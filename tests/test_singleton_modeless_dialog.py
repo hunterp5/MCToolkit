@@ -53,3 +53,32 @@ def test_reuse_or_show_modeless_singleton_reuses_hidden_widget(qapp):  # noqa: A
     assert w2 is w1
     assert len(created) == 1
     assert not destroyed
+
+
+def test_destroyed_callback_does_not_clear_replaced_singleton(qapp) -> None:
+    class Host:
+        def __init__(self) -> None:
+            self._dlg = None
+
+    host = Host()
+    created: list[QWidget] = []
+
+    def factory() -> QWidget:
+        w = QWidget()
+        w.setWindowFlags(Qt.Window)
+        created.append(w)
+        return w
+
+    def on_destroyed() -> None:
+        host._dlg = None
+
+    w1 = reuse_or_show_modeless_singleton(host, "_dlg", factory, on_destroyed)
+    host._dlg = None
+    w2 = reuse_or_show_modeless_singleton(host, "_dlg", factory, on_destroyed)
+    assert w2 is not w1
+    w1.deleteLater()
+    qapp.processEvents()
+    assert host._dlg is w2
+    w2.close()
+    w2.deleteLater()
+    qapp.processEvents()

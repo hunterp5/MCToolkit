@@ -89,6 +89,7 @@ def test_molecule_3d_viewer_widget_is_workspace_dockable():
 
 def test_selection_browser_widget_is_workspace_dockable():
     from molmanager.ui.selection_browser import SelectionBrowserWidget
+    from molmanager.ui.som_browser import SomBrowserWidget
 
     assert getattr(SelectionBrowserWidget, "dockable_in_workspace", False) is True
     assert is_dockable_workspace_widget(SelectionBrowserWidget)
@@ -96,3 +97,5 @@ def test_selection_browser_widget_is_workspace_dockable():
     assert hasattr(SelectionBrowserWidget, "create_floating_dialog")
     assert hasattr(SelectionBrowserWidget, "_toggle_options_visible")
     assert hasattr(SelectionBrowserWidget, "_sync_options_chrome")
+    assert is_dockable_workspace_widget(SomBrowserWidget)
+    assert hasattr(SomBrowserWidget, "create_floating_dialog")

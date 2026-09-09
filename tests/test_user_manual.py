@@ -65,6 +65,8 @@ def test_guide_html_pubchem_and_smina():
     assert "PubChem" in pub and "Topic unavailable" not in pub
     smina = guide_html("tools_smina")
     assert "Smina" in smina and "PDBQT" in smina
+    som = guide_html("tools_predict_som")
+    assert "FAME3R" in som and "Topic unavailable" not in som
 
 
 def test_markdown_renderer_basics():

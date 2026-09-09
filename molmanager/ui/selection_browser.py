@@ -40,6 +40,7 @@ from ..display_constants import (
     BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
 )
 from .compound_table_model import CompoundTableModel
+from .dockable_plot import discard_host_dialog_after_dock
 from .property_columns_panel import PropertyColumnsPanel
 from .qt_widget_utils import make_window_minimizable
 from .table_selection import item_selection_for_view_rows
@@ -58,7 +59,9 @@ class SelectionBrowserWidget(QWidget):
 
         self._rows: list[int] = []
         self._idx = 0
-        self._preview_pix_cache: dict[tuple[int, int, int], QPixmap] = {}  # (oid, w_px, h_px) -> pixmap
+        self._preview_pix_cache: dict[
+            tuple[int, int, int], QPixmap
+        ] = {}  # (oid, w_px, h_px) -> pixmap
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
@@ -123,7 +126,9 @@ class SelectionBrowserWidget(QWidget):
         self._send_window_btn.clicked.connect(self._send_to_new_window)
         foot.addWidget(self._send_window_btn)
         self._close_btn = QPushButton("Close Browser")
-        self._close_btn.setToolTip("Close this docked browser and remove it from the workspace pane.")
+        self._close_btn.setToolTip(
+            "Close this docked browser and remove it from the workspace pane."
+        )
         self._close_btn.clicked.connect(self._close_docked_browser)
         foot.addWidget(self._close_btn)
         foot.addWidget(self._cb_only_selected)
@@ -146,10 +151,15 @@ class SelectionBrowserWidget(QWidget):
         self._btn_toggle_select.clicked.connect(self._toggle_current_row_selected)
         self._cb_only_selected.toggled.connect(lambda _v: self.refresh_from_app())
 
-        QShortcut(QKeySequence(Qt.Key_Home), self, activated=self._go_first)
-        QShortcut(QKeySequence(Qt.Key_Left), self, activated=lambda: self._step(-1))
-        QShortcut(QKeySequence(Qt.Key_Right), self, activated=lambda: self._step(1))
-        QShortcut(QKeySequence(Qt.Key_End), self, activated=self._go_last)
+        for key, slot in (
+            (Qt.Key_Home, self._go_first),
+            (Qt.Key_Left, lambda: self._step(-1)),
+            (Qt.Key_Right, lambda: self._step(1)),
+            (Qt.Key_End, self._go_last),
+        ):
+            sc = QShortcut(QKeySequence(key), self)
+            sc.setContext(Qt.WidgetWithChildrenShortcut)
+            sc.activated.connect(slot)
 
         self._auto_refresh_timer = QTimer(self)
         self._auto_refresh_timer.setSingleShot(True)
@@ -196,9 +206,7 @@ class SelectionBrowserWidget(QWidget):
         if not dock(self):
             return
         if isinstance(dlg, SelectionBrowserDialog):
-            dlg._panel = None
-            dlg._force_close = True
-            dlg.close()
+            discard_host_dialog_after_dock(dlg, self.parent_app, "_selection_browser_dialog")
 
     def _send_to_new_window(self) -> None:
         if self.parent_app is not None:
@@ -251,7 +259,10 @@ class SelectionBrowserWidget(QWidget):
 
     def event(self, event) -> bool:  # noqa: N802 — Qt API
         if event.type() == QEvent.ParentChange:
-            self._sync_footer_chrome()
+            try:
+                self._sync_footer_chrome()
+            except RuntimeError:
+                pass
         return super().event(event)
 
     def _wire_table_updates(self) -> None:
@@ -408,7 +419,9 @@ class SelectionBrowserWidget(QWidget):
         if self._rows:
             self._focus_row(self._rows[self._idx])
 
-    def _view_index_for_source_row(self, logical_row: int, *, column: int = CompoundTableModel.STRUCTURE_COL):
+    def _view_index_for_source_row(
+        self, logical_row: int, *, column: int = CompoundTableModel.STRUCTURE_COL
+    ):
         app = self._app
         m = app._table_model
         if logical_row < 0 or logical_row >= m.rowCount():
@@ -467,7 +480,9 @@ class SelectionBrowserWidget(QWidget):
             view_model = app.table.model()
             if sm is None or view_model is None:
                 return False
-            return bool(sm.isRowSelected(int(view_rows[0]), view_model.index(int(view_rows[0]), 0).parent()))
+            return bool(
+                sm.isRowSelected(int(view_rows[0]), view_model.index(int(view_rows[0]), 0).parent())
+            )
         except Exception:
             return False
 

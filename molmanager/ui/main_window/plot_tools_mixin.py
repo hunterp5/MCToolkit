@@ -159,7 +159,9 @@ class PlotToolsMixin:
         new_table = max(200, total - new_plot)
         splitter.setSizes([new_table, new_plot])
 
-    def _sync_dialog_only_selected_scope(self, dialog: QDialog, *, selected_count: int | None = None) -> None:
+    def _sync_dialog_only_selected_scope(
+        self, dialog: QDialog, *, selected_count: int | None = None
+    ) -> None:
         """Refresh a tool dialog's scope checkbox label/count from the current table selection."""
         cb = getattr(dialog, "only_selected_cb", None)
         if cb is None:
@@ -430,7 +432,9 @@ class PlotToolsMixin:
         from ..dockable_plot import is_dockable_workspace_widget
         from ..plot import PlotWidget
 
-        if not is_dockable_workspace_widget(plot_widget) and not isinstance(plot_widget, PlotWidget):
+        if not is_dockable_workspace_widget(plot_widget) and not isinstance(
+            plot_widget, PlotWidget
+        ):
             return False
         mgr = self._workspace()
         if mgr is None:
@@ -481,17 +485,8 @@ class PlotToolsMixin:
 
                 if isinstance(dlg, PlotDialog):
                     self._register_plot_dialog(dlg)
-                else:
-                    from ..selection_browser import SelectionBrowserDialog
-
-                    if isinstance(dlg, SelectionBrowserDialog):
-                        self._selection_browser_dialog = dlg
-                        try:
-                            dlg.destroyed.connect(self._on_selection_browser_dialog_destroyed)
-                        except Exception:
-                            pass
-                    else:
-                        self._register_floating_result_dialog(dlg)
+                elif not self._bind_undocked_browser_dialog(dlg):
+                    self._register_floating_result_dialog(dlg)
                 plot_widget.show()
                 dlg.show()
                 dlg.raise_()
@@ -504,6 +499,27 @@ class PlotToolsMixin:
             plot_widget.deleteLater()
         except RuntimeError:
             pass
+
+    def _bind_undocked_browser_dialog(self, dlg) -> bool:
+        """Track File → Browser / Predict SOM windows after undock. Return True if handled."""
+        from ..selection_browser import SelectionBrowserDialog
+        from ..som_browser import SomBrowserDialog
+
+        if isinstance(dlg, SelectionBrowserDialog):
+            self._selection_browser_dialog = dlg
+            try:
+                dlg.destroyed.connect(self._on_selection_browser_dialog_destroyed)
+            except Exception:
+                pass
+            return True
+        if isinstance(dlg, SomBrowserDialog):
+            self._som_browser_dialog = dlg
+            try:
+                dlg.destroyed.connect(self._on_som_browser_dialog_destroyed)
+            except Exception:
+                pass
+            return True
+        return False
 
     def _register_floating_result_dialog(self, dlg) -> None:
         """Track undocked SALI/cliff/MMP/etc. windows for table↔plot selection sync."""
@@ -682,17 +698,8 @@ class PlotToolsMixin:
             self._prepare_tool_dialog(dlg)
             if isinstance(dlg, PlotDialog):
                 self._register_plot_dialog(dlg)
-            else:
-                from ..selection_browser import SelectionBrowserDialog
-
-                if isinstance(dlg, SelectionBrowserDialog):
-                    self._selection_browser_dialog = dlg
-                    try:
-                        dlg.destroyed.connect(self._on_selection_browser_dialog_destroyed)
-                    except Exception:
-                        pass
-                else:
-                    self._register_floating_result_dialog(dlg)
+            elif not self._bind_undocked_browser_dialog(dlg):
+                self._register_floating_result_dialog(dlg)
             plot_widget.show()
             dlg.show()
             dlg.raise_()

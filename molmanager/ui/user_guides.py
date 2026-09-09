@@ -155,6 +155,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Neighborhood graph from Transform Ledger pairs.",
             ),
             _e("tools_reaction_enum", "Reaction Enumeration", "Reaction Enumeration", "Enumerate products from reaction SMARTS."),
+            _e(
+                "tools_predict_som",
+                "Predict SOM",
+                "Predict SOM",
+                "FAME3R sites of metabolism with a highlighted atom map.",
+            ),
             _e("data_qsar", "QSAR", "QSAR", "Train and apply QSAR models on table features."),
             _e("data_mpo", "MPO Scoring", "MPO Scoring", "Multi-parameter desirability scores."),
         ),

@@ -27,6 +27,22 @@ PLOT_PANEL_BASE_MINIMUM_WIDTH = 420
 PLOT_PANEL_DEFAULT_WIDTH = 640
 
 
+def discard_host_dialog_after_dock(dlg, host, attr_name: str) -> None:
+    """Destroy the empty floating husk after its panel was reparented into the workspace."""
+    if dlg is None:
+        return
+    if hasattr(dlg, "_panel"):
+        dlg._panel = None
+    dlg._force_close = True
+    if host is not None and getattr(host, attr_name, None) is dlg:
+        setattr(host, attr_name, None)
+    try:
+        dlg.close()
+        dlg.deleteLater()
+    except RuntimeError:
+        pass
+
+
 def make_plot_options_dialog(
     parent: QWidget,
     content: QWidget,
@@ -94,9 +110,8 @@ def iter_plot_selection_views(root: QWidget | None) -> list:
 
 def is_dockable_plot_widget(widget) -> bool:
     """True when the widget can be placed in the main-window plot panel."""
-    return (
-        getattr(widget, "only_selected_cb", None) is not None
-        and bool(iter_plot_selection_views(widget))
+    return getattr(widget, "only_selected_cb", None) is not None and bool(
+        iter_plot_selection_views(widget)
     )
 
 

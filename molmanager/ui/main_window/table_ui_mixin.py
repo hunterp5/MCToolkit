@@ -741,7 +741,11 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             raw = (self._table_model.cell_text(row, ci) or "").strip()
             if not raw:
                 continue
-            if (ov_s and h == ov_s) or self._is_smiles_named_header(h) or self._header_looks_structural(h):
+            if (
+                (ov_s and h == ov_s)
+                or self._is_smiles_named_header(h)
+                or self._header_looks_structural(h)
+            ):
                 return False
             if looks_like_mol_block(raw):
                 return False
@@ -781,9 +785,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             return ""
         return self._canonical_structure_key_cached(raw, smiles_key_cache)
 
-    def _canonical_structure_key_cached(
-        self, smiles: str, cache: dict[str, str] | None
-    ) -> str:
+    def _canonical_structure_key_cached(self, smiles: str, cache: dict[str, str] | None) -> str:
         s = (smiles or "").strip()
         if not s:
             return ""
@@ -1025,7 +1027,11 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             raw = (self._table_model.cell_text(row, ci) or "").strip()
             if not raw:
                 continue
-            priority = (ov_s and h == ov_s) or self._is_smiles_named_header(h) or self._header_looks_structural(h)
+            priority = (
+                (ov_s and h == ov_s)
+                or self._is_smiles_named_header(h)
+                or self._header_looks_structural(h)
+            )
             if not priority and len(raw) > 20000 and not looks_like_mol_block(raw):
                 continue
             m = self._mol_from_structure_text(raw)
@@ -1159,7 +1165,9 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             raw = ""
             if src == "Structure":
                 if smiles_h:
-                    raw = (self._table_model.backing_value_for_row_header(r, smiles_h) or "").strip()
+                    raw = (
+                        self._table_model.backing_value_for_row_header(r, smiles_h) or ""
+                    ).strip()
                     if not raw:
                         raw = (self._table_cell_text(r, self.headers.index(smiles_h)) or "").strip()
                 if not raw:
@@ -1241,6 +1249,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             logical_row_for_oid=self.get_row_by_id,
             render2d_row_by_oid=getattr(self, "_render2d_row_by_oid", None),
         )
+
     def show_header_menu(self, pos):
         col = self.table.horizontalHeader().logicalIndexAt(pos)
         if col < 0 or col >= len(self.headers):
@@ -1259,7 +1268,9 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             "Select every row currently visible in the table (respects active filters)."
         )
         select_all_act = select_sub.addAction("Select All")
-        select_all_act.setToolTip("Select every row in the table, including rows hidden by filters.")
+        select_all_act.setToolTip(
+            "Select every row in the table, including rows hidden by filters."
+        )
         select_sub.addSeparator()
         if self.headers[col] == "Structure":
             first_occ_act = select_sub.addAction("First Occurrence (per distinct structure)")
@@ -1277,7 +1288,9 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
                 "Select visible rows with no chemical structure (no molecule in memory and no parseable SMILES or structure text)."
             )
         else:
-            empty_act.setToolTip("Select every visible row where this column is blank or whitespace-only.")
+            empty_act.setToolTip(
+                "Select every visible row where this column is blank or whitespace-only."
+            )
         sort_num_asc = sort_num_desc = sort_alpha_asc = sort_alpha_desc = None
         if self._table_model.rowCount() > 0:
             sort_top = menu.addMenu("Sort")
@@ -1404,7 +1417,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
                 changed_by_oid=changed,
                 previous_by_oid=previous,
             )
-            )
+        )
 
     def _column_can_apply_precision(self, header_name: str) -> bool:
         if header_name in ("ID_HIDDEN", "Structure"):
@@ -1560,7 +1573,9 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         self._table_delete_job_gen = int(getattr(self, "_table_delete_job_gen", 0)) + 1
         self._table_delete_ctx = None
 
-    def _confirm_and_push_delete_rows(self, rows: list[int] | None = None, *, oids: frozenset[int] | None = None) -> None:
+    def _confirm_and_push_delete_rows(
+        self, rows: list[int] | None = None, *, oids: frozenset[int] | None = None
+    ) -> None:
         """Confirm then push UndoDeleteRowsCommand (shared by Edit and row header menu)."""
         if oids is None:
             rows = sorted({int(r) for r in (rows or [])})
@@ -1758,12 +1773,16 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         if 0 <= col < len(self.headers):
             hdr = self.headers[col]
             raw_cell = self._table_model.backing_value_for_row_header(row, hdr)
-            packed_confs_b64 = resolve_blocks_b64_for_viewer(raw_cell, hdr, oid, getattr(self, "_confs_blocks_sidecar", {}))
+            packed_confs_b64 = resolve_blocks_b64_for_viewer(
+                raw_cell, hdr, oid, getattr(self, "_confs_blocks_sidecar", {})
+            )
 
         chem_col = self._column_eligible_for_table_chemistry_menu(row, col)
         mol_ctx = self._mol_for_table_context_menu(row, col) if chem_col else None
 
-        sketch_act = view_conformers_act = view3d_act = view2d_act = render2d_act = copy_smiles_act = None
+        sketch_act = view_conformers_act = view3d_act = view2d_act = render2d_act = (
+            copy_smiles_act
+        ) = None
         structure_menu = False
         if chem_col and mol_ctx is not None:
             sketch_act = menu.addAction("Open in Sketcher…")
@@ -1797,7 +1816,8 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             copy_smiles_act.setEnabled(bool(copy_smiles_txt))
 
         can_paste = oid is not None and (
-            col == CompoundTableModel.STRUCTURE_COL or self._table_model.column_accepts_text_edit(col)
+            col == CompoundTableModel.STRUCTURE_COL
+            or self._table_model.column_accepts_text_edit(col)
         )
         paste_act = menu.addAction("Paste")
         paste_act.setEnabled(can_paste)
@@ -1812,7 +1832,11 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         action = menu.exec_(self.table.viewport().mapToGlobal(pos))
         if action == sketch_act and mol_ctx is not None:
             self.open_sketcher(mol_ctx)
-        elif view_conformers_act is not None and action == view_conformers_act and packed_confs_b64 is not None:
+        elif (
+            view_conformers_act is not None
+            and action == view_conformers_act
+            and packed_confs_b64 is not None
+        ):
             from ..mol_viewer_3d import open_conformation_viewer_from_blocks_payload
 
             confs_col = "confs"
@@ -1868,6 +1892,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
                 old_t = self._table_model.cell_text(row, col) or ""
                 if old_t != "":
                     self._undo_stack.push(UndoCellTextChangeCommand(self, int(oid), h, old_t, ""))
+
     def _selected_smiles_strings(self) -> list[str]:
         """SMILES for PubChem/ChEMBL: canonical SMILES from any resolvable chemistry in each selected row."""
         if not self.headers:
@@ -2029,7 +2054,11 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
                 return rehydrate_v1_confs_cell(raw, h, oid, sc)
         return (self._table_cell_text(row, col) or "").strip()
 
-    def _on_selection_browser_dialog_destroyed(self) -> None:
+    def _on_selection_browser_dialog_destroyed(self, *_args) -> None:
+        sender = self.sender()
+        current = getattr(self, "_selection_browser_dialog", None)
+        if sender is not None and current is not None and current is not sender:
+            return
         self._selection_browser_dialog = None
 
     def open_selection_browser(self) -> None:
@@ -2059,4 +2088,3 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             self._on_selection_browser_dialog_destroyed,
             on_reused_visible=lambda dlg: dlg.refresh_from_app(preserve_position=True),
         )
-

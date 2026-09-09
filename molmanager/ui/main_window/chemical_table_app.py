@@ -46,7 +46,13 @@ from ...memory_usage import format_process_memory_status
 from ...performance import PerformanceTracker
 from ...tool_progress import ToolProgressState
 from ...storage import SqliteTableStore
-from ...workers import FilterApplySignals, RenderWorker, SqliteRebuildSignals, SubstructureFilterSignals, WorkerSignals
+from ...workers import (
+    FilterApplySignals,
+    RenderWorker,
+    SqliteRebuildSignals,
+    SubstructureFilterSignals,
+    WorkerSignals,
+)
 from ..background_activity import BackgroundActivityHub
 from ..compound_table_model import (
     CompoundTableModel,
@@ -162,7 +168,9 @@ class ChemicalTableApp(
         self.signals.neutralized.connect(self.on_neutralize_finished, _qc)
         self.signals.fast_prepared.connect(self.on_fast_prepare_finished, _qc)
         self.signals.explicit_hydrogens_added.connect(self.on_add_explicit_hydrogens_finished, _qc)
-        self.signals.explicit_hydrogens_removed.connect(self.on_remove_explicit_hydrogens_finished, _qc)
+        self.signals.explicit_hydrogens_removed.connect(
+            self.on_remove_explicit_hydrogens_finished, _qc
+        )
         self.signals.calculated.connect(self.on_calc_finished, _qc)
         self.signals.conformers_finished.connect(self.on_conformers_finished, _qc)
         self.signals.superpose_finished.connect(self.on_superpose_finished, _qc)
@@ -248,6 +256,7 @@ class ChemicalTableApp(
         self._plot_table_sync_timer.setSingleShot(True)
         self._plot_table_sync_timer.timeout.connect(self._sync_active_plots_from_table_selection)
         self._selection_browser_dialog = None
+        self._som_browser_dialog = None
         self._mmp_browser_dialog = None
         self._mmp_ledger_dialog = None
         self._activity_cliff_map_dialog = None
@@ -370,7 +379,9 @@ class ChemicalTableApp(
         self._tool_progress_poll_timer.setInterval(int(cfg.background_job_poll_ms))
 
     def _exit_background_job_ui(self) -> None:
-        self._background_job_ui_depth = max(0, int(getattr(self, "_background_job_ui_depth", 0)) - 1)
+        self._background_job_ui_depth = max(
+            0, int(getattr(self, "_background_job_ui_depth", 0)) - 1
+        )
         if self._background_job_ui_depth != 0:
             return
         ms = int(getattr(self, "_tool_progress_poll_interval_ms", 200))
@@ -480,7 +491,9 @@ class ChemicalTableApp(
         self._structure_delegate = StructureDelegate(self.table, self._table_model)
         self._row_highlight_delegate = RowHighlightDelegate(self._table_model, self.table)
         self.table.setItemDelegate(self._row_highlight_delegate)
-        self.table.setItemDelegateForColumn(CompoundTableModel.STRUCTURE_COL, self._structure_delegate)
+        self.table.setItemDelegateForColumn(
+            CompoundTableModel.STRUCTURE_COL, self._structure_delegate
+        )
         self.table.setColumnHidden(0, True)
         self.table.setAlternatingRowColors(True)
         vh = self.table.verticalHeader()
@@ -496,7 +509,9 @@ class ChemicalTableApp(
         self.table.horizontalHeader().setSectionsMovable(True)
         self.table.horizontalHeader().setFirstSectionMovable(False)
         self.table.horizontalHeader().sectionMoved.connect(self._on_column_moved)
-        self.table.horizontalHeader().sectionClicked.connect(self._on_horizontal_header_section_clicked)
+        self.table.horizontalHeader().sectionClicked.connect(
+            self._on_horizontal_header_section_clicked
+        )
         self.table.setColumnWidth(
             CompoundTableModel.STRUCTURE_COL,
             structure_depiict_width() + STRUCTURE_COLUMN_HORIZONTAL_PADDING,
@@ -634,7 +649,9 @@ class ChemicalTableApp(
                 QAction("&Open File...", self, triggered=self.open_file_dialog),
             )
         )
-        file_menu.addAction(QAction("Import &Data...", self, triggered=self.open_import_file_dialog))
+        file_menu.addAction(
+            QAction("Import &Data...", self, triggered=self.open_import_file_dialog)
+        )
         file_menu.addSeparator()
         file_menu.addAction(QAction("Open Session…", self, triggered=self.open_session_file))
         file_menu.addAction(QAction("Save Session…", self, triggered=self.save_session_as))
@@ -647,7 +664,9 @@ class ChemicalTableApp(
                 QAction("&Export All...", self, triggered=lambda: self.run_export(False)),
             )
         )
-        file_menu.addAction(QAction("Export Selected...", self, triggered=lambda: self.run_export(True)))
+        file_menu.addAction(
+            QAction("Export Selected...", self, triggered=lambda: self.run_export(True))
+        )
         file_menu.addSeparator()
         act_browser = self._bind_hotkey(
             "file.browser",
@@ -790,7 +809,9 @@ class ChemicalTableApp(
         )
         if load_config().disable_custom_calc:
             self._act_custom_calc.setEnabled(False)
-            self._act_custom_calc.setToolTip("Calculator disabled by MOLMANAGER_DISABLE_CUSTOM_CALC.")
+            self._act_custom_calc.setToolTip(
+                "Calculator disabled by MOLMANAGER_DISABLE_CUSTOM_CALC."
+            )
 
         conformations_menu = tools.addMenu("&Conformations")
         conformations_menu.setToolTipsVisible(True)
@@ -853,7 +874,9 @@ class ChemicalTableApp(
             "data.cluster",
             QAction("Cluster…", self, triggered=self.open_cluster_dialog),
         )
-        act_cluster.setToolTip("Cluster compounds by fingerprint (K-Means, Butina, sphere exclusion, etc.).")
+        act_cluster.setToolTip(
+            "Cluster compounds by fingerprint (K-Means, Butina, sphere exclusion, etc.)."
+        )
         fp_menu.addAction(act_cluster)
 
         for title, slot, tip, hk_id in (
@@ -867,6 +890,12 @@ class ChemicalTableApp(
                 "Predict Permeability…",
                 self.open_permeability_predictor,
                 "Predict Caco-2 and MDCK permeability / efflux endpoints (optional Chemprop install).",
+                None,
+            ),
+            (
+                "Predict SOM…",
+                self.open_som_predictor,
+                "Predict sites of metabolism with FAME3R and draw a highlighted atom map.",
                 None,
             ),
         ):
@@ -973,8 +1002,12 @@ class ChemicalTableApp(
         self.addAction(self._act_toggle_filter_panel)
         filter_menu.addAction(self._act_toggle_filter_panel)
         filter_menu.addSeparator()
-        act_sub = QAction("Add Substructure", self, triggered=lambda: self.add_substructure_filter_card())
-        act_sub.setToolTip("Add a filter card that matches a SMARTS substructure in the Structure column.")
+        act_sub = QAction(
+            "Add Substructure", self, triggered=lambda: self.add_substructure_filter_card()
+        )
+        act_sub.setToolTip(
+            "Add a filter card that matches a SMARTS substructure in the Structure column."
+        )
         filter_menu.addAction(act_sub)
         act_slider = QAction("Add Slider", self, triggered=lambda: self.add_filter_card())
         act_slider.setToolTip("Add a numeric range slider filter for a column.")
@@ -986,15 +1019,21 @@ class ChemicalTableApp(
         act_cat.setToolTip("Add a categorical multi-select filter for a column.")
         filter_menu.addAction(act_cat)
         filter_menu.addSeparator()
-        act_enable_all_filters = QAction("Enable All Filters", self, triggered=self.enable_all_filters_keep_panel)
+        act_enable_all_filters = QAction(
+            "Enable All Filters", self, triggered=self.enable_all_filters_keep_panel
+        )
         act_enable_all_filters.setToolTip("Turn on every filter card in the panel.")
         filter_menu.addAction(act_enable_all_filters)
-        act_disable_all_filters = QAction("Disable All Filters", self, triggered=self.disable_all_filters_keep_panel)
+        act_disable_all_filters = QAction(
+            "Disable All Filters", self, triggered=self.disable_all_filters_keep_panel
+        )
         act_disable_all_filters.setToolTip(
             "Turn off every filter card. Cards stay in the panel; use On on each card to enable again."
         )
         filter_menu.addAction(act_disable_all_filters)
-        act_delete_all_filters = QAction("Delete All Filters", self, triggered=self.delete_all_filters_from_panel)
+        act_delete_all_filters = QAction(
+            "Delete All Filters", self, triggered=self.delete_all_filters_from_panel
+        )
         act_delete_all_filters.setToolTip("Remove every filter card from the panel.")
         filter_menu.addAction(act_delete_all_filters)
         act_search = self._bind_hotkey(
@@ -1034,12 +1073,8 @@ class ChemicalTableApp(
         data_menu.addAction(
             QAction("Principal Component Analysis…", self, triggered=self.open_pca_dialog)
         )
-        data_menu.addAction(
-            QAction("t-SNE Visualization…", self, triggered=self.open_tsne_dialog)
-        )
-        data_menu.addAction(
-            QAction("UMAP Visualization…", self, triggered=self.open_umap_dialog)
-        )
+        data_menu.addAction(QAction("t-SNE Visualization…", self, triggered=self.open_tsne_dialog))
+        data_menu.addAction(QAction("UMAP Visualization…", self, triggered=self.open_umap_dialog))
         data_menu.addAction(
             QAction(
                 "Self-Organizing Map…",
@@ -1048,9 +1083,7 @@ class ChemicalTableApp(
             )
         )
         data_menu.addSeparator()
-        data_menu.addAction(
-            QAction("BOILED-Egg plot…", self, triggered=self.open_boiled_egg_plot)
-        )
+        data_menu.addAction(QAction("BOILED-Egg plot…", self, triggered=self.open_boiled_egg_plot))
         data_menu.addAction(
             QAction("Golden Triangle plot…", self, triggered=self.open_golden_triangle_plot)
         )
@@ -1070,7 +1103,9 @@ class ChemicalTableApp(
         data_menu.addAction(act_plot)
 
         ext_menu = mb.addMenu("E&xternal")
-        ext_menu.addAction(QAction("Connect to SQL database…", self, triggered=self.open_external_db))
+        ext_menu.addAction(
+            QAction("Connect to SQL database…", self, triggered=self.open_external_db)
+        )
         ext_menu.addSeparator()
         ext_menu.addAction(QAction("Query PubChem…", self, triggered=self.open_pubchem))
         ext_menu.addAction(QAction("Query ChEMBL…", self, triggered=self.open_chembl))
@@ -1108,7 +1143,9 @@ class ChemicalTableApp(
 
         btn_proc = QToolButton(corner)
         btn_proc.setText("Processes")
-        btn_proc.setToolTip("View queued background jobs (conformers, descriptors, import, export, …).")
+        btn_proc.setToolTip(
+            "View queued background jobs (conformers, descriptors, import, export, …)."
+        )
         btn_proc.setToolButtonStyle(Qt.ToolButtonTextOnly)
         btn_proc.setAutoRaise(True)
         btn_proc.setFocusPolicy(Qt.NoFocus)
@@ -1275,7 +1312,9 @@ class ChemicalTableApp(
             try:
                 pq.shutdown_for_exit()
             except Exception:
-                log_swallowed_exception(logger, "process_queue.shutdown_for_exit failed during quit")
+                log_swallowed_exception(
+                    logger, "process_queue.shutdown_for_exit failed during quit"
+                )
 
         for dlg in list(getattr(self, "_plot_dialogs", [])):
             try:
@@ -1287,6 +1326,7 @@ class ChemicalTableApp(
         for attr in (
             "_processes_dialog",
             "_selection_browser_dialog",
+            "_som_browser_dialog",
             "_mmp_browser_dialog",
             "_mmp_ledger_dialog",
             "_activity_cliff_map_dialog",
@@ -1312,6 +1352,13 @@ class ChemicalTableApp(
                 dlg.close()
             except RuntimeError:
                 setattr(self, attr, None)
+
+        for dlg in list(getattr(self, "_floating_result_dialogs", [])):
+            try:
+                dlg.close()
+            except RuntimeError:
+                pass
+        self._floating_result_dialogs = []
 
         QApplication.processEvents()
 
@@ -1382,7 +1429,9 @@ class ChemicalTableApp(
     def _on_partial_results_notice(self, tool_label: str, done: int, total: int) -> None:
         d = max(0, int(done))
         t = max(1, int(total))
-        self._partial_results_notice = f"Cancelled — applied partial results for {tool_label} ({d}/{t})."
+        self._partial_results_notice = (
+            f"Cancelled — applied partial results for {tool_label} ({d}/{t})."
+        )
 
     def _consume_partial_results_notice(self) -> str | None:
         note = self._partial_results_notice

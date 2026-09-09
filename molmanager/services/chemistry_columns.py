@@ -30,6 +30,8 @@ def skip_chemistry_tool_column_dropdown(header: str) -> bool:
     nl = (header or "").lower()
     if nl == "pka":
         return True
+    if nl.startswith("som "):
+        return True
     if nl == "cluster" or nl.startswith("cluster ("):
         return True
     if "inchikey" in nl and "smiles" not in nl and "inchi" not in nl and "mol" not in nl:

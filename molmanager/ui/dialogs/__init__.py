@@ -52,6 +52,7 @@ from .random_molecule import RandomMoleculeDialog, RandomMoleculeDialogParams
 from .random_number import RandomNumberDialog, RandomNumberDialogParams
 from .permeability import PermeabilityPredictorDialog
 from .pka import PKaPredictorDialog
+from .som import SomPredictorDialog
 from .properties import PropertyDialog
 from .protomer import ProtomerGeneratorDialog
 from .pdbqt_generator import PdbqtGeneratorDialog
@@ -91,6 +92,7 @@ __all__ = [
     "MmpDialogParams",
     "PermeabilityPredictorDialog",
     "PKaPredictorDialog",
+    "SomPredictorDialog",
     "PlotDialog",
     "PropertyDialog",
     "ProtomerGeneratorDialog",

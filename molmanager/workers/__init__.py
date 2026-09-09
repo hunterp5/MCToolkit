@@ -89,6 +89,7 @@ from .load_render import (
 )
 from .pka_predictor import PKaPredictorSignals, PKaPredictorWorker
 from .permeability_worker import PermeabilityPredictorSignals, PermeabilityPredictorWorker
+from .som_worker import SomPredictorSignals, SomPredictorWorker
 from .protomer_generator import ProtomerGeneratorSignals, ProtomerGeneratorWorker
 from .protonate_worker import ProtonateSignals, ProtonateWorker
 from .pdbqt_generator import PdbqtGenSignals, PdbqtGenRequest, PdbqtGeneratorWorker
@@ -145,6 +146,8 @@ __all__ = [
     "PKaPredictorWorker",
     "PermeabilityPredictorSignals",
     "PermeabilityPredictorWorker",
+    "SomPredictorSignals",
+    "SomPredictorWorker",
     "ProtomerGeneratorSignals",
     "ProtomerGeneratorWorker",
     "Render2DBatchHeldJob",

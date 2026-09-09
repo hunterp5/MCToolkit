@@ -35,6 +35,7 @@ from ...utils import redact_sqlalchemy_url, safe_float
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 from ..strings import (
     TOOL_CALCULATOR,
+    TOOL_PREDICT_SOM,
     TOOL_RANDOM_NUMBER,
     loaded_sql_status,
 )
@@ -43,6 +44,7 @@ from ...workers import (
 )
 
 logger = logging.getLogger(__name__)
+
 
 class ToolsSqlPredictMixin:
     def _run_calculator_from_dialog(self, dlg) -> None:
@@ -71,7 +73,10 @@ class ToolsSqlPredictMixin:
         row_data = [
             (
                 o,
-                {v: (self._table_cell_text(self.get_row_by_id(o), h_map[v]) or "0") for v in numeric_vars},
+                {
+                    v: (self._table_cell_text(self.get_row_by_id(o), h_map[v]) or "0")
+                    for v in numeric_vars
+                },
             )
             for o in oids_list
         ]
@@ -138,7 +143,9 @@ class ToolsSqlPredictMixin:
         try:
             values = generate_random_values(len(oids), p.params)
         except ValueError as exc:
-            QMessageBox.warning(self, TOOL_RANDOM_NUMBER, str(exc) or "Invalid random-number settings.")
+            QMessageBox.warning(
+                self, TOOL_RANDOM_NUMBER, str(exc) or "Invalid random-number settings."
+            )
             return
         rows = [(int(oid), {col: text}) for oid, text in zip(oids, values)]
         written = self.on_calc_finished(rows, [col], progress_label=TOOL_RANDOM_NUMBER)
@@ -146,6 +153,7 @@ class ToolsSqlPredictMixin:
         self.status_label.setText(
             f'{TOOL_RANDOM_NUMBER}: column "{final_col}" updated ({len(rows)} row(s)).'
         )
+
     def open_calculator(self):
         if not self.headers:
             return
@@ -186,7 +194,9 @@ class ToolsSqlPredictMixin:
 
     def open_data_analysis(self):
         if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(self, "Data", "Open a file or add rows so the table has data to analyze.")
+            QMessageBox.information(
+                self, "Data", "Open a file or add rows so the table has data to analyze."
+            )
             return
         from ..data_analysis import DataAnalysisDialog
 
@@ -479,7 +489,9 @@ class ToolsSqlPredictMixin:
         except Exception:
             pass
         batch_rows: list[tuple[int, dict[str, str]]] = []
-        while start < len(prepared) and len(batch_rows) < chunk_size and time.monotonic() < deadline:
+        while (
+            start < len(prepared) and len(batch_rows) < chunk_size and time.monotonic() < deadline
+        ):
             batch_rows.append(prepared[start])
             start += 1
         self._external_append_index = start
@@ -668,14 +680,22 @@ class ToolsSqlPredictMixin:
                     est = None
                     try:
                         if table:
-                            crow = conn.execute(text(f"SELECT COUNT(*) AS c FROM {table}")).mappings().first()
+                            crow = (
+                                conn.execute(text(f"SELECT COUNT(*) AS c FROM {table}"))
+                                .mappings()
+                                .first()
+                            )
                             est = int(crow["c"]) if crow and crow.get("c") is not None else None
                         else:
                             base = (query or "").strip().rstrip(";")
                             if base:
-                                crow = conn.execute(
-                                    text(f"SELECT COUNT(*) AS c FROM ({base}) AS __chem_cnt")
-                                ).mappings().first()
+                                crow = (
+                                    conn.execute(
+                                        text(f"SELECT COUNT(*) AS c FROM ({base}) AS __chem_cnt")
+                                    )
+                                    .mappings()
+                                    .first()
+                                )
                                 est = int(crow["c"]) if crow and crow.get("c") is not None else None
                     except Exception:
                         est = None
@@ -702,7 +722,9 @@ class ToolsSqlPredictMixin:
                         if re.search(r"\blimit\b", sql, flags=re.IGNORECASE) is None:
                             sql = f"SELECT * FROM ({sql}) AS subq LIMIT {int(limit_eff)}"
                 perf = getattr(self, "_perf", None)
-                scope = perf.track if perf is not None else (lambda *_args, **_kwargs: nullcontext())
+                scope = (
+                    perf.track if perf is not None else (lambda *_args, **_kwargs: nullcontext())
+                )
                 with scope("sql.load_rows"):
                     try:
                         self.table.setUpdatesEnabled(False)
@@ -793,7 +815,9 @@ class ToolsSqlPredictMixin:
             self.status_label.setText(f"Loaded {nrows:,} row(s) from SQL — drawing 2D structures…")
         else:
             self.status_label.setText(
-                loaded_sql_status(nrows) if smiles_loaded else f"Loaded {nrows:,} row(s) from SQL (no SMILES column)."
+                loaded_sql_status(nrows)
+                if smiles_loaded
+                else f"Loaded {nrows:,} row(s) from SQL (no SMILES column)."
             )
 
     def open_fp_similarity(self):
@@ -895,9 +919,7 @@ class ToolsSqlPredictMixin:
         if msg == "Cancelled.":
             self.status_label.setText("Cancelled.")
         else:
-            self.status_label.setText(
-                f"Diverse subset failed: {msg or 'Computation failed.'}"
-            )
+            self.status_label.setText(f"Diverse subset failed: {msg or 'Computation failed.'}")
 
     def _ensure_pka_predictor_signals(self):
         """Signals live on the main window so pKa jobs survive dialog close."""
@@ -999,8 +1021,10 @@ class ToolsSqlPredictMixin:
         self._begin_tool_progress("Predict Permeability", n)
         self.process_queue.enqueue(
             f"Predict Permeability ({n} rows)",
-            lambda ev, r=rows_smi, ws=self.signals, ps=perm_signals, c=output_columns, st=prog: PermeabilityPredictorWorker(
-                r, ws, ps, cancel_event=ev, output_columns=c, progress_state=st
+            lambda ev, r=rows_smi, ws=self.signals, ps=perm_signals, c=output_columns, st=prog: (
+                PermeabilityPredictorWorker(
+                    r, ws, ps, cancel_event=ev, output_columns=c, progress_state=st
+                )
             ),
         )
 
@@ -1027,6 +1051,158 @@ class ToolsSqlPredictMixin:
         from ..dialogs import PermeabilityPredictorDialog
 
         dlg = PermeabilityPredictorDialog(self)
+        self._prepare_tool_dialog(dlg)
+        dlg.setAttribute(Qt.WA_DeleteOnClose, True)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    def _ensure_som_predictor_signals(self):
+        sig = getattr(self, "_som_predictor_signals", None)
+        if sig is not None:
+            return sig
+        from ...workers import SomPredictorSignals
+
+        sig = SomPredictorSignals(self)
+        sig.finished.connect(self._on_som_prediction_finished, Qt.QueuedConnection)
+        sig.failed.connect(self._on_som_prediction_failed, Qt.QueuedConnection)
+        self._som_predictor_signals = sig
+        return sig
+
+    def _host_unavailable(self) -> bool:
+        try:
+            from PyQt5 import sip
+
+            if sip.isdeleted(self):
+                return True
+        except Exception:
+            return True
+        try:
+            from ...workers.process_pool_utils import application_is_shutting_down
+
+            return bool(application_is_shutting_down())
+        except Exception:
+            return False
+
+    def _on_som_prediction_finished(self, results: list) -> None:
+        if self._host_unavailable():
+            return
+        from ...som_prediction import SOM_MAP_COLUMN
+        from ..structure_pixmap import pixmap_from_structure_render_png
+        from ...display_constants import structure_depiict_height, structure_depiict_width
+        from ..som_browser import records_from_worker_rows
+
+        table_rows = [row for row in results if row and row[0] is not None]
+        if table_rows:
+            calc_h = list(table_rows[0][4]) if table_rows[0][4] else list(table_rows[0][1].keys())
+            res = [(int(oid), cols) for oid, cols, _png, _atoms, _headers in table_rows]
+            written = self.on_calc_finished(res, calc_h, progress_label=TOOL_PREDICT_SOM)
+            map_col = written[0] if written else SOM_MAP_COLUMN
+            if map_col in self.headers:
+                self._table_model.register_pixmap_column(map_col)
+            dw, dh = structure_depiict_width(), structure_depiict_height()
+            for oid, _cols, png, _atoms, _headers in table_rows:
+                if not png:
+                    continue
+                pm = pixmap_from_structure_render_png(png, dw, dh)
+                if pm is not None and not pm.isNull():
+                    self._table_model.set_column_pixmap(int(oid), map_col, pm)
+        else:
+            self._finish_tool_progress(TOOL_PREDICT_SOM)
+
+        records = records_from_worker_rows(results)
+        if records:
+            self._open_som_browser(records)
+        elif not table_rows:
+            QMessageBox.information(
+                self,
+                TOOL_PREDICT_SOM,
+                "No sites of metabolism were returned.",
+            )
+        notice = self._consume_partial_results_notice()
+        if notice:
+            self.status_label.setText(notice)
+
+    def _on_som_browser_dialog_destroyed(self, *_args) -> None:
+        sender = self.sender()
+        current = getattr(self, "_som_browser_dialog", None)
+        if sender is not None and current is not None and current is not sender:
+            return
+        self._som_browser_dialog = None
+
+    def _discard_stale_som_browser_dialog(self) -> None:
+        dlg = getattr(self, "_som_browser_dialog", None)
+        if dlg is None:
+            return
+        try:
+            from PyQt5 import sip
+
+            if sip.isdeleted(dlg) or getattr(dlg, "_panel", None) is None:
+                self._som_browser_dialog = None
+                try:
+                    dlg.close()
+                    dlg.deleteLater()
+                except RuntimeError:
+                    pass
+        except Exception:
+            self._som_browser_dialog = None
+
+    def _open_som_browser(self, records) -> None:
+        from ..som_browser import SomBrowserDialog, SomBrowserWidget
+
+        if self._host_unavailable():
+            return
+        self._discard_stale_som_browser_dialog()
+
+        for w in self.iter_docked_plot_widgets():
+            if isinstance(w, SomBrowserWidget):
+                mgr = self._workspace()
+                if mgr is not None:
+                    pane = mgr.pane_for_widget(w)
+                    if pane is not None:
+                        mgr.set_preferred_pane(pane)
+                self.show_docked_plot_panel()
+                w.set_records(records)
+                w.raise_()
+                self.status_label.setText(f"{TOOL_PREDICT_SOM}: focused in workspace pane.")
+                return
+
+        def _factory():
+            dlg = SomBrowserDialog(self)
+            dlg.set_records(records)
+            return dlg
+
+        def _on_reused(dlg):
+            dlg.set_records(records)
+
+        reuse_or_show_modeless_singleton(
+            self,
+            "_som_browser_dialog",
+            _factory,
+            self._on_som_browser_dialog_destroyed,
+            on_reused_visible=_on_reused,
+        )
+
+    def _on_som_prediction_failed(self, msg: str) -> None:
+        if self._host_unavailable():
+            return
+        self._finish_tool_progress(TOOL_PREDICT_SOM)
+        if msg == "Cancelled.":
+            self.status_label.setText(self._consume_partial_results_notice() or "Cancelled.")
+            return
+        QMessageBox.warning(self, TOOL_PREDICT_SOM, msg or "Prediction failed.")
+
+    def open_som_predictor(self) -> None:
+        if not self.headers:
+            QMessageBox.information(
+                self,
+                TOOL_PREDICT_SOM,
+                "Open a file or start a session first.",
+            )
+            return
+        from ..dialogs import SomPredictorDialog
+
+        dlg = SomPredictorDialog(self)
         self._prepare_tool_dialog(dlg)
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
         dlg.show()
@@ -1078,4 +1254,3 @@ class ToolsSqlPredictMixin:
             self._consume_partial_results_notice()
             or f'{TOOL_CALCULATOR}: column "{self.new_c}" updated.'
         )
-

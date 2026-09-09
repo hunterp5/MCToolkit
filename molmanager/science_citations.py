@@ -168,6 +168,26 @@ def pka_dialog_footer_html() -> str:
     )
 
 
+FAME3R_SOM = (
+    "Sites of metabolism (FAME3R): Jacob, R. A.; Gaskin, L.; Seidel, T.; Chen, Y.; "
+    "Mazzolari, A.; Kirchmair, J. FAME3R: an efficient, practical and reliable open-source "
+    "tool for predicting phase 1 and phase 2 sites of metabolism. J. Cheminform. 2026. "
+    "https://doi.org/10.1186/s13321-026-01161-1 — NERDD https://nerdd.univie.ac.at/fame3r"
+)
+
+
+def som_dialog_footer_html() -> str:
+    """Rich text for the Predict SOM (FAME3R) dialog."""
+    return (
+        "<small><b>Method</b>: FAME3R random-forest sites of metabolism — "
+        '<a href="https://doi.org/10.1186/s13321-026-01161-1">Jacob et al., J. Cheminform. 2026</a>; '
+        'service <a href="https://nerdd.univie.ac.at/fame3r">NERDD</a>. '
+        "Predicted SOM atoms are highlighted on the map (yellow→red by probability). "
+        "Pre-trained MetaQSAR models are free for <b>non-commercial</b> research; "
+        "commercial use requires a license from the University of Milan.</small>"
+    )
+
+
 def permeability_dialog_footer_html() -> str:
     """Rich text for the permeability predictor dialog."""
     return (

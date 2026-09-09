@@ -46,6 +46,15 @@ def reuse_or_show_modeless_singleton(
     dlg = getattr(host, attr_name, None)
     if dlg is not None:
         try:
+            from PyQt5 import sip
+
+            if sip.isdeleted(dlg):
+                setattr(host, attr_name, None)
+                dlg = None
+        except Exception:
+            pass
+    if dlg is not None:
+        try:
             dlg.show()
             dlg.raise_()
             dlg.activateWindow()
@@ -56,6 +65,11 @@ def reuse_or_show_modeless_singleton(
             setattr(host, attr_name, None)
     w = factory()
     setattr(host, attr_name, w)
-    w.destroyed.connect(on_destroyed)
+
+    def _on_destroyed(*_args, obj=w) -> None:
+        if getattr(host, attr_name, None) is obj:
+            on_destroyed()
+
+    w.destroyed.connect(_on_destroyed)
     w.show()
     return w
