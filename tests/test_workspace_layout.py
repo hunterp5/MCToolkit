@@ -47,14 +47,16 @@ def qapp():
 
 def _manager(qapp) -> WorkspaceLayoutManager:
     table = QWidget()
-    return WorkspaceLayoutManager(table)
+    mgr = WorkspaceLayoutManager(table)
+    mgr.apply_layout(LAYOUT_TABLE_STACK, preserve_plots=False)
+    return mgr
 
 
-def test_default_layout_is_table_stack(qapp):
-    mgr = _manager(qapp)
-    assert mgr.layout_id == DEFAULT_LAYOUT_ID == LAYOUT_TABLE_STACK
-    assert len(mgr.plot_panes()) == 2
-    assert all(p.is_empty() for p in mgr.plot_panes())
+def test_default_layout_is_table_only(qapp):
+    table = QWidget()
+    mgr = WorkspaceLayoutManager(table)
+    assert mgr.layout_id == DEFAULT_LAYOUT_ID == LAYOUT_TABLE_ONLY
+    assert mgr.plot_panes() == []
 
 
 def test_apply_layout_pane_counts(qapp):

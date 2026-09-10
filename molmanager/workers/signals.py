@@ -52,7 +52,7 @@ class WorkerSignals(QObject):
     # --- Batch chemistry / tools (wash, descriptors, conformers, custom calc, export) ---
     washed = pyqtSignal(list)
     neutralized = pyqtSignal(list)
-    # Fast Prepare (fused disconnect + neutralize): list of
+    # Fast Prepare (fused disconnect, optional neutralize): list of
     # (oid, mol_blob_bytes, smaller_fragments_text, canonical_smiles_or_empty)
     fast_prepared = pyqtSignal(list)
     explicit_hydrogens_added = pyqtSignal(list)

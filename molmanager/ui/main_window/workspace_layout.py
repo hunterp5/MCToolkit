@@ -42,7 +42,7 @@ LAYOUT_TABLE_STACK = "table_stack"
 LAYOUT_TABLE_SIDE = "table_side"
 LAYOUT_QUADRANTS = "quadrants"
 LAYOUT_TABLE_GRID = "table_grid"
-DEFAULT_LAYOUT_ID = LAYOUT_TABLE_STACK
+DEFAULT_LAYOUT_ID = LAYOUT_TABLE_ONLY
 
 LAYOUT_PRESETS: tuple[tuple[str, str], ...] = (
     (LAYOUT_TABLE_ONLY, "Table Only"),

@@ -14,13 +14,13 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Fast Prepare worker: disconnect largest fragment + neutralize in one parallel pass.
+"""Fast Prepare worker: disconnect largest fragment, optional neutralize, in one parallel pass.
 
 Fast Prepare used to run the disconnect and neutralize tools as two sequential jobs, each
 processing every row on a single thread and each writing its results back to the table (the first
 writeback being immediately overwritten by the second). Both steps are pure per-molecule CPU work,
 so they run here as one batched pass in child processes — the same pattern the descriptor worker
-uses — which keeps RDKit off the GUI thread and off the GIL.
+uses — which keeps RDKit off the GUI thread and off the GIL. Neutralize is optional (off by default).
 
 Results carry molecules as binary blobs rather than live ``Chem.Mol`` objects: child processes have
 to serialize anyway, and handing thousands of live SWIG-wrapped mols across a Qt queued connection
@@ -60,12 +60,12 @@ def _prepare_one(
     *,
     is_text: bool,
     need_smiles: bool,
+    neutralize: bool = False,
 ) -> tuple[bytes, str, str] | None:
-    """Disconnect the largest fragment then neutralize it.
+    """Disconnect the largest fragment, then optionally neutralize it.
 
     Returns ``(mol_blob, smaller_fragments_text, canonical_smiles)``, or ``None`` when the row has
-    no usable structure. Mirrors the old two-stage behavior: if neutralization fails, the
-    disconnected parent is kept.
+    no usable structure. If neutralization is requested and fails, the disconnected parent is kept.
     """
     if is_text:
         raw = str(blob_or_text or "").strip()
@@ -80,19 +80,25 @@ def _prepare_one(
     parent, fragments = largest_fragment_and_rest(mol, source_text)
     if parent is None:
         return None
-    out = neutralize_mol(parent) or parent
+    out = parent
+    if neutralize:
+        out = neutralize_mol(parent) or parent
     smiles = mol_to_canonical_smiles(out) if need_smiles else ""
     return out.ToBinary(), fragments, smiles
 
 
 def _mp_fast_prepare_batch(args: tuple) -> list[tuple]:
     """Run :func:`_prepare_one` over one batch inside a child process (picklable args)."""
-    items, is_text, need_smiles = args
+    items, is_text, need_smiles, neutralize = args
     out: list[tuple] = []
     for oid, payload, source_text in items:
         try:
             res = _prepare_one(
-                payload, source_text, is_text=bool(is_text), need_smiles=bool(need_smiles)
+                payload,
+                source_text,
+                is_text=bool(is_text),
+                need_smiles=bool(need_smiles),
+                neutralize=bool(neutralize),
             )
         except Exception:
             res = None
@@ -104,7 +110,7 @@ def _mp_fast_prepare_batch(args: tuple) -> list[tuple]:
 
 
 class FastPrepareWorker(QRunnable):
-    """Disconnect + neutralize every row in ``items``, batched across child processes.
+    """Disconnect (and optionally neutralize) every row in ``items``, batched across child processes.
 
     ``items`` are ``(oid, mol, source_text)`` tuples, or ``(oid, cell_text)`` when *is_smiles*.
     Emits ``signals.fast_prepared`` with ``(oid, mol_blob, fragments_text, canonical_smiles)`` rows.
@@ -117,6 +123,7 @@ class FastPrepareWorker(QRunnable):
         *,
         is_smiles: bool = False,
         need_smiles: bool = False,
+        neutralize: bool = False,
         cancel_event: threading.Event | None = None,
         batch_size: int = 64,
         process_pool_min_rows: int = 250,
@@ -126,6 +133,7 @@ class FastPrepareWorker(QRunnable):
         self.signals = signals
         self.is_smiles = bool(is_smiles)
         self.need_smiles = bool(need_smiles)
+        self.neutralize = bool(neutralize)
         self.cancel_event = cancel_event
         self.batch_size = max(1, int(batch_size))
         self.process_pool_min_rows = max(2, int(process_pool_min_rows))
@@ -161,7 +169,7 @@ class FastPrepareWorker(QRunnable):
             return
 
         batches = [
-            (tasks[s : s + self.batch_size], self.is_smiles, self.need_smiles)
+            (tasks[s : s + self.batch_size], self.is_smiles, self.need_smiles, self.neutralize)
             for s in range(0, len(tasks), self.batch_size)
         ]
         workers = min(8, max(2, (os.cpu_count() or 4) - 1), 6)

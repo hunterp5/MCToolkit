@@ -742,7 +742,7 @@ class ChemicalTableApp(
             (
                 "Fast Prepare…",
                 self.run_fast_prepare,
-                "Disconnect largest fragment, neutralize it, and redraw 2D images in one background job.",
+                "Disconnect largest fragment, optionally neutralize, and redraw 2D images in one background job.",
                 None,
             ),
             (

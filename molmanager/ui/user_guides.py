@@ -139,7 +139,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "tools_fast_prepare",
                 "Fast Prepare",
                 "Fast Prepare",
-                "Largest fragment, neutralize, and redraw in one job.",
+                "Largest fragment, optional neutralize, and redraw in one job.",
             ),
             _e(
                 "tools_disconnect_fragments",

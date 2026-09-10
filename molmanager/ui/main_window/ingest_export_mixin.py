@@ -45,6 +45,7 @@ class IngestExportMixin:
         self._ingest_append_mode = False
         self._structure_field_override = None
         self.clear_all()
+        self._apply_table_only_layout_for_file_load()
         self._set_ingest_loading(True)
         self._structures_queued = 0
         self._import_building_progress_shown = False
@@ -59,6 +60,17 @@ class IngestExportMixin:
                 p, s, batch_size=bs, cancel_event=ev, structure_choice_event=sce
             ),
         )
+
+    def _apply_table_only_layout_for_file_load(self) -> None:
+        """Give the table the full workspace when replacing the session from a file."""
+        from .workspace_layout import LAYOUT_TABLE_ONLY
+
+        mgr = getattr(self, "_workspace_layout", None)
+        if mgr is None or mgr.layout_id == LAYOUT_TABLE_ONLY:
+            return
+        apply = getattr(self, "apply_workspace_layout", None)
+        if callable(apply):
+            apply(LAYOUT_TABLE_ONLY)
 
     def import_file(self, path: str) -> None:
         """Load molecules from disk and append them to the current table (merge columns as needed)."""

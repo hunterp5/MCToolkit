@@ -47,7 +47,7 @@ def _seeded_window() -> ChemicalTableApp:
     return win
 
 
-def _run_fast_prepare_inline(win: ChemicalTableApp, src: str) -> None:
+def _run_fast_prepare_inline(win: ChemicalTableApp, src: str, *, neutralize: bool = False) -> None:
     """Run the worker synchronously, then feed its results to the real GUI handler."""
     prepare_col = getattr(win, "_fast_prepare_source", src)
     need_smiles = win._fast_prepare_target_is_text(prepare_col)
@@ -84,6 +84,7 @@ def _run_fast_prepare_inline(win: ChemicalTableApp, src: str) -> None:
         _Recorder(),
         is_smiles=is_smiles,
         need_smiles=need_smiles,
+        neutralize=neutralize,
         process_pool_min_rows=10**9,
     ).run()
     assert captured, "worker emitted no results"
@@ -98,7 +99,7 @@ def test_fast_prepare_structure_target_neutralizes_and_lists_fragments(qapp):  #
         win._fast_prepare_update_target = True
         win._fast_prepare_allowed_oids = None
 
-        _run_fast_prepare_inline(win, "Structure")
+        _run_fast_prepare_inline(win, "Structure", neutralize=True)
 
         assert "Fragments" in win.headers
         assert len(win.mols) == len(SALTS)
@@ -129,7 +130,7 @@ def test_fast_prepare_new_column_target_gets_canonical_smiles(qapp):  # noqa: AR
         # otherwise the worker would skip canonical SMILES and the column would be written empty.
         assert win._fast_prepare_target_is_text(target) is True
 
-        _run_fast_prepare_inline(win, "Structure")
+        _run_fast_prepare_inline(win, "Structure", neutralize=True)
 
         assert target in win.headers
         col = win.headers.index(target)

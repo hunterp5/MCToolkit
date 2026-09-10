@@ -62,3 +62,13 @@ def test_generate_conformations_dialog_fine_tune_params(qapp):  # noqa: ARG001
     assert p.use_random_coords is True
     assert p.keep_hydrogens is True
     assert p.enforce_chirality is True
+
+
+def test_generate_conformations_dialog_advanced_box_hidden_until_checked(qapp):  # noqa: ARG001
+    dlg = GenerateConformationsDialog(0)
+    assert dlg.advanced_panel.advanced_cb.text() == "Advanced"
+    assert dlg.advanced_panel.isChecked() is False
+    assert dlg.advanced_panel._box.isHidden() is True
+    dlg.advanced_panel.setChecked(True)
+    assert dlg.advanced_panel._box.isHidden() is False
+    assert dlg.output_panel.add_to_table_cb.text() == "Add as Entries"

@@ -25,15 +25,15 @@ Scoped rows with valid structures; **Selected Rows Only** when checked. Output m
 - **Max keep** - cap the ensemble to this many lowest-energy survivors (0 = no extra cap).
 - **Max iterations** - minimizer budget.
 - **Align on** - optional SMILES (or SMARTS) substructure used to overlay the ensemble after generation. Leave empty to keep embedder orientations.
-- **Advanced** - ETKDG flags (chirality, random coords, torsion preferences, small-ring / macrocycle torsions, basic knowledge, heavy-atom RMS, max embed attempts) and **Keep explicit hydrogens**.
+- **Advanced** - check to show ETKDG flags (chirality, random coords, torsion preferences, small-ring / macrocycle torsions, basic knowledge, heavy-atom RMS, max embed attempts) and **Keep explicit hydrogens**.
 - **Selected Rows Only** - scope.
-- **Add to table** / **Save to SDF** (+ **Browse...**).
+- **Add as Entries** / **Save to SDF** (+ **Browse...**).
 
 ## Workflow
 
 1. Select molecules and set ensemble size / energy window.
 2. Choose force field, seed, RMS pruning, max keep, and optional **Align on** substructure.
-3. Open **Advanced** only when you need extra ETKDG or hydrogen control.
+3. Check **Advanced** only when you need extra ETKDG or hydrogen control.
 4. Run generation (watch **Processes**).
 5. Inspect the 3D results window: click a row to show that pose; check **Superpose** to overlay the ensemble, or **Selected Conformers** to overlay the table selection with a color legend. **View Conformers** on a packed cell reopens the same energy table. If several rows were processed, the window is the first ensemble; open the others from the table.
 6. Optional: add results to the table and/or save SDF.

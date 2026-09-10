@@ -57,7 +57,9 @@ def test_prepare_one_matches_old_two_stage_pipeline(smiles: str) -> None:
     mol = Chem.MolFromSmiles(smiles)
     assert mol is not None
     expected = _old_pipeline(mol, smiles)
-    got = _prepare_one(mol.ToBinary(), smiles, is_text=False, need_smiles=True)
+    got = _prepare_one(
+        mol.ToBinary(), smiles, is_text=False, need_smiles=True, neutralize=True
+    )
     assert (expected is None) == (got is None)
     if expected is None:
         return
@@ -70,18 +72,30 @@ def test_prepare_one_matches_old_two_stage_pipeline(smiles: str) -> None:
 
 def test_prepare_one_from_cell_text_matches_mol_input() -> None:
     smiles = "CC(=O)Oc1ccccc1C(=O)[O-].[Na+]"
-    from_text = _prepare_one(smiles, None, is_text=True, need_smiles=True)
+    from_text = _prepare_one(smiles, None, is_text=True, need_smiles=True, neutralize=True)
     mol = Chem.MolFromSmiles(smiles)
-    from_mol = _prepare_one(mol.ToBinary(), smiles, is_text=False, need_smiles=True)
+    from_mol = _prepare_one(mol.ToBinary(), smiles, is_text=False, need_smiles=True, neutralize=True)
     assert from_text is not None and from_mol is not None
     assert from_text[1:] == from_mol[1:]
 
 
 def test_prepare_one_neutralizes_charge() -> None:
-    res = _prepare_one("C[NH+](C)C.[Cl-]", None, is_text=True, need_smiles=True)
+    res = _prepare_one(
+        "C[NH+](C)C.[Cl-]", None, is_text=True, need_smiles=True, neutralize=True
+    )
     assert res is not None
     out = Chem.Mol(res[0])
     assert Chem.GetFormalCharge(out) == 0
+    assert res[1] == mol_to_canonical_smiles(Chem.MolFromSmiles("[Cl-]"))
+
+
+def test_prepare_one_skips_neutralize_when_disabled() -> None:
+    res = _prepare_one(
+        "C[NH+](C)C.[Cl-]", None, is_text=True, need_smiles=True, neutralize=False
+    )
+    assert res is not None
+    out = Chem.Mol(res[0])
+    assert Chem.GetFormalCharge(out) == 1
     assert res[1] == mol_to_canonical_smiles(Chem.MolFromSmiles("[Cl-]"))
 
 
@@ -102,7 +116,7 @@ def test_batch_helper_preserves_oids_and_drops_failures() -> None:
         (8, "still not a molecule", None),
         (9, "c1ccccc1", None),
     ]
-    rows = _mp_fast_prepare_batch((items, True, True))
+    rows = _mp_fast_prepare_batch((items, True, True, True))
     assert [r[0] for r in rows] == [7, 9]
 
 
@@ -151,7 +165,7 @@ def test_worker_emits_blobs_not_live_mols() -> None:
 
 def test_worker_text_mode_reads_cell_text() -> None:
     items = [(1, "C[NH+](C)C.[Cl-]"), (2, "c1ccccc1")]
-    sig, _ = _worker_rows(items, is_smiles=True, need_smiles=True)
+    sig, _ = _worker_rows(items, is_smiles=True, need_smiles=True, neutralize=True)
     assert [r[0] for r in sig.results] == [1, 2]
     assert Chem.GetFormalCharge(Chem.Mol(sig.results[0][1])) == 0
 

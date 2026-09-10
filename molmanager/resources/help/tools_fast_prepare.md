@@ -1,6 +1,6 @@
 # Fast Prepare
 
-Fast Prepare runs a practical cleanup pipeline (largest fragment, neutralize, redraw) as one background job on scoped rows.
+Fast Prepare runs a practical cleanup pipeline (largest fragment, optional neutralize, redraw) as one background job on scoped rows.
 
 ## Goal
 
@@ -17,16 +17,18 @@ Structure column rows in scope (all or **Selected Rows Only** when offered).
 ## Options
 
 - Structure source / target as presented in the tool.
+- **Neutralize** - off by default; when checked, RDKit Uncharger zeros net formal charge on the largest fragment (same method as Tools → Prepare Structures → Neutralize).
 - **Selected Rows Only** when available.
-- Combined cleanup actions: keep largest fragment, neutralize charges, redraw 2D.
+- Combined cleanup actions: keep largest fragment, redraw 2D.
 - Run control to start the background job.
 
 ## Workflow
 
 1. Select messy rows or leave scope as the full table.
 2. Launch **Fast Prepare** and confirm the structure source.
-3. Wait for the job to finish.
-4. Spot-check depictions and formal charges.
+3. Check **Neutralize** if you want Uncharger applied after keeping the largest fragment.
+4. Wait for the job to finish.
+5. Spot-check depictions and formal charges.
 
 ## Use cases
 

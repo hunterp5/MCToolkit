@@ -84,7 +84,7 @@ class ConformerOutputOptionsPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self.add_to_table_cb = QCheckBox("Add to table")
+        self.add_to_table_cb = QCheckBox("Add as Entries")
         self.add_to_table_cb.setToolTip(
             "Append each generated conformer as a new table row (Parent OID and Conformer columns)."
         )
@@ -287,7 +287,7 @@ class DisconnectFragmentsDialog(QDialog):
 
 
 class FastPrepareDialog(QDialog):
-    """Disconnect largest fragment, neutralize, then render 2D in one pipeline."""
+    """Disconnect largest fragment, optionally neutralize, then render 2D in one pipeline."""
 
     def __init__(
         self,
@@ -336,6 +336,14 @@ class FastPrepareDialog(QDialog):
             self.only_selected_cb.setEnabled(False)
         root.addWidget(self.only_selected_cb)
 
+        self.neutralize_cb = QCheckBox("Neutralize")
+        self.neutralize_cb.setChecked(False)
+        self.neutralize_cb.setToolTip(
+            "After keeping the largest fragment, zero net formal charge with RDKit Uncharger. "
+            "Leave off to keep the fragment charges as-is."
+        )
+        root.addWidget(self.neutralize_cb)
+
         box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         box.accepted.connect(self._try_accept)
         box.rejected.connect(self.reject)
@@ -361,10 +369,10 @@ class FastPrepareDialog(QDialog):
             return
         self.accept()
 
-    def config(self) -> tuple[str, bool, str | None, str, bool]:
+    def config(self) -> tuple[str, bool, str | None, str, bool, bool]:
         """
         Returns ``(target_column, update_target, largest_column_or_None, smallest_fragments_column,
-        only_selected_rows)``.
+        only_selected_rows, neutralize)``.
         """
         update_target = self.radio_update_target.isChecked()
         return (
@@ -373,6 +381,7 @@ class FastPrepareDialog(QDialog):
             None if update_target else (self.largest_edit.text() or "").strip(),
             (self.fragments_edit.text() or "").strip(),
             selection_scope_checked(self),
+            bool(self.neutralize_cb.isChecked()),
         )
 
 
@@ -502,16 +511,24 @@ class RemoveExplicitHydrogensDialog(QDialog):
         )
 
 
-class ConformerEmbedAdvancedPanel(QGroupBox):
+class ConformerEmbedAdvancedPanel(QWidget):
     """Optional ETKDG / hydrogen knobs. Unchecked uses built-in defaults."""
 
     def __init__(self, parent: QWidget | None = None):
-        super().__init__("Advanced", parent)
-        self.setCheckable(True)
-        self.setChecked(False)
-        self.setToolTip(
+        super().__init__(parent)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(4)
+
+        self.advanced_cb = QCheckBox("Advanced")
+        self.advanced_cb.setChecked(False)
+        self.advanced_cb.setToolTip(
             "ETKDG embedder flags and hydrogen handling. Leave off to use MolManager defaults."
         )
+        root.addWidget(self.advanced_cb)
+
+        self._box = QGroupBox(self)
+        self._box.setTitle("")
         inner = QWidget()
         form = QFormLayout(inner)
         form.setSpacing(4)
@@ -578,15 +595,21 @@ class ConformerEmbedAdvancedPanel(QGroupBox):
         )
         form.addRow("Max embed attempts:", self.max_embed_sb)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.addWidget(inner)
-        self._inner = inner
-        self.toggled.connect(self._on_toggled)
+        box_layout = QVBoxLayout(self._box)
+        box_layout.setContentsMargins(8, 8, 8, 8)
+        box_layout.addWidget(inner)
+        root.addWidget(self._box)
+        self.advanced_cb.toggled.connect(self._on_toggled)
         self._on_toggled(False)
 
+    def isChecked(self) -> bool:
+        return bool(self.advanced_cb.isChecked())
+
+    def setChecked(self, on: bool) -> None:
+        self.advanced_cb.setChecked(bool(on))
+
     def _on_toggled(self, on: bool) -> None:
-        self._inner.setVisible(bool(on))
+        self._box.setVisible(bool(on))
         win = self.window()
         if win is not None:
             win.adjustSize()

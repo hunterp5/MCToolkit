@@ -181,7 +181,7 @@ class PrepareStructuresMixin:
         dlg.show()
 
     def _on_fast_prepare_dialog_accepted(self, dlg) -> None:
-        src, update_target, largest_col, fragments_col, only_selected = dlg.config()
+        src, update_target, largest_col, fragments_col, only_selected, neutralize = dlg.config()
         allowed = self._selected_oids_set() if only_selected else None
         if self._abort_if_only_selected_but_empty(only_selected, allowed, "Fast Prepare"):
             return
@@ -190,7 +190,9 @@ class PrepareStructuresMixin:
         self._fast_prepare_allowed_oids = allowed
         self._fast_prepare_fragments_col = fragments_col
         self._fast_prepare_update_target = update_target
-        self._enqueue_fast_prepare(src, prepare_col, only_selected=only_selected)
+        self._enqueue_fast_prepare(
+            src, prepare_col, only_selected=only_selected, neutralize=neutralize
+        )
 
     def _fast_prepare_target_is_text(self, prepare_col: str) -> bool:
         """True when the Fast Prepare output column holds SMILES text rather than a depiction.
@@ -204,8 +206,10 @@ class PrepareStructuresMixin:
             prepare_col in self.headers and self._table_model.is_pixmap_data_column(prepare_col)
         )
 
-    def _enqueue_fast_prepare(self, src: str, prepare_col: str, *, only_selected: bool) -> None:
-        """Queue the fused disconnect + neutralize pass over the rows in scope."""
+    def _enqueue_fast_prepare(
+        self, src: str, prepare_col: str, *, only_selected: bool, neutralize: bool = False
+    ) -> None:
+        """Queue the fused disconnect (and optional neutralize) pass over the rows in scope."""
         from ...workers import FastPrepareWorker
 
         allowed = self._selected_oids_set() if only_selected else None
@@ -247,11 +251,12 @@ class PrepareStructuresMixin:
         self.status_label.setText("Fast prepare: preparing structures…")
         self.process_queue.enqueue(
             "Fast prepare: prepare structures",
-            lambda ev, d=data, s=self.signals: FastPrepareWorker(
+            lambda ev, d=data, n=bool(neutralize), s=self.signals: FastPrepareWorker(
                 d,
                 s,
                 is_smiles=is_smiles,
                 need_smiles=need_smiles,
+                neutralize=n,
                 cancel_event=ev,
                 batch_size=int(cfg.fast_prepare_batch_size),
                 process_pool_min_rows=int(cfg.fast_prepare_process_pool_min_rows),

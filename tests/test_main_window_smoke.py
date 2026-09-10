@@ -82,6 +82,17 @@ def test_chemistry_tool_structure_sources_smoke(qapp):  # noqa: ARG001
     assert w._canonical_smiles_header_for_updates() == "SMILES"
 
 
+def test_new_window_and_file_load_use_table_only_layout(qapp):  # noqa: ARG001
+    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_ONLY, LAYOUT_TABLE_STACK
+
+    w = ChemicalTableApp()
+    assert w._workspace_layout.layout_id == LAYOUT_TABLE_ONLY
+    w.apply_workspace_layout(LAYOUT_TABLE_STACK)
+    assert w._workspace_layout.layout_id == LAYOUT_TABLE_STACK
+    w._apply_table_only_layout_for_file_load()
+    assert w._workspace_layout.layout_id == LAYOUT_TABLE_ONLY
+
+
 def test_clear_all_re_enables_menubar_after_ingest(qapp):  # noqa: ARG001
     w = ChemicalTableApp()
     _seed_two_rows(w)
