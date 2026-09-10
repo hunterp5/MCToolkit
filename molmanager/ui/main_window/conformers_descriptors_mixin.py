@@ -50,6 +50,7 @@ from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
 
 logger = logging.getLogger(__name__)
 
+
 class ConformersDescriptorsMixin:
     def open_generate_conformations(self):
         if not self.headers or self._table_model.rowCount() == 0:
@@ -99,6 +100,7 @@ class ConformersDescriptorsMixin:
             return
         params = d.params()
         self._conformer_output_options = d.output_options()
+        self._pending_conformer_initial_superpose = bool((params.align_pattern or "").strip())
         n = len(data)
         from ...memory_guards import check_conformer_workload
 
@@ -106,6 +108,11 @@ class ConformersDescriptorsMixin:
         if not guard.ok:
             QMessageBox.warning(self, "Generate Conformations", guard.message)
             return
+        from ...workers import StrainEnergyParams
+
+        self._pending_strain_params = StrainEnergyParams(
+            force_field=str(params.force_field or "MMFF")
+        )
         ps = self._tool_progress_state
         self._begin_tool_progress("Generate conformations", n)
         self.process_queue.enqueue(
@@ -148,6 +155,12 @@ class ConformersDescriptorsMixin:
             return
         params = d.params()
         self._conformer_output_options = d.output_options()
+        self._pending_conformer_initial_superpose = False
+        from ...workers import StrainEnergyParams
+
+        self._pending_strain_params = StrainEnergyParams(
+            force_field=str(params.force_field or "MMFF")
+        )
         n = len(data)
         ps = self._tool_progress_state
         self._begin_tool_progress(TOOL_SINGLE_CONFORMATION, n)
@@ -214,7 +227,9 @@ class ConformersDescriptorsMixin:
                 try:
                     saved_count = write_conformer_results_to_sdf(output_opts.save_path, results)
                 except OSError as e:
-                    QMessageBox.warning(self, "Generate Conformations", f"Could not write SDF file:\n{e}")
+                    QMessageBox.warning(
+                        self, "Generate Conformations", f"Could not write SDF file:\n{e}"
+                    )
             self.schedule_calculate_global_bounds()
             self.table.setSortingEnabled(False)
         finally:
@@ -234,6 +249,21 @@ class ConformersDescriptorsMixin:
             elif not any(p.startswith("Could not") for p in parts):
                 parts.append("No conformers were written to the SDF file.")
         self.status_label.setText(" ".join(parts) if parts else "Done.")
+        initial_superpose = bool(getattr(self, "_pending_conformer_initial_superpose", False))
+        self._pending_conformer_initial_superpose = False
+        n_ok = self._auto_open_first_conformer_results(
+            results,
+            title="View Conformers",
+            confs_column="confs",
+            initial_superpose=initial_superpose,
+        )
+        self._pending_strain_params = None
+        if n_ok > 1:
+            self.status_label.setText(
+                (self.status_label.text() + " " if self.status_label.text() else "")
+                + f"Opened energy results for the first of {n_ok} ensembles; "
+                "use View Conformers on other rows."
+            )
 
     def _append_generated_conformers_as_rows(self, results: list) -> int:
         """Append one table row per generated conformer; keep 3D coordinates in ``self.mols``."""
@@ -435,7 +465,9 @@ class ConformersDescriptorsMixin:
                 self.table.setUpdatesEnabled(True)
             except Exception:
                 pass
-        self.status_label.setText(f"Exported {len(batch_rows)} conformer row(s) from the 3D viewer.")
+        self.status_label.setText(
+            f"Exported {len(batch_rows)} conformer row(s) from the 3D viewer."
+        )
         return len(batch_rows)
 
     def open_superpose_conformers(self):
@@ -481,10 +513,15 @@ class ConformersDescriptorsMixin:
             QMessageBox.information(
                 self,
                 "Superpose Conformers",
-                "No rows in scope have a packed multi-conformer \"confs\" cell. Run Generate Conformations first.",
+                'No rows in scope have a packed multi-conformer "confs" cell. Run Generate Conformations first.',
             )
             return
         params = d.params()
+        from ...workers import StrainEnergyParams
+
+        self._pending_strain_params = StrainEnergyParams(
+            reference_conformer_index=int(params.reference_conformer_index or 0)
+        )
         n = len(data)
         ps = self._tool_progress_state
         self._begin_tool_progress("Superpose conformers", n)
@@ -530,6 +567,19 @@ class ConformersDescriptorsMixin:
             except Exception:
                 pass
         self.status_label.setText(self._consume_partial_results_notice() or "Done.")
+        n_ok = self._auto_open_first_conformer_results(
+            results,
+            title="Superpose Conformers",
+            confs_column="superpose",
+            initial_superpose=True,
+        )
+        self._pending_strain_params = None
+        if n_ok > 1:
+            self.status_label.setText(
+                (self.status_label.text() + " " if self.status_label.text() else "")
+                + f"Opened energy results for the first of {n_ok} overlays; "
+                "use View Conformers on other rows."
+            )
 
     def _mol_3d_for_structure_superpose(self, oid: int, src: str) -> Chem.Mol | None:
         """Best-effort 3D mol for structure superposition from *src* (Structure / confs / …)."""
@@ -577,7 +627,6 @@ class ConformersDescriptorsMixin:
         from ...confs_codec import conformer_mol_blocks_b64_json
         from ...workers import run_superpose_structures
         from ..dialogs import SuperposeStructuresDialog
-        from ..mol_viewer_3d import open_conformation_viewer_from_blocks_payload
 
         sources = ["Structure"] + [c for c in ("confs", "superpose") if c in self.headers]
         d = SuperposeStructuresDialog(
@@ -684,23 +733,23 @@ class ConformersDescriptorsMixin:
                     continue
             if len(blocks) >= 2:
                 payload = base64.b64encode(json.dumps(blocks).encode("utf-8")).decode("ascii")
-                open_conformation_viewer_from_blocks_payload(
-                    self,
+                self._open_conformer_results_viewer(
                     payload,
                     title="Superpose Structures",
+                    confs_column="superpose",
+                    oid=int(ref_oid),
                     initial_superpose=True,
-                    export_parent_oid=int(ref_oid),
-                    export_confs_column="superpose",
+                    mols=viewer_mols,
                 )
             elif len(blocks) == 1:
                 payload = conformer_mol_blocks_b64_json(viewer_mols[0])
-                open_conformation_viewer_from_blocks_payload(
-                    self,
+                self._open_conformer_results_viewer(
                     payload,
                     title="Superpose Structures",
+                    confs_column="superpose",
+                    oid=int(ref_oid),
                     initial_superpose=False,
-                    export_parent_oid=int(ref_oid),
-                    export_confs_column="superpose",
+                    mols=viewer_mols[:1],
                 )
         failed = len(results) - ok_n
         status = f"Superpose structures: packed {ok_n} onto reference OID {ref_oid}"
@@ -708,171 +757,113 @@ class ConformersDescriptorsMixin:
             status += f" ({failed} failed)"
         self.status_label.setText(status + ".")
 
-    def open_calculate_strain_energy(self):
-        if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(
-                self,
-                "Calculate Strain Energy",
-                "Open a file or add rows so the table has data to process.",
-            )
-            return
-        sources = [c for c in ("confs", "superpose") if c in self.headers]
-        if not sources:
-            QMessageBox.information(
-                self,
-                "Calculate Strain Energy",
-                'Add a "confs" column first by running Generate Conformations '
-                "(packed multi-conformer cells).",
-            )
-            return
-        from ..dialogs import StrainEnergyDialog
-
-        d = StrainEnergyDialog(
-            len(self._selected_logical_rows()),
-            source_columns=sources,
-            parent=self,
+    def _open_conformer_results_viewer(
+        self,
+        blocks_b64: str,
+        *,
+        title: str,
+        confs_column: str,
+        oid: int | None,
+        initial_superpose: bool = False,
+        mol: Chem.Mol | None = None,
+        mols: list[Chem.Mol] | None = None,
+        strain_params: object | None = None,
+    ) -> None:
+        from ...workers import (
+            StrainEnergyParams,
+            strain_overlay_for_blocks_b64,
+            strain_overlay_for_mol,
+            strain_overlay_for_mols,
         )
-        self._prepare_tool_dialog(d)
-        d.setAttribute(Qt.WA_DeleteOnClose, True)
-        d.accepted.connect(lambda *_, dlg=d: self._on_calculate_strain_energy_dialog_accepted(dlg))
-        d.show()
-
-    def _on_calculate_strain_energy_dialog_accepted(self, d) -> None:
         from ..mol_viewer_3d import open_conformation_viewer_from_blocks_payload
-        from ...confs_codec import mol_from_packed_confs_cell
-        from ...workers import RmsdParams, run_conformer_rmsd, run_strain_energy
 
-        only_selected = d.only_selected_rows()
-        allowed = self._selected_oids_set() if only_selected else None
-        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Calculate Strain Energy"):
-            return
-        params = d.params()
-        src_col = str(params.source_column or "").strip()
-        if not src_col or src_col not in self.headers:
-            QMessageBox.information(
-                self,
-                "Calculate Strain Energy",
-                f'Column "{src_col}" was not found in the table.',
-            )
-            return
-        oids_list = self._all_oids_in_table_order()
-        if allowed is not None:
-            oids_list = [o for o in oids_list if o in allowed]
-        data: list[tuple[int, str]] = []
-        for o in oids_list:
-            r = self.get_row_by_id(o)
-            if r < 0:
-                continue
-            raw = self._table_model.backing_value_for_row_header(r, src_col)
-            sc = getattr(self, "_confs_blocks_sidecar", {}) or {}
-            full = rehydrate_v1_confs_cell(raw, src_col, int(o), sc)
-            if unpack_confs_blocks_json_b64(full) is None:
-                continue
-            data.append((o, full))
-        if not data:
-            QMessageBox.information(
-                self,
-                "Calculate Strain Energy",
-                f'No rows in scope have a packed multi-conformer "{src_col}" cell. '
-                "Run Generate Conformations first.",
-            )
-            return
-        if len(data) > 1:
-            QMessageBox.information(
-                self,
-                "Calculate Strain Energy",
-                "Select a single row with packed conformers (Selected Rows Only), "
-                "then run Calculate Strain Energy to open the 3D viewer.",
-            )
-            return
-        _oid, cell = data[0]
-        mol = mol_from_packed_confs_cell(cell, min_conformers=1)
-        if mol is None:
-            QMessageBox.warning(
-                self,
-                "Calculate Strain Energy",
-                "Could not rebuild conformers from the packed cell.",
-            )
-            return
-        self.status_label.setText("Calculating strain energy and RMSD…")
-        QApplication.processEvents()
-        _row, meta = run_strain_energy(mol, params)
-        if not meta.get("ok"):
-            err = meta.get("err") or "energy_failed"
-            QMessageBox.warning(
-                self,
-                "Calculate Strain Energy",
-                f"Could not compute strain energies ({err}).",
-            )
-            self.status_label.setText("Ready.")
-            return
-        energies = meta.get("energies") or []
-        strains = meta.get("strains") or []
-        if len(energies) != mol.GetNumConformers() or len(strains) != len(energies):
-            QMessageBox.warning(
-                self,
-                "Calculate Strain Energy",
-                "Energy list length does not match the number of conformers.",
-            )
-            self.status_label.setText("Ready.")
-            return
-        rms_vals: list[float] = []
-        rms_max = 0.0
-        _rms_row, rms_meta = run_conformer_rmsd(
-            mol,
-            RmsdParams(
-                reference_conformer_index=int(meta.get("ref_idx", params.reference_conformer_index)),
-                heavy_atoms_only=True,
-            ),
-        )
-        if rms_meta.get("ok") and _rms_row:
+        params = strain_params if strain_params is not None else StrainEnergyParams()
+        overlay = None
+        try:
+            if mols:
+                overlay = strain_overlay_for_mols(mols, params)
+            elif mol is not None:
+                overlay = strain_overlay_for_mol(mol, params)
+            else:
+                overlay = strain_overlay_for_blocks_b64(blocks_b64, params)
+        except Exception:
+            logger.debug("strain overlay failed", exc_info=True)
+        ref_idx = 0
+        if overlay:
             try:
-                rms_vals = [float(x) for x in str(_rms_row.get("RMSD_values", "")).split(";") if x.strip()]
-            except Exception:
-                rms_vals = []
-            try:
-                rms_max = float(rms_meta.get("rms_max", _rms_row.get("RMSD_max", 0.0)))
-            except Exception:
-                rms_max = max(rms_vals) if rms_vals else 0.0
-            if len(rms_vals) != len(energies):
-                rms_vals = []
-        blocks_b64 = unpack_confs_blocks_json_b64(cell)
-        if not blocks_b64:
-            QMessageBox.warning(
-                self,
-                "Calculate Strain Energy",
-                "Could not read packed conformer blocks for the viewer.",
-            )
-            self.status_label.setText("Ready.")
-            return
-        overlay = {
-            "energies": [float(e) for e in energies],
-            "deltas": [float(s) for s in strains],
-            "e_ref": float(meta.get("e_ref_kcal", 0.0)),
-            "strain_max": float(meta.get("strain_max_kcal", 0.0)),
-            "ref_idx": int(meta.get("ref_idx", 0)),
-            "ff": str(meta.get("ff") or ""),
-        }
-        if rms_vals:
-            overlay["rmsds"] = rms_vals
-            overlay["rmsd_max"] = float(rms_max)
+                ref_idx = int(overlay.get("ref_idx", params.reference_conformer_index) or 0)
+            except (TypeError, ValueError):
+                ref_idx = 0
         open_conformation_viewer_from_blocks_payload(
             self,
             blocks_b64,
-            title="Strain Energy",
-            initial_superpose=False,
+            title=title,
+            initial_superpose=initial_superpose,
             strain_overlay=overlay,
-            initial_conf_index=int(meta.get("ref_idx", 0)),
-            export_parent_oid=int(_oid),
-            export_confs_column=src_col,
+            initial_conf_index=ref_idx,
+            export_parent_oid=oid,
+            export_confs_column=confs_column,
+            source_oid=oid,
         )
-        status = (
-            f"Strain energy viewer: {meta.get('ff', '')} · "
-            f"{len(energies)} conformer(s) · E_ref={meta.get('e_ref_kcal')} kcal/mol"
+
+    def open_packed_conformer_viewer(
+        self,
+        blocks_json_b64: str,
+        *,
+        title: str = "View Conformers",
+        export_parent_oid: int | None = None,
+        export_confs_column: str = "confs",
+        source_oid: int | None = None,
+        initial_superpose: bool = False,
+    ) -> None:
+        oid = source_oid if source_oid is not None else export_parent_oid
+        self._open_conformer_results_viewer(
+            blocks_json_b64,
+            title=title,
+            confs_column=export_confs_column,
+            oid=oid,
+            initial_superpose=initial_superpose,
         )
-        if rms_vals:
-            status += f" · max RMSD={rms_max:.3f} Å"
-        self.status_label.setText(status + ".")
+
+    def _auto_open_first_conformer_results(
+        self,
+        results: list,
+        *,
+        title: str,
+        confs_column: str,
+        initial_superpose: bool,
+    ) -> int:
+        from ...confs_codec import conformer_mol_blocks_b64_json, unpack_confs_blocks_json_b64
+
+        n_ok = 0
+        opened = False
+        for item in results:
+            if len(item) < 3:
+                continue
+            oid, mol, cell = int(item[0]), item[1], str(item[2] or "")
+            b64 = unpack_confs_blocks_json_b64(cell)
+            if not b64 and mol is not None:
+                try:
+                    if mol.GetNumConformers() >= 1:
+                        b64 = conformer_mol_blocks_b64_json(mol)
+                except Exception:
+                    b64 = None
+            if not b64:
+                continue
+            n_ok += 1
+            if opened:
+                continue
+            self._open_conformer_results_viewer(
+                b64,
+                title=title,
+                confs_column=confs_column,
+                oid=oid,
+                initial_superpose=initial_superpose,
+                mol=mol if isinstance(mol, Chem.Mol) else None,
+                strain_params=getattr(self, "_pending_strain_params", None),
+            )
+            opened = True
+        return n_ok
 
     def open_calculate_rmsd(self):
         if not self.headers or self._table_model.rowCount() == 0:
@@ -1047,12 +1038,14 @@ class ConformersDescriptorsMixin:
         self._begin_tool_progress("Calculate descriptors", len(data))
         self.process_queue.enqueue(
             f"Calculate descriptors ({len(data)} rows)",
-            lambda ev, d=data, dh=calc_headers, fn=compute_fns, sm=is_s, sigs=self.signals, p=ps: CalcWorker(
-                d, dh, fn, sm, sigs, cancel_event=ev, progress_state=p
+            lambda ev, d=data, dh=calc_headers, fn=compute_fns, sm=is_s, sigs=self.signals, p=ps: (
+                CalcWorker(d, dh, fn, sm, sigs, cancel_event=ev, progress_state=p)
             ),
         )
 
-    def _sync_global_bounds_for_headers(self, headers: list[str], *, refresh_filters: bool = False) -> None:
+    def _sync_global_bounds_for_headers(
+        self, headers: list[str], *, refresh_filters: bool = False
+    ) -> None:
         """Refresh slider min/max for specific columns without scanning the whole table."""
         if not headers:
             return
@@ -1138,11 +1131,7 @@ class ConformersDescriptorsMixin:
                 else:
                     self._table_model.apply_columns_values_bulk(calc_h, bulk_rows)
             if self._table_model.rowCount() >= 5000:
-                dirty = {
-                    h
-                    for h in calc_h
-                    if h in self._table_model._bounds_data_headers()
-                }
+                dirty = {h for h in calc_h if h in self._table_model._bounds_data_headers()}
                 if dirty:
                     self._table_model._mark_numeric_bounds_dirty(dirty)
                 self.schedule_calculate_global_bounds()

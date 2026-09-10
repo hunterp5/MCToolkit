@@ -25,6 +25,8 @@ from molmanager.workers import (
     StrainEnergyParams,
     run_conformer_generation,
     run_strain_energy,
+    strain_overlay_for_mol,
+    strain_overlay_for_mols,
 )
 
 
@@ -83,3 +85,94 @@ def test_run_strain_energy_clamps_reference_index():
     assert smeta.get("ref_clamped") is True
     strains = [float(x) for x in row["Strain_energies"].split(";")]
     assert abs(strains[-1]) < 1e-6
+
+
+def test_run_strain_energy_reports_min_delta_population_and_other_ffs():
+    m = Chem.MolFromSmiles("CCO")
+    out, meta = run_conformer_generation(
+        m,
+        ConformerGenParams(
+            num_confs=4,
+            energy_window_kcal=100.0,
+            force_field="MMFF",
+            random_seed=21,
+            prune_rms_threshold=-1.0,
+            max_iterations=80,
+        ),
+    )
+    assert out is not None and meta.get("ok") is True
+    row, smeta = run_strain_energy(out, StrainEnergyParams(reference_conformer_index=0))
+    assert row is not None and smeta.get("ok") is True
+    energies = [float(x) for x in smeta["energies"]]
+    deltas_min = [float(x) for x in smeta["deltas_min"]]
+    pops = [float(x) for x in smeta["pop_fracs"]]
+    assert abs(min(deltas_min)) < 1e-6
+    assert abs(float(smeta["e_min_kcal"]) - min(energies)) < 1e-6
+    assert abs(sum(pops) - 1.0) < 1e-5
+    by_ff = smeta.get("energies_by_ff") or {}
+    assert smeta["ff"] in by_ff
+    assert len(by_ff[smeta["ff"]]) == len(energies)
+    assert "UFF" in by_ff or smeta["ff"] == "UFF"
+
+
+def test_run_strain_energy_mmff94s():
+    m = Chem.MolFromSmiles("CCO")
+    out, meta = run_conformer_generation(
+        m,
+        ConformerGenParams(
+            num_confs=3,
+            energy_window_kcal=100.0,
+            force_field="MMFF",
+            random_seed=3,
+            prune_rms_threshold=-1.0,
+            max_iterations=60,
+        ),
+    )
+    assert out is not None and meta.get("ok") is True
+    _row, smeta = run_strain_energy(out, StrainEnergyParams(force_field="MMFF94s"))
+    assert smeta.get("ok") is True
+    assert smeta.get("ff") in ("MMFF94s", "UFF")
+
+
+def test_strain_overlay_for_mol_includes_rmsd():
+    m = Chem.MolFromSmiles("CCO")
+    out, meta = run_conformer_generation(
+        m,
+        ConformerGenParams(
+            num_confs=4,
+            energy_window_kcal=100.0,
+            force_field="MMFF",
+            random_seed=11,
+            prune_rms_threshold=-1.0,
+            max_iterations=60,
+        ),
+    )
+    assert out is not None and meta.get("ok") is True
+    overlay = strain_overlay_for_mol(out, StrainEnergyParams(reference_conformer_index=0))
+    assert overlay is not None
+    n = out.GetNumConformers()
+    assert len(overlay["energies"]) == n
+    assert len(overlay["deltas"]) == n
+    assert overlay.get("rmsds") is not None
+    assert len(overlay["rmsds"]) == n
+    assert overlay["rmsds"][0] == 0.0
+
+
+def test_strain_overlay_for_mols_matches_single_mol():
+    m = Chem.MolFromSmiles("CCO")
+    out, meta = run_conformer_generation(
+        m,
+        ConformerGenParams(
+            num_confs=3,
+            energy_window_kcal=100.0,
+            force_field="MMFF",
+            random_seed=12,
+            prune_rms_threshold=-1.0,
+            max_iterations=60,
+        ),
+    )
+    assert out is not None and meta.get("ok") is True
+    a = strain_overlay_for_mol(out)
+    b = strain_overlay_for_mols([out])
+    assert a is not None and b is not None
+    assert a["energies"] == b["energies"]

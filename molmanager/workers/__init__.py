@@ -47,6 +47,9 @@ _CHEMISTRY_TOOLS_EXPORTS = frozenset(
         "align_structure_onto_reference",
         "run_conformer_rmsd",
         "run_strain_energy",
+        "strain_overlay_for_mol",
+        "strain_overlay_for_mols",
+        "strain_overlay_for_blocks_b64",
     }
 )
 
@@ -184,4 +187,7 @@ __all__ = [
     "align_structure_onto_reference",
     "run_conformer_rmsd",
     "run_strain_energy",
+    "strain_overlay_for_mol",
+    "strain_overlay_for_mols",
+    "strain_overlay_for_blocks_b64",
 ]

@@ -336,7 +336,9 @@ class ChemicalTableApp(
         self._memory_status_timer.timeout.connect(self._refresh_status_memory_label)
         if cfg.status_memory_enabled:
             self._memory_status_timer.setInterval(int(cfg.status_memory_poll_ms))
-            self._memory_status_timer.start()
+            host = getattr(self, "_status_host", None)
+            if host is None or host.isVisible():
+                self._memory_status_timer.start()
             self._refresh_status_memory_label()
         else:
             self._memory_status_label.hide()
@@ -637,9 +639,14 @@ class ChemicalTableApp(
         )
         status_row.addWidget(self.status_label, 1)
         status_row.addWidget(self._memory_status_label, 0)
-        status_host = QWidget()
-        status_host.setLayout(status_row)
-        main_v.addWidget(status_host)
+        self._status_host = QWidget()
+        self._status_host.setLayout(status_row)
+        main_v.addWidget(self._status_host)
+        apply_bar = getattr(self, "_apply_status_bar_visible", None)
+        if callable(apply_bar):
+            from ..theme import load_status_bar_visible
+
+            apply_bar(load_status_bar_visible(), persist=False)
 
     def init_menubar(self):
         mb = self.menuBar()
@@ -820,17 +827,12 @@ class ChemicalTableApp(
             (
                 "Generate Conformations…",
                 self.open_generate_conformations,
-                "Build 3D conformer ensembles for molecules (opens the conformer settings dialog).",
+                "Build 3D conformer ensembles and open a results window with energies, ΔE, population, and RMSD.",
             ),
             (
                 "Generate Single Conformation…",
                 self.open_generate_single_conformation,
                 "Embed and minimize one lowest-energy 3D conformer per row into the confs column.",
-            ),
-            (
-                "Calculate Strain Energy…",
-                self.open_calculate_strain_energy,
-                "Open the 3D viewer with strain energy and RMSD vs a reference overlaid.",
             ),
             (
                 "Calculate RMSD…",
@@ -846,12 +848,12 @@ class ChemicalTableApp(
         superpose_menu.setToolTipsVisible(True)
         act_sp_conf = QAction("Conformers…", self, triggered=self.open_superpose_conformers)
         act_sp_conf.setToolTip(
-            "Align conformer ensembles within each row (packed confs) onto a reference conformer."
+            "Align conformer ensembles within each row and open a 3D results window with energies and RMSD."
         )
         superpose_menu.addAction(act_sp_conf)
         act_sp_struct = QAction("Structures…", self, triggered=self.open_superpose_structures)
         act_sp_struct.setToolTip(
-            "Align selected table structures onto a reference (MCS / substructure / best-effort overlay)."
+            "Align selected table structures onto a reference and open a 3D results window with energies."
         )
         superpose_menu.addAction(act_sp_struct)
 

@@ -39,8 +39,10 @@ from .theme import (
     load_saved_app_font_pt,
     load_saved_table_font_pt,
     load_saved_theme_name,
+    load_status_bar_visible,
     make_custom_theme_id,
     save_app_font_pt,
+    save_status_bar_visible,
     save_table_font_pt,
     save_theme_name,
 )
@@ -72,9 +74,7 @@ class GuiSettingsMixin:
         self._act_customize_colors = QAction(
             "Custom Colors…", self, triggered=self.open_custom_theme_dialog
         )
-        self._act_customize_colors.setToolTip(
-            "Create, edit, or delete named custom color schemes."
-        )
+        self._act_customize_colors.setToolTip("Create, edit, or delete named custom color schemes.")
         self._sync_theme_menu_checks()
         self._refresh_filter_card_styles()
         self._table_font_pt = load_saved_table_font_pt()
@@ -110,7 +110,9 @@ class GuiSettingsMixin:
         if hasattr(self, "apply_structure_table_layout"):
             dlg.size_previewed.connect(self._preview_structure_depiict_size)
         if dlg.exec_() == QDialog.Accepted:
-            self._apply_structure_depiict_size(dlg.selected_width(), dlg.selected_height(), persist=True)
+            self._apply_structure_depiict_size(
+                dlg.selected_width(), dlg.selected_height(), persist=True
+            )
         elif hasattr(self, "apply_structure_depiict_size"):
             self._apply_structure_depiict_size(prev_w, prev_h, persist=False)
         if hasattr(self, "status_label"):
@@ -122,7 +124,9 @@ class GuiSettingsMixin:
         if hasattr(self, "apply_structure_depiict_size"):
             self.apply_structure_depiict_size(width, height, persist=False)
 
-    def _apply_structure_depiict_size(self, width: int, height: int, *, persist: bool = True) -> None:
+    def _apply_structure_depiict_size(
+        self, width: int, height: int, *, persist: bool = True
+    ) -> None:
         if hasattr(self, "apply_structure_depiict_size"):
             self.apply_structure_depiict_size(width, height, persist=persist)
 
@@ -150,9 +154,44 @@ class GuiSettingsMixin:
         self._gui_menu = settings_menu.addMenu("&GUI")
         self._rebuild_gui_theme_menu()
         settings_menu.addSeparator()
-        settings_menu.addAction(QAction("&Structure…", self, triggered=self.open_structure_settings_dialog))
+        settings_menu.addAction(
+            QAction("&Structure…", self, triggered=self.open_structure_settings_dialog)
+        )
         settings_menu.addAction(QAction("&Font…", self, triggered=self.open_font_dialog))
         settings_menu.addAction(QAction("&Hotkeys…", self, triggered=self.open_hotkeys_dialog))
+        settings_menu.addSeparator()
+        self._act_status_bar = QAction("Status Bar", self, checkable=True)
+        self._act_status_bar.setToolTip(
+            "Show or hide the status bar at the bottom of the window (messages and memory use)."
+        )
+        self._act_status_bar.setChecked(load_status_bar_visible())
+        self._act_status_bar.toggled.connect(self._on_status_bar_toggled)
+        settings_menu.addAction(self._act_status_bar)
+        self._apply_status_bar_visible(self._act_status_bar.isChecked(), persist=False)
+
+    def _on_status_bar_toggled(self, checked: bool) -> None:
+        self._apply_status_bar_visible(bool(checked), persist=True)
+
+    def _apply_status_bar_visible(self, visible: bool, *, persist: bool = True) -> None:
+        host = getattr(self, "_status_host", None)
+        if host is not None:
+            host.setVisible(bool(visible))
+        if persist:
+            save_status_bar_visible(bool(visible))
+        timer = getattr(self, "_memory_status_timer", None)
+        if timer is None:
+            return
+        if visible:
+            from ..config import load_config
+
+            cfg = load_config()
+            if cfg.status_memory_enabled:
+                timer.start()
+                refresh = getattr(self, "_refresh_status_memory_label", None)
+                if callable(refresh):
+                    refresh()
+        else:
+            timer.stop()
 
     def _rebuild_gui_theme_menu(self) -> None:
         menu = getattr(self, "_gui_menu", None)
@@ -173,9 +212,7 @@ class GuiSettingsMixin:
             for name in names:
                 act = QAction(name, self, checkable=True)
                 theme_id = make_custom_theme_id(name)
-                act.triggered.connect(
-                    lambda *_a, tid=theme_id: self._set_gui_theme(tid)
-                )
+                act.triggered.connect(lambda *_a, tid=theme_id: self._set_gui_theme(tid))
                 self._theme_action_group.addAction(act)
                 self._custom_theme_actions[name] = act
                 menu.addAction(act)

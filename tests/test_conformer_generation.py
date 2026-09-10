@@ -25,7 +25,12 @@ import threading
 from rdkit import Chem
 
 from molmanager.confs_codec import unpack_confs_blocks_json_b64
-from molmanager.workers import ConformerGenParams, format_confs_table_cell, pack_confs_cell, run_conformer_generation
+from molmanager.workers import (
+    ConformerGenParams,
+    format_confs_table_cell,
+    pack_confs_cell,
+    run_conformer_generation,
+)
 
 
 def test_run_conformer_generation_ethanol_mmff():
@@ -59,7 +64,9 @@ def test_run_conformer_generation_ethanol_mmff():
 
 def test_run_conformer_generation_empty_mol():
     m = Chem.Mol()
-    p = ConformerGenParams(num_confs=2, energy_window_kcal=1.0, force_field="UFF", random_seed=1, max_iterations=50)
+    p = ConformerGenParams(
+        num_confs=2, energy_window_kcal=1.0, force_field="UFF", random_seed=1, max_iterations=50
+    )
     out, meta = run_conformer_generation(m, p)
     assert out is None
     assert meta.get("ok") is False
@@ -82,6 +89,56 @@ def test_run_conformer_generation_single_lowest_energy():
     assert meta.get("n_kept") == 1
     packed = pack_confs_cell(meta, out)
     assert unpack_confs_blocks_json_b64(packed) is not None
+
+
+def test_run_conformer_generation_aligns_on_smiles():
+    m = Chem.MolFromSmiles("CCc1ccccc1")
+    p = ConformerGenParams(
+        num_confs=8,
+        energy_window_kcal=100.0,
+        force_field="MMFF",
+        random_seed=5,
+        max_iterations=80,
+        align_pattern="c1ccccc1",
+    )
+    out, meta = run_conformer_generation(m, p)
+    assert out is not None
+    assert meta.get("ok") is True
+    assert meta.get("n_align_atoms") == 6
+    assert meta.get("align_pattern") == "c1ccccc1"
+    assert out.GetNumConformers() >= 2
+    assert float(meta.get("rms_max", 1.0)) < 0.05
+
+
+def test_run_conformer_generation_align_pattern_not_found():
+    m = Chem.MolFromSmiles("CCO")
+    p = ConformerGenParams(
+        num_confs=4,
+        energy_window_kcal=100.0,
+        force_field="UFF",
+        random_seed=1,
+        max_iterations=50,
+        align_pattern="c1ccccc1",
+    )
+    out, meta = run_conformer_generation(m, p)
+    assert out is None
+    assert meta.get("err") == "align_pattern_not_found"
+
+
+def test_run_conformer_generation_invalid_align_pattern():
+    m = Chem.MolFromSmiles("CCO")
+    p = ConformerGenParams(
+        num_confs=3,
+        energy_window_kcal=100.0,
+        force_field="UFF",
+        random_seed=1,
+        max_iterations=40,
+        align_pattern="[[[notsmarts",
+        align_pattern_is_smarts=True,
+    )
+    out, meta = run_conformer_generation(m, p)
+    assert out is None
+    assert meta.get("err") == "invalid_align_pattern"
 
 
 def test_run_conformer_generation_cancelled_before_work():

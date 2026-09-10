@@ -23,6 +23,7 @@ from rdkit import Chem
 from molmanager.ui.mol_viewer_3d import (
     _mol_block_b64,
     _offline_index_html,
+    _offline_index_html_multiconf,
     build_3dmol_html,
     bundled_3dmol_available,
     prepare_mol_2d,
@@ -52,6 +53,40 @@ def test_build_3dmol_html_contains_script_and_model():
     assert "Mouse controls" not in html
     assert "chem-atom-panel" not in html
     assert "chem-atom-detail" not in html
+    assert "Reset Structure" in html
+    assert "molmanagerResetStructure" in html
+    assert "chem-reset-menu" in html
+    assert "molmanagerHomeView" in html
+    assert "__RESET_JS__" not in html
+
+
+def test_multiconf_html_has_no_on_canvas_chrome():
+    import base64
+
+    payload = base64.b64encode(b'["QQ=="]').decode("ascii")
+    html = _offline_index_html_multiconf(payload)
+    assert "chem-strain-overlay" not in html
+    assert "chem-conf-bar" not in html
+    assert "chem-conf-prev" not in html
+    assert "molmanagerLoadConf" in html
+    assert "molmanagerShowSuperpose" in html
+    assert "molmanagerSetConfLegend" in html
+    assert "chem-conf-legend" in html
+    assert "molmanagerRefit" in html
+    assert "Reset Structure" in html
+    assert "molmanagerResetStructure" in html
+    assert "chem-reset-menu" in html
+    assert "__RESET_JS__" not in html
+    assert "ensureViewer" in html
+    assert "bootView" in html
+    assert "distinctOverlayColors" in html
+    assert "opts && opts.colors" in html
+    assert "list[mi] % palette.length" not in html
+    assert "#c0392b" in html
+    assert "width:100%" in html
+    assert "height:100%" in html
+    assert "inset:0" not in html
+    assert "inset: 0" not in html
 
 
 def test_bundled_3dmol_present_in_repo():
@@ -158,7 +193,9 @@ def test_prepare_mol_3d_sf5_octahedral_not_uff_destroyed():
     angles = []
     for i in range(len(f_idxs)):
         for j in range(i + 1, len(f_idxs)):
-            ang = float(np.degrees(np.arccos(np.clip(np.dot(unit(f_idxs[i]), unit(f_idxs[j])), -1, 1))))
+            ang = float(
+                np.degrees(np.arccos(np.clip(np.dot(unit(f_idxs[i]), unit(f_idxs[j])), -1, 1)))
+            )
             angles.append(ang)
     # Octahedral F–S–F: four ~90° and one ~180° among the five fluorines.
     assert any(abs(a - 180.0) < 8.0 for a in angles)

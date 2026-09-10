@@ -1,6 +1,6 @@
 # Superpose Conformers
 
-Superpose Conformers aligns conformers within a molecule for visual comparison using shared atoms and alignment options.
+Superpose Conformers aligns conformers within a molecule for visual comparison using shared atoms and alignment options. When it finishes, a 3D results window opens in Superpose mode with per-conformer energies, ΔE, population, and RMSD.
 
 ## Goal
 
@@ -28,7 +28,7 @@ Molecules that already have multiple conformers available in the working context
 1. Generate or load multi-conformer molecules.
 2. Open **Superpose Conformers** and set alignment options.
 3. Run superposition on the scoped rows.
-4. Inspect overlays in the 3D viewer.
+4. Inspect the 3D results window (overlay plus energy table). If several rows were processed, the first overlay opens; use **View Conformers** on other **superpose** cells.
 
 ## Use cases
 

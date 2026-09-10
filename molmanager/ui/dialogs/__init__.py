@@ -41,7 +41,6 @@ from .mol_tools import (
     GenerateSingleConformationDialog,
     SuperposeConformersDialog,
     SuperposeStructuresDialog,
-    StrainEnergyDialog,
     CalculateRmsdDialog,
 )
 from .mmp import MmpDialog, MmpDialogParams
@@ -111,7 +110,6 @@ __all__ = [
     "SketcherDialog",
     "SuperposeConformersDialog",
     "SuperposeStructuresDialog",
-    "StrainEnergyDialog",
     "CalculateRmsdDialog",
     "selection_scope_checked",
 ]

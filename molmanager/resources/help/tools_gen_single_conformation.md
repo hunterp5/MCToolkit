@@ -27,7 +27,7 @@ Valid structures in scope; **Selected Rows Only** optional.
 1. Scope target rows.
 2. Set force field, seed, and iteration limit.
 3. Run the job.
-4. Inspect the single conformer in a 3D viewer or export.
+4. Inspect the 3D results window (energy table plus pose). Reopen later with **View Conformers**.
 
 ## Use cases
 

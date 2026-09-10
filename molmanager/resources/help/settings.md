@@ -1,6 +1,6 @@
 # Settings
 
-Settings control appearance and keyboard shortcuts: themes, application/table fonts, and the hotkey editor.
+Settings control appearance and keyboard shortcuts: themes, application/table fonts, the hotkey editor, and whether the status bar is shown.
 
 ## Goal
 
@@ -20,6 +20,7 @@ Global UI preferences for this installation/session; they do not alter table che
 - **Custom Colors...** - edit named custom themes (palette roles, save/delete).
 - **Font...** - **Application font size**, **Table font size**, **Reset to Default**.
 - **Hotkeys...** - category/command/shortcut table with **Reset to Defaults**, **Clear Selected**, and OK/Cancel.
+- **Status Bar** - show or hide the bottom bar (status messages and memory use).
 
 ## Workflow
 

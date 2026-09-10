@@ -17,7 +17,10 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import logging
+import math
 import os
 import threading
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
@@ -47,6 +50,9 @@ class ConformerGenParams:
     random_seed: int = 0xC0FFEE
     prune_rms_threshold: float = -1.0
     max_iterations: int = 200
+    # When non-empty, generated conformers are rigidly aligned on this substructure.
+    align_pattern: str = ""
+    align_pattern_is_smarts: bool = False
 
     @classmethod
     def single_lowest_energy(
@@ -155,6 +161,9 @@ def run_conformer_generation(
     """
     Embed multiple conformers, minimize (MMFF or UFF), prune by energy window, RemoveHs.
 
+    When ``params.align_pattern`` is set and at least two conformers remain, they are
+    rigidly aligned on that substructure (same matching rules as Superpose Conformers).
+
     Returns ``(mol_or_None, meta)``. The UI writes a ``confs`` cell via :func:`~molmanager.confs_codec.pack_confs_cell`
     (metadata plus packed mol blocks when there are multiple conformers) and does **not** replace the row's
     working molecule or redraw the Structure column.
@@ -165,7 +174,11 @@ def run_conformer_generation(
     For very large ensembles or many rows, packing may truncate conformers to fit the cell size limit;
     consider storing only a path or DB key in ``confs`` and keeping payloads on disk instead.
     """
-    meta: dict = {"ok": False, "n_requested": int(params.num_confs), "seed": int(params.random_seed)}
+    meta: dict = {
+        "ok": False,
+        "n_requested": int(params.num_confs),
+        "seed": int(params.random_seed),
+    }
     if cancel_event is not None and cancel_event.is_set():
         meta["err"] = "cancelled"
         return None, meta
@@ -235,6 +248,11 @@ def run_conformer_generation(
         m = Chem.RemoveHs(m)
     except Exception:
         pass
+
+    aligned, align_err = _align_generated_conformers(m, params, meta, cancel_event)
+    if align_err:
+        return None, meta
+    m = aligned
 
     meta["ok"] = True
     return m, meta
@@ -329,7 +347,9 @@ class ConformerGenerationWorker(QRunnable):
                                 else:
                                     f.cancel()
                             break
-                        completed, pending = wait(pending, timeout=0.08, return_when=FIRST_COMPLETED)
+                        completed, pending = wait(
+                            pending, timeout=0.08, return_when=FIRST_COMPLETED
+                        )
                         for f in completed:
                             if f.cancelled():
                                 continue
@@ -397,7 +417,9 @@ class SuperposeParams:
     align_pattern_is_smarts: bool = False
 
 
-def _superpose_atom_map(m: Chem.Mol, params: SuperposeParams) -> tuple[list[tuple[int, int]] | None, str | None]:
+def _superpose_atom_map(
+    m: Chem.Mol, params: SuperposeParams
+) -> tuple[list[tuple[int, int]] | None, str | None]:
     """
     Build ``atomMap`` for :func:`rdMolAlign.AlignMol` (probe index, ref index) for same-molecule conformers.
 
@@ -522,6 +544,54 @@ def run_superpose_conformers(
     return m, meta
 
 
+def _align_generated_conformers(
+    m: Chem.Mol,
+    params: ConformerGenParams,
+    meta: dict,
+    cancel_event: threading.Event | None,
+) -> tuple[Chem.Mol | None, str | None]:
+    """
+    Rigidly overlay generated conformers on ``params.align_pattern`` when set.
+
+    Returns ``(mol, None)`` on success (including no-op when the pattern is empty
+    or only one conformer remains). On failure, writes ``meta["err"]`` and returns
+    ``(None, error_code)``.
+    """
+    ap = (params.align_pattern or "").strip()
+    if not ap:
+        return m, None
+    meta["align_pattern"] = ap[:120]
+    meta["align_smarts"] = bool(params.align_pattern_is_smarts)
+    if cancel_event is not None and cancel_event.is_set():
+        meta["err"] = "cancelled"
+        meta["ok"] = False
+        return None, "cancelled"
+    try:
+        nconf = int(m.GetNumConformers())
+    except Exception:
+        nconf = 0
+    if nconf < 2:
+        return m, None
+    aligned, sp_meta = run_superpose_conformers(
+        m,
+        SuperposeParams(
+            reference_conformer_index=0,
+            heavy_atoms_only=True,
+            align_pattern=ap,
+            align_pattern_is_smarts=bool(params.align_pattern_is_smarts),
+        ),
+        cancel_event=cancel_event,
+    )
+    if aligned is None:
+        meta["ok"] = False
+        meta["err"] = str(sp_meta.get("err") or "align_failed")
+        return None, meta["err"]
+    for k in ("n_align_atoms", "rms_mean", "rms_max", "ref_cid"):
+        if k in sp_meta:
+            meta[k] = sp_meta[k]
+    return aligned, None
+
+
 @dataclass(frozen=True)
 class SuperposeStructuresParams:
     """Options for aligning distinct table structures onto a reference molecule."""
@@ -595,7 +665,8 @@ def _atom_map_from_query(
         pairs = [
             (p, r)
             for p, r in pairs
-            if probe.GetAtomWithIdx(p).GetAtomicNum() != 1 and ref.GetAtomWithIdx(r).GetAtomicNum() != 1
+            if probe.GetAtomWithIdx(p).GetAtomicNum() != 1
+            and ref.GetAtomWithIdx(r).GetAtomicNum() != 1
         ]
     return pairs if len(pairs) >= 2 else None
 
@@ -767,7 +838,9 @@ def run_superpose_structures(
     ref_id = None if ref_oid is None else int(ref_oid)
     for oid, probe in probes:
         if cancel_event is not None and cancel_event.is_set():
-            out.append((int(oid), None, {"ok": False, "err": "cancelled", "op": "superpose_structures"}))
+            out.append(
+                (int(oid), None, {"ok": False, "err": "cancelled", "op": "superpose_structures"})
+            )
             continue
         if ref_id is not None and int(oid) == ref_id:
             m = _single_conformer_mol(ref_single or ref_mol)
@@ -800,17 +873,31 @@ def _superpose_row_task(task: tuple) -> tuple[int, Chem.Mol | None, str]:
     cancel_event = task[3] if len(task) > 3 else None
     try:
         if cancel_event is not None and cancel_event.is_set():
-            return oid, None, format_confs_table_cell({"ok": False, "err": "cancelled", "op": "superpose"})
+            return (
+                oid,
+                None,
+                format_confs_table_cell({"ok": False, "err": "cancelled", "op": "superpose"}),
+            )
         mol = mol_from_packed_confs_cell(cell or "")
         if mol is None:
-            return oid, None, format_confs_table_cell({"ok": False, "err": "no_packed_conformers", "op": "superpose"})
+            return (
+                oid,
+                None,
+                format_confs_table_cell(
+                    {"ok": False, "err": "no_packed_conformers", "op": "superpose"}
+                ),
+            )
         new_m, meta = run_superpose_conformers(mol, params, cancel_event=cancel_event)
         if new_m is None:
             return oid, None, format_confs_table_cell(meta)
         return oid, new_m, pack_confs_cell(meta, new_m)
     except Exception as e:
         logger.exception("SuperposeConformersWorker failed for oid=%s", oid)
-        return oid, None, format_confs_table_cell({"ok": False, "err": str(e)[:200], "op": "superpose"})
+        return (
+            oid,
+            None,
+            format_confs_table_cell({"ok": False, "err": str(e)[:200], "op": "superpose"}),
+        )
 
 
 class SuperposeConformersWorker(QRunnable):
@@ -876,7 +963,9 @@ class SuperposeConformersWorker(QRunnable):
                                 else:
                                     f.cancel()
                             break
-                        completed, pending = wait(pending, timeout=0.08, return_when=FIRST_COMPLETED)
+                        completed, pending = wait(
+                            pending, timeout=0.08, return_when=FIRST_COMPLETED
+                        )
                         for f in completed:
                             if f.cancelled():
                                 continue
@@ -1206,13 +1295,48 @@ class StrainEnergyParams:
 
 
 STRAIN_ENERGY_HEADERS = ("Strain_energies", "Strain_max", "E_ref")
+STRAIN_ALT_FORCE_FIELDS = ("MMFF", "MMFF94s", "UFF")
+# kcal/(mol·K); used for Boltzmann populations at 298.15 K
+_GAS_CONSTANT_KCAL = 0.00198720425864083
+_BOLTZMANN_T_K = 298.15
+
+
+def _normalize_strain_force_field(force_field: str) -> str:
+    """Map dialog / param strings onto MMFF, MMFF94s, or UFF."""
+    key = (force_field or "MMFF").strip().upper().replace(" ", "")
+    if key in {"UFF"}:
+        return "UFF"
+    if key in {"MMFF94S"}:
+        return "MMFF94s"
+    return "MMFF"
+
+
+def _boltzmann_fractions(delta_min_kcal: list[float], t_k: float = _BOLTZMANN_T_K) -> list[float]:
+    """Relative populations from ΔE vs the lowest-energy conformer (kcal/mol)."""
+    n = len(delta_min_kcal)
+    if n == 0:
+        return []
+    rt = _GAS_CONSTANT_KCAL * float(t_k)
+    if rt <= 0:
+        rt = _GAS_CONSTANT_KCAL * _BOLTZMANN_T_K
+    weights: list[float] = []
+    for d in delta_min_kcal:
+        clipped = min(max(float(d), 0.0), 80.0)
+        weights.append(math.exp(-clipped / rt))
+    z = sum(weights)
+    if z <= 0:
+        return [1.0 / n] * n
+    return [w / z for w in weights]
 
 
 def _single_point_conformer_energies(
-    mol: Chem.Mol, force_field: str
+    mol: Chem.Mol,
+    force_field: str,
+    *,
+    allow_uff_fallback: bool = True,
 ) -> tuple[list[float], str] | None:
     """
-    Single-point MMFF/UFF energies (kcal/mol) for each conformer — no minimization.
+    Single-point MMFF94, MMFF94s, or UFF energies (kcal/mol) — no minimization.
 
     Adds hydrogens with coordinates when needed for the force field.
     """
@@ -1226,23 +1350,47 @@ def _single_point_conformer_energies(
         cids = list(range(int(m.GetNumConformers())))
     if not cids:
         return None
-    ff_choice = (force_field or "MMFF").strip().upper()
+    ff_choice = _normalize_strain_force_field(force_field)
     energies: list[float] = []
-    if ff_choice == "MMFF":
-        mp = AllChem.MMFFGetMoleculeProperties(m)
+    if ff_choice in {"MMFF", "MMFF94s"}:
+        variant = "MMFF94s" if ff_choice == "MMFF94s" else "MMFF94"
+        try:
+            mp = AllChem.MMFFGetMoleculeProperties(m, mmffVariant=variant)
+        except Exception:
+            mp = None
         if mp is not None:
             for cid in cids:
                 ff = AllChem.MMFFGetMoleculeForceField(m, mp, confId=int(cid))
                 if ff is None:
                     return None
                 energies.append(float(ff.CalcEnergy()))
-            return energies, "MMFF"
+            return energies, ff_choice
+        if not allow_uff_fallback:
+            return None
     for cid in cids:
         ff = AllChem.UFFGetMoleculeForceField(m, confId=int(cid))
         if ff is None:
             return None
         energies.append(float(ff.CalcEnergy()))
     return energies, "UFF"
+
+
+def _alternate_force_field_energies(
+    mol: Chem.Mol, primary_ff: str, n_conf: int
+) -> dict[str, list[float]]:
+    """Single-point energies for the other built-in force fields, when they apply."""
+    out: dict[str, list[float]] = {}
+    for alt in STRAIN_ALT_FORCE_FIELDS:
+        if alt == primary_ff:
+            continue
+        got = _single_point_conformer_energies(mol, alt, allow_uff_fallback=False)
+        if got is None:
+            continue
+        alt_e, alt_name = got
+        if len(alt_e) != n_conf:
+            continue
+        out[alt_name] = [round(float(e), 4) for e in alt_e]
+    return out
 
 
 def run_strain_energy(
@@ -1254,7 +1402,8 @@ def run_strain_energy(
     Compute strain energy of each conformer relative to a reference conformer.
 
     Strain_i = E_i − E_ref (kcal/mol) from a single-point force-field evaluation
-    (coordinates are not re-minimized).
+    (coordinates are not re-minimized). Also reports ΔE vs the lowest-energy
+    conformer and Boltzmann populations at 298.15 K.
     """
     meta: dict = {"ok": False, "op": "strain"}
     if cancel_event is not None and cancel_event.is_set():
@@ -1286,20 +1435,206 @@ def run_strain_energy(
         ref_idx = len(energies) - 1
         ref_clamped = True
     e_ref = float(energies[ref_idx])
+    e_min = min(float(e) for e in energies)
     strains = [float(e) - e_ref for e in energies]
+    deltas_min = [float(e) - e_min for e in energies]
+    pop_fracs = _boltzmann_fractions(deltas_min)
     meta["ok"] = True
     meta["ref_idx"] = ref_idx
     meta["ref_clamped"] = ref_clamped
     meta["e_ref_kcal"] = round(e_ref, 4)
+    meta["e_min_kcal"] = round(e_min, 4)
     meta["strain_max_kcal"] = round(max(strains), 4) if strains else 0.0
     meta["energies"] = [round(float(e), 4) for e in energies]
     meta["strains"] = [round(float(s), 4) for s in strains]
+    meta["deltas_min"] = [round(float(s), 4) for s in deltas_min]
+    meta["pop_fracs"] = [round(float(p), 6) for p in pop_fracs]
+    by_ff = {ff: list(meta["energies"])}
+    by_ff.update(_alternate_force_field_energies(mol, ff, len(energies)))
+    meta["energies_by_ff"] = by_ff
     row = {
         "Strain_energies": ";".join(f"{s:.4f}" for s in strains),
         "Strain_max": f"{max(strains):.4f}" if strains else "0.0000",
         "E_ref": f"{e_ref:.4f}",
     }
     return row, meta
+
+
+def _rmsd_overlay_fields(mol: Chem.Mol, ref_idx: int) -> tuple[list[float], float]:
+    """RMSD of each conformer vs *ref_idx* after rigid alignment, or empty on failure."""
+    _rms_row, rms_meta = run_conformer_rmsd(
+        mol,
+        RmsdParams(reference_conformer_index=int(ref_idx), heavy_atoms_only=True),
+    )
+    rms_vals: list[float] = []
+    rms_max = 0.0
+    if rms_meta.get("ok") and _rms_row:
+        try:
+            rms_vals = [
+                float(x) for x in str(_rms_row.get("RMSD_values", "")).split(";") if x.strip()
+            ]
+        except Exception:
+            rms_vals = []
+        try:
+            rms_max = float(rms_meta.get("rms_max", _rms_row.get("RMSD_max", 0.0)))
+        except Exception:
+            rms_max = max(rms_vals) if rms_vals else 0.0
+        if len(rms_vals) != int(mol.GetNumConformers()):
+            rms_vals = []
+    return rms_vals, rms_max
+
+
+def _overlay_dict_from_strain_meta(
+    meta: dict,
+    *,
+    rmsds: list[float] | None = None,
+    rmsd_max: float = 0.0,
+) -> dict | None:
+    if not meta.get("ok"):
+        return None
+    energies = meta.get("energies") or []
+    strains = meta.get("strains") or []
+    if not energies or len(strains) != len(energies):
+        return None
+    overlay = {
+        "energies": [float(e) for e in energies],
+        "deltas": [float(s) for s in strains],
+        "deltas_min": [float(s) for s in (meta.get("deltas_min") or [])],
+        "pop_fracs": [float(p) for p in (meta.get("pop_fracs") or [])],
+        "e_ref": float(meta.get("e_ref_kcal", 0.0)),
+        "e_min": float(meta.get("e_min_kcal", 0.0)),
+        "strain_max": float(meta.get("strain_max_kcal", 0.0)),
+        "ref_idx": int(meta.get("ref_idx", 0)),
+        "ff": str(meta.get("ff") or ""),
+        "energies_by_ff": dict(meta.get("energies_by_ff") or {}),
+    }
+    if rmsds and len(rmsds) == len(energies):
+        overlay["rmsds"] = [float(x) for x in rmsds]
+        overlay["rmsd_max"] = float(rmsd_max)
+    return overlay
+
+
+def _try_merge_mols_as_conformers(mols: list[Chem.Mol]) -> Chem.Mol | None:
+    """Merge same-atom-count mols into one multi-conformer mol, or None."""
+    if not mols:
+        return None
+    try:
+        base = Chem.Mol(mols[0])
+    except Exception:
+        return None
+    if base.GetNumConformers() < 1:
+        return None
+    if len(mols) == 1:
+        return base
+    na = int(base.GetNumAtoms())
+    for extra in mols[1:]:
+        if extra is None or extra.GetNumAtoms() != na or extra.GetNumConformers() < 1:
+            return None
+        try:
+            base.AddConformer(extra.GetConformer(0), assignId=True)
+        except Exception:
+            return None
+    return base
+
+
+def _mols_from_blocks_b64(blocks_json_b64: str) -> list[Chem.Mol]:
+    raw = (blocks_json_b64 or "").strip()
+    if not raw:
+        return []
+    try:
+        encs = json.loads(base64.b64decode(raw.encode("ascii")))
+    except Exception:
+        return []
+    if not isinstance(encs, list):
+        return []
+    mols: list[Chem.Mol] = []
+    for enc in encs:
+        if not isinstance(enc, str):
+            continue
+        try:
+            block = base64.b64decode(enc.encode("ascii")).decode("utf-8")
+        except Exception:
+            continue
+        m = Chem.MolFromMolBlock(block, sanitize=True, removeHs=False)
+        if m is None:
+            m = Chem.MolFromMolBlock(block, sanitize=False, removeHs=False)
+        if m is not None and m.GetNumConformers() >= 1:
+            mols.append(m)
+    return mols
+
+
+def strain_overlay_for_mol(
+    mol: Chem.Mol,
+    params: StrainEnergyParams | None = None,
+) -> dict | None:
+    """Build the 3D-viewer energy table payload for a multi-conformer molecule."""
+    if mol is None or mol.GetNumConformers() < 1:
+        return None
+    p = params or StrainEnergyParams()
+    _row, meta = run_strain_energy(mol, p)
+    overlay = _overlay_dict_from_strain_meta(meta)
+    if overlay is None:
+        return None
+    rms_vals, rms_max = _rmsd_overlay_fields(mol, int(meta.get("ref_idx", 0)))
+    if rms_vals:
+        overlay["rmsds"] = rms_vals
+        overlay["rmsd_max"] = float(rms_max)
+    return overlay
+
+
+def strain_overlay_for_mols(
+    mols: list[Chem.Mol],
+    params: StrainEnergyParams | None = None,
+) -> dict | None:
+    """Score one mol or a list of poses (e.g. superposed structures)."""
+    if not mols:
+        return None
+    merged = _try_merge_mols_as_conformers(mols)
+    if merged is not None:
+        return strain_overlay_for_mol(merged, params)
+    p = params or StrainEnergyParams()
+    energies: list[float] = []
+    ff_used = _normalize_strain_force_field(p.force_field)
+    for m in mols:
+        opt = _single_point_conformer_energies(m, p.force_field)
+        if opt is None or not opt[0]:
+            return None
+        energies.append(float(opt[0][0]))
+        ff_used = str(opt[1] or ff_used)
+    ref_idx = int(p.reference_conformer_index or 0)
+    if ref_idx < 0:
+        ref_idx = 0
+    if ref_idx >= len(energies):
+        ref_idx = len(energies) - 1
+    e_ref = float(energies[ref_idx])
+    e_min = min(energies)
+    strains = [float(e) - e_ref for e in energies]
+    deltas_min = [float(e) - e_min for e in energies]
+    meta = {
+        "ok": True,
+        "ff": ff_used,
+        "ref_idx": ref_idx,
+        "e_ref_kcal": round(e_ref, 4),
+        "e_min_kcal": round(e_min, 4),
+        "strain_max_kcal": round(max(strains), 4) if strains else 0.0,
+        "energies": [round(float(e), 4) for e in energies],
+        "strains": [round(float(s), 4) for s in strains],
+        "deltas_min": [round(float(s), 4) for s in deltas_min],
+        "pop_fracs": [round(float(x), 6) for x in _boltzmann_fractions(deltas_min)],
+        "energies_by_ff": {ff_used: [round(float(e), 4) for e in energies]},
+    }
+    return _overlay_dict_from_strain_meta(meta)
+
+
+def strain_overlay_for_blocks_b64(
+    blocks_json_b64: str,
+    params: StrainEnergyParams | None = None,
+) -> dict | None:
+    """Score packed 3Dmol blocks (same-molecule conformers or distinct structures)."""
+    mols = _mols_from_blocks_b64(blocks_json_b64)
+    if not mols:
+        return None
+    return strain_overlay_for_mols(mols, params)
 
 
 def _strain_energy_row_task(task: tuple) -> tuple[int, dict[str, str]]:
@@ -1450,5 +1785,3 @@ class StrainEnergyWorker(QRunnable):
                 self.signals.calculated.emit(mapped, headers)
             except Exception:
                 logger.warning("strain energy calculated emit failed", exc_info=True)
-
-

@@ -1866,18 +1866,14 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             and action == view_conformers_act
             and packed_confs_b64 is not None
         ):
-            from ..mol_viewer_3d import open_conformation_viewer_from_blocks_payload
-
             confs_col = "confs"
             if 0 <= col < len(self.headers):
                 hdr = self.headers[col]
                 if hdr in ("confs", "superpose"):
                     confs_col = hdr
-            open_conformation_viewer_from_blocks_payload(
-                self,
+            self.open_packed_conformer_viewer(
                 packed_confs_b64,
                 title="View Conformers",
-                initial_superpose=False,
                 export_parent_oid=oid,
                 export_confs_column=confs_col,
                 source_oid=oid,

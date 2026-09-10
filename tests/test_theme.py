@@ -76,7 +76,7 @@ def test_filter_card_stylesheet_uses_palette_roles():
     assert "border-radius: 0px" in qss_l
     assert 'fcDragging="true"' in qss
     assert "QPushButton#fcToggle" in qss
-    assert "QPushButton#fcToggle[fcActive=\"true\"]" in qss
+    assert 'QPushButton#fcToggle[fcActive="true"]' in qss
     # Same rules for both themes — colors come from the application palette.
     assert filter_card_stylesheet(THEME_LIGHT) == filter_card_stylesheet(THEME_DARK)
     assert filter_card_stylesheet(THEME_GROOVY) == filter_card_stylesheet(THEME_LIGHT)
@@ -98,6 +98,17 @@ def test_apply_application_theme_sets_current(qapp, tmp_path, monkeypatch):
     tid = make_custom_theme_id(name)
     apply_application_theme(QApplication.instance(), tid)
     assert current_theme_name() == tid
+
+
+def test_status_bar_visible_save_and_load(tmp_path, monkeypatch):
+    _isolate_theme_settings(tmp_path, monkeypatch)
+    from molmanager.ui.theme import load_status_bar_visible, save_status_bar_visible
+
+    assert load_status_bar_visible() is True
+    save_status_bar_visible(False)
+    assert load_status_bar_visible() is False
+    save_status_bar_visible(True)
+    assert load_status_bar_visible() is True
 
 
 def test_custom_palette_save_load_and_apply(qapp, tmp_path, monkeypatch):
@@ -172,9 +183,9 @@ def test_groovy_palette_is_randomized():
     b = palette_for_theme(THEME_GROOVY, rng=random.Random(2))
     from PyQt5.QtGui import QPalette
 
-    assert a.color(QPalette.Window) != b.color(QPalette.Window) or a.color(QPalette.Highlight) != b.color(
+    assert a.color(QPalette.Window) != b.color(QPalette.Window) or a.color(
         QPalette.Highlight
-    )
+    ) != b.color(QPalette.Highlight)
 
 
 def test_refresh_open_windows_theme_calls_hook(qapp):

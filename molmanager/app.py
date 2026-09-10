@@ -18,14 +18,18 @@ import logging
 import os
 import sys
 
-from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QApplication
+from .qt_webengine import configure_qtwebengine_quiet_logs
+
+configure_qtwebengine_quiet_logs()
+
+from PyQt5.QtCore import QTimer  # noqa: E402
+from PyQt5.QtWidgets import QApplication  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-from .app_logging import configure_app_logging, install_crash_excepthook
-from .rdkit_env import configure_rdkit_for_desktop_app
-from .ui.main_window import ChemicalTableApp
+from .app_logging import configure_app_logging, install_crash_excepthook  # noqa: E402
+from .rdkit_env import configure_rdkit_for_desktop_app  # noqa: E402
+from .ui.main_window import ChemicalTableApp  # noqa: E402
 
 
 def _configure_logging() -> None:
@@ -36,6 +40,7 @@ def _configure_logging() -> None:
 
 def _preload_qt_webengine() -> None:
     """Import QtWebEngine *before* ``QApplication`` — required for Chromium/QtWebEngineProcess on Windows."""
+    configure_qtwebengine_quiet_logs()
     try:
         import PyQt5.QtWebEngineWidgets  # noqa: F401 — side effect: registers WebEngine with Qt
     except Exception as e:
@@ -112,4 +117,3 @@ def main(argv: list[str] | None = None) -> int:
 
         QTimer.singleShot(0, _do_open)
     return app.exec_()
-

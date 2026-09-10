@@ -39,6 +39,7 @@ _SETTINGS_KEY_CUSTOM_PALETTE = "gui/custom_palette"  # legacy single palette
 _SETTINGS_KEY_CUSTOM_THEMES = "gui/custom_themes"
 _SETTINGS_KEY_TABLE_FONT_PT = "gui/table_font_pt"
 _SETTINGS_KEY_APP_FONT_PT = "gui/app_font_pt"
+_SETTINGS_KEY_STATUS_BAR = "gui/status_bar_visible"
 
 _CURRENT_THEME = THEME_LIGHT
 
@@ -116,6 +117,23 @@ def load_saved_app_font_pt() -> int:
 
 def save_app_font_pt(pt: int) -> None:
     QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_APP_FONT_PT, int(pt))
+
+
+def load_status_bar_visible() -> bool:
+    """Whether the main-window status bar (messages and memory) is shown."""
+    raw = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SETTINGS_KEY_STATUS_BAR, True)
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, float)):
+        return bool(int(raw))
+    s = str(raw or "").strip().lower()
+    if not s:
+        return True
+    return s not in {"0", "false", "no", "off"}
+
+
+def save_status_bar_visible(visible: bool) -> None:
+    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_STATUS_BAR, bool(visible))
 
 
 def apply_application_font_pt(pt: int) -> int:

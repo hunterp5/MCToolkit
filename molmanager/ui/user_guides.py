@@ -79,7 +79,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Processes",
                 "Running and queued background jobs; cancel and clear.",
             ),
-            _e("settings", "Settings", "Settings", "Theme, fonts, and keyboard shortcuts."),
+            _e(
+                "settings",
+                "Settings",
+                "Settings",
+                "Theme, fonts, status bar, and keyboard shortcuts.",
+            ),
         ),
     ),
     GuideSection(
