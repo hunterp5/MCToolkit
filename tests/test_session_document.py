@@ -110,3 +110,61 @@ def test_session_document_roundtrip_restores_logarithmic_columns(qapp):  # noqa:
     w2._apply_session_document(doc)
     assert "MW" in w2._logarithmic_columns
 
+
+def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
+    from molmanager.som_prediction import (
+        SOM_MAP_COLUMN,
+        SOM_PROB_COLUMN,
+        SOM_SITES_COLUMN,
+        SomAtomHit,
+    )
+    from molmanager.ui.som_browser import SomBrowseRecord, records_from_table
+
+    w = ChemicalTableApp()
+    w.headers = [
+        "ID_HIDDEN",
+        "Structure",
+        "SMILES",
+        SOM_MAP_COLUMN,
+        SOM_SITES_COLUMN,
+        SOM_PROB_COLUMN,
+    ]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(
+        7,
+        {
+            "SMILES": "CCO",
+            SOM_MAP_COLUMN: "CCO",
+            SOM_SITES_COLUMN: "0",
+            SOM_PROB_COLUMN: "0:0.91; 1:0.12",
+        },
+    )
+    w.mols[7] = Chem.MolFromSmiles("CCO")
+    w.next_oid = 8
+    w._table_model.register_pixmap_column(SOM_MAP_COLUMN)
+    w._som_browse_records = [
+        SomBrowseRecord(
+            oid=7,
+            smiles="CCO",
+            atoms=(SomAtomHit(0, 0.91, True), SomAtomHit(1, 0.12, False)),
+        )
+    ]
+    assert w._table_model.cell_text(0, w.headers.index(SOM_MAP_COLUMN)) == ""
+    assert w._table_model.backing_value_for_row_header(0, SOM_MAP_COLUMN) == "CCO"
+
+    doc = w._build_session_document()
+    assert doc["rows"][0]["cells"][SOM_MAP_COLUMN] == "CCO"
+    assert doc["som_browse"][0]["oid"] == 7
+    assert doc["som_browse"][0]["smiles"] == "CCO"
+    assert doc["som_browse"][0]["atoms"][0]["atom_id"] == 0
+
+    w2 = ChemicalTableApp()
+    w2._apply_session_document(doc)
+    assert w2._table_model.is_pixmap_data_column(SOM_MAP_COLUMN)
+    pm = w2._table_model.column_pixmap_copy(7, SOM_MAP_COLUMN)
+    assert pm is not None and not pm.isNull()
+    assert w2._table_model.backing_value_for_row_header(0, SOM_MAP_COLUMN) == "CCO"
+    recs = list(getattr(w2, "_som_browse_records", None) or ())
+    assert recs and recs[0].oid == 7 and recs[0].atoms[0].is_som
+    table_recs = records_from_table(w2)
+    assert table_recs and table_recs[0].smiles == "CCO"

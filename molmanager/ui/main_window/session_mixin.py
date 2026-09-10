@@ -59,7 +59,9 @@ class SessionMixin:
         """Launch a new MolManager instance with the current table state."""
         try:
             path = self._write_session_bundle_file()
-            subprocess.Popen([sys.executable, "-m", "molmanager", "--load-session", path], close_fds=True)
+            subprocess.Popen(
+                [sys.executable, "-m", "molmanager", "--load-session", path], close_fds=True
+            )
         except Exception as e:
             QMessageBox.warning(self, "Duplicate Session", str(e))
 
@@ -111,6 +113,7 @@ class SessionMixin:
                 w.writerow(row)
 
         return out_path
+
     def _write_session_bundle_file(self) -> str:
         """Write a full session bundle (.cms JSON) under the temp session directory."""
         session_dir = os.path.join(tempfile.gettempdir(), "MolManagerSessions")
@@ -143,7 +146,10 @@ class SessionMixin:
             for ci, h in enumerate(self.headers):
                 if h in ("ID_HIDDEN", "Structure"):
                     continue
-                cells[h] = self._table_cell_text(r, ci)
+                if self._table_model.is_pixmap_data_column(h):
+                    cells[h] = self._table_model.backing_value_for_row_header(r, h)
+                else:
+                    cells[h] = self._table_cell_text(r, ci)
             if "SMILES" not in cells or not (cells.get("SMILES") or "").strip():
                 mol = self._mol_for_structure_row(r)
                 if mol is not None:
@@ -225,12 +231,22 @@ class SessionMixin:
             "sort_mode": sort_mode,
             "column_colors": self._table_model.export_column_color_rules(),
             "logarithmic_columns": sorted(
-                h
-                for h in getattr(self, "_logarithmic_columns", set())
-                if h in self.headers
+                h for h in getattr(self, "_logarithmic_columns", set()) if h in self.headers
             ),
-            "confs_sidecar": serialize_confs_sidecar(getattr(self, "_confs_blocks_sidecar", {}) or {}),
+            "confs_sidecar": serialize_confs_sidecar(
+                getattr(self, "_confs_blocks_sidecar", {}) or {}
+            ),
+            "som_browse": self._session_som_browse_payload(),
         }
+
+    def _session_som_browse_payload(self) -> list[dict]:
+        """Atom-level SOM maps for session restore (redraws table images on open)."""
+        from ..som_browser import records_from_table, serialize_som_browse_records
+
+        records = list(getattr(self, "_som_browse_records", None) or ())
+        if not records:
+            records = records_from_table(self)
+        return serialize_som_browse_records(records)
 
     def _restore_column_visual_order(self, logical_order: list[int]) -> None:
         h = self.table.horizontalHeader()
@@ -258,7 +274,10 @@ class SessionMixin:
         self._sync_filter_panel_scroll_content()
 
     def _apply_session_document(self, doc: dict) -> None:
-        if not self._session_format_ok(doc.get("format")) or int(doc.get("version", 0)) != self._SESSION_VERSION:
+        if (
+            not self._session_format_ok(doc.get("format"))
+            or int(doc.get("version", 0)) != self._SESSION_VERSION
+        ):
             raise ValueError("Unsupported session format.")
         self.clear_all()
         self._table_stack.setCurrentIndex(1)
@@ -291,7 +310,9 @@ class SessionMixin:
                     max_id = max(max_id, oid)
                     cells = entry.get("cells") or {}
                     smi = (cells.get("SMILES", "") or "").strip()
-                    row_cells = {cname: str(cells.get(cname, "") or "") for cname in self.headers[2:]}
+                    row_cells = {
+                        cname: str(cells.get(cname, "") or "") for cname in self.headers[2:]
+                    }
                     batch_rows.append((oid, row_cells))
                     mol = Chem.MolFromSmiles(smi) if smi else None
                     if mol is not None:
@@ -374,8 +395,12 @@ class SessionMixin:
                 c = SubstructureFilterCard(structure_sources=sources)
                 self._append_filter_widget(c, title=str(spec.get("title") or "") or None)
                 c.set_smarts(str(spec.get("smarts", "") or ""))
-                c.set_structure_source(str(spec.get("structure_source", "Structure") or "Structure"))
-                c.restore_filter_flags(bool(spec.get("enabled", True)), bool(spec.get("inverted", False)))
+                c.set_structure_source(
+                    str(spec.get("structure_source", "Structure") or "Structure")
+                )
+                c.restore_filter_flags(
+                    bool(spec.get("enabled", True)), bool(spec.get("inverted", False))
+                )
             elif kind == "range":
                 props = list(self.global_bounds.keys()) or ["SMILES"]
                 c = FilterCard(props, self)
@@ -386,7 +411,9 @@ class SessionMixin:
                         c.restore_state(p, float(spec.get("min", 0)), float(spec.get("max", 0)))
                     except Exception:
                         pass
-                c.restore_filter_flags(bool(spec.get("enabled", True)), bool(spec.get("inverted", False)))
+                c.restore_filter_flags(
+                    bool(spec.get("enabled", True)), bool(spec.get("inverted", False))
+                )
             elif kind == "text":
                 cols = self._filterable_data_column_names()
                 if not cols:
@@ -399,7 +426,9 @@ class SessionMixin:
                     case_sensitive=bool(spec.get("case_sensitive", False)),
                     partial_match=bool(spec.get("partial_match", True)),
                 )
-                c.restore_filter_flags(bool(spec.get("enabled", True)), bool(spec.get("inverted", False)))
+                c.restore_filter_flags(
+                    bool(spec.get("enabled", True)), bool(spec.get("inverted", False))
+                )
             elif kind == "category":
                 cols = self._filterable_data_column_names()
                 if not cols:
@@ -410,7 +439,9 @@ class SessionMixin:
                 if not isinstance(vals, list):
                     vals = []
                 c.restore_from_session(str(spec.get("property", "") or ""), vals)
-                c.restore_filter_flags(bool(spec.get("enabled", True)), bool(spec.get("inverted", False)))
+                c.restore_filter_flags(
+                    bool(spec.get("enabled", True)), bool(spec.get("inverted", False))
+                )
         self.f_panel.setVisible(bool(doc.get("filter_panel_visible", False)))
         ws = doc.get("workspace_layout")
         mgr = getattr(self, "_workspace_layout", None)
@@ -439,7 +470,9 @@ class SessionMixin:
             mode = doc.get("sort_mode") or "auto"
             if mode not in ("auto", "numeric", "alphabetic"):
                 mode = "auto"
-            self._table_model.sort(sc, Qt.AscendingOrder if asc else Qt.DescendingOrder, sort_kind=mode)
+            self._table_model.sort(
+                sc, Qt.AscendingOrder if asc else Qt.DescendingOrder, sort_kind=mode
+            )
             self._session_sort = {"column": sc, "ascending": asc, "mode": mode}
         else:
             self._session_sort = None
@@ -462,6 +495,9 @@ class SessionMixin:
                 self._confs_blocks_sidecar = {}
                 cs = self._confs_blocks_sidecar
             cs.update(side)
+        from ..som_browser import restore_som_maps_for_session
+
+        restore_som_maps_for_session(self, doc.get("som_browse"))
         QTimer.singleShot(0, self._migrate_legacy_confs_cells_to_sidecar)
 
     def save_session_as(self) -> None:
@@ -503,8 +539,13 @@ class SessionMixin:
             logger.exception("Open session: could not read %s", path)
             QMessageBox.warning(self, "Open Session", f"Could not read file: {e}")
             return False
-        if not self._session_format_ok(d.get("format")) or int(d.get("version", 0)) != self._SESSION_VERSION:
-            QMessageBox.warning(self, "Open Session", "Not a MolManager session file (expected .cms / version 1).")
+        if (
+            not self._session_format_ok(d.get("format"))
+            or int(d.get("version", 0)) != self._SESSION_VERSION
+        ):
+            QMessageBox.warning(
+                self, "Open Session", "Not a MolManager session file (expected .cms / version 1)."
+            )
             return False
         try:
             self._apply_session_document(d)

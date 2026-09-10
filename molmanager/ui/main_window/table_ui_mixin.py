@@ -1965,6 +1965,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
 
     def clear_all(self):
         self._confs_blocks_sidecar = {}
+        self._som_browse_records = []
         if getattr(self, "_undo_stack", None) is not None:
             self._undo_stack.clear()
         try:

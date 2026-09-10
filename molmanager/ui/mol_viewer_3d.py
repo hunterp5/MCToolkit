@@ -248,7 +248,9 @@ def _offline_index_html_multiconf(
 
 def _cdn_fallback_html(mol_b64: str, *, flat: bool = False) -> str:
     """Same as offline page but loads 3Dmol from the network (only if the bundle is missing)."""
-    return _assemble_viewer_page(mol_b64, flat=flat, script_src="https://3dmol.org/build/3Dmol-min.js")
+    return _assemble_viewer_page(
+        mol_b64, flat=flat, script_src="https://3dmol.org/build/3Dmol-min.js"
+    )
 
 
 def _cdn_embed_fallback_html(mol_b64: str = "") -> str:
@@ -301,7 +303,11 @@ def _viewer_help_overlay_html() -> str:
 
 def build_3dmol_html(mol_b64: str) -> str:
     """Return a self-contained HTML document (offline bundle when available, else CDN)."""
-    return _offline_index_html(mol_b64, flat=False) if bundled_3dmol_available() else _cdn_fallback_html(mol_b64, flat=False)
+    return (
+        _offline_index_html(mol_b64, flat=False)
+        if bundled_3dmol_available()
+        else _cdn_fallback_html(mol_b64, flat=False)
+    )
 
 
 # Ideal pentafluorosulfanyl (–SF5) distances (Å). UFF has no S_6 type and can
@@ -914,11 +920,10 @@ class Molecule3DEmbedView(QWidget):
         if self._web is None or not self._web_ready:
             return
         try:
-            self._web.page().runJavaScript(
-                "if (window.molmanagerRefit) window.molmanagerRefit();"
-            )
+            self._web.page().runJavaScript("if (window.molmanagerRefit) window.molmanagerRefit();")
         except Exception:
             logger.debug("3D embed refit failed", exc_info=True)
+
     def _ensure_web(self) -> None:
         if self._bootstrapped:
             return
@@ -1145,12 +1150,14 @@ class Molecule3DViewerWidget(QWidget):
         options_ly.setSpacing(4)
         if self._export_host is not None:
             options_ly.addWidget(self._export_host)
-        self._prop_panel = PropertyColumnsPanel(self._options_host)
-        self._prop_panel.bind_app(parent_app)
-        self._prop_panel.set_source_oid(self._source_oid)
-        options_ly.addWidget(self._prop_panel)
+        # View Conformers is multi-conf; skip table field pickers. Keep them for View 2D/3D.
+        if multi_conf_blocks_json_b64 is None:
+            self._prop_panel = PropertyColumnsPanel(self._options_host)
+            self._prop_panel.bind_app(parent_app)
+            self._prop_panel.set_source_oid(self._source_oid)
+            options_ly.addWidget(self._prop_panel)
+            self._wire_property_column_updates()
         root.addWidget(self._options_host)
-        self._wire_property_column_updates()
         self._options_visible = True
 
         foot = QHBoxLayout()
@@ -1164,9 +1171,7 @@ class Molecule3DViewerWidget(QWidget):
         self._add_to_main_btn.clicked.connect(self._add_to_main_window)
         foot.addWidget(self._add_to_main_btn)
         self._send_window_btn = QPushButton("Send to New Window")
-        self._send_window_btn.setToolTip(
-            "Open this docked viewer in a separate floating window."
-        )
+        self._send_window_btn.setToolTip("Open this docked viewer in a separate floating window.")
         self._send_window_btn.clicked.connect(self._send_to_new_window)
         foot.addWidget(self._send_window_btn)
         self._close_viewer_btn = QPushButton("Close Viewer")
@@ -1178,9 +1183,7 @@ class Molecule3DViewerWidget(QWidget):
         self._toggle_options_btn = QPushButton("Hide Options")
         self._toggle_options_btn.setAutoDefault(False)
         self._toggle_options_btn.setDefault(False)
-        self._toggle_options_btn.setToolTip(
-            "Hide column pickers (and export controls) so only the structure view is shown."
-        )
+        self._toggle_options_btn.setToolTip(self._options_toggle_tooltip(hidden=False))
         self._toggle_options_btn.clicked.connect(self._toggle_options_visible)
         foot.addWidget(self._toggle_options_btn)
         foot.addStretch(1)
@@ -1295,6 +1298,21 @@ class Molecule3DViewerWidget(QWidget):
         self._send_window_btn.setVisible(docked)
         self._close_viewer_btn.setVisible(docked)
 
+    def _options_toggle_tooltip(self, *, hidden: bool) -> str:
+        has_props = getattr(self, "_prop_panel", None) is not None
+        has_export = getattr(self, "_export_host", None) is not None
+        if hidden:
+            if has_props and has_export:
+                return "Show column pickers and related viewer controls."
+            if has_export:
+                return "Show export controls."
+            return "Show column pickers."
+        if has_props and has_export:
+            return "Hide column pickers (and export controls) so only the structure view is shown."
+        if has_export:
+            return "Hide export controls so only the structure view is shown."
+        return "Hide column pickers so only the structure view is shown."
+
     def _sync_options_chrome(self) -> None:
         """Show or hide column pickers / export controls; keep a Show/Hide Options control."""
         visible = bool(getattr(self, "_options_visible", True))
@@ -1305,12 +1323,10 @@ class Molecule3DViewerWidget(QWidget):
         if btn is not None:
             if visible:
                 btn.setText("Hide Options")
-                btn.setToolTip(
-                    "Hide column pickers (and export controls) so only the structure view is shown."
-                )
+                btn.setToolTip(self._options_toggle_tooltip(hidden=False))
             else:
                 btn.setText("Show Options")
-                btn.setToolTip("Show column pickers and related viewer controls.")
+                btn.setToolTip(self._options_toggle_tooltip(hidden=True))
 
     def _toggle_options_visible(self) -> None:
         self._options_visible = not bool(getattr(self, "_options_visible", True))
@@ -1373,9 +1389,13 @@ class Molecule3DViewerWidget(QWidget):
 
     def _export_conformers_to_table(self, state) -> None:
         app = self._host_app()
-        export_fn = getattr(app, "export_conformer_viewer_to_table", None) if app is not None else None
+        export_fn = (
+            getattr(app, "export_conformer_viewer_to_table", None) if app is not None else None
+        )
         if not callable(export_fn):
-            self._set_viewer_status("Export failed: open the viewer from the main MolManager window.")
+            self._set_viewer_status(
+                "Export failed: open the viewer from the main MolManager window."
+            )
             return
         idx = 0
         superposed = False
@@ -1560,9 +1580,7 @@ def open_molecule_3d_viewer(
             "Try editing the structure or simplifying the molecule.",
         )
         return
-    dlg = Molecule3DViewerDialog(
-        m3d, parent, window_title=title, flat=False, source_oid=source_oid
-    )
+    dlg = Molecule3DViewerDialog(m3d, parent, window_title=title, flat=False, source_oid=source_oid)
     dlg.show()
 
 
@@ -1645,7 +1663,5 @@ def open_molecule_2d_viewer(
             "Could not compute a 2D layout for this structure.",
         )
         return
-    dlg = Molecule3DViewerDialog(
-        m2d, parent, window_title=title, flat=True, source_oid=source_oid
-    )
+    dlg = Molecule3DViewerDialog(m2d, parent, window_title=title, flat=True, source_oid=source_oid)
     dlg.show()

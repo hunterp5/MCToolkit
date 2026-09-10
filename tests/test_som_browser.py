@@ -294,6 +294,28 @@ def test_atoms_from_som_columns_parses_phase_sites() -> None:
     assert by_id[1].is_phase2_som and not by_id[1].is_phase1_som
 
 
+def test_som_browse_session_payload_roundtrip() -> None:
+    from molmanager.ui.som_browser import (
+        deserialize_som_browse_records,
+        serialize_som_browse_records,
+    )
+
+    recs = [
+        SomBrowseRecord(
+            oid=4,
+            smiles="CCO",
+            atoms=(SomAtomHit(0, 0.91, True, is_phase1_som=True, is_phase2_som=False),),
+        )
+    ]
+    raw = serialize_som_browse_records(recs)
+    back = deserialize_som_browse_records(raw)
+    assert len(back) == 1
+    assert back[0].oid == 4
+    assert back[0].smiles == "CCO"
+    assert back[0].atoms[0].probability == 0.91
+    assert back[0].atoms[0].is_phase1_som is True
+
+
 def test_som_browser_jump_to_oid(qapp) -> None:  # noqa: ARG001
     recs = [
         SomBrowseRecord(oid=1, smiles="CCO", atoms=(SomAtomHit(0, 0.9, True),)),

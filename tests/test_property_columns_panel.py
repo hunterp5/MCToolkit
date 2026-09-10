@@ -74,3 +74,23 @@ def test_molecule_viewer_hide_options_toggles_panel(qapp):  # noqa: ARG001
     assert not viewer._options_host.isHidden()
     assert viewer._toggle_options_btn.text() == "Hide Options"
     viewer.deleteLater()
+
+
+def test_view_conformers_omits_property_column_pickers(qapp) -> None:  # noqa: ARG001
+    from rdkit.Chem import AllChem
+
+    from molmanager.confs_codec import conformer_mol_blocks_b64_json
+    from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget
+
+    mol = Chem.MolFromSmiles("CCO")
+    AllChem.EmbedMultipleConfs(mol, numConfs=2, randomSeed=0xC0FFEE)
+    payload = conformer_mol_blocks_b64_json(mol)
+    viewer = Molecule3DViewerWidget(
+        mol,
+        None,
+        window_title="View Conformers",
+        multi_conf_blocks_json_b64=payload,
+    )
+    assert viewer._prop_panel is None
+    assert viewer._export_host is not None
+    viewer.deleteLater()

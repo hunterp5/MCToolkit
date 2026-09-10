@@ -36,4 +36,4 @@ The current in-memory table and session metadata. Open loads from a saved sessio
 
 ## Tips and limits
 
-Session files are not a substitute for raw data archives - keep original SDFs/CSVs. Very large structure caches increase file size. Opening replaces the current unsaved work unless you saved first.
+Session files are not a substitute for raw data archives - keep original SDFs/CSVs. Predict SOM maps (SMILES, sites, and atom scores) are stored so **SOM Map** images and the Predict SOM Browser can be restored on open. Opening replaces the current unsaved work unless you saved first.

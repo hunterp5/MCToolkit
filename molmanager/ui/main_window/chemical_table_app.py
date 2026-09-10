@@ -257,6 +257,7 @@ class ChemicalTableApp(
         self._plot_table_sync_timer.timeout.connect(self._sync_active_plots_from_table_selection)
         self._selection_browser_dialog = None
         self._som_browser_dialog = None
+        self._som_browse_records = []
         self._mmp_browser_dialog = None
         self._mmp_ledger_dialog = None
         self._activity_cliff_map_dialog = None

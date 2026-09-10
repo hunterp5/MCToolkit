@@ -243,6 +243,15 @@ def records_from_table(app: Any) -> list[SomBrowseRecord]:
         cols = {h: str(model.backing_value_for_row_header(row, h) or "") for h in som_headers}
         raw_map = str(cols.get(map_h) or "").strip()
         smiles = raw_map if _looks_like_smiles(raw_map) else ""
+        if not smiles:
+            smiles = str(model.backing_value_for_row_header(row, "SMILES") or "").strip()
+        if not smiles:
+            mols = getattr(app, "mols", None) or {}
+            mol = mols.get(oid)
+            if mol is not None:
+                from ..utils import mol_to_canonical_smiles
+
+                smiles = mol_to_canonical_smiles(mol) or ""
         atoms = _atoms_from_som_columns(cols)
         err = None
         if not atoms and not smiles:
@@ -259,6 +268,142 @@ def records_from_table(app: Any) -> list[SomBrowseRecord]:
             )
         )
     return [r for r in out if r.error != SOM_CANCELLED_ERROR]
+
+
+def _atom_hit_to_json(hit: SomAtomHit) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "atom_id": int(hit.atom_id),
+        "probability": float(hit.probability),
+        "is_som": bool(hit.is_som),
+    }
+    if hit.fame_score is not None:
+        payload["fame_score"] = float(hit.fame_score)
+    if hit.shannon_entropy is not None:
+        payload["shannon_entropy"] = float(hit.shannon_entropy)
+    if hit.is_phase1_som is not None:
+        payload["is_phase1_som"] = bool(hit.is_phase1_som)
+    if hit.is_phase2_som is not None:
+        payload["is_phase2_som"] = bool(hit.is_phase2_som)
+    if hit.phase1_probability is not None:
+        payload["phase1_probability"] = float(hit.phase1_probability)
+    if hit.phase2_probability is not None:
+        payload["phase2_probability"] = float(hit.phase2_probability)
+    return payload
+
+
+def serialize_som_browse_records(records: Sequence[SomBrowseRecord] | None) -> list[dict[str, Any]]:
+    """JSON-safe SOM browser payload for ``.cms`` session files."""
+    out: list[dict[str, Any]] = []
+    for rec in records or ():
+        item: dict[str, Any] = {
+            "oid": rec.oid,
+            "smiles": rec.smiles,
+            "atoms": [_atom_hit_to_json(hit) for hit in rec.atoms],
+        }
+        if rec.error:
+            item["error"] = rec.error
+        out.append(item)
+    return out
+
+
+def deserialize_som_browse_records(raw: Any) -> list[SomBrowseRecord]:
+    """Rebuild browser records from a session ``som_browse`` list."""
+    if not isinstance(raw, list):
+        return []
+    out: list[SomBrowseRecord] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        oid_raw = item.get("oid")
+        try:
+            oid = None if oid_raw is None else int(oid_raw)
+        except (TypeError, ValueError):
+            continue
+        atoms = tuple(
+            hit
+            for hit in (_coerce_atom_hit(a) for a in (item.get("atoms") or ()))
+            if hit is not None
+        )
+        out.append(
+            SomBrowseRecord(
+                oid=oid,
+                smiles=str(item.get("smiles") or ""),
+                atoms=atoms,
+                error=item.get("error"),
+            )
+        )
+    return out
+
+
+def restore_som_maps_for_session(app: Any, sidecar: Any = None) -> int:
+    """Register SOM Map columns, restore browse records, and redraw table maps.
+
+    Returns the number of map images written.
+    """
+    records = deserialize_som_browse_records(sidecar)
+    if not records:
+        records = records_from_table(app)
+    app._som_browse_records = list(records)
+    headers = list(getattr(app, "headers", None) or [])
+    map_headers = [h for h in headers if is_som_map_header(h)]
+    if not map_headers:
+        return 0
+    model = getattr(app, "_table_model", None)
+    if model is None:
+        return 0
+    from ..display_constants import structure_depiict_height, structure_depiict_width
+    from .structure_pixmap import pixmap_from_structure_render_png
+
+    for header in map_headers:
+        model.register_pixmap_column(header)
+    dw, dh = structure_depiict_width(), structure_depiict_height()
+    rec_by_oid = {int(rec.oid): rec for rec in records if rec.oid is not None}
+    mols = getattr(app, "mols", None) or {}
+    last_pm = None
+    drawn = 0
+    n = int(model.rowCount())
+    for row in range(n):
+        try:
+            oid = int(model.row_oid(row))
+        except (TypeError, ValueError):
+            continue
+        rec = rec_by_oid.get(oid)
+        smiles = rec.smiles if rec is not None else ""
+        atoms = rec.atoms if rec is not None else ()
+        if not smiles:
+            smiles = str(model.backing_value_for_row_header(row, map_headers[0]) or "").strip()
+        if not smiles or (rec is not None and rec.error and not atoms):
+            continue
+        png = render_som_map_png(
+            smiles,
+            atoms,
+            width=dw,
+            height=dh,
+            reference_mol=mols.get(oid),
+        )
+        if not png:
+            continue
+        pm = pixmap_from_structure_render_png(png, dw, dh)
+        if pm is None or pm.isNull():
+            continue
+        for header in map_headers:
+            model.set_column_pixmap(oid, header, pm)
+        last_pm = pm
+        drawn += 1
+        view_row = row
+        resolve = getattr(app, "_resolve_structure_row_for_oid", None)
+        if callable(resolve):
+            found = resolve(oid)
+            if found != -1:
+                view_row = int(found)
+        need_h = max(dh, int(pm.height()))
+        table = getattr(app, "table", None)
+        if table is not None and int(table.rowHeight(view_row)) < need_h:
+            table.setRowHeight(int(view_row), need_h)
+    sync_w = getattr(app, "_sync_data_pixmap_column_width", None)
+    if callable(sync_w) and last_pm is not None:
+        sync_w(map_headers[0], last_pm, dw)
+    return drawn
 
 
 class SomColorScaleWidget(QWidget):
