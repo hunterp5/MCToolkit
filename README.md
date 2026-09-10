@@ -432,7 +432,7 @@ Optional settings for power users and IT deployments:
 | `MOLMANAGER_PLOT_SELECTION_OVERLAY_MAX` | Max points for SVG/3D selection overlay; larger sets use selectedpoints / skip 3D overlay (default `400`) |
 | `MOLMANAGER_CONFORMER_THREADS` | Parallel workers for conformer generation (`1`–`16`) |
 | `MOLMANAGER_DESCRIPTOR_THREADS` | Parallel workers for descriptors (`1`–`32`) |
-| `MOLMANAGER_PROTOMER_PROCESSES` | Parallel processes for protomer generation (`1`–`8`) |
+| `MOLMANAGER_PROTOMER_PROCESSES` | Parallel processes for Protonate and Generate Protomers (`1`–`8`) |
 | `MOLMANAGER_SQL_MAX_ROWS_HARD` | Hard cap for SQL load row count (default `2000000`) |
 | `MOLMANAGER_MEMORY_GUARD_DIVERSE_MAX_ROWS` | Hard cap for Diverse Subset pool size (default `200000`) |
 | `MOLMANAGER_DIVERSE_SUBSET_EXACT_MAX_ROWS` | Auto mode uses Exact MaxMin at or below this size (default `50000`) |

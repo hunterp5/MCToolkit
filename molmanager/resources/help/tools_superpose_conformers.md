@@ -26,7 +26,7 @@ Molecules that already have multiple conformers available in the working context
 ## Workflow
 
 1. Generate or load multi-conformer molecules.
-2. Open **Superpose Conformers** and set alignment options.
+2. Open **Tools → Conformations → Superpose → Conformers…** and set alignment options.
 3. Run superposition on the scoped rows.
 4. Inspect the 3D results window (overlay plus energy table). If several rows were processed, the first overlay opens; use **View Conformers** on other **superpose** cells.
 

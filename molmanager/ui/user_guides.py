@@ -202,12 +202,6 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Build 3D conformer ensembles.",
             ),
             _e(
-                "tools_gen_single_conformation",
-                "Generate Single Conformation",
-                "Generate Single Conformation",
-                "One minimized 3D conformer per row.",
-            ),
-            _e(
                 "tools_superpose_conformers",
                 "Superpose Conformers",
                 "Superpose Conformers",

@@ -69,13 +69,19 @@ class ProtonateDialog(QDialog):
         self.only_selected_cb = QCheckBox("Selected Rows Only")
         self._only_selected_scope_prefix = "Selected Rows Only"
         if self._have_selection:
-            self.only_selected_cb.setText(f"{self._only_selected_scope_prefix} ({selected_row_count} row(s))")
+            self.only_selected_cb.setText(
+                f"{self._only_selected_scope_prefix} ({selected_row_count} row(s))"
+            )
         else:
             self.only_selected_cb.setEnabled(False)
         form.addRow("", self.only_selected_cb)
 
-        self.render_cb = QCheckBox("Render 2D image in output column")
+        self.render_cb = QCheckBox("Render 2D in output column")
         self.render_cb.setChecked(True)
+        self.render_cb.setToolTip(
+            "Show 2D depictions in the output column (same display style as Structure). "
+            "SMILES remain stored in the cell but are not shown as text."
+        )
         form.addRow("", self.render_cb)
 
         btn_row = QHBoxLayout()
@@ -94,4 +100,3 @@ class ProtonateDialog(QDialog):
         only_selected = selection_scope_checked(self)
         render_2d = bool(self.render_cb.isChecked())
         return src, ph, col, only_selected, render_2d
-

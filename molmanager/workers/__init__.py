@@ -37,8 +37,6 @@ _CHEMISTRY_TOOLS_EXPORTS = frozenset(
         "SuperposeParams",
         "SuperposeStructuresParams",
         "RmsdParams",
-        "RmsdWorker",
-        "RMSD_HEADERS",
         "StrainEnergyParams",
         "StrainEnergyWorker",
         "STRAIN_ENERGY_HEADERS",

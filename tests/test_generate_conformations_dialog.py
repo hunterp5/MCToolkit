@@ -35,3 +35,30 @@ def test_generate_conformations_dialog_align_params(qapp):  # noqa: ARG001
     p = dlg.params()
     assert p.align_pattern == "c1ccccc1"
     assert p.align_pattern_is_smarts is True
+
+
+def test_generate_conformations_dialog_fine_tune_params(qapp):  # noqa: ARG001
+    dlg = GenerateConformationsDialog(0)
+    p = dlg.params()
+    assert p.force_field == "MMFF"
+    assert p.post_min_rms_threshold == 0.0
+    assert p.max_keep == 0
+    assert p.use_random_coords is False
+    assert p.keep_hydrogens is False
+    dlg.ff_combo.setCurrentText("MMFF94s")
+    dlg.post_min_rms_sb.setValue(0.5)
+    dlg.max_keep_sb.setValue(5)
+    dlg.advanced_panel.random_coords_cb.setChecked(True)
+    dlg.advanced_panel.keep_hs_cb.setChecked(True)
+    dlg.advanced_panel.setChecked(False)
+    p = dlg.params()
+    assert p.force_field == "MMFF94s"
+    assert p.post_min_rms_threshold == pytest.approx(0.5)
+    assert p.max_keep == 5
+    assert p.use_random_coords is False
+    assert p.keep_hydrogens is False
+    dlg.advanced_panel.setChecked(True)
+    p = dlg.params()
+    assert p.use_random_coords is True
+    assert p.keep_hydrogens is True
+    assert p.enforce_chirality is True

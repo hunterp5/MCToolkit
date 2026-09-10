@@ -53,6 +53,20 @@ class ConformerGenParams:
     # When non-empty, generated conformers are rigidly aligned on this substructure.
     align_pattern: str = ""
     align_pattern_is_smarts: bool = False
+    # 0 = skip post-minimization RMS pruning.
+    post_min_rms_threshold: float = 0.0
+    # 0 = keep every conformer that passed the energy window / RMS prune.
+    max_keep: int = 0
+    enforce_chirality: bool = True
+    use_random_coords: bool = False
+    use_exp_torsion_prefs: bool = True
+    use_small_ring_torsions: bool = True
+    use_macrocycle_torsions: bool = True
+    use_basic_knowledge: bool = True
+    only_heavy_atoms_for_rms: bool = True
+    # 0 = leave the ETKDG maxIterations default (typically 10 × n_atoms).
+    max_embed_attempts: int = 0
+    keep_hydrogens: bool = False
 
     @classmethod
     def single_lowest_energy(
@@ -62,6 +76,15 @@ class ConformerGenParams:
         random_seed: int = 0xC0FFEE,
         prune_rms_threshold: float = -1.0,
         max_iterations: int = 200,
+        enforce_chirality: bool = True,
+        use_random_coords: bool = False,
+        use_exp_torsion_prefs: bool = True,
+        use_small_ring_torsions: bool = True,
+        use_macrocycle_torsions: bool = True,
+        use_basic_knowledge: bool = True,
+        only_heavy_atoms_for_rms: bool = True,
+        max_embed_attempts: int = 0,
+        keep_hydrogens: bool = False,
     ) -> "ConformerGenParams":
         """One embedded conformer, minimized; written to the ``confs`` column."""
         return cls(
@@ -71,23 +94,128 @@ class ConformerGenParams:
             random_seed=random_seed,
             prune_rms_threshold=prune_rms_threshold,
             max_iterations=max_iterations,
+            enforce_chirality=enforce_chirality,
+            use_random_coords=use_random_coords,
+            use_exp_torsion_prefs=use_exp_torsion_prefs,
+            use_small_ring_torsions=use_small_ring_torsions,
+            use_macrocycle_torsions=use_macrocycle_torsions,
+            use_basic_knowledge=use_basic_knowledge,
+            only_heavy_atoms_for_rms=only_heavy_atoms_for_rms,
+            max_embed_attempts=max_embed_attempts,
+            keep_hydrogens=keep_hydrogens,
         )
 
 
-def _etkdg_params(random_seed: int, prune_rms_threshold: float):
+def _set_embed_attr(params_obj, name: str, value) -> None:
+    if not hasattr(params_obj, name):
+        return
+    try:
+        setattr(params_obj, name, value)
+    except Exception:
+        pass
+
+
+def _etkdg_params(params: ConformerGenParams):
     for name in ("ETKDGv3", "ETKDGv2", "ETKDG"):
         factory = getattr(AllChem, name, None)
         if factory is None:
             continue
         try:
             p = factory()
-            p.randomSeed = int(random_seed)
-            if prune_rms_threshold is not None and prune_rms_threshold >= 0:
-                p.pruneRmsThresh = float(prune_rms_threshold)
+            p.randomSeed = int(params.random_seed)
+            if params.prune_rms_threshold is not None and params.prune_rms_threshold >= 0:
+                p.pruneRmsThresh = float(params.prune_rms_threshold)
+            _set_embed_attr(p, "enforceChirality", bool(params.enforce_chirality))
+            _set_embed_attr(p, "useRandomCoords", bool(params.use_random_coords))
+            _set_embed_attr(p, "useExpTorsionAnglePrefs", bool(params.use_exp_torsion_prefs))
+            _set_embed_attr(p, "useBasicKnowledge", bool(params.use_basic_knowledge))
+            _set_embed_attr(p, "useSmallRingTorsions", bool(params.use_small_ring_torsions))
+            _set_embed_attr(p, "useMacrocycleTorsions", bool(params.use_macrocycle_torsions))
+            _set_embed_attr(p, "onlyHeavyAtomsForRMS", bool(params.only_heavy_atoms_for_rms))
+            if int(params.max_embed_attempts) > 0:
+                _set_embed_attr(p, "maxIterations", int(params.max_embed_attempts))
             return p
         except Exception:
             continue
     return None
+
+
+def _mmff_variant(force_field: str) -> str:
+    return "MMFF94s" if _normalize_strain_force_field(force_field) == "MMFF94s" else "MMFF94"
+
+
+def _heavy_atom_ids(mol: Chem.Mol) -> list[int]:
+    return [i for i in range(mol.GetNumAtoms()) if mol.GetAtomWithIdx(i).GetAtomicNum() != 1]
+
+
+def _conformer_ids(mol: Chem.Mol) -> list[int]:
+    try:
+        return [int(c.GetId()) for c in mol.GetConformers()]
+    except Exception:
+        return list(range(int(mol.GetNumConformers())))
+
+
+def _drop_conformers(mol: Chem.Mol, drop: set[int]) -> None:
+    for cid in sorted(drop, reverse=True):
+        try:
+            mol.RemoveConformer(int(cid))
+        except Exception:
+            pass
+
+
+def _prune_conformers_by_rms(
+    mol: Chem.Mol,
+    energies_by_cid: dict[int, float],
+    thresh: float,
+    *,
+    heavy_atoms_only: bool,
+    cancel_event: threading.Event | None = None,
+) -> dict[int, float]:
+    """Keep lowest-energy conformers that are at least *thresh* Å RMS from each other."""
+    if thresh <= 0 or len(energies_by_cid) < 2:
+        return energies_by_cid
+    atom_ids = _heavy_atom_ids(mol) if heavy_atoms_only else []
+    if heavy_atoms_only and len(atom_ids) < 2:
+        atom_ids = []
+    ranked = sorted(energies_by_cid, key=lambda cid: (energies_by_cid[cid], cid))
+    kept: list[int] = []
+    for cid in ranked:
+        if cancel_event is not None and cancel_event.is_set():
+            break
+        too_close = False
+        for kept_cid in kept:
+            try:
+                if atom_ids:
+                    rms = float(
+                        AllChem.GetConformerRMS(
+                            mol, int(cid), int(kept_cid), atomIds=atom_ids, prealigned=False
+                        )
+                    )
+                else:
+                    rms = float(
+                        AllChem.GetConformerRMS(mol, int(cid), int(kept_cid), prealigned=False)
+                    )
+            except Exception:
+                rms = thresh + 1.0
+            if rms < thresh:
+                too_close = True
+                break
+        if not too_close:
+            kept.append(cid)
+    drop = set(energies_by_cid) - set(kept)
+    _drop_conformers(mol, drop)
+    return {cid: energies_by_cid[cid] for cid in kept}
+
+
+def _keep_lowest_energy(
+    mol: Chem.Mol, energies_by_cid: dict[int, float], max_keep: int
+) -> dict[int, float]:
+    if max_keep <= 0 or len(energies_by_cid) <= max_keep:
+        return energies_by_cid
+    ranked = sorted(energies_by_cid, key=lambda cid: (energies_by_cid[cid], cid))
+    keep = set(ranked[: int(max_keep)])
+    _drop_conformers(mol, set(energies_by_cid) - keep)
+    return {cid: energies_by_cid[cid] for cid in keep}
 
 
 def _optimize_conformer_energies_cooperative(
@@ -98,35 +226,44 @@ def _optimize_conformer_energies_cooperative(
     max_it: int,
 ) -> tuple[list[float], str] | None:
     """Per-conformer minimization so ``cancel_event`` can abort between conformers."""
-    ff_choice = (params.force_field or "MMFF").strip().upper()
-    nconf = m.GetNumConformers()
+    ff_choice = _normalize_strain_force_field(params.force_field)
+    cids = _conformer_ids(m)
     energies: list[float] = []
-    if ff_choice == "MMFF":
-        mp = AllChem.MMFFGetMoleculeProperties(m)
+    if ff_choice in {"MMFF", "MMFF94s"}:
+        variant = _mmff_variant(ff_choice)
+        try:
+            mp = AllChem.MMFFGetMoleculeProperties(m, mmffVariant=variant)
+        except TypeError:
+            mp = AllChem.MMFFGetMoleculeProperties(m)
         if mp is not None:
-            for cid in range(nconf):
+            for cid in cids:
                 if cancel_event.is_set():
                     meta["err"] = "cancelled"
                     return None
-                code = AllChem.MMFFOptimizeMolecule(m, confId=cid, maxIters=max_it)
+                try:
+                    code = AllChem.MMFFOptimizeMolecule(
+                        m, confId=int(cid), maxIters=max_it, mmffVariant=variant
+                    )
+                except TypeError:
+                    code = AllChem.MMFFOptimizeMolecule(m, confId=int(cid), maxIters=max_it)
                 if code == -1:
                     meta["err"] = "mmff_opt"
                     return None
-                ff = AllChem.MMFFGetMoleculeForceField(m, mp, confId=cid)
+                ff = AllChem.MMFFGetMoleculeForceField(m, mp, confId=int(cid))
                 if ff is None:
                     meta["err"] = "mmff_ff"
                     return None
                 energies.append(float(ff.CalcEnergy()))
-            return energies, "MMFF"
-    for cid in range(nconf):
+            return energies, ff_choice
+    for cid in cids:
         if cancel_event.is_set():
             meta["err"] = "cancelled"
             return None
-        code = AllChem.UFFOptimizeMolecule(m, confId=cid, maxIters=max_it)
+        code = AllChem.UFFOptimizeMolecule(m, confId=int(cid), maxIters=max_it)
         if code == -1:
             meta["err"] = "uff_opt"
             return None
-        ff = AllChem.UFFGetMoleculeForceField(m, confId=cid)
+        ff = AllChem.UFFGetMoleculeForceField(m, confId=int(cid))
         energies.append(float(ff.CalcEnergy()))
     return energies, "UFF"
 
@@ -135,15 +272,24 @@ def _optimize_conformer_energies_batch(
     m: Chem.Mol, params: ConformerGenParams, meta: dict, max_it: int
 ) -> tuple[list[float], str] | None:
     """Fast path: RDKit batch optimizers (no cooperative cancel during minimization)."""
-    ff = (params.force_field or "MMFF").strip().upper()
+    ff = _normalize_strain_force_field(params.force_field)
     res = None
     try:
-        if ff == "MMFF":
-            mp = AllChem.MMFFGetMoleculeProperties(m)
+        if ff in {"MMFF", "MMFF94s"}:
+            variant = _mmff_variant(ff)
+            try:
+                mp = AllChem.MMFFGetMoleculeProperties(m, mmffVariant=variant)
+            except TypeError:
+                mp = AllChem.MMFFGetMoleculeProperties(m)
             if mp is None:
                 ff = "UFF"
             else:
-                res = AllChem.MMFFOptimizeMoleculeConfs(m, numThreads=1, maxIters=max_it)
+                try:
+                    res = AllChem.MMFFOptimizeMoleculeConfs(
+                        m, numThreads=1, maxIters=max_it, mmffVariant=variant
+                    )
+                except TypeError:
+                    res = AllChem.MMFFOptimizeMoleculeConfs(m, numThreads=1, maxIters=max_it)
         if ff == "UFF" or res is None:
             res = AllChem.UFFOptimizeMoleculeConfs(m, maxIters=max_it)
             ff = "UFF"
@@ -159,7 +305,8 @@ def run_conformer_generation(
     cancel_event: threading.Event | None = None,
 ) -> tuple[Chem.Mol | None, dict]:
     """
-    Embed multiple conformers, minimize (MMFF or UFF), prune by energy window, RemoveHs.
+    Embed multiple conformers, minimize (MMFF, MMFF94s, or UFF), prune by energy window
+    (and optional post-minimize RMS / max-keep), then RemoveHs unless ``keep_hydrogens``.
 
     When ``params.align_pattern`` is set and at least two conformers remain, they are
     rigidly aligned on that substructure (same matching rules as Superpose Conformers).
@@ -196,7 +343,7 @@ def run_conformer_generation(
         meta["err"] = "cancelled"
         return None, meta
 
-    embed_params = _etkdg_params(params.random_seed, params.prune_rms_threshold)
+    embed_params = _etkdg_params(params)
     if embed_params is None:
         meta["err"] = "no_etkdg"
         return None, meta
@@ -226,28 +373,58 @@ def run_conformer_generation(
         return None, meta
     energies, ff = opt
     meta["ff"] = ff
-    emin = min(energies)
+    conf_ids = _conformer_ids(m)
+    if len(energies) != len(conf_ids):
+        meta["err"] = "energy_count_mismatch"
+        return None, meta
+    e_by_cid = {int(cid): float(e) for cid, e in zip(conf_ids, energies)}
+    emin = min(e_by_cid.values())
     meta["e_min_kcal"] = round(emin, 4)
     window = float(params.energy_window_kcal)
     meta["ewin_kcal"] = round(window, 4) if window > 0 else 0.0
     if window > 0:
-        keep = {i for i, e in enumerate(energies) if e <= emin + window}
+        keep_cids = {cid for cid, e in e_by_cid.items() if e <= emin + window}
     else:
-        keep = set(range(len(energies)))
-    kept_energies = [energies[i] for i in range(len(energies)) if i in keep]
-    meta["e_max_kept_kcal"] = round(max(kept_energies), 4) if kept_energies else None
-    meta["n_kept"] = len(keep)
+        keep_cids = set(e_by_cid)
+    _drop_conformers(m, set(e_by_cid) - keep_cids)
+    e_by_cid = {cid: e_by_cid[cid] for cid in keep_cids}
+    meta["n_after_ewin"] = len(e_by_cid)
 
-    for cid in sorted(set(range(m.GetNumConformers())) - keep, reverse=True):
+    if cancel_event is not None and cancel_event.is_set():
+        meta["err"] = "cancelled"
+        return None, meta
+
+    post_rms = float(params.post_min_rms_threshold)
+    meta["post_min_rms_A"] = round(post_rms, 4) if post_rms > 0 else 0.0
+    if post_rms > 0:
+        e_by_cid = _prune_conformers_by_rms(
+            m,
+            e_by_cid,
+            post_rms,
+            heavy_atoms_only=bool(params.only_heavy_atoms_for_rms),
+            cancel_event=cancel_event,
+        )
+        if cancel_event is not None and cancel_event.is_set():
+            meta["err"] = "cancelled"
+            return None, meta
+    meta["n_after_rms_prune"] = len(e_by_cid)
+
+    max_keep = int(params.max_keep)
+    meta["max_keep"] = int(max_keep) if max_keep > 0 else 0
+    if max_keep > 0:
+        e_by_cid = _keep_lowest_energy(m, e_by_cid, max_keep)
+
+    kept_energies = list(e_by_cid.values())
+    meta["e_max_kept_kcal"] = round(max(kept_energies), 4) if kept_energies else None
+    meta["n_kept"] = len(e_by_cid)
+
+    if not params.keep_hydrogens:
         try:
-            m.RemoveConformer(int(cid))
+            m = Chem.RemoveHs(m)
         except Exception:
             pass
-
-    try:
-        m = Chem.RemoveHs(m)
-    except Exception:
-        pass
+    else:
+        meta["keep_hs"] = True
 
     aligned, align_err = _align_generated_conformers(m, params, meta, cancel_event)
     if align_err:
@@ -1022,7 +1199,7 @@ class SuperposeConformersWorker(QRunnable):
 
 @dataclass(frozen=True)
 class RmsdParams:
-    """Options for :func:`run_conformer_rmsd` / :class:`RmsdWorker`."""
+    """Options for :func:`run_conformer_rmsd`."""
 
     reference_conformer_index: int = 0
     heavy_atoms_only: bool = True
@@ -1031,9 +1208,6 @@ class RmsdParams:
     align_pattern: str = ""
     align_pattern_is_smarts: bool = False
     source_column: str = "confs"
-
-
-RMSD_HEADERS = ("RMSD_values", "RMSD_max", "RMSD_mean")
 
 
 def run_conformer_rmsd(
@@ -1133,156 +1307,6 @@ def run_conformer_rmsd(
         "RMSD_mean": f"{mean_rms:.4f}",
     }
     return row, meta
-
-
-def _rmsd_row_task(task: tuple) -> tuple[int, dict[str, str]]:
-    oid, cell, params = task[0], task[1], task[2]
-    cancel_event = task[3] if len(task) > 3 else None
-    na = {h: "N/A" for h in RMSD_HEADERS}
-    try:
-        if cancel_event is not None and cancel_event.is_set():
-            return oid, na
-        mol = mol_from_packed_confs_cell(cell or "", min_conformers=1)
-        if mol is None:
-            return oid, na
-        row, meta = run_conformer_rmsd(mol, params, cancel_event=cancel_event)
-        if row is None or not meta.get("ok"):
-            return oid, na
-        return oid, {h: str(row.get(h, "N/A")) for h in RMSD_HEADERS}
-    except Exception:
-        logger.exception("RmsdWorker failed for oid=%s", oid)
-        return oid, na
-
-
-class RmsdWorker(QRunnable):
-    """Score packed conformer cells; emit RMSD columns via ``calculated``."""
-
-    def __init__(
-        self,
-        data: list[tuple[int, str]],
-        params: RmsdParams,
-        signals: WorkerSignals,
-        cancel_event: threading.Event | None = None,
-        progress_state=None,
-        output_headers: list[str] | None = None,
-    ):
-        super().__init__()
-        self.data = data
-        self.params = params
-        self.signals = signals
-        self.cancel_event = cancel_event
-        self.progress_state = progress_state
-        if output_headers and len(output_headers) == len(RMSD_HEADERS):
-            self.output_headers = list(output_headers)
-        else:
-            self.output_headers = list(RMSD_HEADERS)
-
-    def run(self):
-        nrows = len(self.data)
-        tot = max(nrows, 1)
-        tasks = [(oid, cell, self.params) for oid, cell in self.data]
-        cfg = load_config()
-        if cfg.conformer_threads is not None:
-            max_workers = cfg.conformer_threads
-        else:
-            max_workers = min(4, max(1, (os.cpu_count() or 4) // 2))
-        use_parallel = nrows >= 6 and max_workers > 1
-        cancel_ev = self.cancel_event
-        results: list = []
-        cancelled = False
-        done_count = 0
-        prog_state = [0, 0.0]
-        headers = list(self.output_headers)
-        rename = dict(zip(RMSD_HEADERS, headers))
-        try:
-            if use_parallel:
-                emit_tool_progress_throttled(
-                    self.signals,
-                    "Calculate RMSD…",
-                    0,
-                    tot,
-                    prog_state,
-                    progress_state=self.progress_state,
-                )
-                ex = ThreadPoolExecutor(max_workers=max_workers)
-                shutdown_cancel = False
-                try:
-                    row_tasks = [(*t, cancel_ev) for t in tasks]
-                    pending = {ex.submit(_rmsd_row_task, rt) for rt in row_tasks}
-                    while pending:
-                        if cancel_ev is not None and cancel_ev.is_set():
-                            shutdown_cancel = True
-                            cancelled = True
-                            for f in list(pending):
-                                if f.done() and not f.cancelled():
-                                    try:
-                                        results.append(f.result())
-                                        done_count += 1
-                                    except Exception:
-                                        logger.exception("RMSD row task failed")
-                                else:
-                                    f.cancel()
-                            break
-                        completed, pending = wait(
-                            pending, timeout=0.08, return_when=FIRST_COMPLETED
-                        )
-                        for f in completed:
-                            if f.cancelled():
-                                continue
-                            try:
-                                results.append(f.result())
-                                done_count += 1
-                            except Exception:
-                                logger.exception("RMSD row task failed")
-                            emit_tool_progress_throttled(
-                                self.signals,
-                                "Calculate RMSD…",
-                                done_count,
-                                tot,
-                                prog_state,
-                                progress_state=self.progress_state,
-                            )
-                finally:
-                    try:
-                        ex.shutdown(wait=not shutdown_cancel, cancel_futures=shutdown_cancel)
-                    except TypeError:
-                        ex.shutdown(wait=not shutdown_cancel)
-                emit_tool_progress_throttled(
-                    self.signals,
-                    "Calculate RMSD…",
-                    min(done_count, tot),
-                    tot,
-                    prog_state,
-                    progress_state=self.progress_state,
-                )
-            else:
-                for done, t in enumerate(tasks, start=1):
-                    if cancel_ev is not None and cancel_ev.is_set():
-                        cancelled = True
-                        break
-                    results.append(_rmsd_row_task((*t, cancel_ev)))
-                    done_count = done
-                    emit_tool_progress_throttled(
-                        self.signals,
-                        "Calculate RMSD…",
-                        done,
-                        tot,
-                        prog_state,
-                        progress_state=self.progress_state,
-                    )
-        except Exception:
-            logger.exception("RmsdWorker failed")
-        finally:
-            emit_partial_results_if_cancelled(
-                self.signals, "Calculate RMSD", done_count, tot, cancelled
-            )
-            mapped: list[tuple[int, dict[str, str]]] = []
-            for oid, row in results:
-                mapped.append((int(oid), {rename.get(k, k): v for k, v in row.items()}))
-            try:
-                self.signals.calculated.emit(mapped, headers)
-            except Exception:
-                logger.warning("RMSD calculated emit failed", exc_info=True)
 
 
 @dataclass(frozen=True)

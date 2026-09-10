@@ -27,7 +27,6 @@ from .chemistry_conformers import (
     ConformerGenParams,
     ConformerGenerationWorker,
     RmsdParams,
-    RmsdWorker,
     StrainEnergyParams,
     StrainEnergyWorker,
     SuperposeConformersWorker,
@@ -46,11 +45,10 @@ from .chemistry_conformers import (
 from .chemistry_descriptors import CalcWorker, descriptor_callable_for_int_fn
 from ..confs_codec import format_confs_table_cell, pack_confs_cell
 
-# Re-export RMSD/STRAIN header constants if present
+# Re-export strain header constants if present
 try:
-    from .chemistry_conformers import RMSD_HEADERS, STRAIN_ENERGY_HEADERS
+    from .chemistry_conformers import STRAIN_ENERGY_HEADERS
 except ImportError:  # pragma: no cover
-    RMSD_HEADERS = ()  # type: ignore[misc, assignment]
     STRAIN_ENERGY_HEADERS = ()  # type: ignore[misc, assignment]
 
 __all__ = [
@@ -62,8 +60,6 @@ __all__ = [
     "SuperposeParams",
     "SuperposeStructuresParams",
     "RmsdParams",
-    "RmsdWorker",
-    "RMSD_HEADERS",
     "StrainEnergyParams",
     "StrainEnergyWorker",
     "STRAIN_ENERGY_HEADERS",

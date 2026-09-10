@@ -218,7 +218,7 @@ def pack_confs_cell(meta: dict, mol: Chem.Mol | None, *, max_chars: int = CONFS_
     Store generation metadata plus, when possible, all conformers as mol blocks for later 3D viewing.
 
     Falls back to :func:`format_confs_table_cell` when there are no conformers or packing fails.
-    A single minimized conformer (e.g. Generate Single Conformation) is packed so the 3D viewer can load it.
+    A single minimized conformer is packed so the 3D viewer can load it.
     """
     base = format_confs_table_cell(meta)
     if mol is None:

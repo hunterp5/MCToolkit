@@ -1,6 +1,6 @@
 # Protonate
 
-Protonate writes the dominant protomer at a chosen pH into an output structure column, optionally using pkasolver-backed predictions when available.
+Protonate writes the dominant protomer at a chosen pH into an output column using pkasolver microstate pKas (Dimorphite-DL site enumeration + GNN). It also writes **% Protomer**, the approximate mole fraction of that form. Optional **Render 2D** depicts that column the same way as **Structure** (image cells; SMILES stay stored, not shown as text).
 
 ## Goal
 
@@ -8,19 +8,19 @@ Produce pH-relevant ionization states for permeability-minded prep, docking liga
 
 ## When to use
 
-Use when default microstates are wrong for your assay pH, or before comparisons that depend on charge state.
+Use when default microstates are wrong for your assay pH, or before comparisons that depend on charge state. For the full ensemble at that pH, use **Generate Protomers** instead.
 
 ## Inputs / scope
 
-Input structures from the selected source; optional **Selected Rows Only**. pkasolver improves pKa-aware dominance when installed/enabled.
+Input structures from the selected source; optional **Selected Rows Only**. Requires pkasolver (PyTorch / torch-geometric). Duplicate structures are predicted once and reused; a session cache is shared with Predict pKa and LogD/LogS so a second run on the same molecules is cheap.
 
 ## Options
 
 - **Structure source** - which structure column to read.
 - **pH** - target pH for dominant protomer selection.
-- **Output column** - destination structure column name.
+- **Output column** - destination column name.
 - **Selected Rows Only** - limit to the selection.
-- **Render 2D image in output column** - refresh depictions when writing.
+- **Render 2D in output column** - depict the output column like **Structure** (pixmap cells). Unchecked leaves SMILES text.
 - **Run** - start the job.
 
 ## Workflow
@@ -28,7 +28,7 @@ Input structures from the selected source; optional **Selected Rows Only**. pkas
 1. Set structure source, **pH**, and output column.
 2. Choose full table or **Selected Rows Only**.
 3. Run and wait for completion.
-4. Point later tools at the output column as structure source.
+4. Point later tools at the output column as structure source. Check **% Protomer** if the top form is only a slim majority.
 
 ## Use cases
 
@@ -38,4 +38,4 @@ Input structures from the selected source; optional **Selected Rows Only**. pkas
 
 ## Tips and limits
 
-Results are approximate; tautomer/protomer ensembles may still matter. Without pkasolver, behavior may be more limited - install it for best results. Always keep the original column if you need neutral parents.
+Populations are independent-site Henderson–Hasselbalch over pkasolver microstates — approximate, not a full tautomer/coupled multi-site model. **% Protomer** below ~80% means other forms still matter; use **Generate Protomers**. Parallelism is `MOLMANAGER_PROTOMER_PROCESSES` (`1`–`8`). Always keep the original column if you need neutral parents.

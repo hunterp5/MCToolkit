@@ -37,9 +37,6 @@ from ...confs_codec import (
     unpack_confs_blocks_json_b64,
 )
 from ...utils import mol_to_canonical_smiles
-from ..strings import (
-    TOOL_SINGLE_CONFORMATION,
-)
 from ...descriptor_reuse import partition_descriptor_jobs
 from ...workers import (
     CalcWorker,
@@ -117,55 +114,6 @@ class ConformersDescriptorsMixin:
         self._begin_tool_progress("Generate conformations", n)
         self.process_queue.enqueue(
             f"Generate conformations ({n} structures)",
-            lambda ev, d=data, p=params, sigs=self.signals, prog=ps: ConformerGenerationWorker(
-                d, p, sigs, cancel_event=ev, progress_state=prog
-            ),
-        )
-
-    def open_generate_single_conformation(self) -> None:
-        if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(
-                self,
-                TOOL_SINGLE_CONFORMATION,
-                "Open a file or add rows so the table has molecules to process.",
-            )
-            return
-        from ..dialogs import GenerateSingleConformationDialog
-
-        d = GenerateSingleConformationDialog(len(self._selected_logical_rows()), self)
-        self._prepare_tool_dialog(d)
-        d.setAttribute(Qt.WA_DeleteOnClose, True)
-        d.accepted.connect(
-            lambda *_, dlg=d: self._on_generate_single_conformation_dialog_accepted(dlg)
-        )
-        d.show()
-
-    def _on_generate_single_conformation_dialog_accepted(self, d) -> None:
-        only_selected = d.only_selected_rows()
-        allowed = self._selected_oids_set() if only_selected else None
-        if self._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_SINGLE_CONFORMATION):
-            return
-        data = self._collect_mols_for_conformer_tools(only_selected=only_selected)
-        if not data:
-            QMessageBox.information(
-                self,
-                TOOL_SINGLE_CONFORMATION,
-                "No parseable structures for those rows (in-memory molecules or chemistry in table cells).",
-            )
-            return
-        params = d.params()
-        self._conformer_output_options = d.output_options()
-        self._pending_conformer_initial_superpose = False
-        from ...workers import StrainEnergyParams
-
-        self._pending_strain_params = StrainEnergyParams(
-            force_field=str(params.force_field or "MMFF")
-        )
-        n = len(data)
-        ps = self._tool_progress_state
-        self._begin_tool_progress(TOOL_SINGLE_CONFORMATION, n)
-        self.process_queue.enqueue(
-            f"{TOOL_SINGLE_CONFORMATION} ({n} structures)",
             lambda ev, d=data, p=params, sigs=self.signals, prog=ps: ConformerGenerationWorker(
                 d, p, sigs, cancel_event=ev, progress_state=prog
             ),
@@ -864,89 +812,6 @@ class ConformersDescriptorsMixin:
             )
             opened = True
         return n_ok
-
-    def open_calculate_rmsd(self):
-        if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(
-                self,
-                "Calculate RMSD",
-                "Open a file or add rows so the table has data to process.",
-            )
-            return
-        sources = [c for c in ("confs", "superpose") if c in self.headers]
-        if not sources:
-            QMessageBox.information(
-                self,
-                "Calculate RMSD",
-                'Add a "confs" column first by running Generate Conformations '
-                "(packed multi-conformer cells).",
-            )
-            return
-        from ..dialogs import CalculateRmsdDialog
-
-        d = CalculateRmsdDialog(
-            len(self._selected_logical_rows()),
-            source_columns=sources,
-            parent=self,
-        )
-        self._prepare_tool_dialog(d)
-        d.setAttribute(Qt.WA_DeleteOnClose, True)
-        d.accepted.connect(lambda *_, dlg=d: self._on_calculate_rmsd_dialog_accepted(dlg))
-        d.show()
-
-    def _on_calculate_rmsd_dialog_accepted(self, d) -> None:
-        from ...workers import RMSD_HEADERS, RmsdWorker
-
-        only_selected = d.only_selected_rows()
-        allowed = self._selected_oids_set() if only_selected else None
-        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Calculate RMSD"):
-            return
-        params = d.params()
-        src_col = str(params.source_column or "").strip()
-        if not src_col or src_col not in self.headers:
-            QMessageBox.information(
-                self,
-                "Calculate RMSD",
-                f'Column "{src_col}" was not found in the table.',
-            )
-            return
-        oids_list = self._all_oids_in_table_order()
-        if allowed is not None:
-            oids_list = [o for o in oids_list if o in allowed]
-        data: list[tuple[int, str]] = []
-        for o in oids_list:
-            r = self.get_row_by_id(o)
-            if r < 0:
-                continue
-            raw = self._table_model.backing_value_for_row_header(r, src_col)
-            sc = getattr(self, "_confs_blocks_sidecar", {}) or {}
-            full = rehydrate_v1_confs_cell(raw, src_col, int(o), sc)
-            if unpack_confs_blocks_json_b64(full) is None:
-                continue
-            data.append((o, full))
-        if not data:
-            QMessageBox.information(
-                self,
-                "Calculate RMSD",
-                f'No rows in scope have a packed multi-conformer "{src_col}" cell. '
-                "Run Generate Conformations first.",
-            )
-            return
-        out_headers = self._unique_table_column_names(list(RMSD_HEADERS))
-        n = len(data)
-        ps = self._tool_progress_state
-        self._begin_tool_progress("Calculate RMSD", n)
-        self.process_queue.enqueue(
-            f"Calculate RMSD ({n} rows)",
-            lambda ev, d=data, p=params, oh=out_headers, sigs=self.signals, prog=ps: RmsdWorker(
-                d,
-                p,
-                sigs,
-                cancel_event=ev,
-                progress_state=prog,
-                output_headers=oh,
-            ),
-        )
 
     def _unique_table_column_names(self, bases: list[str]) -> list[str]:
         """Return column header names; append `` (n)`` when a name already exists in the table."""

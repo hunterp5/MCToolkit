@@ -156,3 +156,75 @@ def test_run_conformer_generation_cancelled_before_work():
     out, meta = run_conformer_generation(m, p, cancel_event=ev)
     assert out is None
     assert meta.get("err") == "cancelled"
+
+
+def test_run_conformer_generation_mmff94s():
+    m = Chem.MolFromSmiles("CCO")
+    p = ConformerGenParams(
+        num_confs=3,
+        energy_window_kcal=100.0,
+        force_field="MMFF94s",
+        random_seed=7,
+        max_iterations=80,
+    )
+    out, meta = run_conformer_generation(m, p)
+    assert out is not None
+    assert meta.get("ok") is True
+    assert meta.get("ff") in ("MMFF94s", "UFF")
+    assert out.GetNumConformers() >= 1
+
+
+def test_run_conformer_generation_max_keep():
+    m = Chem.MolFromSmiles("CCCC")
+    p = ConformerGenParams(
+        num_confs=8,
+        energy_window_kcal=100.0,
+        force_field="UFF",
+        random_seed=11,
+        max_iterations=40,
+        max_keep=2,
+    )
+    out, meta = run_conformer_generation(m, p)
+    assert out is not None
+    assert meta.get("ok") is True
+    assert meta.get("max_keep") == 2
+    assert out.GetNumConformers() <= 2
+    assert meta.get("n_kept") == out.GetNumConformers()
+
+
+def test_run_conformer_generation_post_min_rms_prunes():
+    m = Chem.MolFromSmiles("CCCC")
+    wide = ConformerGenParams(
+        num_confs=12,
+        energy_window_kcal=100.0,
+        force_field="UFF",
+        random_seed=13,
+        max_iterations=40,
+    )
+    tight = ConformerGenParams(
+        num_confs=12,
+        energy_window_kcal=100.0,
+        force_field="UFF",
+        random_seed=13,
+        max_iterations=40,
+        post_min_rms_threshold=2.0,
+    )
+    out_w, meta_w = run_conformer_generation(m, wide)
+    out_t, meta_t = run_conformer_generation(m, tight)
+    assert out_w is not None and out_t is not None
+    assert meta_t.get("ok") is True
+    assert float(meta_t.get("post_min_rms_A") or 0) == 2.0
+    assert int(meta_t.get("n_after_rms_prune") or 0) <= int(meta_t.get("n_after_ewin") or 0)
+    assert int(meta_t.get("n_kept") or 0) <= int(meta_w.get("n_kept") or 0)
+
+
+def test_run_conformer_generation_keep_hydrogens():
+    m = Chem.MolFromSmiles("CCO")
+    p = ConformerGenParams.single_lowest_energy(
+        force_field="UFF", random_seed=3, max_iterations=80, keep_hydrogens=True
+    )
+    out, meta = run_conformer_generation(m, p)
+    assert out is not None
+    assert meta.get("ok") is True
+    assert meta.get("keep_hs") is True
+    assert any(a.GetAtomicNum() == 1 for a in out.GetAtoms())

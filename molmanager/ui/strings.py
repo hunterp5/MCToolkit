@@ -24,7 +24,6 @@ TOOL_RECAP_DECOMP = "RECAP Decomposition"
 TOOL_BRICS_RECOMP = "BRICS Recomposition"
 TOOL_RECAP_RECOMP = "RECAP Recomposition"
 TOOL_CALCULATOR = "Calculator"
-TOOL_SINGLE_CONFORMATION = "Generate Single Conformation"
 TOOL_ADD_EXPLICIT_HYDROGENS = "Add Explicit Hydrogens"
 TOOL_REMOVE_EXPLICIT_HYDROGENS = "Remove Explicit Hydrogens"
 TOOL_REACTION_ENUMERATION = "Reaction Based Enumeration"
@@ -39,10 +38,7 @@ TOOL_PREDICT_SOM = "Predict SOM"
 # Column header when importing similarity hits (PubChem, ChEMBL, SureChEMBL) or adding FP similarity scores.
 COLUMN_TANIMOTO_SIMILARITY = "Tanimoto Similarity"
 
-STRUCTURE_PENDING_HINT = (
-    "No 2D structure yet.\n"
-    f"Use {TOOLS_ARROW_RENDER_2D} to draw."
-)
+STRUCTURE_PENDING_HINT = f"No 2D structure yet.\nUse {TOOLS_ARROW_RENDER_2D} to draw."
 
 STATUS_READY_RENDER_2D = f"Ready — use {TOOLS_ARROW_RENDER_2D} to refresh or redraw 2D images."
 
@@ -51,8 +47,7 @@ LOADING_DETAIL_AFTER_FILE_READ = (
     "2D structure images are drawn automatically when the table is ready."
 )
 LOADING_DETAIL_READING_DISK = (
-    "Reading file from disk…\n"
-    "2D structure images are drawn automatically after the table is built."
+    "Reading file from disk…\n2D structure images are drawn automatically after the table is built."
 )
 LOADING_DETAIL_APPEND = (
     "Reading file from disk…\n"

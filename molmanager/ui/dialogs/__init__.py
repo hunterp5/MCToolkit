@@ -38,10 +38,8 @@ from .mol_tools import (
     FragmentRecompDialogParams,
     FragmentRecompositionDialog,
     GenerateConformationsDialog,
-    GenerateSingleConformationDialog,
     SuperposeConformersDialog,
     SuperposeStructuresDialog,
-    CalculateRmsdDialog,
 )
 from .mmp import MmpDialog, MmpDialogParams
 from .activity_cliff import ActivityCliffDialog, ActivityCliffDialogParams
@@ -86,7 +84,6 @@ __all__ = [
     "DiverseSubsetDialog",
     "FPSimilarityDialog",
     "GenerateConformationsDialog",
-    "GenerateSingleConformationDialog",
     "MmpDialog",
     "MmpDialogParams",
     "PermeabilityPredictorDialog",
@@ -110,6 +107,5 @@ __all__ = [
     "SketcherDialog",
     "SuperposeConformersDialog",
     "SuperposeStructuresDialog",
-    "CalculateRmsdDialog",
     "selection_scope_checked",
 ]

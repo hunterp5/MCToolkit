@@ -42,6 +42,7 @@ from ...display_constants import structure_depiict_height, structure_depiict_wid
 
 logger = logging.getLogger(__name__)
 
+
 class PrepareStructuresMixin:
     def run_protonate(self) -> None:
         """Generate dominant protomer into a new column and optionally render it."""
@@ -74,9 +75,6 @@ class PrepareStructuresMixin:
         allowed = self._selected_oids_set() if only_selected else None
         if self._abort_if_only_selected_but_empty(only_selected, allowed, "Protonate"):
             return
-
-        # Columns are created in on_calc_finished (unique names if they already exist).
-        pct_col = "% Protomer"
 
         data: list[tuple[int, Chem.Mol | None]] = []
         oids_walk = self._all_oids_in_table_order()
@@ -134,10 +132,8 @@ class PrepareStructuresMixin:
             self.status_label.setText("Protonate: no results.")
             return
 
-        # Write column values (unique names if Protonated / % Protomer already exist).
         res = [
-            (int(oid), {out_col: str(smi), pct_col: f"{float(pct):.2f}"})
-            for oid, smi, pct in rows
+            (int(oid), {out_col: str(smi), pct_col: f"{float(pct):.2f}"}) for oid, smi, pct in rows
         ]
         written = self.on_calc_finished(res, [out_col, pct_col], progress_label="Protonate")
         if written:
@@ -146,7 +142,6 @@ class PrepareStructuresMixin:
         if not render_2d:
             return
 
-        # Render into the output column, but keep text visible (cell pixmaps, not pixmap-only column).
         try:
             base_w, base_h = structure_depiict_width(), structure_depiict_height()
             renders, row_by_oid = self._build_render2d_tasks_in_table_order(
@@ -157,9 +152,11 @@ class PrepareStructuresMixin:
                     renders,
                     row_by_oid,
                     out_col,
-                    column_pixmap_mode=False,
+                    column_pixmap_mode=True,
                     queue_title_prefix="Protonate: ",
                 )
+        except Exception:
+            logger.exception("Protonate: render 2D scheduling failed")
         except Exception:
             logger.exception("Protonate: render 2D scheduling failed")
 
@@ -343,7 +340,9 @@ class PrepareStructuresMixin:
     def _on_disconnect_fragments_dialog_accepted(self, dlg) -> None:
         src, update_target, largest_col, fragments_col, only_selected, no_render_2d = dlg.config()
         allowed = self._selected_oids_set() if only_selected else None
-        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Disconnect Largest Fragments"):
+        if self._abort_if_only_selected_but_empty(
+            only_selected, allowed, "Disconnect Largest Fragments"
+        ):
             return
         self.status_label.setText("Disconnecting fragments…")
         self._enqueue_disconnect_fragments(
@@ -394,7 +393,9 @@ class PrepareStructuresMixin:
             title = f"{queue_title_prefix}disconnect largest fragments"
             self.process_queue.enqueue(
                 title,
-                lambda ev, d=data, s=self.signals: WashWorker(d, s, is_smiles=False, cancel_event=ev),
+                lambda ev, d=data, s=self.signals: WashWorker(
+                    d, s, is_smiles=False, cancel_event=ev
+                ),
             )
         else:
             col = self.headers.index(src)
@@ -418,7 +419,9 @@ class PrepareStructuresMixin:
             title = f"{queue_title_prefix}disconnect largest fragments (column)"
             self.process_queue.enqueue(
                 title,
-                lambda ev, d=data, s=self.signals: WashWorker(d, s, is_smiles=True, cancel_event=ev),
+                lambda ev, d=data, s=self.signals: WashWorker(
+                    d, s, is_smiles=True, cancel_event=ev
+                ),
             )
 
     def _mol_for_structure_tool_oid(self, oid: int, src: str) -> Chem.Mol | None:
@@ -517,13 +520,17 @@ class PrepareStructuresMixin:
         dlg = RemoveExplicitHydrogensDialog(candidates, n_sel, self)
         self._prepare_tool_dialog(dlg)
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
-        dlg.accepted.connect(lambda *_, d=dlg: self._on_remove_explicit_hydrogens_dialog_accepted(d))
+        dlg.accepted.connect(
+            lambda *_, d=dlg: self._on_remove_explicit_hydrogens_dialog_accepted(d)
+        )
         dlg.show()
 
     def _on_remove_explicit_hydrogens_dialog_accepted(self, dlg) -> None:
         src, only_selected, no_render_2d = dlg.config()
         allowed = self._selected_oids_set() if only_selected else None
-        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Remove Explicit Hydrogens"):
+        if self._abort_if_only_selected_but_empty(
+            only_selected, allowed, "Remove Explicit Hydrogens"
+        ):
             return
         self.status_label.setText("Removing explicit hydrogens…")
         self._enqueue_remove_explicit_hydrogens(
@@ -628,7 +635,9 @@ class PrepareStructuresMixin:
         title = f"{queue_title_prefix}neutralize".strip() or "Neutralize"
         self.process_queue.enqueue(
             title,
-            lambda ev, d=data, s=self.signals: NeutralizeWorker(d, s, is_smiles=False, cancel_event=ev),
+            lambda ev, d=data, s=self.signals: NeutralizeWorker(
+                d, s, is_smiles=False, cancel_event=ev
+            ),
         )
 
     def on_neutralize_finished(self, results) -> None:
@@ -637,9 +646,8 @@ class PrepareStructuresMixin:
         self._neutralize_source = "Structure"
         self._neutralize_no_render_2d = False
 
-        render_target = (
-            src == "Structure"
-            or (src in self.headers and self._table_model.is_pixmap_data_column(src))
+        render_target = src == "Structure" or (
+            src in self.headers and self._table_model.is_pixmap_data_column(src)
         )
         smiles_h = self._canonical_smiles_header_for_updates()
         update_smiles_col = smiles_h is not None and src == smiles_h
@@ -661,8 +669,11 @@ class PrepareStructuresMixin:
 
         self.schedule_calculate_global_bounds()
         self._clear_tool_progress()
-        if results and render_target and not no_render_2d and not getattr(
-            self, "_render2d_batch_active", False
+        if (
+            results
+            and render_target
+            and not no_render_2d
+            and not getattr(self, "_render2d_batch_active", False)
         ):
             base_w, base_h = structure_depiict_width(), structure_depiict_height()
             renders = []
@@ -694,9 +705,8 @@ class PrepareStructuresMixin:
         self._add_explicit_hydrogens_source = "Structure"
         self._add_explicit_hydrogens_no_render_2d = False
 
-        render_target = (
-            src == "Structure"
-            or (src in self.headers and self._table_model.is_pixmap_data_column(src))
+        render_target = src == "Structure" or (
+            src in self.headers and self._table_model.is_pixmap_data_column(src)
         )
         smiles_h = self._canonical_smiles_header_for_updates()
         update_smiles_col = smiles_h is not None and src == smiles_h
@@ -718,8 +728,11 @@ class PrepareStructuresMixin:
 
         self.schedule_calculate_global_bounds()
         self._clear_tool_progress()
-        if results and render_target and not no_render_2d and not getattr(
-            self, "_render2d_batch_active", False
+        if (
+            results
+            and render_target
+            and not no_render_2d
+            and not getattr(self, "_render2d_batch_active", False)
         ):
             base_w, base_h = structure_depiict_width(), structure_depiict_height()
             renders = []
@@ -751,9 +764,8 @@ class PrepareStructuresMixin:
         self._remove_explicit_hydrogens_source = "Structure"
         self._remove_explicit_hydrogens_no_render_2d = False
 
-        render_target = (
-            src == "Structure"
-            or (src in self.headers and self._table_model.is_pixmap_data_column(src))
+        render_target = src == "Structure" or (
+            src in self.headers and self._table_model.is_pixmap_data_column(src)
         )
         smiles_h = self._canonical_smiles_header_for_updates()
         update_smiles_col = smiles_h is not None and src == smiles_h
@@ -775,8 +787,11 @@ class PrepareStructuresMixin:
 
         self.schedule_calculate_global_bounds()
         self._clear_tool_progress()
-        if results and render_target and not no_render_2d and not getattr(
-            self, "_render2d_batch_active", False
+        if (
+            results
+            and render_target
+            and not no_render_2d
+            and not getattr(self, "_render2d_batch_active", False)
         ):
             base_w, base_h = structure_depiict_width(), structure_depiict_height()
             renders = []
@@ -977,7 +992,9 @@ class PrepareStructuresMixin:
         self._render2d_eager_flush_queue = None
         self._render2d_eager_flush_idx = 0
         self._render2d_eager_uniform_height = False
-        if getattr(self, "_render2d_lazy_flush", False) and not getattr(self, "_render2d_pixmap_target", None):
+        if getattr(self, "_render2d_lazy_flush", False) and not getattr(
+            self, "_render2d_pixmap_target", None
+        ):
             self._table_model.clear_structure_png_store()
         snap = getattr(self, "_render2d_snapshot", None)
         target = getattr(self, "_render2d_pixmap_target", None)
@@ -1006,7 +1023,9 @@ class PrepareStructuresMixin:
     def run_render_2d_structures(self) -> None:
         """Queue 2D structure renders for all rows (after deferred load)."""
         if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(self, TOOL_RENDER_2D, "Load a table with at least one row first.")
+            QMessageBox.information(
+                self, TOOL_RENDER_2D, "Load a table with at least one row first."
+            )
             return
         if self._render2d_batch_active or self.process_queue.has_running_job():
             QMessageBox.warning(
@@ -1031,7 +1050,9 @@ class PrepareStructuresMixin:
         if self._abort_if_only_selected_but_empty(only_selected, allowed_oids, TOOL_RENDER_2D):
             return
         base_w, base_h = structure_depiict_width(), structure_depiict_height()
-        renders, row_by_oid = self._build_render2d_tasks_in_table_order(src, base_w, base_h, allowed_oids)
+        renders, row_by_oid = self._build_render2d_tasks_in_table_order(
+            src, base_w, base_h, allowed_oids
+        )
         if not renders:
             QMessageBox.information(
                 self,
@@ -1040,7 +1061,9 @@ class PrepareStructuresMixin:
             )
             self.status_label.setText("No structures rendered.")
             return
-        self._start_render_2d_batch(renders, row_by_oid, src, column_pixmap_mode=(src != "Structure"))
+        self._start_render_2d_batch(
+            renders, row_by_oid, src, column_pixmap_mode=(src != "Structure")
+        )
 
     def _start_render_2d_batch(
         self,
@@ -1094,7 +1117,9 @@ class PrepareStructuresMixin:
         if after_ingest and structure_column:
             lazy_structure = len(oids) >= int(cfg.structure_render_lazy_after_ingest_min_rows)
         else:
-            lazy_structure = self._render2d_use_lazy_structure_flush(len(oids), structure_column=structure_column)
+            lazy_structure = self._render2d_use_lazy_structure_flush(
+                len(oids), structure_column=structure_column
+            )
         self._render2d_lazy_flush = lazy_structure
         skip_snapshot = after_ingest or lazy_structure
         tgt = self._render2d_pixmap_target
@@ -1129,7 +1154,9 @@ class PrepareStructuresMixin:
         self._import_render_goal = len(renders)
         self._import_render_done = 0
         self._on_tool_progress("Drawing 2D structures…", 0, len(renders))
-        self._render2d_cancel_event = cancel_event if cancel_event is not None else threading.Event()
+        self._render2d_cancel_event = (
+            cancel_event if cancel_event is not None else threading.Event()
+        )
         self._render2d_queue = None
         hub = getattr(self, "background_activity", None)
         if hub is not None:
@@ -1174,7 +1201,9 @@ class PrepareStructuresMixin:
     def run_render_2d_for_table_row(self, row: int, col: int | None = None) -> None:
         """Run Render 2D for one row: read chemistry from ``col`` and write the pixmap into that column."""
         if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(self, TOOL_RENDER_2D, "Load a table with at least one row first.")
+            QMessageBox.information(
+                self, TOOL_RENDER_2D, "Load a table with at least one row first."
+            )
             return
         if self._render2d_batch_active or self.process_queue.has_running_job():
             QMessageBox.warning(
@@ -1188,7 +1217,9 @@ class PrepareStructuresMixin:
         t0 = self._table_model.cell_text(row, 0)
         oid = int(t0) if t0.isdigit() else None
         if oid is None:
-            QMessageBox.information(self, TOOL_RENDER_2D, "Could not resolve this row’s compound id.")
+            QMessageBox.information(
+                self, TOOL_RENDER_2D, "Could not resolve this row’s compound id."
+            )
             return
         src = self._render2d_source_header_for_column(col if col is not None else -1)
         mol = self._mol_for_render2d_source(row, src)
@@ -1222,7 +1253,9 @@ class PrepareStructuresMixin:
                 return raw
             smiles_h = self._canonical_smiles_header_for_updates()
             if smiles_h is not None:
-                return (self._table_cell_text(row, self.headers.index(smiles_h)) or "").strip() or None
+                return (
+                    self._table_cell_text(row, self.headers.index(smiles_h)) or ""
+                ).strip() or None
             return None
         col = self.headers.index(src)
         return (self._table_cell_text(row, col) or "").strip() or None
@@ -1311,8 +1344,11 @@ class PrepareStructuresMixin:
         self._clear_tool_progress()
 
         render_src = src if update_target else largest_col
-        if results and render_largest and not no_render_2d and not getattr(
-            self, "_render2d_batch_active", False
+        if (
+            results
+            and render_largest
+            and not no_render_2d
+            and not getattr(self, "_render2d_batch_active", False)
         ):
             base_w, base_h = structure_depiict_width(), structure_depiict_height()
             renders = []

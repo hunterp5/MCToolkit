@@ -791,7 +791,7 @@ class ChemicalTableApp(
             (
                 "Protonate…",
                 self.run_protonate,
-                "Generate the dominant protomer (pkasolver) into a new column and render it.",
+                "Generate the dominant protomer (pkasolver) into a column and optionally render it like Structure.",
             ),
             (
                 "Generate Protomers…",
@@ -823,28 +823,17 @@ class ChemicalTableApp(
 
         conformations_menu = tools.addMenu("&Conformations")
         conformations_menu.setToolTipsVisible(True)
-        for title, slot, tip in (
-            (
-                "Generate Conformations…",
-                self.open_generate_conformations,
-                "Build 3D conformer ensembles and open a results window with energies, ΔE, population, and RMSD.",
-            ),
-            (
-                "Generate Single Conformation…",
-                self.open_generate_single_conformation,
-                "Embed and minimize one lowest-energy 3D conformer per row into the confs column.",
-            ),
-            (
-                "Calculate RMSD…",
-                self.open_calculate_rmsd,
-                "Compute RMSD of each conformer relative to a reference after rigid alignment.",
-            ),
-        ):
-            act = QAction(title, self, triggered=slot)
-            act.setToolTip(tip)
-            conformations_menu.addAction(act)
+        act_gen_conf = QAction(
+            "Generate Conformations…",
+            self,
+            triggered=self.open_generate_conformations,
+        )
+        act_gen_conf.setToolTip(
+            "Build 3D conformer ensembles and open a results window with energies, ΔE, population, and RMSD."
+        )
+        conformations_menu.addAction(act_gen_conf)
 
-        superpose_menu = tools.addMenu("&Superpose")
+        superpose_menu = conformations_menu.addMenu("&Superpose")
         superpose_menu.setToolTipsVisible(True)
         act_sp_conf = QAction("Conformers…", self, triggered=self.open_superpose_conformers)
         act_sp_conf.setToolTip(

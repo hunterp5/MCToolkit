@@ -49,12 +49,10 @@ from ..strings import (
     TOOL_ADD_EXPLICIT_HYDROGENS,
     TOOL_CORE_DECOMP,
     TOOL_REMOVE_EXPLICIT_HYDROGENS,
-    TOOL_SINGLE_CONFORMATION,
 )
 from ...fragment_decomposition import detect_fragment_column_prefixes
 from ...workers import (
     ConformerGenParams,
-    RmsdParams,
     SuperposeParams,
     SuperposeStructuresParams,
 )
@@ -62,6 +60,10 @@ from .scope import selection_scope_checked
 
 
 _RESERVED_DISCONNECT_COLUMNS = frozenset({"ID_HIDDEN"})
+_CONFORMER_FORCE_FIELDS = ("MMFF", "MMFF94s", "UFF")
+_CONFORMER_FF_TOOLTIP = (
+    "MMFF94 or MMFF94s when parameters exist; otherwise falls back to UFF automatically."
+)
 
 
 @dataclass(frozen=True)
@@ -500,76 +502,110 @@ class RemoveExplicitHydrogensDialog(QDialog):
         )
 
 
-class GenerateSingleConformationDialog(QDialog):
-    """Embed one conformer per row, minimize, and store in the ``confs`` column."""
+class ConformerEmbedAdvancedPanel(QGroupBox):
+    """Optional ETKDG / hydrogen knobs. Unchecked uses built-in defaults."""
 
-    def __init__(self, selected_row_count: int = 0, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle(TOOL_SINGLE_CONFORMATION)
-        self.setMinimumWidth(420)
-        self.resize(460, 0)
-        self._have_selection = selected_row_count > 0
-        root = QVBoxLayout(self)
-        root.setContentsMargins(10, 10, 10, 8)
-        root.setSpacing(8)
-        form = QFormLayout()
-        form.setSpacing(6)
-        self.ff_combo = QComboBox()
-        self.ff_combo.addItems(["MMFF", "UFF"])
-        self.ff_combo.setToolTip(
-            "MMFF94 when parameters exist; otherwise falls back to UFF automatically."
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__("Advanced", parent)
+        self.setCheckable(True)
+        self.setChecked(False)
+        self.setToolTip(
+            "ETKDG embedder flags and hydrogen handling. Leave off to use MolManager defaults."
         )
-        form.addRow("Force field:", self.ff_combo)
+        inner = QWidget()
+        form = QFormLayout(inner)
+        form.setSpacing(4)
+        form.setContentsMargins(0, 0, 0, 0)
 
-        self.seed_sb = QSpinBox()
-        self.seed_sb.setRange(0, 2_147_483_647)
-        self.seed_sb.setValue(0xC0FFEE)
-        self.seed_sb.setToolTip("Random seed passed to the ETKDG embedder.")
-        form.addRow("Seed:", self.seed_sb)
-
-        self.max_iters_sb = QSpinBox()
-        self.max_iters_sb.setRange(20, 2000)
-        self.max_iters_sb.setValue(200)
-        self.max_iters_sb.setToolTip("Maximum minimizer iterations for the conformer.")
-        form.addRow("Max iterations:", self.max_iters_sb)
-        root.addLayout(form)
-
-        self.only_selected_cb = QCheckBox("Selected Rows Only")
-        self._only_selected_scope_prefix = "Selected Rows Only"
-        if self._have_selection:
-            self.only_selected_cb.setText(
-                f"{self._only_selected_scope_prefix} ({selected_row_count} row(s))"
-            )
-        else:
-            self.only_selected_cb.setEnabled(False)
-        root.addWidget(self.only_selected_cb)
-
-        self.output_panel = ConformerOutputOptionsPanel(self)
-        root.addWidget(self.output_panel)
-
-        box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        box.accepted.connect(self._try_accept)
-        box.rejected.connect(self.reject)
-        root.addWidget(box)
-        make_window_minimizable(self)
-
-    def _try_accept(self) -> None:
-        if not self.output_panel.validate(self):
-            return
-        self.accept()
-
-    def only_selected_rows(self) -> bool:
-        return selection_scope_checked(self)
-
-    def output_options(self) -> ConformerOutputOptions:
-        return self.output_panel.options()
-
-    def params(self) -> ConformerGenParams:
-        return ConformerGenParams.single_lowest_energy(
-            force_field=str(self.ff_combo.currentText()),
-            random_seed=int(self.seed_sb.value()),
-            max_iterations=int(self.max_iters_sb.value()),
+        self.enforce_chirality_cb = QCheckBox("Enforce chirality")
+        self.enforce_chirality_cb.setChecked(True)
+        self.enforce_chirality_cb.setToolTip(
+            "Preserve specified stereochemistry during ETKDG embedding."
         )
+        form.addRow(self.enforce_chirality_cb)
+
+        self.random_coords_cb = QCheckBox("Use random coordinates")
+        self.random_coords_cb.setChecked(False)
+        self.random_coords_cb.setToolTip(
+            "Start from random coords instead of distance-geometry embedding. "
+            "Can help stubborn rings, usually slower and noisier."
+        )
+        form.addRow(self.random_coords_cb)
+
+        self.exp_torsions_cb = QCheckBox("Experimental torsion preferences")
+        self.exp_torsions_cb.setChecked(True)
+        self.exp_torsions_cb.setToolTip(
+            "Use ETKDG experimental torsion-angle preferences (recommended)."
+        )
+        form.addRow(self.exp_torsions_cb)
+
+        self.small_ring_cb = QCheckBox("Small-ring torsions")
+        self.small_ring_cb.setChecked(True)
+        self.small_ring_cb.setToolTip("ETKDG small-ring torsion corrections.")
+        form.addRow(self.small_ring_cb)
+
+        self.macrocycle_cb = QCheckBox("Macrocycle torsions")
+        self.macrocycle_cb.setChecked(True)
+        self.macrocycle_cb.setToolTip("ETKDG macrocycle torsion corrections.")
+        form.addRow(self.macrocycle_cb)
+
+        self.basic_knowledge_cb = QCheckBox("Basic knowledge terms")
+        self.basic_knowledge_cb.setChecked(True)
+        self.basic_knowledge_cb.setToolTip("ETKDG basic-knowledge terms (planar aromatics, etc.).")
+        form.addRow(self.basic_knowledge_cb)
+
+        self.heavy_rms_cb = QCheckBox("Heavy atoms only for RMS")
+        self.heavy_rms_cb.setChecked(True)
+        self.heavy_rms_cb.setToolTip(
+            "Embed RMS prune and post-minimize RMS prune ignore hydrogens."
+        )
+        form.addRow(self.heavy_rms_cb)
+
+        self.keep_hs_cb = QCheckBox("Keep explicit hydrogens")
+        self.keep_hs_cb.setChecked(False)
+        self.keep_hs_cb.setToolTip(
+            "Leave hydrogens on after minimization (useful for some docking exports)."
+        )
+        form.addRow(self.keep_hs_cb)
+
+        self.max_embed_sb = QSpinBox()
+        self.max_embed_sb.setRange(0, 2000)
+        self.max_embed_sb.setValue(0)
+        self.max_embed_sb.setSpecialValueText("0 = ETKDG default")
+        self.max_embed_sb.setToolTip(
+            "Max embedding attempts per conformer (ETKDG maxIterations). "
+            "0 leaves the RDKit default (typically 10 × number of atoms)."
+        )
+        form.addRow("Max embed attempts:", self.max_embed_sb)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.addWidget(inner)
+        self._inner = inner
+        self.toggled.connect(self._on_toggled)
+        self._on_toggled(False)
+
+    def _on_toggled(self, on: bool) -> None:
+        self._inner.setVisible(bool(on))
+        win = self.window()
+        if win is not None:
+            win.adjustSize()
+
+    def values(self) -> dict:
+        """Advanced fields to merge into :class:`ConformerGenParams`."""
+        if not self.isChecked():
+            return {}
+        return {
+            "enforce_chirality": bool(self.enforce_chirality_cb.isChecked()),
+            "use_random_coords": bool(self.random_coords_cb.isChecked()),
+            "use_exp_torsion_prefs": bool(self.exp_torsions_cb.isChecked()),
+            "use_small_ring_torsions": bool(self.small_ring_cb.isChecked()),
+            "use_macrocycle_torsions": bool(self.macrocycle_cb.isChecked()),
+            "use_basic_knowledge": bool(self.basic_knowledge_cb.isChecked()),
+            "only_heavy_atoms_for_rms": bool(self.heavy_rms_cb.isChecked()),
+            "max_embed_attempts": int(self.max_embed_sb.value()),
+            "keep_hydrogens": bool(self.keep_hs_cb.isChecked()),
+        }
 
 
 class GenerateConformationsDialog(QDialog):
@@ -608,10 +644,8 @@ class GenerateConformationsDialog(QDialog):
         form.addRow("Energy window:", self.energy_win_sb)
 
         self.ff_combo = QComboBox()
-        self.ff_combo.addItems(["MMFF", "UFF"])
-        self.ff_combo.setToolTip(
-            "MMFF94 when parameters exist; otherwise falls back to UFF automatically."
-        )
+        self.ff_combo.addItems(list(_CONFORMER_FORCE_FIELDS))
+        self.ff_combo.setToolTip(_CONFORMER_FF_TOOLTIP)
         form.addRow("Force field:", self.ff_combo)
 
         self.seed_sb = QSpinBox()
@@ -629,7 +663,29 @@ class GenerateConformationsDialog(QDialog):
         self.prune_rms_sb.setToolTip(
             "ETKDG pruneRmsThresh during embed; −1 uses the parameter object default."
         )
-        form.addRow("RMS prune:", self.prune_rms_sb)
+        form.addRow("RMS prune (embed):", self.prune_rms_sb)
+
+        self.post_min_rms_sb = QDoubleSpinBox()
+        self.post_min_rms_sb.setRange(0.0, 3.0)
+        self.post_min_rms_sb.setDecimals(3)
+        self.post_min_rms_sb.setSingleStep(0.05)
+        self.post_min_rms_sb.setValue(0.0)
+        self.post_min_rms_sb.setSpecialValueText("0 = off")
+        self.post_min_rms_sb.setToolTip(
+            "After minimization, drop higher-energy conformers within this heavy-atom RMS "
+            "of a kept pose. 0 skips this extra prune."
+        )
+        form.addRow("RMS prune (post-min):", self.post_min_rms_sb)
+
+        self.max_keep_sb = QSpinBox()
+        self.max_keep_sb.setRange(0, 500)
+        self.max_keep_sb.setValue(0)
+        self.max_keep_sb.setSpecialValueText("0 = no extra cap")
+        self.max_keep_sb.setToolTip(
+            "Keep at most this many lowest-energy conformers after energy-window and RMS "
+            "pruning. 0 keeps all survivors."
+        )
+        form.addRow("Max keep:", self.max_keep_sb)
 
         self.max_iters_sb = QSpinBox()
         self.max_iters_sb.setRange(20, 2000)
@@ -654,6 +710,9 @@ class GenerateConformationsDialog(QDialog):
         form.addRow("Align on:", pat_row)
 
         root.addLayout(form)
+
+        self.advanced_panel = ConformerEmbedAdvancedPanel(self)
+        root.addWidget(self.advanced_panel)
 
         self.only_selected_cb = QCheckBox("Selected Rows Only")
         self._only_selected_scope_prefix = "Selected Rows Only"
@@ -695,6 +754,9 @@ class GenerateConformationsDialog(QDialog):
             max_iterations=int(self.max_iters_sb.value()),
             align_pattern=(self.align_pat_edit.text() or "").strip(),
             align_pattern_is_smarts=bool(self.align_smarts_cb.isChecked()),
+            post_min_rms_threshold=float(self.post_min_rms_sb.value()),
+            max_keep=int(self.max_keep_sb.value()),
+            **self.advanced_panel.values(),
         )
 
 
@@ -912,105 +974,6 @@ class SuperposeStructuresDialog(QDialog):
             align_pattern=(self.align_pat_edit.text() or "").strip(),
             align_pattern_is_smarts=bool(self.align_smarts_cb.isChecked()),
             use_mcs=bool(self.mcs_cb.isChecked()),
-        )
-
-
-class CalculateRmsdDialog(QDialog):
-    """Compute per-conformer RMSD relative to a reference conformer."""
-
-    def __init__(
-        self,
-        selected_row_count: int = 0,
-        *,
-        source_columns: list[str] | None = None,
-        parent=None,
-    ):
-        super().__init__(parent)
-        self.setWindowTitle("Calculate RMSD")
-        self.setMinimumWidth(420)
-        self.resize(460, 0)
-        self._have_selection = selected_row_count > 0
-        sources = [c for c in (source_columns or ["confs"]) if c]
-        if not sources:
-            sources = ["confs"]
-
-        root = QVBoxLayout(self)
-        root.setContentsMargins(10, 10, 10, 8)
-        root.setSpacing(8)
-
-        form = QFormLayout()
-        form.setSpacing(6)
-
-        self.src_combo = QComboBox()
-        self.src_combo.addItems(sources)
-        self.src_combo.setToolTip(
-            "Packed multi-conformer column to score (from Generate Conformations or Superpose)."
-        )
-        form.addRow("Conformer source:", self.src_combo)
-
-        self.ref_sb = QSpinBox()
-        self.ref_sb.setRange(0, 499)
-        self.ref_sb.setValue(0)
-        self.ref_sb.setToolTip(
-            "0-based reference conformer index (sorted by RDKit conformer id). "
-            "RMSD for each conformer is measured after rigid alignment to this reference. "
-            "If a row has fewer conformers, the last index is used."
-        )
-        form.addRow("Reference index:", self.ref_sb)
-
-        self.heavy_cb = QCheckBox("Heavy atoms only")
-        self.heavy_cb.setChecked(True)
-        self.heavy_cb.setToolTip("Compute RMSD over non-hydrogen atoms only.")
-        form.addRow(self.heavy_cb)
-
-        self.reflect_cb = QCheckBox("Allow reflection")
-        self.reflect_cb.setChecked(False)
-        self.reflect_cb.setToolTip("Allow mirrored rigid transforms during alignment.")
-        form.addRow(self.reflect_cb)
-
-        self.align_pat_edit = QLineEdit()
-        self.align_pat_edit.setPlaceholderText("optional SMILES/SMARTS")
-        self.align_pat_edit.setToolTip(
-            "If set, RMSD uses only atoms matching this query. Leave empty for all (heavy) atoms."
-        )
-        self.align_smarts_cb = QCheckBox("SMARTS")
-        self.align_smarts_cb.setChecked(False)
-        self.align_smarts_cb.setToolTip("Parse the pattern as SMARTS instead of SMILES.")
-        pat_row = QHBoxLayout()
-        pat_row.setContentsMargins(0, 0, 0, 0)
-        pat_row.setSpacing(6)
-        pat_row.addWidget(self.align_pat_edit, 1)
-        pat_row.addWidget(self.align_smarts_cb)
-        form.addRow("Align on:", pat_row)
-        root.addLayout(form)
-
-        self.only_selected_cb = QCheckBox("Selected Rows Only")
-        self._only_selected_scope_prefix = "Selected Rows Only"
-        if self._have_selection:
-            self.only_selected_cb.setText(
-                f"{self._only_selected_scope_prefix} ({selected_row_count} row(s))"
-            )
-        else:
-            self.only_selected_cb.setEnabled(False)
-        root.addWidget(self.only_selected_cb)
-
-        box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        box.accepted.connect(self.accept)
-        box.rejected.connect(self.reject)
-        root.addWidget(box)
-        make_window_minimizable(self)
-
-    def only_selected_rows(self) -> bool:
-        return selection_scope_checked(self)
-
-    def params(self) -> RmsdParams:
-        return RmsdParams(
-            reference_conformer_index=int(self.ref_sb.value()),
-            heavy_atoms_only=bool(self.heavy_cb.isChecked()),
-            reflect=bool(self.reflect_cb.isChecked()),
-            align_pattern=(self.align_pat_edit.text() or "").strip(),
-            align_pattern_is_smarts=bool(self.align_smarts_cb.isChecked()),
-            source_column=str(self.src_combo.currentText() or "confs"),
         )
 
 
