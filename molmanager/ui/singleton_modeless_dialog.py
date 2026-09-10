@@ -23,6 +23,8 @@ from typing import Any
 
 from PyQt5.QtWidgets import QWidget
 
+from .qt_widget_utils import qobject_is_deleted
+
 
 def reuse_or_show_modeless_singleton(
     host: Any,
@@ -67,8 +69,14 @@ def reuse_or_show_modeless_singleton(
     setattr(host, attr_name, w)
 
     def _on_destroyed(*_args, obj=w) -> None:
-        if getattr(host, attr_name, None) is obj:
+        if qobject_is_deleted(host):
+            return
+        try:
+            if getattr(host, attr_name, None) is not obj:
+                return
             on_destroyed()
+        except RuntimeError:
+            pass
 
     w.destroyed.connect(_on_destroyed)
     w.show()

@@ -24,6 +24,7 @@ import time
 from contextlib import nullcontext
 
 from PyQt5.QtCore import QEventLoop, Qt, QTimer
+from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
 from rdkit import Chem
@@ -44,6 +45,24 @@ from ...workers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def som_map_export_filename(oid: int, header: str = "SOM Map") -> str:
+    """Default PNG filename for a SOM Map cell export."""
+    stem = re.sub(r"[^\w\-]+", "_", (header or "SOM_Map").strip()).strip("_") or "SOM_Map"
+    return f"{stem}_{int(oid)}.png"
+
+
+def save_som_map_pixmap(pm: QPixmap, path: str) -> str | None:
+    """Write *pm* as PNG, appending ``.png`` when needed. Returns the path or ``None``."""
+    out = (path or "").strip()
+    if not out or pm is None or pm.isNull():
+        return None
+    if not out.lower().endswith(".png"):
+        out += ".png"
+    if not pm.save(out, "PNG"):
+        return None
+    return out
 
 
 class ToolsSqlPredictMixin:
@@ -1101,17 +1120,28 @@ class ToolsSqlPredictMixin:
             if map_col in self.headers:
                 self._table_model.register_pixmap_column(map_col)
             dw, dh = structure_depiict_width(), structure_depiict_height()
+            last_pm = None
             for oid, _cols, png, _atoms, _headers in table_rows:
                 if not png:
                     continue
                 pm = pixmap_from_structure_render_png(png, dw, dh)
                 if pm is not None and not pm.isNull():
                     self._table_model.set_column_pixmap(int(oid), map_col, pm)
+                    last_pm = pm
+                    view_row = self._resolve_structure_row_for_oid(int(oid))
+                    if view_row != -1:
+                        need_h = max(dh, int(pm.height()))
+                        if int(self.table.rowHeight(view_row)) < need_h:
+                            self.table.setRowHeight(int(view_row), need_h)
+            sync_w = getattr(self, "_sync_data_pixmap_column_width", None)
+            if callable(sync_w) and last_pm is not None:
+                sync_w(map_col, last_pm, dw)
         else:
             self._finish_tool_progress(TOOL_PREDICT_SOM)
 
         records = records_from_worker_rows(results)
         if records:
+            self._som_browse_records = list(records)
             self._open_som_browser(records)
         elif not table_rows:
             QMessageBox.information(
@@ -1124,7 +1154,14 @@ class ToolsSqlPredictMixin:
             self.status_label.setText(notice)
 
     def _on_som_browser_dialog_destroyed(self, *_args) -> None:
-        sender = self.sender()
+        from ..qt_widget_utils import qobject_is_deleted
+
+        if qobject_is_deleted(self):
+            return
+        try:
+            sender = self.sender()
+        except RuntimeError:
+            return
         current = getattr(self, "_som_browser_dialog", None)
         if sender is not None and current is not None and current is not sender:
             return
@@ -1147,12 +1184,20 @@ class ToolsSqlPredictMixin:
         except Exception:
             self._som_browser_dialog = None
 
-    def _open_som_browser(self, records) -> None:
+    def _open_som_browser(self, records, *, focus_oid: int | None = None) -> None:
         from ..som_browser import SomBrowserDialog, SomBrowserWidget
 
         if self._host_unavailable():
             return
+        self._som_browse_records = list(records or [])
         self._discard_stale_som_browser_dialog()
+
+        def _focus(widget) -> None:
+            if widget is None or focus_oid is None:
+                return
+            jump = getattr(widget, "jump_to_oid", None)
+            if callable(jump):
+                jump(int(focus_oid))
 
         for w in self.iter_docked_plot_widgets():
             if isinstance(w, SomBrowserWidget):
@@ -1163,6 +1208,7 @@ class ToolsSqlPredictMixin:
                         mgr.set_preferred_pane(pane)
                 self.show_docked_plot_panel()
                 w.set_records(records)
+                _focus(w)
                 w.raise_()
                 self.status_label.setText(f"{TOOL_PREDICT_SOM}: focused in workspace pane.")
                 return
@@ -1170,10 +1216,12 @@ class ToolsSqlPredictMixin:
         def _factory():
             dlg = SomBrowserDialog(self)
             dlg.set_records(records)
+            _focus(getattr(dlg, "_panel", None))
             return dlg
 
         def _on_reused(dlg):
             dlg.set_records(records)
+            _focus(getattr(dlg, "_panel", None))
 
         reuse_or_show_modeless_singleton(
             self,
@@ -1182,6 +1230,53 @@ class ToolsSqlPredictMixin:
             self._on_som_browser_dialog_destroyed,
             on_reused_visible=_on_reused,
         )
+
+    def open_som_browser_for_oid(self, oid: int | None) -> None:
+        """Open the Predict SOM browser focused on one table row."""
+        from ..som_browser import records_from_table
+
+        records = list(getattr(self, "_som_browse_records", None) or ())
+        missing = oid is not None and not any(r.oid == int(oid) for r in records)
+        if not records or missing:
+            table_recs = records_from_table(self)
+            if table_recs:
+                records = table_recs
+                self._som_browse_records = list(records)
+        if not records:
+            QMessageBox.information(
+                self,
+                TOOL_PREDICT_SOM,
+                "No SOM maps to browse. Run Predict SOM first.",
+            )
+            return
+        self._open_som_browser(records, focus_oid=oid)
+
+    def export_som_map_for_oid(self, oid: int, header: str) -> None:
+        """Save the SOM Map cell image for one table row."""
+        from PyQt5.QtWidgets import QFileDialog
+
+        pm = self._table_model.column_pixmap_copy(int(oid), header)
+        if pm is None or pm.isNull():
+            QMessageBox.information(
+                self,
+                TOOL_PREDICT_SOM,
+                "This cell has no SOM map image to export.",
+            )
+            return
+        suggested = som_map_export_filename(int(oid), header)
+        path, _sel = QFileDialog.getSaveFileName(
+            self,
+            "Export SOM Map",
+            suggested,
+            "PNG image (*.png);;All files (*.*)",
+        )
+        if not path:
+            return
+        written = save_som_map_pixmap(pm, path)
+        if not written:
+            QMessageBox.warning(self, TOOL_PREDICT_SOM, "Could not save the SOM map image.")
+            return
+        self.status_label.setText(f"Exported SOM map to {written}")
 
     def _on_som_prediction_failed(self, msg: str) -> None:
         if self._host_unavailable():

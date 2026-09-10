@@ -26,13 +26,16 @@ from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
 from ..som_prediction import (
+    NERDD_METABOLISM_SUBSETS,
     SOM_CANCELLED_ERROR,
     MetabolismSubset,
     SomMoleculePrediction,
     format_som_columns,
+    merge_phase_predictions,
     predict_soms_batch,
     render_som_map_png,
     som_output_columns,
+    uses_split_phase_jobs,
 )
 from ..ui.strings import TOOL_PREDICT_SOM
 from ..utils import mol_to_canonical_smiles
@@ -115,8 +118,9 @@ class SomPredictorWorker(QRunnable):
 
         cancel_ev = self.cancel_event
         include_fame = bool(self.fame_score)
-        columns = som_output_columns(include_fame=include_fame)
-        na = format_som_columns(None, include_fame=include_fame)
+        include_phases = uses_split_phase_jobs(self.metabolism_subset)
+        columns = som_output_columns(include_fame=include_fame, include_phases=include_phases)
+        na = format_som_columns(None, include_fame=include_fame, include_phases=include_phases)
 
         order, rep, oids_map = group_rows_by_structure(self.rows)
         n_empty = sum(1 for _oid, mol in self.rows if mol is None)
@@ -148,26 +152,62 @@ class SomPredictorWorker(QRunnable):
         smiles = [mol_to_canonical_smiles(rep[k]) for k in order]
         pred_by_key: dict[str, SomMoleculePrediction] = {}
         if smiles:
-            try:
+            n_unique_rows = tot - n_empty
+
+            def _scale_progress(frac: float, message: str) -> None:
+                nonlocal done
+                if _cancelled():
+                    return
+                done = n_empty + int(round(max(0.0, min(frac, 1.0)) * n_unique_rows))
+                _emit_progress(message)
+
+            def _cancelled_preds() -> list[SomMoleculePrediction]:
+                return [
+                    SomMoleculePrediction(smi, "", (), error=SOM_CANCELLED_ERROR) for smi in smiles
+                ]
+
+            def _run_subset(
+                subset: str,
+                lo: float,
+                hi: float,
+                message: str,
+            ) -> list[SomMoleculePrediction]:
+                if _cancelled():
+                    return _cancelled_preds()
 
                 def _batch_progress(batch_done: int, batch_total: int) -> None:
-                    nonlocal done
-                    if _cancelled():
-                        return
-                    frac = batch_done / max(batch_total, 1)
-                    n_unique_rows = tot - n_empty
-                    done = n_empty + int(round(frac * n_unique_rows))
-                    _emit_progress("Predict SOM…")
+                    span = hi - lo
+                    frac = lo + (batch_done / max(batch_total, 1)) * span
+                    _scale_progress(frac, message)
 
-                preds = predict_soms_batch(
-                    smiles,
-                    metabolism_subset=self.metabolism_subset,
-                    fame_score=include_fame,
-                    shannon_entropy=False,
-                    threshold=self.threshold,
-                    cancel=_cancelled,
-                    progress=_batch_progress,
-                )
+                try:
+                    return list(
+                        predict_soms_batch(
+                            smiles,
+                            metabolism_subset=subset,
+                            fame_score=include_fame,
+                            shannon_entropy=False,
+                            threshold=self.threshold,
+                            cancel=_cancelled,
+                            progress=_batch_progress,
+                        )
+                    )
+                except Exception as e:
+                    if str(e) == "Cancelled.":
+                        return _cancelled_preds()
+                    raise
+
+            try:
+                if include_phases:
+                    phase1 = _run_subset("phase1", 0.0, 0.5, "Predict SOM (Phase 1)…")
+                    phase2 = _run_subset("phase2", 0.5, 1.0, "Predict SOM (Phase 2)…")
+                    preds = [merge_phase_predictions(p1, p2) for p1, p2 in zip(phase1, phase2)]
+                else:
+                    subset = str(self.metabolism_subset)
+                    allowed = {k for k, _ in NERDD_METABOLISM_SUBSETS}
+                    if subset not in allowed:
+                        raise ValueError(f"Unknown metabolism subset: {subset}")
+                    preds = _run_subset(subset, 0.0, 1.0, "Predict SOM…")
             except Exception as e:
                 if str(e) == "Cancelled.":
                     _safe_emit(self.som_signals, "failed", "Cancelled.")
@@ -198,6 +238,7 @@ class SomPredictorWorker(QRunnable):
                     pred.atoms,
                     width=self.map_width,
                     height=self.map_height,
+                    reference_mol=rep.get(key),
                 )
             key_png[key] = png
 
@@ -210,7 +251,9 @@ class SomPredictorWorker(QRunnable):
                 continue
             key = structure_key(mol)
             pred = pred_by_key.get(key)
-            cols = format_som_columns(pred, include_fame=include_fame)
+            cols = format_som_columns(
+                pred, include_fame=include_fame, include_phases=include_phases
+            )
             by_oid[oid] = (cols, key_png.get(key), pred)
 
         out = []

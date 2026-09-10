@@ -105,6 +105,10 @@ class SomPredictorDialog(QDialog):
         self.subset_combo = QComboBox()
         for value, label in METABOLISM_SUBSET_OPTIONS:
             self.subset_combo.addItem(label, value)
+        self.subset_combo.setToolTip(
+            "FAME3R model family. Phase 1 and 2 runs two NERDD jobs (slower) "
+            "and writes separate Phase 1 and Phase 2 site columns."
+        )
         sub_row.addWidget(self.subset_combo, 1)
         root.addLayout(sub_row)
 
@@ -209,17 +213,19 @@ class SomPredictorDialog(QDialog):
         self.parent_app._begin_tool_progress("Predict SOM", n)
         self.parent_app.process_queue.enqueue(
             f"Predict SOM ({n} molecules)",
-            lambda ev, r=rows, ws=self.parent_app.signals, ps=som_signals, sub=subset, fs=fame_score, thr=threshold, st=prog, mw=structure_depiict_width(), mh=structure_depiict_height(): SomPredictorWorker(
-                r,
-                ws,
-                ps,
-                cancel_event=ev,
-                metabolism_subset=sub,
-                fame_score=fs,
-                threshold=thr,
-                map_width=mw,
-                map_height=mh,
-                progress_state=st,
+            lambda ev, r=rows, ws=self.parent_app.signals, ps=som_signals, sub=subset, fs=fame_score, thr=threshold, st=prog, mw=structure_depiict_width(), mh=structure_depiict_height(): (
+                SomPredictorWorker(
+                    r,
+                    ws,
+                    ps,
+                    cancel_event=ev,
+                    metabolism_subset=sub,
+                    fame_score=fs,
+                    threshold=thr,
+                    map_width=mw,
+                    map_height=mh,
+                    progress_state=st,
+                )
             ),
         )
         self.close()

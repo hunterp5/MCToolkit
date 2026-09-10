@@ -67,19 +67,44 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
     GuideSection(
         "1 — Start here",
         (
-            _e("overview", "Overview", "Overview", "What MolManager is and how the main window is organized."),
-            _e("processes", "Processes", "Processes", "Running and queued background jobs; cancel and clear."),
+            _e(
+                "overview",
+                "Overview",
+                "Overview",
+                "What MolManager is and how the main window is organized.",
+            ),
+            _e(
+                "processes",
+                "Processes",
+                "Processes",
+                "Running and queued background jobs; cancel and clear.",
+            ),
             _e("settings", "Settings", "Settings", "Theme, fonts, and keyboard shortcuts."),
         ),
     ),
     GuideSection(
         "2 — File and sessions",
         (
-            _e("file_open", "Open File", "Open File", "Load SDF, MOL, SMILES, CSV, and related formats."),
-            _e("file_import", "Import Data", "Import Data", "Append or merge data into the current table."),
+            _e(
+                "file_open",
+                "Open File",
+                "Open File",
+                "Load SDF, MOL, SMILES, CSV, and related formats.",
+            ),
+            _e(
+                "file_import",
+                "Import Data",
+                "Import Data",
+                "Append or merge data into the current table.",
+            ),
             _e("file_sessions", "Sessions", "Sessions", "Open, save, new, and duplicate sessions."),
             _e("file_export", "Export", "Export", "Export all or selected rows to common formats."),
-            _e("file_browser", "Selection Browser", "Selection Browser", "Review and act on the current selection."),
+            _e(
+                "file_browser",
+                "Selection Browser",
+                "Selection Browser",
+                "Review and act on the current selection.",
+            ),
         ),
     ),
     GuideSection(
@@ -87,55 +112,160 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         (
             _e("edit_menu", "Edit", "Edit", "Undo/redo, clipboard, and selection commands."),
             _e("table", "Table", "Table", "Columns, sorting, context menus, and precision."),
-            _e("tools_filter", "Filters", "Filters", "Filter panel cards, titles, reorder, and enable/disable."),
+            _e(
+                "tools_filter",
+                "Filters",
+                "Filters",
+                "Filter panel cards, titles, reorder, and enable/disable.",
+            ),
             _e("tools_search", "Search", "Search", "Multi-column search with AND/OR criteria."),
         ),
     ),
     GuideSection(
         "4 — Prepare and structures",
         (
-            _e("tools_calc_descriptors", "Calculate Descriptors", "Calculate Descriptors", "RDKit descriptors and related property columns."),
-            _e("tools_fast_prepare", "Fast Prepare", "Fast Prepare", "Largest fragment, neutralize, and redraw in one job."),
-            _e("tools_disconnect_fragments", "Disconnect Fragments", "Disconnect Fragments", "Split disconnected components into rows."),
-            _e("tools_add_explicit_h", "Add Explicit Hydrogens", "Add Explicit Hydrogens", "Expand implicit hydrogens with RDKit AddHs."),
-            _e("tools_remove_explicit_h", "Remove Explicit Hydrogens", "Remove Explicit Hydrogens", "Strip explicit hydrogens with RDKit RemoveHs."),
-            _e("tools_render_2d", "Render 2D", "Render 2D", "Regenerate 2D depictions as a background batch."),
-            _e("tools_protonate", "Protonate", "Protonate", "Dominant protomer at a chosen pH (pkasolver)."),
-            _e("tools_generate_protomers", "Generate Protomers", "Generate Protomers", "Enumerate protomers/tautomers into the table."),
-            _e("tools_neutralize", "Neutralize", "Neutralize", "Zero net formal charge with RDKit Uncharger."),
-            _e("tools_calculator", "Calculator", "Calculator", "New numeric column from a math expression."),
+            _e(
+                "tools_calc_descriptors",
+                "Calculate Descriptors",
+                "Calculate Descriptors",
+                "RDKit descriptors and related property columns.",
+            ),
+            _e(
+                "tools_fast_prepare",
+                "Fast Prepare",
+                "Fast Prepare",
+                "Largest fragment, neutralize, and redraw in one job.",
+            ),
+            _e(
+                "tools_disconnect_fragments",
+                "Disconnect Fragments",
+                "Disconnect Fragments",
+                "Split disconnected components into rows.",
+            ),
+            _e(
+                "tools_add_explicit_h",
+                "Add Explicit Hydrogens",
+                "Add Explicit Hydrogens",
+                "Expand implicit hydrogens with RDKit AddHs.",
+            ),
+            _e(
+                "tools_remove_explicit_h",
+                "Remove Explicit Hydrogens",
+                "Remove Explicit Hydrogens",
+                "Strip explicit hydrogens with RDKit RemoveHs.",
+            ),
+            _e(
+                "tools_render_2d",
+                "Render 2D",
+                "Render 2D",
+                "Regenerate 2D depictions as a background batch.",
+            ),
+            _e(
+                "tools_protonate",
+                "Protonate",
+                "Protonate",
+                "Dominant protomer at a chosen pH (pkasolver).",
+            ),
+            _e(
+                "tools_generate_protomers",
+                "Generate Protomers",
+                "Generate Protomers",
+                "Enumerate protomers/tautomers into the table.",
+            ),
+            _e(
+                "tools_neutralize",
+                "Neutralize",
+                "Neutralize",
+                "Zero net formal charge with RDKit Uncharger.",
+            ),
+            _e(
+                "tools_calculator",
+                "Calculator",
+                "Calculator",
+                "New numeric column from a math expression.",
+            ),
             _e("tools_sketcher", "Sketcher", "Sketcher", "Draw and edit molecules interactively."),
         ),
     ),
     GuideSection(
         "5 — Conformations",
         (
-            _e("tools_gen_conformations", "Generate Conformations", "Generate Conformations", "Build 3D conformer ensembles."),
-            _e("tools_gen_single_conformation", "Generate Single Conformation", "Generate Single Conformation", "One minimized 3D conformer per row."),
-            _e("tools_superpose_conformers", "Superpose Conformers", "Superpose Conformers", "Align conformers within a molecule."),
-            _e("tools_superpose_structures", "Superpose Structures", "Superpose Structures", "Align structures across rows (MCS options)."),
+            _e(
+                "tools_gen_conformations",
+                "Generate Conformations",
+                "Generate Conformations",
+                "Build 3D conformer ensembles.",
+            ),
+            _e(
+                "tools_gen_single_conformation",
+                "Generate Single Conformation",
+                "Generate Single Conformation",
+                "One minimized 3D conformer per row.",
+            ),
+            _e(
+                "tools_superpose_conformers",
+                "Superpose Conformers",
+                "Superpose Conformers",
+                "Align conformers within a molecule.",
+            ),
+            _e(
+                "tools_superpose_structures",
+                "Superpose Structures",
+                "Superpose Structures",
+                "Align structures across rows (MCS options).",
+            ),
         ),
     ),
     GuideSection(
         "6 — Fingerprints",
         (
-            _e("tools_fp_similarity", "Fingerprint Similarity", "Fingerprint Similarity", "Similarity scores vs a query molecule."),
-            _e("tools_diverse_subset", "Diverse Subset", "Diverse Subset", "Pick a chemically diverse subset of rows."),
-            _e("tools_cluster", "Cluster", "Cluster", "Cluster molecules by fingerprint similarity."),
+            _e(
+                "tools_fp_similarity",
+                "Fingerprint Similarity",
+                "Fingerprint Similarity",
+                "Similarity scores vs a query molecule.",
+            ),
+            _e(
+                "tools_diverse_subset",
+                "Diverse Subset",
+                "Diverse Subset",
+                "Pick a chemically diverse subset of rows.",
+            ),
+            _e(
+                "tools_cluster",
+                "Cluster",
+                "Cluster",
+                "Cluster molecules by fingerprint similarity.",
+            ),
         ),
     ),
     GuideSection(
         "7 — Docking",
         (
-            _e("tools_prepare_pdb", "Prepare PDB", "Prepare PDB", "Clean and complete protein PDB files."),
-            _e("tools_prepare_pdbqt", "Prepare PDBQT", "Prepare PDBQT", "Build receptor/ligand PDBQT for docking."),
+            _e(
+                "tools_prepare_pdb",
+                "Prepare PDB",
+                "Prepare PDB",
+                "Clean and complete protein PDB files.",
+            ),
+            _e(
+                "tools_prepare_pdbqt",
+                "Prepare PDBQT",
+                "Prepare PDBQT",
+                "Build receptor/ligand PDBQT for docking.",
+            ),
             _e("tools_smina", "Smina", "Smina", "Run Smina docking with box and search settings."),
         ),
     ),
     GuideSection(
         "8 — Design and modeling",
         (
-            _e("tools_rgroup", "R-Group Decomposition", "R-Group Decomposition", "Match a core and extract R-group columns."),
+            _e(
+                "tools_rgroup",
+                "R-Group Decomposition",
+                "R-Group Decomposition",
+                "Match a core and extract R-group columns.",
+            ),
             _e(
                 "tools_mmp",
                 "MMP Transform Ledger",
@@ -154,12 +284,17 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Pair Network",
                 "Neighborhood graph from Transform Ledger pairs.",
             ),
-            _e("tools_reaction_enum", "Reaction Enumeration", "Reaction Enumeration", "Enumerate products from reaction SMARTS."),
+            _e(
+                "tools_reaction_enum",
+                "Reaction Enumeration",
+                "Reaction Enumeration",
+                "Enumerate products from reaction SMARTS.",
+            ),
             _e(
                 "tools_predict_som",
                 "Predict SOM",
                 "Predict SOM",
-                "FAME3R sites of metabolism with a highlighted atom map.",
+                "FAME3R sites of metabolism for Phase 1, Phase 2, both, or CYP.",
             ),
             _e("data_qsar", "QSAR", "QSAR", "Train and apply QSAR models on table features."),
             _e("data_mpo", "MPO Scoring", "MPO Scoring", "Multi-parameter desirability scores."),
@@ -168,21 +303,51 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
     GuideSection(
         "9 — Random",
         (
-            _e("tools_random_number", "Random Number", "Random Number", "Fill a column with random numbers."),
-            _e("tools_random_molecule", "Random Molecule", "Random Molecule", "Generate random molecules into the table."),
+            _e(
+                "tools_random_number",
+                "Random Number",
+                "Random Number",
+                "Fill a column with random numbers.",
+            ),
+            _e(
+                "tools_random_molecule",
+                "Random Molecule",
+                "Random Molecule",
+                "Generate random molecules into the table.",
+            ),
         ),
     ),
     GuideSection(
         "10 — Charts and analysis",
         (
-            _e("data_analyze_table", "Analyze Table", "Analyze Table", "Summary statistics for table columns."),
-            _e("data_plotter", "Plotter", "Plotter", "Scatter, histogram, heatmap, box, violin, radar."),
+            _e(
+                "data_analyze_table",
+                "Analyze Table",
+                "Analyze Table",
+                "Summary statistics for table columns.",
+            ),
+            _e(
+                "data_plotter",
+                "Plotter",
+                "Plotter",
+                "Scatter, histogram, heatmap, box, violin, radar.",
+            ),
             _e("data_pca", "PCA", "PCA", "Principal component analysis plot."),
             _e("data_tsne", "t-SNE", "t-SNE", "t-SNE embedding visualization."),
             _e("data_umap", "UMAP", "UMAP", "UMAP embedding visualization."),
             _e("data_som", "SOM", "Self-Organizing Map", "Self-organizing map visualization."),
-            _e("data_boiled_egg", "BOILED-Egg", "BOILED-Egg", "Brain/intestinal absorption style plot."),
-            _e("data_golden_triangle", "Golden Triangle", "Golden Triangle", "Medchem golden-triangle plot."),
+            _e(
+                "data_boiled_egg",
+                "BOILED-Egg",
+                "BOILED-Egg",
+                "Brain/intestinal absorption style plot.",
+            ),
+            _e(
+                "data_golden_triangle",
+                "Golden Triangle",
+                "Golden Triangle",
+                "Medchem golden-triangle plot.",
+            ),
             _e(
                 "data_sali",
                 "SALI",
@@ -194,7 +359,9 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
     GuideSection(
         "11 — External data",
         (
-            _e("ext_sql", "SQL Database", "SQL Database", "Load query results from a SQL database."),
+            _e(
+                "ext_sql", "SQL Database", "SQL Database", "Load query results from a SQL database."
+            ),
             _e("ext_pubchem", "PubChem", "PubChem", "Lookup and similarity search in PubChem."),
             _e("ext_chembl", "ChEMBL", "ChEMBL", "Molecules and bioactivity from ChEMBL."),
             _e("ext_patents", "Patents", "Patents", "SureChEMBL patent chemistry similarity."),
@@ -267,8 +434,7 @@ def guide_html(guide_id: str, palette: QPalette | None = None) -> str:
     else:
         body = markdown_to_html_fragment(md)
     return (
-        f"<html><head><style>{_guide_style_sheet(palette)}</style></head>"
-        f"<body>{body}</body></html>"
+        f"<html><head><style>{_guide_style_sheet(palette)}</style></head><body>{body}</body></html>"
     )
 
 

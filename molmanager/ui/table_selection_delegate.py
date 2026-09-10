@@ -52,8 +52,37 @@ class RowHighlightDelegate(QStyledItemDelegate):
     def __init__(self, compound_model: CompoundTableModel, parent=None) -> None:
         super().__init__(parent)
         self._compound_model = compound_model
+        self._pixmap_delegate = None
+
+    def _source_index(self, index: QModelIndex) -> QModelIndex:
+        model = index.model()
+        if isinstance(model, QSortFilterProxyModel):
+            return model.mapToSource(index)
+        return index
+
+    def _index_is_pixmap_column(self, index: QModelIndex) -> bool:
+        src = self._source_index(index)
+        if not src.isValid():
+            return False
+        col = int(src.column())
+        headers = getattr(self._compound_model, "_headers", ())
+        if col < 0 or col >= len(headers):
+            return False
+        return bool(self._compound_model.is_pixmap_data_column(headers[col]))
+
+    def _pixmap_style_delegate(self):
+        delg = self._pixmap_delegate
+        if delg is None:
+            from .compound_table_model import StructureDelegate
+
+            delg = StructureDelegate(self.parent(), self._compound_model)
+            self._pixmap_delegate = delg
+        return delg
 
     def paint(self, painter, option, index) -> None:  # noqa: N802
+        if self._index_is_pixmap_column(index):
+            self._pixmap_style_delegate().paint(painter, option, index)
+            return
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
         if row_is_highlighted(index, self._compound_model):
@@ -61,3 +90,8 @@ class RowHighlightDelegate(QStyledItemDelegate):
         widget = opt.widget
         style = widget.style() if widget is not None else QApplication.style()
         style.drawControl(QStyle.CE_ItemViewItem, opt, painter, widget)
+
+    def sizeHint(self, option, index):  # noqa: N802
+        if self._index_is_pixmap_column(index):
+            return self._pixmap_style_delegate().sizeHint(option, index)
+        return super().sizeHint(option, index)

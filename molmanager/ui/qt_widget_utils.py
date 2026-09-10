@@ -18,9 +18,25 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
+from typing import Any
+
+from PyQt5.QtCore import QObject, Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QTextEdit, QWidget
+
+
+def qobject_is_deleted(obj: Any) -> bool:
+    """Return True when *obj* is missing or its C++ QObject has already been destroyed."""
+    if obj is None:
+        return True
+    try:
+        from PyQt5 import sip
+
+        if isinstance(obj, QObject) and sip.isdeleted(obj):
+            return True
+    except Exception:
+        return True
+    return False
 
 
 def monospace_text_font() -> QFont:

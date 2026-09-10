@@ -18,21 +18,36 @@
 
 from __future__ import annotations
 
+import pytest
 from rdkit import Chem
 
 from molmanager.som_prediction import (
+    SOM_CANCELLED_ERROR,
+    SOM_ENTROPY_COLUMN,
     SOM_FAME_COLUMN,
     SOM_MAP_COLUMN,
+    SOM_P1_SITES_COLUMN,
+    SOM_P2_SITES_COLUMN,
+    SOM_PHASE_COLUMN,
     SOM_PROB_COLUMN,
     SOM_SITES_COLUMN,
     SomAtomHit,
     SomMoleculePrediction,
     _group_atom_rows,
     format_som_columns,
+    merge_phase_predictions,
+    predict_soms_batch,
     render_som_map_png,
     shannon_binary_entropy,
+    som_atom_label,
     som_output_columns,
+    som_phase_label,
 )
+
+
+def test_som_atom_label_includes_probability() -> None:
+    assert som_atom_label(3, 0.812) == "3; 0.81"
+    assert som_atom_label(0, 1) == "0; 1.00"
 
 
 def test_shannon_binary_entropy_bounds() -> None:
@@ -71,6 +86,90 @@ def test_som_output_columns_order() -> None:
     assert som_output_columns(include_fame=False)[0] == SOM_MAP_COLUMN
     assert SOM_FAME_COLUMN in som_output_columns(include_fame=True)
     assert SOM_FAME_COLUMN not in som_output_columns(include_fame=False)
+    assert SOM_P1_SITES_COLUMN not in som_output_columns(include_fame=False)
+    phased = som_output_columns(include_fame=False, include_phases=True)
+    assert phased[:5] == [
+        SOM_MAP_COLUMN,
+        SOM_SITES_COLUMN,
+        SOM_P1_SITES_COLUMN,
+        SOM_P2_SITES_COLUMN,
+        SOM_PHASE_COLUMN,
+    ]
+    with_fame = som_output_columns(include_fame=True, include_phases=True)
+    assert with_fame.index(SOM_FAME_COLUMN) == with_fame.index(SOM_ENTROPY_COLUMN) - 1
+
+
+def test_merge_phase_predictions_union_and_labels() -> None:
+    p1 = SomMoleculePrediction(
+        smiles="CCO",
+        preprocessed_smiles="CCO",
+        atoms=(
+            SomAtomHit(0, 0.81, True),
+            SomAtomHit(1, 0.10, False),
+            SomAtomHit(2, 0.40, True),
+        ),
+    )
+    p2 = SomMoleculePrediction(
+        smiles="CCO",
+        preprocessed_smiles="CCO",
+        atoms=(
+            SomAtomHit(0, 0.20, False),
+            SomAtomHit(1, 0.90, True),
+            SomAtomHit(2, 0.70, True),
+        ),
+    )
+    merged = merge_phase_predictions(p1, p2)
+    by_id = {a.atom_id: a for a in merged.atoms}
+    assert by_id[0].is_som and by_id[0].is_phase1_som and not by_id[0].is_phase2_som
+    assert by_id[0].probability == 0.81
+    assert by_id[1].is_som and by_id[1].is_phase2_som and not by_id[1].is_phase1_som
+    assert by_id[2].is_phase1_som and by_id[2].is_phase2_som
+    assert som_phase_label(by_id[2]) == "P1+P2"
+    row = format_som_columns(merged, include_phases=True)
+    assert row[SOM_SITES_COLUMN] == "1, 0, 2"
+    assert row[SOM_P1_SITES_COLUMN] == "0, 2"
+    assert row[SOM_P2_SITES_COLUMN] == "1, 2"
+    assert row[SOM_PHASE_COLUMN] == "1:P2; 0:P1; 2:P1+P2"
+
+
+def test_merge_phase_predictions_keeps_other_side_on_cancel() -> None:
+    p1 = SomMoleculePrediction(
+        smiles="CCO",
+        preprocessed_smiles="CCO",
+        atoms=(SomAtomHit(0, 0.9, True),),
+    )
+    p2 = SomMoleculePrediction("CCO", "", (), error=SOM_CANCELLED_ERROR)
+    merged = merge_phase_predictions(p1, p2)
+    assert merged.error is None
+    assert merged.atoms[0].is_phase1_som
+    assert not merged.atoms[0].is_phase2_som
+
+
+def test_merge_phase_predictions_both_cancelled() -> None:
+    p1 = SomMoleculePrediction("CCO", "", (), error=SOM_CANCELLED_ERROR)
+    p2 = SomMoleculePrediction("CCO", "", (), error=SOM_CANCELLED_ERROR)
+    merged = merge_phase_predictions(p1, p2)
+    assert merged.error == SOM_CANCELLED_ERROR
+
+
+def test_predict_soms_batch_rejects_unknown_subset() -> None:
+    with pytest.raises(ValueError, match="Unknown metabolism subset"):
+        predict_soms_batch(["CCO"], metabolism_subset="compare")  # type: ignore[arg-type]
+
+
+def test_metabolism_options_have_no_compare() -> None:
+    from molmanager.som_prediction import (
+        METABOLISM_SUBSET_OPTIONS,
+        NERDD_METABOLISM_SUBSETS,
+        uses_split_phase_jobs,
+    )
+
+    nerd_keys = {k for k, _ in NERDD_METABOLISM_SUBSETS}
+    ui_keys = {k for k, _ in METABOLISM_SUBSET_OPTIONS}
+    assert nerd_keys == ui_keys
+    assert "compare" not in ui_keys
+    assert uses_split_phase_jobs("all")
+    assert not uses_split_phase_jobs("phase1")
 
 
 def test_group_atom_rows_by_mol_id() -> None:
@@ -121,8 +220,87 @@ def test_render_som_map_png_highlights() -> None:
     emphasized = render_som_map_png("CCO", atoms, width=120, height=100, emphasize_atom=2)
     assert emphasized is not None
     assert emphasized != png
+    p1_atoms = (SomAtomHit(1, 0.9, True, is_phase1_som=True, is_phase2_som=False),)
+    p2_atoms = (SomAtomHit(1, 0.9, True, is_phase1_som=False, is_phase2_som=True),)
+    p1_png = render_som_map_png("CCO", p1_atoms, width=120, height=100)
+    p2_png = render_som_map_png("CCO", p2_atoms, width=120, height=100)
+    assert p1_png is not None and p2_png is not None
+    assert p1_png == p2_png
     blank = render_som_map_png("not-a-molecule", atoms, width=120, height=100)
     assert blank is None
+
+
+def _dark_ink_span(png: bytes) -> tuple[int, int]:
+    from PyQt5.QtGui import QImage
+
+    img = QImage.fromData(png)
+    min_x, min_y = img.width(), img.height()
+    max_x, max_y = -1, -1
+    for y in range(img.height()):
+        for x in range(img.width()):
+            c = img.pixelColor(x, y)
+            if c.red() < 50 and c.green() < 50 and c.blue() < 50:
+                min_x = min(min_x, x)
+                min_y = min(min_y, y)
+                max_x = max(max_x, x)
+                max_y = max(max_y, y)
+    return max(0, max_x - min_x), max(0, max_y - min_y)
+
+
+def test_emphasize_does_not_resize_molecule(qapp) -> None:  # noqa: ARG001
+    atoms = (
+        SomAtomHit(0, 0.2, False),
+        SomAtomHit(1, 0.9, True),
+        SomAtomHit(2, 0.1, False),
+    )
+    plain = render_som_map_png("CCO", atoms, width=180, height=140)
+    emphasized = render_som_map_png("CCO", atoms, width=180, height=140, emphasize_atom=1)
+    assert plain is not None and emphasized is not None
+    w1, h1 = _dark_ink_span(plain)
+    w2, h2 = _dark_ink_span(emphasized)
+    assert w1 > 8 and h1 > 8
+    assert abs(w1 - w2) <= 2
+    assert abs(h1 - h2) <= 2
+
+
+def test_render_som_map_png_matches_reference_orientation() -> None:
+    from rdkit.Chem import rdDepictor
+    from rdkit.Geometry import Point3D
+
+    ref = Chem.MolFromSmiles("c1ccccc1O")
+    assert ref is not None
+    rdDepictor.Compute2DCoords(ref)
+    conf = ref.GetConformer()
+    for i in range(ref.GetNumAtoms()):
+        p = conf.GetAtomPosition(i)
+        conf.SetAtomPosition(i, Point3D(-float(p.x), float(p.y), 0.0))
+    atoms = (SomAtomHit(0, 0.9, True),)
+    plain = render_som_map_png("c1ccccc1O", atoms, width=140, height=120)
+    matched = render_som_map_png("c1ccccc1O", atoms, width=140, height=120, reference_mol=ref)
+    assert plain is not None and matched is not None
+    assert matched != plain
+
+
+def test_emphasize_keeps_atom_color() -> None:
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    from molmanager.som_prediction import _apply_emphasized_atom, som_probability_rgb
+
+    keep = som_probability_rgb(0.9)
+    colors = {1: keep}
+    radii = {1: 0.55}
+    highlight = [1]
+    _apply_emphasized_atom(
+        mol,
+        atom_id=1,
+        highlight=highlight,
+        colors=colors,
+        radii=radii,
+        atom_color=keep,
+    )
+    assert colors[1] == keep
+    assert radii[1] == pytest.approx(0.65)
+    assert radii[1] < 0.8
 
 
 def test_som_worker_emits_map(monkeypatch, qapp) -> None:  # noqa: ARG001
@@ -161,6 +339,57 @@ def test_som_worker_emits_map(monkeypatch, qapp) -> None:  # noqa: ARG001
     assert png is not None and png[:8] == b"\x89PNG\r\n\x1a\n"
     assert any(a.is_som for a in atoms)
     assert SOM_MAP_COLUMN in headers
+
+
+def test_som_worker_phase1_and_2_calls_predict_twice(monkeypatch, qapp) -> None:  # noqa: ARG001
+    from molmanager.som_prediction import SOM_P1_SITES_COLUMN, SOM_P2_SITES_COLUMN
+    from molmanager.workers.signals import WorkerSignals
+    from molmanager.workers.som_worker import SomPredictorSignals, SomPredictorWorker
+
+    finished: list = []
+    failed: list = []
+    sig = SomPredictorSignals()
+    sig.finished.connect(lambda rows: finished.append(rows))
+    sig.failed.connect(lambda msg: failed.append(msg))
+    subsets: list[str] = []
+
+    def fake_predict(smiles, **kwargs):
+        subset = str(kwargs.get("metabolism_subset"))
+        subsets.append(subset)
+        if subset == "phase1":
+            atoms = (SomAtomHit(0, 0.9, True), SomAtomHit(1, 0.1, False))
+        else:
+            atoms = (SomAtomHit(0, 0.1, False), SomAtomHit(1, 0.8, True))
+        return [
+            SomMoleculePrediction(
+                smiles=smiles[0],
+                preprocessed_smiles=smiles[0],
+                atoms=atoms,
+            )
+        ]
+
+    monkeypatch.setattr("molmanager.workers.som_worker.predict_soms_batch", fake_predict)
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    SomPredictorWorker(
+        [(1, mol)],
+        WorkerSignals(),
+        sig,
+        metabolism_subset="all",
+    ).run()
+    assert failed == []
+    assert subsets == ["phase1", "phase2"]
+    oid, cols, png, atoms, headers = finished[0][0]
+    assert oid == 1
+    assert cols[SOM_SITES_COLUMN] == "0, 1"
+    assert cols[SOM_P1_SITES_COLUMN] == "0"
+    assert cols[SOM_P2_SITES_COLUMN] == "1"
+    assert png is not None
+    by_id = {a.atom_id: a for a in atoms}
+    assert by_id[0].is_phase1_som and not by_id[0].is_phase2_som
+    assert by_id[1].is_phase2_som and not by_id[1].is_phase1_som
+    assert SOM_P1_SITES_COLUMN in headers
+    assert "compare" not in subsets
 
 
 def test_predict_soms_batch_skips_delete_when_cancelled(monkeypatch) -> None:

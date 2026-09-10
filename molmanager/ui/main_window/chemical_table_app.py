@@ -1348,10 +1348,20 @@ class ChemicalTableApp(
             dlg = getattr(self, attr, None)
             if dlg is None:
                 continue
+            setattr(self, attr, None)
             try:
+                dlg.destroyed.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            try:
+                dlg.hide()
                 dlg.close()
             except RuntimeError:
-                setattr(self, attr, None)
+                pass
+            try:
+                dlg.setParent(None)
+            except RuntimeError:
+                pass
 
         for dlg in list(getattr(self, "_floating_result_dialogs", [])):
             try:

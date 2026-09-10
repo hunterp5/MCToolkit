@@ -51,19 +51,36 @@ _USER_AGENT = "MolManager/1.0 (FAME3R SOM; local desktop app)"
 SOM_CANCELLED_ERROR = "Cancelled."
 
 MetabolismSubset = Literal["all", "phase1", "phase2", "cyp"]
+COMBINED_PHASES_SUBSET: MetabolismSubset = "all"
 
-METABOLISM_SUBSET_OPTIONS: tuple[tuple[str, str], ...] = (
+NERDD_METABOLISM_SUBSETS: tuple[tuple[str, str], ...] = (
     ("all", "Phase 1 and 2"),
     ("phase1", "Phase 1"),
     ("phase2", "Phase 2"),
     ("cyp", "CYP-mediated"),
 )
+METABOLISM_SUBSET_OPTIONS: tuple[tuple[str, str], ...] = NERDD_METABOLISM_SUBSETS
 
 SOM_MAP_COLUMN = "SOM Map"
 SOM_SITES_COLUMN = "SOM Sites"
+SOM_P1_SITES_COLUMN = "SOM Sites Phase 1"
+SOM_P2_SITES_COLUMN = "SOM Sites Phase 2"
+SOM_PHASE_COLUMN = "SOM Phase"
 SOM_PROB_COLUMN = "SOM Probabilities"
 SOM_FAME_COLUMN = "SOM FAME Score"
 SOM_ENTROPY_COLUMN = "SOM Entropy"
+
+
+def is_som_map_header(header: str) -> bool:
+    """True for the Predict SOM map column (including numbered duplicates)."""
+    h = (header or "").strip().lower()
+    return h == "som map" or h.startswith("som map ")
+
+
+def uses_split_phase_jobs(metabolism_subset: str) -> bool:
+    """True when Phase 1 and 2 runs two NERDD jobs and merges site columns."""
+    return str(metabolism_subset) == COMBINED_PHASES_SUBSET
+
 
 CancelCallback = Callable[[], bool]
 
@@ -77,6 +94,10 @@ class SomAtomHit:
     is_som: bool
     fame_score: float | None = None
     shannon_entropy: float | None = None
+    is_phase1_som: bool | None = None
+    is_phase2_som: bool | None = None
+    phase1_probability: float | None = None
+    phase2_probability: float | None = None
 
 
 @dataclass(frozen=True)
@@ -329,7 +350,7 @@ def predict_soms_batch(
     progress: Callable[[int, int], None] | None = None,
 ) -> list[SomMoleculePrediction]:
     """Predict SOMs for SMILES strings (empty entries become error results)."""
-    if metabolism_subset not in {k for k, _ in METABOLISM_SUBSET_OPTIONS}:
+    if metabolism_subset not in {k for k, _ in NERDD_METABOLISM_SUBSETS}:
         raise ValueError(f"Unknown metabolism subset: {metabolism_subset}")
     base = fame3r_api_base()
     results: list[SomMoleculePrediction | None] = [None] * len(smiles)
@@ -410,10 +431,107 @@ def predict_soms_batch(
     ]
 
 
+def _merged_entropy(
+    h1: SomAtomHit | None, h2: SomAtomHit | None, probability: float
+) -> float | None:
+    ranked: list[tuple[float, float]] = []
+    for hit in (h1, h2):
+        if hit is not None and hit.shannon_entropy is not None:
+            ranked.append((abs(float(hit.probability) - probability), float(hit.shannon_entropy)))
+    if ranked:
+        ranked.sort()
+        return ranked[0][1]
+    return shannon_binary_entropy(probability)
+
+
+def som_phase_label(hit: SomAtomHit) -> str:
+    """Short P1 / P2 / P1+P2 label for split Phase 1 and 2 atoms."""
+    p1 = bool(hit.is_phase1_som)
+    p2 = bool(hit.is_phase2_som)
+    if p1 and p2:
+        return "P1+P2"
+    if p1:
+        return "P1"
+    if p2:
+        return "P2"
+    return ""
+
+
+def _pick_merged_error(p1: SomMoleculePrediction, p2: SomMoleculePrediction) -> str | None:
+    errs = [e for e in (p1.error, p2.error) if e]
+    if not errs:
+        return None
+    if all(e == SOM_CANCELLED_ERROR for e in errs) and not p1.atoms and not p2.atoms:
+        return SOM_CANCELLED_ERROR
+    if not p1.atoms and not p2.atoms:
+        return p1.error or p2.error
+    return None
+
+
+def merge_phase_predictions(
+    phase1: SomMoleculePrediction,
+    phase2: SomMoleculePrediction,
+) -> SomMoleculePrediction:
+    """Combine Phase 1 and Phase 2 FAME3R results for one molecule."""
+    err = _pick_merged_error(phase1, phase2)
+    smiles = phase1.smiles or phase2.smiles
+    if err:
+        return SomMoleculePrediction(
+            smiles=smiles,
+            preprocessed_smiles="",
+            atoms=(),
+            error=err,
+        )
+    by_id: dict[int, tuple[SomAtomHit | None, SomAtomHit | None]] = {}
+    for hit in phase1.atoms:
+        by_id[int(hit.atom_id)] = (hit, None)
+    for hit in phase2.atoms:
+        prev = by_id.get(int(hit.atom_id), (None, None))
+        by_id[int(hit.atom_id)] = (prev[0], hit)
+    merged: list[SomAtomHit] = []
+    for atom_id, (h1, h2) in sorted(by_id.items()):
+        p1_prob = None if h1 is None else float(h1.probability)
+        p2_prob = None if h2 is None else float(h2.probability)
+        is_p1 = bool(h1 is not None and h1.is_som)
+        is_p2 = bool(h2 is not None and h2.is_som)
+        probs = [p for p in (p1_prob, p2_prob) if p is not None]
+        probability = max(probs) if probs else 0.0
+        fame_candidates = [
+            h.fame_score
+            for h, is_som in ((h1, is_p1), (h2, is_p2))
+            if h is not None and h.fame_score is not None and is_som
+        ]
+        if not fame_candidates:
+            fame_candidates = [
+                h.fame_score for h in (h1, h2) if h is not None and h.fame_score is not None
+            ]
+        entropy = _merged_entropy(h1, h2, probability)
+        merged.append(
+            SomAtomHit(
+                atom_id=atom_id,
+                probability=probability,
+                is_som=is_p1 or is_p2,
+                fame_score=max(fame_candidates) if fame_candidates else None,
+                shannon_entropy=entropy,
+                is_phase1_som=is_p1,
+                is_phase2_som=is_p2,
+                phase1_probability=p1_prob,
+                phase2_probability=p2_prob,
+            )
+        )
+    pre = phase1.preprocessed_smiles or phase2.preprocessed_smiles or smiles
+    return SomMoleculePrediction(
+        smiles=smiles,
+        preprocessed_smiles=pre,
+        atoms=tuple(merged),
+    )
+
+
 def format_som_columns(
     pred: SomMoleculePrediction | None,
     *,
     include_fame: bool = False,
+    include_phases: bool = False,
 ) -> dict[str, str]:
     """Table text columns for one molecule (map column holds SMILES / error)."""
     if pred is None or pred.error:
@@ -425,6 +543,10 @@ def format_som_columns(
         }
         if include_fame:
             row[SOM_FAME_COLUMN] = "N/A"
+        if include_phases:
+            row[SOM_P1_SITES_COLUMN] = "N/A"
+            row[SOM_P2_SITES_COLUMN] = "N/A"
+            row[SOM_PHASE_COLUMN] = "N/A"
         return row
     soms = sorted(
         [a for a in pred.atoms if a.is_som],
@@ -451,24 +573,45 @@ def format_som_columns(
         if not fames:
             fames = [a.fame_score for a in ranked[:3] if a.fame_score is not None]
         row[SOM_FAME_COLUMN] = f"{sum(fames) / len(fames):.2f}" if fames else "N/A"
+    if include_phases:
+        p1 = sorted(
+            [a for a in pred.atoms if a.is_phase1_som],
+            key=lambda a: (-(a.phase1_probability or a.probability), a.atom_id),
+        )
+        p2 = sorted(
+            [a for a in pred.atoms if a.is_phase2_som],
+            key=lambda a: (-(a.phase2_probability or a.probability), a.atom_id),
+        )
+        row[SOM_P1_SITES_COLUMN] = ", ".join(str(a.atom_id) for a in p1) if p1 else "—"
+        row[SOM_P2_SITES_COLUMN] = ", ".join(str(a.atom_id) for a in p2) if p2 else "—"
+        phase_bits = []
+        for a in soms:
+            label = som_phase_label(a)
+            if label:
+                phase_bits.append(f"{a.atom_id}:{label}")
+        row[SOM_PHASE_COLUMN] = "; ".join(phase_bits) if phase_bits else "—"
     return row
 
 
-def som_output_columns(*, include_fame: bool) -> list[str]:
-    cols = [SOM_MAP_COLUMN, SOM_SITES_COLUMN, SOM_PROB_COLUMN, SOM_ENTROPY_COLUMN]
+def som_output_columns(*, include_fame: bool, include_phases: bool = False) -> list[str]:
+    cols = [SOM_MAP_COLUMN, SOM_SITES_COLUMN]
+    if include_phases:
+        cols.extend([SOM_P1_SITES_COLUMN, SOM_P2_SITES_COLUMN, SOM_PHASE_COLUMN])
+    cols.extend([SOM_PROB_COLUMN, SOM_ENTROPY_COLUMN])
     if include_fame:
-        cols.insert(3, SOM_FAME_COLUMN)
+        cols.insert(-1, SOM_FAME_COLUMN)
     return cols
 
 
-def _som_rgb(probability: float) -> tuple[float, float, float]:
+def som_atom_label(atom_id: int, probability: float) -> str:
+    """Map annotation: atom index and SOM probability."""
+    return f"{int(atom_id)}; {float(probability):.2f}"
+
+
+def som_probability_rgb(probability: float) -> tuple[float, float, float]:
     """Yellow (low) to orange-red (high) highlight color."""
     t = min(max(float(probability), 0.0), 1.0)
     return (1.0 - 0.05 * t, 0.92 - 0.50 * t, 0.22 - 0.14 * t)
-
-
-# Cyan-blue, distinct from the yellow→red SOM probability scale.
-_SOM_EMPHASIS_RGB = (0.10, 0.58, 1.00)
 
 
 def _apply_emphasized_atom(
@@ -478,25 +621,115 @@ def _apply_emphasized_atom(
     highlight: list[int],
     colors: dict[int, tuple[float, float, float]],
     radii: dict[int, float],
-    bonds: list[int],
-    bond_colors: dict[int, tuple[float, float, float]],
+    atom_color: tuple[float, float, float] | None = None,
+    probability: float | None = None,
 ) -> None:
-    """Make one atom pop on the map (browser row selection)."""
+    """Slightly enlarge one atom on the map without changing its highlight hue."""
     n_atoms = mol.GetNumAtoms()
     if atom_id < 0 or atom_id >= n_atoms:
         return
     if atom_id not in highlight:
         highlight.append(atom_id)
-    colors[atom_id] = _SOM_EMPHASIS_RGB
-    radii[atom_id] = 0.88
+    keep = colors.get(atom_id) or atom_color or som_probability_rgb(0.5)
+    colors[atom_id] = keep
+    radii[atom_id] = radii.get(atom_id, 0.38) + 0.10
     atom = mol.GetAtomWithIdx(atom_id)
     if not atom.HasProp("atomNote"):
-        atom.SetProp("atomNote", str(atom_id))
-    for bond in atom.GetBonds():
-        bi = bond.GetIdx()
-        if bi not in bond_colors:
-            bonds.append(bi)
-        bond_colors[bi] = _SOM_EMPHASIS_RGB
+        if probability is None:
+            atom.SetProp("atomNote", str(atom_id))
+        else:
+            atom.SetProp("atomNote", som_atom_label(atom_id, probability))
+
+
+def _match_reference_2d(mol: Chem.Mol, reference: Chem.Mol | None) -> None:
+    """Orient *mol* like the table Structure column when a 2D reference is available."""
+    if mol is None or reference is None:
+        return
+    if mol.GetNumAtoms() == 0 or reference.GetNumAtoms() == 0:
+        return
+    try:
+        from rdkit.Chem import rdDepictor
+    except Exception:
+        return
+    ref = Chem.Mol(reference)
+    try:
+        if ref.GetNumConformers() == 0:
+            rdDepictor.Compute2DCoords(ref)
+        elif bool(ref.GetConformer().Is3D()):
+            rdDepictor.Compute2DCoords(ref)
+    except Exception:
+        return
+    try:
+        rdDepictor.GenerateDepictionMatching2DStructure(mol, ref)
+    except Exception:
+        logger.debug("SOM map could not match structure-column orientation", exc_info=True)
+
+
+def _conf_draw_bounds(mol: Chem.Mol):
+    """Return (min, max) 2D points for *mol*, or ``None`` if a scale cannot be locked."""
+    if mol is None or mol.GetNumAtoms() == 0 or mol.GetNumConformers() == 0:
+        return None
+    conf = mol.GetConformer()
+    xs: list[float] = []
+    ys: list[float] = []
+    for i in range(mol.GetNumAtoms()):
+        p = conf.GetAtomPosition(i)
+        xs.append(float(p.x))
+        ys.append(float(p.y))
+    if max(xs) - min(xs) < 1e-6 and max(ys) - min(ys) < 1e-6:
+        return None
+    from rdkit.Geometry import Point2D
+
+    return Point2D(min(xs), min(ys)), Point2D(max(xs), max(ys))
+
+
+def _draw_som_molecule(
+    drawer: rdMolDraw2D.MolDraw2DCairo,
+    mol: Chem.Mol,
+    *,
+    highlight: list[int],
+    colors: dict[int, tuple[float, float, float]],
+    radii: dict[int, float],
+    bonds: list[int],
+    bond_colors: dict[int, tuple[float, float, float]],
+) -> None:
+    """Draw *mol* with scale locked to atom coordinates (highlights do not reflow it)."""
+    try:
+        draw_mol = rdMolDraw2D.PrepareMolForDrawing(mol)
+    except Exception:
+        draw_mol = mol
+    bounds = _conf_draw_bounds(draw_mol)
+    if bounds is not None:
+        minv, maxv = bounds
+        try:
+            drawer.SetScale(int(drawer.Width()), int(drawer.Height()), minv, maxv)
+        except TypeError:
+            try:
+                drawer.SetScale(int(drawer.Width()), int(drawer.Height()), minv, maxv, draw_mol)
+            except Exception:
+                logger.debug("SOM map could not lock draw scale", exc_info=True)
+        except Exception:
+            logger.debug("SOM map could not lock draw scale", exc_info=True)
+    if highlight:
+        try:
+            drawer.DrawMolecule(
+                draw_mol,
+                highlightAtoms=highlight,
+                highlightAtomColors=colors,
+                highlightAtomRadii=radii,
+                highlightBonds=bonds,
+                highlightBondColors=bond_colors,
+            )
+            return
+        except TypeError:
+            drawer.DrawMolecule(
+                draw_mol,
+                highlightAtoms=highlight,
+                highlightAtomColors=colors,
+                highlightAtomRadii=radii,
+            )
+            return
+    drawer.DrawMolecule(draw_mol)
 
 
 def render_som_map_png(
@@ -507,11 +740,13 @@ def render_som_map_png(
     height: int,
     min_highlight: float = 0.05,
     emphasize_atom: int | None = None,
+    reference_mol: Chem.Mol | None = None,
 ) -> bytes | None:
     """Draw a 2D map with SOM probabilities as atom highlights and labels."""
     mol = Chem.MolFromSmiles((smiles or "").strip())
     if mol is None or mol.GetNumAtoms() == 0:
         return None
+    _match_reference_2d(mol, reference_mol)
     n_atoms = mol.GetNumAtoms()
     highlight: list[int] = []
     colors: dict[int, tuple[float, float, float]] = {}
@@ -523,33 +758,37 @@ def render_som_map_png(
         if hit.probability < min_highlight and not hit.is_som:
             continue
         highlight.append(idx)
-        colors[idx] = _som_rgb(hit.probability)
+        colors[idx] = som_probability_rgb(hit.probability)
         radii[idx] = 0.55 if hit.is_som else 0.38
         atom = mol.GetAtomWithIdx(idx)
         if hit.is_som:
-            atom.SetProp("atomNote", f"{hit.probability:.2f}")
+            atom.SetProp("atomNote", som_atom_label(idx, hit.probability))
     bonds: list[int] = []
     bond_colors: dict[int, tuple[float, float, float]] = {}
     highlight_set = set(highlight)
-    prob_by_atom = {int(h.atom_id): h.probability for h in atoms}
+    color_by_atom = {int(h.atom_id): som_probability_rgb(h.probability) for h in atoms}
     if highlight_set:
         for bond in mol.GetBonds():
             a = bond.GetBeginAtomIdx()
             b = bond.GetEndAtomIdx()
             if a in highlight_set and b in highlight_set:
                 bonds.append(bond.GetIdx())
-                pa = prob_by_atom.get(a, 0.0)
-                pb = prob_by_atom.get(b, 0.0)
-                bond_colors[bond.GetIdx()] = _som_rgb(0.5 * (pa + pb))
+                ca = color_by_atom.get(a, som_probability_rgb(0.5))
+                cb = color_by_atom.get(b, som_probability_rgb(0.5))
+                bond_colors[bond.GetIdx()] = tuple((x + y) / 2.0 for x, y in zip(ca, cb))
     if emphasize_atom is not None:
+        eid = int(emphasize_atom)
         _apply_emphasized_atom(
             mol,
-            atom_id=int(emphasize_atom),
+            atom_id=eid,
             highlight=highlight,
             colors=colors,
             radii=radii,
-            bonds=bonds,
-            bond_colors=bond_colors,
+            atom_color=color_by_atom.get(eid),
+            probability=next(
+                (float(h.probability) for h in atoms if int(h.atom_id) == eid),
+                None,
+            ),
         )
     cw, ch = structure_cairo_dimensions(width, height)
     drawer = rdMolDraw2D.MolDraw2DCairo(int(cw), int(ch))
@@ -557,27 +796,19 @@ def render_som_map_png(
     opts = drawer.drawOptions()
     opts.annotationFontScale = 0.75
     try:
-        if highlight:
-            try:
-                rdMolDraw2D.PrepareAndDrawMolecule(
-                    drawer,
-                    mol,
-                    highlightAtoms=highlight,
-                    highlightAtomColors=colors,
-                    highlightAtomRadii=radii,
-                    highlightBonds=bonds,
-                    highlightBondColors=bond_colors,
-                )
-            except TypeError:
-                rdMolDraw2D.PrepareAndDrawMolecule(
-                    drawer,
-                    mol,
-                    highlightAtoms=highlight,
-                    highlightAtomColors=colors,
-                    highlightAtomRadii=radii,
-                )
-        else:
-            rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
+        opts.padding = 0.16
+    except Exception:
+        pass
+    try:
+        _draw_som_molecule(
+            drawer,
+            mol,
+            highlight=highlight,
+            colors=colors,
+            radii=radii,
+            bonds=bonds,
+            bond_colors=bond_colors,
+        )
     except Exception:
         logger.debug("SOM map render failed for %s", smiles[:80], exc_info=True)
         return None

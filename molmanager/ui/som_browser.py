@@ -21,10 +21,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
-from PyQt5.QtCore import QEvent, Qt, QTimer
-from PyQt5.QtGui import QImage, QKeySequence, QPixmap
+from PyQt5.QtCore import QEvent, QRect, Qt, QTimer
+from PyQt5.QtGui import (
+    QColor,
+    QImage,
+    QKeySequence,
+    QLinearGradient,
+    QPainter,
+    QPen,
+    QPixmap,
+)
 from PyQt5.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QDialog,
     QHBoxLayout,
     QHeaderView,
@@ -44,18 +53,22 @@ from ..display_constants import (
 )
 from ..som_prediction import (
     SOM_CANCELLED_ERROR,
-    SOM_ENTROPY_COLUMN,
-    SOM_FAME_COLUMN,
     SOM_MAP_COLUMN,
+    SOM_P1_SITES_COLUMN,
+    SOM_P2_SITES_COLUMN,
+    SOM_PHASE_COLUMN,
     SOM_PROB_COLUMN,
     SOM_SITES_COLUMN,
     SomAtomHit,
+    is_som_map_header,
     render_som_map_png,
+    som_phase_label,
+    som_probability_rgb,
 )
 from .dockable_plot import discard_host_dialog_after_dock
-from .property_columns_panel import PropertyColumnsPanel
 from .qt_widget_utils import make_window_minimizable
 from .strings import TOOL_PREDICT_SOM
+from .widgets import NumericTableWidgetItem
 
 
 @dataclass(frozen=True)
@@ -105,6 +118,10 @@ def records_from_worker_rows(
     return [r for r in out if r.error != SOM_CANCELLED_ERROR]
 
 
+def _atoms_have_phases(atoms: Sequence[SomAtomHit]) -> bool:
+    return any(hit.is_phase1_som is not None or hit.is_phase2_som is not None for hit in atoms)
+
+
 def _looks_like_smiles(text: str) -> bool:
     t = (text or "").strip()
     if not t or t.upper() == "N/A" or t == SOM_CANCELLED_ERROR or " " in t:
@@ -125,10 +142,172 @@ def _coerce_atom_hit(item: Any) -> SomAtomHit | None:
                 is_som=bool(item.get("is_som")),
                 fame_score=item.get("fame_score"),
                 shannon_entropy=item.get("shannon_entropy"),
+                is_phase1_som=item.get("is_phase1_som"),
+                is_phase2_som=item.get("is_phase2_som"),
+                phase1_probability=item.get("phase1_probability"),
+                phase2_probability=item.get("phase2_probability"),
             )
         except (KeyError, TypeError, ValueError):
             return None
     return None
+
+
+def _qcolor_from_rgb(rgb: tuple[float, float, float]) -> QColor:
+    r, g, b = rgb
+    return QColor.fromRgbF(
+        min(max(float(r), 0.0), 1.0),
+        min(max(float(g), 0.0), 1.0),
+        min(max(float(b), 0.0), 1.0),
+    )
+
+
+def _parse_int_list(text: str) -> list[int]:
+    out: list[int] = []
+    for part in (text or "").replace("—", ",").split(","):
+        token = part.strip()
+        if token.isdigit():
+            out.append(int(token))
+    return out
+
+
+def _atoms_from_som_columns(cols: dict[str, str]) -> tuple[SomAtomHit, ...]:
+    """Rebuild atom hits from table SOM text columns when worker atoms are gone."""
+    sites = set(_parse_int_list(cols.get(SOM_SITES_COLUMN, "")))
+    p1_sites = set(_parse_int_list(cols.get(SOM_P1_SITES_COLUMN, "")))
+    p2_sites = set(_parse_int_list(cols.get(SOM_P2_SITES_COLUMN, "")))
+    has_phases = bool(p1_sites or p2_sites or (cols.get(SOM_PHASE_COLUMN) or "").strip())
+    phase_map: dict[int, str] = {}
+    for bit in (cols.get(SOM_PHASE_COLUMN) or "").split(";"):
+        bit = bit.strip()
+        if ":" not in bit:
+            continue
+        aid, lab = bit.split(":", 1)
+        if aid.strip().isdigit():
+            phase_map[int(aid.strip())] = lab.strip()
+    by_id: dict[int, SomAtomHit] = {}
+    probs_txt = (cols.get(SOM_PROB_COLUMN) or "").replace("…", "").replace("...", "")
+    for bit in probs_txt.split(";"):
+        bit = bit.strip()
+        if ":" not in bit:
+            continue
+        aid, raw_p = bit.split(":", 1)
+        if not aid.strip().isdigit():
+            continue
+        try:
+            atom_id = int(aid.strip())
+            probability = float(raw_p.strip())
+        except ValueError:
+            continue
+        lab = phase_map.get(atom_id, "")
+        is_p1 = atom_id in p1_sites or "P1" in lab if has_phases else None
+        is_p2 = atom_id in p2_sites or "P2" in lab if has_phases else None
+        by_id[atom_id] = SomAtomHit(
+            atom_id=atom_id,
+            probability=probability,
+            is_som=atom_id in sites,
+            is_phase1_som=is_p1,
+            is_phase2_som=is_p2,
+        )
+    for atom_id in sites | p1_sites | p2_sites:
+        if atom_id in by_id:
+            continue
+        lab = phase_map.get(atom_id, "")
+        by_id[atom_id] = SomAtomHit(
+            atom_id=atom_id,
+            probability=0.0,
+            is_som=True,
+            is_phase1_som=atom_id in p1_sites or "P1" in lab if has_phases else None,
+            is_phase2_som=atom_id in p2_sites or "P2" in lab if has_phases else None,
+        )
+    return tuple(sorted(by_id.values(), key=lambda a: (-a.probability, a.atom_id)))
+
+
+def records_from_table(app: Any) -> list[SomBrowseRecord]:
+    """Rebuild browser records from Predict SOM table columns."""
+    model = getattr(app, "_table_model", None)
+    headers = list(getattr(app, "headers", None) or [])
+    if model is None or not headers:
+        return []
+    map_headers = [h for h in headers if is_som_map_header(h)]
+    if not map_headers:
+        return []
+    map_h = map_headers[0]
+    som_headers = [h for h in headers if str(h).strip().lower().startswith("som ")]
+    out: list[SomBrowseRecord] = []
+    n = int(model.rowCount())
+    for row in range(n):
+        try:
+            oid = int(model.row_oid(row))
+        except (TypeError, ValueError):
+            continue
+        cols = {h: str(model.backing_value_for_row_header(row, h) or "") for h in som_headers}
+        raw_map = str(cols.get(map_h) or "").strip()
+        smiles = raw_map if _looks_like_smiles(raw_map) else ""
+        atoms = _atoms_from_som_columns(cols)
+        err = None
+        if not atoms and not smiles:
+            err = raw_map if raw_map else "No SOM atoms were returned."
+            if err.upper() == "N/A":
+                continue
+        out.append(
+            SomBrowseRecord(
+                oid=oid,
+                smiles=smiles,
+                atoms=atoms,
+                error=err if not atoms else None,
+                columns=cols,
+            )
+        )
+    return [r for r in out if r.error != SOM_CANCELLED_ERROR]
+
+
+class SomColorScaleWidget(QWidget):
+    """Vertical SOM probability scale (yellow low → red high)."""
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setFixedWidth(68)
+        self.setMinimumHeight(160)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.setToolTip("SOM probability: yellow (low) to red (high).")
+
+    def paintEvent(self, event) -> None:  # noqa: N802 — Qt API
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.fillRect(self.rect(), QColor(255, 255, 255))
+        text = QColor(40, 40, 40)
+        edge = QColor(180, 180, 180)
+        font = self.font()
+        font.setPointSize(max(7, font.pointSize() - 1))
+        painter.setFont(font)
+        fm = painter.fontMetrics()
+        width = self.width()
+        height = self.height()
+        pad = 8
+        bar_top = pad
+        bar_bottom = height - pad
+        bar_h = max(48, bar_bottom - bar_top)
+        bar_w = 14
+        bar_x = 8
+        bar = QRect(bar_x, bar_top, bar_w, bar_h)
+        gradient = QLinearGradient(0, bar.top(), 0, bar.bottom())
+        for stop in (0.0, 0.25, 0.5, 0.75, 1.0):
+            gradient.setColorAt(stop, _qcolor_from_rgb(som_probability_rgb(1.0 - stop)))
+        painter.fillRect(bar, gradient)
+        painter.setPen(QPen(edge))
+        painter.drawRect(bar.adjusted(0, 0, -1, -1))
+        painter.setPen(QPen(text))
+        label_x = bar.right() + 4
+        label_w = max(16, width - label_x - 2)
+        for label, frac in (("1.0", 0.0), ("0.5", 0.5), ("0.0", 1.0)):
+            y = bar.top() + int(frac * (bar.height() - 1)) - fm.height() // 2
+            painter.drawText(
+                QRect(label_x, y, label_w, fm.height()),
+                Qt.AlignLeft | Qt.AlignVCenter,
+                label,
+            )
+        painter.end()
 
 
 class SomBrowserWidget(QWidget):
@@ -142,9 +321,11 @@ class SomBrowserWidget(QWidget):
         self._app = parent_app
         self._window_title = f"{TOOL_PREDICT_SOM} Browser"
         self._records: list[SomBrowseRecord] = []
+        self._all_records: list[SomBrowseRecord] = []
         self._idx = 0
         self._preview_cache: dict[tuple, QPixmap] = {}
         self._emphasized_atom: int | None = None
+        self._selection_model = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
@@ -154,21 +335,34 @@ class SomBrowserWidget(QWidget):
         self._meta.setAlignment(Qt.AlignCenter)
         root.addWidget(self._meta)
 
-        self._summary = QLabel()
-        self._summary.setAlignment(Qt.AlignCenter)
-        self._summary.setWordWrap(True)
-        self._summary.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._summary.setStyleSheet("font-weight: 600;")
-        root.addWidget(self._summary)
-
         self._struct_label = QLabel()
         self._struct_label.setAlignment(Qt.AlignCenter)
-        self._struct_label.setMinimumSize(360, 260)
-        self._struct_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._struct_label.setStyleSheet(
-            "background-color: palette(base); border: 1px solid palette(mid); border-radius: 4px;"
+        self._struct_label.setMinimumSize(
+            BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH // 2,
+            BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT // 2,
         )
-        root.addWidget(self._struct_label, 1)
+        self._struct_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._struct_label.setScaledContents(False)
+        self._struct_label.setMargin(0)
+        self._struct_label.setIndent(0)
+        self._struct_label.setStyleSheet("background-color: #ffffff; border: none; padding: 0px;")
+        self._preview_host = QWidget(self)
+        self._preview_host.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._preview_host.setAttribute(Qt.WA_StyledBackground, True)
+        self._preview_host.setStyleSheet(
+            "background-color: #ffffff; border: 1px solid palette(mid);"
+        )
+        self._color_scale = SomColorScaleWidget(self._preview_host)
+        self._color_scale.setAutoFillBackground(True)
+        pal = self._color_scale.palette()
+        pal.setColor(self._color_scale.backgroundRole(), QColor(255, 255, 255))
+        self._color_scale.setPalette(pal)
+        preview_row = QHBoxLayout(self._preview_host)
+        preview_row.setContentsMargins(0, 0, 0, 0)
+        preview_row.setSpacing(0)
+        preview_row.addWidget(self._struct_label, 1)
+        preview_row.addWidget(self._color_scale, 0)
+        root.addWidget(self._preview_host, 1)
 
         self._atom_table = QTableWidget(0, 4)
         self._atom_table.setHorizontalHeaderLabels(["Atom", "Probability", "SOM", "Entropy"])
@@ -177,20 +371,21 @@ class SomBrowserWidget(QWidget):
         self._atom_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._atom_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._atom_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self._atom_table.setToolTip("Select an atom to highlight it on the 2D map.")
+        self._atom_table.setToolTip(
+            "Select an atom to highlight it on the 2D map. Click a column header to sort."
+        )
         self._atom_table.setMaximumHeight(180)
+        self._atom_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self._atom_sort_header: str | None = None
+        self._atom_sort_order = Qt.AscendingOrder
+        self._atom_table.setSortingEnabled(True)
+        hdr = self._atom_table.horizontalHeader()
+        hdr.setSectionsClickable(True)
+        hdr.setSortIndicatorShown(True)
+        hdr.setSortIndicator(-1, Qt.AscendingOrder)
+        hdr.sortIndicatorChanged.connect(self._on_atom_sort_changed)
         self._atom_table.itemSelectionChanged.connect(self._on_atom_selection_changed)
         root.addWidget(self._atom_table)
-
-        self._options_host = QWidget(self)
-        options_ly = QVBoxLayout(self._options_host)
-        options_ly.setContentsMargins(0, 0, 0, 0)
-        options_ly.setSpacing(0)
-        self._prop_panel = PropertyColumnsPanel(self._options_host)
-        self._prop_panel.bind_app(self._app)
-        options_ly.addWidget(self._prop_panel)
-        root.addWidget(self._options_host)
-        self._options_visible = True
 
         row_btns = QHBoxLayout()
         self._btn_first = QPushButton("<<")
@@ -227,14 +422,12 @@ class SomBrowserWidget(QWidget):
         )
         self._close_btn.clicked.connect(self._close_docked_browser)
         foot.addWidget(self._close_btn)
-        self._toggle_options_btn = QPushButton("Hide Options")
-        self._toggle_options_btn.setAutoDefault(False)
-        self._toggle_options_btn.setDefault(False)
-        self._toggle_options_btn.setToolTip(
-            "Hide column pickers so only the SOM map and navigation controls are shown."
+        self._cb_only_selected = QCheckBox("Browse Only Selected")
+        self._cb_only_selected.setToolTip(
+            "When checked, this browser walks only table rows that are currently selected."
         )
-        self._toggle_options_btn.clicked.connect(self._toggle_options_visible)
-        foot.addWidget(self._toggle_options_btn)
+        self._cb_only_selected.toggled.connect(self._on_only_selected_toggled)
+        foot.addWidget(self._cb_only_selected)
         foot.addStretch()
         root.addLayout(foot)
 
@@ -258,16 +451,21 @@ class SomBrowserWidget(QWidget):
         self._resize_timer.setSingleShot(True)
         self._resize_timer.setInterval(60)
         self._resize_timer.timeout.connect(self._refresh_preview)
+        self._selection_timer = QTimer(self)
+        self._selection_timer.setSingleShot(True)
+        self._selection_timer.setInterval(80)
+        self._selection_timer.timeout.connect(self._refresh_selected_scope)
 
         self._sync_footer_chrome()
-        self._sync_options_chrome()
         self.setMinimumWidth(self.embedded_minimum_width())
+        self._connect_table_selection()
         self._update_ui()
 
     def rebind_parent_app(self, parent_app: Any | None) -> None:
+        self._disconnect_table_selection()
         self.parent_app = parent_app
         self._app = parent_app
-        self._prop_panel.bind_app(parent_app)
+        self._connect_table_selection()
 
     def embedded_minimum_width(self) -> int:
         return max(360, BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH // 2)
@@ -280,13 +478,30 @@ class SomBrowserWidget(QWidget):
         return SomBrowserDialog(parent_app, panel=self)
 
     def set_records(self, records: list[SomBrowseRecord]) -> None:
-        self._records = list(records or [])
-        self._idx = 0
+        self._all_records = list(records or [])
         self._preview_cache.clear()
-        has_oid = any(r.oid is not None for r in self._records)
-        self._options_host.setVisible(has_oid and bool(getattr(self, "_options_visible", True)))
-        self._toggle_options_btn.setVisible(has_oid)
-        self._update_ui()
+        has_oid = any(r.oid is not None for r in self._all_records)
+        self._cb_only_selected.setEnabled(has_oid)
+        self._apply_record_scope(preserve_oid=False)
+
+    def jump_to_oid(self, oid: int | None) -> bool:
+        """Show the record for ``oid``, turning off selected-only if needed."""
+        if oid is None:
+            return False
+        want = int(oid)
+        if not any(r.oid == want for r in self._all_records):
+            return False
+        if self._cb_only_selected.isChecked():
+            self._cb_only_selected.blockSignals(True)
+            self._cb_only_selected.setChecked(False)
+            self._cb_only_selected.blockSignals(False)
+        self._records = list(self._all_records)
+        for i, rec in enumerate(self._records):
+            if rec.oid == want:
+                self._idx = i
+                self._update_ui()
+                return True
+        return False
 
     def _add_to_main_window(self) -> None:
         if self.parent_app is None:
@@ -328,27 +543,6 @@ class SomBrowserWidget(QWidget):
         self._send_window_btn.setVisible(docked)
         self._close_btn.setVisible(docked)
 
-    def _sync_options_chrome(self) -> None:
-        visible = bool(getattr(self, "_options_visible", True))
-        has_oid = any(r.oid is not None for r in self._records)
-        host = getattr(self, "_options_host", None)
-        if host is not None:
-            host.setVisible(visible and has_oid)
-        btn = getattr(self, "_toggle_options_btn", None)
-        if btn is not None:
-            if visible:
-                btn.setText("Hide Options")
-                btn.setToolTip(
-                    "Hide column pickers so only the SOM map and navigation controls are shown."
-                )
-            else:
-                btn.setText("Show Options")
-                btn.setToolTip("Show customizable property column pickers.")
-
-    def _toggle_options_visible(self) -> None:
-        self._options_visible = not bool(getattr(self, "_options_visible", True))
-        self._sync_options_chrome()
-
     def event(self, event) -> bool:  # noqa: N802 — Qt API
         if event.type() == QEvent.ParentChange:
             try:
@@ -382,6 +576,71 @@ class SomBrowserWidget(QWidget):
         self._idx = (self._idx + int(delta)) % len(self._records)
         self._update_ui()
 
+    def _on_only_selected_toggled(self, _checked: bool = False) -> None:
+        self._apply_record_scope(preserve_oid=True)
+
+    def _selected_oids(self) -> set[int]:
+        app = self._app
+        if app is None:
+            return set()
+        getter = getattr(app, "_selected_oids_set", None)
+        if not callable(getter):
+            return set()
+        try:
+            return {int(x) for x in getter()}
+        except Exception:
+            return set()
+
+    def _apply_record_scope(self, *, preserve_oid: bool) -> None:
+        cur_oid = None
+        if preserve_oid:
+            rec = self._current()
+            if rec is not None and rec.oid is not None:
+                cur_oid = int(rec.oid)
+        recs = list(self._all_records)
+        if self._cb_only_selected.isChecked():
+            selected = self._selected_oids()
+            recs = [r for r in recs if r.oid is not None and int(r.oid) in selected]
+        self._records = recs
+        self._idx = 0
+        if cur_oid is not None:
+            for i, rec in enumerate(self._records):
+                if rec.oid == cur_oid:
+                    self._idx = i
+                    break
+        self._update_ui()
+
+    def _connect_table_selection(self) -> None:
+        self._disconnect_table_selection()
+        app = self._app
+        table = getattr(app, "table", None) if app is not None else None
+        sm = table.selectionModel() if table is not None else None
+        if sm is None:
+            return
+        sm.selectionChanged.connect(self._on_table_selection_changed)
+        self._selection_model = sm
+
+    def _disconnect_table_selection(self) -> None:
+        sm = getattr(self, "_selection_model", None)
+        if sm is None:
+            return
+        try:
+            sm.selectionChanged.disconnect(self._on_table_selection_changed)
+        except TypeError:
+            pass
+        self._selection_model = None
+
+    def _on_table_selection_changed(self, *_args) -> None:
+        if not self._cb_only_selected.isChecked():
+            return
+        timer = getattr(self, "_selection_timer", None)
+        if timer is not None:
+            timer.start()
+
+    def _refresh_selected_scope(self) -> None:
+        if self._cb_only_selected.isChecked():
+            self._apply_record_scope(preserve_oid=True)
+
     def _select_current_row(self) -> None:
         rec = self._current()
         app = self._app
@@ -393,9 +652,34 @@ class SomBrowserWidget(QWidget):
 
     def _preview_pixel_size(self) -> tuple[int, int, float]:
         dpr = max(1.0, float(self.devicePixelRatioF()))
-        lw = max(self._struct_label.width(), BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH)
-        lh = max(self._struct_label.height(), BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT)
-        return int(lw * dpr), int(lh * dpr), dpr
+        lw = int(self._struct_label.width())
+        lh = int(self._struct_label.height())
+        if lw < 32 or lh < 32:
+            lw = BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH
+            lh = BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT
+        return max(1, int(lw * dpr)), max(1, int(lh * dpr)), dpr
+
+    def _fit_preview_pixmap(self, pm: QPixmap, dpr: float) -> QPixmap:
+        """Place the map on a white canvas that exactly matches the depiction label."""
+        lw = int(self._struct_label.width())
+        lh = int(self._struct_label.height())
+        if lw < 32 or lh < 32:
+            pm.setDevicePixelRatio(dpr)
+            return pm
+        canvas_w = max(1, int(lw * dpr))
+        canvas_h = max(1, int(lh * dpr))
+        canvas = QPixmap(canvas_w, canvas_h)
+        canvas.fill(QColor(255, 255, 255))
+        fitted = pm
+        if fitted.width() != canvas_w or fitted.height() != canvas_h:
+            fitted = pm.scaled(canvas_w, canvas_h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        painter = QPainter(canvas)
+        x = (canvas_w - fitted.width()) // 2
+        y = (canvas_h - fitted.height()) // 2
+        painter.drawPixmap(x, y, fitted)
+        painter.end()
+        canvas.setDevicePixelRatio(dpr)
+        return canvas
 
     def _refresh_preview(self) -> None:
         rec = self._current()
@@ -429,9 +713,7 @@ class SomBrowserWidget(QWidget):
             self._struct_label.setPixmap(QPixmap())
             self._struct_label.setText("(could not render SOM map)")
             return
-        if pm.width() != pw or pm.height() != ph:
-            pm = pm.scaled(pw, ph, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        pm.setDevicePixelRatio(dpr)
+        pm = self._fit_preview_pixmap(pm, dpr)
         self._struct_label.setPixmap(pm)
         self._struct_label.setText("")
 
@@ -458,11 +740,28 @@ class SomBrowserWidget(QWidget):
         self._emphasized_atom = atom_id
         self._refresh_preview()
 
+    def _on_atom_sort_changed(self, logical: int, order) -> None:
+        item = self._atom_table.horizontalHeaderItem(int(logical))
+        if item is None:
+            return
+        self._atom_sort_header = item.text()
+        self._atom_sort_order = order
+
     def _fill_atom_table(self, rec: SomBrowseRecord | None) -> None:
         self._atom_table.blockSignals(True)
+        hdr = self._atom_table.horizontalHeader()
+        hdr.blockSignals(True)
         try:
+            self._atom_table.setSortingEnabled(False)
             self._atom_table.clearSelection()
             self._atom_table.setRowCount(0)
+            show_phase = rec is not None and _atoms_have_phases(rec.atoms)
+            if show_phase:
+                labels = ["Atom", "Probability", "SOM", "Phase", "Entropy"]
+            else:
+                labels = ["Atom", "Probability", "SOM", "Entropy"]
+            self._atom_table.setColumnCount(len(labels))
+            self._atom_table.setHorizontalHeaderLabels(labels)
             if rec is None or not rec.atoms:
                 self._emphasized_atom = None
                 return
@@ -470,21 +769,50 @@ class SomBrowserWidget(QWidget):
             for hit in ranked:
                 r = self._atom_table.rowCount()
                 self._atom_table.insertRow(r)
-                values = (
-                    str(hit.atom_id),
-                    f"{hit.probability:.3f}",
-                    "yes" if hit.is_som else "",
-                    "" if hit.shannon_entropy is None else f"{hit.shannon_entropy:.3f}",
-                )
-                for c, text in enumerate(values):
-                    item = QTableWidgetItem(text)
-                    if c == 0:
-                        item.setData(Qt.UserRole, int(hit.atom_id))
-                    if hit.is_som:
-                        item.setBackground(self.palette().alternateBase())
-                    self._atom_table.setItem(r, c, item)
+                atom_item = NumericTableWidgetItem()
+                atom_item.setData(Qt.EditRole, float(hit.atom_id))
+                atom_item.setText(str(hit.atom_id))
+                atom_item.setData(Qt.UserRole, int(hit.atom_id))
+                self._atom_table.setItem(r, 0, atom_item)
+
+                prob_item = NumericTableWidgetItem()
+                prob_item.setData(Qt.EditRole, float(hit.probability))
+                prob_item.setText(f"{hit.probability:.3f}")
+                self._atom_table.setItem(r, 1, prob_item)
+
+                som_item = QTableWidgetItem("yes" if hit.is_som else "")
+                self._atom_table.setItem(r, 2, som_item)
+
+                col = 3
+                if show_phase:
+                    self._atom_table.setItem(r, col, QTableWidgetItem(som_phase_label(hit)))
+                    col += 1
+                ent_item = NumericTableWidgetItem()
+                if hit.shannon_entropy is None:
+                    ent_item.setText("")
+                else:
+                    ent_item.setData(Qt.EditRole, float(hit.shannon_entropy))
+                    ent_item.setText(f"{hit.shannon_entropy:.3f}")
+                self._atom_table.setItem(r, col, ent_item)
+                if hit.is_som:
+                    bg = self.palette().alternateBase()
+                    for c in range(self._atom_table.columnCount()):
+                        cell = self._atom_table.item(r, c)
+                        if cell is not None:
+                            cell.setBackground(bg)
             self._emphasized_atom = None
         finally:
+            self._atom_table.setSortingEnabled(True)
+            sort_name = self._atom_sort_header
+            if sort_name and self._atom_table.rowCount() > 0:
+                for c in range(self._atom_table.columnCount()):
+                    header_item = self._atom_table.horizontalHeaderItem(c)
+                    if header_item is not None and header_item.text() == sort_name:
+                        self._atom_table.sortItems(c, self._atom_sort_order)
+                        break
+            elif not sort_name:
+                hdr.setSortIndicator(-1, Qt.AscendingOrder)
+            hdr.blockSignals(False)
             self._atom_table.blockSignals(False)
 
     def _update_ui(self) -> None:
@@ -498,10 +826,13 @@ class SomBrowserWidget(QWidget):
         rec = self._current()
         self._btn_select.setEnabled(rec is not None and rec.oid is not None)
         if not has_rows:
-            self._meta.setText("No SOM results.")
-            self._summary.setText("")
+            if self._cb_only_selected.isChecked():
+                self._meta.setText(
+                    "No selected SOM rows — uncheck “Browse Only Selected” or select rows in the table."
+                )
+            else:
+                self._meta.setText("No SOM results.")
             self._fill_atom_table(None)
-            self._prop_panel.set_source_oid(None)
             self._refresh_preview()
             return
         self._idx = max(0, min(self._idx, n - 1))
@@ -515,17 +846,7 @@ class SomBrowserWidget(QWidget):
             except Exception:
                 row_txt = ""
         self._meta.setText(f"{TOOL_PREDICT_SOM}: {self._idx + 1} / {n}{row_txt}")
-        cols = rec.columns if rec is not None else {}
-        sites = cols.get(SOM_SITES_COLUMN) or "—"
-        probs = cols.get(SOM_PROB_COLUMN) or "—"
-        entropy = cols.get(SOM_ENTROPY_COLUMN) or "—"
-        fame = cols.get(SOM_FAME_COLUMN)
-        summary = f"SOM sites {sites}  ·  {probs}  ·  entropy {entropy}"
-        if fame:
-            summary += f"  ·  FAME {fame}"
-        self._summary.setText(summary)
         self._fill_atom_table(rec)
-        self._prop_panel.set_source_oid(None if rec is None else rec.oid)
         self._refresh_preview()
 
 
@@ -538,7 +859,8 @@ class SomBrowserDialog(QDialog):
         self.setWindowTitle(f"{TOOL_PREDICT_SOM} Browser")
         self.setModal(False)
         self.setWindowModality(Qt.NonModal)
-        self.resize(520, 720)
+        self.setMinimumSize(560, 640)
+        self.resize(640, 820)
         self._force_close = False
 
         if panel is not None:
@@ -553,10 +875,25 @@ class SomBrowserDialog(QDialog):
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(self._panel, 1)
         self._panel._sync_footer_chrome()
-        self._panel._sync_options_chrome()
         make_window_minimizable(self)
         self.setModal(False)
         self.setWindowModality(Qt.NonModal)
+
+    def showEvent(self, event) -> None:  # noqa: N802 — Qt API
+        super().showEvent(event)
+        panel = getattr(self, "_panel", None)
+        if panel is not None:
+            QTimer.singleShot(0, self._refresh_panel_preview)
+
+    def _refresh_panel_preview(self) -> None:
+        from .qt_widget_utils import qobject_is_deleted
+
+        if qobject_is_deleted(self):
+            return
+        panel = getattr(self, "_panel", None)
+        if panel is None or qobject_is_deleted(panel):
+            return
+        panel._refresh_preview()
 
     def set_records(self, records: list[SomBrowseRecord]) -> None:
         panel = getattr(self, "_panel", None)

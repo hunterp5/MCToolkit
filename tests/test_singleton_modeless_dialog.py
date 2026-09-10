@@ -82,3 +82,31 @@ def test_destroyed_callback_does_not_clear_replaced_singleton(qapp) -> None:
     w2.close()
     w2.deleteLater()
     qapp.processEvents()
+
+
+def test_destroyed_callback_skips_deleted_qobject_host(qapp) -> None:
+    """Quit must not call QObject methods on a host that Qt already destroyed."""
+    from PyQt5.QtWidgets import QDialog
+
+    host = QWidget()
+    host._dlg = None
+
+    def factory() -> QWidget:
+        return QDialog(host)
+
+    def on_destroyed() -> None:
+        host.sender()
+
+    reuse_or_show_modeless_singleton(host, "_dlg", factory, on_destroyed)
+    host.deleteLater()
+    qapp.processEvents()
+    qapp.processEvents()
+
+
+def test_qobject_is_deleted_for_live_and_missing() -> None:
+    from molmanager.ui.qt_widget_utils import qobject_is_deleted
+
+    assert qobject_is_deleted(None) is True
+    w = QWidget()
+    assert qobject_is_deleted(w) is False
+    w.deleteLater()

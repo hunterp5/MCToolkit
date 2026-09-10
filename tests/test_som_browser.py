@@ -21,14 +21,20 @@ from __future__ import annotations
 from molmanager.som_prediction import (
     SOM_CANCELLED_ERROR,
     SOM_MAP_COLUMN,
+    SOM_P1_SITES_COLUMN,
+    SOM_P2_SITES_COLUMN,
+    SOM_PHASE_COLUMN,
     SOM_PROB_COLUMN,
     SOM_SITES_COLUMN,
     SomAtomHit,
+    is_som_map_header,
 )
 from molmanager.ui.dockable_plot import is_dockable_workspace_widget
 from molmanager.ui.som_browser import (
     SomBrowseRecord,
+    SomBrowserDialog,
     SomBrowserWidget,
+    SomColorScaleWidget,
     records_from_worker_rows,
 )
 
@@ -90,7 +96,8 @@ def test_som_browser_widget_is_workspace_dockable():
     assert getattr(SomBrowserWidget, "dockable_in_workspace", False) is True
     assert is_dockable_workspace_widget(SomBrowserWidget)
     assert hasattr(SomBrowserWidget, "create_floating_dialog")
-    assert hasattr(SomBrowserWidget, "_toggle_options_visible")
+    assert not hasattr(SomBrowserWidget, "_toggle_options_visible")
+    assert not hasattr(SomBrowserWidget, "_prop_panel")
 
 
 def test_som_browser_steps_between_maps(qapp) -> None:  # noqa: ARG001
@@ -111,7 +118,6 @@ def test_som_browser_steps_between_maps(qapp) -> None:  # noqa: ARG001
     w = SomBrowserWidget(None)
     w.set_records(recs)
     assert "1 / 2" in w._meta.text()
-    assert "SOM sites 0" in w._summary.text()
     assert w._atom_table.rowCount() == 2
     w._step(1)
     assert "2 / 2" in w._meta.text()
@@ -137,6 +143,185 @@ def test_som_browser_emphasizes_selected_atom(qapp) -> None:  # noqa: ARG001
     assert w._emphasized_atom == 1
     w._atom_table.clearSelection()
     assert w._emphasized_atom is None
+    w.close()
+
+
+def test_som_browser_has_color_scale(qapp) -> None:  # noqa: ARG001
+    recs = [
+        SomBrowseRecord(
+            oid=1,
+            smiles="CCO",
+            atoms=(SomAtomHit(0, 0.9, True), SomAtomHit(1, 0.1, False)),
+            columns={SOM_SITES_COLUMN: "0", SOM_PROB_COLUMN: "0:0.90"},
+        ),
+        SomBrowseRecord(
+            oid=2,
+            smiles="CCO",
+            atoms=(
+                SomAtomHit(0, 0.9, True, is_phase1_som=True, is_phase2_som=False),
+                SomAtomHit(1, 0.8, True, is_phase1_som=False, is_phase2_som=True),
+            ),
+            columns={
+                SOM_SITES_COLUMN: "0, 1",
+                SOM_P1_SITES_COLUMN: "0",
+                SOM_P2_SITES_COLUMN: "1",
+                SOM_PROB_COLUMN: "0:0.90; 1:0.80",
+            },
+        ),
+    ]
+    w = SomBrowserWidget(None)
+    w.set_records(recs)
+    assert w._color_scale.parent() is w._preview_host
+    assert w._struct_label.parent() is w._preview_host
+    assert not w._color_scale.isHidden()
+    w._step(1)
+    assert not w._color_scale.isHidden()
+    w.close()
+
+
+def test_som_browser_preview_fits_label(qapp) -> None:  # noqa: ARG001
+    recs = [
+        SomBrowseRecord(
+            oid=1,
+            smiles="c1ccccc1O",
+            atoms=(SomAtomHit(0, 0.91, True), SomAtomHit(6, 0.40, True)),
+        ),
+    ]
+    dlg = SomBrowserDialog(None)
+    dlg.set_records(recs)
+    dlg.show()
+    qapp.processEvents()
+    w = dlg._panel
+    w._refresh_preview()
+    pm = w._struct_label.pixmap()
+    assert pm is not None and not pm.isNull()
+    dpr = max(1.0, float(pm.devicePixelRatio()))
+    assert abs(pm.width() / dpr - w._struct_label.width()) <= 1
+    assert abs(pm.height() / dpr - w._struct_label.height()) <= 1
+    assert w._color_scale.height() == w._struct_label.height()
+    assert w._color_scale.y() == w._struct_label.y()
+    dlg.close()
+
+
+def test_som_color_scale_widget_paints(qapp) -> None:  # noqa: ARG001
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtGui import QPixmap
+
+    w = SomColorScaleWidget()
+    w.resize(68, 200)
+    pm = QPixmap(w.size())
+    pm.fill(Qt.transparent)
+    w.render(pm)
+    assert not pm.isNull()
+    w.close()
+
+
+def test_som_browser_shows_phase_column(qapp) -> None:  # noqa: ARG001
+    recs = [
+        SomBrowseRecord(
+            oid=1,
+            smiles="CCO",
+            atoms=(
+                SomAtomHit(0, 0.9, True, is_phase1_som=True, is_phase2_som=False),
+                SomAtomHit(1, 0.8, True, is_phase1_som=False, is_phase2_som=True),
+            ),
+            columns={
+                SOM_SITES_COLUMN: "0, 1",
+                SOM_P1_SITES_COLUMN: "0",
+                SOM_P2_SITES_COLUMN: "1",
+                SOM_PROB_COLUMN: "0:0.90; 1:0.80",
+            },
+        ),
+    ]
+    w = SomBrowserWidget(None)
+    w.set_records(recs)
+    assert w._atom_table.columnCount() == 5
+    assert w._atom_table.horizontalHeaderItem(3).text() == "Phase"
+    assert w._atom_table.item(0, 3).text() == "P1"
+    assert w._atom_table.item(1, 3).text() == "P2"
+    w.close()
+
+
+def test_som_browser_atom_table_sorts_numerically(qapp) -> None:  # noqa: ARG001
+    from PyQt5.QtCore import Qt
+
+    recs = [
+        SomBrowseRecord(
+            oid=1,
+            smiles="CCO",
+            atoms=(
+                SomAtomHit(2, 0.10, False),
+                SomAtomHit(10, 0.90, True),
+                SomAtomHit(3, 0.50, True),
+            ),
+        ),
+    ]
+    w = SomBrowserWidget(None)
+    w.set_records(recs)
+    table = w._atom_table
+    assert table.isSortingEnabled()
+    assert [table.item(r, 0).text() for r in range(3)] == ["10", "3", "2"]
+    table.sortItems(0, Qt.AscendingOrder)
+    assert [table.item(r, 0).text() for r in range(3)] == ["2", "3", "10"]
+    table.sortItems(1, Qt.DescendingOrder)
+    assert [table.item(r, 0).text() for r in range(3)] == ["10", "3", "2"]
+    table.sortItems(2, Qt.AscendingOrder)
+    assert [table.item(r, 2).text() for r in range(3)] == ["", "yes", "yes"]
+    w.close()
+
+
+def test_is_som_map_header() -> None:
+    assert is_som_map_header("SOM Map")
+    assert is_som_map_header("SOM Map 2")
+    assert not is_som_map_header("SOM Sites")
+    assert not is_som_map_header("Structure")
+
+
+def test_atoms_from_som_columns_parses_phase_sites() -> None:
+    from molmanager.ui.som_browser import _atoms_from_som_columns
+
+    hits = _atoms_from_som_columns(
+        {
+            SOM_SITES_COLUMN: "0, 1",
+            SOM_PROB_COLUMN: "0:0.90; 1:0.80",
+            SOM_P1_SITES_COLUMN: "0",
+            SOM_P2_SITES_COLUMN: "1",
+            SOM_PHASE_COLUMN: "0:P1; 1:P2",
+        }
+    )
+    by_id = {h.atom_id: h for h in hits}
+    assert by_id[0].is_som and by_id[0].is_phase1_som
+    assert by_id[1].is_phase2_som and not by_id[1].is_phase1_som
+
+
+def test_som_browser_jump_to_oid(qapp) -> None:  # noqa: ARG001
+    recs = [
+        SomBrowseRecord(oid=1, smiles="CCO", atoms=(SomAtomHit(0, 0.9, True),)),
+        SomBrowseRecord(oid=2, smiles="c1ccccc1", atoms=(SomAtomHit(0, 0.2, False),)),
+    ]
+    w = SomBrowserWidget(None)
+    w.set_records(recs)
+    assert w.jump_to_oid(2) is True
+    assert w._current() is not None and w._current().oid == 2
+    w.close()
+
+
+def test_som_browser_only_selected_filters(qapp) -> None:  # noqa: ARG001
+    class _FakeApp:
+        def _selected_oids_set(self):
+            return {2}
+
+    recs = [
+        SomBrowseRecord(oid=1, smiles="CCO", atoms=(SomAtomHit(0, 0.9, True),)),
+        SomBrowseRecord(oid=2, smiles="c1ccccc1", atoms=(SomAtomHit(0, 0.2, False),)),
+    ]
+    w = SomBrowserWidget(_FakeApp())
+    w.set_records(recs)
+    assert w._cb_only_selected.text() == "Browse Only Selected"
+    w._cb_only_selected.setChecked(True)
+    assert [r.oid for r in w._records] == [2]
+    w._cb_only_selected.setChecked(False)
+    assert [r.oid for r in w._records] == [1, 2]
     w.close()
 
 
@@ -176,3 +361,48 @@ def test_discard_host_dialog_after_dock_clears_attr(qapp) -> None:  # noqa: ARG0
     discard_host_dialog_after_dock(dlg, host, "_dlg")
     assert host._dlg is None
     qapp.processEvents()
+
+
+def test_pixmap_column_size_hint_matches_image(qapp) -> None:  # noqa: ARG001
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtGui import QPixmap
+    from PyQt5.QtWidgets import QStyleOptionViewItem
+
+    from molmanager.ui.compound_table_model import CompoundTableModel
+    from molmanager.ui.table_selection_delegate import RowHighlightDelegate
+
+    model = CompoundTableModel(["ID_HIDDEN", "Structure", "SOM Map"])
+    model.append_row(1, {})
+    model.register_pixmap_column("SOM Map")
+    pm = QPixmap(80, 60)
+    pm.fill(Qt.white)
+    model.set_column_pixmap(1, "SOM Map", pm)
+    delegate = RowHighlightDelegate(model)
+    idx = model.index(0, 2)
+    assert delegate._index_is_pixmap_column(idx)
+    hint = delegate.sizeHint(QStyleOptionViewItem(), idx)
+    assert hint.width() >= 80
+    assert hint.height() >= 60
+
+
+def test_som_map_export_filename() -> None:
+    from molmanager.ui.main_window.tools_sql_predict_mixin import som_map_export_filename
+
+    assert som_map_export_filename(12) == "SOM_Map_12.png"
+    assert som_map_export_filename(3, "SOM Map 2") == "SOM_Map_2_3.png"
+
+
+def test_save_som_map_pixmap(tmp_path, qapp) -> None:  # noqa: ARG001
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtGui import QPixmap
+
+    from molmanager.ui.main_window.tools_sql_predict_mixin import save_som_map_pixmap
+
+    pm = QPixmap(24, 16)
+    pm.fill(Qt.red)
+    dest = tmp_path / "map"
+    written = save_som_map_pixmap(pm, str(dest))
+    assert written == str(dest) + ".png"
+    data = dest.with_suffix(".png").read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    assert save_som_map_pixmap(QPixmap(), str(tmp_path / "empty.png")) is None
