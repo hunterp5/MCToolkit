@@ -54,6 +54,7 @@ from .properties import PropertyDialog
 from .protomer import ProtomerGeneratorDialog
 from .pdbqt_generator import PdbqtGeneratorDialog
 from .protonate import ProtonateDialog
+from .easydock import EasyDockDialog
 from .qsar import QSARDialog
 from .mpo_scoring import MPOScoringDialog, MPOScoringDialogParams
 from .reaction_enumeration import ReactionEnumerationDialog
@@ -82,6 +83,7 @@ __all__ = [
     "FragmentRecompDialogParams",
     "FragmentRecompositionDialog",
     "DiverseSubsetDialog",
+    "EasyDockDialog",
     "FPSimilarityDialog",
     "GenerateConformationsDialog",
     "MmpDialog",

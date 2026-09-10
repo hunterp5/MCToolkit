@@ -38,13 +38,27 @@ from ...workers.pdb_fixer import PdbFixerRequest, PdbFixerSignals, PdbFixerWorke
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 
 
+def _browse_path_row(edit: QLineEdit, on_browse) -> QWidget:
+    row = QHBoxLayout()
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(4)
+    row.addWidget(edit, 1)
+    btn = QPushButton("Browse…")
+    btn.setFixedWidth(76)
+    btn.clicked.connect(on_browse)
+    row.addWidget(btn)
+    wrap = QWidget()
+    wrap.setLayout(row)
+    return wrap
+
+
 class PdbFixerDialog(QDialog):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.parent_app = parent
         self.setWindowTitle("Dock — Prepare PDB")
-        self.setMinimumWidth(640)
-        self.resize(700, 480)
+        self.setMinimumWidth(460)
+        self.resize(500, 400)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
@@ -52,32 +66,22 @@ class PdbFixerDialog(QDialog):
 
         io_gb = QGroupBox("Receptor PDB")
         io_form = QFormLayout(io_gb)
+        io_form.setContentsMargins(8, 6, 8, 6)
+        io_form.setSpacing(4)
 
         self.edit_in = QLineEdit()
         self.edit_in.setPlaceholderText("receptor.pdb")
-        br_in = QHBoxLayout()
-        br_in.addWidget(self.edit_in, 1)
-        btn_in = QPushButton("Browse…")
-        btn_in.clicked.connect(self._browse_input)
-        br_in.addWidget(btn_in)
-        w_in = QWidget()
-        w_in.setLayout(br_in)
-        io_form.addRow("Input PDB:", w_in)
+        io_form.addRow("Input:", _browse_path_row(self.edit_in, self._browse_input))
 
         self.edit_out = QLineEdit()
         self.edit_out.setPlaceholderText("receptor_prepared.pdb")
-        br_out = QHBoxLayout()
-        br_out.addWidget(self.edit_out, 1)
-        btn_out = QPushButton("Browse…")
-        btn_out.clicked.connect(self._browse_output)
-        br_out.addWidget(btn_out)
-        w_out = QWidget()
-        w_out.setLayout(br_out)
-        io_form.addRow("Output PDB:", w_out)
+        io_form.addRow("Output:", _browse_path_row(self.edit_out, self._browse_output))
         root.addWidget(io_gb)
 
-        opt_gb = QGroupBox("Preparation options")
+        opt_gb = QGroupBox("Options")
         opt_form = QFormLayout(opt_gb)
+        opt_form.setContentsMargins(8, 6, 8, 6)
+        opt_form.setSpacing(4)
         self.chk_remove_heterogens = QCheckBox("Remove heterogens (ligands, ions, buffers)")
         self.chk_remove_heterogens.setChecked(True)
         self.chk_remove_heterogens.toggled.connect(self._sync_water_enabled)
@@ -110,6 +114,8 @@ class PdbFixerDialog(QDialog):
 
         self.log = QTextEdit()
         self.log.setReadOnly(True)
+        self.log.setMaximumHeight(90)
+        self.log.setPlaceholderText("Log")
         apply_monospace_to_text_edit(self.log)
         root.addWidget(self.log, 1)
 
@@ -146,13 +152,17 @@ class PdbFixerDialog(QDialog):
             self.edit_out.setText(str(suggested))
 
     def _browse_input(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Receptor PDB", "", "PDB (*.pdb);;All files (*.*)")
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Receptor PDB", "", "PDB (*.pdb);;All files (*.*)"
+        )
         if path:
             self.edit_in.setText(path)
             self._suggest_output_path(path)
 
     def _browse_output(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Prepared receptor PDB", "", "PDB (*.pdb);;All files (*.*)")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Prepared receptor PDB", "", "PDB (*.pdb);;All files (*.*)"
+        )
         if path:
             self.edit_out.setText(path)
 

@@ -94,6 +94,7 @@ from .som_worker import SomPredictorSignals, SomPredictorWorker
 from .protomer_generator import ProtomerGeneratorSignals, ProtomerGeneratorWorker
 from .protonate_worker import ProtonateSignals, ProtonateWorker
 from .pdbqt_generator import PdbqtGenSignals, PdbqtGenRequest, PdbqtGeneratorWorker
+from .easydock_worker import EasyDockWorker
 from .fragment_decomposition import FragmentDecompositionWorker
 from .fragment_recomposition import FragmentRecompositionWorker
 from .mmp_worker import MmpAnalysisWorker
@@ -170,6 +171,7 @@ __all__ = [
     "PdbqtGenSignals",
     "PdbqtGenRequest",
     "PdbqtGeneratorWorker",
+    "EasyDockWorker",
     "describe_custom_calc_error",
     "fingerprint_bitvect_for_ui_choice",
     "materialize_pool_fingerprints",

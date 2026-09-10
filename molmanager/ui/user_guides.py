@@ -251,9 +251,20 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "tools_prepare_pdbqt",
                 "Prepare PDBQT",
                 "Prepare PDBQT",
-                "Build receptor/ligand PDBQT for docking.",
+                "Build receptor/ligand PDBQT (SDF, PDB, SMILES, or table rows).",
             ),
-            _e("tools_smina", "Smina", "Smina", "Run Smina docking with box and search settings."),
+            _e(
+                "tools_easydock",
+                "EasyDock",
+                "EasyDock",
+                "Dock table ligands with EasyDock (Smina or Vina) into a receptor box.",
+            ),
+            _e(
+                "tools_smina",
+                "Smina",
+                "Smina",
+                "Run Smina as a file-based CLI (no table writeback).",
+            ),
         ),
     ),
     GuideSection(
@@ -292,7 +303,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
             _e(
                 "tools_predict_som",
                 "Predict SOM",
-                "Predict SOM",
+                "SOM",
                 "FAME3R sites of metabolism for Phase 1, Phase 2, both, or CYP.",
             ),
             _e("data_qsar", "QSAR", "QSAR", "Train and apply QSAR models on table features."),

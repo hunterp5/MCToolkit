@@ -20,7 +20,13 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.utils import redact_sqlalchemy_url, safe_float, safe_mol_prop_string
+from molmanager.utils import (
+    looks_like_structure_cell_text,
+    parse_molecule_from_cell_text,
+    redact_sqlalchemy_url,
+    safe_float,
+    safe_mol_prop_string,
+)
 
 
 def test_safe_float_none():
@@ -58,3 +64,24 @@ def test_safe_mol_prop_string_present():
     mol = Chem.MolFromSmiles("CC")
     mol.SetProp("CustomTag", "hello")
     assert safe_mol_prop_string(mol, "CustomTag") == "hello"
+
+
+def test_looks_like_structure_cell_text_rejects_urls_and_json():
+    assert looks_like_structure_cell_text("CCO")
+    assert not looks_like_structure_cell_text("http://selleckchem.com/products/Carmofur.html")
+    assert not looks_like_structure_cell_text(
+        '{"v":2,"h":"confs","m":{"ok":true,"n_requested":50}}'
+    )
+
+
+def test_parse_molecule_from_cell_text_skips_urls_and_json_quietly(capsys):
+    assert parse_molecule_from_cell_text("http://selleckchem.com/products/Carmofur.html") is None
+    assert (
+        parse_molecule_from_cell_text(
+            '{"v":2,"h":"superpose","m":{"ok":true,"align_pattern":"Cc1n[nH]c2cc(S)ccc12"}}'
+        )
+        is None
+    )
+    err = capsys.readouterr().err
+    assert "SMILES Parse Error" not in err
+    assert "SMARTS Parse Error" not in err

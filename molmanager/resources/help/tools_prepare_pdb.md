@@ -29,7 +29,7 @@ An input PDB path on disk; writes an output PDB path. Not a table-row tool.
 1. Browse to the input PDB and set an output path.
 2. Toggle cleanup options appropriate to your receptor.
 3. Set hydrogen **pH** if adding hydrogens.
-4. **Prepare PDB**, then continue to Prepare PDBQT.
+4. **Prepare PDB**, then continue to **Prepare → PDBQT…**.
 
 ## Use cases
 

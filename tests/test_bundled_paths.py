@@ -23,8 +23,26 @@ from pathlib import Path
 from molmanager import bundled_paths
 
 
-def test_default_external_executable_falls_back_to_name():
+def test_default_external_executable_falls_back_to_name(monkeypatch, tmp_path):
+    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
     assert bundled_paths.default_external_executable("smina") in ("smina", "smina.exe")
+
+
+def test_resolve_user_executable(tmp_path):
+    missing = tmp_path / "missing.bin"
+    assert bundled_paths.resolve_user_executable(str(missing)) is None
+    assert bundled_paths.resolve_user_executable("") is None
+    exe = tmp_path / "smina.exe"
+    exe.write_bytes(b"")
+    assert bundled_paths.resolve_user_executable(str(exe)) == str(exe)
+
+
+def test_resolve_user_executable_bare_name_uses_bundle(tmp_path, monkeypatch):
+    exe = tmp_path / "smina.exe"
+    exe.write_bytes(b"")
+    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
+    assert bundled_paths.resolve_user_executable("smina.exe") == str(exe)
+    assert bundled_paths.resolve_user_executable("smina") == str(exe)
 
 
 def test_resolve_bundled_executable_when_present(tmp_path, monkeypatch):
@@ -33,6 +51,24 @@ def test_resolve_bundled_executable_when_present(tmp_path, monkeypatch):
     monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
     assert bundled_paths.resolve_bundled_executable("smina") == exe
     assert bundled_paths.default_external_executable("smina") == str(exe)
+
+
+def test_smina_launch_env_sets_babel_libdir(tmp_path):
+    exe = tmp_path / "smina.exe"
+    exe.write_bytes(b"")
+    (tmp_path / "formats_common.obf").write_bytes(b"")
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "atomtyp.txt").write_text("C\n", encoding="utf-8")
+    env = bundled_paths.smina_launch_env(str(exe))
+    assert env["BABEL_LIBDIR"] == str(tmp_path)
+    assert env["BABEL_DATADIR"] == str(data)
+
+
+def test_smina_launch_env_empty_without_plugins(tmp_path):
+    exe = tmp_path / "smina.exe"
+    exe.write_bytes(b"")
+    assert bundled_paths.smina_launch_env(str(exe)) == {}
 
 
 def test_static_asset_path_points_at_3dmol():

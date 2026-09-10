@@ -1,0 +1,494 @@
+# This file is part of MolManager.
+# Copyright (C) 2026 Hunter Picard
+#
+# MolManager is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# MolManager is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+
+"""EasyDock backend helpers (PDBQT parse, setup file, pose merge)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from rdkit import Chem
+from rdkit.Chem import AllChem
+
+from molmanager.easydock_backend import (
+    ENGINE_SMINA,
+    EasyDockParams,
+    _smina_argv,
+    affinity_from_pdbqt,
+    combine_placement_and_minimized,
+    combine_pose_mols,
+    combine_sdf_placement_and_minimized,
+    dock_mol,
+    dock_result_headers,
+    is_autobox_ligand_path,
+    load_sdf_mols,
+    merge_pdbqt_files,
+    mol_from_pdbqt_block,
+    mols_from_dock_output,
+    pose_metadata_from_pdbqt,
+    pose_stage_from_pdbqt,
+    restore_sdf_bond_orders,
+    sdf_path_for_pdbqt,
+    smina_executable_ok,
+    smina_log_pose_rows,
+    split_ligand_pdbqt_records,
+    split_pdbqt_models,
+    write_ligand_pdbqt_as_sdf,
+    write_pdbqt_poses_sdf,
+    write_protein_setup,
+)
+
+
+def test_write_protein_setup(tmp_path):
+    path = write_protein_setup(
+        tmp_path / "grid.txt",
+        center_x=1.5,
+        center_y=-2.0,
+        center_z=3.25,
+        size_x=20,
+        size_y=18,
+        size_z=22,
+    )
+    text = path.read_text(encoding="utf-8")
+    assert "center_x = 1.5" in text
+    assert "size_z = 22.0" in text
+
+
+def test_split_pdbqt_models_and_affinity():
+    raw = (
+        "MODEL 1\n"
+        "REMARK VINA RESULT:      -8.50      0.000      0.000\n"
+        "ATOM      1  C   LIG     1       0.000   0.000   0.000  0.00  0.00     0.000 C\n"
+        "ENDMDL\n"
+        "MODEL 2\n"
+        "REMARK minimizedAffinity -6.25\n"
+        "ATOM      1  C   LIG     1       1.000   0.000   0.000  0.00  0.00     0.000 C\n"
+        "ENDMDL\n"
+    )
+    models = split_pdbqt_models(raw)
+    assert len(models) == 2
+    assert affinity_from_pdbqt(models[0]) == -8.5
+    assert affinity_from_pdbqt(models[1]) == -6.25
+
+
+_TWO_MEEKO_LIGANDS = """\
+ROOT
+ATOM      1  C   UNL     1       0.000   0.000   0.000  1.00  0.00     0.000 C
+ENDROOT
+TORSDOF 0
+ROOT
+ATOM      1  C   UNL     1       1.000   0.000   0.000  1.00  0.00     0.000 C
+ENDROOT
+TORSDOF 0
+"""
+
+
+def test_split_ligand_pdbqt_records_concatenated_meeko():
+    records = split_ligand_pdbqt_records(_TWO_MEEKO_LIGANDS)
+    assert len(records) == 2
+    assert records[0].strip().startswith("ROOT")
+    assert "TORSDOF" in records[0]
+    assert sum(1 for ln in records[1].splitlines() if ln.startswith("ROOT")) == 1
+    assert "ROOT" not in records[0].split("TORSDOF")[1]
+
+
+def test_split_ligand_pdbqt_records_strips_model_tags():
+    raw = (
+        "MODEL 1\nROOT\nATOM      1  C   UNL     1       0.000   0.000   0.000  1.00  0.00     0.000 C\n"
+        "ENDROOT\nTORSDOF 0\nENDMDL\n"
+        "MODEL 2\nROOT\nATOM      1  C   UNL     1       1.000   0.000   0.000  1.00  0.00     0.000 C\n"
+        "ENDROOT\nTORSDOF 0\nENDMDL\n"
+    )
+    records = split_ligand_pdbqt_records(raw)
+    assert len(records) == 2
+    assert not any(ln.startswith("MODEL") for rec in records for ln in rec.splitlines())
+    assert all("TORSDOF" in rec for rec in records)
+
+
+def test_split_ligand_pdbqt_axitinib_conformers():
+    sample = Path(__file__).resolve().parents[1] / "samples" / "axitininb_conformers.pdbqt"
+    if not sample.is_file():
+        pytest.skip("axitininb_conformers.pdbqt sample missing")
+    records = split_ligand_pdbqt_records(sample.read_text(encoding="utf-8"))
+    assert len(records) > 1
+    assert all(
+        rec.lstrip().startswith("REMARK") or rec.lstrip().startswith("ROOT") for rec in records
+    )
+    assert all("TORSDOF" in rec for rec in records)
+    # Smina ligand parser rejects a second ROOT after TORSDOF.
+    assert all(rec.rstrip().splitlines()[-1].startswith("TORSDOF") for rec in records)
+
+
+def test_merge_pdbqt_files(tmp_path):
+    a = tmp_path / "a.pdbqt"
+    b = tmp_path / "b.pdbqt"
+    a.write_text("MODEL 1\nATOM a\nENDMDL\n", encoding="utf-8")
+    b.write_text("MODEL 1\nATOM b\nENDMDL\n", encoding="utf-8")
+    dest = tmp_path / "merged.pdbqt"
+    merge_pdbqt_files([a, b], dest)
+    text = dest.read_text(encoding="utf-8")
+    assert "ATOM a" in text and "ATOM b" in text
+
+
+def test_combine_placement_and_minimized():
+    placement = (
+        "MODEL 1\nREMARK minimizedAffinity -8.5\n"
+        "ATOM      1  C   LIG     1       0.000   0.000   0.000  1.00  0.00     0.000 C\n"
+        "ENDMDL\n"
+    )
+    minimized = (
+        "MODEL 1\nREMARK minimizedAffinity -9.1\n"
+        "ATOM      1  C   LIG     1       0.100   0.000   0.000  1.00  0.00     0.000 C\n"
+        "ENDMDL\n"
+    )
+    combined = combine_placement_and_minimized(placement, [minimized])
+    models = split_pdbqt_models(combined)
+    assert len(models) == 2
+    assert pose_stage_from_pdbqt(models[0]) == "placement"
+    assert pose_stage_from_pdbqt(models[1]) == "minimized"
+
+
+def test_write_pdbqt_poses_sdf_includes_pose_stage(tmp_path):
+    src = tmp_path / "docked.pdbqt"
+    atom = "ATOM      1  C   LIG     1       0.000   0.000   0.000  0.00  0.00     0.000 C \n"
+    src.write_text(
+        "MODEL 1\nREMARK poseStage placement\nREMARK minimizedAffinity -8.5\n" + atom + "ENDMDL\n"
+        "MODEL 2\nREMARK poseStage minimized\nREMARK minimizedAffinity -9.1\n"
+        + atom.replace("  0.000   0.000   0.000", "  0.200   0.000   0.000")
+        + "ENDMDL\n",
+        encoding="utf-8",
+    )
+    dest, n_written = write_pdbqt_poses_sdf(src)
+    assert n_written == 2
+    suppl = Chem.SDMolSupplier(str(dest), removeHs=False)
+    mols = [m for m in suppl if m is not None]
+    assert mols[0].GetProp("poseStage") == "placement"
+    assert mols[1].GetProp("poseStage") == "minimized"
+
+
+def test_sdf_path_for_pdbqt():
+    assert sdf_path_for_pdbqt("out.pdbqt") == Path("out.sdf")
+    assert sdf_path_for_pdbqt(Path("docked") / "lig.PDBQT") == Path("docked") / "lig.sdf"
+
+
+def test_write_pdbqt_poses_sdf(tmp_path):
+    src = tmp_path / "docked.pdbqt"
+    atom = "ATOM      1  C   LIG     1       0.000   0.000   0.000  0.00  0.00     0.000 C \n"
+    src.write_text(
+        "MODEL 1\nREMARK VINA RESULT:      -8.50      0.000      0.000\n" + atom + "ENDMDL\n"
+        "MODEL 2\nREMARK minimizedAffinity -6.25\n"
+        + atom.replace("  0.000   0.000   0.000", "  1.000   0.000   0.000")
+        + "ENDMDL\n",
+        encoding="utf-8",
+    )
+    dest, n_written = write_pdbqt_poses_sdf(src)
+    assert dest == tmp_path / "docked.sdf"
+    assert n_written == 2
+    suppl = Chem.SDMolSupplier(str(dest), removeHs=False)
+    mols = [m for m in suppl if m is not None]
+    assert len(mols) == 2
+    assert mols[0].GetProp("minimizedAffinity") == "-8.500"
+    assert mols[0].GetProp("rmsd_lb") == "0.000"
+    assert mols[0].GetProp("rmsd_ub") == "0.000"
+    assert mols[1].GetProp("minimizedAffinity") == "-6.250"
+
+
+def test_write_pdbqt_poses_sdf_sample_ligand(tmp_path):
+    sample = Path(__file__).resolve().parents[1] / "samples" / "4AGC_liigand.pdbqt"
+    if not sample.is_file():
+        pytest.skip("sample ligand missing")
+    src = tmp_path / "out.pdbqt"
+    src.write_bytes(sample.read_bytes())
+    dest, n_written = write_pdbqt_poses_sdf(src)
+    assert dest == tmp_path / "out.sdf"
+    assert n_written >= 1
+    suppl = Chem.SDMolSupplier(str(dest), removeHs=False)
+    assert any(m is not None for m in suppl)
+
+
+def test_mol_from_pdbqt_restores_axitinib_bond_orders():
+    sample = Path(__file__).resolve().parents[1] / "samples" / "axitininb_conformers.pdbqt"
+    if not sample.is_file():
+        pytest.skip("axitininb_conformers.pdbqt sample missing")
+    records = split_ligand_pdbqt_records(sample.read_text(encoding="utf-8"))
+    mol = mol_from_pdbqt_block(records[0])
+    assert mol is not None
+    assert mol.GetNumAtoms() == 28
+    orders = {b.GetBondType() for b in mol.GetBonds()}
+    assert Chem.BondType.DOUBLE in orders or any(b.GetIsAromatic() for b in mol.GetBonds())
+    smiles = Chem.MolToSmiles(mol)
+    assert "c" in smiles or "=" in smiles
+
+
+def test_write_pdbqt_poses_sdf_axitinib_keeps_double_bonds(tmp_path):
+    sample = Path(__file__).resolve().parents[1] / "samples" / "axitininb_conformers.pdbqt"
+    if not sample.is_file():
+        pytest.skip("axitininb_conformers.pdbqt sample missing")
+    src = tmp_path / "out.pdbqt"
+    src.write_bytes(sample.read_bytes())
+    dest, n_written = write_pdbqt_poses_sdf(src)
+    assert n_written >= 1
+    mols = [m for m in Chem.SDMolSupplier(str(dest), removeHs=False) if m is not None]
+    assert mols
+    assert any(
+        b.GetBondType() == Chem.BondType.DOUBLE or b.GetIsAromatic() for b in mols[0].GetBonds()
+    )
+
+
+def test_write_ligand_pdbqt_as_sdf_axitinib(tmp_path):
+    sample = Path(__file__).resolve().parents[1] / "samples" / "axitininb_conformers.pdbqt"
+    if not sample.is_file():
+        pytest.skip("axitininb_conformers.pdbqt sample missing")
+    dest, n_written = write_ligand_pdbqt_as_sdf(sample, tmp_path / "lig.sdf")
+    assert n_written > 1
+    mols = load_sdf_mols(dest)
+    assert len(mols) == n_written
+    assert any(
+        b.GetBondType() == Chem.BondType.DOUBLE or b.GetIsAromatic() for b in mols[0].GetBonds()
+    )
+
+
+def test_restore_sdf_bond_orders_from_template(tmp_path):
+    sdf = Path(__file__).resolve().parents[1] / "samples" / "axitininb_conformers.sdf"
+    if not sdf.is_file():
+        pytest.skip("axitininb_conformers.sdf sample missing")
+    template = next(m for m in Chem.SDMolSupplier(str(sdf), removeHs=False) if m is not None)
+    pose = Chem.Mol(template)
+    for bond in pose.GetBonds():
+        bond.SetBondType(Chem.BondType.SINGLE)
+        bond.SetIsAromatic(False)
+    dest = tmp_path / "flat.sdf"
+    writer = Chem.SDWriter(str(dest))
+    writer.SetKekulize(False)
+    writer.write(pose)
+    writer.close()
+    n_restored = restore_sdf_bond_orders(dest, template)
+    assert n_restored == 1
+    mol = load_sdf_mols(dest)[0]
+    assert any(b.GetBondType() == Chem.BondType.DOUBLE or b.GetIsAromatic() for b in mol.GetBonds())
+
+
+def test_combine_sdf_placement_and_minimized(tmp_path):
+    sdf = Path(__file__).resolve().parents[1] / "samples" / "axitininb_conformers.sdf"
+    if not sdf.is_file():
+        pytest.skip("axitininb_conformers.sdf sample missing")
+    mols = load_sdf_mols(sdf)
+    place = tmp_path / "place.sdf"
+    minimized = tmp_path / "min.sdf"
+    writer = Chem.SDWriter(str(place))
+    writer.write(mols[0])
+    writer.close()
+    writer = Chem.SDWriter(str(minimized))
+    writer.write(mols[0] if len(mols) == 1 else mols[1])
+    writer.close()
+    dest, n_written = combine_sdf_placement_and_minimized(place, minimized)
+    assert n_written == 2
+    combined = load_sdf_mols(dest)
+    assert combined[0].GetProp("poseStage") == "placement"
+    assert combined[1].GetProp("poseStage") == "minimized"
+
+
+def test_mol_from_pdbqt_template_restores_sdf_bond_orders():
+    sdf = Path(__file__).resolve().parents[1] / "samples" / "axitininb_conformers.sdf"
+    if not sdf.is_file():
+        pytest.skip("axitininb_conformers.sdf sample missing")
+    template = next(m for m in Chem.SDMolSupplier(str(sdf), removeHs=False) if m is not None)
+    conf = template.GetConformer()
+    lines = ["ROOT\n"]
+    for i, atom in enumerate(template.GetAtoms(), start=1):
+        pos = conf.GetAtomPosition(atom.GetIdx())
+        sym = atom.GetSymbol().ljust(3)
+        lines.append(
+            f"ATOM  {i:5d}  {sym}UNL     1    "
+            f"{pos.x:8.3f}{pos.y:8.3f}{pos.z:8.3f}  1.00  0.00     0.000 {sym.strip()}\n"
+        )
+    lines.append("ENDROOT\nTORSDOF 0\n")
+    mol = mol_from_pdbqt_block("".join(lines), template=template)
+    assert mol is not None
+    assert any(b.GetBondType() == Chem.BondType.DOUBLE or b.GetIsAromatic() for b in mol.GetBonds())
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    mol = Chem.AddHs(mol)
+    assert AllChem.EmbedMolecule(mol, AllChem.ETKDG()) == 0
+    a = Chem.Mol(mol)
+    b = Chem.Mol(mol)
+    conf = b.GetConformer()
+    p = conf.GetAtomPosition(0)
+    conf.SetAtomPosition(0, (p.x + 0.4, p.y, p.z))
+    combined = combine_pose_mols([a, b])
+    assert combined is not None
+    assert combined.GetNumConformers() == 2
+
+
+def test_easydock_params_defaults():
+    p = EasyDockParams(receptor_pdbqt="rec.pdbqt")
+    assert p.engine == ENGINE_SMINA
+    assert p.n_poses == 9
+    assert p.size_x == 20.0
+
+
+def test_smina_executable_ok(tmp_path):
+    exe = tmp_path / "smina.exe"
+    exe.write_bytes(b"")
+    assert smina_executable_ok(str(exe))
+    assert not smina_executable_ok("")
+    assert not smina_executable_ok(str(tmp_path / "missing.bin"))
+
+
+def test_smina_argv_includes_box_and_cpu(tmp_path):
+    rec = tmp_path / "rec.pdbqt"
+    rec.write_text("REMARK\n", encoding="utf-8")
+    params = EasyDockParams(
+        receptor_pdbqt=str(rec),
+        smina_executable="smina.exe",
+        energy_range=4.5,
+        ncpu=2,
+    )
+    argv = _smina_argv(
+        params, tmp_path / "lig.pdbqt", tmp_path / "out.pdbqt", tmp_path / "grid.txt"
+    )
+    assert Path(argv[0]).name.lower() in {"smina.exe", "smina"}
+    assert "--energy_range" in argv
+    assert argv[argv.index("--energy_range") + 1] == "4.5"
+    assert "--cpu" in argv
+    assert argv[argv.index("--cpu") + 1] == "2"
+
+
+def test_smina_argv_autobox_omits_config(tmp_path):
+    rec = tmp_path / "rec.pdbqt"
+    rec.write_text("REMARK\n", encoding="utf-8")
+    params = EasyDockParams(
+        receptor_pdbqt=str(rec),
+        smina_executable="smina.exe",
+        autobox=True,
+        autobox_ligand="crystal.pdbqt",
+        autobox_add=5.5,
+    )
+    argv = _smina_argv(
+        params, tmp_path / "lig.pdbqt", tmp_path / "out.pdbqt", tmp_path / "grid.txt"
+    )
+    assert "--config" not in argv
+    assert argv[argv.index("--autobox_ligand") + 1] == "crystal.pdbqt"
+    assert argv[argv.index("--autobox_add") + 1] == "5.50"
+
+
+def test_smina_argv_autobox_accepts_pdb(tmp_path):
+    rec = tmp_path / "rec.pdbqt"
+    rec.write_text("REMARK\n", encoding="utf-8")
+    lig = tmp_path / "crystal.pdb"
+    lig.write_text("ATOM      1  C   LIG A   1       0.000   0.000   0.000\n", encoding="utf-8")
+    params = EasyDockParams(
+        receptor_pdbqt=str(rec),
+        smina_executable="smina.exe",
+        autobox=True,
+        autobox_ligand=str(lig),
+        autobox_add=4.0,
+    )
+    argv = _smina_argv(
+        params, tmp_path / "lig.pdbqt", tmp_path / "out.pdbqt", tmp_path / "grid.txt"
+    )
+    assert argv[argv.index("--autobox_ligand") + 1] == str(lig.resolve())
+
+
+def test_is_autobox_ligand_path():
+    assert is_autobox_ligand_path("crystal.pdb")
+    assert is_autobox_ligand_path("crystal.PDB")
+    assert is_autobox_ligand_path("lig.pdbqt")
+    assert not is_autobox_ligand_path("lig.sdf")
+    assert not is_autobox_ligand_path("rec.mol2")
+
+
+def test_pose_metadata_from_pdbqt_extracts_smina_and_vina_fields():
+    block = (
+        "MODEL 1\n"
+        "REMARK  Name = oid7_conf1\n"
+        "REMARK minimizedAffinity -10.3347759\n"
+        "REMARK minimizedRMSD 0.05945\n"
+        "REMARK poseStage minimized\n"
+        "REMARK SMILES CCO\n"
+        "ATOM      1  C   LIG     1       0.000   0.000   0.000  0.00  0.00     0.000 C \n"
+        "ENDMDL\n"
+    )
+    meta = pose_metadata_from_pdbqt(block)
+    assert meta["minimizedAffinity"] == "-10.335"
+    assert meta["minimizedRMSD"] == "0.05945"
+    assert meta["poseStage"] == "minimized"
+    assert meta["Name"] == "oid7_conf1"
+    assert meta["SMILES"] == "CCO"
+    vina = pose_metadata_from_pdbqt(
+        "REMARK VINA RESULT:      -8.50      0.000      1.250\n"
+        "ATOM      1  C   LIG     1       0.000   0.000   0.000  0.00  0.00     0.000 C \n"
+    )
+    assert vina["minimizedAffinity"] == "-8.500"
+    assert vina["rmsd_lb"] == "0.000"
+    assert vina["rmsd_ub"] == "1.250"
+    skipped = pose_metadata_from_pdbqt("REMARK minimizedRMSD -1\nREMARK minimizedAffinity -3.1\n")
+    assert "minimizedRMSD" not in skipped
+    assert skipped["minimizedAffinity"] == "-3.100"
+
+
+def test_smina_log_pose_rows_parses_mode_table():
+    log = (
+        "mode |   affinity | dist from best mode\n"
+        "     | (kcal/mol) | rmsd l.b.| rmsd u.b.\n"
+        "-----+------------+----------+----------\n"
+        "   1       -12.339      0.000      0.000\n"
+        "   2       -11.204      1.234      2.456\n"
+        "Writing output ... done.\n"
+    )
+    rows = smina_log_pose_rows(log)
+    assert len(rows) == 2
+    assert rows[0]["mode"] == "1"
+    assert rows[0]["minimizedAffinity"] == "-12.339"
+    assert rows[1]["rmsd_lb"] == "1.234"
+    assert rows[1]["rmsd_ub"] == "2.456"
+
+
+def test_mols_from_dock_output_merges_log(tmp_path):
+    sdf = tmp_path / "out.sdf"
+    mol = Chem.MolFromSmiles("CCO")
+    mol.SetProp("minimizedAffinity", "-7.250")
+    from rdkit.Chem import SDWriter
+
+    writer = SDWriter(str(sdf))
+    writer.write(mol)
+    writer.close()
+    log = (
+        "mode |   affinity | dist from best mode\n"
+        "     | (kcal/mol) | rmsd l.b.| rmsd u.b.\n"
+        "-----+------------+----------+----------\n"
+        "   1         -7.25      0.000      0.000\n"
+    )
+    mols = mols_from_dock_output(sdf, log_text=log)
+    assert len(mols) == 1
+    assert mols[0].GetProp("minimizedAffinity") == "-7.250"
+    assert mols[0].GetProp("mode") == "1"
+    assert mols[0].GetProp("rmsd_lb") == "0.000"
+    headers = dock_result_headers(mols)
+    assert headers[:2] == ["ID_HIDDEN", "Structure"]
+    assert "minimizedAffinity" in headers
+    assert "mode" in headers
+    assert "rmsd_lb" in headers
+    assert "confs" in headers
+
+
+def test_dock_mol_unknown_engine():
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    hit = dock_mol(mol, EasyDockParams(receptor_pdbqt="rec.pdbqt", engine="nope"))
+    assert hit.score is None
+    assert hit.error and "unknown" in hit.error

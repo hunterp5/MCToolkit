@@ -18,12 +18,36 @@ import re
 
 # Upper bound for attempting RDKit parses from a single table cell (mol blocks, etc.).
 _CELL_TEXT_MAX_PARSE_CHARS = 2_000_000
+_NON_STRUCTURE_PREFIXES = ("http://", "https://", "ftp://", "file://", "www.")
 
 
 def looks_like_mol_block(text: str) -> bool:
     """Heuristic: cell text resembles an MDL mol block."""
     t = text or ""
     return "V2000" in t or "V3000" in t or ("M  END" in t and "\n" in t)
+
+
+def looks_like_structure_cell_text(raw: str) -> bool:
+    """False for URLs, JSON, and HTML that should not be fed to RDKit."""
+    t = (raw or "").strip()
+    if not t:
+        return False
+    if t.startswith(("{", "<")):
+        return False
+    lo = t.lower()
+    if lo.startswith(_NON_STRUCTURE_PREFIXES) or "://" in t:
+        return False
+    return True
+
+
+def _rdkit_log_blocker():
+    """Silence RDKit C++ logs for speculative parses (destructor restores)."""
+    try:
+        from rdkit.rdBase import BlockLogs
+
+        return BlockLogs()
+    except Exception:
+        return None
 
 
 def parse_molecule_from_cell_text(raw: str):
@@ -39,48 +63,54 @@ def parse_molecule_from_cell_text(raw: str):
         return None
     if len(raw) > _CELL_TEXT_MAX_PARSE_CHARS:
         return None
-    try:
-        m = Chem.MolFromSmiles(raw)
-        if m is not None:
-            return m
-    except Exception:
-        pass
-    try:
-        m = Chem.MolFromInchi(raw)
-        if m is not None:
-            return m
-    except Exception:
-        pass
-    if looks_like_mol_block(raw):
-        try:
-            m = Chem.MolFromMolBlock(raw)
-            if m is not None:
-                return m
-        except Exception:
-            pass
-    head = raw[:200]
-    if "ATOM  " in head or raw.startswith("COMPND") or raw.startswith("HEADER"):
-        try:
-            m = Chem.MolFromPDBBlock(raw)
-            if m is not None:
-                return m
-        except Exception:
-            pass
-    # SMARTS / reaction SMARTS (SMILES already attempted; skip huge mol blocks that contain '[').
-    if (
-        len(raw) < 600
-        and not looks_like_mol_block(raw)
-        and ("[" in raw or ">>" in raw or raw.startswith("^"))
-    ):
-        try:
-            from .smarts_patterns import mol_from_smarts
-
-            m = mol_from_smarts(raw)
-            if m is not None:
-                return m
-        except Exception:
-            pass
+    if not looks_like_structure_cell_text(raw):
         return None
+    blocker = _rdkit_log_blocker()
+    try:
+        try:
+            m = Chem.MolFromSmiles(raw)
+            if m is not None:
+                return m
+        except Exception:
+            pass
+        try:
+            m = Chem.MolFromInchi(raw)
+            if m is not None:
+                return m
+        except Exception:
+            pass
+        if looks_like_mol_block(raw):
+            try:
+                m = Chem.MolFromMolBlock(raw)
+                if m is not None:
+                    return m
+            except Exception:
+                pass
+        head = raw[:200]
+        if "ATOM  " in head or raw.startswith("COMPND") or raw.startswith("HEADER"):
+            try:
+                m = Chem.MolFromPDBBlock(raw)
+                if m is not None:
+                    return m
+            except Exception:
+                pass
+        # SMARTS / reaction SMARTS (SMILES already attempted; skip huge mol blocks that contain '[').
+        if (
+            len(raw) < 600
+            and not looks_like_mol_block(raw)
+            and ("[" in raw or ">>" in raw or raw.startswith("^"))
+        ):
+            try:
+                from .smarts_patterns import mol_from_smarts
+
+                m = mol_from_smarts(raw)
+                if m is not None:
+                    return m
+            except Exception:
+                pass
+        return None
+    finally:
+        del blocker
 
 
 def redact_sqlalchemy_url(url: str) -> str:
@@ -205,4 +235,3 @@ def mol_from_binary_blob(blob) -> object | None:
         return Chem.Mol(bytes(blob))
     except Exception:
         return None
-

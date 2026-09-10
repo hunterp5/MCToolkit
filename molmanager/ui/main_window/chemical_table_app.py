@@ -20,9 +20,10 @@ import threading
 import time
 
 from PyQt5.QtCore import QThreadPool, QTimer, Qt, pyqtSlot
-from PyQt5.QtGui import QCloseEvent
+from PyQt5.QtGui import QCloseEvent, QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
+    QActionGroup,
     QApplication,
     QFrame,
     QHBoxLayout,
@@ -194,6 +195,8 @@ class ChemicalTableApp(
         self.signals.sali_failed.connect(self.on_sali_failed, _qc)
         self.signals.cluster_failed.connect(self.on_cluster_failed, _qc)
         self.signals.cluster_explore_finished.connect(self.on_cluster_explore_finished, _qc)
+        self.signals.easydock_finished.connect(self.on_easydock_finished, _qc)
+        self.signals.easydock_failed.connect(self.on_easydock_failed, _qc)
         self.signals.export_finished.connect(self._on_export_finished_message, _qc)
         self.signals.tool_progress.connect(self._on_tool_progress, _qc)
         self._substructure_filter_signals = SubstructureFilterSignals()
@@ -246,6 +249,8 @@ class ChemicalTableApp(
         self._last_batch_received = False
         self._plot_dialogs: list = []
         self._floating_result_dialogs: list = []
+        self._dock_result_windows: list = []
+        self._dock_results_mode = False
         self._scope_sync_targets: list = []
         self._cached_plot_selected_oids: frozenset[int] | None = None
         self._selected_oids_override: frozenset[int] | None = None
@@ -565,6 +570,7 @@ class ChemicalTableApp(
         workspace_col_lyt.setSpacing(4)
         workspace_col_lyt.addWidget(self._search_panel)
         workspace_col_lyt.addWidget(self._workspace_layout, 1)
+        self._content_h = content_h
         content_h.addWidget(self._workspace_column, 1)
         # Wide enough for filter cards and footer actions (avoids clipping).
         _filter_panel_w = 320
@@ -871,48 +877,53 @@ class ChemicalTableApp(
         )
         fp_menu.addAction(act_cluster)
 
-        for title, slot, tip, hk_id in (
+        predict_menu = tools.addMenu("&Predict")
+        predict_menu.setToolTipsVisible(True)
+        for title, slot, tip in (
             (
-                "Predict pKa…",
+                "pKa…",
                 self.open_pka_predictor,
                 "Estimate ionization / pKa-related properties when the predictor is available.",
-                None,
             ),
             (
-                "Predict Permeability…",
+                "Permeability…",
                 self.open_permeability_predictor,
                 "Predict Caco-2 and MDCK permeability / efflux endpoints (optional Chemprop install).",
-                None,
             ),
             (
-                "Predict SOM…",
+                "SOM…",
                 self.open_som_predictor,
                 "Predict sites of metabolism with FAME3R and draw a highlighted atom map.",
-                None,
             ),
         ):
             act = QAction(title, self, triggered=slot)
-            if hk_id:
-                self._bind_hotkey(hk_id, act)
             act.setToolTip(tip)
-            tools.addAction(act)
+            predict_menu.addAction(act)
 
         dock_menu = tools.addMenu("&Dock")
         dock_menu.setToolTipsVisible(True)
-        act_dock_prepare = QAction("Prepare…", self, triggered=self.open_dock_prepare)
+        prepare_menu = dock_menu.addMenu("Prepare")
+        prepare_menu.setToolTipsVisible(True)
+        act_dock_prepare = QAction("PDBQT…", self, triggered=self.open_dock_prepare)
         act_dock_prepare.setToolTip(
-            "Generate receptor and/or ligand PDBQT files with Meeko (PDB, SDF, SMILES, or table rows)."
+            "Generate receptor and/or ligand PDBQT (receptor PDB; ligand SDF, PDB, SMILES, or table rows)."
         )
-        dock_menu.addAction(act_dock_prepare)
-        act_dock_prepare_pdb = QAction("Prepare PDB…", self, triggered=self.open_dock_prepare_pdb)
+        prepare_menu.addAction(act_dock_prepare)
+        act_dock_prepare_pdb = QAction("Receptor PDB…", self, triggered=self.open_dock_prepare_pdb)
         act_dock_prepare_pdb.setToolTip(
             "Clean a receptor PDB with PDBFixer (remove ligands/waters, add atoms and hydrogens) "
-            "before PDBQT conversion or Smina docking."
+            "before PDBQT conversion or docking."
         )
-        dock_menu.addAction(act_dock_prepare_pdb)
+        prepare_menu.addAction(act_dock_prepare_pdb)
+        dock_menu.addSeparator()
+        act_dock = QAction("EasyDock…", self, triggered=self.open_easydock)
+        act_dock.setToolTip(
+            "Dock table ligands with EasyDock (Smina or Vina): scores and poses written to the table."
+        )
+        dock_menu.addAction(act_dock)
         act_dock_smina = QAction("Smina…", self, triggered=self.open_smina_dock)
         act_dock_smina.setToolTip(
-            "Run Smina rigid docking: receptor/ligand PDBQT, search box, and log (install smina separately)."
+            "Run Smina as a file-based CLI on PDBQT inputs (log only; no table writeback)."
         )
         dock_menu.addAction(act_dock_smina)
 
@@ -1148,6 +1159,118 @@ class ChemicalTableApp(
         mb.setCornerWidget(corner, Qt.TopRightCorner)
         self._sync_main_toolbar_for_table_ready()
 
+    def apply_dock_results_chrome(self) -> None:
+        """Keep File → Export All / Export Selected / Browser; drop the rest of the toolbar."""
+        self._dock_results_mode = True
+        mb = self.menuBar()
+        mb.clear()
+        file_menu = mb.addMenu("&File")
+        export_all = (getattr(self, "_hotkey_actions", {}) or {}).get("file.export_all")
+        if export_all is None:
+            export_all = self._bind_hotkey(
+                "file.export_all",
+                QAction("&Export All...", self, triggered=lambda: self.run_export(False)),
+            )
+        file_menu.addAction(export_all)
+        file_menu.addAction(
+            QAction("Export Selected...", self, triggered=lambda: self.run_export(True))
+        )
+        file_menu.addSeparator()
+        act_browser = (getattr(self, "_hotkey_actions", {}) or {}).get("file.browser")
+        if act_browser is None:
+            act_browser = self._bind_hotkey(
+                "file.browser",
+                QAction("&Browser…", self, triggered=self.open_selection_browser),
+            )
+        act_browser.setToolTip("Open the selection browser to review and act on selected rows.")
+        file_menu.addAction(act_browser)
+        self._add_dock_view_menu(mb)
+        keep = {"file.export_all", "file.browser"}
+        for action_id, action in list(getattr(self, "_hotkey_actions", {}).items()):
+            if action_id in keep or action is None:
+                continue
+            try:
+                action.setShortcut(QKeySequence())
+                action.setEnabled(False)
+            except RuntimeError:
+                pass
+        for btn in (
+            getattr(self, "_btn_workspace_layout", None),
+            getattr(self, "_btn_processes", None),
+        ):
+            if btn is not None:
+                btn.hide()
+        corner = mb.cornerWidget(Qt.TopRightCorner)
+        if corner is not None:
+            corner.hide()
+        if sys.platform == "win32":
+            mb.setNativeMenuBar(False)
+
+    def _add_dock_view_menu(self, mb) -> None:
+        """View → Render submenu for receptor / ligand / pocket drawing styles."""
+        from ..dock_complex_viewer import (
+            DEFAULT_RENDER_STYLES,
+            RENDER_COMPONENT_LABELS,
+            RENDER_STYLE_CHOICES,
+        )
+
+        view_menu = mb.addMenu("&View")
+        render_menu = view_menu.addMenu("&Render")
+        render_menu.setToolTipsVisible(True)
+        render_menu.setToolTip("Choose how each component of the 3D complex is drawn.")
+        self._dock_render_groups = {}
+        for component, choices in RENDER_STYLE_CHOICES.items():
+            sub = render_menu.addMenu(RENDER_COMPONENT_LABELS[component])
+            group = QActionGroup(self)
+            group.setExclusive(True)
+            default = DEFAULT_RENDER_STYLES[component]
+            for style_id, label in choices:
+                act = QAction(label, self)
+                act.setCheckable(True)
+                act.setChecked(style_id == default)
+                act.setData((component, style_id))
+                group.addAction(act)
+                sub.addAction(act)
+            group.triggered.connect(self._on_dock_render_style_triggered)
+            self._dock_render_groups[component] = group
+        view_menu.addSeparator()
+        pocket_act = QAction("Pocket View", self)
+        pocket_act.setToolTip(
+            "Show nearby amino acids as ball-and-stick with residue labels, and zoom to the ligand."
+        )
+        pocket_act.triggered.connect(self._on_dock_pocket_view)
+        view_menu.addAction(pocket_act)
+
+    def _sync_dock_render_menu_checks(self, styles: dict) -> None:
+        groups = getattr(self, "_dock_render_groups", None) or {}
+        for component, group in groups.items():
+            want = (styles or {}).get(component)
+            group.blockSignals(True)
+            try:
+                for act in group.actions():
+                    data = act.data()
+                    act.setChecked(bool(data) and data[1] == want)
+            finally:
+                group.blockSignals(False)
+
+    def _on_dock_pocket_view(self) -> None:
+        viewer = getattr(self, "_dock_complex_viewer", None)
+        apply = getattr(viewer, "apply_pocket_view", None) if viewer is not None else None
+        if callable(apply):
+            apply()
+        if viewer is not None:
+            self._sync_dock_render_menu_checks(viewer.render_styles())
+
+    def _on_dock_render_style_triggered(self, action: QAction) -> None:
+        data = action.data() if action is not None else None
+        if not data or len(data) != 2:
+            return
+        component, style = data
+        viewer = getattr(self, "_dock_complex_viewer", None)
+        setter = getattr(viewer, "set_render_style", None) if viewer is not None else None
+        if callable(setter):
+            setter(str(component), str(style))
+
     def _set_ingest_loading(self, loading: bool) -> None:
         """Track file/import ingest and gray out the main toolbar until the table is ready."""
         self._ingest_loading = bool(loading)
@@ -1155,6 +1278,8 @@ class ChemicalTableApp(
 
     def _sync_main_toolbar_for_table_ready(self) -> None:
         """Disable File/Edit/Tools menus and Layout while ``_ingest_loading``; keep Processes usable."""
+        if getattr(self, "_dock_results_mode", False):
+            return
         enabled = not bool(getattr(self, "_ingest_loading", False))
         mb = self.menuBar()
         for action in mb.actions():

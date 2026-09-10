@@ -309,6 +309,9 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         self._selected_oids_override = None
         self._sync_table_selection_highlight()
         self._schedule_plot_sync_after_programmatic_selection()
+        sync_dock = getattr(self, "_sync_dock_complex_viewer", None)
+        if callable(sync_dock):
+            sync_dock()
 
     def select_table_rows(
         self,
@@ -407,6 +410,9 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         self._sync_table_selection_highlight()
         self._refresh_table_selection_visual(source_rows)
         self._schedule_plot_sync_after_programmatic_selection()
+        sync_dock = getattr(self, "_sync_dock_complex_viewer", None)
+        if callable(sync_dock):
+            sync_dock()
         return len(source_rows)
 
     def _finish_oid_override_selection(
@@ -1231,6 +1237,9 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
     def _on_smina_dock_dialog_destroyed(self):
         self._smina_dock_dialog = None
 
+    def _on_easydock_dialog_destroyed(self):
+        self._easydock_dialog = None
+
     def _on_pdbqt_generator_dialog_destroyed(self):
         self._pdbqt_generator_dialog = None
 
@@ -1250,24 +1259,26 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             render2d_row_by_oid=getattr(self, "_render2d_row_by_oid", None),
         )
 
-    def show_header_menu(self, pos):
-        col = self.table.horizontalHeader().logicalIndexAt(pos)
+    def _create_header_context_menu(self, col: int):
+        """Column-header context menu. Dock results windows keep Sort and Select only."""
         if col < 0 or col >= len(self.headers):
-            return
+            return None
         if self.headers[col] == "ID_HIDDEN":
-            return
-
+            return None
         old_n = self.headers[col]
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
         sel_act = menu.addAction(f"Select column '{old_n}'")
+        sel_act.setObjectName("header_select_column")
         select_sub = menu.addMenu("Select")
         select_sub.setToolTipsVisible(True)
         select_all_visible_act = select_sub.addAction("Select All Visible")
+        select_all_visible_act.setObjectName("header_select_all_visible")
         select_all_visible_act.setToolTip(
             "Select every row currently visible in the table (respects active filters)."
         )
         select_all_act = select_sub.addAction("Select All")
+        select_all_act.setObjectName("header_select_all")
         select_all_act.setToolTip(
             "Select every row in the table, including rows hidden by filters."
         )
@@ -1282,7 +1293,9 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             first_occ_act.setToolTip(
                 "For each non-empty cell text, select the first visible row where that value appears (top to bottom)."
             )
+        first_occ_act.setObjectName("header_select_first_occurrence")
         empty_act = select_sub.addAction("Empty cells")
+        empty_act.setObjectName("header_select_empty")
         if self.headers[col] == "Structure":
             empty_act.setToolTip(
                 "Select visible rows with no chemical structure (no molecule in memory and no parseable SMILES or structure text)."
@@ -1291,96 +1304,116 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             empty_act.setToolTip(
                 "Select every visible row where this column is blank or whitespace-only."
             )
-        sort_num_asc = sort_num_desc = sort_alpha_asc = sort_alpha_desc = None
         if self._table_model.rowCount() > 0:
             sort_top = menu.addMenu("Sort")
             num_m = sort_top.addMenu("Numeric")
             sort_num_asc = num_m.addAction("Ascending")
+            sort_num_asc.setObjectName("header_sort_num_asc")
             sort_num_desc = num_m.addAction("Descending")
+            sort_num_desc.setObjectName("header_sort_num_desc")
             alp_m = sort_top.addMenu("Alphabetic")
             sort_alpha_asc = alp_m.addAction("Ascending")
+            sort_alpha_asc.setObjectName("header_sort_alpha_asc")
             sort_alpha_desc = alp_m.addAction("Descending")
-        menu.addSeparator()
-        search_act = menu.addAction("Search")
-        color_act = None
-        if col >= 2 and not self._table_model.is_pixmap_data_column(old_n):
-            color_act = menu.addAction("Color")
-        menu.addSeparator()
-        ren_act = dup_act = del_act = None
-        if old_n != "Structure":
-            ren_act = menu.addAction(f"Rename '{old_n}'")
-            dup_act = menu.addAction(f"Duplicate '{old_n}'")
-            del_act = menu.addAction(f"Delete '{old_n}'")
-        menu.addSeparator()
-        log_act = menu.addAction("Logarithmic")
-        log_act.setCheckable(True)
-        log_act.setChecked(old_n in getattr(self, "_logarithmic_columns", set()))
-        log_act.setEnabled(self._column_can_toggle_logarithmic(old_n))
-        log_act.setToolTip(
-            "Convert positive numeric values to log10. Click again to convert back. "
-            "Disabled when the column has no positive numeric values, or any numeric "
-            "value ≤ 0 (while not already logarithmic)."
-        )
-        prec_act = menu.addAction("Precision…")
-        prec_act.setEnabled(self._column_can_apply_precision(old_n))
-        prec_act.setToolTip(
-            "Round numeric values in this column to a chosen number of decimal places. "
-            "Disabled when the column has no numeric values."
-        )
+            sort_alpha_desc.setObjectName("header_sort_alpha_desc")
+        if not getattr(self, "_dock_results_mode", False):
+            menu.addSeparator()
+            search_act = menu.addAction("Search")
+            search_act.setObjectName("header_search")
+            if col >= 2 and not self._table_model.is_pixmap_data_column(old_n):
+                color_act = menu.addAction("Color")
+                color_act.setObjectName("header_color")
+            menu.addSeparator()
+            if old_n != "Structure":
+                ren_act = menu.addAction(f"Rename '{old_n}'")
+                ren_act.setObjectName("header_rename")
+                dup_act = menu.addAction(f"Duplicate '{old_n}'")
+                dup_act.setObjectName("header_duplicate")
+                del_act = menu.addAction(f"Delete '{old_n}'")
+                del_act.setObjectName("header_delete")
+            menu.addSeparator()
+            log_act = menu.addAction("Logarithmic")
+            log_act.setObjectName("header_logarithmic")
+            log_act.setCheckable(True)
+            log_act.setChecked(old_n in getattr(self, "_logarithmic_columns", set()))
+            log_act.setEnabled(self._column_can_toggle_logarithmic(old_n))
+            log_act.setToolTip(
+                "Convert positive numeric values to log10. Click again to convert back. "
+                "Disabled when the column has no positive numeric values, or any numeric "
+                "value ≤ 0 (while not already logarithmic)."
+            )
+            prec_act = menu.addAction("Precision…")
+            prec_act.setObjectName("header_precision")
+            prec_act.setEnabled(self._column_can_apply_precision(old_n))
+            prec_act.setToolTip(
+                "Round numeric values in this column to a chosen number of decimal places. "
+                "Disabled when the column has no numeric values."
+            )
+        return menu
+
+    def show_header_menu(self, pos):
+        col = self.table.horizontalHeader().logicalIndexAt(pos)
+        menu = self._create_header_context_menu(col)
+        if menu is None:
+            return
+        old_n = self.headers[col]
         action = menu.exec_(self.table.horizontalHeader().mapToGlobal(pos))
-        if action == sel_act:
+        if action is None:
+            return
+        name = action.objectName()
+        if name == "header_select_column":
             self.table.setCurrentIndex(self._table_model.index(0, col))
             self._select_column(col)
-        elif sort_num_asc is not None and action == sort_num_asc:
+        elif name == "header_sort_num_asc":
             self._apply_table_sort(col, True, "numeric")
-        elif sort_num_desc is not None and action == sort_num_desc:
+        elif name == "header_sort_num_desc":
             self._apply_table_sort(col, False, "numeric")
-        elif sort_alpha_asc is not None and action == sort_alpha_asc:
+        elif name == "header_sort_alpha_asc":
             self._apply_table_sort(col, True, "alphabetic")
-        elif sort_alpha_desc is not None and action == sort_alpha_desc:
+        elif name == "header_sort_alpha_desc":
             self._apply_table_sort(col, False, "alphabetic")
-        elif action == search_act:
+        elif name == "header_search":
             self.open_table_search_with_column(col)
-        elif color_act is not None and action == color_act:
+        elif name == "header_color":
             self._open_column_color_dialog(col)
-        elif action == log_act:
+        elif name == "header_logarithmic":
             self._toggle_column_logarithmic(old_n)
-        elif action == prec_act:
+        elif name == "header_precision":
             self._apply_column_precision(old_n)
-        elif action == select_all_visible_act:
+        elif name == "header_select_all_visible":
             self._select_all_visible_rows()
-        elif action == select_all_act:
+        elif name == "header_select_all":
             self._select_all_rows()
-        elif first_occ_act is not None and action == first_occ_act:
+        elif name == "header_select_first_occurrence":
             if self.headers[col] == "Structure":
                 self._select_first_occurrence_per_distinct_structure()
             else:
                 self._select_first_occurrence_per_distinct_value(col)
-        elif empty_act is not None and action == empty_act:
+        elif name == "header_select_empty":
             if self.headers[col] == "Structure":
                 self._select_empty_structure_cells()
             else:
                 self._select_empty_cells_in_column(col)
-        elif del_act is not None and action == del_act:
+        elif name == "header_delete":
             self._undo_stack.push(UndoDeleteColumnCommand(self, col))
-        elif ren_act is not None and action == ren_act:
-            name, ok = QInputDialog.getText(self, "Rename", "New name:", text=old_n)
-            if ok and name:
-                self.headers[col] = name
-                self._table_model.rename_header_at(col, name)
+        elif name == "header_rename":
+            name_in, ok = QInputDialog.getText(self, "Rename", "New name:", text=old_n)
+            if ok and name_in:
+                self.headers[col] = name_in
+                self._table_model.rename_header_at(col, name_in)
                 logs = getattr(self, "_logarithmic_columns", None)
                 if logs is not None and old_n in logs:
                     logs.discard(old_n)
-                    logs.add(name)
+                    logs.add(name_in)
                 if old_n in self.global_bounds:
-                    self.global_bounds[name] = self.global_bounds.pop(old_n)
+                    self.global_bounds[name_in] = self.global_bounds.pop(old_n)
                 cols = self._filterable_data_column_names()
                 for f in self.filters:
                     if isinstance(f, FilterCard):
-                        f.update_prop_list(list(self.global_bounds.keys()), old_n, name)
+                        f.update_prop_list(list(self.global_bounds.keys()), old_n, name_in)
                     elif isinstance(f, (TextFilterCard, CategoryFilterCard)):
-                        f.update_prop_list(cols, old_n, name)
-        elif dup_act is not None and action == dup_act:
+                        f.update_prop_list(cols, old_n, name_in)
+        elif name == "header_duplicate":
             self._undo_stack.push(UndoDuplicateColumnCommand(self, col, old_n))
 
     def _column_can_toggle_logarithmic(self, header_name: str) -> bool:

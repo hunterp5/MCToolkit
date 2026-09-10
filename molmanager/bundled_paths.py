@@ -79,9 +79,89 @@ def default_external_executable(tool: str) -> str:
     if bundled is not None:
         return str(bundled)
     key = (tool or "").strip().lower()
-    if key in _TOOL_BINARIES:
-        return _TOOL_BINARIES[key][-1]
-    return tool
+    names = _TOOL_BINARIES.get(key)
+    if not names:
+        return tool
+    if sys.platform.startswith("win"):
+        return names[0]
+    return names[-1]
+
+
+def resolve_user_executable(user_path: str) -> str | None:
+    """Return an existing executable path from a file path or PATH name, else ``None``."""
+    text = (user_path or "").strip()
+    if not text:
+        return None
+    candidate = Path(text).expanduser()
+    if candidate.is_file():
+        return str(candidate)
+    from shutil import which
+
+    found = which(text)
+    if found:
+        return found
+    if sys.platform.startswith("win") and not text.lower().endswith(".exe"):
+        found = which(f"{text}.exe")
+        if found:
+            return found
+    if candidate.parent == Path("."):
+        bundled = resolve_bundled_executable(candidate.stem)
+        if bundled is not None:
+            return str(bundled)
+    return None
+
+
+def _openbabel_plugin_dir(exe_dir: Path) -> Path | None:
+    """Directory containing OpenBabel format plugins (``.obf`` or ``*.so``)."""
+    if any(exe_dir.glob("*.obf")):
+        return exe_dir
+    nested = exe_dir / "openbabel"
+    if nested.is_dir() and any(nested.glob("*.obf")):
+        return nested
+    lib_ob = exe_dir.parent.parent / "lib" / "openbabel"
+    if lib_ob.is_dir():
+        if any(lib_ob.glob("*.so")) or any(lib_ob.glob("*.obf")):
+            return lib_ob
+        for sub in sorted(lib_ob.glob("*")):
+            if sub.is_dir() and (any(sub.glob("*.so")) or any(sub.glob("*.obf"))):
+                return sub
+    return None
+
+
+def _openbabel_data_dir(exe_dir: Path) -> Path | None:
+    """Directory containing OpenBabel data files (``atomtyp.txt``)."""
+    for candidate in (
+        exe_dir / "data",
+        exe_dir / "openbabel-data",
+        exe_dir.parent.parent / "share" / "openbabel",
+    ):
+        if (candidate / "atomtyp.txt").is_file():
+            return candidate
+    return None
+
+
+def smina_launch_env(exe: str) -> dict[str, str]:
+    """
+    Environment so Smina's OpenBabel can load format plugins and data files.
+
+    Conda-forge Smina links OpenBabel. Without ``BABEL_LIBDIR`` pointing at the
+    ``.obf`` plugins, PDBQT files fail to open even when they exist.
+    """
+    text = (exe or "").strip()
+    if not text:
+        return {}
+    exe_path = Path(text).expanduser()
+    exe_dir = exe_path.parent if exe_path.is_file() else Path(text).expanduser().parent
+    if not exe_dir.is_dir():
+        return {}
+    env: dict[str, str] = {}
+    plugin_dir = _openbabel_plugin_dir(exe_dir)
+    if plugin_dir is not None:
+        env["BABEL_LIBDIR"] = str(plugin_dir)
+    data_dir = _openbabel_data_dir(exe_dir)
+    if data_dir is not None:
+        env["BABEL_DATADIR"] = str(data_dir)
+    return env
 
 
 def models_dir() -> Path:

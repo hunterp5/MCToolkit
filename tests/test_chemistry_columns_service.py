@@ -76,6 +76,9 @@ def test_data_headers_confirmed_structural():
 def test_cell_texts_have_parseable_molecule():
     assert cell_texts_have_parseable_molecule(["CCO", "not-a-mol"])
     assert not cell_texts_have_parseable_molecule(["", "???"])
+    assert not cell_texts_have_parseable_molecule(
+        ["http://selleckchem.com/products/Carmofur.html", '{"v":2,"h":"confs"}']
+    )
 
 
 def test_canonical_structure_key_from_smiles():

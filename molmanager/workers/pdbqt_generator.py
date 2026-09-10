@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-import shutil
-import subprocess
+import logging
+import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,48 +28,73 @@ from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class PdbqtGenRequest:
     receptor_pdb_path: str | None
     receptor_pdbqt_out: str | None
-    ligand_mode: str  # "sdf" | "smiles" | "rows"
+    ligand_mode: str  # "sdf" | "pdb" | "smiles" | "rows"
     ligand_sdf_path: str | None
     ligand_smiles: list[str] | None
     ligand_rows: list[tuple[int, Chem.Mol]] | None
     ligand_pdbqt_out: str | None
+    ligand_pdb_path: str | None = None
     working_dir: str | None = None
 
 
 class PdbqtGenSignals(QObject):
     finished = pyqtSignal(str, str)  # receptor_pdbqt_path, ligand_pdbqt_path (empty if skipped)
     failed = pyqtSignal(str)
-
-
-def _which_or_empty(name: str) -> str:
-    return shutil.which(name) or ""
-
-def _meeko_cli_or_module_argv(module_name: str, script_base: str) -> list[str] | None:
-    """
-    Return argv prefix to run Meeko CLI either via PATH script or python -m module.
-
-    On Windows, entrypoints are often installed as ``mk_prepare_ligand.exe`` (no .py).
-    """
-    for cand in (script_base, f"{script_base}.exe", f"{script_base}.py"):
-        p = _which_or_empty(cand)
-        if p:
-            return [p]
-    try:
-        import sys
-
-        return [sys.executable, "-m", module_name]
-    except Exception:
-        return None
+    logged = pyqtSignal(str)
 
 
 def _read_sdf_molecules(path: Path) -> list[Chem.Mol]:
     suppl = Chem.SDMolSupplier(str(path), removeHs=False)
     return [m for m in suppl if m is not None]
+
+
+_PDB_MODEL_RE = re.compile(r"^MODEL\b", re.MULTILINE)
+
+
+def _split_pdb_models(text: str) -> list[str]:
+    body = (text or "").replace("\r\n", "\n")
+    if not body.strip():
+        return []
+    if _PDB_MODEL_RE.search(body):
+        chunks = re.split(r"(?=^MODEL\b)", body, flags=re.MULTILINE)
+        return [c.strip() + "\n" for c in chunks if c.strip()]
+    return [body if body.endswith("\n") else body + "\n"]
+
+
+def _mol_from_pdb_block(block: str) -> Chem.Mol | None:
+    try:
+        return Chem.MolFromPDBBlock(block, removeHs=False, proximityBonding=True)
+    except TypeError:
+        return Chem.MolFromPDBBlock(block, removeHs=False)
+
+
+def _read_pdb_molecules(path: Path) -> list[Chem.Mol]:
+    """Load small-molecule ligand(s) from a PDB file (one mol per MODEL, else the whole file)."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    mols: list[Chem.Mol] = []
+    for block in _split_pdb_models(text):
+        mol = _mol_from_pdb_block(block)
+        if mol is not None and mol.GetNumAtoms() > 0:
+            mols.append(mol)
+    if mols:
+        return mols
+    try:
+        mol = Chem.MolFromPDBFile(str(path), removeHs=False, proximityBonding=True)
+    except TypeError:
+        mol = Chem.MolFromPDBFile(str(path), removeHs=False)
+    if mol is None or mol.GetNumAtoms() == 0:
+        return []
+    return [mol]
 
 
 def _embed_ligand_3d(mol: Chem.Mol) -> bool:
@@ -154,6 +179,17 @@ def _ligand_mols_from_request(req: PdbqtGenRequest) -> tuple[list[Chem.Mol] | No
         if not mols:
             return None, "Could not read any molecules from the ligand SDF file."
         return mols, ""
+    if req.ligand_mode == "pdb":
+        pdb_path = (req.ligand_pdb_path or "").strip()
+        if not pdb_path:
+            return None, "Select a PDB file for ligand input."
+        path = Path(pdb_path).expanduser()
+        if not path.is_file():
+            return None, f"Ligand PDB file not found: {path}"
+        mols = _read_pdb_molecules(path)
+        if not mols:
+            return None, "Could not read any molecules from the ligand PDB file."
+        return mols, ""
     if req.ligand_mode == "smiles":
         smis = [s.strip() for s in (req.ligand_smiles or []) if s.strip()]
         if not smis:
@@ -194,14 +230,66 @@ def _apply_meeko_rdkit_compat() -> None:
     Chem.Mol._molmanager_hasquery_patched = True  # type: ignore[attr-defined]
 
 
-def _ligand_mol_for_meeko(mol: Chem.Mol) -> Chem.Mol:
-    """Return a copy with a single 3D conformer for Meeko preparation."""
+def _write_receptor_pdbqt_file(pdb_path: Path, out_path: Path) -> tuple[str | None, list[str]]:
+    """
+    Prepare a receptor PDB with Meeko and write rigid PDBQT to *out_path*.
+
+    Incomplete residues are skipped (Meeko ``allow_bad_res``). Runs in-process so the
+    RDKit ``Mol.HasQuery`` shim applies (Meeko 0.7.x / RDKit 2023.09+).
+
+    Returns ``(error_message, ignored_residue_ids)``.
+    """
+    _apply_meeko_rdkit_compat()
+    from meeko import MoleculePreparation, PDBQTWriterLegacy, ResidueChemTemplates
+    from meeko.polymer import Polymer, PolymerCreationError
+
+    if not pdb_path.is_file():
+        return f"Receptor PDB not found: {pdb_path}", []
+    try:
+        pdb_string = pdb_path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        return f"Could not read receptor PDB: {exc}", []
+    templates = ResidueChemTemplates.create_from_defaults()
+    mk_prep = MoleculePreparation.from_config({})
+    try:
+        polymer = Polymer.from_pdb_string(
+            pdb_string,
+            templates,
+            mk_prep,
+            allow_bad_res=True,
+        )
+    except PolymerCreationError as exc:
+        return str(exc) or "Meeko could not parse the receptor PDB.", []
+    except Exception as exc:
+        logger.exception("Meeko receptor preparation failed")
+        return str(exc) or "Meeko receptor preparation failed.", []
+    ignored = [str(k) for k in (polymer.get_ignored_monomers() or {})]
+    try:
+        rigid_pdbqt, _flex = PDBQTWriterLegacy.write_from_polymer(polymer)
+    except Exception as exc:
+        logger.exception("Meeko PDBQT write failed")
+        return str(exc) or "Meeko could not write receptor PDBQT.", ignored
+    if not (rigid_pdbqt or "").strip():
+        return "Meeko produced an empty receptor PDBQT.", ignored
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(rigid_pdbqt, encoding="utf-8")
+    return None, ignored
+
+
+def _ligand_mols_for_meeko(mol: Chem.Mol) -> list[Chem.Mol]:
+    """Return one single-conformer copy per 3D conformer for Meeko preparation."""
     m = Chem.Mol(mol)
-    if m.GetNumConformers() > 1:
-        conf = Chem.Conformer(m.GetConformer(0))
-        m.RemoveAllConformers()
-        m.AddConformer(conf, assignId=True)
-    return m
+    n_conf = int(m.GetNumConformers())
+    if n_conf <= 1:
+        return [m]
+    out: list[Chem.Mol] = []
+    for cid in range(n_conf):
+        one = Chem.Mol(m)
+        conf = Chem.Conformer(m.GetConformer(cid))
+        one.RemoveAllConformers()
+        one.AddConformer(conf, assignId=True)
+        out.append(one)
+    return out
 
 
 def _write_ligand_pdbqt_file(mols: list[Chem.Mol], out_path: Path) -> str | None:
@@ -218,47 +306,30 @@ def _write_ligand_pdbqt_file(mols: list[Chem.Mol], out_path: Path) -> str | None
     errors: list[str] = []
     with out_path.open("w", encoding="utf-8") as fh:
         for index, mol in enumerate(mols, start=1):
-            lig = _ligand_mol_for_meeko(mol)
-            if not lig.HasProp("_Name"):
-                lig.SetProp("_Name", f"ligand_{index}")
-            try:
-                molsetups = preparator.prepare(lig)
-            except Exception as exc:
-                errors.append(f"Molecule {index}: {exc}")
-                continue
-            for molsetup in molsetups:
-                pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup)
-                if not success:
-                    errors.append(f"Molecule {index}: {error_msg or 'PDBQT write failed.'}")
+            for lig in _ligand_mols_for_meeko(mol):
+                if not lig.HasProp("_Name"):
+                    lig.SetProp("_Name", f"ligand_{index}")
+                try:
+                    molsetups = preparator.prepare(lig)
+                except Exception as exc:
+                    errors.append(f"Molecule {index}: {exc}")
                     continue
-                fh.write(pdbqt_string)
-                if not pdbqt_string.endswith("\n"):
-                    fh.write("\n")
-                written += 1
+                for molsetup in molsetups:
+                    pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(molsetup)
+                    if not success:
+                        errors.append(f"Molecule {index}: {error_msg or 'PDBQT write failed.'}")
+                        continue
+                    fh.write(pdbqt_string)
+                    if not pdbqt_string.endswith("\n"):
+                        fh.write("\n")
+                    written += 1
     if written == 0:
         return "\n".join(errors) if errors else "No PDBQT models were generated."
     return None
 
 
-def _run_cmd(argv: list[str], *, cwd: str | None, cancel_event: threading.Event | None) -> tuple[int, str]:
-    if cancel_event is not None and cancel_event.is_set():
-        raise RuntimeError("Cancelled.")
-    try:
-        p = subprocess.run(
-            argv,
-            cwd=cwd or None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            check=False,
-        )
-        return int(p.returncode), (p.stdout or "")
-    except FileNotFoundError:
-        return 127, f"Command not found: {argv[0]}"
-
-
 class PdbqtGeneratorWorker(QRunnable):
-    """Generate .pdbqt files using Meeko CLI scripts."""
+    """Generate .pdbqt files using Meeko (in-process)."""
 
     def __init__(
         self,
@@ -272,53 +343,41 @@ class PdbqtGeneratorWorker(QRunnable):
         self.signals = signals
         self.cancel_event = cancel_event
 
+    def _log(self, text: str) -> None:
+        try:
+            self.signals.logged.emit(text)
+        except Exception:
+            logger.debug("pdbqt logged emit failed", exc_info=True)
+
     def run(self) -> None:
         try:
             cancel_ev = self.cancel_event
-            meeko_ok = True
             try:
                 import meeko  # noqa: F401
             except Exception:
-                meeko_ok = False
-            if not meeko_ok:
                 self.signals.failed.emit(
                     "Meeko is required to generate PDBQT. Install with: pip install meeko"
                 )
                 return
 
-            rec_prefix = _meeko_cli_or_module_argv(
-                "meeko.cli.mk_prepare_receptor", "mk_prepare_receptor"
-            )
-            if self.req.receptor_pdbqt_out and not rec_prefix:
-                self.signals.failed.emit(
-                    "Could not find Meeko receptor CLI entrypoints or module runner. "
-                    "Try: pip install --upgrade meeko"
-                )
-                return
-
-            cwd = (self.req.working_dir or "").strip() or None
             receptor_out = ""
             ligand_out = ""
 
-            # Receptor
             if self.req.receptor_pdb_path and self.req.receptor_pdbqt_out:
-                rec_in = Path(self.req.receptor_pdb_path).expanduser()
-                rec_out = Path(self.req.receptor_pdbqt_out).expanduser()
-                rec_out.parent.mkdir(parents=True, exist_ok=True)
-                argv = [
-                    *rec_prefix,
-                    "--read_pdb",
-                    str(rec_in),
-                    "--write_pdbqt",
-                    str(rec_out),
-                ]
-                code, out = _run_cmd(argv, cwd=cwd, cancel_event=cancel_ev)
                 if cancel_ev is not None and cancel_ev.is_set():
                     self.signals.failed.emit("Cancelled.")
                     return
-                if code != 0:
-                    self.signals.failed.emit(f"Receptor PDBQT generation failed:\n{out.strip()}")
+                rec_in = Path(self.req.receptor_pdb_path).expanduser()
+                rec_out = Path(self.req.receptor_pdbqt_out).expanduser()
+                err, ignored = _write_receptor_pdbqt_file(rec_in, rec_out)
+                if cancel_ev is not None and cancel_ev.is_set():
+                    self.signals.failed.emit("Cancelled.")
                     return
+                if err:
+                    self.signals.failed.emit(f"Receptor PDBQT generation failed:\n{err}")
+                    return
+                if ignored:
+                    self._log("Skipped incomplete receptor residue(s): " + ", ".join(ignored) + ".")
                 receptor_out = str(rec_out)
 
             # Ligand
@@ -352,4 +411,3 @@ class PdbqtGeneratorWorker(QRunnable):
             self.signals.finished.emit(receptor_out, ligand_out)
         except Exception as e:
             self.signals.failed.emit(str(e) or "PDBQT generation failed.")
-

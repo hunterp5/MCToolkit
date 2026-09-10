@@ -29,6 +29,9 @@ venv/
 ENV/
 env/
 
+# Local conda prefixes for optional CLI tools (e.g. smina)
+.tools/
+
 # Pytest / coverage / type check / Ruff
 .pytest_cache/
 .coverage

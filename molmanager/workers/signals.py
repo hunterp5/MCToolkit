@@ -18,6 +18,7 @@
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
+
 def emit_partial_results_if_cancelled(
     signals: "WorkerSignals",
     tool_label: str,
@@ -91,6 +92,9 @@ class WorkerSignals(QObject):
     cluster_failed = pyqtSignal(str)
     # Exploratory clustering: list of dict rows (method, params, settings, metrics, notes)
     cluster_explore_finished = pyqtSignal(list)
+    # EasyDock: list of (oid, score_text, confs_cell[, pose_payloads])
+    easydock_finished = pyqtSignal(list)
+    easydock_failed = pyqtSignal(str)
 
     # --- Progress banner (message, done, total; total < 0 => indeterminate) ---
     tool_progress = pyqtSignal(str, int, int)
@@ -123,7 +127,9 @@ class BulkSimilaritySignals(QObject):
 class SubstructureFilterSignals(QObject):
     """Completion signals for :class:`SubstructureFilterWorker` (owned by the main window)."""
 
-    finished = pyqtSignal(int, object)  # job_gen, frozenset[int] of matched oids (empty = no matches)
+    finished = pyqtSignal(
+        int, object
+    )  # job_gen, frozenset[int] of matched oids (empty = no matches)
     failed = pyqtSignal(int, str)  # job_gen, message
 
 
@@ -139,4 +145,3 @@ class SqliteRebuildSignals(QObject):
 
     finished = pyqtSignal(int, str)  # job_gen, path to rebuilt sqlite file
     failed = pyqtSignal(int, str)  # job_gen, message
-

@@ -266,3 +266,34 @@ def test_apply_layout_preserves_pane_stacks(qapp):
     assert panes[0].plot_widgets() == [a, b]
     assert panes[0].plot_widget() is b
     assert panes[1].plot_widgets() == [c]
+
+
+def test_dock_fits_wide_widget_to_existing_splitter_sizes(qapp):
+    from PyQt5.QtWidgets import QLayout, QVBoxLayout
+
+    from molmanager.ui.dockable_plot import embed_in_plot_pane, unembed_from_plot_pane
+
+    host = QWidget()
+    ly = QVBoxLayout(host)
+    ly.setSizeConstraint(QLayout.SetMinimumSize)
+    ly.addWidget(QLabel("wide"))
+    host.setMinimumWidth(900)
+    embed_in_plot_pane(host)
+    assert host.minimumWidth() == 0
+    assert ly.sizeConstraint() == QLayout.SetDefaultConstraint
+    unembed_from_plot_pane(host)
+    assert host.minimumWidth() == 900
+    assert ly.sizeConstraint() == QLayout.SetMinimumSize
+
+    mgr = _manager(qapp)
+    outer = mgr._splitters[0]
+    outer.setSizes([900, 320])
+    before = [int(s) for s in outer.sizes()]
+    widget = QLabel("wide")
+    widget.setMinimumWidth(1800)
+    widget.setMinimumHeight(900)
+    mgr.dock_into_pane(mgr.plot_panes()[0], widget)
+    assert [int(s) for s in outer.sizes()] == before
+    assert widget.minimumWidth() == 0
+    assert mgr.release_widget(widget) is True
+    assert widget.minimumWidth() == 1800

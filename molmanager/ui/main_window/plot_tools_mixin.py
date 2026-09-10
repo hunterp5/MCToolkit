@@ -133,10 +133,12 @@ class PlotToolsMixin:
 
     def _ensure_plot_panel_width(self, preferred: int | None = None) -> None:
         """Give the plot region a usable width when the outer splitter is horizontal."""
+        from ..dockable_plot import PLOT_PANEL_COLLAPSED_WIDTH
+
         mgr = self._workspace()
         if mgr is None or not mgr._splitters:
             return
-        if mgr.layout_id == "quadrants":
+        if mgr.layout_id in {"quadrants", "table_grid"}:
             return
         splitter = mgr._splitters[0]
         try:
@@ -146,6 +148,10 @@ class PlotToolsMixin:
         if len(sizes) < 2:
             return
         table_w, plot_w = sizes[0], sizes[1]
+        # Existing panes already have a share of the window; do not grow them to
+        # the docked widget's floating sizeHint / preferred width.
+        if preferred is None and plot_w >= PLOT_PANEL_COLLAPSED_WIDTH:
+            return
         min_w = self._apply_plot_panel_minimum_width()
         _content_min, content_pref = self._docked_plot_content_widths()
         if preferred is not None:

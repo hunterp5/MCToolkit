@@ -29,12 +29,18 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSplitter,
+    QStackedLayout,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from ..dockable_plot import PLOT_PANEL_BASE_MINIMUM_WIDTH, PLOT_PANEL_DEFAULT_WIDTH
+from ..dockable_plot import (
+    PLOT_PANEL_BASE_MINIMUM_WIDTH,
+    PLOT_PANEL_DEFAULT_WIDTH,
+    embed_in_plot_pane,
+    unembed_from_plot_pane,
+)
 
 LAYOUT_TABLE_ONLY = "table_only"
 LAYOUT_TABLE_SINGLE = "table_single"
@@ -136,6 +142,9 @@ class PlotPane(QFrame):
 
         self._stack = QStackedWidget()
         self._stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        stack_ly = self._stack.layout()
+        if stack_ly is not None and hasattr(stack_ly, "setSizeAdjustPolicy"):
+            stack_ly.setSizeAdjustPolicy(QStackedLayout.AdjustIgnored)
         self._stack.currentChanged.connect(self._on_stack_current_changed)
         self._stack.hide()
 
@@ -249,10 +258,12 @@ class PlotPane(QFrame):
                 self._uninstall_activate_filter(old)
                 self._stack.removeWidget(old)
                 old.setParent(None)
+                unembed_from_plot_pane(old)
             self._pages = []
             for widget in widgets:
                 if widget is None:
                     continue
+                embed_in_plot_pane(widget)
                 self._pages.append(widget)
                 self._stack.addWidget(widget)
                 self._install_activate_filter(widget)
@@ -270,13 +281,17 @@ class PlotPane(QFrame):
             self._stack.blockSignals(False)
         self._refresh_pager()
         self._sync_visible_footer()
+        for widget in self._pages:
+            embed_in_plot_pane(widget)
 
     def add_plot_widget(self, widget: QWidget) -> None:
         """Append ``widget`` and show it. If it is already here, just show it."""
+        embed_in_plot_pane(widget)
         if widget in self._pages:
             self._stack.setCurrentWidget(widget)
             self._refresh_pager()
             self._sync_visible_footer()
+            embed_in_plot_pane(widget)
             return
         self._pages.append(widget)
         self._stack.addWidget(widget)
@@ -284,6 +299,7 @@ class PlotPane(QFrame):
         self._stack.setCurrentWidget(widget)
         self._refresh_pager()
         self._sync_visible_footer()
+        embed_in_plot_pane(widget)
 
     def remove_plot_widget(self, widget: QWidget) -> bool:
         """Detach ``widget`` from this pane. Returns True if it was present."""
@@ -297,6 +313,7 @@ class PlotPane(QFrame):
             widget.setParent(None)
         except RuntimeError:
             pass
+        unembed_from_plot_pane(widget)
         if self._pages:
             self._stack.setCurrentIndex(min(idx, len(self._pages) - 1))
         self._refresh_pager()
@@ -389,9 +406,7 @@ class PlotPane(QFrame):
     def _set_active_style(self, active: bool) -> None:
         # Keep border width identical so activating a pane does not resize Plotly.
         color = "palette(highlight)" if active else "palette(mid)"
-        self.setStyleSheet(
-            f"QFrame#PlotPane {{ border: 2px solid {color}; border-radius: 2px; }}"
-        )
+        self.setStyleSheet(f"QFrame#PlotPane {{ border: 2px solid {color}; border-radius: 2px; }}")
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 — Qt API
         self.activated.emit(self)
@@ -469,11 +484,13 @@ class WorkspaceLayoutManager(QWidget):
 
     def dock_into_pane(self, pane: PlotPane, widget: QWidget) -> QWidget | None:
         """Dock ``widget`` into ``pane`` (appends; does not replace other plots)."""
+        snapshot = self.collect_splitter_sizes()
         previous = pane.plot_widget()
         other = self.pane_for_widget(widget)
         if other is not None and other is not pane:
             other.remove_plot_widget(widget)
         pane.add_plot_widget(widget)
+        self.restore_splitter_sizes(snapshot)
         self.set_preferred_pane(pane)
         return previous if previous is not widget else None
 

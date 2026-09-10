@@ -26,6 +26,8 @@ def test_plain_citations_contain_dois() -> None:
     assert "10.1186/s13321-019-0336-9" in sc.DIMORPHITE_DL
     assert "10.1021/ci034243x" in sc.ESOL_DELANEY
     assert "10.1021/cn100008c" in sc.WAGER_CNS_MPO
+    assert "10.1186/s13321-023-00772-2" in sc.EASYDOCK
+    assert "EasyDock" in sc.easydock_dialog_footer_html()
 
 
 def test_descriptor_footer_html_links() -> None:

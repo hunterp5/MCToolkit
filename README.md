@@ -274,7 +274,7 @@ Most Python packages are already installed by **Step 6b**. The items below are b
 
 ### pKa / PyTorch repair
 
-If **Tools → Predict pKa** fails with a PyTorch version error (often after installing another package that upgrades torch), run this in the **same** venv — do **not** create a second environment:
+If **Tools → Predict → pKa** fails with a PyTorch version error (often after installing another package that upgrades torch), run this in the **same** venv — do **not** create a second environment:
 
 **Windows:**
 
@@ -290,9 +290,11 @@ bash scripts/install_pytorch_pka.sh
 
 This removes conflicting packages (such as **admet-ai**) and reinstalls from `requirements.txt`.
 
-### Docking (Smina)
+### Docking (EasyDock)
 
-Docking uses the **smina** program (a fork of AutoDock Vina). It is not included in the Python install. Download a binary from [https://vina.scripps.edu](https://vina.scripps.edu) or your package manager, then either:
+Table docking is **Tools → Dock → EasyDock…**. Receptor PDBQT still comes from **Prepare → Receptor PDB…** then **Prepare → PDBQT…**. Ligands are prepared by EasyDock/Meeko from table structures. Python pieces are in the docking extra (`pip install -e ".[docking]"` or `requirements.txt`).
+
+The **Smina** engine is not included in the Python install. Download a binary from [https://sourceforge.net/projects/smina](https://sourceforge.net/projects/smina) or your package manager, then either:
 
 - Put `smina.exe` (Windows) or `smina` (macOS/Linux) in:
   - `molmanager/resources/bin/win/` (Windows)
@@ -300,7 +302,9 @@ Docking uses the **smina** program (a fork of AutoDock Vina). It is not included
   - `molmanager/resources/bin/linux/` (Linux)
 - Or set the environment variable `MOLMANAGER_BUNDLE_DIR` to a folder that contains the executable.
 
-See **Tools → Docking** in the app after the binary is in place.
+The optional **Vina** engine needs `pip install vina` (often Linux/macOS only). **Smina…** remains for file-based PDBQT runs without table writeback.
+
+See **Tools → Dock** in the app after the binary is in place.
 
 ### Guided optional setup script
 

@@ -18,13 +18,17 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QWidget
+from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtWidgets import QDialog, QLayout, QSizePolicy, QVBoxLayout, QWidget
 
 # Floor when no docked content is present (empty host / buttons only).
 PLOT_PANEL_BASE_MINIMUM_WIDTH = 420
 # Comfortable default dock width for a plot figure (options live in a dialog).
 PLOT_PANEL_DEFAULT_WIDTH = 640
+# Plot region narrower than this is treated as collapsed (grow to the layout default).
+PLOT_PANEL_COLLAPSED_WIDTH = 48
+
+_PANE_EMBED_ATTR = "_molmanager_pane_embed_state"
 
 
 def discard_host_dialog_after_dock(dlg, host, attr_name: str) -> None:
@@ -155,3 +159,83 @@ def plot_embedded_preferred_width(widget: QWidget | None) -> int:
     except Exception:
         hint = 0
     return max(min_w, hint, PLOT_PANEL_DEFAULT_WIDTH)
+
+
+def _iter_widget_layouts(widget: QWidget):
+    seen: set[int] = set()
+    layout = widget.layout()
+    layouts = []
+    if layout is not None:
+        layouts.append(layout)
+    try:
+        layouts.extend(widget.findChildren(QLayout))
+    except RuntimeError:
+        pass
+    for item in layouts:
+        key = id(item)
+        if key in seen:
+            continue
+        seen.add(key)
+        yield item
+
+
+def embed_in_plot_pane(widget: QWidget | None) -> None:
+    """Let ``widget`` shrink to the current plot pane instead of growing the splitter.
+
+    Floating windows keep large minimum sizes and ``QLayout.SetMinimumSize`` constraints.
+    Those must not drive QSplitter after the widget is reparented into an existing pane.
+    """
+    if widget is None:
+        return
+    state = getattr(widget, _PANE_EMBED_ATTR, None)
+    if state is None:
+        layout_constraints: list[tuple[QLayout, int]] = []
+        for layout in _iter_widget_layouts(widget):
+            try:
+                constraint = int(layout.sizeConstraint())
+            except RuntimeError:
+                continue
+            if constraint == int(QLayout.SetMinimumSize):
+                layout_constraints.append((layout, constraint))
+        state = {
+            "min": QSize(widget.minimumSize()),
+            "max": QSize(widget.maximumSize()),
+            "policy": QSizePolicy(widget.sizePolicy()),
+            "layouts": layout_constraints,
+        }
+        setattr(widget, _PANE_EMBED_ATTR, state)
+    _apply_plot_pane_fit(widget, state)
+
+
+def _apply_plot_pane_fit(widget: QWidget, state: dict) -> None:
+    for layout, _constraint in state.get("layouts") or ():
+        try:
+            layout.setSizeConstraint(QLayout.SetDefaultConstraint)
+        except RuntimeError:
+            pass
+    widget.setMinimumSize(0, 0)
+    widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+
+def unembed_from_plot_pane(widget: QWidget | None) -> None:
+    """Restore size constraints saved by :func:`embed_in_plot_pane`."""
+    if widget is None:
+        return
+    state = getattr(widget, _PANE_EMBED_ATTR, None)
+    if not isinstance(state, dict):
+        return
+    try:
+        delattr(widget, _PANE_EMBED_ATTR)
+    except Exception:
+        setattr(widget, _PANE_EMBED_ATTR, None)
+    for layout, constraint in state.get("layouts") or ():
+        try:
+            layout.setSizeConstraint(constraint)
+        except RuntimeError:
+            pass
+    try:
+        widget.setMinimumSize(state["min"])
+        widget.setMaximumSize(state["max"])
+        widget.setSizePolicy(state["policy"])
+    except RuntimeError:
+        pass

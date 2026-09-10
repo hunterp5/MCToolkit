@@ -96,6 +96,15 @@ GNN_MTL_PERMEABILITY = (
     "https://doi.org/10.5281/zenodo.16948542 (Chemprop v2.1.0, graph-only GNN-MTL)."
 )
 
+EASYDOCK = (
+    "EasyDock (ligand docking pipeline): Minibaeva, G.; Ivanova, A.; Polishchuk, P. EasyDock: "
+    "customizable and scalable docking tool. J. Cheminform. 2023, 15, 102. "
+    "https://doi.org/10.1186/s13321-023-00772-2 ; Minibaeva, G.; Yap, V.; Polishchuk, P. "
+    "EasyDock 1.3: An Automated Pipeline for Molecular Docking. J. Chem. Inf. Model. 2026. "
+    "https://doi.org/10.1021/acs.jcim.6c01221 — https://github.com/ci-lab-cz/easydock "
+    "(Meeko ligand PDBQT prep; AutoDock Vina or Smina engine; MolManager writes scores/poses to the table)."
+)
+
 
 def descriptor_checkbox_citation_html(internal_key: str) -> str | None:
     """Short rich-text citation beside a Calculate Descriptors checkbox, if applicable."""
@@ -127,8 +136,7 @@ def descriptor_checkbox_citation_html(internal_key: str) -> str | None:
         "RO5_VIOLATIONS": "Lipinski et al., Adv. Drug Deliv. Rev. 1997 (RDKit Ro5)",
         "RO5_PASS": "Lipinski et al., Adv. Drug Deliv. Rev. 1997 (RDKit Ro5)",
         "FP_Pharm2D_Gobbi": (
-            "RDKit Pharm2D; Gobbi &amp; Poppinger, "
-            "<i>Perspect. Drug Discov. Des.</i> 1998"
+            "RDKit Pharm2D; Gobbi &amp; Poppinger, <i>Perspect. Drug Discov. Des.</i> 1998"
         ),
     }
     return citations.get(key)
@@ -199,6 +207,18 @@ def permeability_dialog_footer_html() -> str:
     )
 
 
+def easydock_dialog_footer_html() -> str:
+    """Rich text for Tools → Dock → EasyDock…."""
+    return (
+        "<small><b>Method</b>: EasyDock — "
+        '<a href="https://doi.org/10.1186/s13321-023-00772-2">Minibaeva et al., J. Cheminform. 2023</a>; '
+        '<a href="https://doi.org/10.1021/acs.jcim.6c01221">Minibaeva et al., J. Chem. Inf. Model. 2026</a>. '
+        "Ligand PDBQT via Meeko; engine is Smina (CLI) or AutoDock Vina (Python). "
+        "Scores are vacuum AutoDock-family affinities (kcal/mol), not experimental ΔG. "
+        "This tool does not protonate ligands or prepare the protein.</small>"
+    )
+
+
 def protomer_dialog_footer_html() -> str:
     """Rich text appended under the protomer generator hint."""
     return (
@@ -220,11 +240,10 @@ SURECHEMBL = (
 def surechembl_patent_search_html() -> str:
     """Rich text for the Query Patents (SureChEMBL) dialog."""
     return (
-        "<small><b>Data source</b>: <a href=\"https://www.surechembl.org\">SureChEMBL</a> "
+        '<small><b>Data source</b>: <a href="https://www.surechembl.org">SureChEMBL</a> '
         "(EMBL-EBI) — compounds linked to <b>patent and document</b> chemistry, not a live Google Patents "
         "HTML search. "
         "<b>Similarity</b>: server-side Tanimoto on RDKit Morgan fingerprints (256 bits, r=2); "
         'see <a href="https://chembl.gitbook.io/surechembl/chemical-search/similarity-search-tanimoto-coefficient-and-fingerprint-generation">SureChEMBL docs</a> '
         'and <a href="https://www.ebi.ac.uk/chembl/surechembl/">SureChEMBL at ChEMBL</a>.</small>'
     )
-

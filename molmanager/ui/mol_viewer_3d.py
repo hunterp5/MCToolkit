@@ -2058,7 +2058,8 @@ class Molecule3DViewerWidget(QWidget):
         self._add_to_main_btn.setVisible(floating)
         self._send_window_btn.setVisible(docked)
         self._close_viewer_btn.setVisible(docked)
-        self.setMinimumWidth(self.embedded_minimum_width())
+        if not docked:
+            self.setMinimumWidth(self.embedded_minimum_width())
 
     def event(self, event):  # noqa: N802 — Qt API name
         if event.type() == QEvent.ParentChange:

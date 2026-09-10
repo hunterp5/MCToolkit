@@ -46,6 +46,8 @@ from ...workers import (
 
 logger = logging.getLogger(__name__)
 
+_DOCK_RESULT_WINDOWS: list = []
+
 
 def som_map_export_filename(oid: int, header: str = "SOM Map") -> str:
     """Default PNG filename for a SOM Map cell export."""
@@ -324,6 +326,291 @@ class ToolsSqlPredictMixin:
             lambda: PatentQueryDialog(self),
             self._on_patent_query_dialog_destroyed,
         )
+
+    def open_easydock(self):
+        from ...easydock_backend import ensure_easydock_stack_ready
+        from ..dialogs.easydock import EasyDockDialog
+
+        err = ensure_easydock_stack_ready()
+        if err:
+            QMessageBox.warning(self, "Dock", err)
+            return
+        if not self.headers or self._table_model.rowCount() == 0:
+            QMessageBox.information(
+                self,
+                "Dock",
+                "Open a file or add rows so the table has ligands to dock.",
+            )
+            return
+        n_sel = len(self._selected_logical_rows())
+
+        def _factory():
+            d = EasyDockDialog(n_sel, self)
+            self._prepare_tool_dialog(d)
+            d.setAttribute(Qt.WA_DeleteOnClose, True)
+            d.accepted.connect(lambda *_, dlg=d: self._on_easydock_dialog_accepted(dlg))
+            return d
+
+        reuse_or_show_modeless_singleton(
+            self,
+            "_easydock_dialog",
+            _factory,
+            self._on_easydock_dialog_destroyed,
+        )
+
+    def _on_easydock_dialog_accepted(self, dlg) -> None:
+        from ...workers import EasyDockWorker
+
+        only_selected = dlg.only_selected_rows()
+        allowed = self._selected_oids_set() if only_selected else None
+        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Dock"):
+            return
+        data = self._collect_mols_for_conformer_tools(only_selected=only_selected)
+        if not data:
+            QMessageBox.information(
+                self,
+                "Dock",
+                "No parseable structures for those rows.",
+            )
+            return
+        params = dlg.params()
+        items: list[tuple[int, bytes]] = []
+        for oid, mol in data:
+            try:
+                items.append((int(oid), mol.ToBinary()))
+            except Exception:
+                continue
+        if not items:
+            QMessageBox.information(self, "Dock", "Could not serialize any ligands.")
+            return
+        self._easydock_score_column = dlg.score_column()
+        self._easydock_write_poses = dlg.write_poses()
+        self._easydock_receptor_path = (params.receptor_pdbqt or "").strip()
+        n = len(items)
+        self._begin_tool_progress("Dock", n)
+        self.process_queue.enqueue(
+            f"Dock ({n} ligand(s))",
+            lambda ev, it=items, p=params, sigs=self.signals, wp=dlg.write_poses(), sdf=dlg.sdf_path(): (
+                EasyDockWorker(
+                    it,
+                    p,
+                    sigs,
+                    write_poses=wp,
+                    sdf_path=sdf,
+                    cancel_event=ev,
+                )
+            ),
+        )
+
+    def on_easydock_finished(self, results: list) -> None:
+        self._finish_tool_progress("Dock")
+        score_col = getattr(self, "_easydock_score_column", None) or "Dock score"
+        write_poses = bool(getattr(self, "_easydock_write_poses", True))
+        self._easydock_score_column = "Dock score"
+        self._easydock_write_poses = True
+        if not results:
+            self.status_label.setText("Dock: no results.")
+            return
+        ensure = [score_col]
+        if write_poses:
+            ensure.append("confs")
+        self._ensure_columns(ensure)
+        score_pairs: list[tuple[int, str]] = []
+        confs_pairs: list[tuple[int, str]] = []
+        sc = getattr(self, "_confs_blocks_sidecar", None)
+        if sc is None:
+            self._confs_blocks_sidecar = {}
+            sc = self._confs_blocks_sidecar
+        from ...confs_codec import demote_v1_cell_to_sidecar
+
+        n_ok = 0
+        for item in results:
+            if len(item) < 3:
+                continue
+            oid, score_txt, cell = int(item[0]), str(item[1] or ""), str(item[2] or "")
+            score_pairs.append((oid, score_txt))
+            if write_poses and cell:
+                light, b64 = demote_v1_cell_to_sidecar(cell, "confs")
+                if b64 is not None:
+                    sc[(oid, "confs")] = b64
+                confs_pairs.append((oid, light))
+                n_ok += 1
+        if score_pairs:
+            self._table_model.set_column_text_by_oids(score_col, score_pairs)
+        if confs_pairs:
+            self._table_model.set_column_text_by_oids("confs", confs_pairs)
+        self.schedule_calculate_global_bounds()
+        notice = self._consume_partial_results_notice()
+        n_scored = sum(1 for _oid, s in score_pairs if s)
+        msg = f"Dock: {n_scored} score(s) in “{score_col}”."
+        if notice:
+            msg = f"{notice} {msg}"
+        self.status_label.setText(msg)
+        pose_mols: list[Chem.Mol] = []
+        from ...easydock_backend import mols_from_pose_payloads
+
+        for item in results:
+            if len(item) >= 4 and item[3]:
+                pose_mols.extend(mols_from_pose_payloads(item[3]))
+        if pose_mols:
+            rec = str(getattr(self, "_easydock_receptor_path", "") or "").strip()
+            self.open_dock_results_window(
+                pose_mols, title="Dock results", receptor_path=rec or None
+            )
+        elif write_poses and n_ok:
+            packed = [
+                (int(item[0]), None, str(item[2] or ""))
+                for item in results
+                if len(item) >= 3 and item[2]
+            ]
+            if packed:
+                self._auto_open_first_conformer_results(
+                    packed,
+                    title="Docked poses",
+                    confs_column="confs",
+                    initial_superpose=False,
+                )
+
+    def open_dock_results_window(
+        self,
+        mols: list,
+        *,
+        title: str = "Dock results",
+        receptor_path: str | None = None,
+    ):
+        """Open a new main-table window populated with docked poses and Smina fields."""
+        from ...easydock_backend import dock_result_headers
+        from .chemical_table_app import ChemicalTableApp
+
+        usable = [m for m in (mols or []) if m is not None]
+        if not usable:
+            return None
+        win = ChemicalTableApp()
+        win.apply_dock_results_chrome()
+        win.setWindowTitle(f"MolManager — {title}")
+        win.setAttribute(Qt.WA_DeleteOnClose, True)
+        headers = dock_result_headers(usable)
+        win.headers = headers
+        win._table_model.set_headers(list(headers))
+        win.table.setColumnHidden(0, True)
+        prepared: list[tuple[int, dict[str, str]]] = []
+        pose_map: dict[int, Chem.Mol] = {}
+        for mol in usable:
+            oid = win.next_oid
+            win.next_oid += 1
+            pose_map[oid] = mol
+            prepared.append((oid, win._ingest_store_mol(oid, mol)))
+        win._dock_pose_mols = pose_map
+        win._table_model.append_rows_batch(prepared, defer_color_cache=True)
+        for oid, _cells in prepared:
+            stored = win.mols.get(oid)
+            if stored is not None:
+                win.start_render_worker(oid, stored, skip_mol_props=True)
+        rebuild = getattr(win._table_model, "rebuild_column_color_caches_after_bulk_load", None)
+        if callable(rebuild):
+            rebuild()
+        schedule = getattr(win, "schedule_calculate_global_bounds", None)
+        if callable(schedule):
+            schedule()
+        n = len(usable)
+        win.status_label.setText(f"{n} docked pose(s).")
+        win._install_dock_complex_pane(receptor_path)
+        if n:
+            win.select_table_rows([0])
+            win._sync_dock_complex_viewer()
+        win.show()
+        win.raise_()
+        win.activateWindow()
+        _DOCK_RESULT_WINDOWS.append(win)
+        if not hasattr(self, "_dock_result_windows"):
+            self._dock_result_windows = []
+        self._dock_result_windows.append(win)
+
+        def _drop(*_a, w=win, parent=self) -> None:
+            for lst in (_DOCK_RESULT_WINDOWS, getattr(parent, "_dock_result_windows", None)):
+                if not lst:
+                    continue
+                try:
+                    lst.remove(w)
+                except ValueError:
+                    pass
+
+        try:
+            win.destroyed.connect(_drop)
+        except Exception:
+            pass
+        return win
+
+    def _install_dock_complex_pane(self, receptor_path: str | None) -> None:
+        """Put a 3Dmol receptor+ligand view to the left of this table."""
+        from PyQt5.QtWidgets import QSplitter
+
+        from ..dock_complex_viewer import DockComplexEmbedView
+
+        if getattr(self, "_dock_complex_viewer", None) is not None:
+            viewer = self._dock_complex_viewer
+            setter = getattr(viewer, "set_receptor_path", None)
+            if callable(setter):
+                setter(receptor_path)
+            return
+        content_h = getattr(self, "_content_h", None)
+        workspace = getattr(self, "_workspace_column", None)
+        if content_h is None or workspace is None:
+            return
+        viewer = DockComplexEmbedView(self)
+        viewer.set_receptor_path(receptor_path)
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setObjectName("DockComplexSplitter")
+        splitter.setChildrenCollapsible(False)
+        content_h.removeWidget(workspace)
+        splitter.addWidget(viewer)
+        splitter.addWidget(workspace)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 3)
+        splitter.setSizes([520, 980])
+        content_h.insertWidget(0, splitter, 1)
+        self._dock_complex_viewer = viewer
+        self._dock_complex_splitter = splitter
+        try:
+            self.resize(max(self.width(), 1680), max(self.height(), 900))
+        except Exception:
+            pass
+
+    def _dock_complex_current_oid(self) -> int | None:
+        table = getattr(self, "table", None)
+        model = getattr(self, "_table_model", None)
+        if table is None or model is None:
+            return None
+        idx = table.currentIndex()
+        if idx.isValid():
+            proxy = getattr(self, "_filter_proxy_model", None)
+            src = proxy.mapToSource(idx) if proxy is not None else idx
+            try:
+                return int(model.row_oid(src.row()))
+            except Exception:
+                pass
+        oids = self._selected_oids_set() if hasattr(self, "_selected_oids_set") else set()
+        if oids:
+            return min(int(x) for x in oids)
+        return None
+
+    def _sync_dock_complex_viewer(self) -> None:
+        viewer = getattr(self, "_dock_complex_viewer", None)
+        if viewer is None:
+            return
+        pose_map = getattr(self, "_dock_pose_mols", None) or {}
+        oid = self._dock_complex_current_oid()
+        mol = pose_map.get(oid) if oid is not None else None
+        if mol is None and pose_map:
+            mol = next(iter(pose_map.values()))
+        setter = getattr(viewer, "set_ligand_mol", None)
+        if callable(setter):
+            setter(mol)
+
+    def on_easydock_failed(self, message: str) -> None:
+        self._finish_tool_progress("Dock")
+        QMessageBox.warning(self, "Dock", message or "EasyDock failed.")
+        self.status_label.setText("Dock failed.")
 
     def open_smina_dock(self):
         from ..smina_dock import SminaDockDialog

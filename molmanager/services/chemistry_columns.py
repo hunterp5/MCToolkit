@@ -20,7 +20,11 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 
 from ..import_structure import header_looks_like_structure_text
-from ..utils import looks_like_mol_block, parse_molecule_from_cell_text
+from ..utils import (
+    looks_like_mol_block,
+    looks_like_structure_cell_text,
+    parse_molecule_from_cell_text,
+)
 
 
 def skip_chemistry_tool_column_dropdown(header: str) -> bool:
@@ -121,6 +125,8 @@ def cell_texts_have_parseable_molecule(
         if tries > max_nonempty_samples:
             break
         if len(text) > 20000 and not looks_like_mol_block(text):
+            continue
+        if not looks_like_structure_cell_text(text):
             continue
         if parse_molecule_from_cell_text(text) is not None:
             return True
