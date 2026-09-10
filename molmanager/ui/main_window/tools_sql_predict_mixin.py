@@ -49,6 +49,19 @@ logger = logging.getLogger(__name__)
 _DOCK_RESULT_WINDOWS: list = []
 
 
+def _copy_dock_pose_mols(mols: list) -> list:
+    """Independent RDKit copies so the results viewer can reopen after the window is closed."""
+    out: list = []
+    for mol in mols or []:
+        if mol is None:
+            continue
+        try:
+            out.append(Chem.Mol(mol))
+        except Exception:
+            continue
+    return out
+
+
 def som_map_export_filename(oid: int, header: str = "SOM Map") -> str:
     """Default PNG filename for a SOM Map cell export."""
     stem = re.sub(r"[^\w\-]+", "_", (header or "SOM_Map").strip()).strip("_") or "SOM_Map"
@@ -485,6 +498,17 @@ class ToolsSqlPredictMixin:
         usable = [m for m in (mols or []) if m is not None]
         if not usable:
             return None
+        self._last_dock_results = {
+            "mols": _copy_dock_pose_mols(usable),
+            "title": title,
+            "receptor_path": (receptor_path or "").strip() or None,
+        }
+        act = getattr(self, "_act_dock_viewer", None)
+        if act is not None:
+            try:
+                act.setEnabled(True)
+            except RuntimeError:
+                pass
         win = ChemicalTableApp()
         win.apply_dock_results_chrome()
         win.setWindowTitle(f"MolManager — {title}")
@@ -540,6 +564,46 @@ class ToolsSqlPredictMixin:
         except Exception:
             pass
         return win
+
+    def _live_dock_result_windows(self) -> list:
+        """Dock-results windows that still have a live C++ object."""
+        from ..qt_widget_utils import qobject_is_deleted
+
+        live: list = []
+        for w in list(getattr(self, "_dock_result_windows", []) or []):
+            if qobject_is_deleted(w):
+                continue
+            live.append(w)
+        self._dock_result_windows = live
+        return live
+
+    def open_dock_results_viewer(self):
+        """Raise the last docking results window, or recreate it after it was closed."""
+        live = self._live_dock_result_windows()
+        if live:
+            win = live[-1]
+            try:
+                win.show()
+                win.raise_()
+                win.activateWindow()
+            except RuntimeError:
+                pass
+            else:
+                return win
+        snap = getattr(self, "_last_dock_results", None) or {}
+        mols = list(snap.get("mols") or [])
+        if not mols:
+            QMessageBox.information(
+                self,
+                "Dock Viewer",
+                "No docking results to show. Run EasyDock or Smina first.",
+            )
+            return None
+        return self.open_dock_results_window(
+            _copy_dock_pose_mols(mols),
+            title=str(snap.get("title") or "Dock results"),
+            receptor_path=snap.get("receptor_path"),
+        )
 
     def _install_dock_complex_pane(self, receptor_path: str | None) -> None:
         """Put a 3Dmol receptor+ligand view to the left of this table."""

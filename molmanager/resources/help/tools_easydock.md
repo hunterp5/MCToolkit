@@ -32,7 +32,7 @@ Table rows with valid structures; **Selected Rows Only** when checked. Receptor 
 2. Convert it with **Prepare → PDBQT…** to receptor PDBQT (if EasyDock is already open, the receptor path is filled in).
 3. Protonate ligands separately if you need a pH-specific state.
 4. Open **Tools → Dock → EasyDock…**, set the box and engine, run.
-5. Inspect **Dock score** on the source table (kcal/mol, more negative is better) and the **results table** that opens with every pose and Smina field (affinity, RMSD, mode, …). The left pane shows the pose in the receptor.
+5. Inspect **Dock score** on the source table (kcal/mol, more negative is better) and the **results table** that opens with every pose and Smina field (affinity, RMSD, mode, …). The left pane shows the pose in the receptor. **Tools → Dock → Viewer** reopens that results window after it has been closed.
 
 ## Use cases
 

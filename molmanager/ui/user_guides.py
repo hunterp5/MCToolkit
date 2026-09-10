@@ -199,7 +199,13 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "tools_gen_conformations",
                 "Generate Conformations",
                 "Generate Conformations",
-                "Build 3D conformer ensembles.",
+                "Build 3D conformer ensembles (stochastic ETKDG).",
+            ),
+            _e(
+                "tools_gen_conformations_systematic",
+                "Systematic Conformations",
+                "Systematic Conformations",
+                "Build 3D ensembles with Open Babel Confab.",
             ),
             _e(
                 "tools_superpose_conformers",

@@ -42,6 +42,7 @@ from ...workers import (
     CalcWorker,
     ConformerGenerationWorker,
     SuperposeConformersWorker,
+    SystematicConformerWorker,
 )
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
 
@@ -63,6 +64,22 @@ class ConformersDescriptorsMixin:
         self._prepare_tool_dialog(d)
         d.setAttribute(Qt.WA_DeleteOnClose, True)
         d.accepted.connect(lambda *_, dlg=d: self._on_generate_conformations_dialog_accepted(dlg))
+        d.show()
+
+    def open_systematic_conformations(self):
+        if not self.headers or self._table_model.rowCount() == 0:
+            QMessageBox.information(
+                self,
+                "Generate Conformations — Systematic",
+                "Open a file or add rows so the table has molecules to process.",
+            )
+            return
+        from ..dialogs import SystematicConformationsDialog
+
+        d = SystematicConformationsDialog(len(self._selected_logical_rows()), self)
+        self._prepare_tool_dialog(d)
+        d.setAttribute(Qt.WA_DeleteOnClose, True)
+        d.accepted.connect(lambda *_, dlg=d: self._on_systematic_conformations_dialog_accepted(dlg))
         d.show()
 
     def _collect_mols_for_conformer_tools(
@@ -119,6 +136,49 @@ class ConformersDescriptorsMixin:
             ),
         )
 
+    def _on_systematic_conformations_dialog_accepted(self, d) -> None:
+        only_selected = d.only_selected_rows()
+        allowed = self._selected_oids_set() if only_selected else None
+        if self._abort_if_only_selected_but_empty(
+            only_selected, allowed, "Generate Conformations — Systematic"
+        ):
+            return
+        data = self._collect_mols_for_conformer_tools(only_selected=only_selected)
+        if not data:
+            QMessageBox.information(
+                self,
+                "Generate Conformations — Systematic",
+                "No parseable structures for those rows (in-memory molecules or chemistry in table cells).",
+            )
+            return
+        params = d.params()
+        from ...openbabel_confab import ensure_openbabel_confab_ready
+
+        missing = ensure_openbabel_confab_ready(params.obabel_path)
+        if missing:
+            QMessageBox.warning(self, "Generate Conformations — Systematic", missing)
+            return
+        self._conformer_output_options = d.output_options()
+        self._pending_conformer_initial_superpose = False
+        n = len(data)
+        from ...memory_guards import check_conformer_workload
+
+        guard = check_conformer_workload(n, int(getattr(params, "num_confs", 1) or 1))
+        if not guard.ok:
+            QMessageBox.warning(self, "Generate Conformations — Systematic", guard.message)
+            return
+        from ...workers import StrainEnergyParams
+
+        self._pending_strain_params = StrainEnergyParams(force_field="MMFF")
+        ps = self._tool_progress_state
+        self._begin_tool_progress("Systematic conformations", n)
+        self.process_queue.enqueue(
+            f"Systematic conformations ({n} structures)",
+            lambda ev, d=data, p=params, sigs=self.signals, prog=ps: SystematicConformerWorker(
+                d, p, sigs, cancel_event=ev, progress_state=prog
+            ),
+        )
+
     def cancel_active_tool_process(self) -> None:
         """Request cooperative cancellation of the process-queue job, Render 2D, and/or Smina."""
         r2d = self.cancel_render_2d_batch()
@@ -139,36 +199,25 @@ class ConformersDescriptorsMixin:
             )
 
     def on_conformers_finished(self, results: list) -> None:
-        self._finish_tool_progress("Generate conformations")
+        self._finish_tool_progress()
         output_opts = getattr(self, "_conformer_output_options", None)
         self._conformer_output_options = None
         added_rows = 0
         saved_count = 0
+        confs_col = "confs"
         self.table.setSortingEnabled(False)
         try:
             self.table.setUpdatesEnabled(False)
         except Exception:
             pass
         try:
-            if "confs" not in self.headers:
-                col_at = len(self.headers)
-                self.headers.append("confs")
-                self._table_model.insert_column_at(col_at, "confs", None)
+            confs_col = self._next_packed_ensemble_column("confs")
             pairs: list[tuple[int, str]] = []
-            sc = getattr(self, "_confs_blocks_sidecar", None)
-            if sc is None:
-                self._confs_blocks_sidecar = {}
-                sc = self._confs_blocks_sidecar
             for item in results:
                 if len(item) < 3:
                     continue
-                oid, cell = int(item[0]), str(item[2] or "")
-                light, b64 = demote_v1_cell_to_sidecar(cell, "confs")
-                if b64 is not None:
-                    sc[(oid, "confs")] = b64
-                pairs.append((oid, light))
-            if pairs:
-                self._table_model.set_column_text_by_oids("confs", pairs)
+                pairs.append((int(item[0]), str(item[2] or "")))
+            self._write_packed_ensemble_cells(confs_col, pairs)
             if output_opts is not None and output_opts.add_to_table:
                 added_rows = self._append_generated_conformers_as_rows(results)
             if output_opts is not None and output_opts.save_to_file and output_opts.save_path:
@@ -189,6 +238,8 @@ class ConformersDescriptorsMixin:
         parts = []
         if notice:
             parts.append(notice)
+        if confs_col != "confs":
+            parts.append(f"Wrote ensembles to “{confs_col}”.")
         if output_opts is not None and output_opts.add_to_table:
             parts.append(f"Added {added_rows} conformer row(s) to the table.")
         if output_opts is not None and output_opts.save_to_file and output_opts.save_path:
@@ -202,7 +253,7 @@ class ConformersDescriptorsMixin:
         n_ok = self._auto_open_first_conformer_results(
             results,
             title="View Conformers",
-            confs_column="confs",
+            confs_column=confs_col,
             initial_superpose=initial_superpose,
         )
         self._pending_strain_params = None
@@ -482,31 +533,20 @@ class ConformersDescriptorsMixin:
 
     def on_superpose_finished(self, results: list) -> None:
         self._finish_tool_progress("Superpose conformers")
+        superpose_col = "superpose"
         self.table.setSortingEnabled(False)
         try:
             self.table.setUpdatesEnabled(False)
         except Exception:
             pass
         try:
-            if "superpose" not in self.headers:
-                col_at = len(self.headers)
-                self.headers.append("superpose")
-                self._table_model.insert_column_at(col_at, "superpose", None)
+            superpose_col = self._next_packed_ensemble_column("superpose")
             pairs: list[tuple[int, str]] = []
-            sc = getattr(self, "_confs_blocks_sidecar", None)
-            if sc is None:
-                self._confs_blocks_sidecar = {}
-                sc = self._confs_blocks_sidecar
             for item in results:
                 if len(item) < 3:
                     continue
-                oid, cell = int(item[0]), str(item[2] or "")
-                light, b64 = demote_v1_cell_to_sidecar(cell, "superpose")
-                if b64 is not None:
-                    sc[(oid, "superpose")] = b64
-                pairs.append((oid, light))
-            if pairs:
-                self._table_model.set_column_text_by_oids("superpose", pairs)
+                pairs.append((int(item[0]), str(item[2] or "")))
+            self._write_packed_ensemble_cells(superpose_col, pairs)
             self.schedule_calculate_global_bounds()
             self.table.setSortingEnabled(False)
         finally:
@@ -514,11 +554,17 @@ class ConformersDescriptorsMixin:
                 self.table.setUpdatesEnabled(True)
             except Exception:
                 pass
-        self.status_label.setText(self._consume_partial_results_notice() or "Done.")
+        notice = self._consume_partial_results_notice()
+        parts = []
+        if notice:
+            parts.append(notice)
+        if superpose_col != "superpose":
+            parts.append(f"Wrote overlays to “{superpose_col}”.")
+        self.status_label.setText(" ".join(parts) if parts else "Done.")
         n_ok = self._auto_open_first_conformer_results(
             results,
             title="Superpose Conformers",
-            confs_column="superpose",
+            confs_column=superpose_col,
             initial_superpose=True,
         )
         self._pending_strain_params = None
@@ -630,15 +676,9 @@ class ConformersDescriptorsMixin:
             pass
         ok_n = 0
         viewer_mols: list[Chem.Mol] = []
+        superpose_col = "superpose"
         try:
-            if "superpose" not in self.headers:
-                col_at = len(self.headers)
-                self.headers.append("superpose")
-                self._table_model.insert_column_at(col_at, "superpose", None)
-            sc = getattr(self, "_confs_blocks_sidecar", None)
-            if sc is None:
-                self._confs_blocks_sidecar = {}
-                sc = self._confs_blocks_sidecar
+            superpose_col = self._next_packed_ensemble_column("superpose")
             for oid, mol, meta in results:
                 if mol is None or not meta.get("ok"):
                     continue
@@ -656,10 +696,7 @@ class ConformersDescriptorsMixin:
                     "ref_oid": int(ref_oid),
                 }
                 cell = pack_mols_as_confs_cell(ensemble_meta, viewer_mols)
-                light, b64 = demote_v1_cell_to_sidecar(cell, "superpose")
-                if b64 is not None:
-                    sc[(int(ref_oid), "superpose")] = b64
-                self._table_model.set_column_text_by_oids("superpose", [(int(ref_oid), light)])
+                self._write_packed_ensemble_cells(superpose_col, [(int(ref_oid), cell)])
             self.schedule_calculate_global_bounds()
             self.table.setSortingEnabled(False)
         finally:
@@ -684,7 +721,7 @@ class ConformersDescriptorsMixin:
                 self._open_conformer_results_viewer(
                     payload,
                     title="Superpose Structures",
-                    confs_column="superpose",
+                    confs_column=superpose_col,
                     oid=int(ref_oid),
                     initial_superpose=True,
                     mols=viewer_mols,
@@ -694,7 +731,7 @@ class ConformersDescriptorsMixin:
                 self._open_conformer_results_viewer(
                     payload,
                     title="Superpose Structures",
-                    confs_column="superpose",
+                    confs_column=superpose_col,
                     oid=int(ref_oid),
                     initial_superpose=False,
                     mols=viewer_mols[:1],
@@ -703,6 +740,8 @@ class ConformersDescriptorsMixin:
         status = f"Superpose structures: packed {ok_n} onto reference OID {ref_oid}"
         if failed:
             status += f" ({failed} failed)"
+        if superpose_col != "superpose":
+            status += f"; wrote overlays to “{superpose_col}”"
         self.status_label.setText(status + ".")
 
     def _open_conformer_results_viewer(
@@ -828,6 +867,30 @@ class ConformersDescriptorsMixin:
             out.append(col)
             used.add(col)
         return out
+
+    def _next_packed_ensemble_column(self, base: str) -> str:
+        """Return a unique packed-ensemble header, inserting it when it is not already in the table."""
+        col = self._unique_table_column_names([base])[0]
+        if col not in self.headers:
+            col_at = len(self.headers)
+            self.headers.append(col)
+            self._table_model.insert_column_at(col_at, col, None)
+        return col
+
+    def _write_packed_ensemble_cells(self, column: str, pairs: list[tuple[int, str]]) -> None:
+        """Store packed ensembles under *column*, demoting payloads into the sidecar keyed by that header."""
+        sc = getattr(self, "_confs_blocks_sidecar", None)
+        if sc is None:
+            self._confs_blocks_sidecar = {}
+            sc = self._confs_blocks_sidecar
+        out: list[tuple[int, str]] = []
+        for oid, cell in pairs:
+            light, b64 = demote_v1_cell_to_sidecar(str(cell or ""), column)
+            if b64 is not None:
+                sc[(int(oid), column)] = b64
+            out.append((int(oid), light))
+        if out:
+            self._table_model.set_column_text_by_oids(column, out)
 
     def open_calc(self):
         if not self.headers:

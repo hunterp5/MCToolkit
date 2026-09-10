@@ -38,4 +38,4 @@ Molecules that already have multiple conformers available in the working context
 
 ## Tips and limits
 
-Alignment quality depends on a common substructure. Flexible tails may still diverge after core overlay. This does not dock to a protein.
+Alignment quality depends on a common substructure. Flexible tails may still diverge after core overlay. This does not dock to a protein. If a **superpose** column already exists, new overlays go to **superpose (1)** (then **superpose (2)**, …) so the previous column is kept.

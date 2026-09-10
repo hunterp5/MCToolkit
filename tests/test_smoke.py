@@ -112,6 +112,14 @@ def test_easydock_guide_html(qapp):  # noqa: ARG001
     assert "Topic unavailable" not in h
 
 
+def test_systematic_conformations_guide_html(qapp):  # noqa: ARG001
+    from molmanager.ui.user_guides import guide_html
+
+    h = guide_html("tools_gen_conformations_systematic")
+    assert "Confab" in h and "Systematic" in h
+    assert "Topic unavailable" not in h
+
+
 def test_smina_dock_dialog_constructible(qapp):  # noqa: ARG001
     from molmanager.ui.smina_dock import SminaDockDialog
 

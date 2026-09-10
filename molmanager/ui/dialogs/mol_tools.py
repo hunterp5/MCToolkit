@@ -51,6 +51,7 @@ from ..strings import (
     TOOL_REMOVE_EXPLICIT_HYDROGENS,
 )
 from ...fragment_decomposition import detect_fragment_column_prefixes
+from ...science_citations import stochastic_conformations_dialog_footer_html
 from ...workers import (
     ConformerGenParams,
     SuperposeParams,
@@ -75,36 +76,55 @@ class ConformerOutputOptions:
     save_path: str | None = None
 
 
+def conformer_options_group(*checkboxes: QWidget) -> QGroupBox:
+    """Checkbox cluster used by Generate Conformations dialogs."""
+    gb = QGroupBox("Options")
+    layout = QVBoxLayout(gb)
+    layout.setContentsMargins(8, 6, 8, 6)
+    layout.setSpacing(4)
+    for widget in checkboxes:
+        if widget is not None:
+            layout.addWidget(widget)
+    return gb
+
+
+def citation_footer_label(html: str, parent: QWidget | None = None) -> QLabel:
+    """Rich-text Method / citation line used under conformation dialogs."""
+    ref_lbl = QLabel(html, parent)
+    ref_lbl.setWordWrap(True)
+    ref_lbl.setTextFormat(Qt.RichText)
+    ref_lbl.setOpenExternalLinks(True)
+    ref_lbl.setStyleSheet("color: palette(mid); font-size: 11px;")
+    return ref_lbl
+
+
 class ConformerOutputOptionsPanel(QWidget):
-    """Checkboxes and path picker for table append / SDF export."""
+    """Add-as-entries checkbox plus a one-line Save to SDF path picker."""
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
+        layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(6)
 
         self.add_to_table_cb = QCheckBox("Add as Entries")
         self.add_to_table_cb.setToolTip(
             "Append each generated conformer as a new table row (Parent OID and Conformer columns)."
         )
-        layout.addWidget(self.add_to_table_cb)
 
         self.save_to_file_cb = QCheckBox("Save to SDF")
         self.save_to_file_cb.setToolTip("Write all generated conformers to an SDF file.")
         self.save_to_file_cb.toggled.connect(self._sync_save_path_enabled)
         layout.addWidget(self.save_to_file_cb)
 
-        path_row = QHBoxLayout()
         self.save_path_edit = QLineEdit()
         self.save_path_edit.setPlaceholderText("conformers.sdf")
         self.save_path_edit.setEnabled(False)
-        path_row.addWidget(self.save_path_edit, 1)
+        layout.addWidget(self.save_path_edit, 1)
         self.save_browse_btn = QPushButton("Browse…")
         self.save_browse_btn.setEnabled(False)
         self.save_browse_btn.clicked.connect(self._browse_save_path)
-        path_row.addWidget(self.save_browse_btn)
-        layout.addLayout(path_row)
+        layout.addWidget(self.save_browse_btn)
 
     def _sync_save_path_enabled(self, enabled: bool) -> None:
         self.save_path_edit.setEnabled(bool(enabled))
@@ -511,132 +531,12 @@ class RemoveExplicitHydrogensDialog(QDialog):
         )
 
 
-class ConformerEmbedAdvancedPanel(QWidget):
-    """Optional ETKDG / hydrogen knobs. Unchecked uses built-in defaults."""
-
-    def __init__(self, parent: QWidget | None = None):
-        super().__init__(parent)
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(4)
-
-        self.advanced_cb = QCheckBox("Advanced")
-        self.advanced_cb.setChecked(False)
-        self.advanced_cb.setToolTip(
-            "ETKDG embedder flags and hydrogen handling. Leave off to use MolManager defaults."
-        )
-        root.addWidget(self.advanced_cb)
-
-        self._box = QGroupBox(self)
-        self._box.setTitle("")
-        inner = QWidget()
-        form = QFormLayout(inner)
-        form.setSpacing(4)
-        form.setContentsMargins(0, 0, 0, 0)
-
-        self.enforce_chirality_cb = QCheckBox("Enforce chirality")
-        self.enforce_chirality_cb.setChecked(True)
-        self.enforce_chirality_cb.setToolTip(
-            "Preserve specified stereochemistry during ETKDG embedding."
-        )
-        form.addRow(self.enforce_chirality_cb)
-
-        self.random_coords_cb = QCheckBox("Use random coordinates")
-        self.random_coords_cb.setChecked(False)
-        self.random_coords_cb.setToolTip(
-            "Start from random coords instead of distance-geometry embedding. "
-            "Can help stubborn rings, usually slower and noisier."
-        )
-        form.addRow(self.random_coords_cb)
-
-        self.exp_torsions_cb = QCheckBox("Experimental torsion preferences")
-        self.exp_torsions_cb.setChecked(True)
-        self.exp_torsions_cb.setToolTip(
-            "Use ETKDG experimental torsion-angle preferences (recommended)."
-        )
-        form.addRow(self.exp_torsions_cb)
-
-        self.small_ring_cb = QCheckBox("Small-ring torsions")
-        self.small_ring_cb.setChecked(True)
-        self.small_ring_cb.setToolTip("ETKDG small-ring torsion corrections.")
-        form.addRow(self.small_ring_cb)
-
-        self.macrocycle_cb = QCheckBox("Macrocycle torsions")
-        self.macrocycle_cb.setChecked(True)
-        self.macrocycle_cb.setToolTip("ETKDG macrocycle torsion corrections.")
-        form.addRow(self.macrocycle_cb)
-
-        self.basic_knowledge_cb = QCheckBox("Basic knowledge terms")
-        self.basic_knowledge_cb.setChecked(True)
-        self.basic_knowledge_cb.setToolTip("ETKDG basic-knowledge terms (planar aromatics, etc.).")
-        form.addRow(self.basic_knowledge_cb)
-
-        self.heavy_rms_cb = QCheckBox("Heavy atoms only for RMS")
-        self.heavy_rms_cb.setChecked(True)
-        self.heavy_rms_cb.setToolTip(
-            "Embed RMS prune and post-minimize RMS prune ignore hydrogens."
-        )
-        form.addRow(self.heavy_rms_cb)
-
-        self.keep_hs_cb = QCheckBox("Keep explicit hydrogens")
-        self.keep_hs_cb.setChecked(False)
-        self.keep_hs_cb.setToolTip(
-            "Leave hydrogens on after minimization (useful for some docking exports)."
-        )
-        form.addRow(self.keep_hs_cb)
-
-        self.max_embed_sb = QSpinBox()
-        self.max_embed_sb.setRange(0, 2000)
-        self.max_embed_sb.setValue(0)
-        self.max_embed_sb.setSpecialValueText("0 = ETKDG default")
-        self.max_embed_sb.setToolTip(
-            "Max embedding attempts per conformer (ETKDG maxIterations). "
-            "0 leaves the RDKit default (typically 10 × number of atoms)."
-        )
-        form.addRow("Max embed attempts:", self.max_embed_sb)
-
-        box_layout = QVBoxLayout(self._box)
-        box_layout.setContentsMargins(8, 8, 8, 8)
-        box_layout.addWidget(inner)
-        root.addWidget(self._box)
-        self.advanced_cb.toggled.connect(self._on_toggled)
-        self._on_toggled(False)
-
-    def isChecked(self) -> bool:
-        return bool(self.advanced_cb.isChecked())
-
-    def setChecked(self, on: bool) -> None:
-        self.advanced_cb.setChecked(bool(on))
-
-    def _on_toggled(self, on: bool) -> None:
-        self._box.setVisible(bool(on))
-        win = self.window()
-        if win is not None:
-            win.adjustSize()
-
-    def values(self) -> dict:
-        """Advanced fields to merge into :class:`ConformerGenParams`."""
-        if not self.isChecked():
-            return {}
-        return {
-            "enforce_chirality": bool(self.enforce_chirality_cb.isChecked()),
-            "use_random_coords": bool(self.random_coords_cb.isChecked()),
-            "use_exp_torsion_prefs": bool(self.exp_torsions_cb.isChecked()),
-            "use_small_ring_torsions": bool(self.small_ring_cb.isChecked()),
-            "use_macrocycle_torsions": bool(self.macrocycle_cb.isChecked()),
-            "use_basic_knowledge": bool(self.basic_knowledge_cb.isChecked()),
-            "only_heavy_atoms_for_rms": bool(self.heavy_rms_cb.isChecked()),
-            "max_embed_attempts": int(self.max_embed_sb.value()),
-            "keep_hydrogens": bool(self.keep_hs_cb.isChecked()),
-        }
-
-
 class GenerateConformationsDialog(QDialog):
-    """Configure ETKDG embedding, minimizer, energy window, optional alignment, and table scope."""
+    """Configure stochastic ETKDG embedding, minimizer, energy window, optional alignment, and table scope."""
 
     def __init__(self, selected_row_count: int = 0, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Generate Conformations")
+        self.setWindowTitle("Generate Conformations — Stochastic")
         self.setMinimumWidth(420)
         self.resize(460, 0)
         self._have_selection = selected_row_count > 0
@@ -716,6 +616,16 @@ class GenerateConformationsDialog(QDialog):
         self.max_iters_sb.setToolTip("Maximum minimizer iterations per conformer.")
         form.addRow("Max iterations:", self.max_iters_sb)
 
+        self.max_embed_sb = QSpinBox()
+        self.max_embed_sb.setRange(0, 2000)
+        self.max_embed_sb.setValue(0)
+        self.max_embed_sb.setSpecialValueText("0 = ETKDG default")
+        self.max_embed_sb.setToolTip(
+            "Max embedding attempts per conformer (ETKDG maxIterations). "
+            "0 leaves the RDKit default (typically 10 × number of atoms)."
+        )
+        form.addRow("Max embed attempts:", self.max_embed_sb)
+
         self.align_pat_edit = QLineEdit()
         self.align_pat_edit.setPlaceholderText("optional SMILES/SMARTS")
         self.align_pat_edit.setToolTip(
@@ -734,8 +644,48 @@ class GenerateConformationsDialog(QDialog):
 
         root.addLayout(form)
 
-        self.advanced_panel = ConformerEmbedAdvancedPanel(self)
-        root.addWidget(self.advanced_panel)
+        self.enforce_chirality_cb = QCheckBox("Enforce chirality")
+        self.enforce_chirality_cb.setChecked(True)
+        self.enforce_chirality_cb.setToolTip(
+            "Preserve specified stereochemistry during ETKDG embedding."
+        )
+
+        self.random_coords_cb = QCheckBox("Use random coordinates")
+        self.random_coords_cb.setChecked(False)
+        self.random_coords_cb.setToolTip(
+            "Start from random coords instead of distance-geometry embedding. "
+            "Can help stubborn rings, usually slower and noisier."
+        )
+
+        self.exp_torsions_cb = QCheckBox("Experimental torsion preferences")
+        self.exp_torsions_cb.setChecked(True)
+        self.exp_torsions_cb.setToolTip(
+            "Use ETKDG experimental torsion-angle preferences (recommended)."
+        )
+
+        self.small_ring_cb = QCheckBox("Small-ring torsions")
+        self.small_ring_cb.setChecked(True)
+        self.small_ring_cb.setToolTip("ETKDG small-ring torsion corrections.")
+
+        self.macrocycle_cb = QCheckBox("Macrocycle torsions")
+        self.macrocycle_cb.setChecked(True)
+        self.macrocycle_cb.setToolTip("ETKDG macrocycle torsion corrections.")
+
+        self.basic_knowledge_cb = QCheckBox("Basic knowledge terms")
+        self.basic_knowledge_cb.setChecked(True)
+        self.basic_knowledge_cb.setToolTip("ETKDG basic-knowledge terms (planar aromatics, etc.).")
+
+        self.heavy_rms_cb = QCheckBox("Heavy atoms only for RMS")
+        self.heavy_rms_cb.setChecked(True)
+        self.heavy_rms_cb.setToolTip(
+            "Embed RMS prune and post-minimize RMS prune ignore hydrogens."
+        )
+
+        self.keep_hs_cb = QCheckBox("Keep explicit hydrogens")
+        self.keep_hs_cb.setChecked(False)
+        self.keep_hs_cb.setToolTip(
+            "Leave hydrogens on after minimization (useful for some docking exports)."
+        )
 
         self.only_selected_cb = QCheckBox("Selected Rows Only")
         self._only_selected_scope_prefix = "Selected Rows Only"
@@ -745,10 +695,24 @@ class GenerateConformationsDialog(QDialog):
             )
         else:
             self.only_selected_cb.setEnabled(False)
-        root.addWidget(self.only_selected_cb)
 
         self.output_panel = ConformerOutputOptionsPanel(self)
+        root.addWidget(
+            conformer_options_group(
+                self.enforce_chirality_cb,
+                self.random_coords_cb,
+                self.exp_torsions_cb,
+                self.small_ring_cb,
+                self.macrocycle_cb,
+                self.basic_knowledge_cb,
+                self.heavy_rms_cb,
+                self.keep_hs_cb,
+                self.only_selected_cb,
+                self.output_panel.add_to_table_cb,
+            )
+        )
         root.addWidget(self.output_panel)
+        root.addWidget(citation_footer_label(stochastic_conformations_dialog_footer_html()))
 
         box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         box.accepted.connect(self._try_accept)
@@ -779,7 +743,15 @@ class GenerateConformationsDialog(QDialog):
             align_pattern_is_smarts=bool(self.align_smarts_cb.isChecked()),
             post_min_rms_threshold=float(self.post_min_rms_sb.value()),
             max_keep=int(self.max_keep_sb.value()),
-            **self.advanced_panel.values(),
+            enforce_chirality=bool(self.enforce_chirality_cb.isChecked()),
+            use_random_coords=bool(self.random_coords_cb.isChecked()),
+            use_exp_torsion_prefs=bool(self.exp_torsions_cb.isChecked()),
+            use_small_ring_torsions=bool(self.small_ring_cb.isChecked()),
+            use_macrocycle_torsions=bool(self.macrocycle_cb.isChecked()),
+            use_basic_knowledge=bool(self.basic_knowledge_cb.isChecked()),
+            only_heavy_atoms_for_rms=bool(self.heavy_rms_cb.isChecked()),
+            max_embed_attempts=int(self.max_embed_sb.value()),
+            keep_hydrogens=bool(self.keep_hs_cb.isChecked()),
         )
 
 

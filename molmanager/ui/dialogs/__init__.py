@@ -41,6 +41,7 @@ from .mol_tools import (
     SuperposeConformersDialog,
     SuperposeStructuresDialog,
 )
+from .systematic_conformations import SystematicConformationsDialog
 from .mmp import MmpDialog, MmpDialogParams
 from .activity_cliff import ActivityCliffDialog, ActivityCliffDialogParams
 from .mmp_neighborhood import MmpNeighborhoodDialog, MmpNeighborhoodDialogParams
@@ -86,6 +87,7 @@ __all__ = [
     "EasyDockDialog",
     "FPSimilarityDialog",
     "GenerateConformationsDialog",
+    "SystematicConformationsDialog",
     "MmpDialog",
     "MmpDialogParams",
     "PermeabilityPredictorDialog",

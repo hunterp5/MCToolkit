@@ -95,6 +95,7 @@ from .protomer_generator import ProtomerGeneratorSignals, ProtomerGeneratorWorke
 from .protonate_worker import ProtonateSignals, ProtonateWorker
 from .pdbqt_generator import PdbqtGenSignals, PdbqtGenRequest, PdbqtGeneratorWorker
 from .easydock_worker import EasyDockWorker
+from .openbabel_confab_worker import SystematicConformerWorker
 from .fragment_decomposition import FragmentDecompositionWorker
 from .fragment_recomposition import FragmentRecompositionWorker
 from .mmp_worker import MmpAnalysisWorker
@@ -172,6 +173,7 @@ __all__ = [
     "PdbqtGenRequest",
     "PdbqtGeneratorWorker",
     "EasyDockWorker",
+    "SystematicConformerWorker",
     "describe_custom_calc_error",
     "fingerprint_bitvect_for_ui_choice",
     "materialize_pool_fingerprints",

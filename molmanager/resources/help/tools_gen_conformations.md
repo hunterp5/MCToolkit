@@ -1,6 +1,8 @@
-# Generate Conformations
+# Generate Conformations (Stochastic)
 
-Generate Conformations builds 3D conformer ensembles per molecule with energy window, force field, and pruning controls, optionally writing to the table or SDF. When generation finishes, a 3D results window opens with per-conformer **E**, **ΔE vs ref**, **ΔE vs min**, **Pop. %**, and **RMSD**.
+Generate Conformations → **Stochastic** builds 3D conformer ensembles per molecule with RDKit ETKDG, energy window, force field, and pruning controls, optionally writing to the table or SDF. When generation finishes, a 3D results window opens with per-conformer **E**, **ΔE vs ref**, **ΔE vs min**, **Pop. %**, and **RMSD**.
+
+For a systematic torsion search instead of stochastic ETKDG, use **Generate Conformations → Systematic…** (Open Babel Confab).
 
 ## Goal
 
@@ -24,16 +26,16 @@ Scoped rows with valid structures; **Selected Rows Only** when checked. Output m
 - **RMS prune (post-min)** - after minimization, drop higher-energy poses within this RMS of a kept conformer (0 = off).
 - **Max keep** - cap the ensemble to this many lowest-energy survivors (0 = no extra cap).
 - **Max iterations** - minimizer budget.
+- **Max embed attempts** - ETKDG embedding attempts per conformer (0 = RDKit default).
 - **Align on** - optional SMILES (or SMARTS) substructure used to overlay the ensemble after generation. Leave empty to keep embedder orientations.
-- **Advanced** - check to show ETKDG flags (chirality, random coords, torsion preferences, small-ring / macrocycle torsions, basic knowledge, heavy-atom RMS, max embed attempts) and **Keep explicit hydrogens**.
-- **Selected Rows Only** - scope.
-- **Add as Entries** / **Save to SDF** (+ **Browse...**).
+- **Options** - ETKDG flags (chirality, random coords, torsion preferences, small-ring / macrocycle torsions, basic knowledge, heavy-atom RMS), **Keep explicit hydrogens**, **Selected Rows Only**, and **Add as Entries**.
+- **Save to SDF** - path and **Browse...** on one line below Options.
 
 ## Workflow
 
 1. Select molecules and set ensemble size / energy window.
 2. Choose force field, seed, RMS pruning, max keep, and optional **Align on** substructure.
-3. Check **Advanced** only when you need extra ETKDG or hydrogen control.
+3. Set ETKDG flags and hydrogen handling under **Options** when you need them.
 4. Run generation (watch **Processes**).
 5. Inspect the 3D results window: click a row to show that pose; check **Superpose** to overlay the ensemble, or **Selected Conformers** to overlay the table selection with a color legend. **View Conformers** on a packed cell reopens the same energy table. If several rows were processed, the window is the first ensemble; open the others from the table.
 6. Optional: add results to the table and/or save SDF.
@@ -47,4 +49,4 @@ Scoped rows with valid structures; **Selected Rows Only** when checked. Output m
 
 ## Tips and limits
 
-Cost scales with atoms × conformers × rows. Force-field minima are not protein-aware. Failed embeddings skip or partially fill - check logs/status. Energies in the results window are vacuum molecular-mechanics totals (kcal/mol), not protein-bound or quantum-chemical values. The force field is the one chosen in this dialog (MMFF, MMFF94s, or UFF). Optional **Align on** overlays the ensemble on a common substructure; flexible tails may still diverge after core overlay. Embed RMS prune happens before minimization; use **RMS prune (post-min)** to collapse poses that relaxed onto the same basin.
+Cost scales with atoms × conformers × rows. Force-field minima are not protein-aware. Failed embeddings skip or partially fill - check logs/status. Energies in the results window are vacuum molecular-mechanics totals (kcal/mol), not protein-bound or quantum-chemical values. The force field is the one chosen in this dialog (MMFF, MMFF94s, or UFF). Optional **Align on** overlays the ensemble on a common substructure; flexible tails may still diverge after core overlay. Embed RMS prune happens before minimization; use **RMS prune (post-min)** to collapse poses that relaxed onto the same basin. If a **confs** column already exists, new ensembles go to **confs (1)** (then **confs (2)**, …) so the previous column is kept.

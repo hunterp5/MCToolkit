@@ -250,6 +250,7 @@ class ChemicalTableApp(
         self._plot_dialogs: list = []
         self._floating_result_dialogs: list = []
         self._dock_result_windows: list = []
+        self._last_dock_results: dict | None = None
         self._dock_results_mode = False
         self._scope_sync_targets: list = []
         self._cached_plot_selected_oids: frozenset[int] | None = None
@@ -829,15 +830,26 @@ class ChemicalTableApp(
 
         conformations_menu = tools.addMenu("&Conformations")
         conformations_menu.setToolTipsVisible(True)
+        gen_conf_menu = conformations_menu.addMenu("Generate Conformations")
+        gen_conf_menu.setToolTipsVisible(True)
         act_gen_conf = QAction(
-            "Generate Conformations…",
+            "Stochastic…",
             self,
             triggered=self.open_generate_conformations,
         )
         act_gen_conf.setToolTip(
-            "Build 3D conformer ensembles and open a results window with energies, ΔE, population, and RMSD."
+            "Build ensembles with RDKit ETKDG (stochastic distance geometry), then minimize and prune."
         )
-        conformations_menu.addAction(act_gen_conf)
+        gen_conf_menu.addAction(act_gen_conf)
+        act_sys_conf = QAction(
+            "Systematic…",
+            self,
+            triggered=self.open_systematic_conformations,
+        )
+        act_sys_conf.setToolTip(
+            "Build ensembles with Open Babel Confab (systematic torsion search)."
+        )
+        gen_conf_menu.addAction(act_sys_conf)
 
         superpose_menu = conformations_menu.addMenu("&Superpose")
         superpose_menu.setToolTipsVisible(True)
@@ -926,6 +938,14 @@ class ChemicalTableApp(
             "Run Smina as a file-based CLI on PDBQT inputs (log only; no table writeback)."
         )
         dock_menu.addAction(act_dock_smina)
+        dock_menu.addSeparator()
+        act_dock_viewer = QAction("Viewer", self, triggered=self.open_dock_results_viewer)
+        act_dock_viewer.setToolTip(
+            "Show the last docking results window, even after it has been closed."
+        )
+        act_dock_viewer.setEnabled(False)
+        self._act_dock_viewer = act_dock_viewer
+        dock_menu.addAction(act_dock_viewer)
 
         decomp_menu = tools.addMenu("&R-Group Decomposition")
         decomp_menu.setToolTipsVisible(True)
@@ -1407,6 +1427,13 @@ class ChemicalTableApp(
         return False
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        if getattr(self, "_dock_results_mode", False):
+            if not getattr(self, "_dock_results_force_close", False):
+                self.hide()
+                event.ignore()
+                return
+            super().closeEvent(event)
+            return
         self._prepare_application_shutdown()
         super().closeEvent(event)
 
@@ -1486,6 +1513,18 @@ class ChemicalTableApp(
             except RuntimeError:
                 pass
         self._floating_result_dialogs = []
+
+        from ..qt_widget_utils import qobject_is_deleted
+
+        for win in list(getattr(self, "_dock_result_windows", [])):
+            if qobject_is_deleted(win):
+                continue
+            try:
+                win._dock_results_force_close = True
+                win.close()
+            except RuntimeError:
+                pass
+        self._dock_result_windows = []
 
         QApplication.processEvents()
 

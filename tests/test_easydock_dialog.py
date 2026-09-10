@@ -122,7 +122,10 @@ def test_dock_menu_includes_easydock(qapp):  # noqa: ARG001
     labels = [a.text() for a in dock_actions if a.text()]
     assert any(t.startswith("EasyDock") for t in labels)
     assert any(t.startswith("Smina") for t in labels)
+    assert any(t.replace("&", "") == "Viewer" for t in labels)
     assert not any("Smina CLI" in t for t in labels)
+    viewer_act = next(a for a in dock_actions if a.text().replace("&", "") == "Viewer")
+    assert viewer_act.isEnabled() is False
     predict = None
     for act in tools.actions():
         menu = act.menu()
@@ -144,6 +147,7 @@ def test_dock_menu_includes_easydock(qapp):  # noqa: ARG001
     prep_labels = [a.text() for a in prepare.actions() if a.text()]
     assert any("PDBQT" in t for t in prep_labels)
     assert any("PDB" in t for t in prep_labels)
+    w.close()
 
 
 def test_open_dock_results_window_lists_smina_fields(qapp, tmp_path, monkeypatch):  # noqa: ARG001
@@ -173,9 +177,7 @@ def test_open_dock_results_window_lists_smina_fields(qapp, tmp_path, monkeypatch
         encoding="utf-8",
     )
     parent = ChemicalTableApp()
-    win = parent.open_dock_results_window(
-        [mol], title="Dock results", receptor_path=str(rec)
-    )
+    win = parent.open_dock_results_window([mol], title="Dock results", receptor_path=str(rec))
     assert win is not None
     assert "minimizedAffinity" in win.headers
     assert "rmsd_lb" in win.headers
@@ -232,3 +234,48 @@ def test_open_dock_results_window_lists_smina_fields(qapp, tmp_path, monkeypatch
     assert "Color" in main_titles
     win.close()
     parent.close()
+
+
+def test_dock_viewer_reopens_closed_results_window(qapp, tmp_path, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtWidgets import QApplication
+    from rdkit import Chem
+    from rdkit.Geometry import Point3D
+
+    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
+    from molmanager.ui.main_window import ChemicalTableApp
+
+    monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
+
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    conf = Chem.Conformer(mol.GetNumAtoms())
+    conf.SetAtomPosition(0, Point3D(1.0, 0.0, 0.0))
+    conf.SetAtomPosition(1, Point3D(2.4, 0.0, 0.0))
+    conf.SetAtomPosition(2, Point3D(3.0, 1.1, 0.0))
+    mol.AddConformer(conf, assignId=True)
+    mol.SetProp("minimizedAffinity", "-7.250")
+    rec = tmp_path / "rec.pdbqt"
+    rec.write_text(
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00  0.00     0.000 C \n",
+        encoding="utf-8",
+    )
+    parent = ChemicalTableApp()
+    try:
+        assert parent._act_dock_viewer.isEnabled() is False
+        win = parent.open_dock_results_window([mol], title="Dock results", receptor_path=str(rec))
+        assert win is not None
+        assert parent._act_dock_viewer.isEnabled() is True
+        raised = parent.open_dock_results_viewer()
+        assert raised is win
+        win.close()
+        QApplication.processEvents()
+        assert win.isVisible() is False
+        again = parent.open_dock_results_viewer()
+        assert again is win
+        assert again.isVisible() is True
+        assert again._table_model.rowCount() == 1
+        assert "minimizedAffinity" in again.headers
+        aff_col = again.headers.index("minimizedAffinity")
+        assert again._table_model.cell_text(0, aff_col) == "-7.250"
+    finally:
+        parent.close()

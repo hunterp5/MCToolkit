@@ -27,6 +27,7 @@ _PACKAGE_ROOT = Path(__file__).resolve().parent
 # Basenames searched under ``resources/bin/<platform>/`` (first match wins).
 _TOOL_BINARIES: dict[str, tuple[str, ...]] = {
     "smina": ("smina.exe", "smina"),
+    "obabel": ("obabel.exe", "obabel"),
 }
 
 
@@ -69,9 +70,40 @@ def resolve_bundled_executable(tool: str) -> Path | None:
     return None
 
 
+def pip_openbabel_executable() -> Path | None:
+    """``obabel`` shipped inside the pip ``openbabel`` wheel (``site-packages/openbabel/bin``)."""
+    try:
+        import importlib.util
+
+        spec = importlib.util.find_spec("openbabel")
+    except (ImportError, ValueError):
+        return None
+    origin = getattr(spec, "origin", None) if spec is not None else None
+    if not origin:
+        return None
+    root = Path(origin).resolve().parent
+    for name in _TOOL_BINARIES.get("obabel", ("obabel.exe", "obabel")):
+        candidate = root / "bin" / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _interpreter_scripts_executable(names: tuple[str, ...]) -> Path | None:
+    """Look next to the current Python (venv ``Scripts`` / conda prefix)."""
+    bindir = Path(sys.executable).resolve().parent
+    search = (bindir, bindir / "Scripts")
+    for directory in search:
+        for name in names:
+            candidate = directory / name
+            if candidate.is_file():
+                return candidate
+    return None
+
+
 def default_external_executable(tool: str) -> str:
     """
-    Prefer a bundled binary; otherwise return the bare tool name for PATH lookup.
+    Prefer a bundled binary, then a pip/venv install, otherwise the bare tool name.
 
     Set ``MOLMANAGER_BUNDLE_DIR`` to point at a directory containing platform binaries.
     """
@@ -80,11 +112,18 @@ def default_external_executable(tool: str) -> str:
         return str(bundled)
     key = (tool or "").strip().lower()
     names = _TOOL_BINARIES.get(key)
-    if not names:
-        return tool
-    if sys.platform.startswith("win"):
-        return names[0]
-    return names[-1]
+    if key == "obabel":
+        pip_exe = pip_openbabel_executable()
+        if pip_exe is not None:
+            return str(pip_exe)
+    if names:
+        scripts_exe = _interpreter_scripts_executable(names)
+        if scripts_exe is not None:
+            return str(scripts_exe)
+        if sys.platform.startswith("win"):
+            return names[0]
+        return names[-1]
+    return tool
 
 
 def resolve_user_executable(user_path: str) -> str | None:
@@ -140,12 +179,12 @@ def _openbabel_data_dir(exe_dir: Path) -> Path | None:
     return None
 
 
-def smina_launch_env(exe: str) -> dict[str, str]:
+def openbabel_launch_env(exe: str) -> dict[str, str]:
     """
-    Environment so Smina's OpenBabel can load format plugins and data files.
+    Environment so Open Babel can load format plugins and data files.
 
-    Conda-forge Smina links OpenBabel. Without ``BABEL_LIBDIR`` pointing at the
-    ``.obf`` plugins, PDBQT files fail to open even when they exist.
+    Conda-forge Open Babel (and Smina linked against it) needs ``BABEL_LIBDIR``
+    pointing at the ``.obf`` plugins, otherwise format I/O fails even when files exist.
     """
     text = (exe or "").strip()
     if not text:
@@ -162,6 +201,11 @@ def smina_launch_env(exe: str) -> dict[str, str]:
     if data_dir is not None:
         env["BABEL_DATADIR"] = str(data_dir)
     return env
+
+
+def smina_launch_env(exe: str) -> dict[str, str]:
+    """Environment so Smina's OpenBabel can load format plugins and data files."""
+    return openbabel_launch_env(exe)
 
 
 def models_dir() -> Path:

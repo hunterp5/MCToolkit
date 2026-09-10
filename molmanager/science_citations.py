@@ -105,6 +105,19 @@ EASYDOCK = (
     "(Meeko ligand PDBQT prep; AutoDock Vina or Smina engine; MolManager writes scores/poses to the table)."
 )
 
+CONFAB = (
+    "Confab (Open Babel systematic conformer generator): O'Boyle, N. M.; Vandermeersch, T.; "
+    "Flynn, C. J.; Maguire, A. R.; Hutchison, G. R. Confab — Systematic generation of diverse "
+    "low-energy conformers. J. Cheminform. 2011, 3, 8. https://doi.org/10.1186/1758-2946-3-8 — "
+    "https://openbabel.org/docs/3DStructureGen/multipleconformers.html"
+)
+
+OPENBABEL = (
+    "Open Babel: O'Boyle, N. M.; Banck, M.; James, C. A.; Morley, C.; Vandermeersch, T.; "
+    "Hutchison, G. R. Open Babel: An open chemical toolbox. J. Cheminform. 2011, 3, 33. "
+    "https://doi.org/10.1186/1758-2946-3-33 — https://openbabel.org"
+)
+
 
 def descriptor_checkbox_citation_html(internal_key: str) -> str | None:
     """Short rich-text citation beside a Calculate Descriptors checkbox, if applicable."""
@@ -216,6 +229,29 @@ def easydock_dialog_footer_html() -> str:
         "Ligand PDBQT via Meeko; engine is Smina (CLI) or AutoDock Vina (Python). "
         "Scores are vacuum AutoDock-family affinities (kcal/mol), not experimental ΔG. "
         "This tool does not protonate ligands or prepare the protein.</small>"
+    )
+
+
+def stochastic_conformations_dialog_footer_html() -> str:
+    """Rich text for Tools → Conformations → Generate Conformations → Stochastic…."""
+    return (
+        "<small><b>Method</b>: RDKit <b>ETKDG</b> (experimental-torsion-knowledge distance geometry) — "
+        '<a href="https://doi.org/10.1021/acs.jcim.5b00654">Riniker &amp; Landrum, J. Chem. Inf. Model. 2015</a>. '
+        "Stochastic embedding, then MMFF/UFF minimization and energy/RMS pruning. "
+        "Energies in the results window are vacuum molecular-mechanics totals (kcal/mol), "
+        "not protein-bound or quantum-chemical values.</small>"
+    )
+
+
+def systematic_conformations_dialog_footer_html() -> str:
+    """Rich text for Tools → Conformations → Generate Conformations → Systematic…."""
+    return (
+        "<small><b>Method</b>: Open Babel <b>Confab</b> — "
+        '<a href="https://doi.org/10.1186/1758-2946-3-8">O\'Boyle et al., J. Cheminform. 2011</a>. '
+        "Systematic torsion driving with RMSD and energy cutoffs (not RDKit ETKDG). "
+        "Requires Open Babel (<code>obabel</code> or the Python bindings). "
+        "Confab needs a 3D starting geometry; MolManager embeds with ETKDG when the ligand is 2D. "
+        "Energies in the results window are vacuum MMFF/UFF totals, not protein-bound ΔG.</small>"
     )
 
 

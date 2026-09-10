@@ -39,4 +39,4 @@ Multiple rows with 3D (or embedable) structures; **Selected Rows Only** recommen
 
 ## Tips and limits
 
-MCS can be slow or ambiguous on distant analogs. Poor SMARTS yields wrong overlays - test on two rows first. 2D-only molecules need conformer generation first.
+MCS can be slow or ambiguous on distant analogs. Poor SMARTS yields wrong overlays - test on two rows first. 2D-only molecules need conformer generation first. If a **superpose** column already exists, new overlays go to **superpose (1)** (then **superpose (2)**, …) so the previous column is kept.

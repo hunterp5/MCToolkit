@@ -30,7 +30,7 @@ Requires a **Smina executable**, receptor PDBQT, ligand file, and an output path
 1. Set the Smina executable and working directory.
 2. Choose receptor, ligand, and output paths.
 3. Define the box (center/size, or **Autobox**) and search parameters.
-4. **Run Smina**, monitor progress, **Stop** if needed. When the run finishes, poses open in a new interactive table (affinity, RMSD, mode, and other Smina fields when present). The left pane shows the selected pose in the receptor (click a row to switch). **View → Render** controls receptor, ligand, and pocket drawing styles. **View → Pocket View** labels nearby residues as ball-and-stick and zooms to the ligand. The SDF (or PDBQT) is also written to the output path.
+4. **Run Smina**, monitor progress, **Stop** if needed. When the run finishes, poses open in a new interactive table (affinity, RMSD, mode, and other Smina fields when present). The left pane shows the selected pose in the receptor (click a row to switch). **View → Render** controls receptor, ligand, and pocket drawing styles. **View → Pocket View** labels nearby residues as ball-and-stick and zooms to the ligand. The SDF (or PDBQT) is also written to the output path. **Tools → Dock → Viewer** brings that results window back if you closed it.
 
 ## Use cases
 

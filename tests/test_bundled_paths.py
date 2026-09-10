@@ -28,6 +28,17 @@ def test_default_external_executable_falls_back_to_name(monkeypatch, tmp_path):
     assert bundled_paths.default_external_executable("smina") in ("smina", "smina.exe")
 
 
+def test_default_obabel_uses_pip_wheel(monkeypatch, tmp_path):
+    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
+    pip_exe = bundled_paths.pip_openbabel_executable()
+    got = bundled_paths.default_external_executable("obabel")
+    if pip_exe is None:
+        assert Path(got).name.lower() in {"obabel", "obabel.exe"}
+    else:
+        assert got == str(pip_exe)
+        assert pip_exe.is_file()
+
+
 def test_resolve_user_executable(tmp_path):
     missing = tmp_path / "missing.bin"
     assert bundled_paths.resolve_user_executable(str(missing)) is None
@@ -63,6 +74,7 @@ def test_smina_launch_env_sets_babel_libdir(tmp_path):
     env = bundled_paths.smina_launch_env(str(exe))
     assert env["BABEL_LIBDIR"] == str(tmp_path)
     assert env["BABEL_DATADIR"] == str(data)
+    assert bundled_paths.openbabel_launch_env(str(exe)) == env
 
 
 def test_smina_launch_env_empty_without_plugins(tmp_path):
