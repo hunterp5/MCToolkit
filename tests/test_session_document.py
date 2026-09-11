@@ -185,6 +185,43 @@ def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
     assert table_recs and table_recs[0].smiles == "CCO"
 
 
+def test_session_roundtrip_restores_mmp_ledger(qapp):  # noqa: ARG001
+    from molmanager.mmp_analysis import MmpPair
+
+    pair = MmpPair(
+        oid_a=1,
+        oid_b=2,
+        smiles_a="Clc1ccccc1",
+        smiles_b="Fc1ccccc1",
+        activity_a=1.0,
+        activity_b=0.5,
+        delta_activity=-0.5,
+        transform="Cl[*:1]>>F[*:1]",
+        core="c1ccccc1",
+        sidechain_a="Cl[*:1]",
+        sidechain_b="F[*:1]",
+    )
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MMP_Partners"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(1, {"SMILES": "Clc1ccccc1", "MMP_Partners": "2"})
+    w.mols[1] = Chem.MolFromSmiles("Clc1ccccc1")
+    w.next_oid = 3
+    w._mmp_last_pairs = [pair]
+    w._mmp_last_activity_column = "IC50"
+
+    doc = w._build_session_document()
+    assert doc["mmp_ledger"]["activity_column"] == "IC50"
+    assert doc["mmp_ledger"]["pairs"][0]["oid_a"] == 1
+
+    w2 = ChemicalTableApp()
+    w2._apply_session_document(doc)
+    restored = list(getattr(w2, "_mmp_last_pairs", None) or [])
+    assert len(restored) == 1
+    assert restored[0] == pair
+    assert w2._mmp_last_activity_column == "IC50"
+
+
 def test_session_roundtrip_restores_ionization_cache(qapp, monkeypatch) -> None:  # noqa: ARG001
     from molmanager import microstate_cache as mc
     from molmanager.ionization import (

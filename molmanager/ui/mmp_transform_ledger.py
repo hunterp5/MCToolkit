@@ -21,19 +21,20 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from PyQt5.QtCore import QSize, Qt, QTimer
-from PyQt5.QtGui import QIcon, QImage, QPainter, QPixmap
+from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtGui import QColor, QImage, QPainter, QPixmap
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QAbstractScrollArea,
     QDialog,
-    QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
-    QSizePolicy,
+    QStyle,
+    QStyleOptionViewItem,
+    QStyledItemDelegate,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -45,7 +46,6 @@ from ..mmp_analysis import (
     MmpPair,
     TransformSummary,
     aggregate_transforms,
-    assemble_mmp_table_annotations,
     pairs_for_summary,
     pairs_involving_oid,
 )
@@ -78,13 +78,37 @@ _HEADERS = (
     "Max Δ",
 )
 
-_ROW_HEIGHT = 78
-_CORE_COL_WIDTH = 110
-_TRANSFORM_COL_WIDTH = 220
-_FRAG_W = 88
-_FRAG_H = 64
-_ARROW_W = 28
-_CORE_W = 96
+_ROW_HEIGHT = 104
+_CORE_COL_WIDTH = 140
+_TRANSFORM_COL_WIDTH = 280
+_FRAG_W = 120
+_FRAG_H = 92
+_ARROW_W = 32
+_CORE_W = 128
+
+
+class _LedgerStructureDelegate(QStyledItemDelegate):
+    """Paint Core/Transform 2D images so they fill the cell like the main table."""
+
+    def paint(self, painter, option, index):  # noqa: N802 — Qt API name
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        pix = index.data(Qt.DecorationRole)
+        if not isinstance(pix, QPixmap) or pix.isNull():
+            super().paint(painter, option, index)
+            return
+        painter.save()
+        painter.fillRect(opt.rect, QColor(255, 255, 255))
+        margin = 2
+        avail_w = max(1, opt.rect.width() - 2 * margin)
+        avail_h = max(1, opt.rect.height() - 2 * margin)
+        fitted = pix.scaled(avail_w, avail_h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        x = opt.rect.x() + margin + (avail_w - fitted.width()) // 2
+        y = opt.rect.y() + margin + (avail_h - fitted.height()) // 2
+        painter.drawPixmap(x, y, fitted)
+        if opt.state & QStyle.State_Selected:
+            painter.fillRect(opt.rect, QColor(0, 120, 215, 48))
+        painter.restore()
 
 
 def _try_configure_drawer(drawer, width: int) -> None:
@@ -131,28 +155,6 @@ class MmpTransformLedgerDialog(QDialog):
         self.setWindowModality(Qt.NonModal)
 
         root = QVBoxLayout(self)
-        self._meta = QLabel()
-        self._meta.setWordWrap(True)
-        root.addWidget(self._meta)
-
-        ref_row = QHBoxLayout()
-        self._btn_ref_selected = QPushButton("Selected as Reference")
-        self._btn_ref_selected.setToolTip(
-            "Use the currently selected table molecule as the reference (exactly one row). "
-            "Shows only pairs involving that molecule; transforms and Δ are oriented "
-            "as reference → partner."
-        )
-        self._btn_ref_clear = QPushButton("Clear Reference")
-        self._btn_ref_clear.setToolTip(
-            "Show all pairs again (lexicographic transform orientation)."
-        )
-        self._btn_ref_clear.setEnabled(False)
-        self._ref_status = QLabel("Reference: (all pairs)")
-        self._ref_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        ref_row.addWidget(self._btn_ref_selected)
-        ref_row.addWidget(self._btn_ref_clear)
-        ref_row.addWidget(self._ref_status, 1)
-        root.addLayout(ref_row)
 
         filter_row = QHBoxLayout()
         filter_row.addWidget(QLabel("Filter:"))
@@ -168,7 +170,7 @@ class MmpTransformLedgerDialog(QDialog):
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setAlternatingRowColors(True)
-        self._table.setIconSize(QSize(_TRANSFORM_COL_WIDTH - 12, _ROW_HEIGHT - 8))
+        self._table.setIconSize(QSize(_TRANSFORM_COL_WIDTH - 4, _ROW_HEIGHT - 4))
         self._table.verticalHeader().setVisible(False)
         self._table.verticalHeader().setDefaultSectionSize(_ROW_HEIGHT)
         self._table.setSortingEnabled(True)
@@ -184,27 +186,14 @@ class MmpTransformLedgerDialog(QDialog):
         for col in range(2, len(_HEADERS)):
             hdr.setSectionResizeMode(col, QHeaderView.Interactive)
             self._table.setColumnWidth(col, 78)
+        struct_delegate = _LedgerStructureDelegate(self._table)
+        self._table.setItemDelegateForColumn(_COL_CORE, struct_delegate)
+        self._table.setItemDelegateForColumn(_COL_TRANSFORM, struct_delegate)
         root.addWidget(self._table, 1)
 
-        preview = QHBoxLayout()
-        self._core_panel = self._make_frag_panel("Core (unchanged)")
-        self._from_panel = self._make_frag_panel("From")
-        self._to_panel = self._make_frag_panel("To")
-        preview.addWidget(self._core_panel["box"], 1)
-        preview.addWidget(self._from_panel["box"], 1)
-        preview.addWidget(self._to_panel["box"], 1)
-        root.addLayout(preview)
-
-        self._detail = QLabel()
-        self._detail.setWordWrap(True)
-        self._detail.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        root.addWidget(self._detail)
-
         actions = QHBoxLayout()
-        self._btn_browse = QPushButton("Browse pairs")
+        self._btn_browse = QPushButton("Browse Pairs")
         self._btn_browse.setToolTip("Open the pair browser for the selected transform")
-        self._btn_browse_all = QPushButton("Browse all pairs")
-        self._btn_browse_all.setToolTip("Open the pair browser with every MMP pair")
         self._btn_cliffs = QPushButton("Activity Cliffs")
         self._btn_cliffs.setToolTip(
             "Open the activity-cliff scatter for the pairs currently shown in this ledger "
@@ -215,65 +204,31 @@ class MmpTransformLedgerDialog(QDialog):
             "Open the MMP pair neighborhood graph for the pairs currently shown in this ledger "
             "(respects reference filter)."
         )
-        self._btn_apply = QPushButton("Apply to seed")
-        self._btn_apply.setToolTip(
-            "Apply the selected transform to the seed molecule (main-table selection, "
-            "or the reference if nothing is selected) and add product(s) to the table."
-        )
-        self._btn_apply.setEnabled(False)
-        self._btn_write = QPushButton("Write to table")
-        self._btn_write.setToolTip(
-            "Write MMP_Partners / MMP_Transforms / MMP_Delta columns for all pairs"
+        self._btn_ref_selected = QPushButton("Make Reference")
+        self._btn_ref_selected.setToolTip(
+            "Use the currently selected table molecule as the reference (exactly one row). "
+            "Shows only pairs involving that molecule; transforms and Δ are oriented "
+            "as reference → partner. Click again with no single-row selection to show all pairs."
         )
         actions.addWidget(self._btn_browse)
-        actions.addWidget(self._btn_browse_all)
         actions.addWidget(self._btn_cliffs)
         actions.addWidget(self._btn_network)
-        actions.addWidget(self._btn_apply)
-        actions.addWidget(self._btn_write)
-        actions.addStretch()
+        actions.addStretch(1)
+        actions.addWidget(self._btn_ref_selected)
         root.addLayout(actions)
 
         self._filter_edit.textChanged.connect(self._apply_filter)
         self._btn_ref_selected.clicked.connect(self._reference_from_table_selection)
-        self._btn_ref_clear.clicked.connect(self._clear_reference)
         self._table.itemSelectionChanged.connect(self._on_selection_changed)
         self._table.cellDoubleClicked.connect(lambda *_a: self._browse_selected())
         self._btn_browse.clicked.connect(self._browse_selected)
-        self._btn_browse_all.clicked.connect(self._browse_all)
         self._btn_cliffs.clicked.connect(self._open_activity_cliffs)
         self._btn_network.clicked.connect(self._open_pair_network)
-        self._btn_apply.clicked.connect(self._apply_selected_to_seed)
-        self._btn_write.clicked.connect(self._write_all_to_table)
-
-        self._resize_timer = QTimer(self)
-        self._resize_timer.setSingleShot(True)
-        self._resize_timer.setInterval(60)
-        self._resize_timer.timeout.connect(self._refresh_previews)
 
         make_window_minimizable(self)
         self.setModal(False)
         self.setWindowModality(Qt.NonModal)
         self.set_pairs(pairs, activity_column=activity_column)
-
-    def _make_frag_panel(self, title: str) -> dict[str, Any]:
-        box = QGroupBox(title)
-        lyt = QVBoxLayout(box)
-        struct = QLabel()
-        struct.setAlignment(Qt.AlignCenter)
-        struct.setMinimumHeight(140)
-        struct.setMaximumHeight(200)
-        struct.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        struct.setStyleSheet(
-            "background-color: palette(base); border: 1px solid palette(mid); border-radius: 4px;"
-        )
-        smiles = QLabel("—")
-        smiles.setAlignment(Qt.AlignCenter)
-        smiles.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        smiles.setWordWrap(False)
-        lyt.addWidget(struct, 1)
-        lyt.addWidget(smiles)
-        return {"box": box, "struct": struct, "smiles": smiles}
 
     def set_pairs(self, pairs: list[MmpPair], *, activity_column: str | None = None) -> None:
         """Replace the underlying pair list and rebuild the ledger table."""
@@ -297,40 +252,13 @@ class MmpTransformLedgerDialog(QDialog):
         )
         self._pairs_for_summaries = self._visible_pairs()
         n_pairs = len(self._pairs_for_summaries)
-        n_tx = len(self._summaries)
-        act = self._activity_column or "activity"
-        if self._reference_oid is not None:
-            if n_pairs == 0:
-                self._meta.setText(
-                    f"Reference ID {self._reference_oid}  ·  "
-                    f"no matched pairs for this molecule  ·  "
-                    f"Δ = partner − reference ({act})"
-                )
-            else:
-                self._meta.setText(
-                    f"Reference ID {self._reference_oid}  ·  "
-                    f"{n_tx} transform(s) from {n_pairs} pair(s)  ·  "
-                    f"Δ = partner − reference ({act})"
-                )
-            self._ref_status.setText(f"Reference: ID {self._reference_oid}")
-        else:
-            self._meta.setText(
-                f"{n_tx} core+transform rule(s) from {n_pairs} pair(s)  ·  "
-                f"Δ relative to {act}  ·  sides ordered lexicographically"
-            )
-            self._ref_status.setText("Reference: (all pairs)")
-        self._btn_ref_clear.setEnabled(self._reference_oid is not None)
         self._populate_table()
-        self._btn_browse_all.setEnabled(n_pairs > 0)
-        self._btn_write.setEnabled(len(self._pairs) > 0)
         self._btn_cliffs.setEnabled(n_pairs > 0)
         self._btn_network.setEnabled(n_pairs > 0)
-        self._btn_apply.setEnabled(self._table.rowCount() > 0)
         if self._table.rowCount() > 0:
             self._table.selectRow(0)
         else:
-            self._clear_preview()
-            self._btn_apply.setEnabled(False)
+            self._btn_browse.setEnabled(False)
 
     def _reference_from_table_selection(self) -> None:
         app = self._app
@@ -341,12 +269,17 @@ class MmpTransformLedgerDialog(QDialog):
         except Exception:
             oids = []
         if len(oids) != 1:
-            try:
-                app.status_label.setText(
-                    "MMP ledger: select exactly one table molecule for reference."
-                )
-            except Exception:
-                pass
+            # No single-row selection: clear reference and show all pairs again.
+            if self._reference_oid is not None:
+                self._reference_oid = None
+                self._rebuild_summaries()
+            else:
+                try:
+                    app.status_label.setText(
+                        "MMP ledger: select exactly one table molecule for reference."
+                    )
+                except Exception:
+                    pass
             return
         oid = oids[0]
         self._reference_oid = oid
@@ -358,16 +291,6 @@ class MmpTransformLedgerDialog(QDialog):
                 )
             except Exception:
                 pass
-
-    def _clear_reference(self) -> None:
-        if self._reference_oid is None:
-            return
-        self._reference_oid = None
-        self._rebuild_summaries()
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self._resize_timer.start()
 
     def _populate_table(self) -> None:
         filter_text = (self._filter_edit.text() or "").strip().lower()
@@ -392,7 +315,7 @@ class MmpTransformLedgerDialog(QDialog):
         core_item.setFlags(core_item.flags() & ~Qt.ItemIsEditable)
         core_pm = self._core_icon(summary.core)
         if core_pm is not None and not core_pm.isNull():
-            core_item.setIcon(QIcon(core_pm))
+            core_item.setData(Qt.DecorationRole, core_pm)
         else:
             core_item.setText("—")
             core_item.setTextAlignment(Qt.AlignCenter)
@@ -404,7 +327,7 @@ class MmpTransformLedgerDialog(QDialog):
         transform_item.setFlags(transform_item.flags() & ~Qt.ItemIsEditable)
         pm = self._transform_icon(summary)
         if pm is not None and not pm.isNull():
-            transform_item.setIcon(QIcon(pm))
+            transform_item.setData(Qt.DecorationRole, pm)
         else:
             transform_item.setText("→")
             transform_item.setTextAlignment(Qt.AlignCenter)
@@ -492,6 +415,17 @@ class MmpTransformLedgerDialog(QDialog):
             self._preview_cache[cache_key] = pm
         return pm
 
+    def _render_mol(self, mol: Chem.Mol, pw: int, ph: int) -> QPixmap | None:
+        try:
+            drawer = rdMolDraw2D.MolDraw2DCairo(pw, ph)
+            _try_configure_drawer(drawer, pw)
+            rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
+            drawer.FinishDrawing()
+            img = QImage.fromData(drawer.GetDrawingText())
+            return QPixmap.fromImage(img)
+        except Exception:
+            return None
+
     def _apply_filter(self, _text: str = "") -> None:
         prev = self._selected_key()
         self._populate_table()
@@ -504,7 +438,7 @@ class MmpTransformLedgerDialog(QDialog):
         if self._table.rowCount() > 0:
             self._table.selectRow(0)
         else:
-            self._clear_preview()
+            self._btn_browse.setEnabled(False)
 
     def _selected_key(self) -> tuple[str, str] | None:
         rows = self._table.selectionModel().selectedRows()
@@ -533,100 +467,6 @@ class MmpTransformLedgerDialog(QDialog):
     def _on_selection_changed(self) -> None:
         summary = self._selected_summary()
         self._btn_browse.setEnabled(summary is not None)
-        self._btn_apply.setEnabled(summary is not None)
-        if summary is None:
-            self._clear_preview()
-            return
-        self._core_panel["box"].setTitle("Core (unchanged)")
-        self._from_panel["box"].setTitle("From" + (" (reference)" if self._reference_oid is not None else ""))
-        self._to_panel["box"].setTitle("To" + (" (partner)" if self._reference_oid is not None else ""))
-        for panel, smiles in (
-            (self._core_panel, summary.core),
-            (self._from_panel, summary.sidechain_from),
-            (self._to_panel, summary.sidechain_to),
-        ):
-            panel["smiles"].hide()
-            panel["smiles"].setText("")
-            panel["struct"].setToolTip(smiles or "")
-        self._detail.setText(
-            f"n={summary.n}  ·  "
-            f"median Δ={_fmt_delta(summary.median_delta)}  ·  "
-            f"win {100.0 * summary.win_rate:.0f}% "
-            f"({summary.n_improve} improve / {summary.n_worsen} worsen"
-            + (f" / {summary.n_flat} flat" if summary.n_flat else "")
-            + ")"
-        )
-        self._detail.setToolTip(f"{summary.core}  |  {summary.transform}")
-        self._refresh_previews()
-
-    def _clear_preview(self) -> None:
-        for panel in (self._core_panel, self._from_panel, self._to_panel):
-            panel["struct"].clear()
-            panel["struct"].setPixmap(QPixmap())
-            panel["struct"].setText("")
-            panel["struct"].setToolTip("")
-            panel["smiles"].setText("—")
-            panel["smiles"].setToolTip("")
-        self._detail.setText("")
-        self._detail.setToolTip("")
-
-    def _refresh_previews(self) -> None:
-        summary = self._selected_summary()
-        if summary is None:
-            return
-        self._render_fragment(self._core_panel, summary.core)
-        self._render_fragment(self._from_panel, summary.sidechain_from)
-        self._render_fragment(self._to_panel, summary.sidechain_to)
-
-    def _preview_pixel_size(self, label: QLabel) -> tuple[int, int, float]:
-        dpr = max(1.0, float(self.devicePixelRatioF()))
-        lw = max(min(label.width(), 480), 160)
-        lh = max(min(label.height(), 200), 120)
-        return int(lw * dpr), int(lh * dpr), dpr
-
-    def _render_fragment(self, panel: dict[str, Any], smiles: str) -> None:
-        label: QLabel = panel["struct"]
-        mol = None
-        if smiles:
-            try:
-                mol = Chem.MolFromSmiles(smiles)
-            except Exception:
-                mol = None
-        pw, ph, dpr = self._preview_pixel_size(label)
-        if mol is None:
-            label.clear()
-            label.setPixmap(QPixmap())
-            label.setText("(no fragment)")
-            return
-        cache_key = (smiles, pw, ph)
-        cached = self._preview_cache.get(cache_key)
-        if cached is not None and not cached.isNull():
-            pm = cached
-        else:
-            pm = self._render_mol(mol, pw, ph)
-            if pm is not None and not pm.isNull():
-                self._preview_cache[cache_key] = pm
-        if pm is None or pm.isNull():
-            label.clear()
-            label.setPixmap(QPixmap())
-            label.setText("(render failed)")
-            return
-        if pm.width() != pw or pm.height() != ph:
-            pm = pm.scaled(pw, ph, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        pm.setDevicePixelRatio(dpr)
-        label.setPixmap(pm)
-        label.setText("")
-
-    def _render_mol(self, mol: Chem.Mol, pw: int, ph: int) -> QPixmap | None:
-        try:
-            drawer = rdMolDraw2D.MolDraw2DCairo(pw, ph)
-            _try_configure_drawer(drawer, pw)
-            rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
-            drawer.FinishDrawing()
-            img = QImage.fromData(drawer.GetDrawingText())
-            return QPixmap.fromImage(img)
-        except Exception:
-            return None
 
     def _browse_selected(self) -> None:
         summary = self._selected_summary()
@@ -638,16 +478,6 @@ class MmpTransformLedgerDialog(QDialog):
             return
         try:
             app._open_mmp_browser(subset, activity_column=self._activity_column)
-        except Exception:
-            pass
-
-    def _browse_all(self) -> None:
-        app = self._app
-        visible = self._visible_pairs()
-        if app is None or not visible:
-            return
-        try:
-            app._open_mmp_browser(visible, activity_column=self._activity_column)
         except Exception:
             pass
 
@@ -677,58 +507,3 @@ class MmpTransformLedgerDialog(QDialog):
             )
         except Exception:
             logger.exception("Open pair network from ledger failed")
-
-    def _resolve_seed_oids(self) -> list[int]:
-        """Table selection if any; otherwise the active reference OID."""
-        app = self._app
-        oids: list[int] = []
-        if app is not None:
-            try:
-                oids = sorted(int(o) for o in app._selected_oids_set())
-            except Exception:
-                oids = []
-        if oids:
-            return oids
-        if self._reference_oid is not None:
-            return [int(self._reference_oid)]
-        return []
-
-    def _apply_selected_to_seed(self) -> None:
-        summary = self._selected_summary()
-        app = self._app
-        if summary is None or app is None:
-            return
-        seed_oids = self._resolve_seed_oids()
-        if not seed_oids:
-            try:
-                app.status_label.setText(
-                    "MMP design: select a seed molecule in the table "
-                    "(or set a reference)."
-                )
-            except Exception:
-                pass
-            return
-        try:
-            app.apply_mmp_transform_to_seeds(
-                seed_oids,
-                side_from=summary.sidechain_from,
-                side_to=summary.sidechain_to,
-                transform=summary.transform,
-                core=summary.core,
-            )
-        except Exception:
-            logger.exception("MMP apply to seed failed")
-
-    def _write_all_to_table(self) -> None:
-        app = self._app
-        if app is None or not self._pairs:
-            return
-        rows, headers = assemble_mmp_table_annotations(
-            self._pairs, activity_column=self._activity_column
-        )
-        if not rows:
-            return
-        try:
-            app.on_calc_finished(rows, headers, progress_label="MMP")
-        except Exception:
-            pass

@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Matched molecular pair analysis worker (Tools → MMP)."""
+"""Matched molecular pair analysis worker (Data → MMP)."""
 
 from __future__ import annotations
 
@@ -77,7 +77,6 @@ class MmpAnalysisWorker(QRunnable):
         min_activity_difference: float = 0.0,
         max_activity_difference: float = 0.0,
         core_smarts: str = "",
-        write_to_table: bool = False,
         purpose: str = "mmp",
         x_mode: str = "heavy_atoms",
         signals: WorkerSignals,
@@ -93,7 +92,6 @@ class MmpAnalysisWorker(QRunnable):
         self.min_activity_difference = float(min_activity_difference)
         self.max_activity_difference = float(max_activity_difference)
         self.core_smarts = (core_smarts or "").strip()
-        self.write_to_table = bool(write_to_table)
         self.purpose = (purpose or "mmp").strip().lower()
         self.x_mode = x_mode or "heavy_atoms"
         self.signals = signals
@@ -286,9 +284,7 @@ class MmpAnalysisWorker(QRunnable):
         elif self.purpose == "mmp_neighborhood":
             self.signals.mmp_neighborhood_finished.emit(pairs, self.activity_column)
         else:
-            self.signals.mmp_finished.emit(
-                pairs, self.activity_column, self.write_to_table
-            )
+            self.signals.mmp_finished.emit(pairs, self.activity_column)
 
     def _emit_failed(self, message: str) -> None:
         if self.purpose == "activity_cliff":

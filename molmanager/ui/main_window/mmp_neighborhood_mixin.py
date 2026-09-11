@@ -130,7 +130,6 @@ class MmpNeighborhoodMixin:
                 max_variable_heavy_atoms=pp.max_variable_heavy_atoms,
                 min_activity_difference=pp.min_activity_difference,
                 max_activity_difference=pp.max_activity_difference,
-                write_to_table=False,
                 purpose="mmp_neighborhood",
                 signals=sigs,
                 cancel_event=ev,

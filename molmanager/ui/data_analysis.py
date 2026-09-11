@@ -247,7 +247,7 @@ class DataAnalysisDialog(QDialog):
         self._selected_columns_scope_prefix = "Selected Columns Only"
         self.chk_selected_columns.setToolTip(
             "Correlations and Percentiles use only numeric columns selected in the main table "
-            "(click a column header to select a column)."
+            "(click a column header to select a column; Shift+click for a range)."
         )
         self.chk_selected_columns.setEnabled(False)
 
@@ -578,7 +578,7 @@ class DataAnalysisDialog(QDialog):
                 self,
                 "Correlations",
                 "Selected Columns Only is checked, but no table columns are selected "
-                "(click a column header in the main table).",
+                "(click a column header in the main table; Shift+click for a range).",
             )
             self.corr_table.setRowCount(0)
             self.corr_table.setColumnCount(0)
@@ -633,7 +633,7 @@ class DataAnalysisDialog(QDialog):
         if num is None:
             self.percentile_text.setPlainText(
                 "Selected Columns Only is checked, but no table columns are selected "
-                "(click a column header in the main table)."
+                "(click a column header in the main table; Shift+click for a range)."
             )
             return
         if num.empty:

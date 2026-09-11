@@ -104,19 +104,28 @@ def test_selection_browser_widget_is_workspace_dockable():
 def test_clear_selection_button_is_glyph(qapp):  # noqa: ARG001
     from molmanager.ui.dockable_plot import (
         _DOCK_LEADING_OPTS_ATTRS,
+        _GLYPH_BTN_SIZE,
+        _GLYPH_ICON_SIZE,
         make_clear_selection_button,
+        make_plot_options_button,
     )
 
     btn = make_clear_selection_button()
     assert btn.text() == ""
     assert not btn.icon().isNull()
+    assert btn.width() == _GLYPH_BTN_SIZE
+    assert btn.height() == _GLYPH_BTN_SIZE
+    assert btn.iconSize().width() == _GLYPH_ICON_SIZE
+    assert "padding: 0px" in (btn.styleSheet() or "")
+    opts = make_plot_options_button()
+    assert opts.width() == opts.height() == _GLYPH_BTN_SIZE
     assert _DOCK_LEADING_OPTS_ATTRS == ("_opts_btn", "_clear_sel_btn")
 
 
 def test_floating_title_edit_installed_when_undocked(qapp):  # noqa: ARG001
     from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
-    from molmanager.ui.dockable_plot import sync_docked_footer_bar
+    from molmanager.ui.dockable_plot import position_floating_title_edit, sync_docked_footer_bar
 
     host = QWidget()
     root = QVBoxLayout(host)
@@ -127,6 +136,8 @@ def test_floating_title_edit_installed_when_undocked(qapp):  # noqa: ARG001
     foot.addWidget(host._opts_btn)
     foot.addStretch(1)
     root.addWidget(footer)
+    host.resize(400, 80)
+    footer.resize(400, 24)
 
     sync_docked_footer_bar(host, docked=False)
     edit = host._float_title_edit
@@ -135,5 +146,9 @@ def test_floating_title_edit_installed_when_undocked(qapp):  # noqa: ARG001
     host._pane_display_title = "My Plot"
     sync_docked_footer_bar(host, docked=False)
     assert edit.text() == "My Plot"
+    position_floating_title_edit(host)
+    center = edit.x() + edit.width() // 2
+    assert abs(center - footer.width() // 2) <= 1
+    assert "transparent" in (edit.styleSheet() or "")
     sync_docked_footer_bar(host, docked=True)
     assert edit.isHidden()

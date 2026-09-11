@@ -54,6 +54,7 @@ from ...workers import SIMILARITY_FP_TYPE_LABELS
 from ...workers.qsar_worker import QSARSignals, QSARPredictWorker, QSARTrainWorker
 from ..data_analysis import numeric_subset, table_to_dataframe
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
+from .mmp import select_preferred_activity_column
 from .scope import selection_scope_checked
 
 if TYPE_CHECKING:
@@ -313,6 +314,7 @@ class QSARDialog(QDialog):
         return df, oids
 
     def _reload_columns(self) -> None:
+        prev_act = self.activity_combo.currentText().strip()
         self.activity_combo.clear()
         self.column_list.clear()
         if self.parent_app is None:
@@ -321,20 +323,27 @@ class QSARDialog(QDialog):
         self.struct_src_combo.addItems(self.parent_app.chemistry_tool_structure_sources())
         df, _oids = self._scoped_dataframe_and_oids()
         num = numeric_subset(df, exclude_id=True)
-        act = self.activity_combo.currentText()
         for col in num.columns:
             self.activity_combo.addItem(col)
             item = QListWidgetItem(col)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            is_act = col == act
-            item.setCheckState(
-                Qt.Unchecked if is_act else (Qt.Checked if num.shape[1] <= 10 else Qt.Unchecked)
-            )
+            item.setCheckState(Qt.Checked if num.shape[1] <= 10 else Qt.Unchecked)
             self.column_list.addItem(item)
-        if self.activity_combo.count() and act:
-            idx = self.activity_combo.findText(act)
+        if self.activity_combo.count() <= 0:
+            return
+        if prev_act:
+            idx = self.activity_combo.findText(prev_act)
             if idx >= 0:
                 self.activity_combo.setCurrentIndex(idx)
+            else:
+                select_preferred_activity_column(self.activity_combo)
+        else:
+            select_preferred_activity_column(self.activity_combo)
+        act = self.activity_combo.currentText()
+        for i in range(self.column_list.count()):
+            item = self.column_list.item(i)
+            if item.text() == act:
+                item.setCheckState(Qt.Unchecked)
 
     def _select_all_columns(self) -> None:
         act = self.activity_combo.currentText()

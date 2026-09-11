@@ -77,8 +77,8 @@ class WorkerSignals(QObject):
     # Reaction-based enumeration: ReactionEnumerationJobResult
     reaction_enum_finished = pyqtSignal(object)
     reaction_enum_failed = pyqtSignal(str, str)
-    # Matched molecular pairs: (pairs, activity_column, write_to_table)
-    mmp_finished = pyqtSignal(list, str, bool)
+    # Matched molecular pairs: (pairs, activity_column)
+    mmp_finished = pyqtSignal(list, str)
     mmp_failed = pyqtSignal(str)
     # Activity cliff map: (pairs, activity_column, x_mode)
     activity_cliff_finished = pyqtSignal(list, str, str)

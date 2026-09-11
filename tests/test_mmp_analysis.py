@@ -360,3 +360,29 @@ def test_apply_transform_to_mol_two_cut():
     assert any("N" in p and "O" in p for p in products)
     # Canonical expected product from molzip
     assert "CNc1ccc(OC)cc1" in products or any("OC" in p and "NC" in p for p in products)
+
+
+def test_mmp_ledger_session_payload_roundtrip():
+    from molmanager.mmp_analysis import (
+        deserialize_mmp_ledger_payload,
+        serialize_mmp_ledger_payload,
+    )
+
+    pair = _hand_pair(
+        oid_a=3,
+        oid_b=9,
+        side_a="Cl[*:1]",
+        side_b="F[*:1]",
+        delta=-0.5,
+        core="c1ccccc1",
+    )
+    payload = serialize_mmp_ledger_payload([pair], activity_column="IC50")
+    assert payload is not None
+    assert payload["activity_column"] == "IC50"
+    assert len(payload["pairs"]) == 1
+    restored, act = deserialize_mmp_ledger_payload(payload)
+    assert act == "IC50"
+    assert len(restored) == 1
+    assert restored[0] == pair
+    assert serialize_mmp_ledger_payload([]) is None
+    assert deserialize_mmp_ledger_payload(None) == ([], "")

@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import QEvent, QObject, QPointF, QRectF, QSize, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PyQt5.QtGui import QColor, QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PyQt5.QtWidgets import (
     QDialog,
     QGroupBox,
@@ -45,13 +45,13 @@ _DOCK_HEADER_HOME_ATTR = "_molmanager_dock_header_homes"
 _FLOAT_TITLE_EDIT_ATTR = "_float_title_edit"
 _FLOAT_TITLE_FILTER_ATTR = "_float_title_filter"
 _FLOAT_TITLE_BASE_ATTR = "_float_title_edit_base"
+_FLOAT_TITLE_RESIZE_FILTER_ATTR = "_float_title_resize_filter"
 _DOCK_LEADING_OPTS_ATTRS = ("_opts_btn", "_clear_sel_btn")
 _DOCK_HEADER_BUTTON_ATTRS = (
     "select_egg_btn",
     "select_yolk_btn",
     "select_region_btn",
     "_btn_browse",
-    "_btn_select",
 )
 # Floating: Add to Main. Docked: Send to New Window. Same footer slot.
 _DOCK_SEND_WINDOW_ATTRS = (
@@ -71,22 +71,33 @@ _DOCK_TEXT_CHROME_ATTRS = (
     "select_yolk_btn",
     "select_region_btn",
     "_btn_browse",
-    "_btn_select",
 )
-_GLYPH_BTN_SIZE = 20
-_GLYPH_ICON_SIZE = 13
+_GLYPH_BTN_SIZE = 22
+_GLYPH_ICON_SIZE = 15
+_GLYPH_INK = QColor(20, 20, 20)
 _FOOTER_TEXT_FONT_PX = 11
 _FOOTER_TEXT_PAD_H = 5
 
 
+def _glyph_pen(width: float) -> QPen:
+    pen = QPen(_GLYPH_INK, width)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    return pen
+
+
 def _paint_glyph_icon(paint_fn, size: int = _GLYPH_ICON_SIZE) -> QIcon:
+    """Rasterize a glyph with stroke inset so ink stays centered and unclipped."""
     dpr = 2.0
     pm = QPixmap(int(size * dpr), int(size * dpr))
     pm.fill(Qt.transparent)
     pm.setDevicePixelRatio(dpr)
     painter = QPainter(pm)
     painter.setRenderHint(QPainter.Antialiasing, True)
-    paint_fn(painter, float(size))
+    # Inset by ~½ stroke so edge strokes are not clipped asymmetrically.
+    pad = 1.0
+    painter.translate(pad, pad)
+    paint_fn(painter, float(size) - 2.0 * pad)
     painter.end()
     return QIcon(pm)
 
@@ -95,22 +106,19 @@ def plot_options_glyph_icon(size: int = _GLYPH_ICON_SIZE) -> QIcon:
     """Compact gear icon for Plot Options."""
 
     def paint(p: QPainter, s: float) -> None:
-        pen = QPen(QColor(40, 40, 40), max(1.2, s * 0.1))
-        pen.setCapStyle(Qt.RoundCap)
-        pen.setJoinStyle(Qt.RoundJoin)
-        p.setPen(pen)
+        p.setPen(_glyph_pen(max(1.5, s * 0.12)))
         p.setBrush(Qt.NoBrush)
         cx = cy = s * 0.5
-        r = s * 0.22
-        R = s * 0.38
+        r = s * 0.24
+        R = s * 0.42
         p.drawEllipse(QPointF(cx, cy), r, r)
         for i in range(8):
             ang = i * 45.0
             from math import cos, radians, sin
 
             a = radians(ang)
-            x0 = cx + r * 1.35 * cos(a)
-            y0 = cy + r * 1.35 * sin(a)
+            x0 = cx + r * 1.3 * cos(a)
+            y0 = cy + r * 1.3 * sin(a)
             x1 = cx + R * cos(a)
             y1 = cy + R * sin(a)
             p.drawLine(QPointF(x0, y0), QPointF(x1, y1))
@@ -122,22 +130,19 @@ def send_to_window_glyph_icon(size: int = _GLYPH_ICON_SIZE) -> QIcon:
     """Window-with-arrow icon for Send to New Window."""
 
     def paint(p: QPainter, s: float) -> None:
-        pen = QPen(QColor(40, 40, 40), max(1.2, s * 0.1))
-        pen.setCapStyle(Qt.RoundCap)
-        pen.setJoinStyle(Qt.RoundJoin)
-        p.setPen(pen)
+        p.setPen(_glyph_pen(max(1.5, s * 0.12)))
         p.setBrush(Qt.NoBrush)
         # Back window
-        p.drawRect(QRectF(s * 0.12, s * 0.28, s * 0.48, s * 0.48))
+        p.drawRect(QRectF(s * 0.10, s * 0.26, s * 0.48, s * 0.50))
         # Front window offset
-        p.drawRect(QRectF(s * 0.34, s * 0.14, s * 0.48, s * 0.48))
+        p.drawRect(QRectF(s * 0.32, s * 0.12, s * 0.48, s * 0.50))
         # Arrow pointing out
         path = QPainterPath()
-        path.moveTo(s * 0.58, s * 0.42)
-        path.lineTo(s * 0.82, s * 0.18)
-        path.moveTo(s * 0.66, s * 0.18)
-        path.lineTo(s * 0.82, s * 0.18)
-        path.lineTo(s * 0.82, s * 0.34)
+        path.moveTo(s * 0.56, s * 0.40)
+        path.lineTo(s * 0.86, s * 0.14)
+        path.moveTo(s * 0.68, s * 0.14)
+        path.lineTo(s * 0.86, s * 0.14)
+        path.lineTo(s * 0.86, s * 0.32)
         p.drawPath(path)
 
     return _paint_glyph_icon(paint, size)
@@ -147,21 +152,18 @@ def add_to_main_glyph_icon(size: int = _GLYPH_ICON_SIZE) -> QIcon:
     """Dock-into-main icon for Add to Main Window (inverse of send)."""
 
     def paint(p: QPainter, s: float) -> None:
-        pen = QPen(QColor(40, 40, 40), max(1.2, s * 0.1))
-        pen.setCapStyle(Qt.RoundCap)
-        pen.setJoinStyle(Qt.RoundJoin)
-        p.setPen(pen)
+        p.setPen(_glyph_pen(max(1.5, s * 0.12)))
         p.setBrush(Qt.NoBrush)
         # Main window / dock target on the left
-        p.drawRect(QRectF(s * 0.12, s * 0.18, s * 0.42, s * 0.64))
-        p.drawLine(QPointF(s * 0.12, s * 0.32), QPointF(s * 0.54, s * 0.32))
+        p.drawRect(QRectF(s * 0.10, s * 0.14, s * 0.44, s * 0.72))
+        p.drawLine(QPointF(s * 0.10, s * 0.30), QPointF(s * 0.54, s * 0.30))
         # Arrow pointing into the window
         path = QPainterPath()
-        path.moveTo(s * 0.88, s * 0.5)
-        path.lineTo(s * 0.62, s * 0.5)
-        path.moveTo(s * 0.70, s * 0.36)
-        path.lineTo(s * 0.58, s * 0.5)
-        path.lineTo(s * 0.70, s * 0.64)
+        path.moveTo(s * 0.90, s * 0.5)
+        path.lineTo(s * 0.60, s * 0.5)
+        path.moveTo(s * 0.72, s * 0.34)
+        path.lineTo(s * 0.56, s * 0.5)
+        path.lineTo(s * 0.72, s * 0.66)
         p.drawPath(path)
 
     return _paint_glyph_icon(paint, size)
@@ -171,18 +173,16 @@ def clear_selection_glyph_icon(size: int = _GLYPH_ICON_SIZE) -> QIcon:
     """Dashed selection box with a clear mark for Clear Selection."""
 
     def paint(p: QPainter, s: float) -> None:
-        pen = QPen(QColor(40, 40, 40), max(1.2, s * 0.1))
-        pen.setCapStyle(Qt.RoundCap)
-        pen.setJoinStyle(Qt.RoundJoin)
+        pen = _glyph_pen(max(1.5, s * 0.12))
         pen.setStyle(Qt.DashLine)
         p.setPen(pen)
         p.setBrush(Qt.NoBrush)
-        inset = s * 0.14
+        inset = s * 0.12
         p.drawRect(QRectF(inset, inset, s - 2 * inset, s - 2 * inset))
         pen.setStyle(Qt.SolidLine)
-        pen.setWidthF(max(1.4, s * 0.12))
+        pen.setWidthF(max(1.7, s * 0.14))
         p.setPen(pen)
-        m = s * 0.32
+        m = s * 0.30
         p.drawLine(QPointF(m, m), QPointF(s - m, s - m))
         p.drawLine(QPointF(s - m, m), QPointF(m, s - m))
 
@@ -200,6 +200,13 @@ def style_plot_chrome_glyph_button(btn: QPushButton, icon: QIcon, tooltip: str) 
     btn.setDefault(False)
     btn.setFocusPolicy(Qt.NoFocus)
     btn.setFlat(False)
+    # Zero padding so the icon is optically centered in the square button.
+    btn.setStyleSheet(
+        "QPushButton {"
+        " padding: 0px;"
+        " margin: 0px;"
+        " }"
+    )
 
 
 def style_plot_footer_text_button(btn: QPushButton) -> None:
@@ -224,19 +231,62 @@ def style_plot_pane_title_edit(edit: QLineEdit) -> None:
     edit.setFixedWidth(130)
     edit.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
     edit.setAlignment(Qt.AlignCenter)
+    edit.setFrame(False)
+    edit.setAutoFillBackground(False)
+    pal = edit.palette()
+    pal.setColor(QPalette.Base, Qt.transparent)
+    pal.setColor(QPalette.Window, Qt.transparent)
+    edit.setPalette(pal)
     edit.setStyleSheet(
         "QLineEdit {"
         f" padding: 0px {_FOOTER_TEXT_PAD_H}px;"
         f" font-size: {_FOOTER_TEXT_FONT_PX}px;"
         " border: none;"
         " background: transparent;"
+        " background-color: transparent;"
         " min-height: 0px;"
         " }"
         "QLineEdit:focus {"
         " border: 1px solid palette(highlight);"
         " background: transparent;"
+        " background-color: transparent;"
         " }"
         "QLineEdit:read-only {"
+        " selection-background-color: transparent;"
+        " }"
+    )
+
+
+def style_floating_plot_title_edit(edit: QLineEdit) -> None:
+    """Window-centered floating title: no chrome background, text only."""
+    edit.setFixedHeight(_GLYPH_BTN_SIZE)
+    edit.setMinimumWidth(80)
+    edit.setMaximumWidth(360)
+    edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+    edit.setAlignment(Qt.AlignCenter)
+    edit.setFrame(False)
+    edit.setAutoFillBackground(False)
+    edit.setAttribute(Qt.WA_TranslucentBackground, True)
+    pal = edit.palette()
+    pal.setColor(QPalette.Base, Qt.transparent)
+    pal.setColor(QPalette.Window, Qt.transparent)
+    edit.setPalette(pal)
+    edit.setStyleSheet(
+        "QLineEdit {"
+        f" padding: 0px {_FOOTER_TEXT_PAD_H}px;"
+        f" font-size: {_FOOTER_TEXT_FONT_PX}px;"
+        " border: none;"
+        " background: transparent;"
+        " background-color: transparent;"
+        " min-height: 0px;"
+        " }"
+        "QLineEdit:focus {"
+        " border: none;"
+        " background: transparent;"
+        " background-color: transparent;"
+        " }"
+        "QLineEdit:read-only {"
+        " border: none;"
         " selection-background-color: transparent;"
         " }"
     )
@@ -295,6 +345,19 @@ class _FloatingTitleEditFilter(QObject):
         return super().eventFilter(obj, event)
 
 
+class _FloatingTitleResizeFilter(QObject):
+    """Keep the floating title geometrically centered in the footer bar."""
+
+    def __init__(self, host: QWidget):
+        super().__init__(host)
+        self._host = host
+
+    def eventFilter(self, obj, event):  # noqa: N802 — Qt API name
+        if event.type() in (QEvent.Resize, QEvent.Show, QEvent.LayoutRequest):
+            position_floating_title_edit(self._host)
+        return super().eventFilter(obj, event)
+
+
 def begin_floating_title_edit(widget: QWidget) -> None:
     edit = getattr(widget, _FLOAT_TITLE_EDIT_ATTR, None)
     if not isinstance(edit, QLineEdit):
@@ -307,6 +370,7 @@ def begin_floating_title_edit(widget: QWidget) -> None:
     edit.setReadOnly(False)
     edit.setFocus(Qt.MouseFocusReason)
     edit.selectAll()
+    position_floating_title_edit(widget)
 
 
 def cancel_floating_title_edit(widget: QWidget) -> None:
@@ -356,47 +420,64 @@ def refresh_floating_title_edit(widget: QWidget | None) -> None:
     if not isinstance(edit, QLineEdit):
         return
     if not edit.isReadOnly() and edit.hasFocus():
+        position_floating_title_edit(widget)
         return
     title = plot_widget_display_title(widget)
     edit.blockSignals(True)
     edit.setText(title)
     edit.blockSignals(False)
     edit.setToolTip(f"{title}\nDouble-click to rename")
+    position_floating_title_edit(widget)
+
+
+def position_floating_title_edit(widget: QWidget | None) -> None:
+    """Center the floating title over the footer bar (true window center)."""
+    if widget is None:
+        return
+    edit = getattr(widget, _FLOAT_TITLE_EDIT_ATTR, None)
+    bar = getattr(widget, "_footer_bar", None)
+    if not isinstance(edit, QLineEdit) or bar is None:
+        return
+    try:
+        if edit.isHidden():
+            return
+        bar_w = max(0, int(bar.width()))
+        bar_h = max(_GLYPH_BTN_SIZE, int(bar.height()))
+        fm = edit.fontMetrics()
+        text = edit.text() or "Plot"
+        text_w = fm.horizontalAdvance(text) + (2 * _FOOTER_TEXT_PAD_H) + 12
+        width = max(80, min(360, text_w, max(80, bar_w - 24)))
+        height = _GLYPH_BTN_SIZE
+        x = max(0, (bar_w - width) // 2)
+        y = max(0, (bar_h - height) // 2)
+        edit.setGeometry(x, y, width, height)
+        edit.raise_()
+    except RuntimeError:
+        return
 
 
 def ensure_floating_title_edit(widget: QWidget | None) -> QLineEdit | None:
-    """Ensure a centered editable title sits in the floating footer chrome."""
+    """Ensure a window-centered editable title overlays the floating footer chrome."""
     if widget is None:
         return None
     existing = getattr(widget, _FLOAT_TITLE_EDIT_ATTR, None)
     if isinstance(existing, QLineEdit):
         return existing
     bar = getattr(widget, "_footer_bar", None)
-    foot = bar.layout() if bar is not None else None
-    if not isinstance(foot, QHBoxLayout):
+    if bar is None:
         return None
     edit = QLineEdit(bar)
-    style_plot_pane_title_edit(edit)
+    style_floating_plot_title_edit(edit)
     edit.setReadOnly(True)
     edit.setToolTip("Double-click to rename this plot")
     edit.editingFinished.connect(lambda w=widget: commit_floating_title_edit(w))
     filt = _FloatingTitleEditFilter(widget, edit)
     edit.installEventFilter(filt)
+    resize_filt = _FloatingTitleResizeFilter(widget)
+    bar.installEventFilter(resize_filt)
     setattr(widget, _FLOAT_TITLE_EDIT_ATTR, edit)
     setattr(widget, _FLOAT_TITLE_FILTER_ATTR, filt)
-
-    stretch_idx = -1
-    for i in range(foot.count()):
-        item = foot.itemAt(i)
-        if item is not None and item.spacerItem() is not None:
-            stretch_idx = i
-            break
-    if stretch_idx < 0:
-        foot.addStretch(1)
-        stretch_idx = foot.count() - 1
-    # opts … | stretch | title | stretch | add…
-    foot.insertStretch(stretch_idx, 1)
-    foot.insertWidget(stretch_idx + 1, edit)
+    setattr(widget, _FLOAT_TITLE_RESIZE_FILTER_ATTR, resize_filt)
     refresh_floating_title_edit(widget)
     return edit
 

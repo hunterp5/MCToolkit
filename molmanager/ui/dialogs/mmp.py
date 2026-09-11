@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Matched molecular pair (MMP) analysis dialog (Tools → MMP)."""
+"""Matched molecular pair (MMP) analysis dialog (Data → MMP)."""
 
 from __future__ import annotations
 
@@ -51,7 +51,6 @@ class MmpDialogParams:
     min_activity_difference: float
     max_activity_difference: float
     core_smarts: str
-    write_to_table: bool
 
 
 class MmpDialog(QDialog):
@@ -85,6 +84,7 @@ class MmpDialog(QDialog):
         self.activity_combo.setMinimumWidth(220)
         if activity_columns:
             self.activity_combo.addItems(activity_columns)
+            select_preferred_activity_column(self.activity_combo)
         else:
             self.activity_combo.addItem("(no numeric columns)")
             self.activity_combo.setEnabled(False)
@@ -162,14 +162,6 @@ class MmpDialog(QDialog):
             self.only_selected_cb.setEnabled(False)
         root.addWidget(self.only_selected_cb)
 
-        self.write_table_cb = QCheckBox("Write MMP annotations to the main table")
-        self.write_table_cb.setChecked(True)
-        self.write_table_cb.setToolTip(
-            "Add MMP_Partners, MMP_Transforms, and MMP_Delta_<activity> columns "
-            "for molecules that participate in at least one pair."
-        )
-        root.addWidget(self.write_table_cb)
-
         box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         box.accepted.connect(self.accept)
         box.rejected.connect(self.reject)
@@ -230,7 +222,6 @@ class MmpDialog(QDialog):
             min_activity_difference=float(self.min_dact_sb.value()),
             max_activity_difference=float(self.max_dact_sb.value()),
             core_smarts=self.core_edit.text().strip(),
-            write_to_table=bool(self.write_table_cb.isChecked()),
         )
 
 
@@ -248,3 +239,31 @@ def activity_columns_for_mmp(parent_app, *, only_selected: bool = False) -> list
         return [str(c) for c in num.columns]
     except Exception:
         return []
+
+
+def index_of_preferred_activity_column(
+    names: list[str],
+    *,
+    keyword: str = "ic50",
+) -> int:
+    """First index whose header contains ``keyword`` (case-insensitive), else ``0``."""
+    if not names:
+        return -1
+    key = (keyword or "ic50").casefold()
+    for i, name in enumerate(names):
+        text = str(name or "")
+        if text.startswith("("):
+            continue
+        if key in text.casefold():
+            return i
+    return 0
+
+
+def select_preferred_activity_column(combo: QComboBox, *, keyword: str = "ic50") -> None:
+    """Default an Activity combo to a column whose name contains ``keyword`` when present."""
+    if combo is None or combo.count() <= 0 or not combo.isEnabled():
+        return
+    names = [combo.itemText(i) for i in range(combo.count())]
+    idx = index_of_preferred_activity_column(names, keyword=keyword)
+    if idx >= 0:
+        combo.setCurrentIndex(idx)

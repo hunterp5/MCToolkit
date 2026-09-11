@@ -83,21 +83,16 @@ class SaliMapPanel(DockableResultPlotPanel):
             self._root.addWidget(missing, 1)
 
         foot = self._footer_bar.layout()
-        self._btn_browse = QPushButton("Browse pair")
+        self._btn_browse = QPushButton("Browse")
         self._btn_browse.setEnabled(False)
         self._btn_browse.setToolTip(
             "Open the SALI pair browser for the selected point (step through plot pairs)."
         )
         style_plot_footer_text_button(self._btn_browse)
-        self._btn_select = QPushButton("Select pair in table")
-        self._btn_select.setEnabled(False)
-        style_plot_footer_text_button(self._btn_select)
         clear_idx = foot.indexOf(self._clear_sel_btn)
         insert_at = clear_idx + 1 if clear_idx >= 0 else 2
         foot.insertWidget(insert_at, self._btn_browse)
-        foot.insertWidget(insert_at + 1, self._btn_select)
         self._btn_browse.clicked.connect(self._browse_current)
-        self._btn_select.clicked.connect(self._select_current)
 
         self._finish_layout()
         self.set_points(
@@ -124,7 +119,6 @@ class SaliMapPanel(DockableResultPlotPanel):
             self._metric = metric
         self._current_index = None
         self._btn_browse.setEnabled(False)
-        self._btn_select.setEnabled(False)
         self._reload_color_columns()
         self._rebuild_figure()
 
@@ -191,25 +185,10 @@ class SaliMapPanel(DockableResultPlotPanel):
         if not (0 <= point_index < len(self._points)):
             self._current_index = None
             self._btn_browse.setEnabled(False)
-            self._btn_select.setEnabled(False)
             return
         self._current_index = int(point_index)
         self._btn_browse.setEnabled(True)
-        self._btn_select.setEnabled(True)
         # Table selection is applied by the plot view (both pair partners).
-
-    def _select_current(self) -> None:
-        if self._current_index is None or self.parent_app is None:
-            return
-        if not (0 <= self._current_index < len(self._points)):
-            return
-        point = self._points[self._current_index]
-        try:
-            self.parent_app.select_table_oids(
-                [point.oid_a, point.oid_b], extra_status="SALI"
-            )
-        except Exception:
-            pass
 
     def _browse_current(self) -> None:
         if self._current_index is None or self.parent_app is None:
@@ -233,7 +212,6 @@ class SaliMapPanel(DockableResultPlotPanel):
     def _clear_selection(self) -> None:
         self._current_index = None
         self._btn_browse.setEnabled(False)
-        self._btn_select.setEnabled(False)
         if self._plot_view is not None:
             try:
                 self._plot_view.clear_table_selection(update_plot=True)

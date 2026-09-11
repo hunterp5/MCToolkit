@@ -97,19 +97,14 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
             self._root.addWidget(missing, 1)
 
         foot = self._footer_bar.layout()
-        self._btn_browse = QPushButton("Browse pair")
+        self._btn_browse = QPushButton("Browse")
         self._btn_browse.setEnabled(False)
         self._btn_browse.setToolTip("Open the MMP pair browser for the selected cliff point")
         style_plot_footer_text_button(self._btn_browse)
-        self._btn_select = QPushButton("Select pair in table")
-        self._btn_select.setEnabled(False)
-        style_plot_footer_text_button(self._btn_select)
         clear_idx = foot.indexOf(self._clear_sel_btn)
         insert_at = clear_idx + 1 if clear_idx >= 0 else 2
         foot.insertWidget(insert_at, self._btn_browse)
-        foot.insertWidget(insert_at + 1, self._btn_select)
         self._btn_browse.clicked.connect(self._browse_current)
-        self._btn_select.clicked.connect(self._select_current)
 
         self._finish_layout()
         self.set_pairs(pairs or [], activity_column=activity_column, x_mode=self._x_mode)
@@ -134,7 +129,6 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
         self._points = build_activity_cliff_points(self._pairs)
         self._current_index = None
         self._btn_browse.setEnabled(False)
-        self._btn_select.setEnabled(False)
         self._reload_color_columns()
         self._rebuild_figure()
 
@@ -200,11 +194,9 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
         if not (0 <= point_index < len(self._points)):
             self._current_index = None
             self._btn_browse.setEnabled(False)
-            self._btn_select.setEnabled(False)
             return
         self._current_index = int(point_index)
         self._btn_browse.setEnabled(True)
-        self._btn_select.setEnabled(True)
         # Table selection is applied by the plot view (both pair partners).
 
     def _current_pair(self) -> MmpPair | None:
@@ -216,16 +208,6 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
         if not (0 <= pair_index < len(self._pairs)):
             return None
         return self._pairs[pair_index]
-
-    def _select_current(self) -> None:
-        pair = self._current_pair()
-        app = self.parent_app
-        if pair is None or app is None:
-            return
-        try:
-            app.select_table_oids([pair.oid_a, pair.oid_b], extra_status="Activity cliff")
-        except Exception:
-            pass
 
     def _browse_current(self) -> None:
         pair = self._current_pair()
@@ -240,7 +222,6 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
     def _clear_selection(self) -> None:
         self._current_index = None
         self._btn_browse.setEnabled(False)
-        self._btn_select.setEnabled(False)
         if self._plot_view is not None:
             try:
                 self._plot_view.clear_table_selection(update_plot=True)

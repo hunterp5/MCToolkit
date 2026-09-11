@@ -242,6 +242,7 @@ class SessionMixin:
             ),
             "som_browse": self._session_som_browse_payload(),
             "ionization_sidecar": serialize_ionization_sidecar(),
+            "mmp_ledger": self._session_mmp_ledger_payload(),
         }
 
     def _session_som_browse_payload(self) -> list[dict]:
@@ -252,6 +253,15 @@ class SessionMixin:
         if not records:
             records = records_from_table(self)
         return serialize_som_browse_records(records)
+
+    def _session_mmp_ledger_payload(self) -> dict | None:
+        """Last MMP run for Transform Ledger reopen after session open."""
+        from ...mmp_analysis import serialize_mmp_ledger_payload
+
+        return serialize_mmp_ledger_payload(
+            getattr(self, "_mmp_last_pairs", None),
+            activity_column=str(getattr(self, "_mmp_last_activity_column", "") or ""),
+        )
 
     @staticmethod
     def _header_state_b64(header) -> str | None:
@@ -1093,6 +1103,9 @@ class SessionMixin:
 
         restore_som_maps_for_session(self, doc.get("som_browse"))
         restore_ionization_sidecar(doc.get("ionization_sidecar"))
+        from ...mmp_analysis import restore_mmp_ledger_for_session
+
+        restore_mmp_ledger_for_session(self, doc.get("mmp_ledger"))
         self._pending_session_table_layout = doc.get("table_layout")
         self._restore_table_layout(self._pending_session_table_layout)
         self._reveal_table_after_session_prep()

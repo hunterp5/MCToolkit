@@ -8,7 +8,7 @@ See how molecules connect through small structural changes, which neighbors impr
 
 ## When to use
 
-Use after running **Tools → MMP** when you want a landscape of the same MMP evidence.
+Use after running **Data → MMP** when you want a landscape of the same MMP evidence.
 
 ## Inputs / scope
 
@@ -16,10 +16,10 @@ Pairs come from the open Transform Ledger (same activity column). Reference filt
 
 ## Workflow
 
-1. Run **Tools → MMP**, then click **Pair Network**.
+1. Run **Data → MMP**, then click **Pair Network**.
 2. Inspect the graph: **nodes** = molecules (default size = degree, color = activity); **edges** = MMP pairs (green Δ>0, red Δ<0).
 3. Scroll to zoom; middle-mouse drag to pan; left-drag lasso / click to select.
-4. Click a node to select it in the table; **Browse pairs for node** opens the pair stepper for its edges. **Clear Selection** clears plot and table selection.
+4. Click a node to select it in the table; **Browse** opens the pair stepper for its edges. **Clear Selection** clears plot and table selection.
 5. Optionally set **Neighborhood hops** > 0, select seed molecule(s) in the table, and click **Rebuild focus** to show only the local neighborhood.
 6. Optional: **Add to Main Window** docks the plot beside the table. **Plot Options** sets **Color by** / **Size by** from table columns.
 

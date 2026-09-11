@@ -72,7 +72,7 @@ def build_dimension_reduction_figure(
         x_label, y_label = "SOM column", "SOM row"
     else:
         x_label, y_label = "t-SNE 1", "t-SNE 2"
-    title = resolve_plot_title_text(plot_title, result.title or "")
+    title = resolve_plot_title_text(plot_title, "")
     x_label = resolve_plot_title_text(xaxis_title, x_label)
     y_label = resolve_plot_title_text(yaxis_title, y_label)
     marker_kwargs: dict[str, Any] = {
@@ -113,7 +113,7 @@ def build_dimension_reduction_figure(
         dragmode="lasso",
         clickmode="event+select",
         showlegend=False,
-        margin=dict(l=48, r=24, t=48, b=48),
+        margin=dict(l=48, r=24, t=24 if not title else 48, b=48),
         meta={
             "molmanager_selection_traces": [0],
             "molmanager_hover_persist": False,

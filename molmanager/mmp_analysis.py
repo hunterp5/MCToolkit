@@ -28,6 +28,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from statistics import fmean, median
+from typing import Any
 
 from rdkit import Chem
 from rdkit.Chem import rdFMCS, rdMMPA
@@ -700,6 +701,102 @@ def find_matched_molecular_pairs(
         max_activity_difference=max_activity_difference,
         cancel_check=cancel_check,
     )
+
+
+def is_mmp_result_header(header: str) -> bool:
+    """True for table columns written by MMP analysis (partners / transforms / deltas)."""
+    h = (header or "").strip()
+    if not h:
+        return False
+    if h in ("MMP_Partners", "MMP_Transforms"):
+        return True
+    return h.startswith("MMP_Delta_")
+
+
+def serialize_mmp_ledger_payload(
+    pairs: Sequence[MmpPair] | None,
+    *,
+    activity_column: str = "",
+) -> dict[str, Any] | None:
+    """Session sidecar for Transform Ledger reopen (pairs + activity column)."""
+    if not pairs:
+        return None
+    return {
+        "activity_column": str(activity_column or ""),
+        "pairs": [
+            {
+                "oid_a": int(p.oid_a),
+                "oid_b": int(p.oid_b),
+                "smiles_a": str(p.smiles_a or ""),
+                "smiles_b": str(p.smiles_b or ""),
+                "activity_a": float(p.activity_a),
+                "activity_b": float(p.activity_b),
+                "delta_activity": float(p.delta_activity),
+                "transform": str(p.transform or ""),
+                "core": str(p.core or ""),
+                "sidechain_a": str(p.sidechain_a or ""),
+                "sidechain_b": str(p.sidechain_b or ""),
+            }
+            for p in pairs
+        ],
+    }
+
+
+def deserialize_mmp_ledger_payload(
+    raw: Any,
+) -> tuple[list[MmpPair], str]:
+    """Parse ``serialize_mmp_ledger_payload`` output; returns ``(pairs, activity_column)``."""
+    if not isinstance(raw, dict):
+        return [], ""
+    activity_column = str(raw.get("activity_column") or "")
+    items = raw.get("pairs")
+    if not isinstance(items, list):
+        return [], activity_column
+    pairs: list[MmpPair] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        try:
+            pairs.append(
+                MmpPair(
+                    oid_a=int(item["oid_a"]),
+                    oid_b=int(item["oid_b"]),
+                    smiles_a=str(item.get("smiles_a") or ""),
+                    smiles_b=str(item.get("smiles_b") or ""),
+                    activity_a=float(item["activity_a"]),
+                    activity_b=float(item["activity_b"]),
+                    delta_activity=float(item["delta_activity"]),
+                    transform=str(item.get("transform") or ""),
+                    core=str(item.get("core") or ""),
+                    sidechain_a=str(item.get("sidechain_a") or ""),
+                    sidechain_b=str(item.get("sidechain_b") or ""),
+                )
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return pairs, activity_column
+
+
+def restore_mmp_ledger_for_session(app: Any, payload: Any = None) -> int:
+    """Restore last MMP run into ``app`` so Transform Ledger can reopen after Open Session."""
+    pairs, activity_column = deserialize_mmp_ledger_payload(payload)
+    try:
+        app._mmp_last_pairs = list(pairs)
+        app._mmp_last_activity_column = str(activity_column or "")
+    except Exception:
+        return 0
+    dlg = getattr(app, "_mmp_ledger_dialog", None)
+    if dlg is not None and pairs:
+        try:
+            dlg.set_pairs(pairs, activity_column=activity_column)
+        except Exception:
+            pass
+    elif dlg is not None and not pairs:
+        try:
+            dlg.close()
+        except Exception:
+            pass
+    return len(pairs)
 
 
 def assemble_mmp_table_annotations(

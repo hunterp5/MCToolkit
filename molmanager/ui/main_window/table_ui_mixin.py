@@ -154,9 +154,44 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         view_model = self.table.model()
         if view_model is not None and view_model.rowCount() > 0:
             self.table.setCurrentIndex(view_model.index(0, logical_index))
-        self._select_column(logical_index)
+        mods = QApplication.keyboardModifiers()
+        if mods & Qt.ShiftModifier:
+            anchor = getattr(self, "_column_selection_anchor", None)
+            if anchor is None or anchor < 0 or anchor >= len(self.headers):
+                self._column_selection_anchor = logical_index
+                self._select_columns([logical_index], anchor_col=logical_index)
+            else:
+                self._select_column_range(anchor, logical_index)
+            return
+        self._column_selection_anchor = logical_index
+        self._select_columns([logical_index], anchor_col=logical_index)
 
     def _select_column(self, col: int) -> None:
+        self._column_selection_anchor = col
+        self._select_columns([col], anchor_col=col)
+
+    def _select_column_range(self, anchor_col: int, end_col: int) -> None:
+        """Select all visible columns from ``anchor_col`` to ``end_col`` (inclusive)."""
+        hh = self.table.horizontalHeader()
+        vis_a = hh.visualIndex(int(anchor_col))
+        vis_b = hh.visualIndex(int(end_col))
+        if vis_a < 0 or vis_b < 0:
+            self._select_columns([end_col], anchor_col=end_col)
+            return
+        lo, hi = (vis_a, vis_b) if vis_a <= vis_b else (vis_b, vis_a)
+        cols: list[int] = []
+        for vis in range(lo, hi + 1):
+            logical = hh.logicalIndex(vis)
+            if logical < 0 or logical >= len(self.headers):
+                continue
+            if self.headers[logical] == "ID_HIDDEN":
+                continue
+            cols.append(logical)
+        self._select_columns(cols, anchor_col=end_col)
+
+    def _select_columns(
+        self, cols: list[int], *, anchor_col: int | None = None
+    ) -> None:
         view_model = self.table.model()
         if view_model is None:
             self._report_table_selection_status(0)
@@ -165,17 +200,39 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         if n <= 0:
             self._report_table_selection_status(0)
             return
+        unique_cols: list[int] = []
+        seen: set[int] = set()
+        for col in cols:
+            c = int(col)
+            if c < 0 or c >= len(self.headers) or c in seen:
+                continue
+            if self.headers[c] == "ID_HIDDEN":
+                continue
+            seen.add(c)
+            unique_cols.append(c)
+        if not unique_cols:
+            self._report_table_selection_status(0)
+            return
         prev_behavior = self.table.selectionBehavior()
         self.table.setSelectionBehavior(QAbstractItemView.SelectColumns)
-        top = view_model.index(0, col)
-        bottom = view_model.index(n - 1, col)
-        sel = QItemSelection(top, bottom)
+        sel = QItemSelection()
+        for col in unique_cols:
+            top = view_model.index(0, col)
+            bottom = view_model.index(n - 1, col)
+            sel.select(top, bottom)
         sm = self.table.selectionModel()
         if sm is not None:
             sm.select(sel, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Columns)
         self.table.setSelectionBehavior(prev_behavior)
-        self._refresh_table_selection_visual([0] if n > 0 else None, anchor_col=col)
-        self._report_table_selection_status(n)
+        focus_col = (
+            int(anchor_col)
+            if anchor_col is not None and int(anchor_col) in seen
+            else unique_cols[-1]
+        )
+        self._refresh_table_selection_visual([0] if n > 0 else None, anchor_col=focus_col)
+        n_cols = len(unique_cols)
+        extra = f"{n_cols} column{'s' if n_cols != 1 else ''}."
+        self._report_table_selection_status(n, extra=extra)
 
     def _refresh_table_selection_visual(
         self, anchor_rows: list[int] | None, anchor_col: int | None = None
@@ -1325,6 +1382,14 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             if col >= 2 and not self._table_model.is_pixmap_data_column(old_n):
                 color_act = menu.addAction("Color")
                 color_act.setObjectName("header_color")
+            from ...mmp_analysis import is_mmp_result_header
+
+            if is_mmp_result_header(old_n):
+                ledger_act = menu.addAction("Transform Ledger")
+                ledger_act.setObjectName("header_mmp_transform_ledger")
+                ledger_act.setToolTip(
+                    "Open the MMP Transform Ledger for this session's MMP results."
+                )
             menu.addSeparator()
             if old_n != "Structure":
                 ren_act = menu.addAction(f"Rename '{old_n}'")
@@ -1378,6 +1443,10 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             self.open_table_search_with_column(col)
         elif name == "header_color":
             self._open_column_color_dialog(col)
+        elif name == "header_mmp_transform_ledger":
+            opener = getattr(self, "open_mmp_transform_ledger_for_last_run", None)
+            if callable(opener):
+                opener()
         elif name == "header_logarithmic":
             self._toggle_column_logarithmic(old_n)
         elif name == "header_precision":
@@ -1914,6 +1983,17 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             edit_act = menu.addAction("Edit Value…")
             clear_act = menu.addAction("Clear Value")
 
+        mmp_ledger_act = None
+        if 0 <= col < len(self.headers):
+            from ...mmp_analysis import is_mmp_result_header
+
+            if is_mmp_result_header(self.headers[col]):
+                menu.addSeparator()
+                mmp_ledger_act = menu.addAction("Transform Ledger")
+                mmp_ledger_act.setToolTip(
+                    "Open the MMP Transform Ledger for this session's MMP results."
+                )
+
         action = menu.exec_(self.table.viewport().mapToGlobal(pos))
         if browse_act is not None and action == browse_act and oid is not None:
             opener = getattr(self, "open_som_browser_for_oid", None)
@@ -1994,6 +2074,10 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
                 old_t = self._table_model.cell_text(row, col) or ""
                 if old_t != "":
                     self._undo_stack.push(UndoCellTextChangeCommand(self, int(oid), h, old_t, ""))
+        elif mmp_ledger_act is not None and action == mmp_ledger_act:
+            opener = getattr(self, "open_mmp_transform_ledger_for_last_run", None)
+            if callable(opener):
+                opener()
 
     def _selected_smiles_strings(self) -> list[str]:
         """SMILES for PubChem/ChEMBL: canonical SMILES from any resolvable chemistry in each selected row."""

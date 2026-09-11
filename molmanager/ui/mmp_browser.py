@@ -23,6 +23,7 @@ from typing import Any
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QKeySequence, QPainter, QPixmap
 from PyQt5.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QFormLayout,
@@ -72,10 +73,12 @@ class MmpBrowserDialog(QDialog):
     ):
         super().__init__(parent)
         self._app = parent
+        self._all_pairs = list(pairs)
         self._pairs = list(pairs)
         self._activity_column = activity_column
         self._idx = 0
         self._preview_cache: dict[tuple, QPixmap] = {}
+        self._prefer_keys: tuple[int, int] | None = None
 
         self.setWindowTitle("Matched Molecular Pairs")
         self.resize(920, 620)
@@ -151,12 +154,18 @@ class MmpBrowserDialog(QDialog):
         self._btn_write.setToolTip(
             "Write MMP_Partners / MMP_Transforms / MMP_Delta columns for all pairs"
         )
+        self._cb_selected_only = QCheckBox("Selected Only")
+        self._cb_selected_only.setToolTip(
+            "When checked, browse only pairs that involve at least one molecule "
+            "from the current table selection."
+        )
         nav.addWidget(self._btn_first)
         nav.addWidget(self._btn_back)
         nav.addWidget(self._btn_fwd)
         nav.addWidget(self._btn_last)
         nav.addWidget(self._btn_select)
         nav.addWidget(self._btn_write)
+        nav.addWidget(self._cb_selected_only)
         nav.addStretch()
         root.addLayout(nav)
 
@@ -166,6 +175,7 @@ class MmpBrowserDialog(QDialog):
         self._btn_last.clicked.connect(self._go_last)
         self._btn_select.clicked.connect(self._select_current_pair)
         self._btn_write.clicked.connect(self._write_all_to_table)
+        self._cb_selected_only.toggled.connect(self._on_selected_only_toggled)
         self._prop_combo_1.currentIndexChanged.connect(lambda _i: self._update_property_values())
         self._prop_combo_2.currentIndexChanged.connect(lambda _i: self._update_property_values())
         self._prop_combo_3.currentIndexChanged.connect(lambda _i: self._update_property_values())
@@ -228,18 +238,60 @@ class MmpBrowserDialog(QDialog):
 
     def set_pairs(self, pairs: list[MmpPair], *, activity_column: str | None = None) -> None:
         """Replace the pair list (e.g. when re-running MMP) and refresh the view."""
-        self._pairs = list(pairs)
+        self._all_pairs = list(pairs or [])
         if activity_column is not None:
             self._activity_column = activity_column
-        self._idx = 0
+        prefer: tuple[int, int] | None = None
+        if self._all_pairs:
+            p0 = self._all_pairs[0]
+            prefer = (int(p0.oid_a), int(p0.oid_b))
+        self._prefer_keys = prefer
         self._preview_cache.clear()
         self._highlight_cache.clear()
         self._refresh_property_columns()
-        self._update_ui()
+        self._rebuild_filtered_pairs(update_ui=True)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._resize_timer.start()
+
+    def _selected_oids(self) -> set[int]:
+        app = self._app
+        if app is None:
+            return set()
+        try:
+            return {int(o) for o in app._selected_oids_set()}
+        except Exception:
+            return set()
+
+    def _on_selected_only_toggled(self, _checked: bool) -> None:
+        cur = self._current_pair()
+        if cur is not None:
+            self._prefer_keys = (int(cur.oid_a), int(cur.oid_b))
+        self._rebuild_filtered_pairs(update_ui=True)
+
+    def _rebuild_filtered_pairs(self, *, update_ui: bool) -> None:
+        source = list(self._all_pairs)
+        if self._cb_selected_only.isChecked():
+            selected = self._selected_oids()
+            if selected:
+                source = [
+                    p
+                    for p in source
+                    if int(p.oid_a) in selected or int(p.oid_b) in selected
+                ]
+            else:
+                source = []
+        self._pairs = source
+        prefer = self._prefer_keys
+        self._idx = 0
+        if prefer is not None:
+            for i, p in enumerate(self._pairs):
+                if (int(p.oid_a), int(p.oid_b)) == prefer:
+                    self._idx = i
+                    break
+        if update_ui:
+            self._update_ui()
 
     def _current_pair(self) -> MmpPair | None:
         if not self._pairs or not (0 <= self._idx < len(self._pairs)):
@@ -272,10 +324,10 @@ class MmpBrowserDialog(QDialog):
 
     def _write_all_to_table(self) -> None:
         app = self._app
-        if app is None or not self._pairs:
+        if app is None or not self._all_pairs:
             return
         rows, headers = assemble_mmp_table_annotations(
-            self._pairs, activity_column=self._activity_column
+            self._all_pairs, activity_column=self._activity_column
         )
         if not rows:
             return
@@ -382,7 +434,10 @@ class MmpBrowserDialog(QDialog):
         self._btn_select.setEnabled(has)
         self._btn_write.setEnabled(has)
         if not has:
-            self._meta.setText("No matched molecular pairs found.")
+            if self._cb_selected_only.isChecked():
+                self._meta.setText("No matched molecular pairs involve the current table selection.")
+            else:
+                self._meta.setText("No matched molecular pairs found.")
             self._delta_label.setText("")
             self._transform_preview.clear()
             self._transform_preview.setPixmap(QPixmap())

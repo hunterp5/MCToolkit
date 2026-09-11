@@ -1829,7 +1829,8 @@ def run_table_model_demo() -> int:
     view.resizeColumnsToContents()
     ly.addWidget(
         QLabel(
-            "Click a column header to select that column; right-click the header for Sort (numeric or alphabetic). "
+            "Click a column header to select that column; Shift+click another header to select a range. "
+            "Right-click the header for Sort (numeric or alphabetic). "
             "Structure column shows placeholders until you click the button."
         )
     )

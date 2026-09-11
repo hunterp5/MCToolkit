@@ -18,8 +18,6 @@
 
 from __future__ import annotations
 
-import logging
-
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMessageBox
 
@@ -28,8 +26,6 @@ from rdkit import Chem
 from ..strings import TOOL_MMP
 from ...workers import MmpAnalysisWorker
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
-
-logger = logging.getLogger(__name__)
 
 
 class MmpMixin:
@@ -135,14 +131,13 @@ class MmpMixin:
                 min_activity_difference=pp.min_activity_difference,
                 max_activity_difference=pp.max_activity_difference,
                 core_smarts=pp.core_smarts,
-                write_to_table=pp.write_to_table,
                 signals=sigs,
                 cancel_event=ev,
                 progress_state=prog,
             ),
         )
 
-    def on_mmp_finished(self, pairs, activity_column: str, write_to_table: bool) -> None:
+    def on_mmp_finished(self, pairs, activity_column: str) -> None:
         self._finish_tool_progress(TOOL_MMP)
         pairs = list(pairs or [])
         if not pairs:
@@ -154,15 +149,19 @@ class MmpMixin:
             )
             return
 
-        if write_to_table:
-            from ...mmp_analysis import assemble_mmp_table_annotations
+        from ...mmp_analysis import assemble_mmp_table_annotations
 
-            rows, headers = assemble_mmp_table_annotations(
-                pairs, activity_column=activity_column
-            )
-            if rows:
-                self.on_calc_finished(rows, headers, finish_progress=False)
+        rows, headers = assemble_mmp_table_annotations(
+            pairs, activity_column=activity_column
+        )
+        if rows:
+            self.on_calc_finished(rows, headers, finish_progress=False)
 
+        self._mmp_last_pairs = pairs
+        self._mmp_last_activity_column = str(activity_column or "")
+        mark = getattr(self, "_mark_session_dirty", None)
+        if callable(mark):
+            mark()
         self._open_mmp_ledger(pairs, activity_column=activity_column)
         self.status_label.setText(f"MMP: {len(pairs)} pair(s).")
 
@@ -170,6 +169,19 @@ class MmpMixin:
         self._clear_tool_progress()
         self.status_label.setText("Ready.")
         QMessageBox.warning(self, TOOL_MMP, message or "MMP analysis failed.")
+
+    def open_mmp_transform_ledger_for_last_run(self) -> None:
+        """Re-open the Transform Ledger for the most recent MMP analysis."""
+        pairs = list(getattr(self, "_mmp_last_pairs", None) or [])
+        activity_column = str(getattr(self, "_mmp_last_activity_column", "") or "")
+        if not pairs:
+            QMessageBox.information(
+                self,
+                TOOL_MMP,
+                "No MMP results are available in this session. Run Data → MMP first.",
+            )
+            return
+        self._open_mmp_ledger(pairs, activity_column=activity_column)
 
     def _open_mmp_ledger(self, pairs, *, activity_column: str) -> None:
         from ..mmp_transform_ledger import MmpTransformLedgerDialog
@@ -216,85 +228,3 @@ class MmpMixin:
 
     def _on_mmp_browser_dialog_destroyed(self, *_args) -> None:
         self._mmp_browser_dialog = None
-
-    def apply_mmp_transform_to_seeds(
-        self,
-        seed_oids: list[int],
-        *,
-        side_from: str,
-        side_to: str,
-        transform: str,
-        core: str = "",
-    ) -> int:
-        """Apply an MMP transform to seed molecules and append products to the table."""
-        from ...mmp_analysis import apply_transform_to_mol
-
-        if not seed_oids:
-            QMessageBox.information(
-                self,
-                TOOL_MMP,
-                "Select at least one seed molecule in the table.",
-            )
-            return 0
-
-        n_cuts = max(1, len([p for p in (side_from or "").split(".") if p.strip()]))
-        records: list[tuple[str, dict[str, str]]] = []
-        no_match: list[int] = []
-        missing_mol: list[int] = []
-        seen_products: set[str] = set()
-
-        for oid in seed_oids:
-            mol = getattr(self, "mols", {}).get(int(oid))
-            if mol is None:
-                missing_mol.append(int(oid))
-                continue
-            try:
-                products = apply_transform_to_mol(
-                    mol, side_from, side_to, max_cuts=n_cuts
-                )
-            except Exception:
-                logger.exception("apply_transform_to_mol failed for oid=%s", oid)
-                products = []
-            if not products:
-                no_match.append(int(oid))
-                continue
-            for smi in products:
-                if not smi or smi in seen_products:
-                    continue
-                seen_products.add(smi)
-                records.append(
-                    (
-                        smi,
-                        {
-                            "MMP_Transform": transform or f"{side_from}>>{side_to}",
-                            "MMP_Core": core or "",
-                            "MMP_Seed_ID": str(int(oid)),
-                            "Design_Method": "MMP",
-                        },
-                    )
-                )
-
-        if not records:
-            parts = []
-            if missing_mol:
-                parts.append(f"no structure for ID(s) {', '.join(map(str, missing_mol))}")
-            if no_match:
-                parts.append(
-                    f"from-fragment not found on ID(s) {', '.join(map(str, no_match))}"
-                )
-            detail = "; ".join(parts) if parts else "no products"
-            QMessageBox.information(
-                self,
-                TOOL_MMP,
-                f"No products were generated ({detail}).",
-            )
-            self.status_label.setText("Ready.")
-            return 0
-
-        n = self.add_rows_from_external_records_batch(records, render_structures=True)
-        skipped = len(no_match) + len(missing_mol)
-        suffix = f" ({skipped} seed(s) produced no match)" if skipped else ""
-        self.status_label.setText(
-            f"MMP design: added {n} product(s) from transform {transform}{suffix}."
-        )
-        return int(n)

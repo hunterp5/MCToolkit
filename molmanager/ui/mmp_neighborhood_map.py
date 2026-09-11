@@ -149,23 +149,18 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
             self._root.addWidget(missing, 1)
 
         foot = self._footer_bar.layout()
-        self._btn_browse = QPushButton("Browse pairs")
+        self._btn_browse = QPushButton("Browse")
         self._btn_browse.setEnabled(False)
         self._btn_browse.setToolTip(
             "Open the MMP pair browser for pairs involving the selected node."
         )
         style_plot_footer_text_button(self._btn_browse)
-        self._btn_select = QPushButton("Select in table")
-        self._btn_select.setEnabled(False)
-        style_plot_footer_text_button(self._btn_select)
         clear_idx = foot.indexOf(self._clear_sel_btn)
         insert_at = clear_idx + 1 if clear_idx >= 0 else 2
         foot.insertWidget(insert_at, self._btn_browse)
-        foot.insertWidget(insert_at + 1, self._btn_select)
 
         self._btn_rebuild.clicked.connect(self._rebuild_from_table_selection)
         self._btn_browse.clicked.connect(self._browse_current)
-        self._btn_select.clicked.connect(self._select_current)
 
         self._finish_layout()
         self.set_pairs(pairs or [], activity_column=activity_column)
@@ -209,7 +204,6 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
             self._default_color_hint = activity_column
         self._current_oid = None
         self._btn_browse.setEnabled(False)
-        self._btn_select.setEnabled(False)
         self._reload_color_columns()
         self._rebuild_graph(focus_oids=None)
 
@@ -302,27 +296,15 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
         if not (0 <= point_index < len(self._graph.node_oids)):
             self._current_oid = None
             self._btn_browse.setEnabled(False)
-            self._btn_select.setEnabled(False)
             return
         oid = int(self._graph.node_oids[point_index])
         self._current_oid = oid
         self._btn_browse.setEnabled(True)
-        self._btn_select.setEnabled(True)
         # Table selection is applied by the plot view.
-
-    def _select_current(self) -> None:
-        app = self.parent_app
-        if app is None or self._current_oid is None:
-            return
-        try:
-            app.select_table_oids([self._current_oid], extra_status="MMP network")
-        except Exception:
-            pass
 
     def _clear_selection(self) -> None:
         self._current_oid = None
         self._btn_browse.setEnabled(False)
-        self._btn_select.setEnabled(False)
         if self._plot_view is not None:
             try:
                 self._plot_view.clear_table_selection(update_plot=True)

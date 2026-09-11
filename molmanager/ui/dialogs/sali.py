@@ -33,7 +33,8 @@ from PyQt5.QtWidgets import (
 
 from ...workers import SIMILARITY_FP_TYPE_LABELS, SIMILARITY_METRIC_LABELS
 from ..qt_widget_utils import make_window_minimizable
-from .mmp import activity_columns_for_mmp
+from ..strings import TOOL_SALI_MAP
+from .mmp import activity_columns_for_mmp, select_preferred_activity_column
 from .scope import selection_scope_checked
 
 
@@ -63,7 +64,7 @@ class SaliDialog(QDialog):
     ):
         super().__init__(parent)
         self.parent_app = parent
-        self.setWindowTitle("SALI")
+        self.setWindowTitle(TOOL_SALI_MAP)
         self.setMinimumWidth(460)
         self.resize(520, 0)
         self._have_selection = selected_row_count > 0
@@ -81,6 +82,7 @@ class SaliDialog(QDialog):
         self.activity_combo.setMinimumWidth(220)
         if activity_columns:
             self.activity_combo.addItems(activity_columns)
+            select_preferred_activity_column(self.activity_combo)
         else:
             self.activity_combo.addItem("(no numeric columns)")
             self.activity_combo.setEnabled(False)

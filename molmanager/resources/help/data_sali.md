@@ -29,7 +29,7 @@ Structures from **Molecules from**; **Activity column** for Δactivity. Scope vi
 1. Select or filter to a relevant chemical space.
 2. Choose activity column, fingerprint, and filters.
 3. Run the tool. Results open in an interactive map: **X** = similarity, **Y** = |Δactivity|, **color** = SALI = |Δ| / (1 − similarity) by default.
-4. Click a point to select both molecules in the table. **Browse pair** opens a side-by-side pair browser (step through plot pairs with ←/→). **Clear Selection** clears plot and table selection.
+4. Click a point to select both molecules in the table. **Browse** opens a side-by-side pair browser (step through plot pairs with ←/→; **Selected Only** limits to pairs involving the table selection). **Clear Selection** clears plot and table selection.
 5. Optional: **Add to Main Window** docks the plot beside the table. **Plot Options** sets **Color by** / **Size by** (table columns; pair points use the mean of both molecules when numeric).
 
 ## Use cases

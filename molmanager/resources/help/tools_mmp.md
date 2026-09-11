@@ -1,6 +1,6 @@
 # MMP Transform Ledger
 
-Matched Molecular Pair (MMP) analysis finds pairs related by small transformations, with controls for cuts, variable heavy atoms, and optional activity differences. Open from **Tools → MMP**.
+Matched Molecular Pair (MMP) analysis finds pairs related by small transformations, with controls for cuts, variable heavy atoms, and optional activity differences. Open from **Data → MMP**. After a run, right-click an **MMP_Partners**, **MMP_Transforms**, or **MMP_Delta_*** column and choose **Transform Ledger** to reopen the ledger for that analysis.
 
 ## Goal
 
@@ -24,29 +24,26 @@ Structures from **Molecules from**; optional **Activity column**. Scope via **Se
 - **Minimum activity difference** - filter weak deltas (0 = no floor).
 - **Maximum activity difference** - exclude large deltas (0 = no ceiling).
 - **Selected Rows Only**.
-- **Write MMP annotations to the main table**.
 - **OK** / **Cancel**.
 
 ## Workflow
 
 1. Select or filter to a relevant chemical space.
 2. Set cuts, variable-atom cap, and activity column.
-3. Run MMP. Results open in the **transform ledger**, which groups pairs by chemically canonical `from>>to` fragment swap.
+3. Run MMP. Annotation columns (**MMP_Partners**, **MMP_Transforms**, **MMP_Delta_…**) are written to the table, and results open in the **transform ledger**, which groups pairs by chemically canonical `from>>to` fragment swap.
 4. Sort or filter the ledger by support (**n**), median/mean Δ, or win rate.
-5. Select a transform to preview the fragments; **Browse pairs** opens the pair stepper for that rule's evidence (or **Browse all pairs** for the full set).
-6. Optionally click **Selected as Reference** with exactly one table molecule selected to show only pairs involving that compound; transforms and Δ are then oriented as reference → partner. **Clear Reference** restores the full view.
+5. Select a transform row; **Browse Pairs** (far left) opens the pair stepper for that rule's evidence.
+6. Optionally click **Make Reference** (far right) with exactly one table molecule selected to show only pairs involving that compound; transforms and Δ are then oriented as reference → partner. Click again without a single-row selection to show all pairs.
 7. **Activity Cliffs** opens a scatter of structural-change size vs |Δactivity| for the pairs currently shown (respects reference filter).
 8. **Pair Network** opens the neighborhood graph for the pairs currently shown (respects reference filter).
-9. **Apply to seed** applies the selected transform to the current table selection (or the reference if nothing is selected) and adds product molecule(s) to the table with `MMP_Transform` / `MMP_Seed_ID` provenance.
-10. Optionally **Write to table** for plotting or further filtering.
+9. After **Save Session**, reopen via right-click on an MMP annotation column (**MMP_Partners**, **MMP_Transforms**, or **MMP_Delta_…**) → **Transform Ledger**.
 
 ## Use cases
 
 - Find potency-increasing halogen swaps with enough supporting pairs.
 - Mine solubility cliffs between matched pairs.
 - Restrict to selected series to avoid cross-chemotype noise.
-- Design analogues by applying a trusted transform to a new seed (including scaffolds that were not in the original pairs).
 
 ## Tips and limits
 
-MMP depends on fragmentation parameters - too-loose cuts explode pairs. Activity noise produces spurious cliffs; set a minimum and/or maximum difference. Ledger transforms are oriented with lexicographically ordered sidechains so the same chemical swap shares one row (Δ is flipped when sides are swapped). **Apply to seed** requires the seed to contain the transform's from-fragment under the same cut semantics; multi-site matches can yield multiple products. Not a substitute for full QSAR on diverse libraries.
+MMP depends on fragmentation parameters - too-loose cuts explode pairs. Activity noise produces spurious cliffs; set a minimum and/or maximum difference. Ledger transforms are oriented with lexicographically ordered sidechains so the same chemical swap shares one row (Δ is flipped when sides are swapped). Not a substitute for full QSAR on diverse libraries.

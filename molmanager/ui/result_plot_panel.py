@@ -80,7 +80,7 @@ class DockableResultPlotPanel(QWidget):
         self._opts_panel = QWidget(self)
         opts = QVBoxLayout(self._opts_panel)
         opts.setContentsMargins(0, 0, 0, 0)
-        opts.setSpacing(8)
+        opts.setSpacing(6)
 
         self._titles = PlotTitlesControls(self._opts_panel)
         self._titles.changed.connect(self._on_titles_changed)
@@ -140,9 +140,10 @@ class DockableResultPlotPanel(QWidget):
         opts.insertWidget(1, self._extra_opts_host)
 
         self._root = QVBoxLayout(self)
-        # Top inset matches spacing: same toolbar→plot gap when floating or docked.
-        self._root.setContentsMargins(8, 8, 8, 8)
-        self._root.setSpacing(8)
+        # Top inset matches root spacing so floating (chrome→plot) and docked
+        # (pane header→plot) share the same gap under the toolbar as Plotter/PCA.
+        self._root.setContentsMargins(4, 4, 4, 4)
+        self._root.setSpacing(4)
 
         self._footer_bar = QWidget(self)
         self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)

@@ -32,7 +32,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ..qt_widget_utils import make_window_minimizable
-from .mmp import activity_columns_for_mmp
+from .mmp import activity_columns_for_mmp, select_preferred_activity_column
 from .scope import selection_scope_checked
 
 
@@ -79,6 +79,7 @@ class MmpNeighborhoodDialog(QDialog):
         self.activity_combo.setMinimumWidth(220)
         if activity_columns:
             self.activity_combo.addItems(activity_columns)
+            select_preferred_activity_column(self.activity_combo)
         else:
             self.activity_combo.addItem("(no numeric columns)")
             self.activity_combo.setEnabled(False)

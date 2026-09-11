@@ -265,6 +265,7 @@ class ChemicalTableApp(
         self._in_programmatic_table_selection = False
         self._table_selection_job_gen = 0
         self._table_selection_ctx = None
+        self._column_selection_anchor: int | None = None
         self._plot_table_sync_timer = QTimer(self)
         self._plot_table_sync_timer.setSingleShot(True)
         self._plot_table_sync_timer.timeout.connect(self._sync_active_plots_from_table_selection)
@@ -273,6 +274,8 @@ class ChemicalTableApp(
         self._som_browse_records = []
         self._mmp_browser_dialog = None
         self._mmp_ledger_dialog = None
+        self._mmp_last_pairs = []
+        self._mmp_last_activity_column = ""
         self._activity_cliff_map_dialog = None
         self._mmp_neighborhood_map_dialog = None
         self._sali_map_dialog = None
@@ -987,13 +990,6 @@ class ChemicalTableApp(
             act.setToolTip(tip)
             decomp_menu.addAction(act)
 
-        act_mmp = QAction("&MMP…", self, triggered=self.open_mmp_dialog)
-        act_mmp.setToolTip(
-            "Find matched molecular pairs (RDKit MMPA) and open the transform ledger "
-            "ranked by support and activity effect."
-        )
-        tools.addAction(act_mmp)
-
         act_reaction_enum = QAction(
             "Reaction Based Enumeration…",
             self,
@@ -1131,8 +1127,12 @@ class ChemicalTableApp(
             "(|Δ| / (1 − similarity)). Click a point to select the pair."
         )
         data_menu.addAction(act_sali)
-
-        data_menu.addSeparator()
+        act_mmp = QAction("&MMP…", self, triggered=self.open_mmp_dialog)
+        act_mmp.setToolTip(
+            "Find matched molecular pairs (RDKit MMPA) and open the transform ledger "
+            "ranked by support and activity effect."
+        )
+        data_menu.addAction(act_mmp)
         act_plot = self._bind_hotkey(
             "data.plotter",
             QAction("&Plotter…", self, triggered=self.open_plot),

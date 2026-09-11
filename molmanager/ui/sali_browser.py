@@ -23,6 +23,7 @@ from typing import Any
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QFormLayout,
@@ -70,12 +71,17 @@ class SaliBrowserDialog(QDialog):
     ):
         super().__init__(parent)
         self._app = parent
+        self._all_points = list(points)
         self._points = list(points)
         self._activity_column = activity_column
         self._fp_choice = fp_choice or ""
         self._metric = metric or "Tanimoto"
         self._idx = max(0, int(start_index))
         self._preview_cache: dict[tuple, QPixmap] = {}
+        self._prefer_keys: tuple[int, int] | None = None
+        if self._all_points and 0 <= self._idx < len(self._all_points):
+            p0 = self._all_points[self._idx]
+            self._prefer_keys = (int(p0.oid_a), int(p0.oid_b))
 
         self.setWindowTitle("SALI Pairs")
         self.resize(920, 620)
@@ -139,11 +145,17 @@ class SaliBrowserDialog(QDialog):
         self._btn_last.setToolTip("Last pair (End)")
         self._btn_select = QPushButton("Select pair in table")
         self._btn_select.setToolTip("Select both molecules of this pair in the main table")
+        self._cb_selected_only = QCheckBox("Selected Only")
+        self._cb_selected_only.setToolTip(
+            "When checked, browse only pairs that involve at least one molecule "
+            "from the current table selection."
+        )
         nav.addWidget(self._btn_first)
         nav.addWidget(self._btn_back)
         nav.addWidget(self._btn_fwd)
         nav.addWidget(self._btn_last)
         nav.addWidget(self._btn_select)
+        nav.addWidget(self._cb_selected_only)
         nav.addStretch()
         root.addLayout(nav)
 
@@ -152,6 +164,7 @@ class SaliBrowserDialog(QDialog):
         self._btn_fwd.clicked.connect(lambda: self._step(1))
         self._btn_last.clicked.connect(self._go_last)
         self._btn_select.clicked.connect(self._select_current_pair)
+        self._cb_selected_only.toggled.connect(self._on_selected_only_toggled)
         self._prop_combo_1.currentIndexChanged.connect(lambda _i: self._update_property_values())
         self._prop_combo_2.currentIndexChanged.connect(lambda _i: self._update_property_values())
         self._prop_combo_3.currentIndexChanged.connect(lambda _i: self._update_property_values())
@@ -220,24 +233,66 @@ class SaliBrowserDialog(QDialog):
         start_index: int | None = None,
     ) -> None:
         """Replace the pair list and refresh the view."""
-        self._points = list(points or [])
+        self._all_points = list(points or [])
         if activity_column is not None:
             self._activity_column = activity_column
         if fp_choice is not None:
             self._fp_choice = fp_choice
         if metric is not None:
             self._metric = metric
-        if start_index is not None:
-            self._idx = max(0, int(start_index))
-        else:
-            self._idx = 0
+        prefer: tuple[int, int] | None = None
+        if start_index is not None and self._all_points:
+            si = max(0, min(int(start_index), len(self._all_points) - 1))
+            p0 = self._all_points[si]
+            prefer = (int(p0.oid_a), int(p0.oid_b))
+        elif self._all_points:
+            prefer = (int(self._all_points[0].oid_a), int(self._all_points[0].oid_b))
+        self._prefer_keys = prefer
         self._preview_cache.clear()
         self._refresh_property_columns()
-        self._update_ui()
+        self._rebuild_filtered_points(update_ui=True)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._resize_timer.start()
+
+    def _selected_oids(self) -> set[int]:
+        app = self._app
+        if app is None:
+            return set()
+        try:
+            return {int(o) for o in app._selected_oids_set()}
+        except Exception:
+            return set()
+
+    def _on_selected_only_toggled(self, _checked: bool) -> None:
+        cur = self._current_point()
+        if cur is not None:
+            self._prefer_keys = (int(cur.oid_a), int(cur.oid_b))
+        self._rebuild_filtered_points(update_ui=True)
+
+    def _rebuild_filtered_points(self, *, update_ui: bool) -> None:
+        source = list(self._all_points)
+        if self._cb_selected_only.isChecked():
+            selected = self._selected_oids()
+            if selected:
+                source = [
+                    p
+                    for p in source
+                    if int(p.oid_a) in selected or int(p.oid_b) in selected
+                ]
+            else:
+                source = []
+        self._points = source
+        prefer = self._prefer_keys
+        self._idx = 0
+        if prefer is not None:
+            for i, p in enumerate(self._points):
+                if (int(p.oid_a), int(p.oid_b)) == prefer:
+                    self._idx = i
+                    break
+        if update_ui:
+            self._update_ui()
 
     def _current_point(self) -> SaliPoint | None:
         if not self._points or not (0 <= self._idx < len(self._points)):
@@ -379,7 +434,10 @@ class SaliBrowserDialog(QDialog):
         self._btn_fwd.setEnabled(n > 1)
         self._btn_select.setEnabled(has)
         if not has:
-            self._meta.setText("No SALI pairs to browse.")
+            if self._cb_selected_only.isChecked():
+                self._meta.setText("No SALI pairs involve the current table selection.")
+            else:
+                self._meta.setText("No SALI pairs to browse.")
             self._metrics_label.setText("")
             for panel in (self._left_panel, self._right_panel):
                 panel["struct"].clear()

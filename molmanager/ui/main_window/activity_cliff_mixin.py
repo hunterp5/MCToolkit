@@ -129,7 +129,6 @@ class ActivityCliffMixin:
                 max_cuts=pp.max_cuts,
                 max_variable_heavy_atoms=pp.max_variable_heavy_atoms,
                 min_activity_difference=pp.min_activity_difference,
-                write_to_table=False,
                 purpose="activity_cliff",
                 x_mode=pp.x_mode,
                 signals=sigs,
