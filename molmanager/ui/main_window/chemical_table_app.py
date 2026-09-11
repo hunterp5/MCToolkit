@@ -675,6 +675,15 @@ class ChemicalTableApp(
             )
         )
         file_menu.addAction(
+            self._bind_hotkey(
+                "file.export_all",
+                QAction("&Save File...", self, triggered=lambda: self.run_export(False)),
+            )
+        )
+        file_menu.addAction(
+            QAction("Save Selected...", self, triggered=lambda: self.run_export(True))
+        )
+        file_menu.addAction(
             QAction("Import &Data...", self, triggered=self.open_import_file_dialog)
         )
         file_menu.addSeparator()
@@ -682,23 +691,6 @@ class ChemicalTableApp(
         file_menu.addAction(QAction("Save Session…", self, triggered=self.save_session_as))
         file_menu.addAction(QAction("New Session", self, triggered=self.new_session))
         file_menu.addAction(QAction("Duplicate Session", self, triggered=self.duplicate_session))
-        file_menu.addSeparator()
-        file_menu.addAction(
-            self._bind_hotkey(
-                "file.export_all",
-                QAction("&Export All...", self, triggered=lambda: self.run_export(False)),
-            )
-        )
-        file_menu.addAction(
-            QAction("Export Selected...", self, triggered=lambda: self.run_export(True))
-        )
-        file_menu.addSeparator()
-        act_browser = self._bind_hotkey(
-            "file.browser",
-            QAction("&Browser…", self, triggered=self.open_selection_browser),
-        )
-        act_browser.setToolTip("Open the selection browser to review and act on selected rows.")
-        file_menu.addAction(act_browser)
         edit = mb.addMenu("&Edit")
         act_undo = self._bind_hotkey("edit.undo", self._undo_stack.createUndoAction(self))
         act_redo = self._bind_hotkey("edit.redo", self._undo_stack.createRedoAction(self))
@@ -1140,6 +1132,13 @@ class ChemicalTableApp(
         )
         act_plot.setToolTip("Open the plotter or show the docked plot panel.")
         data_menu.addAction(act_plot)
+        data_menu.addSeparator()
+        act_browser = self._bind_hotkey(
+            "file.browser",
+            QAction("&Browser…", self, triggered=self.open_selection_browser),
+        )
+        act_browser.setToolTip("Open the selection browser to review and act on selected rows.")
+        data_menu.addAction(act_browser)
 
         ext_menu = mb.addMenu("E&xternal")
         ext_menu.addAction(
@@ -1213,7 +1212,7 @@ class ChemicalTableApp(
         self._sync_main_toolbar_for_table_ready()
 
     def apply_dock_results_chrome(self) -> None:
-        """Keep File → Export All / Export Selected / Browser; drop the rest of the toolbar."""
+        """Keep File → Save File / Save Selected; drop the rest of the toolbar."""
         self._dock_results_mode = True
         mb = self.menuBar()
         mb.clear()
@@ -1222,23 +1221,16 @@ class ChemicalTableApp(
         if export_all is None:
             export_all = self._bind_hotkey(
                 "file.export_all",
-                QAction("&Export All...", self, triggered=lambda: self.run_export(False)),
+                QAction("&Save File...", self, triggered=lambda: self.run_export(False)),
             )
+        else:
+            export_all.setText("&Save File...")
         file_menu.addAction(export_all)
         file_menu.addAction(
-            QAction("Export Selected...", self, triggered=lambda: self.run_export(True))
+            QAction("Save Selected...", self, triggered=lambda: self.run_export(True))
         )
-        file_menu.addSeparator()
-        act_browser = (getattr(self, "_hotkey_actions", {}) or {}).get("file.browser")
-        if act_browser is None:
-            act_browser = self._bind_hotkey(
-                "file.browser",
-                QAction("&Browser…", self, triggered=self.open_selection_browser),
-            )
-        act_browser.setToolTip("Open the selection browser to review and act on selected rows.")
-        file_menu.addAction(act_browser)
         self._add_dock_view_menu(mb)
-        keep = {"file.export_all", "file.browser"}
+        keep = {"file.export_all"}
         for action_id, action in list(getattr(self, "_hotkey_actions", {}).items()):
             if action_id in keep or action is None:
                 continue

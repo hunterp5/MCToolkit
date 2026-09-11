@@ -32,6 +32,15 @@ from rdkit import Chem
 from ...config import load_config
 from ...confs_codec import deserialize_confs_sidecar, serialize_confs_sidecar
 from ...microstate_cache import restore_ionization_sidecar, serialize_ionization_sidecar
+from ...session_codec import (
+    SESSION_VERSION_CURRENT,
+    compact_session_document,
+    dumps_session_document,
+    expand_session_document,
+    loads_session_bytes,
+    session_format_ok,
+    session_version_ok,
+)
 from ...utils import mol_to_canonical_smiles
 from ..strings import LOADING_DETAIL_SESSION, loaded_session_status
 from ..threadpool_access import start_runnable_on_app_pool
@@ -50,10 +59,13 @@ class SessionMixin:
     _SESSION_FORMAT_ALIASES = frozenset(
         {"molmanager_session", "MOLMANAGER_session", "chemmanager_session"}
     )
-    _SESSION_VERSION = 1
+    _SESSION_VERSION = SESSION_VERSION_CURRENT
 
     def _session_format_ok(self, fmt: object) -> bool:
-        return isinstance(fmt, str) and fmt in self._SESSION_FORMAT_ALIASES
+        return session_format_ok(fmt)
+
+    def _session_version_ok(self, version: object) -> bool:
+        return session_version_ok(version)
 
     def new_session(self) -> None:
         """Launch a new MolManager instance with nothing loaded."""
@@ -127,8 +139,8 @@ class SessionMixin:
         os.makedirs(session_dir, exist_ok=True)
         fname = f"session_{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}.cms"
         out_path = os.path.join(session_dir, fname)
-        with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(self._build_session_document(), f, separators=(",", ":"))
+        with open(out_path, "wb") as f:
+            f.write(dumps_session_document(self._build_session_document()))
         return out_path
 
     def _build_session_document(self) -> dict:
@@ -215,7 +227,7 @@ class SessionMixin:
                         "inverted": cfg.get("inverted", False),
                     }
                 )
-        return {
+        doc = {
             "format": self._SESSION_FORMAT,
             "version": self._SESSION_VERSION,
             "headers": list(self.headers),
@@ -250,6 +262,7 @@ class SessionMixin:
             "ionization_sidecar": serialize_ionization_sidecar(),
             "mmp_ledger": self._session_mmp_ledger_payload(),
         }
+        return compact_session_document(doc)
 
     def _session_som_browse_payload(self) -> list[dict]:
         """Atom-level SOM maps for session restore (redraws table images on open)."""
@@ -851,9 +864,12 @@ class SessionMixin:
         self._sync_filter_panel_scroll_content()
 
     def _apply_session_document(self, doc: dict) -> None:
-        if (
-            not self._session_format_ok(doc.get("format"))
-            or int(doc.get("version", 0)) != self._SESSION_VERSION
+        try:
+            doc = expand_session_document(doc)
+        except ValueError as exc:
+            raise ValueError(str(exc) or "Unsupported session format.") from exc
+        if not self._session_format_ok(doc.get("format")) or not self._session_version_ok(
+            doc.get("version")
         ):
             raise ValueError("Unsupported session format.")
         self._session_mutation_paused = True
@@ -1218,7 +1234,14 @@ class SessionMixin:
         self._pending_session_table_layout = doc.get("table_layout")
         self._restore_table_layout(self._pending_session_table_layout)
         self._reveal_table_after_session_prep()
-        QTimer.singleShot(0, self._deferred_session_post_load_follow_up)
+        # Same timing as file ingest: auto-render Structure after the table is visible.
+        from PyQt5.QtCore import QEventLoop
+        from PyQt5.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None:
+            app.processEvents(QEventLoop.ExcludeUserInputEvents)
+        self._deferred_session_post_load_follow_up()
 
     def _reveal_table_after_session_prep(self) -> None:
         """Leave the loading page once session rows and chrome are restored."""
@@ -1243,8 +1266,8 @@ class SessionMixin:
         if not low.endswith(".cms") and not low.endswith(".json"):
             path += ".cms"
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(self._build_session_document(), f, separators=(",", ":"))
+            with open(path, "wb") as f:
+                f.write(dumps_session_document(self._build_session_document()))
             self.status_label.setText(f"Session saved to {path}")
             clear = getattr(self, "_clear_session_dirty", None)
             if callable(clear):
@@ -1271,18 +1294,20 @@ class SessionMixin:
 
     def apply_saved_session_from_file(self, path: str) -> bool:
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                d = json.load(f)
+            with open(path, "rb") as f:
+                raw = f.read()
+            d = expand_session_document(loads_session_bytes(raw))
         except Exception as e:
             logger.exception("Open session: could not read %s", path)
             QMessageBox.warning(self, "Open Session", f"Could not read file: {e}")
             return False
-        if (
-            not self._session_format_ok(d.get("format"))
-            or int(d.get("version", 0)) != self._SESSION_VERSION
+        if not self._session_format_ok(d.get("format")) or not self._session_version_ok(
+            d.get("version")
         ):
             QMessageBox.warning(
-                self, "Open Session", "Not a MolManager session file (expected .cms / version 1)."
+                self,
+                "Open Session",
+                "Not a MolManager session file (expected .cms / version 1–2).",
             )
             return False
         try:
@@ -1463,4 +1488,10 @@ class SessionMixin:
             if callable(schedule) and rows_n > 0:
                 schedule()
         self._reveal_table_after_session_prep()
-        QTimer.singleShot(0, self._deferred_session_post_load_follow_up)
+        from PyQt5.QtCore import QEventLoop
+        from PyQt5.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None:
+            app.processEvents(QEventLoop.ExcludeUserInputEvents)
+        self._deferred_session_post_load_follow_up()

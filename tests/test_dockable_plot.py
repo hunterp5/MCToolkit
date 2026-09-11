@@ -95,8 +95,10 @@ def test_selection_browser_widget_is_workspace_dockable():
     assert is_dockable_workspace_widget(SelectionBrowserWidget)
     assert not is_dockable_plot_widget(SelectionBrowserWidget)
     assert hasattr(SelectionBrowserWidget, "create_floating_dialog")
+    assert getattr(SelectionBrowserWidget, "supports_floating_title", True) is False
     assert hasattr(SelectionBrowserWidget, "_toggle_options_visible")
     assert hasattr(SelectionBrowserWidget, "_sync_options_chrome")
+    assert hasattr(SelectionBrowserWidget, "_open_browser_options")
     assert is_dockable_workspace_widget(SomBrowserWidget)
     assert hasattr(SomBrowserWidget, "create_floating_dialog")
 
@@ -152,3 +154,24 @@ def test_floating_title_edit_installed_when_undocked(qapp):  # noqa: ARG001
     assert "transparent" in (edit.styleSheet() or "")
     sync_docked_footer_bar(host, docked=True)
     assert edit.isHidden()
+
+
+def test_browser_skips_floating_title_edit(qapp):  # noqa: ARG001
+    from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+
+    from molmanager.ui.dockable_plot import sync_docked_footer_bar
+
+    host = QWidget()
+    host.supports_floating_title = False
+    host._window_title = "Browser"
+    root = QVBoxLayout(host)
+    footer = QWidget(host)
+    host._footer_bar = footer
+    foot = QHBoxLayout(footer)
+    host._opts_btn = QPushButton(host)
+    foot.addWidget(host._opts_btn)
+    foot.addStretch(1)
+    root.addWidget(footer)
+
+    sync_docked_footer_bar(host, docked=False)
+    assert getattr(host, "_float_title_edit", None) is None

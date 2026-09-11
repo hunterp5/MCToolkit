@@ -38,23 +38,37 @@ def test_property_columns_panel_defaults_and_oid_values(qapp):  # noqa: ARG001
     panel.bind_app(w)
     panel.set_source_oid(0)
 
-    assert len(panel._prop_combos) == 5
+    assert len(panel._prop_combos) == 10
+    assert panel.visible_slot_count() == 3
     assert panel._prop_combo_1.currentText() == "SMILES"
     assert panel._prop_combo_2.currentText() == "Name"
     assert panel._prop_combo_3.currentText() == "MW"
-    assert panel._prop_combos[3].currentText() == "TPSA"
-    assert panel._prop_combos[4].currentText() == "cLogP"
     assert panel._prop_value_1.text() == "CCO"
     assert panel._prop_value_2.text() == "ethanol"
     assert panel._prop_value_3.text() == "46.07"
-    assert panel._prop_values[3].text() == "20.2"
-    assert panel._prop_values[4].text() == "-0.3"
+    assert panel._prop_rows[0].isHidden() is False
+    assert panel._prop_rows[2].isHidden() is False
+    assert panel._prop_rows[3].isHidden()
+
+    panel.set_visible_slot_count(2)
+    assert panel.visible_slot_count() == 2
+    assert not panel._prop_rows[0].isHidden()
+    assert not panel._prop_rows[1].isHidden()
+    assert panel._prop_rows[2].isHidden()
+    assert panel._prop_box.sizeHint().height() > 0
+
+    panel.set_visible_slot_count(5)
+    assert panel.visible_slot_count() == 5
+    assert not panel._prop_rows[4].isHidden()
+    tall = panel._prop_box.sizeHint().height()
+    panel.set_visible_slot_count(1)
+    assert panel._prop_box.sizeHint().height() < tall
 
     panel.set_source_oid(None)
     assert panel._prop_value_1.text() == "—"
 
 
-def test_molecule_viewer_has_no_options_toggle(qapp):  # noqa: ARG001
+def test_molecule_viewer_has_settings_not_hide_options_button(qapp):  # noqa: ARG001
     from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget, prepare_mol_2d
 
     m2 = prepare_mol_2d(Chem.MolFromSmiles("CCO"))
@@ -63,6 +77,10 @@ def test_molecule_viewer_has_no_options_toggle(qapp):  # noqa: ARG001
     assert viewer._options_host is not None
     assert not viewer._options_host.isHidden()
     assert not hasattr(viewer, "_toggle_options_btn")
+    assert viewer._opts_btn is not None
+    assert viewer._cb_hide_options is not None
+    assert viewer._spin_field_count is not None
+    assert viewer._close_viewer_btn.isHidden()
     assert viewer._conf_nav_host is None
     viewer.deleteLater()
 

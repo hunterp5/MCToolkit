@@ -20,17 +20,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import QItemSelectionModel, Qt, QTimer, QEvent
+from PyQt5.QtCore import QItemSelectionModel, Qt, QTimer, QEvent, QSize
 from PyQt5.QtGui import QImage, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QDialog,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QPushButton,
     QShortcut,
     QSizePolicy,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -43,11 +46,18 @@ from .compound_table_model import CompoundTableModel
 from .dockable_plot import (
     discard_host_dialog_after_dock,
     make_add_to_main_button,
+    make_plot_options_button,
+    make_plot_options_dialog,
     make_send_window_button,
     request_close_plot_widget,
+    show_plot_options_dialog,
     style_plot_footer_text_button,
 )
-from .property_columns_panel import PropertyColumnsPanel
+from .property_columns_panel import (
+    PROPERTY_COLUMN_SLOT_COUNT,
+    PROPERTY_COLUMN_SLOT_MAX,
+    PropertyColumnsPanel,
+)
 from .qt_widget_utils import make_window_minimizable
 from .table_selection import item_selection_for_view_rows
 
@@ -56,6 +66,7 @@ class SelectionBrowserWidget(QWidget):
     """Forward/back through the current selection or entire table; shows a structure preview."""
 
     dockable_in_workspace = True
+    supports_floating_title = False
 
     def __init__(self, parent_app: Any = None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -70,8 +81,8 @@ class SelectionBrowserWidget(QWidget):
         ] = {}  # (oid, w_px, h_px) -> pixmap
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        root.setContentsMargins(4, 4, 4, 4)
+        root.setSpacing(4)
 
         self._cb_only_selected = QCheckBox("Browse Selected")
         self._cb_only_selected.setToolTip(
@@ -79,18 +90,32 @@ class SelectionBrowserWidget(QWidget):
             "When unchecked, Browser walks the entire table."
         )
 
+        self._preview_host = QWidget(self)
+        self._preview_host.setMinimumSize(360, 260)
+        # Ignored: preview content must not drive the window sizeHint (move/resize loop).
+        self._preview_host.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self._preview_host.setStyleSheet(
+            "background-color: #ffffff; border: 1px solid palette(mid); border-radius: 4px;"
+        )
+        self._preview_ly = QVBoxLayout(self._preview_host)
+        self._preview_ly.setContentsMargins(0, 0, 0, 0)
+        self._preview_ly.setSpacing(0)
+
+        self._struct_label = QLabel(self._preview_host)
+        self._struct_label.setAlignment(Qt.AlignCenter)
+        self._struct_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self._struct_label.setScaledContents(False)
+        # Match RDKit depiction background (white), not palette(base).
+        self._struct_label.setStyleSheet("background-color: #ffffff; border: none;")
+        self._preview_ly.addWidget(self._struct_label, 1)
+        self._view_3d = None
+        self._preview_3d_mode = False
+        root.addWidget(self._preview_host, 1)
+
         self._meta = QLabel()
         self._meta.setAlignment(Qt.AlignCenter)
+        self._meta.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         root.addWidget(self._meta)
-
-        self._struct_label = QLabel()
-        self._struct_label.setAlignment(Qt.AlignCenter)
-        self._struct_label.setMinimumSize(360, 260)
-        self._struct_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._struct_label.setStyleSheet(
-            "background-color: palette(base); border: 1px solid palette(mid); border-radius: 4px;"
-        )
-        root.addWidget(self._struct_label, 1)
 
         self._options_host = QWidget(self)
         options_ly = QVBoxLayout(self._options_host)
@@ -102,7 +127,11 @@ class SelectionBrowserWidget(QWidget):
         root.addWidget(self._options_host)
         self._options_visible = True
 
-        row_btns = QHBoxLayout()
+        self._nav_bar = QWidget(self)
+        self._nav_bar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        row_btns = QHBoxLayout(self._nav_bar)
+        row_btns.setContentsMargins(0, 0, 0, 0)
+        row_btns.setSpacing(4)
         self._btn_first = QPushButton("<<")
         self._btn_first.setToolTip("First eligible row in scope (Home)")
         self._btn_back = QPushButton("←")
@@ -115,17 +144,25 @@ class SelectionBrowserWidget(QWidget):
         row_btns.addWidget(self._btn_back)
         row_btns.addWidget(self._btn_fwd)
         row_btns.addWidget(self._btn_last)
-        row_btns.addStretch()
-        root.addLayout(row_btns)
-
         self._btn_toggle_select = QPushButton("Select")
         self._btn_toggle_select.setToolTip("Select or deselect this row in the table")
+        row_btns.addWidget(self._btn_toggle_select)
+        row_btns.addWidget(self._cb_only_selected)
+        row_btns.addStretch(1)
+        root.addWidget(self._nav_bar)
 
         self._footer_bar = QWidget(self)
         self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         foot = QHBoxLayout(self._footer_bar)
         foot.setContentsMargins(0, 0, 0, 0)
         foot.setSpacing(4)
+        self._opts_btn = make_plot_options_button(
+            self,
+            tooltip="Browser settings: data fields and options visibility.",
+        )
+        self._opts_btn.clicked.connect(self._open_browser_options)
+        foot.addWidget(self._opts_btn)
+        foot.addStretch(1)
         self._add_to_main_btn = make_add_to_main_button(
             self,
             tooltip="Dock this browser beside the compound table.",
@@ -143,18 +180,41 @@ class SelectionBrowserWidget(QWidget):
         self._close_btn.clicked.connect(self._close_docked_browser)
         style_plot_footer_text_button(self._close_btn)
         foot.addWidget(self._close_btn)
-        foot.addWidget(self._cb_only_selected)
-        foot.addWidget(self._btn_toggle_select)
-        self._toggle_options_btn = QPushButton("Hide Options")
-        self._toggle_options_btn.setAutoDefault(False)
-        self._toggle_options_btn.setDefault(False)
-        self._toggle_options_btn.setToolTip(
+        root.insertWidget(0, self._footer_bar)
+
+        self._opts_panel = QWidget(self)
+        opts_form = QFormLayout(self._opts_panel)
+        opts_form.setContentsMargins(0, 0, 0, 0)
+        opts_form.setHorizontalSpacing(10)
+        opts_form.setVerticalSpacing(8)
+        self._cb_hide_options = QCheckBox("Hide Options")
+        self._cb_hide_options.setToolTip(
             "Hide column pickers so only the structure preview and navigation controls are shown."
         )
-        self._toggle_options_btn.clicked.connect(self._toggle_options_visible)
-        foot.addWidget(self._toggle_options_btn)
-        foot.addStretch()
-        root.insertWidget(0, self._footer_bar)
+        self._cb_hide_options.toggled.connect(self._on_hide_options_toggled)
+        opts_form.addRow(self._cb_hide_options)
+        self._cb_view_3d = QCheckBox("3D")
+        self._cb_view_3d.setToolTip(
+            "Browse structures as interactive 3D models instead of 2D RDKit depictions.\n"
+            "Existing 3D coordinates (e.g. docked ligands) are kept when present."
+        )
+        self._cb_view_3d.toggled.connect(self._on_view_3d_toggled)
+        opts_form.addRow(self._cb_view_3d)
+        self._spin_field_count = QSpinBox()
+        self._spin_field_count.setRange(0, PROPERTY_COLUMN_SLOT_MAX)
+        self._spin_field_count.setValue(PROPERTY_COLUMN_SLOT_COUNT)
+        self._spin_field_count.setToolTip(
+            "How many table data fields to show under the structure preview."
+        )
+        self._spin_field_count.valueChanged.connect(self._on_field_count_changed)
+        opts_form.addRow("Data fields:", self._spin_field_count)
+        self._opts_dialog = make_plot_options_dialog(
+            self,
+            self._opts_panel,
+            title="Browser Settings",
+            min_width=320,
+            min_height=180,
+        )
 
         self._btn_first.clicked.connect(self._go_first)
         self._btn_back.clicked.connect(lambda: self._step(-1))
@@ -201,7 +261,22 @@ class SelectionBrowserWidget(QWidget):
         return max(360, BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH // 2)
 
     def embedded_preferred_width(self) -> int:
-        return max(self.embedded_minimum_width(), 480)
+        return max(self.embedded_minimum_width(), self.floating_content_minimum_width())
+
+    def floating_content_minimum_width(self) -> int:
+        """Width needed for footer + nav chrome without clipping."""
+        margins = 8  # root layout left+right (4+4)
+        widths = [self.embedded_minimum_width()]
+        for bar in (getattr(self, "_footer_bar", None), getattr(self, "_nav_bar", None)):
+            if bar is None:
+                continue
+            try:
+                hint = bar.sizeHint()
+                min_hint = bar.minimumSizeHint()
+                widths.append(max(int(hint.width()), int(min_hint.width()), 0))
+            except RuntimeError:
+                continue
+        return max(widths) + margins
 
     def create_floating_dialog(self, parent_app) -> "SelectionBrowserDialog":
         """Re-open this browser in a floating window after undocking from the main table."""
@@ -250,29 +325,92 @@ class SelectionBrowserWidget(QWidget):
         docked = self._is_docked_in_main_window()
         self._add_to_main_btn.setVisible(floating)
         self._send_window_btn.setVisible(docked)
-        self._close_btn.setVisible(True)
+        self._close_btn.setVisible(docked)
         sync_docked_footer_bar(self, docked=docked)
+        if floating:
+            dlg = self.window()
+            ensure = getattr(dlg, "ensure_fits_chrome", None)
+            if callable(ensure):
+                ensure()
 
     def _sync_options_chrome(self) -> None:
-        """Show or hide property column pickers; keep the toggle button visible."""
+        """Show or hide property column pickers from Browser Settings."""
         visible = bool(getattr(self, "_options_visible", True))
+        spin = getattr(self, "_spin_field_count", None)
+        count = int(spin.value()) if spin is not None else 1
         host = getattr(self, "_options_host", None)
         if host is not None:
-            host.setVisible(visible)
-        btn = getattr(self, "_toggle_options_btn", None)
-        if btn is not None:
-            if visible:
-                btn.setText("Hide Options")
-                btn.setToolTip(
-                    "Hide column pickers so only the structure preview and navigation controls are shown."
-                )
+            host.setVisible(visible and count > 0)
+        cb = getattr(self, "_cb_hide_options", None)
+        if cb is not None and cb.isChecked() == visible:
+            cb.blockSignals(True)
+            cb.setChecked(not visible)
+            cb.blockSignals(False)
+
+    def _on_hide_options_toggled(self, checked: bool) -> None:
+        self._options_visible = not bool(checked)
+        self._sync_options_chrome()
+
+    def _on_view_3d_toggled(self, checked: bool) -> None:
+        self._preview_3d_mode = bool(checked)
+        self._sync_preview_mode()
+        row = self._current_row()
+        if row is not None:
+            self._update_preview(row)
+        elif bool(checked) and self._view_3d is not None:
+            self._view_3d.clear()
+
+    def _ensure_3d_view(self) -> None:
+        if getattr(self, "_view_3d", None) is not None:
+            return
+        try:
+            from .mol_viewer_3d import Molecule3DEmbedView
+        except Exception:
+            return
+        view = Molecule3DEmbedView(self._preview_host)
+        view.setMinimumSize(0, 0)
+        view.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self._preview_ly.addWidget(view, 1)
+        self._view_3d = view
+
+    def _sync_preview_mode(self) -> None:
+        three_d = bool(getattr(self, "_preview_3d_mode", False))
+        if three_d:
+            self._ensure_3d_view()
+            self._struct_label.hide()
+            view = getattr(self, "_view_3d", None)
+            if view is not None:
+                view.show()
+                view.schedule_refit()
             else:
-                btn.setText("Show Options")
-                btn.setToolTip("Show customizable property column pickers.")
+                self._struct_label.show()
+                self._struct_label.clear()
+                self._struct_label.setPixmap(QPixmap())
+                self._struct_label.setText("(3D viewer unavailable)")
+        else:
+            self._struct_label.show()
+            view = getattr(self, "_view_3d", None)
+            if view is not None:
+                view.hide()
+
+    def _on_field_count_changed(self, value: int) -> None:
+        panel = getattr(self, "_prop_panel", None)
+        if panel is not None:
+            panel.set_visible_slot_count(int(value))
+        self._sync_options_chrome()
+
+    def _open_browser_options(self) -> None:
+        show_plot_options_dialog(getattr(self, "_opts_dialog", None))
 
     def _toggle_options_visible(self) -> None:
-        self._options_visible = not bool(getattr(self, "_options_visible", True))
-        self._sync_options_chrome()
+        """Compatibility helper: flip Hide Options and refresh chrome."""
+        hide = bool(getattr(self, "_options_visible", True))
+        cb = getattr(self, "_cb_hide_options", None)
+        if cb is not None:
+            cb.setChecked(hide)
+        else:
+            self._options_visible = not hide
+            self._sync_options_chrome()
 
     def event(self, event) -> bool:  # noqa: N802 — Qt API
         if event.type() == QEvent.ParentChange:
@@ -329,6 +467,11 @@ class SelectionBrowserWidget(QWidget):
 
     def resizeEvent(self, event) -> None:  # noqa: N802 — Qt API
         super().resizeEvent(event)
+        if getattr(self, "_preview_3d_mode", False):
+            view = getattr(self, "_view_3d", None)
+            if view is not None:
+                view.schedule_refit()
+            return
         if self._rows and 0 <= self._idx < len(self._rows):
             self._update_preview(self._rows[self._idx])
 
@@ -568,9 +711,15 @@ class SelectionBrowserWidget(QWidget):
 
     def _preview_pixel_size(self) -> tuple[int, int, float]:
         dpr = max(1.0, float(self.devicePixelRatioF()))
-        lw = max(self._struct_label.width(), BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH)
-        lh = max(self._struct_label.height(), BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT)
-        return int(lw * dpr), int(lh * dpr), dpr
+        host = getattr(self, "_preview_host", None) or self._struct_label
+        lw = int(host.width())
+        lh = int(host.height())
+        # Use the label's current box; only fall back before the first layout pass.
+        if lw < 2:
+            lw = max(360, BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH // 2)
+        if lh < 2:
+            lh = max(260, BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT // 2)
+        return max(1, int(lw * dpr)), max(1, int(lh * dpr)), dpr
 
     def _render_preview_pixmap(self, logical_row: int, pw: int, ph: int) -> QPixmap | None:
         try:
@@ -591,6 +740,9 @@ class SelectionBrowserWidget(QWidget):
             return None
         try:
             d = rdMolDraw2D.MolDraw2DCairo(pw, ph)
+            opts = d.drawOptions()
+            # Keep molecule canvas white to match the preview host background.
+            opts.setBackgroundColour((1.0, 1.0, 1.0, 1.0))
             rdMolDraw2D.PrepareAndDrawMolecule(d, mol)
             d.FinishDrawing()
             img = QImage.fromData(d.GetDrawingText())
@@ -602,7 +754,30 @@ class SelectionBrowserWidget(QWidget):
             return None
         return None
 
+    def _update_preview_3d(self, logical_row: int) -> None:
+        self._ensure_3d_view()
+        view = getattr(self, "_view_3d", None)
+        if view is None:
+            self._struct_label.show()
+            self._struct_label.clear()
+            self._struct_label.setPixmap(QPixmap())
+            self._struct_label.setText("(3D viewer unavailable)")
+            return
+        app = self._app
+        try:
+            oid = int(app._table_model.row_oid(logical_row))
+        except Exception:
+            view.clear()
+            return
+        mol = getattr(app, "mols", {}).get(oid)
+        view.set_molecule(mol, rebuild_3d=False)
+
     def _update_preview(self, logical_row: int) -> None:
+        if getattr(self, "_preview_3d_mode", False):
+            self._sync_preview_mode()
+            self._update_preview_3d(logical_row)
+            return
+        self._sync_preview_mode()
         pw, ph, dpr = self._preview_pixel_size()
         pm = self._render_preview_pixmap(logical_row, pw, ph)
         if pm is None or pm.isNull():
@@ -639,6 +814,9 @@ class SelectionBrowserWidget(QWidget):
             self._struct_label.clear()
             self._struct_label.setPixmap(QPixmap())
             self._struct_label.setText("")
+            view = getattr(self, "_view_3d", None)
+            if view is not None:
+                view.clear()
             return
         self._idx = max(0, min(self._idx, n - 1))
         self._idx = self._first_navigable_index(self._idx, +1)
@@ -659,7 +837,6 @@ class SelectionBrowserDialog(QDialog):
         self.setWindowTitle("Browser")
         self.setModal(False)
         self.setWindowModality(Qt.NonModal)
-        self.resize(480, 520)
         self._force_close = False
 
         if panel is not None:
@@ -672,10 +849,39 @@ class SelectionBrowserDialog(QDialog):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
+        root.setSizeConstraint(QLayout.SetDefaultConstraint)
         root.addWidget(self._panel, 1)
         self._panel._sync_footer_chrome()
         self._panel._sync_options_chrome()
         make_window_minimizable(self)
+        self.ensure_fits_chrome(initial=True)
+
+    def ensure_fits_chrome(self, *, initial: bool = False) -> None:
+        """Keep the floating window at least as wide as footer/nav chrome."""
+        panel = getattr(self, "_panel", None)
+        if panel is None:
+            return
+        try:
+            min_w = int(panel.floating_content_minimum_width())
+        except Exception:
+            min_w = 480
+        min_w = max(480, min_w)
+        self.setMinimumWidth(min_w)
+        if initial:
+            self.resize(min_w, max(520, int(self.height()) or 520))
+        elif self.width() < min_w:
+            self.resize(min_w, self.height())
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — Qt API
+        hint = super().sizeHint()
+        panel = getattr(self, "_panel", None)
+        if panel is None:
+            return hint
+        try:
+            min_w = int(panel.floating_content_minimum_width())
+        except Exception:
+            min_w = hint.width()
+        return QSize(max(hint.width(), min_w, 480), max(hint.height(), 520))
 
     def refresh_from_app(self, *, preserve_position: bool = False) -> None:
         self._panel.refresh_from_app(preserve_position=preserve_position)

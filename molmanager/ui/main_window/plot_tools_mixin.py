@@ -519,7 +519,7 @@ class PlotToolsMixin:
             pass
 
     def _bind_undocked_browser_dialog(self, dlg) -> bool:
-        """Track File → Browser / Predict SOM windows after undock. Return True if handled."""
+        """Track Data → Browser / Predict SOM windows after undock. Return True if handled."""
         from ..selection_browser import SelectionBrowserDialog
         from ..som_browser import SomBrowserDialog
 

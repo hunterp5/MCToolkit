@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Modeless SOM results browser: step through FAME3R maps like File → Browser."""
+"""Modeless SOM results browser: step through FAME3R maps like Data → Browser."""
 
 from __future__ import annotations
 
@@ -462,7 +462,7 @@ class SomColorScaleWidget(QWidget):
 
 
 class SomBrowserWidget(QWidget):
-    """Forward/back through SOM maps with a File → Browser style preview."""
+    """Forward/back through SOM maps with a Data → Browser style preview."""
 
     dockable_in_workspace = True
 

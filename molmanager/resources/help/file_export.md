@@ -1,6 +1,6 @@
-# Export
+# Save File
 
-Export writes the table (all rows or the current selection) to common chemistry and spreadsheet formats for sharing or downstream tools.
+Save File writes the table (all rows or the current selection) to common chemistry and spreadsheet formats for sharing or downstream tools.
 
 ## Goal
 
@@ -12,27 +12,27 @@ Use after filtering to a hit list, after adding scores/descriptors, or when hand
 
 ## Inputs / scope
 
-Current table columns and structures. Choose all rows or selected rows depending on the export dialog scope.
+Current table columns and structures. Choose all rows or selected rows depending on the save dialog scope.
 
 ## Options
 
-- Export **all** rows or **selected** rows.
+- Save **all** rows (**File → Save File**) or **selected** rows (**File → Save Selected**).
 - Format choice appropriate to the destination (e.g. SDF, SMILES, tabular).
 - Destination path / file name.
 
 ## Workflow
 
 1. Select rows if you only need a subset.
-2. Open **Export** and pick format and scope.
-3. Choose the output path and run the export (may appear under **Processes**).
+2. Choose **File → Save File** or **File → Save Selected**, then pick format.
+3. Choose the output path and run the save (may appear under **Processes**).
 4. Verify the file in the target application.
 
 ## Use cases
 
-- Export a diverse subset for external vendor quoting.
+- Save a diverse subset for external vendor quoting.
 - Send selected docking candidates as SDF.
 - Dump scored QSAR predictions to CSV for a report.
 
 ## Tips and limits
 
-Hidden or filter-excluded rows may or may not be included depending on whether you export the full table vs selection - check scope. Some formats drop depiction caches and keep connection tables only. Large exports can be slow; watch Processes.
+Hidden or filter-excluded rows may or may not be included depending on whether you save the full table vs selection - check scope. Some formats drop depiction caches and keep connection tables only. Large saves can be slow; watch Processes.

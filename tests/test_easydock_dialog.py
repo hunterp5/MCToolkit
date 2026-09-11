@@ -197,9 +197,9 @@ def test_open_dock_results_window_lists_smina_fields(qapp, tmp_path, monkeypatch
     file_menu = mb.actions()[0].menu()
     assert file_menu is not None
     file_labels = [a.text().replace("&", "") for a in file_menu.actions() if a.text()]
-    assert file_labels[0].startswith("Export All")
-    assert any(t.startswith("Export Selected") for t in file_labels)
-    assert any(t.startswith("Browser") for t in file_labels)
+    assert file_labels[0].startswith("Save File")
+    assert any(t.startswith("Save Selected") for t in file_labels)
+    assert not any(t.startswith("Browser") for t in file_labels)
     assert not any("Open File" in t or t.startswith("Tools") for t in file_labels)
     view_menu = mb.actions()[1].menu()
     assert view_menu is not None

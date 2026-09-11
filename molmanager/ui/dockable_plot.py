@@ -486,6 +486,14 @@ def sync_floating_title_chrome(widget: QWidget | None, *, floating: bool) -> Non
     """Show the floating title editor only while the plot is undocked."""
     if widget is None:
         return
+    if getattr(widget, "supports_floating_title", True) is False:
+        existing = getattr(widget, _FLOAT_TITLE_EDIT_ATTR, None)
+        if isinstance(existing, QLineEdit):
+            try:
+                existing.hide()
+            except RuntimeError:
+                pass
+        return
     edit = ensure_floating_title_edit(widget)
     if edit is None:
         return

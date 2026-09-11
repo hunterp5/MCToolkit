@@ -947,6 +947,11 @@ class PrepareStructuresMixin:
         base_w, base_h = structure_depiict_width(), structure_depiict_height()
         renders, row_by_oid = self._build_render2d_tasks_from_mols(base_w, base_h, None)
         if not renders:
+            # Session restore may have rows before mols are keyed; rebuild from table cells.
+            renders, row_by_oid = self._build_render2d_tasks_in_table_order(
+                "Structure", base_w, base_h, None
+            )
+        if not renders:
             return False
         self._render2d_after_ingest = True
         self._start_render_2d_batch(renders, row_by_oid, "Structure")

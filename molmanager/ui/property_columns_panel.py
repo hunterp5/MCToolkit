@@ -23,14 +23,16 @@ from typing import Any
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QComboBox,
-    QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
-PROPERTY_COLUMN_SLOT_COUNT = 5
+PROPERTY_COLUMN_SLOT_COUNT = 3
+PROPERTY_COLUMN_SLOT_MAX = 10
 
 _DEFAULT_COLUMN_PREFERENCES: tuple[tuple[str, ...], ...] = (
     ("SMILES", "Name", "CompoundName", "ID"),
@@ -49,49 +51,109 @@ class PropertyColumnsPanel(QWidget):
         parent: QWidget | None = None,
         *,
         slot_count: int = PROPERTY_COLUMN_SLOT_COUNT,
+        max_slots: int = PROPERTY_COLUMN_SLOT_MAX,
     ):
         super().__init__(parent)
         self._app: Any = None
         self._oid: int | None = None
-        n = max(1, int(slot_count))
+        capacity = max(1, int(max_slots))
+        visible = max(0, min(int(slot_count), capacity))
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
         self._prop_box = QGroupBox()
+        self._prop_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         self._prop_box.setStyleSheet(
             "QGroupBox { margin-top: 6px; background-color: palette(base); "
             "border: 1px solid palette(mid); border-radius: 4px; }"
         )
-        self._prop_form = QFormLayout(self._prop_box)
-        self._prop_form.setLabelAlignment(Qt.AlignRight)
-        self._prop_form.setFormAlignment(Qt.AlignTop)
-        self._prop_form.setContentsMargins(12, 12, 12, 10)
-        self._prop_form.setVerticalSpacing(8)
-        self._prop_form.setHorizontalSpacing(10)
+        self._rows_host = QWidget(self._prop_box)
+        self._rows_host.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self._rows_ly = QVBoxLayout(self._rows_host)
+        self._rows_ly.setContentsMargins(12, 12, 12, 10)
+        self._rows_ly.setSpacing(8)
+        box_ly = QVBoxLayout(self._prop_box)
+        box_ly.setContentsMargins(0, 0, 0, 0)
+        box_ly.setSpacing(0)
+        box_ly.addWidget(self._rows_host)
 
         self._prop_combos: list[QComboBox] = []
         self._prop_values: list[QLabel] = []
-        for _ in range(n):
+        self._prop_rows: list[QWidget] = []
+        for _ in range(capacity):
+            row = QWidget(self._rows_host)
+            row.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+            row_ly = QHBoxLayout(row)
+            row_ly.setContentsMargins(0, 0, 0, 0)
+            row_ly.setSpacing(10)
             cb = QComboBox()
-            cb.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+            cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            cb.setMinimumContentsLength(10)
+            cb.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
             lab = QLabel("—")
             lab.setTextInteractionFlags(Qt.TextSelectableByMouse)
             lab.setWordWrap(True)
-            self._prop_form.addRow(cb, lab)
+            lab.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            lab.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            row_ly.addWidget(cb, 0)
+            row_ly.addWidget(lab, 1)
+            self._rows_ly.addWidget(row)
             cb.currentIndexChanged.connect(lambda _i: self.update_values())
+            self._prop_rows.append(row)
             self._prop_combos.append(cb)
             self._prop_values.append(lab)
         root.addWidget(self._prop_box)
+        self._visible_slot_count = visible
+        self._apply_visible_slot_count()
 
         # Compatibility aliases used by tests / older call sites.
         self._prop_combo_1 = self._prop_combos[0]
-        self._prop_combo_2 = self._prop_combos[1] if n > 1 else self._prop_combos[0]
-        self._prop_combo_3 = self._prop_combos[2] if n > 2 else self._prop_combos[0]
+        self._prop_combo_2 = self._prop_combos[1] if capacity > 1 else self._prop_combos[0]
+        self._prop_combo_3 = self._prop_combos[2] if capacity > 2 else self._prop_combos[0]
         self._prop_value_1 = self._prop_values[0]
-        self._prop_value_2 = self._prop_values[1] if n > 1 else self._prop_values[0]
-        self._prop_value_3 = self._prop_values[2] if n > 2 else self._prop_values[0]
+        self._prop_value_2 = self._prop_values[1] if capacity > 1 else self._prop_values[0]
+        self._prop_value_3 = self._prop_values[2] if capacity > 2 else self._prop_values[0]
+
+    def visible_slot_count(self) -> int:
+        return int(getattr(self, "_visible_slot_count", len(self._prop_combos)))
+
+    def set_visible_slot_count(self, count: int) -> None:
+        """Show the first *count* property pickers (0 hides all rows)."""
+        capacity = len(self._prop_combos)
+        n = max(0, min(int(count), capacity))
+        if n == self.visible_slot_count():
+            return
+        self._visible_slot_count = n
+        self._apply_visible_slot_count()
+        self.update_values()
+
+    def _apply_visible_slot_count(self) -> None:
+        n = self.visible_slot_count()
+        # Re-parent only the visible rows into the layout so the group box height
+        # tracks the field count (hidden QForm/QVBox children still reserve space).
+        while self._rows_ly.count():
+            item = self._rows_ly.takeAt(0)
+            w = item.widget() if item is not None else None
+            if w is not None:
+                w.hide()
+                w.setParent(self._rows_host)
+        for i, row in enumerate(self._prop_rows):
+            if i < n:
+                self._rows_ly.addWidget(row)
+                row.show()
+            else:
+                row.hide()
+                row.setParent(self._rows_host)
+        self._prop_box.setVisible(n > 0)
+        self.setVisible(n > 0)
+        self._rows_host.adjustSize()
+        self._prop_box.adjustSize()
+        self.adjustSize()
+        self._prop_box.updateGeometry()
+        self.updateGeometry()
 
     def bind_app(self, app: Any) -> None:
         """Attach the main table app and (re)populate column choices."""

@@ -24,6 +24,8 @@ sqlalchemy>=2.0
 pubchempy>=1.0.4
 chembl_webresource_client>=0.10.9
 rdkit>=2022.9.5
+# Fast JSON for compact .cms session files.
+orjson>=3.9
 # Official Open Babel wheels (obabel + Confab) for Systematic conformers.
 openbabel>=3.2.0
 scikit-learn>=1.3

@@ -39,6 +39,8 @@ def _skip_session_auto_render(monkeypatch) -> None:
 
 
 def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
+    from molmanager.session_codec import dumps_session_document, expand_session_document, loads_session_bytes
+
     w = ChemicalTableApp()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
@@ -47,11 +49,17 @@ def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
     w.next_oid = 1
 
     doc = w._build_session_document()
-    wire = json.dumps(doc)
-    doc2 = json.loads(wire)
+    assert doc["version"] == 2
+    assert doc["ids"] == [0]
+    assert doc["data_headers"] == ["SMILES", "Note"]
+    assert "rows" not in doc
+
+    wire = dumps_session_document(doc)
+    assert wire.startswith(b"\x1f\x8b")
+    doc2 = expand_session_document(loads_session_bytes(wire))
 
     assert doc2["format"] == doc["format"]
-    assert doc2["version"] == doc["version"]
+    assert doc2["version"] == 2
     assert doc2["headers"] == w.headers
     assert len(doc2["rows"]) == 1
     assert doc2["rows"][0]["id"] == 0
@@ -80,6 +88,23 @@ def test_apply_session_document_restores_row(qapp):  # noqa: ARG001
     smi_col = w2.headers.index("SMILES")
     assert "CC" in (w2._table_model.cell_text(0, smi_col) or "")
     assert 0 in w2.mols
+
+
+def test_apply_legacy_v1_session_document(qapp):  # noqa: ARG001
+    """Plain uncompressed version-1 documents still open."""
+    w = ChemicalTableApp()
+    v1 = {
+        "format": "molmanager_session",
+        "version": 1,
+        "headers": ["ID_HIDDEN", "Structure", "SMILES", "Note"],
+        "rows": [{"id": 3, "cells": {"SMILES": "CCO", "Note": "ethanol"}}],
+        "next_oid": 4,
+    }
+    w._apply_session_document(v1)
+    assert w._table_model.rowCount() == 1
+    assert 3 in w.mols
+    note_col = w.headers.index("Note")
+    assert "ethanol" in (w._table_model.cell_text(0, note_col) or "")
 
 
 def test_session_document_roundtrip_restores_column_coloring(qapp):  # noqa: ARG001
@@ -168,7 +193,10 @@ def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
     assert w._table_model.backing_value_for_row_header(0, SOM_MAP_COLUMN) == "CCO"
 
     doc = w._build_session_document()
-    assert doc["rows"][0]["cells"][SOM_MAP_COLUMN] == "CCO"
+    from molmanager.session_codec import expand_session_document
+
+    expanded = expand_session_document(doc)
+    assert expanded["rows"][0]["cells"][SOM_MAP_COLUMN] == "CCO"
     assert doc["som_browse"][0]["oid"] == 7
     assert doc["som_browse"][0]["smiles"] == "CCO"
     assert doc["som_browse"][0]["atoms"][0]["atom_id"] == 0

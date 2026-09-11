@@ -32,6 +32,7 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QDialog,
+    QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -40,6 +41,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QShortcut,
     QSizePolicy,
+    QSpinBox,
     QTableWidget,
     QVBoxLayout,
     QWidget,
@@ -52,10 +54,17 @@ from ..confs_codec import conformer_mol_blocks_b64_json
 from ..exception_policy import log_swallowed_exception
 from .dockable_plot import (
     make_add_to_main_button,
+    make_plot_options_button,
+    make_plot_options_dialog,
     make_send_window_button,
+    show_plot_options_dialog,
     style_plot_footer_text_button,
 )
-from .property_columns_panel import PropertyColumnsPanel
+from .property_columns_panel import (
+    PROPERTY_COLUMN_SLOT_COUNT,
+    PROPERTY_COLUMN_SLOT_MAX,
+    PropertyColumnsPanel,
+)
 from .qt_widget_utils import make_window_minimizable, qobject_is_deleted
 from .widgets import NumericTableWidgetItem
 
@@ -1270,12 +1279,24 @@ class Molecule3DEmbedView(QWidget):
         """Clear the displayed model."""
         self._run_set_mol_b64("")
 
-    def set_molecule(self, mol: Chem.Mol | None) -> None:
-        """Embed *mol* in 3D and display it, or clear when *mol* is empty/invalid."""
+    def set_molecule(self, mol: Chem.Mol | None, *, rebuild_3d: bool = True) -> None:
+        """Embed *mol* in 3D and display it, or clear when *mol* is empty/invalid.
+
+        When *rebuild_3d* is False and *mol* already has a 3D conformer (e.g. a docked
+        ligand), that geometry is kept instead of running ETKDG again.
+        """
         if mol is None or mol.GetNumAtoms() == 0:
             self.clear()
             return
-        m3 = prepare_mol_3d(mol)
+        m3 = None
+        if not rebuild_3d:
+            try:
+                if mol.GetNumConformers() >= 1 and mol.GetConformer().Is3D():
+                    m3 = Chem.Mol(mol)
+            except Exception:
+                m3 = None
+        if m3 is None:
+            m3 = prepare_mol_3d(mol)
         if m3 is None:
             self.clear()
             return
@@ -1545,6 +1566,11 @@ class Molecule3DViewerWidget(QWidget):
         self._export_host = None
         self._btn_export_table = None
         self._viewer_status = None
+        self._opts_btn = None
+        self._opts_dialog = None
+        self._cb_hide_options = None
+        self._spin_field_count = None
+        self._options_visible = True
 
         self._options_host = QWidget(self)
         options_ly = QVBoxLayout(self._options_host)
@@ -1569,24 +1595,57 @@ class Molecule3DViewerWidget(QWidget):
         foot = QHBoxLayout(footer)
         foot.setContentsMargins(0, 0, 0, 0)
         foot.setSpacing(4)
+        if self._prop_panel is not None:
+            self._opts_btn = make_plot_options_button(
+                self,
+                tooltip="Viewer settings: data fields and options visibility.",
+            )
+            self._opts_btn.clicked.connect(self._open_viewer_options)
+            foot.addWidget(self._opts_btn)
+            self._opts_panel = QWidget(self)
+            opts_form = QFormLayout(self._opts_panel)
+            opts_form.setContentsMargins(0, 0, 0, 0)
+            opts_form.setHorizontalSpacing(10)
+            opts_form.setVerticalSpacing(8)
+            self._cb_hide_options = QCheckBox("Hide Options")
+            self._cb_hide_options.setToolTip(
+                "Hide column pickers so only the structure view and navigation controls are shown."
+            )
+            self._cb_hide_options.toggled.connect(self._on_hide_options_toggled)
+            opts_form.addRow(self._cb_hide_options)
+            self._spin_field_count = QSpinBox()
+            self._spin_field_count.setRange(0, PROPERTY_COLUMN_SLOT_MAX)
+            self._spin_field_count.setValue(PROPERTY_COLUMN_SLOT_COUNT)
+            self._spin_field_count.setToolTip(
+                "How many table data fields to show under the structure view."
+            )
+            self._spin_field_count.valueChanged.connect(self._on_field_count_changed)
+            opts_form.addRow("Data fields:", self._spin_field_count)
+            self._opts_dialog = make_plot_options_dialog(
+                self,
+                self._opts_panel,
+                title="Viewer Settings",
+                min_width=320,
+                min_height=140,
+            )
         self._add_to_main_btn = make_add_to_main_button(
             self,
             tooltip="Dock this viewer beside the table in the main window (like a plot pane).",
         )
         self._add_to_main_btn.clicked.connect(self._add_to_main_window)
-        foot.addWidget(self._add_to_main_btn)
         self._send_window_btn = make_send_window_button(
             self,
             tooltip="Open this docked viewer in a separate floating window.",
         )
         self._send_window_btn.clicked.connect(self._send_to_new_window)
-        foot.addWidget(self._send_window_btn)
         self._close_viewer_btn = QPushButton("Close")
         self._close_viewer_btn.setToolTip("Close this viewer.")
         self._close_viewer_btn.clicked.connect(self._close_docked_viewer)
         style_plot_footer_text_button(self._close_viewer_btn)
-        foot.addWidget(self._close_viewer_btn)
         if multi_conf_blocks_json_b64 is not None:
+            foot.addWidget(self._add_to_main_btn)
+            foot.addWidget(self._send_window_btn)
+            foot.addWidget(self._close_viewer_btn)
             self._add_conf_nav_controls(foot)
             self._btn_export_table = QPushButton("Export to Table")
             self._btn_export_table.setAutoDefault(False)
@@ -1601,15 +1660,20 @@ class Molecule3DViewerWidget(QWidget):
             foot.addWidget(self._btn_export_table)
             self._conf_nav_host = footer
             self._export_host = footer
-        foot.addStretch(1)
-        if multi_conf_blocks_json_b64 is not None:
+            foot.addStretch(1)
             self._viewer_status = QLabel("")
             self._viewer_status.setStyleSheet("color: #333;")
             self._viewer_status.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
             foot.addWidget(self._viewer_status)
+        else:
+            foot.addStretch(1)
+            foot.addWidget(self._add_to_main_btn)
+            foot.addWidget(self._send_window_btn)
+            foot.addWidget(self._close_viewer_btn)
         self._apply_footer_size_constraints(foot)
         root.insertWidget(0, footer)
         self._sync_footer_chrome()
+        self._sync_options_chrome()
         self.setMinimumWidth(self.embedded_minimum_width())
 
     def _wire_property_column_updates(self) -> None:
@@ -2097,7 +2161,7 @@ class Molecule3DViewerWidget(QWidget):
         return getattr(app, "_docked_plot_widget", None) is self
 
     def _sync_footer_chrome(self) -> None:
-        """Floating: Add glyph + Close. Docked: Send/Close. Conformer arrows stay on this row."""
+        """Floating: opts + Add. Docked: opts + Send + Close (Close moves beside pane ×)."""
         from .dockable_plot import apply_plot_chrome_glyphs, sync_docked_footer_bar
 
         apply_plot_chrome_glyphs(self)
@@ -2105,10 +2169,39 @@ class Molecule3DViewerWidget(QWidget):
         docked = self._is_docked_in_main_window()
         self._add_to_main_btn.setVisible(floating)
         self._send_window_btn.setVisible(docked)
-        self._close_viewer_btn.setVisible(True)
+        self._close_viewer_btn.setVisible(docked)
         sync_docked_footer_bar(self, docked=docked)
         if not docked:
             self.setMinimumWidth(self.embedded_minimum_width())
+
+    def _sync_options_chrome(self) -> None:
+        """Show or hide property column pickers from Viewer Settings."""
+        if getattr(self, "_prop_panel", None) is None:
+            return
+        visible = bool(getattr(self, "_options_visible", True))
+        spin = getattr(self, "_spin_field_count", None)
+        count = int(spin.value()) if spin is not None else 1
+        host = getattr(self, "_options_host", None)
+        if host is not None:
+            host.setVisible(visible and count > 0)
+        cb = getattr(self, "_cb_hide_options", None)
+        if cb is not None and cb.isChecked() == visible:
+            cb.blockSignals(True)
+            cb.setChecked(not visible)
+            cb.blockSignals(False)
+
+    def _on_hide_options_toggled(self, checked: bool) -> None:
+        self._options_visible = not bool(checked)
+        self._sync_options_chrome()
+
+    def _on_field_count_changed(self, value: int) -> None:
+        panel = getattr(self, "_prop_panel", None)
+        if panel is not None:
+            panel.set_visible_slot_count(int(value))
+        self._sync_options_chrome()
+
+    def _open_viewer_options(self) -> None:
+        show_plot_options_dialog(getattr(self, "_opts_dialog", None))
 
     def event(self, event):  # noqa: N802 — Qt API name
         if event.type() == QEvent.ParentChange:
