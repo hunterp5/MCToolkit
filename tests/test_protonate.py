@@ -26,6 +26,7 @@ from molmanager.ionization import LN10, build_ensemble_from_scored
 from molmanager.workers.protonate_worker import (
     _dominant_smiles_from_microstates,
     dominant_results_from_microstate_cache,
+    protomer_percent_column_name,
 )
 
 
@@ -82,6 +83,13 @@ def test_dominant_results_replicate_across_duplicate_oids():
     assert len(rows) == 2
     assert {oid for oid, _smi, _pct in rows} == {10, 20}
     assert all(pct > 90.0 for _oid, _smi, pct in rows)
+
+
+def test_protomer_percent_column_includes_ph() -> None:
+    assert protomer_percent_column_name(7.4) == "% Protomer (pH 7.4)"
+    assert protomer_percent_column_name(7.40) == "% Protomer (pH 7.4)"
+    assert protomer_percent_column_name(5.25) == "% Protomer (pH 5.25)"
+    assert protomer_percent_column_name(7.0) == "% Protomer (pH 7)"
 
 
 def test_dominant_protomer_from_unipka_ensemble_at_ph_7_4():

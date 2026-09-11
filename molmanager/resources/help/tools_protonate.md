@@ -1,6 +1,6 @@
 # Protonate
 
-Protonate writes the dominant protomer at a chosen pH into an output column using a **Uni-pKa** ionization ensemble (MolGpKa SMARTS enumeration + Uni-Mol free energies). It also writes **% Protomer**, the Boltzmann mole fraction of that form at the dialog pH. Optional **Render 2D** depicts that column the same way as **Structure** (image cells; SMILES stay stored, not shown as text).
+Protonate writes the dominant protomer at a chosen pH into an output column using a **Uni-pKa** ionization ensemble (MolGpKa SMARTS enumeration + Uni-Mol free energies). It also writes **% Protomer (pH …)** with the dialog pH in the header, the Boltzmann mole fraction of that form at that pH. Optional **Render 2D** depicts that column the same way as **Structure** (image cells; SMILES stay stored, not shown as text). Right-click a Protonated cell for the same structure actions as **Structure**: Open in Sketcher, View in 3D/2D, Render 2D, Copy, Copy as SMILES, and Paste.
 
 ## Goal
 
@@ -12,13 +12,13 @@ Use when default microstates are wrong for your assay pH, or before comparisons 
 
 ## Inputs / scope
 
-Input structures from the selected source; optional **Selected Rows Only**. Requires Uni-pKa (`unipkainfer`). Duplicate structures are predicted once and reused; a session cache is shared with Predict pKa and LogD/LogS so a second run on the same molecules is cheap.
+Input structures from the selected source; optional **Selected Rows Only**. Requires Uni-pKa (`unipkainfer`). Duplicate structures are predicted once and reused; a session cache is shared with Predict pKa and LogD/LogS so a second run on the same molecules is cheap. Saved ``.cms`` sessions restore that cache on Open / Duplicate.
 
 ## Options
 
 - **Structure source** - which structure column to read.
 - **pH** - target pH for dominant protomer selection.
-- **Output column** - destination column name.
+- **Output column** - destination column name. A companion **% Protomer (pH …)** column records the population at this pH.
 - **Selected Rows Only** - limit to the selection.
 - **Render 2D in output column** - depict the output column like **Structure** (pixmap cells). Unchecked leaves SMILES text.
 - **Run** - start the job.
@@ -28,7 +28,7 @@ Input structures from the selected source; optional **Selected Rows Only**. Requ
 1. Set structure source, **pH**, and output column.
 2. Choose full table or **Selected Rows Only**.
 3. Run and wait for completion.
-4. Point later tools at the output column as structure source. Check **% Protomer** if the top form is only a slim majority.
+4. Point later tools at the output column as structure source. Check **% Protomer (pH …)** if the top form is only a slim majority.
 
 ## Use cases
 
@@ -38,4 +38,4 @@ Input structures from the selected source; optional **Selected Rows Only**. Requ
 
 ## Tips and limits
 
-Populations are Boltzmann weights of Uni-pKa free energies at the dialog pH (not independent-site Henderson–Hasselbalch). **% Protomer** below ~80% means other forms still matter; use **Generate Protomers**. Parallelism is `MOLMANAGER_PROTOMER_PROCESSES` (`1`–`8`). Always keep the original column if you need neutral parents. Re-running after pkasolver is a new method, not a refresh.
+Populations are Boltzmann weights of Uni-pKa free energies at the dialog pH (not independent-site Henderson–Hasselbalch). **% Protomer (pH …)** below ~80% means other forms still matter; use **Generate Protomers**. Parallelism is `MOLMANAGER_PROTOMER_PROCESSES` (`1`–`8`). Always keep the original column if you need neutral parents. Re-running after pkasolver is a new method, not a refresh.

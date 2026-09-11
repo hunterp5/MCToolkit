@@ -35,6 +35,12 @@ from .structure_grouping import group_rows_by_structure
 logger = logging.getLogger(__name__)
 
 
+def protomer_percent_column_name(ph: float) -> str:
+    """Table header for the dominant-protomer population at *ph*."""
+    label = f"{float(ph):.2f}".rstrip("0").rstrip(".") or "0"
+    return f"% Protomer (pH {label})"
+
+
 class ProtonateSignals(QObject):
     finished = pyqtSignal(list)  # list[tuple[int, str, float]] oid, dominant_smiles, pct
     failed = pyqtSignal(str)

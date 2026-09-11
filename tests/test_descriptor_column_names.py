@@ -59,3 +59,24 @@ def test_on_calc_finished_does_not_replace_existing_column(qapp):  # noqa: ARG00
     assert w._table_model.value_for_header(0, "LogP") == "1.23"
     assert w._table_model.value_for_header(0, "LogP (1)") == "9.99"
     w.close()
+
+
+def test_on_calc_finished_colors_qed_score(qapp):  # noqa: ARG001
+    from molmanager.ui.main_window import ChemicalTableApp
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {})
+    w.mols = {}
+    w.next_oid = 1
+    written = w.on_calc_finished(
+        [(0, {"QED Score": "0.80"})],
+        ["QED Score"],
+        finish_progress=False,
+    )
+    assert written == ["QED Score"]
+    spec = w._table_model.column_color_rule_spec("QED Score")
+    assert spec is not None
+    assert spec["mode"] == "numeric3"
+    w.close()

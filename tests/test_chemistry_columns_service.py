@@ -38,6 +38,7 @@ def test_skip_chemistry_tool_column_dropdown():
     assert skip_chemistry_tool_column_dropdown("SOM Phase")
     assert skip_chemistry_tool_column_dropdown("Cluster (Morgan)")
     assert not skip_chemistry_tool_column_dropdown("SMILES")
+    assert not skip_chemistry_tool_column_dropdown("Protonated")
 
 
 def test_is_smiles_named_header():
@@ -71,6 +72,14 @@ def test_data_headers_confirmed_structural():
     out = data_headers_confirmed_for_chemistry_tools(headers)
     assert "SMILES" in out
     assert "MW" not in out
+
+
+def test_data_headers_include_protonated_not_protomer_percent():
+    headers = ["ID_HIDDEN", "Structure", "SMILES", "Protonated", "% Protomer (pH 7.4)"]
+    out = data_headers_confirmed_for_chemistry_tools(headers)
+    assert "Protonated" in out
+    assert "SMILES" in out
+    assert "% Protomer (pH 7.4)" not in out
 
 
 def test_cell_texts_have_parseable_molecule():

@@ -12,7 +12,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for descriptor/fingerprint reuse helpers."""
 
@@ -23,7 +23,6 @@ from rdkit import Chem
 from molmanager.descriptor_reuse import (
     column_complete_for_oids,
     is_valid_descriptor_cell,
-    partition_descriptor_jobs,
 )
 from molmanager.fingerprint_cache import clear as clear_fp_cache
 from molmanager.fingerprint_cache import store_from_mol
@@ -37,35 +36,6 @@ def test_is_valid_descriptor_cell():
     assert is_valid_descriptor_cell("12.3")
     assert not is_valid_descriptor_cell("")
     assert not is_valid_descriptor_cell("N/A")
-
-
-def test_partition_descriptor_jobs_skips_complete_columns():
-    headers = ["ID_HIDDEN", "Structure", "Mol Weight"]
-    oids = [1, 2]
-
-    def row_for_oid(oid: int) -> int:
-        return {1: 0, 2: 1}[oid]
-
-    def cell_text(row: int, col: int) -> str:
-        data = {
-            (0, 2): "180.1",
-            (1, 2): "46.0",
-        }
-        return data.get((row, col), "")
-
-    disp, fns, out_hdrs, skipped = partition_descriptor_jobs(
-        ["Mol Weight", "LogP"],
-        ["MolWt", "MolLogP"],
-        ["Mol Weight", "LogP"],
-        oids,
-        headers=headers,
-        cell_text=cell_text,
-        row_for_oid=row_for_oid,
-    )
-    assert skipped == ["Mol Weight"]
-    assert disp == ["LogP"]
-    assert fns == ["MolLogP"]
-    assert out_hdrs == ["LogP"]
 
 
 def test_fingerprint_bitvect_for_row_uses_cache():

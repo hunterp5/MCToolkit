@@ -67,6 +67,20 @@ def test_set_cell_text_batch_updates_row(model: CompoundTableModel):
     assert model.cell_text(0, mwi) == "44.1"
 
 
+def test_set_backing_text_updates_pixmap_column(qapp):  # noqa: ARG001
+    model = CompoundTableModel(["ID_HIDDEN", "Structure", "Protonated"])
+    model.append_row(1, {"Protonated": "CC(=O)O"})
+    model.register_pixmap_column("Protonated")
+    prot = model._headers.index("Protonated")
+    assert model.cell_text(0, prot) == ""
+    assert model.backing_value_for_row_header(0, "Protonated") == "CC(=O)O"
+    model.set_cell_text(1, "Protonated", "CCO")
+    assert model.backing_value_for_row_header(0, "Protonated") == "CC(=O)O"
+    model.set_backing_text(1, "Protonated", "CCO")
+    assert model.backing_value_for_row_header(0, "Protonated") == "CCO"
+    assert model.cell_text(0, prot) == ""
+
+
 def test_numeric_bounds_by_column(model: CompoundTableModel):
     model.append_row(0, {"SMILES": "C", "MW": "10"})
     model.append_row(1, {"SMILES": "CC", "MW": "20"})

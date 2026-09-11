@@ -1052,30 +1052,48 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         if col <= 0 or col >= len(self.headers):
             return False
         h = self.headers[col]
-        if self._table_model.is_pixmap_data_column(h):
+        from ...som_prediction import is_som_map_header
+
+        if is_som_map_header(h):
             return False
         if self._skip_chemistry_tool_column_dropdown(h):
             return False
         if self._header_looks_structural(h) or self._is_smiles_named_header(h):
             return True
-        raw = (self._table_model.cell_text(row, col) or "").strip()
+        raw = self._structure_text_for_table_cell(row, col)
         if not raw or (len(raw) > 20000 and not looks_like_mol_block(raw)):
             return False
         return parse_molecule_from_cell_text(raw) is not None
 
-    def _mol_for_table_context_menu(self, row: int, col: int) -> Chem.Mol | None:
-        """Molecule for context-menu actions: row-wide chemistry, else parseable text in the clicked cell."""
-        if not self._column_eligible_for_table_chemistry_menu(row, col):
-            return None
-        m = self._mol_for_structure_row(row)
-        if m is not None:
-            return m
+    def _column_accepts_cell_paste(self, row: int, col: int) -> bool:
+        """Whether Paste is allowed on this cell (text data, Structure, or pixmap chemistry)."""
         if col == CompoundTableModel.STRUCTURE_COL:
-            return None
+            return True
+        if self._table_model.column_accepts_text_edit(col):
+            return True
+        if 0 <= col < len(self.headers) and self._table_model.is_pixmap_data_column(
+            self.headers[col]
+        ):
+            return self._column_eligible_for_table_chemistry_menu(row, col)
+        return False
+
+    def _structure_text_for_table_cell(self, row: int, col: int) -> str:
+        """Stored SMILES/molblock for a cell, including pixmap-only structure columns."""
+        if col == CompoundTableModel.STRUCTURE_COL or col <= 0 or col >= len(self.headers):
+            return ""
         h = self.headers[col]
         raw = (self._table_model.backing_value_for_row_header(row, h) or "").strip()
-        if not raw:
-            raw = (self._table_model.cell_text(row, col) or "").strip()
+        if raw:
+            return raw
+        return (self._table_model.cell_text(row, col) or "").strip()
+
+    def _mol_for_table_context_menu(self, row: int, col: int) -> Chem.Mol | None:
+        """Molecule for context-menu actions from the clicked column (not a different field)."""
+        if not self._column_eligible_for_table_chemistry_menu(row, col):
+            return None
+        if col == CompoundTableModel.STRUCTURE_COL:
+            return self._mol_for_structure_row(row)
+        raw = self._structure_text_for_table_cell(row, col)
         if not raw or (len(raw) > 20000 and not looks_like_mol_block(raw)):
             return None
         m = self._mol_from_structure_text(raw)
@@ -1099,9 +1117,9 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         Iterate the table and return ``(oid, mol)`` pairs in scope for a chemistry tool.
 
         ``src`` is ``"Structure"`` (use the row's structure column / cached mol) or a
-        data-column header name (parse the cell text as SMILES/molblock/etc.). Mols parsed
-        from data columns are cached on ``self.mols[oid]`` for subsequent calls. Used by
-        the pKa, protomer, cluster, and dimensionality-reduction dialogs.
+        data-column header name (parse that column's cell or pixmap backing SMILES).
+        Data-column parses are not written into ``self.mols``. Used by the pKa, protomer,
+        cluster, and dimensionality-reduction dialogs.
         """
         allowed = self._selected_oids_set() if only_selected else None
         col = None if src == "Structure" else self.headers.index(src)
@@ -1115,20 +1133,13 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             if src == "Structure":
                 return self.mols.get(oid) or self._mol_for_structure_row(r)
             if is_pixmap_src:
-                mol = self.mols.get(oid)
-                if mol is None:
-                    raw = self._table_model.backing_value_for_row_header(r, src)
-                    mol = self._mol_from_structure_text(raw) if raw else None
-                if mol is None:
-                    mol = self._mol_for_structure_row(r)
-                if mol is not None:
-                    self.mols[oid] = mol
+                raw = self._table_model.backing_value_for_row_header(r, src)
+                mol = self._mol_from_structure_text(raw) if raw else None
                 return mol
             raw = self._table_cell_text(r, col)
-            mol = self._mol_from_structure_text(raw)
-            if mol is not None:
-                self.mols[oid] = mol
-            return mol
+            if not raw:
+                raw = self._table_model.backing_value_for_row_header(r, src)
+            return self._mol_from_structure_text(raw) if raw else None
 
         return collect_scoped_pairs(
             self._table_model.rowCount(),
@@ -1187,15 +1198,6 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
                             raw = ""
             elif is_pixmap_src:
                 raw = (self._table_model.backing_value_for_row_header(r, src) or "").strip()
-                if not raw:
-                    mol = self.mols.get(oid)
-                    if mol is None:
-                        mol = self._mol_for_structure_row(r)
-                    if mol is not None:
-                        try:
-                            raw = mol_to_canonical_smiles(mol)
-                        except Exception:
-                            raw = ""
             else:
                 raw = (self._table_cell_text(r, col) or "").strip()
                 if not raw:
@@ -1528,6 +1530,10 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
                 except Exception:
                     return False, ""
             return False, ""
+        h = self.headers[col] if 0 <= col < len(self.headers) else ""
+        if h and self._table_model.is_pixmap_data_column(h):
+            t = (self._table_model.backing_value_for_row_header(row, h) or "").strip()
+            return (True, t) if t else (False, "")
         if self._table_model.column_accepts_text_edit(col):
             return True, self._table_model.cell_text(row, col) or ""
         return False, ""
@@ -1589,7 +1595,13 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         if not clip:
             QMessageBox.information(self, "Paste", "Clipboard is empty.")
             return
-        if col == CompoundTableModel.STRUCTURE_COL:
+        if not self._column_accepts_cell_paste(row, col):
+            self.status_label.setText("Paste: this column cannot be edited.")
+            return
+        if col == CompoundTableModel.STRUCTURE_COL or (
+            0 <= col < len(self.headers)
+            and self._table_model.is_pixmap_data_column(self.headers[col])
+        ):
             if self._mol_from_structure_text(clip) is None:
                 QMessageBox.warning(
                     self,
@@ -1597,9 +1609,6 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
                     "Could not interpret the clipboard as a structure (try SMILES, InChI, or a MolBlock).",
                 )
                 return
-        elif not self._table_model.column_accepts_text_edit(col):
-            self.status_label.setText("Paste: this column cannot be edited.")
-            return
         self._undo_stack.push(UndoPasteCellCommand(self, row, col, oid, clip))
 
     def _cancel_chunked_table_delete(self) -> None:
@@ -1783,6 +1792,28 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             if not quiet:
                 self.status_label.setText("Structure updated from clipboard.")
             return True
+        h = self.headers[col] if 0 <= col < len(self.headers) else ""
+        if h and self._table_model.is_pixmap_data_column(h):
+            mol = self._mol_from_structure_text(text)
+            if mol is None:
+                if not quiet:
+                    QMessageBox.warning(
+                        self,
+                        "Paste",
+                        "Could not interpret the clipboard as a structure (try SMILES, InChI, or a MolBlock).",
+                    )
+                return False
+            try:
+                smi = mol_to_canonical_smiles(mol)
+            except Exception:
+                smi = text
+            self._table_model.set_backing_text(oid, h, smi)
+            self._table_model.set_column_pixmap(oid, h, None)
+            self.calculate_global_bounds()
+            self.apply_filters()
+            if not quiet:
+                self.status_label.setText("Structure updated from clipboard.")
+            return True
         if not self._table_model.column_accepts_text_edit(col):
             return False
         h = self.headers[col]
@@ -1869,10 +1900,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             copy_smiles_act = menu.addAction("Copy as SMILES")
             copy_smiles_act.setEnabled(bool(copy_smiles_txt))
 
-        can_paste = oid is not None and (
-            col == CompoundTableModel.STRUCTURE_COL
-            or self._table_model.column_accepts_text_edit(col)
-        )
+        can_paste = oid is not None and self._column_accepts_cell_paste(row, col)
         paste_act = menu.addAction("Paste")
         paste_act.setEnabled(can_paste)
 
@@ -1927,6 +1955,19 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             if not clip:
                 QMessageBox.information(self, "Paste", "Clipboard is empty.")
             elif col == CompoundTableModel.STRUCTURE_COL:
+                if self._mol_from_structure_text(clip) is None:
+                    QMessageBox.warning(
+                        self,
+                        "Paste",
+                        "Could not interpret the clipboard as a structure (try SMILES, InChI, or a MolBlock).",
+                    )
+                else:
+                    self._undo_stack.push(UndoPasteCellCommand(self, row, col, int(oid), clip))
+            elif (
+                0 <= col < len(self.headers)
+                and self._table_model.is_pixmap_data_column(self.headers[col])
+                and chem_col
+            ):
                 if self._mol_from_structure_text(clip) is None:
                     QMessageBox.warning(
                         self,

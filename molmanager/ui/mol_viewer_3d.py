@@ -51,7 +51,7 @@ from rdkit.Chem import AllChem
 from ..confs_codec import conformer_mol_blocks_b64_json
 from ..exception_policy import log_swallowed_exception
 from .property_columns_panel import PropertyColumnsPanel
-from .qt_widget_utils import make_window_minimizable
+from .qt_widget_utils import make_window_minimizable, qobject_is_deleted
 from .widgets import NumericTableWidgetItem
 
 logger = logging.getLogger(__name__)
@@ -1451,6 +1451,9 @@ class Molecule3DViewerWidget(QWidget):
         self._viewer_tmp: QTemporaryDir | None = None
         self._prop_panel: PropertyColumnsPanel | None = None
         self._prop_refresh_wired = False
+        self._prop_refresh_timer: QTimer | None = None
+        self._prop_refresh_schedule = None
+        self._prop_refresh_signals: list = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(4, 4, 4, 4)
@@ -1615,8 +1618,11 @@ class Molecule3DViewerWidget(QWidget):
         timer = QTimer(self)
         timer.setSingleShot(True)
         timer.setInterval(80)
+        self._prop_refresh_timer = timer
 
         def _refresh() -> None:
+            if qobject_is_deleted(self):
+                return
             panel = self._prop_panel
             if panel is None:
                 return
@@ -1626,19 +1632,49 @@ class Molecule3DViewerWidget(QWidget):
         timer.timeout.connect(_refresh)
 
         def _schedule(*_args) -> None:
-            timer.start()
+            if qobject_is_deleted(self):
+                return
+            t = self._prop_refresh_timer
+            if t is None or qobject_is_deleted(t):
+                return
+            try:
+                t.start()
+            except RuntimeError:
+                return
 
-        model.dataChanged.connect(_schedule)
-        model.rowsInserted.connect(_schedule)
-        model.rowsRemoved.connect(_schedule)
-        model.modelReset.connect(_schedule)
-        model.layoutChanged.connect(_schedule)
-        model.columnsInserted.connect(_schedule)
-        model.columnsRemoved.connect(_schedule)
+        self._prop_refresh_schedule = _schedule
+        signals = [
+            model.dataChanged,
+            model.rowsInserted,
+            model.rowsRemoved,
+            model.modelReset,
+            model.layoutChanged,
+            model.columnsInserted,
+            model.columnsRemoved,
+        ]
         try:
-            model.headerDataChanged.connect(_schedule)
+            signals.append(model.headerDataChanged)
         except Exception:
             pass
+        self._prop_refresh_signals = signals
+        for sig in signals:
+            sig.connect(_schedule)
+        self.destroyed.connect(self._unwire_property_column_updates)
+
+    def _unwire_property_column_updates(self, *_args) -> None:
+        """Drop table-model connections so a deleted viewer cannot restart its QTimer."""
+        slot = self._prop_refresh_schedule
+        for sig in list(self._prop_refresh_signals or []):
+            if slot is None:
+                break
+            try:
+                sig.disconnect(slot)
+            except (TypeError, RuntimeError):
+                pass
+        self._prop_refresh_signals = []
+        self._prop_refresh_schedule = None
+        self._prop_refresh_timer = None
+        self._prop_refresh_wired = False
 
     def _build_strain_energy_table(self) -> QTableWidget:
         table = QTableWidget(0, len(_STRAIN_TABLE_BASE_HEADERS), self)

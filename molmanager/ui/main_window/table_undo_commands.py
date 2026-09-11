@@ -251,11 +251,15 @@ class UndoPasteCellCommand(QUndoCommand):
             else:
                 self._prev_smiles = ""
             self._prev_text = ""
+            self._pixmap_header = None
         else:
             h = app.headers[col]
-            self._prev_text = app._table_model.value_for_header(row, h)
+            self._prev_text = app._table_model.backing_value_for_row_header(row, h)
             self._prev_mol = None
-            self._prev_pm = None
+            self._pixmap_header = h if app._table_model.is_pixmap_data_column(h) else None
+            self._prev_pm = (
+                app._table_model.column_pixmap_copy(oid, h) if self._pixmap_header else None
+            )
             self._prev_smiles = ""
 
     def redo(self) -> None:
@@ -276,7 +280,11 @@ class UndoPasteCellCommand(QUndoCommand):
             app._table_model.set_structure_pixmap(oid, self._prev_pm)
         else:
             h = app.headers[self._col]
-            app._table_model.set_cell_text(oid, h, self._prev_text)
+            if self._pixmap_header:
+                app._table_model.set_backing_text(oid, h, self._prev_text)
+                app._table_model.set_column_pixmap(oid, h, self._prev_pm)
+            else:
+                app._table_model.set_cell_text(oid, h, self._prev_text)
         app.calculate_global_bounds()
         app.apply_filters()
         app.status_label.setText("Undo: paste reverted.")
@@ -285,7 +293,9 @@ class UndoPasteCellCommand(QUndoCommand):
 class UndoCellTextChangeCommand(QUndoCommand):
     """Undo/redo for context-menu Edit Value or Clear Value on a text data cell."""
 
-    def __init__(self, app: TableUIMixin, oid: int, header: str, old_text: str, new_text: str) -> None:
+    def __init__(
+        self, app: TableUIMixin, oid: int, header: str, old_text: str, new_text: str
+    ) -> None:
         label = "Clear cell" if new_text == "" else "Edit cell"
         super().__init__(label)
         self._app = app

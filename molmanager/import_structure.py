@@ -67,6 +67,13 @@ def header_looks_like_structure_text(name: str) -> bool:
         return True
     if "mol_string" in n or n in ("mol", "rmol") or n.endswith("_mol"):
         return True
+    # Tool-generated structure columns (Protonate, uniquified Protonated (1), …).
+    if n == "protonated" or n.startswith("protonated "):
+        return True
+    if n == "fragments" or n.startswith("fragments "):
+        return True
+    if n.startswith("largest fragment"):
+        return True
     return False
 
 

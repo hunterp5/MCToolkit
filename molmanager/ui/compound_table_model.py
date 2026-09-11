@@ -33,8 +33,21 @@ from dataclasses import dataclass, field
 
 from PyQt5.QtCore import QAbstractItemModel, QAbstractTableModel, QModelIndex, QRect, QSize, Qt
 from PyQt5.QtGui import QColor, QPalette, QPixmap
-from PyQt5.QtWidgets import QApplication, QHeaderView, QStyledItemDelegate, QStyleOptionViewItem, QTableView
+from PyQt5.QtWidgets import (
+    QApplication,
+    QHeaderView,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QTableView,
+)
 
+from ..column_score_color import (
+    COLOR_ALPHA,
+    COLOR_FAVORABLE_RGB,
+    COLOR_MID_RGB,
+    COLOR_UNFAVORABLE_RGB,
+    favorable_score_color_spec,
+)
 from ..display_constants import (
     STRUCTURE_COLUMN_HORIZONTAL_PADDING,
     STRUCTURE_DEPICT_HEIGHT,
@@ -110,7 +123,9 @@ class CompoundTableModel(QAbstractTableModel):
         self._extra_pixmaps: dict[tuple[int, str], QPixmap] = {}
         # Incremental numeric min/max cache for filter sliders (see numeric_bounds_by_column).
         self._numeric_bounds_cache: dict[str, dict] | None = None
-        self._numeric_bounds_key: tuple[str, ...] | None = None  # sorted data header names used for last full build
+        self._numeric_bounds_key: tuple[str, ...] | None = (
+            None  # sorted data header names used for last full build
+        )
         self._numeric_bounds_dirty_cols: set[str] | None = None  # None = need full rebuild
         # Optional per-column background coloring with O(1) lookups in data().
         self._column_color_rules: dict[str, _ColumnColorRule] = {}
@@ -148,7 +163,9 @@ class CompoundTableModel(QAbstractTableModel):
         self.beginResetModel()
         self._headers = list(headers)
         self._pixmap_columns &= set(self._headers)
-        self._extra_pixmaps = {k: v for k, v in self._extra_pixmaps.items() if k[1] in self._headers}
+        self._extra_pixmaps = {
+            k: v for k, v in self._extra_pixmaps.items() if k[1] in self._headers
+        }
         keep = set(self._headers)
         self._column_color_rules = {h: r for h, r in self._column_color_rules.items() if h in keep}
         self._column_color_cache = {h: c for h, c in self._column_color_cache.items() if h in keep}
@@ -381,6 +398,26 @@ class CompoundTableModel(QAbstractTableModel):
         idx = self.index(r, c)
         self.dataChanged.emit(idx, idx, [Qt.DisplayRole, Qt.EditRole, Qt.BackgroundRole])
 
+    def set_backing_text(self, oid: int, column_name: str, text: str) -> None:
+        """Set stored cell text, including pixmap-only structure columns (hidden SMILES)."""
+        if column_name in ("ID_HIDDEN", "Structure"):
+            return
+        if column_name not in self._pixmap_columns:
+            self.set_cell_text(oid, column_name, text)
+            return
+        r = self.logical_row_for_oid(oid)
+        if r < 0:
+            return
+        self._rows[r].values[column_name] = text
+        try:
+            c = self._headers.index(column_name)
+        except ValueError:
+            return
+        idx = self.index(r, c)
+        self.dataChanged.emit(
+            idx, idx, [Qt.DisplayRole, Qt.EditRole, Qt.DecorationRole, Qt.SizeHintRole]
+        )
+
     def set_cell_text_batch(self, oid: int, values: dict[str, str]) -> None:
         """Set several text cells on one row; emit ``dataChanged`` once for the affected column span."""
         if not values:
@@ -402,7 +439,11 @@ class CompoundTableModel(QAbstractTableModel):
             changed_cols.append(c)
         if not changed_cols:
             return
-        dirty = {self._headers[c] for c in changed_cols if self._headers[c] in self._bounds_data_headers()}
+        dirty = {
+            self._headers[c]
+            for c in changed_cols
+            if self._headers[c] in self._bounds_data_headers()
+        }
         if dirty:
             self._mark_numeric_bounds_dirty(dirty)
         lo, hi = min(changed_cols), max(changed_cols)
@@ -434,10 +475,14 @@ class CompoundTableModel(QAbstractTableModel):
     def notify_structure_column_changed(self, row_lo: int = 0, row_hi: int | None = None) -> None:
         if not self._rows:
             return
-        hi = len(self._rows) - 1 if row_hi is None else max(0, min(int(row_hi), len(self._rows) - 1))
+        hi = (
+            len(self._rows) - 1 if row_hi is None else max(0, min(int(row_hi), len(self._rows) - 1))
+        )
         lo = max(0, min(int(row_lo), hi))
         roles = [Qt.DecorationRole, Qt.SizeHintRole, Qt.DisplayRole, Qt.ToolTipRole]
-        self.dataChanged.emit(self.index(lo, self.STRUCTURE_COL), self.index(hi, self.STRUCTURE_COL), roles)
+        self.dataChanged.emit(
+            self.index(lo, self.STRUCTURE_COL), self.index(hi, self.STRUCTURE_COL), roles
+        )
 
     def clear_structure_pixmaps_for_oids(self, oids: list[int], *, emit: bool = True) -> None:
         for oid in oids:
@@ -477,7 +522,9 @@ class CompoundTableModel(QAbstractTableModel):
         if r < 0:
             return
         idx = self.index(r, self.STRUCTURE_COL)
-        self.dataChanged.emit(idx, idx, [Qt.DecorationRole, Qt.SizeHintRole, Qt.DisplayRole, Qt.ToolTipRole])
+        self.dataChanged.emit(
+            idx, idx, [Qt.DecorationRole, Qt.SizeHintRole, Qt.DisplayRole, Qt.ToolTipRole]
+        )
 
     def register_pixmap_column(self, header_name: str) -> None:
         """Mark a data column as image-only (2D pixmap via ``set_column_pixmap``)."""
@@ -538,7 +585,9 @@ class CompoundTableModel(QAbstractTableModel):
                 out[oid] = None
         return out
 
-    def snapshot_column_pixmaps(self, header_name: str, oids: list[int]) -> dict[int, QPixmap | None]:
+    def snapshot_column_pixmaps(
+        self, header_name: str, oids: list[int]
+    ) -> dict[int, QPixmap | None]:
         """Shallow copies of pixmap-column images for a header (e.g. Render 2D target column)."""
         out: dict[int, QPixmap | None] = {}
         if header_name not in self._headers:
@@ -687,7 +736,9 @@ class CompoundTableModel(QAbstractTableModel):
             return str(section + 1)
         return None
 
-    def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder, *, sort_kind: str = "auto") -> None:  # noqa: N802
+    def sort(
+        self, column: int, order: Qt.SortOrder = Qt.AscendingOrder, *, sort_kind: str = "auto"
+    ) -> None:  # noqa: N802
         """Sort rows by *column*. *sort_kind*: ``auto`` (numbers then text), ``numeric``, or ``alphabetic``."""
         if column < 0 or column >= len(self._headers):
             return
@@ -804,7 +855,9 @@ class CompoundTableModel(QAbstractTableModel):
         if r < 0:
             return
         idx = self.index(r, self.STRUCTURE_COL)
-        self.dataChanged.emit(idx, idx, [Qt.DecorationRole, Qt.SizeHintRole, Qt.DisplayRole, Qt.ToolTipRole])
+        self.dataChanged.emit(
+            idx, idx, [Qt.DecorationRole, Qt.SizeHintRole, Qt.DisplayRole, Qt.ToolTipRole]
+        )
 
     def extra_column_pixmaps_copy(self, oid: int) -> dict[str, QPixmap]:
         """Detached copies of extra pixmap-column images for this oid."""
@@ -1100,7 +1153,11 @@ class CompoundTableModel(QAbstractTableModel):
 
     def set_column_text_by_oids(self, column_name: str, oid_values: list[tuple[int, str]]) -> None:
         """Set one text column for many molecule ids; batch ``dataChanged`` (contiguous row runs)."""
-        if not oid_values or column_name in ("ID_HIDDEN", "Structure") or column_name in self._pixmap_columns:
+        if (
+            not oid_values
+            or column_name in ("ID_HIDDEN", "Structure")
+            or column_name in self._pixmap_columns
+        ):
             return
         try:
             col = self._headers.index(column_name)
@@ -1171,9 +1228,7 @@ class CompoundTableModel(QAbstractTableModel):
             roles = [Qt.DisplayRole, Qt.EditRole]
             if not defer_color:
                 roles.append(Qt.BackgroundRole)
-            self._emit_data_changed_row_spans(
-                rows_changed, min(cols), max(cols), roles=roles
-            )
+            self._emit_data_changed_row_spans(rows_changed, min(cols), max(cols), roles=roles)
 
     def fill_column_from_oid_map(
         self,
@@ -1207,7 +1262,9 @@ class CompoundTableModel(QAbstractTableModel):
                 [Qt.DisplayRole, Qt.EditRole, Qt.BackgroundRole],
             )
 
-    def insert_columns_at(self, col: int, header_names: list[str], copy_from_logical: int | None = None) -> None:
+    def insert_columns_at(
+        self, col: int, header_names: list[str], copy_from_logical: int | None = None
+    ) -> None:
         """Insert multiple headers in one model notification (large tables)."""
         if not header_names:
             return
@@ -1231,7 +1288,9 @@ class CompoundTableModel(QAbstractTableModel):
         self._mark_headers_added_for_bounds(header_names)
         self.endInsertColumns()
 
-    def insert_column_at(self, col: int, header_name: str, copy_from_logical: int | None = None) -> None:
+    def insert_column_at(
+        self, col: int, header_name: str, copy_from_logical: int | None = None
+    ) -> None:
         n = len(self._headers)
         if col < 0 or col > n:
             return
@@ -1367,6 +1426,30 @@ class CompoundTableModel(QAbstractTableModel):
         )
         self._rebuild_column_color_cache(header_name)
         self._emit_color_refresh_for_header(header_name)
+
+    def apply_favorable_score_column_coloring(self, header_name: str) -> bool:
+        """Color QED / AB-MPS / CNS MPO columns green (favorable) → yellow → red."""
+        spec = favorable_score_color_spec(header_name)
+        if spec is None:
+            return False
+        green = QColor(*COLOR_FAVORABLE_RGB)
+        yellow = QColor(*COLOR_MID_RGB)
+        red = QColor(*COLOR_UNFAVORABLE_RGB)
+        if spec.higher_is_better:
+            low_color, mid_color, high_color = red, yellow, green
+        else:
+            low_color, mid_color, high_color = green, yellow, red
+        self.set_column_color_three_point_gradient(
+            header_name,
+            min_value=spec.min_value,
+            mid_value=spec.mid_value,
+            max_value=spec.max_value,
+            low_color=low_color,
+            mid_color=mid_color,
+            high_color=high_color,
+            alpha=COLOR_ALPHA,
+        )
+        return self.column_color_mode(header_name) == "numeric3"
 
     def set_column_color_categorical(self, header_name: str, *, alpha: int = 88) -> None:
         """Color non-empty distinct text values using a deterministic categorical palette."""
@@ -1539,7 +1622,13 @@ class CompoundTableModel(QAbstractTableModel):
             return QColor.fromHsl(int(hue), 140, 215, rule.alpha).rgba()
         return None
 
-    def moveRow(self, sourceParent: QModelIndex, sourceRow: int, destinationParent: QModelIndex, destinationChild: int) -> bool:  # noqa: N802
+    def moveRow(
+        self,
+        sourceParent: QModelIndex,
+        sourceRow: int,
+        destinationParent: QModelIndex,
+        destinationChild: int,
+    ) -> bool:  # noqa: N802
         if sourceParent.isValid() or destinationParent.isValid():
             return False
         n = len(self._rows)
@@ -1588,7 +1677,11 @@ class StructureDelegate(QStyledItemDelegate):
         from .table_selection_delegate import source_row_for_view_index
 
         row = source_row_for_view_index(index, self._compound_model) if self._compound_model else -1
-        if self._compound_model is not None and row >= 0 and self._compound_model.is_row_highlighted(row):
+        if (
+            self._compound_model is not None
+            and row >= 0
+            and self._compound_model.is_row_highlighted(row)
+        ):
             pal = QApplication.palette() if QApplication.instance() else opt.palette
             painter.fillRect(opt.rect, pal.color(QPalette.Highlight))
             return
@@ -1616,8 +1709,16 @@ class StructureDelegate(QStyledItemDelegate):
             painter.setFont(opt.font)
             from .table_selection_delegate import source_row_for_view_index
 
-            row = source_row_for_view_index(index, self._compound_model) if self._compound_model else -1
-            if self._compound_model is not None and row >= 0 and self._compound_model.is_row_highlighted(row):
+            row = (
+                source_row_for_view_index(index, self._compound_model)
+                if self._compound_model
+                else -1
+            )
+            if (
+                self._compound_model is not None
+                and row >= 0
+                and self._compound_model.is_row_highlighted(row)
+            ):
                 pal = QApplication.palette() if QApplication.instance() else opt.palette
                 painter.setPen(pal.color(QPalette.HighlightedText))
             else:
@@ -1681,7 +1782,9 @@ class CompoundTableView(QTableView):
             finally:
                 hh.blockSignals(False)
 
-    def _on_horizontal_section_resized(self, logical_index: int, _old_size: int, new_size: int) -> None:
+    def _on_horizontal_section_resized(
+        self, logical_index: int, _old_size: int, new_size: int
+    ) -> None:
         if logical_index != CompoundTableModel.STRUCTURE_COL:
             return
         min_w = self._structure_column_min_width

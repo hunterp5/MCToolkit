@@ -99,3 +99,27 @@ def test_view_conformers_omits_property_column_pickers(qapp) -> None:  # noqa: A
     assert viewer.embedded_minimum_width() >= 1200
     assert not hasattr(viewer, "_toggle_options_btn")
     viewer.deleteLater()
+
+
+def test_3d_viewer_property_timer_survives_widget_delete(qapp) -> None:
+    from PyQt5 import sip
+
+    from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget, prepare_mol_3d
+    from molmanager.ui.qt_widget_utils import qobject_is_deleted
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CCO"})
+    mol = prepare_mol_3d(Chem.MolFromSmiles("CCO"))
+    assert mol is not None
+    w.mols[0] = mol
+    viewer = Molecule3DViewerWidget(mol, w, window_title="View in 3D", source_oid=0)
+    assert viewer._prop_refresh_wired is True
+    sip.delete(viewer)
+    assert qobject_is_deleted(viewer)
+    w._table_model.dataChanged.emit(
+        w._table_model.index(0, 0),
+        w._table_model.index(0, 0),
+        [],
+    )

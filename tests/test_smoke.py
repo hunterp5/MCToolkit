@@ -220,7 +220,69 @@ def test_table_chemistry_context_menu_column_eligibility(qapp):  # noqa: ARG001
     mol = w._mol_for_table_context_menu(0, 2)
     assert mol is not None and mol.GetNumAtoms() == 2
     mol_note = w._mol_for_table_context_menu(0, 3)
-    assert mol_note is not None and mol_note.GetNumAtoms() == 2
+    assert mol_note is not None and mol_note.GetNumAtoms() == 3
+
+
+def test_pixmap_structure_column_context_chemistry(qapp):  # noqa: ARG001
+    """Protonated pixmap cells use backing SMILES, not the Structure mol cache."""
+    from rdkit import Chem
+
+    parent = Chem.MolFromSmiles("CC(=O)O")
+    anion = Chem.MolFromSmiles("CC(=O)[O-]")
+    parent_smi = Chem.MolToSmiles(parent, canonical=True)
+    anion_smi = Chem.MolToSmiles(anion, canonical=True)
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Protonated", "SOM Map"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": parent_smi, "Protonated": anion_smi, "SOM Map": ""})
+    w.mols[0] = parent
+    w.next_oid = 1
+    w._table_model.register_pixmap_column("Protonated")
+    w._table_model.register_pixmap_column("SOM Map")
+
+    prot_col = w.headers.index("Protonated")
+    som_col = w.headers.index("SOM Map")
+    assert w._column_eligible_for_table_chemistry_menu(0, prot_col) is True
+    assert w._column_eligible_for_table_chemistry_menu(0, som_col) is False
+    assert w._column_accepts_cell_paste(0, prot_col) is True
+    assert w._column_accepts_cell_paste(0, som_col) is False
+
+    mol = w._mol_for_table_context_menu(0, prot_col)
+    assert mol is not None
+    assert Chem.MolToSmiles(mol, canonical=True) == anion_smi
+    struct = w._mol_for_table_context_menu(0, 1)
+    assert struct is not None
+    assert Chem.MolToSmiles(struct, canonical=True) == parent_smi
+
+    ok, txt = w._copy_text_for_table_cell(0, prot_col, 0)
+    assert ok
+    copied = Chem.MolFromSmiles(txt)
+    assert copied is not None
+    assert Chem.MolToSmiles(copied, canonical=True) == anion_smi
+
+    scoped = w.collect_scoped_table_mols("Protonated")
+    assert len(scoped) == 1
+    assert Chem.MolToSmiles(scoped[0][1], canonical=True) == anion_smi
+    assert Chem.MolToSmiles(w.mols[0], canonical=True) == parent_smi
+
+    tool_mol = w._mol_for_structure_tool_oid(0, "Protonated")
+    assert tool_mol is not None
+    assert Chem.MolToSmiles(tool_mol, canonical=True) == anion_smi
+
+    render_mol = w._mol_for_render2d_source(0, "Protonated")
+    assert render_mol is not None
+    assert Chem.MolToSmiles(render_mol, canonical=True) == anion_smi
+    renders, _ = w._build_render2d_tasks_in_table_order("Protonated", 64, 64)
+    assert len(renders) == 1
+    assert Chem.MolToSmiles(renders[0][1], canonical=True) == anion_smi
+    assert Chem.MolToSmiles(w.mols[0], canonical=True) == parent_smi
+
+    assert w._paste_clipboard_into_table_cell(0, prot_col, 0, clip_text="CCO", quiet=True)
+    pasted = Chem.MolFromSmiles(w._table_model.backing_value_for_row_header(0, "Protonated"))
+    assert pasted is not None
+    assert pasted.GetNumAtoms() == 3
+    assert Chem.MolToSmiles(w.mols[0], canonical=True) == parent_smi
 
 
 def test_canonical_structure_keys_for_dedup(qapp):  # noqa: ARG001

@@ -17,6 +17,7 @@
 """Tests for import structure-source header detection."""
 
 from molmanager.import_structure import (
+    header_looks_like_structure_text,
     needs_structure_source_picker,
     structure_source_picker_candidates,
 )
@@ -32,3 +33,13 @@ def test_inchi_key_not_a_structure_source_candidate():
 def test_needs_picker_when_two_real_structure_columns():
     headers = ["ID_HIDDEN", "Structure", "SMILES", "Ligand InChI"]
     assert needs_structure_source_picker(headers)
+
+
+def test_tool_generated_structure_headers():
+    assert header_looks_like_structure_text("Protonated")
+    assert header_looks_like_structure_text("Protonated (1)")
+    assert header_looks_like_structure_text("Largest Fragment")
+    assert header_looks_like_structure_text("Largest Fragment (1)")
+    assert not header_looks_like_structure_text("% Protomer (pH 7.4)")
+    assert not header_looks_like_structure_text("Protomer %")
+    assert not header_looks_like_structure_text("Fragments")

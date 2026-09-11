@@ -21,6 +21,7 @@ Rows with valid molecules in the chosen **Target Column** / structure source. Op
 - Category tabs / groups such as **Physiochemical**, **Name**, **Drug-likeness**, **Structural Counts**, **Ring Counts**, **Atom Counts**, **Complexity**, **Electronic**, **Fingerprints**.
 - Per-descriptor checkboxes (e.g. LogP, Mol Weight, TPSA, QED, rule-of-five style flags).
 - Confirm with **OK** to run (often as a background job).
+- **QED Score**, **AB-MPS score**, and **CNS MPO score** columns are colored automatically (green = more favorable, through yellow, to red). QED uses 0–1, CNS MPO 0–6, and AB-MPS 0–14 (literature threshold) with worse values trending red. Change or clear this with the column header **Color** action.
 
 ## Workflow
 
@@ -37,4 +38,4 @@ Rows with valid molecules in the chosen **Target Column** / structure source. Op
 
 ## Tips and limits
 
-LogD 7.4, LogS 7.4, CNS MPO, and AB-MPS use a Uni-pKa ionization ensemble when the pka extra is installed; otherwise they fall back to heuristics. Re-running those columns after switching from pkasolver is a new method, not a refresh.
+LogD 7.4, LogS 7.4, CNS MPO, and AB-MPS use a Uni-pKa ionization ensemble when the pka extra is installed; otherwise they fall back to heuristics. Re-running a descriptor that already exists writes a new column (`Name (1)`, …) and leaves the original. Re-running ionization-dependent scores after switching from pkasolver is a new method, not a refresh. QED / AB-MPS / CNS MPO coloring uses fixed score ranges, not min/max of the current table.

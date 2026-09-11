@@ -25,8 +25,6 @@ from PyQt5.QtWidgets import (
     QMessageBox,
 )
 
-from rdkit import Chem
-
 from ..strings import (
     TOOL_BRICS_DECOMP,
     TOOL_BRICS_RECOMP,
@@ -42,6 +40,7 @@ from ...workers import (
 from ..compound_table_model import structure_depiict_height, structure_depiict_width
 
 logger = logging.getLogger(__name__)
+
 
 class FragmentToolsMixin:
     def open_core_based_decomposition(self) -> None:
@@ -68,34 +67,7 @@ class FragmentToolsMixin:
         if self._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_CORE_DECOMP):
             return
         src = p.structure_source
-        col = None if src == "Structure" else self.headers.index(src)
-        data: list[tuple[int, Chem.Mol]] = []
-        for r in range(self._table_model.rowCount()):
-            t0 = self._table_model.cell_text(r, 0)
-            if not t0.isdigit():
-                continue
-            oid = int(t0)
-            if allowed is not None and oid not in allowed:
-                continue
-            if src == "Structure":
-                mol = self.mols.get(oid)
-                if mol is None:
-                    mol = self._mol_for_structure_row(r)
-            else:
-                if self._table_model.is_pixmap_data_column(src):
-                    mol = self.mols.get(oid)
-                    if mol is None:
-                        raw = self._table_model.backing_value_for_row_header(r, src)
-                        mol = self._mol_from_structure_text(raw) if raw else None
-                    if mol is None:
-                        mol = self._mol_for_structure_row(r)
-                else:
-                    raw = self._table_cell_text(r, col)
-                    mol = self._mol_from_structure_text(raw)
-                if mol is not None:
-                    self.mols[oid] = mol
-            if mol is not None:
-                data.append((oid, mol))
+        data = self.collect_scoped_table_mols(src, only_selected=only_selected)
         if not data:
             QMessageBox.information(
                 self,
@@ -169,15 +141,15 @@ class FragmentToolsMixin:
         )
         self._prepare_tool_dialog(d)
         d.setAttribute(Qt.WA_DeleteOnClose, True)
-        d.accepted.connect(
-            lambda *_, dlg=d: self._on_fragment_decomposition_dialog_accepted(dlg)
-        )
+        d.accepted.connect(lambda *_, dlg=d: self._on_fragment_decomposition_dialog_accepted(dlg))
         d.show()
 
     def _on_fragment_decomposition_dialog_accepted(self, d) -> None:
         p = d.params()
         only_selected = d.only_selected_rows()
-        if self._abort_if_only_selected_but_empty(only_selected, self._selected_oids_set(), p.tool_title):
+        if self._abort_if_only_selected_but_empty(
+            only_selected, self._selected_oids_set(), p.tool_title
+        ):
             return
         data = self.collect_scoped_table_mols(p.structure_source, only_selected=only_selected)
         if not data:
@@ -195,14 +167,16 @@ class FragmentToolsMixin:
         self._begin_tool_progress(p.tool_title, len(data))
         self.process_queue.enqueue(
             f"{p.tool_title} ({len(data)} rows)",
-            lambda ev, dt=data, m=method, pref=prefix, title=p.tool_title, sigs=self.signals, prog=ps: FragmentDecompositionWorker(
-                dt,
-                m,
-                pref,
-                title,
-                sigs,
-                cancel_event=ev,
-                progress_state=prog,
+            lambda ev, dt=data, m=method, pref=prefix, title=p.tool_title, sigs=self.signals, prog=ps: (
+                FragmentDecompositionWorker(
+                    dt,
+                    m,
+                    pref,
+                    title,
+                    sigs,
+                    cancel_event=ev,
+                    progress_state=prog,
+                )
             ),
         )
 
@@ -279,9 +253,7 @@ class FragmentToolsMixin:
         )
         self._prepare_tool_dialog(d)
         d.setAttribute(Qt.WA_DeleteOnClose, True)
-        d.accepted.connect(
-            lambda *_, dlg=d: self._on_fragment_recomposition_dialog_accepted(dlg)
-        )
+        d.accepted.connect(lambda *_, dlg=d: self._on_fragment_recomposition_dialog_accepted(dlg))
         d.show()
 
     def _collect_fragment_smiles_for_prefix(
@@ -342,24 +314,30 @@ class FragmentToolsMixin:
         self._begin_tool_progress(p.tool_title, p.max_products)
         self.process_queue.enqueue(
             f"{p.tool_title} ({len(fragments)} fragments)",
-            lambda ev, fr=fragments, pp=p, m=method, sigs=self.signals, prog=ps: FragmentRecompositionWorker(
-                fr,
-                m,
-                pp.max_depth,
-                pp.max_products,
-                pp.tool_title,
-                sigs,
-                output_filters=pp.output_filters,
-                cancel_event=ev,
-                progress_state=prog,
+            lambda ev, fr=fragments, pp=p, m=method, sigs=self.signals, prog=ps: (
+                FragmentRecompositionWorker(
+                    fr,
+                    m,
+                    pp.max_depth,
+                    pp.max_products,
+                    pp.tool_title,
+                    sigs,
+                    output_filters=pp.output_filters,
+                    cancel_event=ev,
+                    progress_state=prog,
+                )
             ),
         )
 
-    def on_fragment_recomp_finished(self, products: list, tool_title: str, skipped: int = 0) -> None:
+    def on_fragment_recomp_finished(
+        self, products: list, tool_title: str, skipped: int = 0
+    ) -> None:
         self._finish_tool_progress(tool_title)
         method_label = "BRICS" if "BRICS" in tool_title.upper() else "RECAP"
         records = [
-            (str(smi), {"Recompose_Method": method_label}) for smi in products if (smi or "").strip()
+            (str(smi), {"Recompose_Method": method_label})
+            for smi in products
+            if (smi or "").strip()
         ]
         n = self.add_rows_from_external_records_batch(records, render_structures=True)
         suffix = ""

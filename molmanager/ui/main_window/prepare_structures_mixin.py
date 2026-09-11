@@ -96,6 +96,7 @@ class PrepareStructuresMixin:
 
         self._protonate_run_ctx = {
             "out_col": out_col,
+            "ph": float(ph),
             "render_2d": bool(render_2d),
             "allowed_oids": set(oid for oid, _ in data),
         }
@@ -120,9 +121,11 @@ class PrepareStructuresMixin:
         )
 
     def _on_protonate_finished(self, rows: list) -> None:
+        from ...workers.protonate_worker import protomer_percent_column_name
+
         ctx = getattr(self, "_protonate_run_ctx", {}) or {}
         out_col = str(ctx.get("out_col") or "Protonated")
-        pct_col = "% Protomer"
+        pct_col = protomer_percent_column_name(float(ctx.get("ph", 7.4)))
         render_2d = bool(ctx.get("render_2d"))
         allowed = ctx.get("allowed_oids") or None
         self._protonate_run_ctx = None
@@ -155,8 +158,6 @@ class PrepareStructuresMixin:
                     column_pixmap_mode=True,
                     queue_title_prefix="Protonate: ",
                 )
-        except Exception:
-            logger.exception("Protonate: render 2D scheduling failed")
         except Exception:
             logger.exception("Protonate: render 2D scheduling failed")
 
@@ -442,10 +443,8 @@ class PrepareStructuresMixin:
         if src not in self.headers:
             return None
         col = self.headers.index(src)
+        raw = ""
         if self._table_model.is_pixmap_data_column(src):
-            mol = self.mols.get(oid)
-            if mol is not None:
-                return mol
             raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
         else:
             raw = (self._table_cell_text(row, col) or "").strip()
@@ -665,7 +664,12 @@ class PrepareStructuresMixin:
                 self._table_model.set_structure_pixmap(oid, None)
             elif src in self.headers:
                 if self._table_model.is_pixmap_data_column(src):
-                    self.mols[oid] = mol
+                    try:
+                        smi = mol_to_canonical_smiles(mol)
+                    except Exception:
+                        smi = ""
+                    if smi:
+                        self._table_model.set_backing_text(oid, src, smi)
                     self._table_model.set_column_pixmap(oid, src, None)
                 else:
                     self._table_model.set_cell_text(oid, src, mol_to_canonical_smiles(mol))
@@ -724,7 +728,12 @@ class PrepareStructuresMixin:
                 self._table_model.set_structure_pixmap(oid, None)
             elif src in self.headers:
                 if self._table_model.is_pixmap_data_column(src):
-                    self.mols[oid] = mol
+                    try:
+                        smi = mol_to_canonical_smiles(mol)
+                    except Exception:
+                        smi = ""
+                    if smi:
+                        self._table_model.set_backing_text(oid, src, smi)
                     self._table_model.set_column_pixmap(oid, src, None)
                 else:
                     self._table_model.set_cell_text(oid, src, mol_to_canonical_smiles(mol))
@@ -783,7 +792,12 @@ class PrepareStructuresMixin:
                 self._table_model.set_structure_pixmap(oid, None)
             elif src in self.headers:
                 if self._table_model.is_pixmap_data_column(src):
-                    self.mols[oid] = mol
+                    try:
+                        smi = mol_to_canonical_smiles(mol)
+                    except Exception:
+                        smi = ""
+                    if smi:
+                        self._table_model.set_backing_text(oid, src, smi)
                     self._table_model.set_column_pixmap(oid, src, None)
                 else:
                     self._table_model.set_cell_text(oid, src, mol_to_canonical_smiles(mol))
@@ -858,7 +872,8 @@ class PrepareStructuresMixin:
         """Collect (oid, mol, w, h) tasks in current visual row order (top to bottom) and oid→row map."""
         renders = []
         row_by_oid: dict[int, int] = {}
-        col = None if src == "Structure" else self.headers.index(src)
+        if src != "Structure" and src not in self.headers:
+            return [], {}
         for r in range(self._table_model.rowCount()):
             t0 = self._table_model.cell_text(r, 0)
             if not t0.isdigit():
@@ -874,19 +889,9 @@ class PrepareStructuresMixin:
                     continue
                 self.mols[oid] = mol
             else:
-                if self._table_model.is_pixmap_data_column(src):
-                    mol = self.mols.get(oid)
-                    if mol is None:
-                        raw = self._table_model.backing_value_for_row_header(r, src)
-                        mol = self._mol_from_structure_text(raw) if raw else None
-                    if mol is None:
-                        mol = self._mol_for_structure_row(r)
-                else:
-                    raw = self._table_cell_text(r, col)
-                    mol = self._mol_from_structure_text(raw)
+                mol = self._mol_for_render2d_source(r, src)
                 if mol is None:
                     continue
-                self.mols[oid] = mol
             rw, rh = (
                 (structure_depiict_width() * 2, structure_depiict_height() * 2)
                 if oid in self.zoomed_ids
@@ -925,7 +930,7 @@ class PrepareStructuresMixin:
         return renders, row_by_oid
 
     def _try_auto_render_all_structures_after_ingest(self) -> bool:
-        """Queue 2D renders for every row with an in-memory Structure mol (after file ingest or SQL load)."""
+        """Queue 2D renders for every row with an in-memory Structure mol (file ingest, SQL, or session)."""
         if getattr(self, "_render2d_batch_active", False):
             return False
         if not self.headers or self._table_model.rowCount() == 0:
@@ -1192,10 +1197,7 @@ class PrepareStructuresMixin:
         ci = self.headers.index(src)
         if self._table_model.is_pixmap_data_column(src):
             raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
-            mol = self._mol_from_structure_text(raw) if raw else None
-            if mol is not None:
-                return mol
-            return self._mol_for_structure_row(row)
+            return self._mol_from_structure_text(raw) if raw else None
         raw = (self._table_cell_text(row, ci) or "").strip()
         if not raw:
             raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
@@ -1235,7 +1237,9 @@ class PrepareStructuresMixin:
                 f"No structure could be read from column “{src}” for this row.",
             )
             return
-        self.mols[oid] = mol
+        if src == "Structure":
+            self.mols[oid] = mol
+        pixmap_mode = src != "Structure" and self._table_model.is_pixmap_data_column(src)
         base_w, base_h = structure_depiict_width(), structure_depiict_height()
         renders, row_by_oid = self._build_render2d_tasks_in_table_order(src, base_w, base_h, {oid})
         if not renders:
@@ -1245,7 +1249,7 @@ class PrepareStructuresMixin:
                 f"No structure could be read from column “{src}” for this row.",
             )
             return
-        self._start_render_2d_batch(renders, row_by_oid, src, column_pixmap_mode=False)
+        self._start_render_2d_batch(renders, row_by_oid, src, column_pixmap_mode=pixmap_mode)
 
     def _disconnect_source_text_for_oid(self, oid: int, src: str) -> str | None:
         """Original cell text for the disconnect target column (for multi-component SMILES)."""
@@ -1262,8 +1266,14 @@ class PrepareStructuresMixin:
                     self._table_cell_text(row, self.headers.index(smiles_h)) or ""
                 ).strip() or None
             return None
+        if src in self.headers and self._table_model.is_pixmap_data_column(src):
+            raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
+            return raw or None
         col = self.headers.index(src)
-        return (self._table_cell_text(row, col) or "").strip() or None
+        raw = (self._table_cell_text(row, col) or "").strip()
+        if not raw:
+            raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
+        return raw or None
 
     def _ensure_disconnect_output_column(self, header_name: str) -> None:
         """Insert a data column if the disconnect dialog named one that is not present yet."""

@@ -37,7 +37,6 @@ from ...confs_codec import (
     unpack_confs_blocks_json_b64,
 )
 from ...utils import mol_to_canonical_smiles
-from ...descriptor_reuse import partition_descriptor_jobs
 from ...workers import (
     CalcWorker,
     ConformerGenerationWorker,
@@ -937,36 +936,11 @@ class ConformersDescriptorsMixin:
             self.status_label.setText("Ready.")
             return
 
-        compute_disp, compute_fns, calc_headers, skipped = partition_descriptor_jobs(
-            disp,
-            list(fns),
-            calc_headers,
-            oids_list,
-            headers=list(self.headers),
-            cell_text=self._table_cell_text,
-            row_for_oid=self.get_row_by_id,
-        )
-        if skipped:
-            preview = ", ".join(skipped[:4])
-            if len(skipped) > 4:
-                preview += f", … (+{len(skipped) - 4} more)"
-            self.status_label.setText(
-                f"Skipping {len(skipped)} already-calculated column(s): {preview}"
-            )
-        if not compute_disp:
-            QMessageBox.information(
-                self,
-                "Calculate Descriptors",
-                "All selected descriptors are already calculated for every row in this scope.",
-            )
-            self.status_label.setText("Ready.")
-            return
-
         ps = self._tool_progress_state
         self._begin_tool_progress("Calculate descriptors", len(data))
         self.process_queue.enqueue(
             f"Calculate descriptors ({len(data)} rows)",
-            lambda ev, d=data, dh=calc_headers, fn=compute_fns, sm=is_s, sigs=self.signals, p=ps: (
+            lambda ev, d=data, dh=calc_headers, fn=fns, sm=is_s, sigs=self.signals, p=ps: (
                 CalcWorker(d, dh, fn, sm, sigs, cancel_event=ev, progress_state=p)
             ),
         )
@@ -1065,6 +1039,8 @@ class ConformersDescriptorsMixin:
                 self.schedule_calculate_global_bounds()
             else:
                 self._sync_global_bounds_for_headers(calc_h, refresh_filters=bool(new_h))
+            for header_name in calc_h:
+                self._table_model.apply_favorable_score_column_coloring(header_name)
             self.table.setSortingEnabled(False)
         finally:
             try:
