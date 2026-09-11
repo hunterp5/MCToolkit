@@ -69,6 +69,7 @@ from ..filter_proxy_model import FilterProxyModel
 from ..filters.cards import FilterCardsHost
 from ..table_selection_delegate import RowHighlightDelegate
 from ..process_queue import ProcessQueueManager
+from ..citations_dialog import open_citations_dialog
 from ..user_guides import open_user_guide_dialog
 from .cluster_mixin import ClusterMixin
 from .dimension_reduction_mixin import DimensionReductionMixin
@@ -1081,6 +1082,14 @@ class ChemicalTableApp(
                 QAction("Analyze Table…", self, triggered=self.open_data_analysis),
             )
         )
+        act_split_col = self._bind_hotkey(
+            "data.split_column",
+            QAction("Split Column…", self, triggered=self.open_split_column_dialog),
+        )
+        act_split_col.setToolTip(
+            "Split a delimited column (comma, tab, space, semicolon, …) into new columns."
+        )
+        data_menu.addAction(act_split_col)
         data_menu.addSeparator()
         act_qsar = QAction("QSAR…", self, triggered=self.open_qsar_dialog)
         act_qsar.setToolTip(
@@ -1136,6 +1145,7 @@ class ChemicalTableApp(
 
         self._init_settings_menu(mb)
 
+        help_menu = mb.addMenu("&Help")
         self._act_user_guide = self._bind_hotkey(
             "help.user_guides",
             QAction("&Help", self),
@@ -1143,7 +1153,23 @@ class ChemicalTableApp(
         self._act_user_guide.setToolTip("Open MolManager help (F1).")
         self._act_user_guide.triggered.connect(lambda: open_user_guide_dialog(self))
         self.addAction(self._act_user_guide)
-        mb.addAction(self._act_user_guide)
+        help_menu.addAction(self._act_user_guide)
+
+        self._act_user_guide_page = QAction("&User Guide", self)
+        self._act_user_guide_page.setToolTip("Open the MolManager user guide (same as Help).")
+        self._act_user_guide_page.triggered.connect(lambda: open_user_guide_dialog(self))
+        help_menu.addAction(self._act_user_guide_page)
+
+        help_menu.addSeparator()
+
+        self._act_citations = self._bind_hotkey(
+            "help.citations",
+            QAction("&Citations…", self),
+        )
+        self._act_citations.setToolTip("Papers and licenses for tools used in MolManager.")
+        self._act_citations.triggered.connect(lambda: open_citations_dialog(self))
+        self.addAction(self._act_citations)
+        help_menu.addAction(self._act_citations)
 
         # Native Windows menu bars can swallow clicks meant for the corner widget; use in-window bar.
         if sys.platform == "win32":

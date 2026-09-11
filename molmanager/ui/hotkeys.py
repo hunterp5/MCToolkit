@@ -63,7 +63,9 @@ HOTKEY_SPECS: tuple[HotkeySpec, ...] = (
     HotkeySpec("data.plotter", "Plotter…", "Data", ()),
     HotkeySpec("data.cluster", "Cluster…", "Data", ()),
     HotkeySpec("data.analyze_table", "Analyze Table…", "Data", ()),
+    HotkeySpec("data.split_column", "Split Column…", "Data", ()),
     HotkeySpec("help.user_guides", "Help", "Help", ("F1",)),
+    HotkeySpec("help.citations", "Citations…", "Help", ()),
 )
 
 _SPECS_BY_ID: dict[str, HotkeySpec] = {s.action_id: s for s in HOTKEY_SPECS}
