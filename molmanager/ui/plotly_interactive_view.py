@@ -96,6 +96,7 @@ class PlotlyInteractiveView(QWidget):
         # Match Plotter: hover cards are transient unless the user enables persist.
         self._hover_persist = False
         self._hover_show_structure = True
+        self._hover_columns: list[str] | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -241,6 +242,28 @@ class PlotlyInteractiveView(QWidget):
             self._last_pushed_selection_key = None
             self._sync_hover_persist_visual()
 
+    def set_hover_options(
+        self,
+        *,
+        columns: list[str] | None = None,
+        show_structure: bool | None = None,
+        persist: bool | None = None,
+    ) -> None:
+        """Configure hover-card columns / structure / persist (Plotter On Hover parity)."""
+        if columns is not None:
+            cleaned = [str(c).strip() for c in columns if str(c or "").strip()]
+            self._hover_columns = cleaned
+        if show_structure is not None:
+            self._hover_show_structure = bool(show_structure)
+        if persist is not None:
+            self._hover_persist = bool(persist)
+            self._sync_hover_persist_visual()
+
+    def _active_hover_columns(self) -> list[str]:
+        if self._hover_columns is not None:
+            return list(self._hover_columns)
+        return self._default_hover_columns()
+
     def _default_hover_columns(self) -> list[str]:
         headers = list(getattr(self.parent_app, "headers", []) or []) if self.parent_app else []
         return resolve_default_hover_columns(headers)
@@ -252,7 +275,7 @@ class PlotlyInteractiveView(QWidget):
         payload = hover_cards_payload(
             self.parent_app,
             [oid],
-            self._default_hover_columns(),
+            self._active_hover_columns(),
             show_structure=bool(self._hover_show_structure),
         )
         return json.dumps(payload, separators=(",", ":"))
@@ -273,7 +296,7 @@ class PlotlyInteractiveView(QWidget):
         payload = hover_cards_payload(
             self.parent_app,
             oids,
-            self._default_hover_columns(),
+            self._active_hover_columns(),
             show_structure=bool(self._hover_show_structure),
         )
         return json.dumps(payload, separators=(",", ":"))

@@ -25,7 +25,7 @@ import tempfile
 import time
 
 from PyQt5.QtCore import QByteArray, QTimer, Qt
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from rdkit import Chem
 
@@ -34,7 +34,13 @@ from ...confs_codec import deserialize_confs_sidecar, serialize_confs_sidecar
 from ...microstate_cache import restore_ionization_sidecar, serialize_ionization_sidecar
 from ...utils import mol_to_canonical_smiles
 from ..strings import LOADING_DETAIL_SESSION, loaded_session_status
+from ..threadpool_access import start_runnable_on_app_pool
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
+from ...workers.session_rows_parse import (
+    SessionRowsParseResult,
+    SessionRowsParseSignals,
+    SessionRowsParseWorker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -852,8 +858,14 @@ class SessionMixin:
             raise ValueError("Unsupported session format.")
         self._session_mutation_paused = True
         self._pending_session_clean_on_ready = True
+        self._session_restore_ctx = None
+        self._session_finalize_ctx = None
+        self._session_parse_busy = False
         self._discard_floating_plot_dialogs()
         self.clear_all()
+        # clear_all() bumps the load generation; capture after that so callbacks match.
+        self._session_load_generation = int(getattr(self, "_session_load_generation", 0)) + 1
+        gen = self._session_load_generation
         self._set_ingest_loading(True)
         self._table_stack.setCurrentIndex(0)
         self._loading_detail.setText(LOADING_DETAIL_SESSION)
@@ -872,58 +884,109 @@ class SessionMixin:
         self._clear_filter_target_smiles_cache()
         self.global_bounds = {}
         rows = doc.get("rows") or []
-        max_id = -1
-        chunk = 128
         try:
             self.table.setUpdatesEnabled(False)
         except Exception:
             pass
-        if len(rows) <= chunk:
-            batch_rows: list[tuple[int, dict[str, str]]] = []
-            try:
-                for entry in rows:
-                    oid = int(entry["id"])
-                    max_id = max(max_id, oid)
-                    cells = entry.get("cells") or {}
-                    smi = (cells.get("SMILES", "") or "").strip()
-                    row_cells = {
-                        cname: str(cells.get(cname, "") or "") for cname in self.headers[2:]
-                    }
-                    batch_rows.append((oid, row_cells))
-                    mol = Chem.MolFromSmiles(smi) if smi else None
-                    if mol is not None:
-                        self.mols[oid] = mol
-                self._table_model.append_rows_batch(batch_rows)
-            except Exception:
-                try:
-                    self.table.setUpdatesEnabled(True)
-                except Exception:
-                    pass
-                self._set_ingest_loading(False)
-                self._session_mutation_paused = False
-                self._pending_session_clean_on_ready = False
-                self._table_stack.setCurrentIndex(1)
-                raise
-            self._loading_detail.setText(
-                f"Session loaded ({len(rows):,} row(s)).\nRestoring filters and workspace…"
-            )
-            self._finalize_session_restore(doc, max_id)
-        else:
-            self._session_restore_ctx = {
-                "gen": int(getattr(self, "_session_load_generation", 0)),
-                "doc": doc,
-                "rows": rows,
-                "idx": 0,
-                "chunk": chunk,
-                "max_id": -1,
-            }
-            self.status_label.setText(f"Loading session… (0/{len(rows)} rows)")
-            self._loading_detail.setText(
-                f"Loading session…\n0 / {len(rows):,} rows"
-            )
-            QTimer.singleShot(0, self._session_restore_step)
 
-    def _session_restore_step(self) -> None:
+        if not rows:
+            self._begin_session_finalize(doc, -1, gen=gen)
+        else:
+            self._loading_detail.setText(
+                f"Parsing structures…\n0 / {len(rows):,} rows"
+            )
+            self.status_label.setText(f"Loading session… (parsing {len(rows):,} rows)")
+            self._session_parse_busy = True
+            signals = SessionRowsParseSignals(self)
+
+            def _on_parsed(result, g=gen, d=doc) -> None:
+                self._on_session_rows_parsed(result, g, d)
+
+            def _on_failed(message, g=gen) -> None:
+                self._on_session_rows_parse_failed(message, g)
+
+            worker = SessionRowsParseWorker(
+                list(rows),
+                data_headers=list(self.headers[2:]),
+                signals=signals,
+                generation=gen,
+            )
+            # Pytest has no lasting event-loop turn for threadpool completions; parse inline.
+            if "pytest" in sys.modules:
+                signals.finished.connect(_on_parsed, type=Qt.DirectConnection)
+                signals.failed.connect(_on_failed, type=Qt.DirectConnection)
+                worker.run()
+            else:
+                signals.finished.connect(_on_parsed, type=Qt.QueuedConnection)
+                signals.failed.connect(_on_failed, type=Qt.QueuedConnection)
+                start_runnable_on_app_pool(self, worker)
+
+        # Tests call apply synchronously; drain until async restore finishes.
+        if "pytest" in sys.modules:
+            self._drain_pending_session_load()
+
+    def _drain_pending_session_load(self, *, timeout_s: float = 60.0) -> None:
+        """Process Qt events until session parse/apply/finalize complete."""
+        deadline = time.monotonic() + float(timeout_s)
+        while time.monotonic() < deadline:
+            busy = bool(getattr(self, "_session_parse_busy", False))
+            busy = busy or getattr(self, "_session_restore_ctx", None) is not None
+            busy = busy or getattr(self, "_session_finalize_ctx", None) is not None
+            if not busy:
+                return
+            QApplication.processEvents()
+            time.sleep(0.001)
+        raise TimeoutError("Timed out waiting for session restore to finish.")
+
+    def _session_gui_chunk_size(self) -> int:
+        return max(64, int(load_config().ingest_gui_chunk_size))
+
+    def _on_session_rows_parse_failed(self, message: str, generation: int) -> None:
+        if generation != getattr(self, "_session_load_generation", 0):
+            return
+        self._session_parse_busy = False
+        try:
+            self.table.setUpdatesEnabled(True)
+        except Exception:
+            pass
+        self._set_ingest_loading(False)
+        self._session_mutation_paused = False
+        self._pending_session_clean_on_ready = False
+        self._table_stack.setCurrentIndex(1)
+        QMessageBox.warning(self, "Open Session", message or "Session row parse failed.")
+
+    def _on_session_rows_parsed(
+        self, result: object, generation: int, doc: dict
+    ) -> None:
+        if generation != getattr(self, "_session_load_generation", 0):
+            return
+        self._session_parse_busy = False
+        if not isinstance(result, SessionRowsParseResult):
+            self._on_session_rows_parse_failed("Invalid session parse result.", generation)
+            return
+        prepared = list(result.prepared_rows or [])
+        try:
+            self.mols.update(result.mols or {})
+        except Exception:
+            self.mols = dict(result.mols or {})
+        if not prepared:
+            self._begin_session_finalize(doc, int(result.max_id), gen=generation)
+            return
+        chunk = self._session_gui_chunk_size()
+        self._session_restore_ctx = {
+            "gen": generation,
+            "doc": doc,
+            "prepared_rows": prepared,
+            "idx": 0,
+            "chunk": chunk,
+            "max_id": int(result.max_id),
+        }
+        n = len(prepared)
+        self.status_label.setText(f"Loading session… (0/{n} rows)")
+        self._loading_detail.setText(f"Loading session…\n0 / {n:,} rows")
+        QTimer.singleShot(0, self._session_restore_apply_step)
+
+    def _session_restore_apply_step(self) -> None:
         ctx = getattr(self, "_session_restore_ctx", None)
         if not ctx or ctx.get("gen") != getattr(self, "_session_load_generation", 0):
             try:
@@ -931,40 +994,80 @@ class SessionMixin:
             except Exception:
                 pass
             return
-        rows = ctx["rows"]
+        prepared = ctx["prepared_rows"]
         doc = ctx["doc"]
         i = int(ctx["idx"])
         chunk = int(ctx["chunk"])
         max_id = int(ctx["max_id"])
-        n = len(rows)
+        n = len(prepared)
         end = min(i + chunk, n)
-        batch_rows: list[tuple[int, dict[str, str]]] = []
-        for j in range(i, end):
-            entry = rows[j]
-            oid = int(entry["id"])
-            max_id = max(max_id, oid)
-            cells = entry.get("cells") or {}
-            smi = (cells.get("SMILES", "") or "").strip()
-            row_cells = {cname: str(cells.get(cname, "") or "") for cname in self.headers[2:]}
-            batch_rows.append((oid, row_cells))
-            mol = Chem.MolFromSmiles(smi) if smi else None
-            if mol is not None:
-                self.mols[oid] = mol
-        self._table_model.append_rows_batch(batch_rows)
+        batch = prepared[i:end]
+        if batch:
+            self._table_model.append_rows_batch(batch)
         ctx["idx"] = end
-        ctx["max_id"] = max_id
         self.status_label.setText(f"Loading session… ({end}/{n} rows)")
         self._loading_detail.setText(f"Loading session…\n{end:,} / {n:,} rows")
         if end < n:
-            QTimer.singleShot(0, self._session_restore_step)
-        else:
-            self._session_restore_ctx = None
-            self._loading_detail.setText(
-                f"Session loaded ({n:,} row(s)).\nRestoring filters and workspace…"
-            )
-            self._finalize_session_restore(doc, max_id)
+            QTimer.singleShot(0, self._session_restore_apply_step)
+            return
+        self._session_restore_ctx = None
+        self._loading_detail.setText(
+            f"Session loaded ({n:,} row(s)).\nRestoring filters and workspace…"
+        )
+        self._begin_session_finalize(doc, max_id, gen=int(ctx["gen"]))
 
-    def _finalize_session_restore(self, doc: dict, max_id: int) -> None:
+    def _begin_session_finalize(self, doc: dict, max_id: int, *, gen: int) -> None:
+        self._session_finalize_ctx = {
+            "gen": int(gen),
+            "doc": doc,
+            "max_id": int(max_id),
+            "step": 0,
+        }
+        QTimer.singleShot(0, self._session_finalize_step)
+
+    def _session_finalize_step(self) -> None:
+        ctx = getattr(self, "_session_finalize_ctx", None)
+        if not ctx or ctx.get("gen") != getattr(self, "_session_load_generation", 0):
+            return
+        doc = ctx["doc"]
+        max_id = int(ctx["max_id"])
+        step = int(ctx["step"])
+        try:
+            if step == 0:
+                self._loading_detail.setText("Restoring filters…")
+                self._finalize_session_filters(doc, max_id)
+                ctx["step"] = 1
+                QTimer.singleShot(0, self._session_finalize_step)
+                return
+            if step == 1:
+                self._loading_detail.setText("Restoring workspace and plots…")
+                self._finalize_session_workspace_and_plots(doc)
+                ctx["step"] = 2
+                QTimer.singleShot(0, self._session_finalize_step)
+                return
+            if step == 2:
+                self._loading_detail.setText("Applying sort, colors, and filters…")
+                self._finalize_session_table_chrome(doc)
+                ctx["step"] = 3
+                QTimer.singleShot(0, self._session_finalize_step)
+                return
+            # step 3 — sidecars + reveal
+            self._loading_detail.setText("Restoring tool data…")
+            self._finalize_session_sidecars_and_reveal(doc)
+            self._session_finalize_ctx = None
+        except Exception:
+            self._session_finalize_ctx = None
+            try:
+                self.table.setUpdatesEnabled(True)
+            except Exception:
+                pass
+            self._set_ingest_loading(False)
+            self._session_mutation_paused = False
+            self._pending_session_clean_on_ready = False
+            self._table_stack.setCurrentIndex(1)
+            raise
+
+    def _finalize_session_filters(self, doc: dict, max_id: int) -> None:
         want_next = int(doc.get("next_oid", max_id + 1))
         self.next_oid = want_next if want_next > max_id else max_id + 1
         self.calculate_global_bounds()
@@ -1026,6 +1129,8 @@ class SessionMixin:
                     bool(spec.get("enabled", True)), bool(spec.get("inverted", False))
                 )
         self.f_panel.setVisible(bool(doc.get("filter_panel_visible", False)))
+
+    def _finalize_session_workspace_and_plots(self, doc: dict) -> None:
         self._discard_docked_plot_widgets()
         ws = doc.get("workspace_layout")
         self._pending_session_workspace_layout = ws if isinstance(ws, dict) else None
@@ -1067,6 +1172,8 @@ class SessionMixin:
         co = self._pending_session_column_order
         if isinstance(co, list):
             self._restore_column_visual_order([int(x) for x in co])
+
+    def _finalize_session_table_chrome(self, doc: dict) -> None:
         sc = doc.get("sort_column")
         self.table.setSortingEnabled(False)
         if sc is not None and isinstance(sc, int) and 0 <= sc < self._table_model.columnCount():
@@ -1092,6 +1199,8 @@ class SessionMixin:
         self.status_label.setText(loaded_session_status(rows_n))
         if getattr(self, "_sqlite_store", None) is not None:
             self._sqlite_store_dirty = True
+
+    def _finalize_session_sidecars_and_reveal(self, doc: dict) -> None:
         side = deserialize_confs_sidecar(doc.get("confs_sidecar"))
         if side:
             cs = getattr(self, "_confs_blocks_sidecar", None)

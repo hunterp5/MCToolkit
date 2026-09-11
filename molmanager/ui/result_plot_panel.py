@@ -50,6 +50,7 @@ from .dockable_plot import (
     show_plot_options_dialog,
 )
 from .plot_color_range_controls import PlotColorRangeControls
+from .plot_on_hover_controls import PlotOnHoverControls
 from .plot_size_controls import PlotSizeRangeControls
 
 
@@ -128,6 +129,11 @@ class DockableResultPlotPanel(QWidget):
         self.size_range.connect_changed(self._on_size_column_changed)
         size_row.addWidget(self.size_range)
         opts.addLayout(size_row)
+
+        self._hover_controls = PlotOnHoverControls(self._opts_panel)
+        self._hover_controls.changed.connect(self._on_hover_options_changed)
+        self._hover_controls.persist_changed.connect(self._on_hover_persist_changed)
+        opts.addWidget(self._hover_controls)
         opts.addStretch(1)
 
         self._opts_dialog = make_plot_options_dialog(self, self._opts_panel)
@@ -152,7 +158,7 @@ class DockableResultPlotPanel(QWidget):
         foot.setSpacing(4)
         self._opts_btn = make_plot_options_button(
             self,
-            tooltip="Configure Color by, Size by, and other plot options.",
+            tooltip="Configure Color by, Size by, On Hover, and other plot options.",
         )
         self._opts_btn.clicked.connect(self._open_plot_options)
         foot.addWidget(self._opts_btn)
@@ -177,6 +183,7 @@ class DockableResultPlotPanel(QWidget):
         foot.addWidget(self._close_plot_btn)
 
         self._reload_color_columns()
+        self._reload_hover_columns()
         self._update_spectrum_controls()
         self._update_size_controls()
         self._sync_footer_chrome()
@@ -188,6 +195,7 @@ class DockableResultPlotPanel(QWidget):
             self._extra_opts_host.hide()
         # Floating chrome sits as a header; docked panes hide this bar.
         self._root.insertWidget(0, self._footer_bar)
+        self._sync_hover_options_to_plot_view()
 
     def embedded_minimum_width(self) -> int:
         return 420
@@ -283,6 +291,21 @@ class DockableResultPlotPanel(QWidget):
         finally:
             self.color_combo.blockSignals(False)
             self.size_combo.blockSignals(False)
+        self._reload_hover_columns()
+
+    def _reload_hover_columns(self) -> None:
+        headers = list(getattr(self.parent_app, "headers", []) or []) if self.parent_app else []
+        self._hover_controls.reload_columns(headers)
+        self._sync_hover_options_to_plot_view()
+
+    def _sync_hover_options_to_plot_view(self) -> None:
+        self._hover_controls.apply_to_plot_view(getattr(self, "_plot_view", None))
+
+    def _on_hover_options_changed(self) -> None:
+        self._sync_hover_options_to_plot_view()
+
+    def _on_hover_persist_changed(self) -> None:
+        self._sync_hover_options_to_plot_view()
 
     def _update_spectrum_controls(self) -> None:
         enabled = self.color_combo.currentText() != "(none)"
@@ -425,6 +448,7 @@ class DockableResultPlotPanel(QWidget):
             "size_min": float(self.size_range.size_min.value()),
             "size_max": float(self.size_range.size_max.value()),
             **self._titles.title_overrides(),
+            **self._hover_controls.collect_state(),
         }
 
     def _apply_encoding_chrome_state(self, state: dict | None) -> None:
@@ -459,6 +483,8 @@ class DockableResultPlotPanel(QWidget):
             val = state.get(key)
             if isinstance(val, str):
                 edit.setText(val)
+        self._hover_controls.apply_state(state)
+        self._sync_hover_options_to_plot_view()
         self._update_spectrum_controls()
         self._update_size_controls()
 

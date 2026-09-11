@@ -69,6 +69,7 @@ from ...plot_color import (
     resolve_plot_colorscale,
 )
 from ..plot_color_range_controls import PlotColorRangeControls
+from ..plot_on_hover_controls import PlotOnHoverControls
 from ..plot_size_controls import PlotSizeRangeControls
 from ..dimred_plot import build_dimension_reduction_figure, dimension_reduction_result_with_color
 from ..plotly_interactive_view import PlotlyInteractiveView
@@ -218,6 +219,11 @@ class DimensionReductionPanel(QWidget):
         size_row.addWidget(self.size_range)
         opts.addLayout(size_row)
 
+        self._hover_controls = PlotOnHoverControls(self._opts_panel)
+        self._hover_controls.changed.connect(self._on_hover_options_changed)
+        self._hover_controls.persist_changed.connect(self._on_hover_options_changed)
+        opts.addWidget(self._hover_controls)
+
         run_row = QHBoxLayout()
         run_row.setContentsMargins(0, 10, 0, 6)
         run_row.addStretch()
@@ -250,7 +256,7 @@ class DimensionReductionPanel(QWidget):
         foot.setSpacing(4)
         self._opts_btn = make_plot_options_button(
             self,
-            tooltip="Configure features, method parameters, and color options.",
+            tooltip="Configure features, method parameters, color, and On Hover options.",
         )
         self._opts_btn.clicked.connect(self._open_plot_options)
         foot.addWidget(self._opts_btn)
@@ -282,9 +288,11 @@ class DimensionReductionPanel(QWidget):
 
         self._refresh_structure_sources()
         self._reload_columns()
+        self._reload_hover_columns()
         self._on_fp_selection_changed()
         self._update_spectrum_controls()
         self._update_size_controls()
+        self._sync_hover_options_to_plot_view()
         self._sync_footer_chrome()
         self.setMinimumWidth(self.embedded_minimum_width())
 
@@ -405,6 +413,7 @@ class DimensionReductionPanel(QWidget):
             "size_max": float(self.size_range.size_max.value()),
             "method_params": dict(self._method_params()),
             **self._titles.title_overrides(),
+            **self._hover_controls.collect_state(),
         }
         if self._last_result is not None:
             state["result"] = result_to_dict(self._last_result)
@@ -458,6 +467,8 @@ class DimensionReductionPanel(QWidget):
             val = state.get(key)
             if isinstance(val, str):
                 edit.setText(val)
+        self._hover_controls.apply_state(state)
+        self._sync_hover_options_to_plot_view()
         params = state.get("method_params")
         if isinstance(params, dict):
             self._apply_method_params(params)
@@ -535,6 +546,18 @@ class DimensionReductionPanel(QWidget):
         finally:
             self.color_combo.blockSignals(False)
             self.size_combo.blockSignals(False)
+        self._reload_hover_columns()
+
+    def _reload_hover_columns(self) -> None:
+        headers = list(getattr(self.parent_app, "headers", []) or []) if self.parent_app else []
+        self._hover_controls.reload_columns(headers)
+        self._sync_hover_options_to_plot_view()
+
+    def _sync_hover_options_to_plot_view(self) -> None:
+        self._hover_controls.apply_to_plot_view(getattr(self, "_plot_view", None))
+
+    def _on_hover_options_changed(self) -> None:
+        self._sync_hover_options_to_plot_view()
 
     def _column_values_for_oids(self, oids: list[int], column: str | None) -> list[Any] | None:
         if not column or column == "(none)" or self.parent_app is None:

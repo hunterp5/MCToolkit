@@ -126,13 +126,13 @@ def test_session_load_uses_loading_page_then_reveals(qapp, monkeypatch):  # noqa
     }
     seen = {"loading": False}
 
-    orig_finalize = w._finalize_session_restore
+    orig_begin = w._begin_session_finalize
 
-    def wrap_finalize(d, max_id):
+    def wrap_begin(d, max_id, *, gen):
         seen["loading"] = w._table_stack.currentIndex() == 0
-        return orig_finalize(d, max_id)
+        return orig_begin(d, max_id, gen=gen)
 
-    monkeypatch.setattr(w, "_finalize_session_restore", wrap_finalize)
+    monkeypatch.setattr(w, "_begin_session_finalize", wrap_begin)
     w._apply_session_document(doc)
     assert seen["loading"] is True
     assert w._table_stack.currentIndex() == 1

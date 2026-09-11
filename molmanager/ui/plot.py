@@ -135,12 +135,9 @@ from ..plot_radar import (
     summarize_radar,
 )
 from .plot_color_range_controls import PlotColorRangeControls
+from .plot_on_hover_controls import PlotOnHoverControls
 from .plot_size_controls import PlotSizeRangeControls
-from .plot_hover import (
-    default_hover_column_preferences,
-    hover_cards_payload,
-    hover_column_choices,
-)
+from .plot_hover import hover_cards_payload
 from .plot_table_sync import (
     apply_table_selection_for_source_rows,
     build_oid_point_index,
@@ -486,31 +483,13 @@ class PlotWidget(QWidget):
         options_l.addWidget(self.only_selected_cb)
         ctrl_root.addWidget(gb_options)
 
-        gb_hover = QGroupBox("On Hover")
-        hover_l = QVBoxLayout(gb_hover)
-        hover_l.setSpacing(4)
-        self.hover_structure_cb = QCheckBox("Show structure")
-        self.hover_structure_cb.setChecked(True)
-        self.hover_structure_cb.setToolTip(
-            "Show a small 2D depiction of the molecule next to the hover card."
-        )
-        self.hover_structure_cb.stateChanged.connect(self._schedule_plot)
-        hover_l.addWidget(self.hover_structure_cb)
-        self._hover_combos: list[QComboBox] = []
-        for _ in range(3):
-            cb = QComboBox()
-            cb.setSizeAdjustPolicy(QComboBox.AdjustToContents)
-            cb.currentIndexChanged.connect(lambda _i: self._schedule_plot())
-            hover_l.addWidget(cb)
-            self._hover_combos.append(cb)
-        self.hover_persist_cb = QCheckBox("Persistent on Select")
-        self.hover_persist_cb.setChecked(False)
-        self.hover_persist_cb.setToolTip(
-            "Keep the hover card near selected point(s); multiple selections are shown together."
-        )
-        self.hover_persist_cb.stateChanged.connect(self._on_hover_persist_changed)
-        hover_l.addWidget(self.hover_persist_cb)
-        ctrl_root.addWidget(gb_hover)
+        self._hover_controls = PlotOnHoverControls()
+        self.hover_structure_cb = self._hover_controls.hover_structure_cb
+        self.hover_persist_cb = self._hover_controls.hover_persist_cb
+        self._hover_combos = self._hover_controls._hover_combos
+        self._hover_controls.changed.connect(self._schedule_plot)
+        self._hover_controls.persist_changed.connect(self._on_hover_persist_changed)
+        ctrl_root.addWidget(self._hover_controls)
 
         color_row = QHBoxLayout()
         color_row.setSpacing(6)
@@ -979,46 +958,11 @@ class PlotWidget(QWidget):
 
     def _reload_hover_columns(self) -> None:
         """Populate On Hover column pickers from current table headers."""
-        combos = getattr(self, "_hover_combos", None) or []
-        if not combos:
-            return
         headers = list(getattr(self.parent_app, "headers", []) or []) if self.parent_app else []
-        choices = hover_column_choices(headers)
-        prev = [cb.currentText() for cb in combos]
-        for cb in combos:
-            cb.blockSignals(True)
-        try:
-            for cb in combos:
-                cb.clear()
-                cb.addItem("—", userData=None)
-                for h in choices:
-                    cb.addItem(h, userData=h)
-            for cb, p in zip(combos, prev, strict=False):
-                if p and p != "—":
-                    j = cb.findText(p)
-                    if j >= 0:
-                        cb.setCurrentIndex(j)
-            prefs = default_hover_column_preferences()
-            for i, cb in enumerate(combos):
-                if cb.currentData() is not None:
-                    continue
-                prefer = prefs[i] if i < len(prefs) else ()
-                for h in prefer:
-                    j = cb.findText(h)
-                    if j >= 0:
-                        cb.setCurrentIndex(j)
-                        break
-        finally:
-            for cb in combos:
-                cb.blockSignals(False)
+        self._hover_controls.reload_columns(headers)
 
     def _selected_hover_columns(self) -> list[str]:
-        cols: list[str] = []
-        for cb in getattr(self, "_hover_combos", None) or []:
-            h = cb.currentData()
-            if h:
-                cols.append(str(h))
-        return cols
+        return self._hover_controls.selected_columns()
 
     def _hover_card_json_for_point(self, point_index: int) -> str:
         if point_index < 0 or point_index >= len(self._plotted_oids):
@@ -2593,10 +2537,6 @@ class PlotWidget(QWidget):
 
     def collect_session_state(self) -> dict:
         """JSON-safe Plotter settings for ``.cms`` session files."""
-        hover = []
-        for cb in getattr(self, "_hover_combos", None) or []:
-            h = cb.currentData()
-            hover.append(str(h) if h else "")
         spokes = [c.currentText() for c in getattr(self, "spoke_combos", None) or []]
         entries = [e.text() for e in getattr(self, "entry_edits", None) or []]
         fit_key = self.fit_combo.currentData()
@@ -2630,9 +2570,7 @@ class PlotWidget(QWidget):
             "yaxis_title": self.yaxis_title_edit.text(),
             "zaxis_title": self.zaxis_title_edit.text(),
             "only_selected": bool(self.only_selected_cb.isChecked()),
-            "hover_structure": bool(self.hover_structure_cb.isChecked()),
-            "hover_persist": bool(self.hover_persist_cb.isChecked()),
-            "hover_columns": hover,
+            **self._hover_controls.collect_state(),
             "radar_spokes": spokes,
             "radar_entries": entries,
         }
@@ -2716,17 +2654,7 @@ class PlotWidget(QWidget):
             self.show_fit_formula_cb.setChecked(bool(state.get("show_fit_formula")))
         if "only_selected" in state:
             self.only_selected_cb.setChecked(bool(state.get("only_selected")))
-        if "hover_structure" in state:
-            self.hover_structure_cb.setChecked(bool(state.get("hover_structure")))
-        if "hover_persist" in state:
-            self.hover_persist_cb.setChecked(bool(state.get("hover_persist")))
-        hover_cols = state.get("hover_columns")
-        if isinstance(hover_cols, list):
-            for cb, name in zip(self._hover_combos, hover_cols, strict=False):
-                if name:
-                    self._set_combo_text(cb, str(name))
-                else:
-                    cb.setCurrentIndex(0)
+        self._hover_controls.apply_state(state)
         spokes = state.get("radar_spokes")
         if isinstance(spokes, list):
             for combo, name in zip(self.spoke_combos, spokes, strict=False):

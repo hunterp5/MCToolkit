@@ -60,6 +60,7 @@ from ...plot_color import (
     resolve_plot_colorscale,
 )
 from ..plot_color_range_controls import PlotColorRangeControls
+from ..plot_on_hover_controls import PlotOnHoverControls
 from ..plot_size_controls import PlotSizeRangeControls
 from ...utils import mol_to_canonical_smiles
 from ...medchem_space import (
@@ -215,6 +216,11 @@ class MedChemPlotPanel(QWidget):
         size_row.addWidget(self.size_range)
         opts.addLayout(size_row)
 
+        self._hover_controls = PlotOnHoverControls(self._opts_panel)
+        self._hover_controls.changed.connect(self._on_hover_options_changed)
+        self._hover_controls.persist_changed.connect(self._on_hover_options_changed)
+        opts.addWidget(self._hover_controls)
+
         self.summary_text = QTextEdit()
         self.summary_text.setReadOnly(True)
         self.summary_text.setMaximumHeight(52)
@@ -231,7 +237,7 @@ class MedChemPlotPanel(QWidget):
         foot.setSpacing(4)
         self._opts_btn = make_plot_options_button(
             self,
-            tooltip="Configure structure source, color, and summary options.",
+            tooltip="Configure structure source, color, On Hover, and summary options.",
         )
         self._opts_btn.clicked.connect(self._open_plot_options)
         foot.addWidget(self._opts_btn)
@@ -337,6 +343,7 @@ class MedChemPlotPanel(QWidget):
             "size_min": float(self.size_range.size_min.value()),
             "size_max": float(self.size_range.size_max.value()),
             **self._titles.title_overrides(),
+            **self._hover_controls.collect_state(),
             "full_dataset": self._medchem_dataset_to_dict(self._full_dataset),
             "plot_dataset": self._medchem_dataset_to_dict(self._plot_dataset),
             "summary": self.summary_text.toPlainText(),
@@ -372,6 +379,8 @@ class MedChemPlotPanel(QWidget):
             val = state.get(key)
             if isinstance(val, str):
                 edit.setText(val)
+        self._hover_controls.apply_state(state)
+        self._sync_hover_options_to_plot_view()
         self._full_dataset = self._medchem_dataset_from_dict(state.get("full_dataset"))
         self._plot_dataset = self._medchem_dataset_from_dict(state.get("plot_dataset"))
         summary = state.get("summary")
@@ -506,6 +515,18 @@ class MedChemPlotPanel(QWidget):
         finally:
             self.color_combo.blockSignals(False)
             self.size_combo.blockSignals(False)
+        self._reload_hover_columns()
+
+    def _reload_hover_columns(self) -> None:
+        headers = list(getattr(self.parent_app, "headers", []) or []) if self.parent_app else []
+        self._hover_controls.reload_columns(headers)
+        self._sync_hover_options_to_plot_view()
+
+    def _sync_hover_options_to_plot_view(self) -> None:
+        self._hover_controls.apply_to_plot_view(getattr(self, "_plot_view", None))
+
+    def _on_hover_options_changed(self) -> None:
+        self._sync_hover_options_to_plot_view()
 
     def _on_scope_changed(self) -> None:
         self._reload_color_columns()

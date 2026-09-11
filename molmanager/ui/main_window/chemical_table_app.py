@@ -1133,6 +1133,7 @@ class ChemicalTableApp(
             "ranked by support and activity effect."
         )
         data_menu.addAction(act_mmp)
+        data_menu.addSeparator()
         act_plot = self._bind_hotkey(
             "data.plotter",
             QAction("&Plotter…", self, triggered=self.open_plot),
