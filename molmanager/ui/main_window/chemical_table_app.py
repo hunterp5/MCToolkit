@@ -140,6 +140,12 @@ class ChemicalTableApp(
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MolManager")
+        # Avoid modal exit prompts during pytest teardown / headless runs.
+        self._suppress_exit_session_prompt = "pytest" in sys.modules
+        # Unsaved workspace vs last save / successful open (file or session).
+        self._session_dirty = False
+        self._session_mutation_paused = False
+        self._pending_session_clean_on_ready = False
         self.resize(1500, 900)
         self.threadpool = QThreadPool()
         cfg = load_config()
@@ -1366,6 +1372,9 @@ class ChemicalTableApp(
         extras = mgr.apply_layout(layout_id, preserve_plots=True)
         for w in extras:
             self._float_released_plot_widget(w)
+        mark = getattr(self, "_mark_session_dirty", None)
+        if callable(mark):
+            mark()
         self.status_label.setText(f"Layout: {layout_id.replace('_', ' ')}.")
 
     def _on_processes_dialog_destroyed(self) -> None:
@@ -1434,10 +1443,33 @@ class ChemicalTableApp(
         if getattr(self, "_ingest_sqlite_paused_dirty", False):
             return
         if self._sqlite_store is None:
+            self._mark_session_dirty()
             return
         self._sqlite_store_dirty = True
         if self._sqlite_rebuild_in_progress:
             self._sqlite_rebuild_stale = True
+        self._mark_session_dirty()
+
+    def _mark_session_dirty(self) -> None:
+        """Record that the workspace differs from the last save or successful open."""
+        if getattr(self, "_session_mutation_paused", False):
+            return
+        if getattr(self, "_ingest_sqlite_paused_dirty", False):
+            return
+        self._session_dirty = True
+
+    def _clear_session_dirty(self) -> None:
+        self._session_dirty = False
+
+    def _session_has_unsaved_changes(self) -> bool:
+        return bool(getattr(self, "_session_dirty", False))
+
+    def _finish_session_clean_if_pending(self) -> None:
+        """Clear dirty after a replace-open finishes revealing the table."""
+        self._session_mutation_paused = False
+        if getattr(self, "_pending_session_clean_on_ready", False):
+            self._clear_session_dirty()
+            self._pending_session_clean_on_ready = False
 
     def _ensure_sqlite_store_current(self) -> bool:
         """Return True when the SQLite mirror is ready for filter/search pushdown."""
@@ -1460,6 +1492,26 @@ class ChemicalTableApp(
                 return
             super().closeEvent(event)
             return
+        # Skip modal prompt under pytest / headless teardown, or when nothing changed.
+        if not getattr(self, "_suppress_exit_session_prompt", False):
+            if self._session_has_unsaved_changes():
+                from PyQt5.QtWidgets import QMessageBox
+
+                reply = QMessageBox.question(
+                    self,
+                    "Save Session",
+                    "Save the current session before exiting?",
+                    QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+                    QMessageBox.Save,
+                )
+                if reply == QMessageBox.Cancel:
+                    event.ignore()
+                    return
+                if reply == QMessageBox.Save:
+                    save = getattr(self, "save_session_as", None)
+                    if callable(save) and not save():
+                        event.ignore()
+                        return
         self._prepare_application_shutdown()
         super().closeEvent(event)
 

@@ -50,6 +50,11 @@ from rdkit.Chem import AllChem
 
 from ..confs_codec import conformer_mol_blocks_b64_json
 from ..exception_policy import log_swallowed_exception
+from .dockable_plot import (
+    make_add_to_main_button,
+    make_send_window_button,
+    style_plot_footer_text_button,
+)
 from .property_columns_panel import PropertyColumnsPanel
 from .qt_widget_utils import make_window_minimizable, qobject_is_deleted
 from .widgets import NumericTableWidgetItem
@@ -1457,6 +1462,7 @@ class Molecule3DViewerWidget(QWidget):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(4, 4, 4, 4)
+        root.setSpacing(4)
 
         web = None
         try:
@@ -1559,26 +1565,26 @@ class Molecule3DViewerWidget(QWidget):
 
         footer = QWidget(self)
         footer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self._footer_bar = footer
         foot = QHBoxLayout(footer)
-        foot.setContentsMargins(0, 4, 0, 0)
-        foot.setSpacing(6)
-        self._add_to_main_btn = QPushButton("Add to Main Window")
-        self._add_to_main_btn.setAutoDefault(False)
-        self._add_to_main_btn.setDefault(False)
-        self._add_to_main_btn.setToolTip(
-            "Dock this viewer beside the table in the main window (like a plot pane)."
+        foot.setContentsMargins(0, 0, 0, 0)
+        foot.setSpacing(4)
+        self._add_to_main_btn = make_add_to_main_button(
+            self,
+            tooltip="Dock this viewer beside the table in the main window (like a plot pane).",
         )
         self._add_to_main_btn.clicked.connect(self._add_to_main_window)
         foot.addWidget(self._add_to_main_btn)
-        self._send_window_btn = QPushButton("Send to New Window")
-        self._send_window_btn.setToolTip("Open this docked viewer in a separate floating window.")
+        self._send_window_btn = make_send_window_button(
+            self,
+            tooltip="Open this docked viewer in a separate floating window.",
+        )
         self._send_window_btn.clicked.connect(self._send_to_new_window)
         foot.addWidget(self._send_window_btn)
-        self._close_viewer_btn = QPushButton("Close Viewer")
-        self._close_viewer_btn.setToolTip(
-            "Close this docked viewer and free the panel so another plot or viewer can be docked."
-        )
+        self._close_viewer_btn = QPushButton("Close")
+        self._close_viewer_btn.setToolTip("Close this viewer.")
         self._close_viewer_btn.clicked.connect(self._close_docked_viewer)
+        style_plot_footer_text_button(self._close_viewer_btn)
         foot.addWidget(self._close_viewer_btn)
         if multi_conf_blocks_json_b64 is not None:
             self._add_conf_nav_controls(foot)
@@ -1602,7 +1608,7 @@ class Molecule3DViewerWidget(QWidget):
             self._viewer_status.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
             foot.addWidget(self._viewer_status)
         self._apply_footer_size_constraints(foot)
-        root.addWidget(footer)
+        root.insertWidget(0, footer)
         self._sync_footer_chrome()
         self.setMinimumWidth(self.embedded_minimum_width())
 
@@ -2073,10 +2079,13 @@ class Molecule3DViewerWidget(QWidget):
                 undock(self)
 
     def _close_docked_viewer(self) -> None:
-        if self.parent_app is not None:
-            close_fn = getattr(self.parent_app, "close_docked_plot", None)
-            if callable(close_fn):
-                close_fn(self)
+        from .dockable_plot import request_close_plot_widget
+
+        request_close_plot_widget(
+            self,
+            title="Close Viewer",
+            message="Close this viewer?",
+        )
 
     def _is_docked_in_main_window(self) -> bool:
         app = self.parent_app
@@ -2088,12 +2097,16 @@ class Molecule3DViewerWidget(QWidget):
         return getattr(app, "_docked_plot_widget", None) is self
 
     def _sync_footer_chrome(self) -> None:
-        """Floating: Add to Main. Docked: Send/Close. Conformer arrows stay on this row."""
+        """Floating: Add glyph + Close. Docked: Send/Close. Conformer arrows stay on this row."""
+        from .dockable_plot import apply_plot_chrome_glyphs, sync_docked_footer_bar
+
+        apply_plot_chrome_glyphs(self)
         floating = isinstance(self.window(), Molecule3DViewerDialog)
         docked = self._is_docked_in_main_window()
         self._add_to_main_btn.setVisible(floating)
         self._send_window_btn.setVisible(docked)
-        self._close_viewer_btn.setVisible(docked)
+        self._close_viewer_btn.setVisible(True)
+        sync_docked_footer_bar(self, docked=docked)
         if not docked:
             self.setMinimumWidth(self.embedded_minimum_width())
 
@@ -2306,9 +2319,14 @@ class Molecule3DViewerDialog(QDialog):
         self.resize(max(min_w, 1280), 800)
 
     def closeEvent(self, event) -> None:  # noqa: N802 — Qt API name
-        if self._force_close:
-            self._force_close = False
-        event.accept()
+        from .dockable_plot import handle_floating_plot_close_event
+
+        handle_floating_plot_close_event(
+            self,
+            event,
+            title="Close Viewer",
+            message="Close this viewer?",
+        )
 
 
 def open_molecule_3d_viewer(

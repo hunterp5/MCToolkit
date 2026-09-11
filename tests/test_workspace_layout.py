@@ -134,6 +134,7 @@ def test_splitter_size_roundtrip(qapp):
     payload = mgr.collect_splitter_sizes()
     assert payload["layout_id"] == LAYOUT_TABLE_STACK
     assert "sizes" in payload
+    assert "ratios" in payload
     assert "preferred_pane_id" in payload
     mgr.apply_layout(LAYOUT_TABLE_SIDE, preserve_plots=False)
     mgr.restore_splitter_sizes(payload)  # different layout; sizes keys may not match count
@@ -165,7 +166,10 @@ def test_dock_appends_and_paginates_in_same_pane(qapp):
     assert pane.page_count() == 2
     assert pane.page_index() == 1
     assert not pane._pager.isHidden()
-    assert "2 / 2" in pane._page_label.text()
+    assert not pane._header.isHidden()
+    assert pane._pager.parentWidget() is pane._header
+    assert pane._title_edit.text() == "Beta"
+    assert "2/2" in pane._page_label.text()
     assert pane.display_title() == "Beta"
     pane.show_previous_page()
     assert pane.plot_widget() is w0
@@ -188,6 +192,101 @@ def test_release_one_page_keeps_the_other(qapp):
     assert pane.page_count() == 1
     assert pane.plot_widgets() == [w0]
     assert not pane.is_empty()
+    assert pane._prev_btn.isHidden()
+    assert pane._next_btn.isHidden()
+    assert pane._title_edit.text() == pane.display_title()
+
+
+def test_plot_pane_header_adopts_dock_chrome_buttons(qapp):
+    from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+
+    mgr = _manager(qapp)
+    pane = mgr.plot_panes()[0]
+    host = QWidget()
+    root = QVBoxLayout(host)
+    footer = QWidget(host)
+    host._footer_bar = footer
+    foot = QHBoxLayout(footer)
+    host._opts_btn = QPushButton("Plot Options")
+    host._send_window_btn = QPushButton("Send to New Window")
+    host._close_plot_btn = QPushButton("Close")
+    host._clear_sel_btn = QPushButton("Clear Selection")
+    for btn in (
+        host._opts_btn,
+        host._send_window_btn,
+        host._close_plot_btn,
+        host._clear_sel_btn,
+    ):
+        foot.addWidget(btn)
+    root.addWidget(footer)
+
+    def _sync_footer_chrome() -> None:
+        host._send_window_btn.setVisible(True)
+        host._close_plot_btn.setVisible(True)
+
+    host._sync_footer_chrome = _sync_footer_chrome
+    mgr.dock_into_pane(pane, host)
+    assert host._opts_btn.parentWidget() is pane._leading_opts_host
+    assert host._clear_sel_btn.parentWidget() is pane._leading_opts_host
+    assert host._send_window_btn.parentWidget() is pane._send_host
+    assert host._close_plot_btn.parentWidget() is pane._trailing_close_host
+    assert pane._close_btn.parentWidget() is pane._header_right
+    assert footer.isHidden()
+    assert pane._prev_btn.isHidden()
+
+    # Header order: left strip | pager | right strip (pager stays pane-centered)
+    header_ly = pane._header.layout()
+    left_idx = header_ly.indexOf(pane._header_left)
+    nav_idx = header_ly.indexOf(pane._nav_host)
+    right_idx = header_ly.indexOf(pane._header_right)
+    assert left_idx >= 0 and nav_idx == left_idx + 1 and right_idx == nav_idx + 1
+    left_ly = pane._header_left.layout()
+    assert left_ly.indexOf(pane._leading_opts_host) == 0
+    assert left_ly.indexOf(pane._chrome_host) == 1
+    leading_ly = pane._leading_opts_ly
+    assert leading_ly.indexOf(host._opts_btn) == 0
+    assert leading_ly.indexOf(host._clear_sel_btn) == 1
+    right_ly = pane._header_right.layout()
+    send_idx = right_ly.indexOf(pane._send_host)
+    trailing_idx = right_ly.indexOf(pane._trailing_close_host)
+    close_idx = right_ly.indexOf(pane._close_btn)
+    assert send_idx >= 0 and trailing_idx == send_idx + 1 and close_idx == trailing_idx + 1
+
+    mgr.release_widget(host)
+    assert host._opts_btn.parentWidget() is footer
+    assert host._send_window_btn.parentWidget() is footer
+    assert host._close_plot_btn.parentWidget() is footer
+    assert not footer.isHidden()
+
+
+def test_plot_pane_title_double_click_renames(qapp):
+    from PyQt5.QtCore import QEvent, QPoint, Qt
+    from PyQt5.QtGui import QMouseEvent
+
+    mgr = _manager(qapp)
+    pane = mgr.plot_panes()[0]
+    w = QLabel("plot")
+    w._window_title = "Original"
+    mgr.dock_into_pane(pane, w)
+    assert pane._title_edit.text() == "Original"
+    assert pane._title_edit.isReadOnly()
+
+    pos = QPoint(4, 4)
+    dbl = QMouseEvent(
+        QEvent.MouseButtonDblClick,
+        pos,
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
+    )
+    pane.eventFilter(pane._title_edit, dbl)
+    assert not pane._title_edit.isReadOnly()
+    pane._title_edit.setText("Custom Name")
+    pane._commit_title_edit()
+    assert pane._title_edit.isReadOnly()
+    assert pane.display_title() == "Custom Name"
+    assert w._window_title == "Original"
+    assert getattr(w, "_pane_display_title") == "Custom Name"
 
 
 def test_move_widget_between_panes_keeps_other_pages(qapp):

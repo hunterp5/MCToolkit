@@ -32,6 +32,7 @@ from ..plot_color import (
     marker_sizes_from_column_values,
     scatter_marker_from_column_values,
 )
+from .dockable_plot import resolve_plot_title_text
 from .plotly_html import finalize_plot_legend
 
 
@@ -56,6 +57,9 @@ def build_activity_cliff_figure(
     size_label: str | None = None,
     size_min_px: float = DEFAULT_MARKER_SIZE_MIN_PX,
     size_max_px: float = DEFAULT_MARKER_SIZE_MAX_PX,
+    plot_title: str = "",
+    xaxis_title: str = "",
+    yaxis_title: str = "",
 ) -> go.Figure:
     """
     Scatter of structural-change size vs ``|Δactivity|``, colored by signed Δ by default.
@@ -70,10 +74,8 @@ def build_activity_cliff_figure(
     for p in points:
         if use_distance:
             x = float(p.frag_distance)
-            x_label = "Fragment distance (1 − Tanimoto)"
         else:
             x = float(p.change_heavy_atoms) + _x_jitter(p.oid_a, p.oid_b)
-            x_label = "Changing heavy atoms"
         xs.append(x)
         ys.append(float(p.abs_delta))
         colors.append(float(p.signed_delta))
@@ -132,14 +134,14 @@ def build_activity_cliff_figure(
         ]
     )
     fig.update_layout(
-        title="Activity Cliff Map",
-        xaxis_title=x_label,
-        yaxis_title=f"|Δ{activity_column}|",
+        title=resolve_plot_title_text(plot_title, ""),
+        xaxis_title=resolve_plot_title_text(xaxis_title, ""),
+        yaxis_title=resolve_plot_title_text(yaxis_title, ""),
         template="plotly_white",
         dragmode="lasso",
         clickmode="event+select",
         showlegend=False,
-        margin=dict(l=56, r=24, t=48, b=56),
+        margin=dict(l=48, r=24, t=24, b=40),
         meta={
             "molmanager_selection_traces": [0],
             "molmanager_hover_persist": False,

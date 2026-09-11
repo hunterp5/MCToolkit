@@ -54,6 +54,10 @@ LOADING_DETAIL_APPEND = (
     "Reading file from disk…\n"
     "New rows are appended; 2D images refresh automatically when import finishes."
 )
+LOADING_DETAIL_SESSION = (
+    "Loading session…\n"
+    "Restoring table, filters, and workspace; 2D images draw when ready."
+)
 
 DISCONNECT_FRAGMENTS_HELP = (
     "Split salts and multi-component entries, keep the largest fragment as the working molecule,\n"

@@ -26,7 +26,7 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 - **n_neighbors**, **min_dist**.
 - **Max points**, **Random seed**.
 - **Run UMAP**.
-- **Add to Main Window**, **Send to New Window**, **Close Plot**, **Plot Options**, **Clear Selection**.
+- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
 
 ## Workflow
 

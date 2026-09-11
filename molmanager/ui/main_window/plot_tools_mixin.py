@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QDialog
+from PyQt5.QtWidgets import QDialog, QMessageBox
 
 logger = logging.getLogger(__name__)
 
@@ -358,8 +358,13 @@ class PlotToolsMixin:
             self._plot_dialogs = []
         self._prune_plot_dialogs()
         self._plot_dialogs.append(dlg)
-        n = len(self._plot_dialogs)
-        dlg.setWindowTitle("Plot Data" if n == 1 else f"Plot Data ({n})")
+        panel = getattr(dlg, "_plot_widget", None)
+        custom = getattr(panel, "_pane_display_title", None) if panel is not None else None
+        if isinstance(custom, str) and custom.strip():
+            dlg.setWindowTitle(custom.strip())
+        else:
+            n = len(self._plot_dialogs)
+            dlg.setWindowTitle("Plot Data" if n == 1 else f"Plot Data ({n})")
         dlg.destroyed.connect(lambda *_a, d=dlg: self._unregister_plot_dialog(d))
 
     def _unregister_plot_dialog(self, dlg) -> None:
@@ -465,6 +470,9 @@ class PlotToolsMixin:
             )
         else:
             self.status_label.setText(f"{kind}: docked in pane {pane_n}.")
+        mark = getattr(self, "_mark_session_dirty", None)
+        if callable(mark):
+            mark()
         return True
 
     def _wire_docked_plot_widget(self, plot_widget) -> None:
@@ -568,6 +576,9 @@ class PlotToolsMixin:
         mgr = self._workspace()
         if mgr is not None:
             mgr.show()
+        # Session restore owns splitter sizes; do not fight them with auto-grow.
+        if getattr(self, "_pending_session_workspace_layout", None):
+            return
         QTimer.singleShot(0, self._ensure_plot_panel_width)
 
     def hide_docked_plot_panel(self) -> None:
@@ -606,7 +617,7 @@ class PlotToolsMixin:
         self.hide_docked_plot_panel()
         self.status_label.setText("Plot panel hidden.")
 
-    def close_docked_plot(self, plot_widget=None) -> None:
+    def close_docked_plot(self, plot_widget=None, *, confirm: bool = True) -> None:
         """Close a docked plot (``plot_widget`` or the preferred/occupied pane)."""
         mgr = self._workspace()
         if mgr is None:
@@ -645,6 +656,20 @@ class PlotToolsMixin:
             return
 
         widgets = list(pane.plot_widgets())
+        if widgets:
+            n = len(widgets)
+            noun = "plot" if n == 1 else "plots"
+            reply = QMessageBox.question(
+                self,
+                "Close Plot Pane",
+                f"This pane has {n} {noun}. Close the pane and discard "
+                f"{'it' if n == 1 else 'them'}?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
         for plot_widget in widgets:
             self._release_plot_widget_from_panel_host(plot_widget)
             try:
@@ -719,6 +744,9 @@ class PlotToolsMixin:
                 sync_footer()
             kind = self._docked_widget_kind(plot_widget)
             self.status_label.setText(f"{kind}: moved to separate window.")
+            mark = getattr(self, "_mark_session_dirty", None)
+            if callable(mark):
+                mark()
             return True
 
         if not isinstance(plot_widget, PlotWidget):
@@ -733,4 +761,7 @@ class PlotToolsMixin:
         dlg.raise_()
         dlg.activateWindow()
         self.status_label.setText("Plot: moved to separate window.")
+        mark = getattr(self, "_mark_session_dirty", None)
+        if callable(mark):
+            mark()
         return True

@@ -99,3 +99,41 @@ def test_selection_browser_widget_is_workspace_dockable():
     assert hasattr(SelectionBrowserWidget, "_sync_options_chrome")
     assert is_dockable_workspace_widget(SomBrowserWidget)
     assert hasattr(SomBrowserWidget, "create_floating_dialog")
+
+
+def test_clear_selection_button_is_glyph(qapp):  # noqa: ARG001
+    from molmanager.ui.dockable_plot import (
+        _DOCK_LEADING_OPTS_ATTRS,
+        make_clear_selection_button,
+    )
+
+    btn = make_clear_selection_button()
+    assert btn.text() == ""
+    assert not btn.icon().isNull()
+    assert _DOCK_LEADING_OPTS_ATTRS == ("_opts_btn", "_clear_sel_btn")
+
+
+def test_floating_title_edit_installed_when_undocked(qapp):  # noqa: ARG001
+    from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+
+    from molmanager.ui.dockable_plot import sync_docked_footer_bar
+
+    host = QWidget()
+    root = QVBoxLayout(host)
+    footer = QWidget(host)
+    host._footer_bar = footer
+    foot = QHBoxLayout(footer)
+    host._opts_btn = QPushButton(host)
+    foot.addWidget(host._opts_btn)
+    foot.addStretch(1)
+    root.addWidget(footer)
+
+    sync_docked_footer_bar(host, docked=False)
+    edit = host._float_title_edit
+    assert edit is not None
+    assert not edit.isHidden()
+    host._pane_display_title = "My Plot"
+    sync_docked_footer_bar(host, docked=False)
+    assert edit.text() == "My Plot"
+    sync_docked_footer_bar(host, docked=True)
+    assert edit.isHidden()

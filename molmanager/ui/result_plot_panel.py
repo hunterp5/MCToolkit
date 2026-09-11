@@ -25,7 +25,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
-    QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -38,7 +38,15 @@ from ..plot_color import (
     resolve_plot_colorscale,
 )
 from .dockable_plot import (
+    PlotTitlesControls,
+    apply_plot_chrome_glyphs,
+    make_add_to_main_button,
+    make_clear_selection_button,
+    make_close_plot_button,
+    make_plot_options_button,
     make_plot_options_dialog,
+    make_send_window_button,
+    request_close_plot_widget,
     show_plot_options_dialog,
 )
 from .plot_color_range_controls import PlotColorRangeControls
@@ -73,6 +81,10 @@ class DockableResultPlotPanel(QWidget):
         opts = QVBoxLayout(self._opts_panel)
         opts.setContentsMargins(0, 0, 0, 0)
         opts.setSpacing(8)
+
+        self._titles = PlotTitlesControls(self._opts_panel)
+        self._titles.changed.connect(self._on_titles_changed)
+        opts.addWidget(self._titles)
 
         color_row = QHBoxLayout()
         color_row.setSpacing(6)
@@ -124,40 +136,44 @@ class DockableResultPlotPanel(QWidget):
         self._extra_opts_layout = QVBoxLayout(self._extra_opts_host)
         self._extra_opts_layout.setContentsMargins(0, 0, 0, 0)
         self._extra_opts_layout.setSpacing(6)
-        opts.insertWidget(0, self._extra_opts_host)
+        # Keep Titles first; subclass extras sit just below.
+        opts.insertWidget(1, self._extra_opts_host)
 
         self._root = QVBoxLayout(self)
+        # Top inset matches spacing: same toolbar→plot gap when floating or docked.
         self._root.setContentsMargins(8, 8, 8, 8)
-        self._root.setSpacing(6)
+        self._root.setSpacing(8)
 
-        foot = QHBoxLayout()
-        foot.setContentsMargins(0, 4, 0, 0)
-        self._add_to_main_btn = QPushButton("Add to Main Window")
-        self._add_to_main_btn.setToolTip("Dock this plot beside the compound table.")
+        self._footer_bar = QWidget(self)
+        self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        foot = QHBoxLayout(self._footer_bar)
+        foot.setContentsMargins(0, 0, 0, 0)
+        foot.setSpacing(4)
+        self._opts_btn = make_plot_options_button(
+            self,
+            tooltip="Configure Color by, Size by, and other plot options.",
+        )
+        self._opts_btn.clicked.connect(self._open_plot_options)
+        foot.addWidget(self._opts_btn)
+        self._clear_sel_btn = make_clear_selection_button(self)
+        self._clear_sel_btn.clicked.connect(self._clear_selection)
+        foot.addWidget(self._clear_sel_btn)
+        foot.addStretch(1)
+        self._add_to_main_btn = make_add_to_main_button(
+            self,
+            tooltip="Dock this plot beside the compound table.",
+        )
         self._add_to_main_btn.clicked.connect(self._add_to_main_window)
         foot.addWidget(self._add_to_main_btn)
-        self._send_window_btn = QPushButton("Send to New Window")
-        self._send_window_btn.setToolTip(
-            "Open this docked plot in a separate floating window."
+        self._send_window_btn = make_send_window_button(
+            self,
+            tooltip="Open this docked plot in a separate floating window.",
         )
         self._send_window_btn.clicked.connect(self._send_to_new_window)
         foot.addWidget(self._send_window_btn)
-        self._close_plot_btn = QPushButton("Close Plot")
-        self._close_plot_btn.setToolTip(
-            "Close this docked plot and free the panel so another plot can be docked."
-        )
+        self._close_plot_btn = make_close_plot_button(self)
         self._close_plot_btn.clicked.connect(self._close_docked_plot)
         foot.addWidget(self._close_plot_btn)
-        self._opts_btn = QPushButton("Plot Options")
-        self._opts_btn.setToolTip("Configure Color by, Size by, and other plot options.")
-        self._opts_btn.clicked.connect(self._open_plot_options)
-        foot.addWidget(self._opts_btn)
-        foot.addStretch(1)
-        self._clear_sel_btn = QPushButton("Clear Selection")
-        self._clear_sel_btn.setToolTip("Clear the current table and plot selection.")
-        self._clear_sel_btn.clicked.connect(self._clear_selection)
-        foot.addWidget(self._clear_sel_btn)
-        self._footer = foot
 
         self._reload_color_columns()
         self._update_spectrum_controls()
@@ -169,7 +185,8 @@ class DockableResultPlotPanel(QWidget):
         """Call after subclass adds content widgets to ``self._root``."""
         if self._extra_opts_layout.count() == 0:
             self._extra_opts_host.hide()
-        self._root.addLayout(self._footer)
+        # Floating chrome sits as a header; docked panes hide this bar.
+        self._root.insertWidget(0, self._footer_bar)
 
     def embedded_minimum_width(self) -> int:
         return 420
@@ -207,10 +224,7 @@ class DockableResultPlotPanel(QWidget):
                 undock(self)
 
     def _close_docked_plot(self) -> None:
-        if self.parent_app is not None:
-            close = getattr(self.parent_app, "close_docked_plot", None)
-            if callable(close):
-                close(self)
+        request_close_plot_widget(self)
 
     def _is_docked_in_main_window(self) -> bool:
         app = self.parent_app
@@ -222,11 +236,15 @@ class DockableResultPlotPanel(QWidget):
         return getattr(app, "_docked_plot_widget", None) is self
 
     def _sync_footer_chrome(self) -> None:
+        from .dockable_plot import sync_docked_footer_bar
+
+        apply_plot_chrome_glyphs(self)
         floating = isinstance(self.window(), self._floating_dialog_cls)
         docked = self._is_docked_in_main_window()
         self._add_to_main_btn.setVisible(floating)
         self._send_window_btn.setVisible(docked)
         self._close_plot_btn.setVisible(docked)
+        sync_docked_footer_bar(self, docked=docked)
 
     def event(self, event):  # noqa: N802 — Qt API name
         if event.type() == QEvent.ParentChange:
@@ -301,9 +319,7 @@ class DockableResultPlotPanel(QWidget):
         self._update_size_controls()
         self._rebuild_figure()
 
-    def _column_values_for_oids(
-        self, oids: list[int], color_col: str | None
-    ) -> list[Any] | None:
+    def _column_values_for_oids(self, oids: list[int], color_col: str | None) -> list[Any] | None:
         if not color_col or color_col == "(none)" or self.parent_app is None:
             return None
         model = self.parent_app._table_model
@@ -383,7 +399,67 @@ class DockableResultPlotPanel(QWidget):
             "size_label": size_col,
             "size_min_px": size_min_px,
             "size_max_px": size_max_px,
+            **self._titles.title_overrides(),
         }
+
+    def _on_titles_changed(self) -> None:
+        if getattr(self, "_plot_view", None) is not None:
+            self._rebuild_figure()
+
+    @staticmethod
+    def _set_combo_text(combo: QComboBox, text: str | None) -> None:
+        if not text:
+            return
+        idx = combo.findText(str(text))
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+
+    def _collect_encoding_chrome_state(self) -> dict[str, Any]:
+        return {
+            "color": self.color_combo.currentText(),
+            "colorscale": self.colorscale_combo.currentText(),
+            "color_min": self.color_range.color_min.text(),
+            "color_max": self.color_range.color_max.text(),
+            "size": self.size_combo.currentText(),
+            "size_min": float(self.size_range.size_min.value()),
+            "size_max": float(self.size_range.size_max.value()),
+            **self._titles.title_overrides(),
+        }
+
+    def _apply_encoding_chrome_state(self, state: dict | None) -> None:
+        if not isinstance(state, dict):
+            return
+        self.color_combo.blockSignals(True)
+        self.size_combo.blockSignals(True)
+        try:
+            self._set_combo_text(self.color_combo, state.get("color"))
+            self._set_combo_text(self.colorscale_combo, state.get("colorscale"))
+            self._set_combo_text(self.size_combo, state.get("size"))
+        finally:
+            self.color_combo.blockSignals(False)
+            self.size_combo.blockSignals(False)
+        cmin, cmax = state.get("color_min"), state.get("color_max")
+        if isinstance(cmin, str):
+            self.color_range.color_min.setText(cmin)
+        if isinstance(cmax, str):
+            self.color_range.color_max.setText(cmax)
+        try:
+            if state.get("size_min") is not None:
+                self.size_range.size_min.setValue(float(state["size_min"]))
+            if state.get("size_max") is not None:
+                self.size_range.size_max.setValue(float(state["size_max"]))
+        except (TypeError, ValueError):
+            pass
+        for edit, key in (
+            (self._titles.plot_title_edit, "plot_title"),
+            (self._titles.xaxis_title_edit, "xaxis_title"),
+            (self._titles.yaxis_title_edit, "yaxis_title"),
+        ):
+            val = state.get(key)
+            if isinstance(val, str):
+                edit.setText(val)
+        self._update_spectrum_controls()
+        self._update_size_controls()
 
     def _rebuild_figure(self) -> None:
         raise NotImplementedError

@@ -273,6 +273,9 @@ class FilterPanelMixin:
 
     def apply_filters(self) -> None:
         """Coalesce expensive filter passes on large tables (slider drags)."""
+        mark = getattr(self, "_mark_session_dirty", None)
+        if callable(mark):
+            mark()
         n = self._table_model.rowCount()
         cfg = load_config()
         # Substructure matching runs RDKit per row — debounce earlier and slightly longer while typing SMARTS.

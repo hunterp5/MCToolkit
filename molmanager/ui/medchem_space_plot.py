@@ -30,6 +30,7 @@ from ..medchem_space import (
 )
 from ..plot_color import DEFAULT_PLOT_COLORSCALE, attach_marker_size_legend
 from ..ui.plotly_html import finalize_plot_legend
+from .dockable_plot import resolve_plot_title_text
 
 
 def _path_shape(
@@ -113,6 +114,9 @@ def build_boiled_egg_figure(
     size_label: str | None = None,
     size_min_px: float | None = None,
     size_max_px: float | None = None,
+    plot_title: str = "",
+    xaxis_title: str = "",
+    yaxis_title: str = "",
 ) -> go.Figure:
     """TPSA vs LogP with GIA (white) and BBB (yellow) regions."""
     pts = dataset.points
@@ -137,11 +141,12 @@ def build_boiled_egg_figure(
         ]
     )
     fig.update_layout(
+        title=resolve_plot_title_text(plot_title, "") or None,
         template="plotly_white",
         dragmode="lasso",
         clickmode="event+select",
         showlegend=False,
-        margin=dict(l=56, r=24, t=24, b=48),
+        margin=dict(l=56, r=24, t=48 if (plot_title or "").strip() else 24, b=48),
         meta={
             "molmanager_selection_traces": [0],
             "molmanager_hover_persist": False,
@@ -171,8 +176,8 @@ def build_boiled_egg_figure(
             ),
         ],
     )
-    fig.update_xaxes(title_text="TPSA (Ų)", range=[-20, 220])
-    fig.update_yaxes(title_text="LogP", range=[-3, 8])
+    fig.update_xaxes(title_text=resolve_plot_title_text(xaxis_title, "TPSA (Ų)"), range=[-20, 220])
+    fig.update_yaxes(title_text=resolve_plot_title_text(yaxis_title, "LogP"), range=[-3, 8])
     attach_marker_size_legend(
         fig,
         size_label=size_label,
@@ -195,6 +200,9 @@ def build_golden_triangle_figure(
     size_label: str | None = None,
     size_min_px: float | None = None,
     size_max_px: float | None = None,
+    plot_title: str = "",
+    xaxis_title: str = "",
+    yaxis_title: str = "",
 ) -> go.Figure:
     """MW vs LogP with the golden-triangle drug-likeness region."""
     pts = dataset.points
@@ -219,11 +227,12 @@ def build_golden_triangle_figure(
         ]
     )
     fig.update_layout(
+        title=resolve_plot_title_text(plot_title, "") or None,
         template="plotly_white",
         dragmode="lasso",
         clickmode="event+select",
         showlegend=False,
-        margin=dict(l=56, r=24, t=24, b=48),
+        margin=dict(l=56, r=24, t=48 if (plot_title or "").strip() else 24, b=48),
         meta={
             "molmanager_selection_traces": [0],
             "molmanager_hover_persist": False,
@@ -236,8 +245,11 @@ def build_golden_triangle_figure(
             ),
         ],
     )
-    fig.update_xaxes(title_text="LogP", range=[-3, 6])
-    fig.update_yaxes(title_text="Molecular weight (Da)", range=[150, 520])
+    fig.update_xaxes(title_text=resolve_plot_title_text(xaxis_title, "LogP"), range=[-3, 6])
+    fig.update_yaxes(
+        title_text=resolve_plot_title_text(yaxis_title, "Molecular weight (Da)"),
+        range=[150, 520],
+    )
     attach_marker_size_legend(
         fig,
         size_label=size_label,

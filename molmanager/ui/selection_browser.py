@@ -40,7 +40,13 @@ from ..display_constants import (
     BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
 )
 from .compound_table_model import CompoundTableModel
-from .dockable_plot import discard_host_dialog_after_dock
+from .dockable_plot import (
+    discard_host_dialog_after_dock,
+    make_add_to_main_button,
+    make_send_window_button,
+    request_close_plot_widget,
+    style_plot_footer_text_button,
+)
 from .property_columns_panel import PropertyColumnsPanel
 from .qt_widget_utils import make_window_minimizable
 from .table_selection import item_selection_for_view_rows
@@ -65,7 +71,7 @@ class SelectionBrowserWidget(QWidget):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(6)
+        root.setSpacing(8)
 
         self._cb_only_selected = QCheckBox("Browse Selected")
         self._cb_only_selected.setToolTip(
@@ -115,21 +121,27 @@ class SelectionBrowserWidget(QWidget):
         self._btn_toggle_select = QPushButton("Select")
         self._btn_toggle_select.setToolTip("Select or deselect this row in the table")
 
-        foot = QHBoxLayout()
-        foot.setContentsMargins(0, 4, 0, 0)
-        self._add_to_main_btn = QPushButton("Add to Main Window")
-        self._add_to_main_btn.setToolTip("Dock this browser beside the compound table.")
+        self._footer_bar = QWidget(self)
+        self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        foot = QHBoxLayout(self._footer_bar)
+        foot.setContentsMargins(0, 0, 0, 0)
+        foot.setSpacing(4)
+        self._add_to_main_btn = make_add_to_main_button(
+            self,
+            tooltip="Dock this browser beside the compound table.",
+        )
         self._add_to_main_btn.clicked.connect(self._add_to_main_window)
         foot.addWidget(self._add_to_main_btn)
-        self._send_window_btn = QPushButton("Send to New Window")
-        self._send_window_btn.setToolTip("Open this docked browser in a separate floating window.")
+        self._send_window_btn = make_send_window_button(
+            self,
+            tooltip="Open this docked browser in a separate floating window.",
+        )
         self._send_window_btn.clicked.connect(self._send_to_new_window)
         foot.addWidget(self._send_window_btn)
-        self._close_btn = QPushButton("Close Browser")
-        self._close_btn.setToolTip(
-            "Close this docked browser and remove it from the workspace pane."
-        )
+        self._close_btn = QPushButton("Close")
+        self._close_btn.setToolTip("Close this browser.")
         self._close_btn.clicked.connect(self._close_docked_browser)
+        style_plot_footer_text_button(self._close_btn)
         foot.addWidget(self._close_btn)
         foot.addWidget(self._cb_only_selected)
         foot.addWidget(self._btn_toggle_select)
@@ -142,7 +154,7 @@ class SelectionBrowserWidget(QWidget):
         self._toggle_options_btn.clicked.connect(self._toggle_options_visible)
         foot.addWidget(self._toggle_options_btn)
         foot.addStretch()
-        root.addLayout(foot)
+        root.insertWidget(0, self._footer_bar)
 
         self._btn_first.clicked.connect(self._go_first)
         self._btn_back.clicked.connect(lambda: self._step(-1))
@@ -215,10 +227,11 @@ class SelectionBrowserWidget(QWidget):
                 undock(self)
 
     def _close_docked_browser(self) -> None:
-        if self.parent_app is not None:
-            close_fn = getattr(self.parent_app, "close_docked_plot", None)
-            if callable(close_fn):
-                close_fn(self)
+        request_close_plot_widget(
+            self,
+            title="Close Browser",
+            message="Close this browser?",
+        )
 
     def _is_docked_in_main_window(self) -> bool:
         app = self.parent_app
@@ -230,11 +243,15 @@ class SelectionBrowserWidget(QWidget):
         return False
 
     def _sync_footer_chrome(self) -> None:
+        from .dockable_plot import apply_plot_chrome_glyphs, sync_docked_footer_bar
+
+        apply_plot_chrome_glyphs(self)
         floating = isinstance(self.window(), SelectionBrowserDialog)
         docked = self._is_docked_in_main_window()
         self._add_to_main_btn.setVisible(floating)
         self._send_window_btn.setVisible(docked)
-        self._close_btn.setVisible(docked)
+        self._close_btn.setVisible(True)
+        sync_docked_footer_bar(self, docked=docked)
 
     def _sync_options_chrome(self) -> None:
         """Show or hide property column pickers; keep the toggle button visible."""
@@ -664,8 +681,15 @@ class SelectionBrowserDialog(QDialog):
         self._panel.refresh_from_app(preserve_position=preserve_position)
 
     def closeEvent(self, event) -> None:  # noqa: N802 — Qt API
-        if self._force_close:
-            self._force_close = False
-        elif getattr(self, "_panel", None) is not None and self._panel.parent() is not self:
+        from .dockable_plot import handle_floating_plot_close_event
+
+        if getattr(self, "_panel", None) is not None and self._panel.parent() is not self:
+            # Panel was docked into the workspace; just drop the husk reference.
+            self._force_close = True
             self._panel = None
-        event.accept()
+        handle_floating_plot_close_event(
+            self,
+            event,
+            title="Close Browser",
+            message="Close this browser?",
+        )

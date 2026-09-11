@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from typing import Any
 
 from PyQt5.QtCore import QObject, Qt, QRunnable, QThreadPool, pyqtSignal
@@ -33,6 +34,7 @@ from PyQt5.QtWidgets import (
 
 from ..mmp_analysis import MmpPair, pairs_involving_oid
 from ..mmp_neighborhood_analysis import MmpNetworkGraph, build_mmp_network_graph
+from .dockable_plot import style_plot_footer_text_button
 from .mmp_neighborhood_plot import build_mmp_neighborhood_figure
 from .plotly_interactive_view import PlotlyInteractiveView
 from .qt_widget_utils import make_window_minimizable
@@ -89,6 +91,8 @@ class _LayoutWorker(QRunnable):
 class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
     """Interactive MMP pair network; click a node to select it in the table."""
 
+    SESSION_KIND = "mmp_neighborhood_map"
+
     def __init__(
         self,
         parent_app: Any,
@@ -114,10 +118,6 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
         self._layout_signals.failed.connect(self._on_layout_failed)
         self._pending_focus: list[int] | None = None
 
-        self._meta = QLabel()
-        self._meta.setWordWrap(True)
-        self._root.addWidget(self._meta)
-
         controls = QHBoxLayout()
         controls.addWidget(QLabel("Neighborhood hops:"))
         self._hops_sb = QSpinBox()
@@ -133,9 +133,10 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
             "Rebuild the graph using the current table selection as focus seeds "
             "(uses Neighborhood hops)."
         )
+        style_plot_footer_text_button(self._btn_rebuild)
         controls.addWidget(self._btn_rebuild)
         controls.addStretch()
-        self._root.addLayout(controls)
+        self._extra_opts_layout.addLayout(controls)
 
         self._plot_view: PlotlyInteractiveView | None = None
         if _HAS_WEB and parent_app is not None:
@@ -147,23 +148,20 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
             missing.setAlignment(Qt.AlignCenter)
             self._root.addWidget(missing, 1)
 
-        self._detail = QLabel("Click a node to select that molecule.")
-        self._detail.setWordWrap(True)
-        self._detail.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._root.addWidget(self._detail)
-
-        actions = QHBoxLayout()
-        self._btn_browse = QPushButton("Browse pairs for node")
+        foot = self._footer_bar.layout()
+        self._btn_browse = QPushButton("Browse pairs")
         self._btn_browse.setEnabled(False)
         self._btn_browse.setToolTip(
             "Open the MMP pair browser for pairs involving the selected node."
         )
-        self._btn_select = QPushButton("Select node in table")
+        style_plot_footer_text_button(self._btn_browse)
+        self._btn_select = QPushButton("Select in table")
         self._btn_select.setEnabled(False)
-        actions.addWidget(self._btn_browse)
-        actions.addWidget(self._btn_select)
-        actions.addStretch()
-        self._root.addLayout(actions)
+        style_plot_footer_text_button(self._btn_select)
+        clear_idx = foot.indexOf(self._clear_sel_btn)
+        insert_at = clear_idx + 1 if clear_idx >= 0 else 2
+        foot.insertWidget(insert_at, self._btn_browse)
+        foot.insertWidget(insert_at + 1, self._btn_select)
 
         self._btn_rebuild.clicked.connect(self._rebuild_from_table_selection)
         self._btn_browse.clicked.connect(self._browse_current)
@@ -171,6 +169,38 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
 
         self._finish_layout()
         self.set_pairs(pairs or [], activity_column=activity_column)
+
+    def collect_session_state(self) -> dict:
+        return {
+            "kind": self.SESSION_KIND,
+            **self._collect_encoding_chrome_state(),
+            "activity_column": self._activity_column,
+            "hops": int(self._hops_sb.value()),
+            "pairs": [asdict(p) for p in self._pairs],
+        }
+
+    def apply_session_state(self, state: dict | None) -> None:
+        if not isinstance(state, dict):
+            return
+        pairs: list[MmpPair] = []
+        raw_pairs = state.get("pairs")
+        if isinstance(raw_pairs, list):
+            for raw in raw_pairs:
+                if isinstance(raw, dict):
+                    pairs.append(MmpPair(**raw))
+        try:
+            hops = int(state.get("hops", 0))
+        except (TypeError, ValueError):
+            hops = 0
+        self._hops_sb.setValue(max(0, min(8, hops)))
+        self._apply_encoding_chrome_state(state)
+        self.set_pairs(pairs, activity_column=str(state.get("activity_column") or ""))
+
+    @classmethod
+    def from_session_state(cls, parent_app, state: dict | None) -> "MmpNeighborhoodMapPanel":
+        panel = cls(parent_app, pairs=[], activity_column="")
+        panel.apply_session_state(state)
+        return panel
 
     def set_pairs(self, pairs: list[MmpPair], *, activity_column: str | None = None) -> None:
         self._pairs = list(pairs or [])
@@ -215,11 +245,9 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
         self._layout_generation += 1
         generation = self._layout_generation
         n_pairs = len(self._pairs)
-        self._meta.setText(
-            f"Laying out network ({n_pairs} pair(s))…  ·  "
-            f"default node color = {self._activity_column}"
-        )
-        self._detail.setText("Computing layout in the background…")
+        app = self.parent_app
+        if app is not None and hasattr(app, "status_label"):
+            app.status_label.setText(f"MMP network: laying out {n_pairs:,} pair(s)…")
         self._set_busy(True)
         worker = _LayoutWorker(
             generation,
@@ -235,22 +263,11 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
             return
         self._set_busy(False)
         if not isinstance(graph, MmpNetworkGraph):
-            self._meta.setText("Layout failed.")
+            app = self.parent_app
+            if app is not None and hasattr(app, "status_label"):
+                app.status_label.setText("MMP network: layout failed.")
             return
         self._graph = graph
-        focus_oids = self._pending_focus
-        hops = int(self._hops_sb.value())
-        n_nodes = len(self._graph.node_oids)
-        n_edges = len(self._graph.edges)
-        focus_txt = ""
-        if focus_oids and hops > 0:
-            focus_txt = f"  ·  focus {len(focus_oids)} seed(s), {hops} hop(s)"
-        self._meta.setText(
-            f"{n_nodes} molecule(s), {n_edges} MMP edge(s)  ·  "
-            f"default node color = {self._activity_column}, size = degree  ·  "
-            f"edge color = signed Δ{focus_txt}"
-        )
-        self._detail.setText("Click a node to select that molecule.")
         self._rebuild_figure()
 
     def _rebuild_figure(self) -> None:
@@ -267,18 +284,17 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
             self._update_spectrum_controls()
         except Exception:
             logger.exception("Failed to render MMP neighborhood figure")
-            n_nodes = len(self._graph.node_oids)
-            n_edges = len(self._graph.edges)
-            self._meta.setText(
-                f"{n_nodes} molecule(s), {n_edges} MMP edge(s)  ·  plot render failed"
-            )
+            app = self.parent_app
+            if app is not None and hasattr(app, "status_label"):
+                app.status_label.setText("MMP network: plot render failed.")
 
     def _on_layout_failed(self, generation: int, message: str) -> None:
         if int(generation) != self._layout_generation:
             return
         self._set_busy(False)
-        self._meta.setText(message or "Layout failed.")
-        self._detail.setText("Try reducing scope or using Neighborhood hops with a table selection.")
+        app = self.parent_app
+        if app is not None and hasattr(app, "status_label"):
+            app.status_label.setText(f"MMP network: {message or 'layout failed.'}")
 
     def _on_point_activated(self, point_index: int) -> None:
         if self._graph is None:
@@ -290,12 +306,6 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
             return
         oid = int(self._graph.node_oids[point_index])
         self._current_oid = oid
-        deg = int(self._graph.degrees.get(oid, 0))
-        act = self._graph.activities.get(oid)
-        act_txt = f"{act:.4g}" if act is not None else "—"
-        self._detail.setText(
-            f"ID {oid}  ·  degree={deg}  ·  {self._activity_column}={act_txt}"
-        )
         self._btn_browse.setEnabled(True)
         self._btn_select.setEnabled(True)
         # Table selection is applied by the plot view.
@@ -313,7 +323,6 @@ class MmpNeighborhoodMapPanel(DockableResultPlotPanel):
         self._current_oid = None
         self._btn_browse.setEnabled(False)
         self._btn_select.setEnabled(False)
-        self._detail.setText("Click a node to select that molecule.")
         if self._plot_view is not None:
             try:
                 self._plot_view.clear_table_selection(update_plot=True)
@@ -379,9 +388,9 @@ class MmpNeighborhoodMapDialog(QDialog):
             self._panel.set_pairs(*args, **kwargs)
 
     def closeEvent(self, event) -> None:  # noqa: N802 — Qt API name
-        if self._force_close:
-            self._force_close = False
-        event.accept()
+        from .dockable_plot import handle_floating_plot_close_event
+
+        handle_floating_plot_close_event(self, event)
 
 
 class _NetworkPlotView(PlotlyInteractiveView):

@@ -1749,6 +1749,9 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         )
         if reply == QMessageBox.Yes:
             self.clear_all()
+            mark = getattr(self, "_mark_session_dirty", None)
+            if callable(mark):
+                mark()
             self.status_label.setText("Table cleared.")
 
     def _paste_clipboard_into_table_cell(
@@ -2064,6 +2067,8 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         self._export_busy = False
         self._render2d_queue = None
         self._pending_session_table_layout = None
+        self._pending_session_workspace_layout = None
+        self._pending_session_column_order = None
         self._restore_render2d_batch_environment()
         self._session_restore_ctx = None
         abort_csv = getattr(self, "_abort_csv_session_load", None)

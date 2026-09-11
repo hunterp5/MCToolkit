@@ -33,7 +33,7 @@ from ...config import load_config
 from ...confs_codec import deserialize_confs_sidecar, serialize_confs_sidecar
 from ...microstate_cache import restore_ionization_sidecar, serialize_ionization_sidecar
 from ...utils import mol_to_canonical_smiles
-from ..strings import loaded_session_status
+from ..strings import LOADING_DETAIL_SESSION, loaded_session_status
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
 
 logger = logging.getLogger(__name__)
@@ -226,6 +226,7 @@ class SessionMixin:
             "plot_panel_visible": True,
             "plot_panel_width": (self._plot_panel_splitter_sizes() or [0, 0])[1],
             "docked_plots": self._collect_docked_plots(),
+            "floating_plots": self._collect_floating_plots(),
             "table_layout": self._collect_table_layout(),
             "filters": filters_out,
             "column_logical_order": logical_order,
@@ -324,12 +325,25 @@ class SessionMixin:
                 default_h = int(vh.defaultSectionSize())
         except RuntimeError:
             vh = None
+        scroll_v = None
+        scroll_h = None
+        try:
+            vbar = self.table.verticalScrollBar()
+            hbar = self.table.horizontalScrollBar()
+            if vbar is not None:
+                scroll_v = int(vbar.value())
+            if hbar is not None:
+                scroll_h = int(hbar.value())
+        except RuntimeError:
+            pass
         return {
             "column_widths": widths,
             "hidden_columns": hidden,
             "default_row_height": default_h,
             "hheader_state": self._header_state_b64(hh),
             "vheader_state": self._header_state_b64(vh),
+            "scroll_vertical": scroll_v,
+            "scroll_horizontal": scroll_h,
         }
 
     def _restore_table_layout(self, payload: object) -> None:
@@ -385,12 +399,23 @@ class SessionMixin:
             self.table.setColumnHidden(0, True)
         except RuntimeError:
             pass
+        try:
+            vbar = self.table.verticalScrollBar()
+            hbar = self.table.horizontalScrollBar()
+            sv = payload.get("scroll_vertical")
+            sh = payload.get("scroll_horizontal")
+            if vbar is not None and isinstance(sv, (int, float)):
+                vbar.setValue(int(sv))
+            if hbar is not None and isinstance(sh, (int, float)):
+                hbar.setValue(int(sh))
+        except RuntimeError:
+            pass
 
     def _collect_docked_plots(self) -> dict:
-        """Docked Plotter widgets keyed by workspace pane."""
+        """Docked plot widgets keyed by workspace pane (Plotter and analysis maps)."""
         mgr = getattr(self, "_workspace_layout", None)
         if mgr is None:
-            return {"panes": [], "preferred_pane_id": None}
+            return {"panes": [], "preferred_pane_id": None, "layout_id": None}
         panes_out: list[dict] = []
         for i, pane in enumerate(mgr.plot_panes()):
             plots: list[dict] = []
@@ -400,12 +425,24 @@ class SessionMixin:
                     continue
                 try:
                     state = collect()
-                except RuntimeError:
+                except Exception:
+                    logger.exception("Skipping docked plot while collecting session state")
                     continue
                 if not isinstance(state, dict):
                     continue
+                try:
+                    json.dumps(state)
+                except (TypeError, ValueError):
+                    logger.exception(
+                        "Skipping docked plot with non-JSON-serializable session state"
+                    )
+                    continue
                 kind = str(state.get("kind") or "plotter")
-                plots.append({"kind": kind, "state": state})
+                entry: dict = {"kind": kind, "state": state}
+                custom_title = getattr(widget, "_pane_display_title", None)
+                if isinstance(custom_title, str) and custom_title.strip():
+                    entry["display_title"] = custom_title.strip()
+                plots.append(entry)
             if not plots:
                 continue
             panes_out.append(
@@ -420,7 +457,137 @@ class SessionMixin:
         return {
             "panes": panes_out,
             "preferred_pane_id": pref.pane_id if pref is not None else None,
+            "layout_id": mgr.layout_id,
         }
+
+    def _iter_floating_plot_hosts(self) -> list:
+        """Floating plot/viewer/browser dialogs that can be session-serialized."""
+        hosts: list = []
+        seen: set[int] = set()
+
+        def add(dlg) -> None:
+            if dlg is None:
+                return
+            try:
+                from PyQt5 import sip
+
+                if sip.isdeleted(dlg):
+                    return
+            except Exception:
+                pass
+            key = id(dlg)
+            if key in seen:
+                return
+            seen.add(key)
+            hosts.append(dlg)
+
+        for dlg in list(getattr(self, "_plot_dialogs", []) or []):
+            add(dlg)
+        for dlg in list(getattr(self, "_floating_result_dialogs", []) or []):
+            add(dlg)
+        for attr in (
+            "_pca_dialog",
+            "_tsne_dialog",
+            "_umap_dialog",
+            "_som_dialog",
+            "_boiled_egg_dialog",
+            "_golden_triangle_dialog",
+            "_sali_map_dialog",
+            "_activity_cliff_map_dialog",
+            "_mmp_neighborhood_map_dialog",
+            "_selection_browser_dialog",
+            "_som_browser_dialog",
+            "_molecule_3d_viewer_dialog",
+        ):
+            add(getattr(self, attr, None))
+        return hosts
+
+    @staticmethod
+    def _floating_plot_panel(dlg):
+        for attr in ("_plot_widget", "_panel", "_viewer_widget"):
+            panel = getattr(dlg, attr, None)
+            if panel is not None:
+                return panel
+        return None
+
+    def _collect_floating_plots(self) -> list[dict]:
+        """Undocked plot windows to restore beside docked panes."""
+        out: list[dict] = []
+        for dlg in self._iter_floating_plot_hosts():
+            panel = self._floating_plot_panel(dlg)
+            if panel is None:
+                continue
+            collect = getattr(panel, "collect_session_state", None)
+            if not callable(collect):
+                continue
+            try:
+                state = collect()
+            except Exception:
+                logger.exception("Skipping floating plot while collecting session state")
+                continue
+            if not isinstance(state, dict):
+                continue
+            try:
+                json.dumps(state)
+            except (TypeError, ValueError):
+                logger.exception(
+                    "Skipping floating plot with non-JSON-serializable session state"
+                )
+                continue
+            kind = str(state.get("kind") or "plotter")
+            entry: dict = {"kind": kind, "state": state}
+            custom_title = getattr(panel, "_pane_display_title", None)
+            if isinstance(custom_title, str) and custom_title.strip():
+                entry["display_title"] = custom_title.strip()
+            try:
+                geo = dlg.saveGeometry()
+                if geo is not None and not geo.isEmpty():
+                    entry["geometry"] = bytes(geo.toBase64()).decode("ascii")
+            except RuntimeError:
+                pass
+            try:
+                title = str(dlg.windowTitle() or "").strip()
+            except RuntimeError:
+                title = ""
+            if title:
+                entry["window_title"] = title
+            out.append(entry)
+        return out
+
+    def _discard_floating_plot_dialogs(self) -> None:
+        """Close floating plot windows so a session restore starts clean."""
+        for dlg in list(self._iter_floating_plot_hosts()):
+            try:
+                dlg._force_close = True
+            except Exception:
+                pass
+            try:
+                dlg.hide()
+                dlg.close()
+            except RuntimeError:
+                pass
+            try:
+                dlg.setParent(None)
+            except RuntimeError:
+                pass
+        self._plot_dialogs = []
+        self._floating_result_dialogs = []
+        for attr in (
+            "_pca_dialog",
+            "_tsne_dialog",
+            "_umap_dialog",
+            "_som_dialog",
+            "_boiled_egg_dialog",
+            "_golden_triangle_dialog",
+            "_sali_map_dialog",
+            "_activity_cliff_map_dialog",
+            "_mmp_neighborhood_map_dialog",
+            "_selection_browser_dialog",
+            "_som_browser_dialog",
+            "_molecule_3d_viewer_dialog",
+        ):
+            if getattr(self, attr, None) is not None:
+                setattr(self, attr, None)
 
     def _discard_docked_plot_widgets(self) -> None:
         """Detach and delete docked plot widgets so a session restore starts clean."""
@@ -439,31 +606,151 @@ class SessionMixin:
                 pass
 
     def _restore_docked_plot_widget(self, spec: dict):
-        state = spec.get("state")
-        if not isinstance(state, dict):
-            state = spec
-        kind = str(spec.get("kind") or state.get("kind") or "plotter")
-        if kind != "plotter":
+        from ..docked_plot_session import restore_docked_plot_widget
+
+        return restore_docked_plot_widget(self, spec)
+
+    def _resolve_session_workspace_layout_id(
+        self, docked_payload: object, panes_data: list
+    ) -> str | None:
+        """Pick the workspace layout id to use when restoring docked plots."""
+        from .workspace_layout import (
+            LAYOUT_PRESETS,
+            LAYOUT_TABLE_SIDE,
+            LAYOUT_TABLE_SINGLE,
+        )
+
+        known = {p[0] for p in LAYOUT_PRESETS}
+        candidates: list[str] = []
+        for source in (
+            getattr(self, "_pending_session_workspace_layout", None),
+            docked_payload if isinstance(docked_payload, dict) else None,
+        ):
+            if not isinstance(source, dict):
+                continue
+            lid = source.get("layout_id")
+            if isinstance(lid, str) and lid in known and lid != "table_only":
+                if lid not in candidates:
+                    candidates.append(lid)
+
+        max_idx = 0
+        for spec in panes_data:
+            if not isinstance(spec, dict):
+                continue
+            try:
+                max_idx = max(max_idx, int(spec.get("pane_index", 0)))
+            except (TypeError, ValueError):
+                continue
+        need_multi = max_idx > 0 or len(panes_data) > 1
+
+        # Prefer an explicit id that can host the saved pane indices.
+        for lid in candidates:
+            if need_multi and lid == LAYOUT_TABLE_SINGLE:
+                continue
+            return lid
+        if candidates:
+            return candidates[0]
+
+        if not panes_data:
             return None
-        try:
-            from ..plot import PlotWidget
-        except Exception:
-            logger.exception("Could not import Plotter to restore a docked plot")
-            return None
-        return PlotWidget.from_session_state(self, state)
+        if not need_multi:
+            return LAYOUT_TABLE_SINGLE
+        # Prefer side-by-side over stacked when the saved layout id is unavailable.
+        return LAYOUT_TABLE_SIDE
+
+    def _restore_floating_plots(self, payload: object) -> None:
+        """Re-open undocked plot windows from session state."""
+        if not isinstance(payload, list) or not payload:
+            return
+        from ..dockable_plot import plot_widget_display_title
+
+        for spec in payload:
+            if not isinstance(spec, dict):
+                continue
+            widget = self._restore_docked_plot_widget(spec)
+            if widget is None:
+                continue
+            factory = getattr(widget, "create_floating_dialog", None)
+            if not callable(factory):
+                try:
+                    widget.setParent(None)
+                    widget.deleteLater()
+                except RuntimeError:
+                    pass
+                continue
+            try:
+                dlg = factory(self)
+            except Exception:
+                logger.exception("Failed to recreate floating plot from session")
+                try:
+                    widget.setParent(None)
+                    widget.deleteLater()
+                except RuntimeError:
+                    pass
+                continue
+            prepare = getattr(self, "_prepare_tool_dialog", None)
+            if callable(prepare):
+                prepare(dlg)
+            # Prefer plotter registration without importing PlotDialog (WebEngine).
+            if getattr(dlg, "_plot_widget", None) is not None and getattr(dlg, "_panel", None) is None:
+                self._register_plot_dialog(dlg)
+            elif not self._bind_undocked_browser_dialog(dlg):
+                self._register_floating_result_dialog(dlg)
+            title = spec.get("display_title") or spec.get("window_title")
+            if isinstance(title, str) and title.strip():
+                try:
+                    dlg.setWindowTitle(title.strip())
+                except RuntimeError:
+                    pass
+            else:
+                try:
+                    dlg.setWindowTitle(plot_widget_display_title(widget))
+                except RuntimeError:
+                    pass
+            geo = spec.get("geometry")
+            if isinstance(geo, str) and geo:
+                try:
+                    raw = QByteArray.fromBase64(geo.encode("ascii"))
+                    dlg.restoreGeometry(raw)
+                except (RuntimeError, ValueError):
+                    pass
+            sync = getattr(widget, "_sync_footer_chrome", None)
+            if callable(sync):
+                sync()
+            try:
+                widget.show()
+                dlg.show()
+            except RuntimeError:
+                pass
 
     def _restore_docked_plots(self, payload: object) -> None:
-        from .workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
-
         mgr = getattr(self, "_workspace_layout", None)
         if mgr is None:
             return
         panes_data = payload.get("panes") if isinstance(payload, dict) else None
         if not isinstance(panes_data, list):
             panes_data = []
-        if panes_data and not mgr.plot_panes():
-            layout_id = LAYOUT_TABLE_SINGLE if len(panes_data) <= 1 else LAYOUT_TABLE_STACK
-            mgr.apply_layout(layout_id, preserve_plots=False)
+        saved_layout = self._resolve_session_workspace_layout_id(payload, panes_data)
+        if panes_data:
+            need_layout = False
+            if not mgr.plot_panes():
+                need_layout = True
+            elif saved_layout and mgr.layout_id != saved_layout:
+                need_layout = True
+            elif saved_layout:
+                # Enough panes for the highest saved pane index?
+                max_idx = 0
+                for spec in panes_data:
+                    if not isinstance(spec, dict):
+                        continue
+                    try:
+                        max_idx = max(max_idx, int(spec.get("pane_index", 0)))
+                    except (TypeError, ValueError):
+                        continue
+                if max_idx >= len(mgr.plot_panes()):
+                    need_layout = True
+            if need_layout and saved_layout:
+                mgr.apply_layout(saved_layout, preserve_plots=False)
         for pane in mgr.plot_panes():
             leftover = pane.plot_widgets()
             pane.set_plot_widgets([])
@@ -510,11 +797,14 @@ class SessionMixin:
             except (TypeError, ValueError):
                 current = 0
             pane.set_plot_widgets(widgets, current=current)
-        pref_id = payload.get("preferred_pane_id")
+        pref_id = payload.get("preferred_pane_id") if isinstance(payload, dict) else None
         if isinstance(pref_id, str) and pref_id:
             pref = mgr.find_pane(pref_id)
             if pref is not None:
                 mgr.set_preferred_pane(pref)
+        # Re-assert saved workspace layout in case docking hooks changed it.
+        if saved_layout and mgr.layout_id != saved_layout:
+            mgr.apply_layout(saved_layout, preserve_plots=True)
         show = getattr(self, "show_docked_plot_panel", None)
         if callable(show):
             show()
@@ -550,8 +840,13 @@ class SessionMixin:
             or int(doc.get("version", 0)) != self._SESSION_VERSION
         ):
             raise ValueError("Unsupported session format.")
+        self._session_mutation_paused = True
+        self._pending_session_clean_on_ready = True
+        self._discard_floating_plot_dialogs()
         self.clear_all()
-        self._table_stack.setCurrentIndex(1)
+        self._set_ingest_loading(True)
+        self._table_stack.setCurrentIndex(0)
+        self._loading_detail.setText(LOADING_DETAIL_SESSION)
         self.status_label.setText("Loading session…")
         headers = doc.get("headers") or ["ID_HIDDEN", "Structure", "SMILES"]
         if len(headers) < 2 or headers[0] != "ID_HIDDEN" or headers[1] != "Structure":
@@ -569,12 +864,12 @@ class SessionMixin:
         rows = doc.get("rows") or []
         max_id = -1
         chunk = 128
+        try:
+            self.table.setUpdatesEnabled(False)
+        except Exception:
+            pass
         if len(rows) <= chunk:
             batch_rows: list[tuple[int, dict[str, str]]] = []
-            try:
-                self.table.setUpdatesEnabled(False)
-            except Exception:
-                pass
             try:
                 for entry in rows:
                     oid = int(entry["id"])
@@ -589,17 +884,21 @@ class SessionMixin:
                     if mol is not None:
                         self.mols[oid] = mol
                 self._table_model.append_rows_batch(batch_rows)
-            finally:
+            except Exception:
                 try:
                     self.table.setUpdatesEnabled(True)
                 except Exception:
                     pass
+                self._set_ingest_loading(False)
+                self._session_mutation_paused = False
+                self._pending_session_clean_on_ready = False
+                self._table_stack.setCurrentIndex(1)
+                raise
+            self._loading_detail.setText(
+                f"Session loaded ({len(rows):,} row(s)).\nRestoring filters and workspace…"
+            )
             self._finalize_session_restore(doc, max_id)
         else:
-            try:
-                self.table.setUpdatesEnabled(False)
-            except Exception:
-                pass
             self._session_restore_ctx = {
                 "gen": int(getattr(self, "_session_load_generation", 0)),
                 "doc": doc,
@@ -609,6 +908,9 @@ class SessionMixin:
                 "max_id": -1,
             }
             self.status_label.setText(f"Loading session… (0/{len(rows)} rows)")
+            self._loading_detail.setText(
+                f"Loading session…\n0 / {len(rows):,} rows"
+            )
             QTimer.singleShot(0, self._session_restore_step)
 
     def _session_restore_step(self) -> None:
@@ -642,17 +944,17 @@ class SessionMixin:
         ctx["idx"] = end
         ctx["max_id"] = max_id
         self.status_label.setText(f"Loading session… ({end}/{n} rows)")
+        self._loading_detail.setText(f"Loading session…\n{end:,} / {n:,} rows")
         if end < n:
             QTimer.singleShot(0, self._session_restore_step)
         else:
             self._session_restore_ctx = None
+            self._loading_detail.setText(
+                f"Session loaded ({n:,} row(s)).\nRestoring filters and workspace…"
+            )
             self._finalize_session_restore(doc, max_id)
 
     def _finalize_session_restore(self, doc: dict, max_id: int) -> None:
-        try:
-            self.table.setUpdatesEnabled(True)
-        except Exception:
-            pass
         want_next = int(doc.get("next_oid", max_id + 1))
         self.next_oid = want_next if want_next > max_id else max_id + 1
         self.calculate_global_bounds()
@@ -716,8 +1018,24 @@ class SessionMixin:
         self.f_panel.setVisible(bool(doc.get("filter_panel_visible", False)))
         self._discard_docked_plot_widgets()
         ws = doc.get("workspace_layout")
+        self._pending_session_workspace_layout = ws if isinstance(ws, dict) else None
+        self._pending_session_column_order = (
+            doc.get("column_logical_order")
+            if isinstance(doc.get("column_logical_order"), list)
+            else None
+        )
         mgr = getattr(self, "_workspace_layout", None)
-        if mgr is not None and isinstance(ws, dict):
+        docked_payload = doc.get("docked_plots")
+        panes_data = docked_payload.get("panes") if isinstance(docked_payload, dict) else None
+        if not isinstance(panes_data, list):
+            panes_data = []
+        saved_layout = self._resolve_session_workspace_layout_id(docked_payload, panes_data)
+        if mgr is not None and saved_layout:
+            if mgr.layout_id != saved_layout:
+                mgr.apply_layout(saved_layout, preserve_plots=False)
+            if isinstance(ws, dict):
+                mgr.restore_splitter_sizes(ws)
+        elif mgr is not None and isinstance(ws, dict):
             layout_id = ws.get("layout_id")
             if isinstance(layout_id, str) and layout_id:
                 mgr.apply_layout(layout_id, preserve_plots=False)
@@ -728,11 +1046,15 @@ class SessionMixin:
                 ensure = getattr(self, "_ensure_plot_panel_width", None)
                 if callable(ensure):
                     QTimer.singleShot(0, lambda: ensure(int(saved_w)))
-        self._restore_docked_plots(doc.get("docked_plots"))
-        ws_after = doc.get("workspace_layout")
-        if mgr is not None and isinstance(ws_after, dict):
-            mgr.restore_splitter_sizes(ws_after)
-        co = doc.get("column_logical_order")
+        self._restore_docked_plots(docked_payload)
+        # Re-assert after docking hooks so side-by-side cannot collapse to stacked.
+        if mgr is not None and saved_layout and mgr.layout_id != saved_layout:
+            mgr.apply_layout(saved_layout, preserve_plots=True)
+            if isinstance(ws, dict):
+                mgr.restore_splitter_sizes(ws)
+        self._restore_floating_plots(doc.get("floating_plots"))
+        self._restore_pending_workspace_layout()
+        co = self._pending_session_column_order
         if isinstance(co, list):
             self._restore_column_visual_order([int(x) for x in co])
         sc = doc.get("sort_column")
@@ -773,14 +1095,28 @@ class SessionMixin:
         restore_ionization_sidecar(doc.get("ionization_sidecar"))
         self._pending_session_table_layout = doc.get("table_layout")
         self._restore_table_layout(self._pending_session_table_layout)
+        self._reveal_table_after_session_prep()
         QTimer.singleShot(0, self._deferred_session_post_load_follow_up)
 
-    def save_session_as(self) -> None:
+    def _reveal_table_after_session_prep(self) -> None:
+        """Leave the loading page once session rows and chrome are restored."""
+        self._set_ingest_loading(False)
+        self._table_stack.setCurrentIndex(1)
+        finish_clean = getattr(self, "_finish_session_clean_if_pending", None)
+        if callable(finish_clean):
+            finish_clean()
+        try:
+            self.table.setUpdatesEnabled(True)
+        except Exception:
+            pass
+
+    def save_session_as(self) -> bool:
+        """Prompt for a path and save the session. Returns True if a file was written."""
         path, _ = QFileDialog.getSaveFileName(
             self, "Save Session", "", "MolManager Session (*.cms);;JSON (*.json)"
         )
         if not path:
-            return
+            return False
         low = path.lower()
         if not low.endswith(".cms") and not low.endswith(".json"):
             path += ".cms"
@@ -788,9 +1124,14 @@ class SessionMixin:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self._build_session_document(), f, separators=(",", ":"))
             self.status_label.setText(f"Session saved to {path}")
+            clear = getattr(self, "_clear_session_dirty", None)
+            if callable(clear):
+                clear()
+            return True
         except Exception as e:
             logger.exception("Save session failed: %s", path)
             QMessageBox.warning(self, "Save Session", str(e))
+            return False
 
     def open_session_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -847,8 +1188,12 @@ class SessionMixin:
         """Load a session CSV exported by `_write_session_csv` (streamed + chunked on the GUI thread)."""
         import csv
 
+        self._session_mutation_paused = True
+        self._pending_session_clean_on_ready = True
         self.clear_all()
-        self._table_stack.setCurrentIndex(1)
+        self._set_ingest_loading(True)
+        self._table_stack.setCurrentIndex(0)
+        self._loading_detail.setText(LOADING_DETAIL_SESSION)
         self.status_label.setText("Loading session…")
 
         f = open(path, "r", encoding="utf-8", errors="replace", newline="")
@@ -866,6 +1211,10 @@ class SessionMixin:
         self._clear_filter_target_smiles_cache()
         self.global_bounds = {}
         self.next_oid = 0
+        try:
+            self.table.setUpdatesEnabled(False)
+        except Exception:
+            pass
 
         self._session_load_generation = int(getattr(self, "_session_load_generation", 0)) + 1
         gen = self._session_load_generation
@@ -908,6 +1257,7 @@ class SessionMixin:
             ctx["loaded"] = int(ctx.get("loaded", 0)) + len(pack)
         loaded = int(ctx.get("loaded", 0))
         self.status_label.setText(f"Loading session… ({loaded:,} rows)")
+        self._loading_detail.setText(f"Loading session…\n{loaded:,} rows")
         if not done:
             QTimer.singleShot(0, self._load_session_csv_step)
             return
@@ -918,7 +1268,29 @@ class SessionMixin:
             except Exception:
                 pass
         self._csv_session_ctx = None
+        self._loading_detail.setText(
+            f"Session loaded ({loaded:,} row(s)).\nPreparing table…"
+        )
         self._finalize_session_csv_load()
+
+    def _restore_pending_workspace_layout(self) -> None:
+        """Re-apply saved splitter ratios after the workspace has a real size."""
+        pending = getattr(self, "_pending_session_workspace_layout", None)
+        if not isinstance(pending, dict):
+            return
+        mgr = getattr(self, "_workspace_layout", None)
+        if mgr is None:
+            return
+        lid = pending.get("layout_id")
+        if isinstance(lid, str) and lid and mgr.layout_id != lid:
+            try:
+                mgr.apply_layout(lid, preserve_plots=True)
+            except RuntimeError:
+                pass
+        try:
+            mgr.restore_splitter_sizes(pending)
+        except RuntimeError:
+            pass
 
     def _deferred_session_post_load_follow_up(self) -> None:
         """Migrate packed ensembles, then auto-render 2D using the same rules as file ingest."""
@@ -928,12 +1300,36 @@ class SessionMixin:
         n = self._table_model.rowCount()
         render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
         pending = getattr(self, "_pending_session_table_layout", None)
+        self._restore_pending_workspace_layout()
         if callable(render) and render():
-            self._restore_table_layout(pending)
+            self._restore_session_table_chrome(pending)
+            self._restore_pending_workspace_layout()
+            QTimer.singleShot(0, self._restore_pending_workspace_layout)
             return
-        self._restore_table_layout(pending)
+        self._restore_session_table_chrome(pending)
         self._pending_session_table_layout = None
+        self._restore_pending_workspace_layout()
+        QTimer.singleShot(0, self._finish_deferred_session_workspace_restore)
         self.status_label.setText(loaded_session_status(n) if n else "Ready.")
+
+    def _restore_session_table_chrome(self, payload: object | None = None) -> None:
+        """Re-apply saved table layout and column order after other session side effects."""
+        layout = payload if payload is not None else getattr(self, "_pending_session_table_layout", None)
+        if layout is not None:
+            self._restore_table_layout(layout)
+        co = getattr(self, "_pending_session_column_order", None)
+        if isinstance(co, list):
+            try:
+                self._restore_column_visual_order([int(x) for x in co])
+            except (TypeError, ValueError):
+                pass
+
+    def _finish_deferred_session_workspace_restore(self) -> None:
+        self._restore_pending_workspace_layout()
+        self._restore_session_table_chrome()
+        self._pending_session_table_layout = None
+        self._pending_session_column_order = None
+        self._pending_session_workspace_layout = None
 
     def _finalize_session_csv_load(self) -> None:
         self.schedule_calculate_global_bounds()
@@ -944,4 +1340,5 @@ class SessionMixin:
             schedule = getattr(self, "_schedule_sqlite_rebuild", None)
             if callable(schedule) and rows_n > 0:
                 schedule()
+        self._reveal_table_after_session_prep()
         QTimer.singleShot(0, self._deferred_session_post_load_follow_up)

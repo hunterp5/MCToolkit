@@ -34,6 +34,7 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QDoubleSpinBox,
     QTextEdit,
@@ -43,8 +44,17 @@ from PyQt5.QtWidgets import (
 from rdkit import Chem
 
 from ..dockable_plot import (
+    PlotTitlesControls,
+    apply_plot_chrome_glyphs,
+    handle_floating_plot_close_event,
     hide_plot_options_dialog,
+    make_add_to_main_button,
+    make_clear_selection_button,
+    make_close_plot_button,
+    make_plot_options_button,
     make_plot_options_dialog,
+    make_send_window_button,
+    request_close_plot_widget,
     show_plot_options_dialog,
 )
 from ...dimensionality_reduction import DimensionReductionResult, is_fingerprint_bitcount_column
@@ -81,6 +91,7 @@ _FP_NONE_LABEL = "None"
 class DimensionReductionPanel(QWidget):
     """PCA / t-SNE / UMAP / SOM panel; owns Send/Close when docked so all actions share one footer."""
 
+    DIMRED_SESSION_KIND = "dimension_reduction"
     owns_docked_plot_actions = True
 
     def __init__(self, parent: ChemicalTableApp | None, *, window_title: str, method: str):
@@ -94,8 +105,9 @@ class DimensionReductionPanel(QWidget):
         self._last_result: DimensionReductionResult | None = None
 
         root = QVBoxLayout(self)
+        # Top inset matches spacing: same toolbar→plot gap when floating or docked.
         root.setContentsMargins(4, 4, 4, 4)
-        root.setSpacing(6)
+        root.setSpacing(4)
 
         plot_host = QWidget()
         plot_ly = QVBoxLayout(plot_host)
@@ -119,6 +131,10 @@ class DimensionReductionPanel(QWidget):
         opts = QVBoxLayout(self._opts_panel)
         opts.setContentsMargins(0, 0, 0, 0)
         opts.setSpacing(6)
+
+        self._titles = PlotTitlesControls(self._opts_panel)
+        self._titles.changed.connect(self._on_titles_changed)
+        opts.addWidget(self._titles)
 
         features_opts_row = QHBoxLayout()
         features_opts_row.setSpacing(8)
@@ -194,9 +210,7 @@ class DimensionReductionPanel(QWidget):
         size_row.addWidget(self._size_by_label)
         self.size_combo = QComboBox()
         self.size_combo.setMinimumWidth(120)
-        self.size_combo.setToolTip(
-            "Size points by a table column (numeric or categorical)."
-        )
+        self.size_combo.setToolTip("Size points by a table column (numeric or categorical).")
         self.size_combo.currentIndexChanged.connect(self._on_size_column_changed)
         size_row.addWidget(self.size_combo, 1)
         self.size_range = PlotSizeRangeControls()
@@ -229,34 +243,37 @@ class DimensionReductionPanel(QWidget):
             min_height=480,
         )
 
-        foot = QHBoxLayout()
-        foot.setContentsMargins(0, 4, 0, 0)
-        self._add_to_main_btn = QPushButton("Add to Main Window")
-        self._add_to_main_btn.setToolTip("Dock this plot beside the compound table.")
+        self._footer_bar = QWidget(self)
+        self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        foot = QHBoxLayout(self._footer_bar)
+        foot.setContentsMargins(0, 0, 0, 0)
+        foot.setSpacing(4)
+        self._opts_btn = make_plot_options_button(
+            self,
+            tooltip="Configure features, method parameters, and color options.",
+        )
+        self._opts_btn.clicked.connect(self._open_plot_options)
+        foot.addWidget(self._opts_btn)
+        self._clear_sel_btn = make_clear_selection_button(self)
+        self._clear_sel_btn.clicked.connect(self._clear_selection)
+        foot.addWidget(self._clear_sel_btn)
+        foot.addStretch(1)
+        self._add_to_main_btn = make_add_to_main_button(
+            self,
+            tooltip="Dock this plot beside the compound table.",
+        )
         self._add_to_main_btn.clicked.connect(self._add_to_main_window)
         foot.addWidget(self._add_to_main_btn)
-        self._send_window_btn = QPushButton("Send to New Window")
-        self._send_window_btn.setToolTip(
-            "Open this docked plot in a separate floating window."
+        self._send_window_btn = make_send_window_button(
+            self,
+            tooltip="Open this docked plot in a separate floating window.",
         )
         self._send_window_btn.clicked.connect(self._send_to_new_window)
         foot.addWidget(self._send_window_btn)
-        self._close_plot_btn = QPushButton("Close Plot")
-        self._close_plot_btn.setToolTip(
-            "Close this docked plot and free the panel so another plot can be docked."
-        )
+        self._close_plot_btn = make_close_plot_button(self)
         self._close_plot_btn.clicked.connect(self._close_docked_plot)
         foot.addWidget(self._close_plot_btn)
-        self._opts_btn = QPushButton("Plot Options")
-        self._opts_btn.setToolTip("Configure features, method parameters, and color options.")
-        self._opts_btn.clicked.connect(self._open_plot_options)
-        foot.addWidget(self._opts_btn)
-        foot.addStretch(1)
-        self._clear_sel_btn = QPushButton("Clear Selection")
-        self._clear_sel_btn.setToolTip("Clear the current table and plot selection.")
-        self._clear_sel_btn.clicked.connect(self._clear_selection)
-        foot.addWidget(self._clear_sel_btn)
-        root.addLayout(foot)
+        root.insertWidget(0, self._footer_bar)
 
         host = parent if parent is not None else self
         self._signals = DimensionReductionSignals(host)
@@ -302,8 +319,7 @@ class DimensionReductionPanel(QWidget):
             self.parent_app.undock_plot_to_window(self)
 
     def _close_docked_plot(self) -> None:
-        if self.parent_app is not None:
-            self.parent_app.close_docked_plot(self)
+        request_close_plot_widget(self)
 
     def _is_docked_in_main_window(self) -> bool:
         app = self.parent_app
@@ -315,12 +331,16 @@ class DimensionReductionPanel(QWidget):
         return getattr(app, "_docked_plot_widget", None) is self
 
     def _sync_footer_chrome(self) -> None:
-        """Floating: Add to Main. Docked: Send/Close. Clear Selection always."""
+        """Floating: opts + clear + Add. Docked: opts + clear + Send + Close Plot."""
+        from ..dockable_plot import sync_docked_footer_bar
+
+        apply_plot_chrome_glyphs(self)
         floating = isinstance(self.window(), DimensionReductionDialog)
         docked = self._is_docked_in_main_window()
         self._add_to_main_btn.setVisible(floating)
         self._send_window_btn.setVisible(docked)
         self._close_plot_btn.setVisible(docked)
+        sync_docked_footer_bar(self, docked=docked)
 
     def event(self, event):  # noqa: N802 — Qt API name
         if event.type() == QEvent.ParentChange:
@@ -352,6 +372,111 @@ class DimensionReductionPanel(QWidget):
 
     def _method_params(self) -> dict:
         raise NotImplementedError
+
+    def _apply_method_params(self, params: dict | None) -> None:
+        return None
+
+    @staticmethod
+    def _set_combo_text(combo: QComboBox, text: str | None) -> None:
+        if not text:
+            return
+        idx = combo.findText(str(text))
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+
+    def collect_session_state(self) -> dict:
+        from ...workers.dimensionality_reduction import result_to_dict
+
+        state: dict = {
+            "kind": self.DIMRED_SESSION_KIND,
+            "method": self._method,
+            "features": self._selected_feature_columns(),
+            "use_fingerprints": self._use_fingerprints(),
+            "fingerprint": self.fp_combo.currentText(),
+            "struct_src": self.struct_src_combo.currentText(),
+            "standardize": bool(self.standardize_cb.isChecked()),
+            "only_selected": bool(self.only_selected_cb.isChecked()),
+            "color": self.color_combo.currentText(),
+            "colorscale": self.colorscale_combo.currentText(),
+            "color_min": self.color_range.color_min.text(),
+            "color_max": self.color_range.color_max.text(),
+            "size": self.size_combo.currentText(),
+            "size_min": float(self.size_range.size_min.value()),
+            "size_max": float(self.size_range.size_max.value()),
+            "method_params": dict(self._method_params()),
+            **self._titles.title_overrides(),
+        }
+        if self._last_result is not None:
+            state["result"] = result_to_dict(self._last_result)
+            state["summary"] = self.summary_text.toPlainText()
+        return state
+
+    def apply_session_state(self, state: dict | None) -> None:
+        if not isinstance(state, dict):
+            return
+        self._reload_columns()
+        features = set(state.get("features") or [])
+        for i in range(self.column_list.count()):
+            item = self.column_list.item(i)
+            item.setCheckState(Qt.Checked if item.text() in features else Qt.Unchecked)
+        self.fp_combo.blockSignals(True)
+        self.struct_src_combo.blockSignals(True)
+        self.color_combo.blockSignals(True)
+        self.size_combo.blockSignals(True)
+        try:
+            self._set_combo_text(self.fp_combo, state.get("fingerprint"))
+            self._set_combo_text(self.struct_src_combo, state.get("struct_src"))
+            self._set_combo_text(self.color_combo, state.get("color"))
+            self._set_combo_text(self.colorscale_combo, state.get("colorscale"))
+            self._set_combo_text(self.size_combo, state.get("size"))
+        finally:
+            self.fp_combo.blockSignals(False)
+            self.struct_src_combo.blockSignals(False)
+            self.color_combo.blockSignals(False)
+            self.size_combo.blockSignals(False)
+        if "standardize" in state:
+            self.standardize_cb.setChecked(bool(state.get("standardize")))
+        if "only_selected" in state:
+            self.only_selected_cb.setChecked(bool(state.get("only_selected")))
+        cmin, cmax = state.get("color_min"), state.get("color_max")
+        if isinstance(cmin, str):
+            self.color_range.color_min.setText(cmin)
+        if isinstance(cmax, str):
+            self.color_range.color_max.setText(cmax)
+        try:
+            if state.get("size_min") is not None:
+                self.size_range.size_min.setValue(float(state["size_min"]))
+            if state.get("size_max") is not None:
+                self.size_range.size_max.setValue(float(state["size_max"]))
+        except (TypeError, ValueError):
+            pass
+        for edit, key in (
+            (self._titles.plot_title_edit, "plot_title"),
+            (self._titles.xaxis_title_edit, "xaxis_title"),
+            (self._titles.yaxis_title_edit, "yaxis_title"),
+        ):
+            val = state.get(key)
+            if isinstance(val, str):
+                edit.setText(val)
+        params = state.get("method_params")
+        if isinstance(params, dict):
+            self._apply_method_params(params)
+        self._on_fp_selection_changed()
+        self._update_spectrum_controls()
+        self._update_size_controls()
+        raw_result = state.get("result")
+        if isinstance(raw_result, dict):
+            self._last_result = DimensionReductionResult(**raw_result)
+            summary = state.get("summary")
+            if isinstance(summary, str):
+                self.summary_text.setPlainText(summary)
+            elif isinstance(raw_result.get("summary"), str):
+                self.summary_text.setPlainText(raw_result["summary"])
+            QTimer.singleShot(0, self._refresh_plot_colors)
+
+    @classmethod
+    def from_session_state(cls, parent_app, state: dict | None) -> "DimensionReductionPanel":
+        return dimension_reduction_panel_from_session(parent_app, state)
 
     def _use_fingerprints(self) -> bool:
         return self.fp_combo.currentText() != _FP_NONE_LABEL
@@ -388,7 +513,9 @@ class DimensionReductionPanel(QWidget):
                 return
             self._refresh_structure_sources()
             only_sel = selection_scope_checked(self)
-            df, _rows = table_to_dataframe(self.parent_app, visible_only=True, only_selected=only_sel)
+            df, _rows = table_to_dataframe(
+                self.parent_app, visible_only=True, only_selected=only_sel
+            )
             num = numeric_subset(df, exclude_id=True)
             for col in num.columns:
                 item = QListWidgetItem(col)
@@ -492,6 +619,9 @@ class DimensionReductionPanel(QWidget):
         size_min_px, size_max_px = self._current_size_bounds()
         return size_vals, size_label, size_min_px, size_max_px
 
+    def _on_titles_changed(self) -> None:
+        self._refresh_plot_colors()
+
     def _refresh_plot_colors(self) -> None:
         if self._last_result is None or self._plot_view is None or self._job_running:
             return
@@ -519,6 +649,7 @@ class DimensionReductionPanel(QWidget):
                 size_label=size_label,
                 size_min_px=size_min_px,
                 size_max_px=size_max_px,
+                **self._titles.title_overrides(),
             )
             self._plot_view.push_figure(fig, list(updated.oids))
         except Exception as exc:
@@ -573,7 +704,12 @@ class DimensionReductionPanel(QWidget):
                 "Select at least one numeric column and/or choose a fingerprint type.",
             )
             return
-        if features and len(features) == 1 and is_fingerprint_bitcount_column(features[0]) and not use_fp:
+        if (
+            features
+            and len(features) == 1
+            and is_fingerprint_bitcount_column(features[0])
+            and not use_fp
+        ):
             QMessageBox.warning(
                 self,
                 self._window_title,
@@ -626,9 +762,7 @@ class DimensionReductionPanel(QWidget):
         mol_rows = None
         if use_fp:
             src = str(prep.get("struct_src") or "")
-            self.parent_app.status_label.setText(
-                f"{self._window_title}: collecting structures…"
-            )
+            self.parent_app.status_label.setText(f"{self._window_title}: collecting structures…")
             mol_rows = self._collect_table_mols(src, only_sel)
             if len(mol_rows) < 2 and not features:
                 self._reset_dimred_job_ui()
@@ -718,6 +852,7 @@ class DimensionReductionPanel(QWidget):
                 size_label=size_label,
                 size_min_px=size_min_px,
                 size_max_px=size_max_px,
+                **self._titles.title_overrides(),
             )
             self._plot_view.push_figure(fig, list(plotted.oids))
             self._update_spectrum_controls()
@@ -775,9 +910,7 @@ class DimensionReductionDialog(QDialog):
         make_window_minimizable(self)
 
     def closeEvent(self, event) -> None:  # noqa: N802 — Qt API name
-        if self._force_close:
-            self._force_close = False
-        event.accept()
+        handle_floating_plot_close_event(self, event)
 
 
 class PCAPlotPanel(DimensionReductionPanel):
@@ -798,9 +931,21 @@ class PCAPlotPanel(DimensionReductionPanel):
     def _method_params(self) -> dict:
         return {"n_components": int(self.pca_components.value())}
 
+    def _apply_method_params(self, params: dict | None) -> None:
+        if not isinstance(params, dict):
+            return
+        n = params.get("n_components")
+        if isinstance(n, int):
+            self.pca_components.setValue(max(2, min(50, n)))
+
 
 class PCADialog(DimensionReductionDialog):
-    def __init__(self, parent: ChemicalTableApp | None = None, *, panel: DimensionReductionPanel | None = None):
+    def __init__(
+        self,
+        parent: ChemicalTableApp | None = None,
+        *,
+        panel: DimensionReductionPanel | None = None,
+    ):
         super().__init__(parent, panel=panel or PCAPlotPanel(parent))
 
 
@@ -854,9 +999,28 @@ class TSNEPlotPanel(DimensionReductionPanel):
             "random_state": int(self.tsne_seed.value()),
         }
 
+    def _apply_method_params(self, params: dict | None) -> None:
+        if not isinstance(params, dict):
+            return
+        if params.get("perplexity") is not None:
+            self.tsne_perplexity.setValue(float(params["perplexity"]))
+        if params.get("learning_rate") is not None:
+            self.tsne_learning_rate.setValue(float(params["learning_rate"]))
+        if isinstance(params.get("max_iter"), int):
+            self.tsne_max_iter.setValue(int(params["max_iter"]))
+        if isinstance(params.get("max_points"), int):
+            self.tsne_max_points.setValue(int(params["max_points"]))
+        if isinstance(params.get("random_state"), int):
+            self.tsne_seed.setValue(int(params["random_state"]))
+
 
 class TSNEVisualizationDialog(DimensionReductionDialog):
-    def __init__(self, parent: ChemicalTableApp | None = None, *, panel: DimensionReductionPanel | None = None):
+    def __init__(
+        self,
+        parent: ChemicalTableApp | None = None,
+        *,
+        panel: DimensionReductionPanel | None = None,
+    ):
         super().__init__(parent, panel=panel or TSNEPlotPanel(parent))
 
 
@@ -909,9 +1073,26 @@ class UMAPPlotPanel(DimensionReductionPanel):
             "random_state": int(self.umap_seed.value()),
         }
 
+    def _apply_method_params(self, params: dict | None) -> None:
+        if not isinstance(params, dict):
+            return
+        if isinstance(params.get("n_neighbors"), int):
+            self.umap_neighbors.setValue(int(params["n_neighbors"]))
+        if params.get("min_dist") is not None:
+            self.umap_min_dist.setValue(float(params["min_dist"]))
+        if isinstance(params.get("max_points"), int):
+            self.umap_max_points.setValue(int(params["max_points"]))
+        if isinstance(params.get("random_state"), int):
+            self.umap_seed.setValue(int(params["random_state"]))
+
 
 class UMAPVisualizationDialog(DimensionReductionDialog):
-    def __init__(self, parent: ChemicalTableApp | None = None, *, panel: DimensionReductionPanel | None = None):
+    def __init__(
+        self,
+        parent: ChemicalTableApp | None = None,
+        *,
+        panel: DimensionReductionPanel | None = None,
+    ):
         super().__init__(parent, panel=panel or UMAPPlotPanel(parent))
 
 
@@ -997,9 +1178,34 @@ class SOMPlotPanel(DimensionReductionPanel):
             "random_state": int(self.som_seed.value()),
         }
 
+    def _apply_method_params(self, params: dict | None) -> None:
+        if not isinstance(params, dict):
+            return
+        for key, spin in (
+            ("grid_width", self.som_grid_w),
+            ("grid_height", self.som_grid_h),
+            ("n_epochs", self.som_epochs),
+            ("max_points", self.som_max_points),
+            ("random_state", self.som_seed),
+        ):
+            if isinstance(params.get(key), int):
+                spin.setValue(int(params[key]))
+        for key, spin in (
+            ("learning_rate", self.som_lr),
+            ("sigma", self.som_sigma),
+            ("jitter", self.som_jitter),
+        ):
+            if params.get(key) is not None:
+                spin.setValue(float(params[key]))
+
 
 class SOMVisualizationDialog(DimensionReductionDialog):
-    def __init__(self, parent: ChemicalTableApp | None = None, *, panel: DimensionReductionPanel | None = None):
+    def __init__(
+        self,
+        parent: ChemicalTableApp | None = None,
+        *,
+        panel: DimensionReductionPanel | None = None,
+    ):
         super().__init__(parent, panel=panel or SOMPlotPanel(parent))
 
 
@@ -1009,3 +1215,23 @@ _DIMRED_FLOATING_DIALOGS = {
     "umap": UMAPVisualizationDialog,
     "som": SOMVisualizationDialog,
 }
+
+_DIMRED_PANELS = {
+    "pca": PCAPlotPanel,
+    "tsne": TSNEPlotPanel,
+    "umap": UMAPPlotPanel,
+    "som": SOMPlotPanel,
+}
+
+
+def dimension_reduction_panel_from_session(
+    parent_app: ChemicalTableApp | None,
+    state: dict | None,
+) -> DimensionReductionPanel:
+    method = "pca"
+    if isinstance(state, dict):
+        method = str(state.get("method") or "pca")
+    panel_cls = _DIMRED_PANELS.get(method, PCAPlotPanel)
+    panel = panel_cls(parent_app)
+    panel.apply_session_state(state)
+    return panel

@@ -969,10 +969,21 @@ class PrepareStructuresMixin:
         finishing_batch = bool(getattr(self, "_render2d_batch_active", False))
         if finishing_batch:
             pending = getattr(self, "_pending_session_table_layout", None)
-            restore = getattr(self, "_restore_table_layout", None)
-            if pending and callable(restore):
-                restore(pending)
-                self._pending_session_table_layout = None
+            restore_chrome = getattr(self, "_restore_session_table_chrome", None)
+            if pending and callable(restore_chrome):
+                restore_chrome(pending)
+            elif pending:
+                restore = getattr(self, "_restore_table_layout", None)
+                if callable(restore):
+                    restore(pending)
+            restore_ws = getattr(self, "_restore_pending_workspace_layout", None)
+            if callable(restore_ws):
+                restore_ws()
+            finish_ws = getattr(self, "_finish_deferred_session_workspace_restore", None)
+            if callable(finish_ws):
+                from PyQt5.QtCore import QTimer
+
+                QTimer.singleShot(0, finish_ws)
         try:
             self.table.setUpdatesEnabled(True)
         except Exception:

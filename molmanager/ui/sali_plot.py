@@ -31,6 +31,7 @@ from ..plot_color import (
     scatter_marker_from_column_values,
 )
 from ..sali_analysis import SaliPoint
+from .dockable_plot import resolve_plot_title_text
 from .plotly_html import finalize_plot_legend
 
 
@@ -48,6 +49,9 @@ def build_sali_figure(
     size_label: str | None = None,
     size_min_px: float = DEFAULT_MARKER_SIZE_MIN_PX,
     size_max_px: float = DEFAULT_MARKER_SIZE_MAX_PX,
+    plot_title: str = "",
+    xaxis_title: str = "",
+    yaxis_title: str = "",
 ) -> go.Figure:
     """Scatter of fingerprint similarity vs ``|Δactivity|``, colored by SALI by default."""
     xs = [float(p.similarity) for p in points]
@@ -105,14 +109,14 @@ def build_sali_figure(
         ]
     )
     fig.update_layout(
-        title="SALI",
-        xaxis_title=similarity_label,
-        yaxis_title=f"|Δ{activity_column}|",
+        title=resolve_plot_title_text(plot_title, ""),
+        xaxis_title=resolve_plot_title_text(xaxis_title, ""),
+        yaxis_title=resolve_plot_title_text(yaxis_title, ""),
         template="plotly_white",
         dragmode="lasso",
         clickmode="event+select",
         showlegend=False,
-        margin=dict(l=56, r=24, t=48, b=56),
+        margin=dict(l=48, r=24, t=24, b=40),
         meta={
             "molmanager_selection_traces": [0],
             "molmanager_hover_persist": False,

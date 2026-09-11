@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Any
 
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -33,6 +34,7 @@ from PyQt5.QtWidgets import (
 from ..activity_cliff_analysis import ActivityCliffPoint, build_activity_cliff_points
 from ..mmp_analysis import MmpPair
 from .activity_cliff_plot import build_activity_cliff_figure
+from .dockable_plot import style_plot_footer_text_button
 from .plotly_interactive_view import PlotlyInteractiveView
 from .qt_widget_utils import make_window_minimizable
 from .result_plot_panel import DockableResultPlotPanel
@@ -47,6 +49,8 @@ except Exception:
 
 class ActivityCliffMapPanel(DockableResultPlotPanel):
     """Interactive cliff scatter; click a point to select the pair and browse evidence."""
+
+    SESSION_KIND = "activity_cliff_map"
 
     def __init__(
         self,
@@ -82,10 +86,6 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
         x_row.addWidget(self._x_combo, 1)
         self._extra_opts_layout.addLayout(x_row)
 
-        self._meta = QLabel()
-        self._meta.setWordWrap(True)
-        self._root.addWidget(self._meta)
-
         self._plot_view: PlotlyInteractiveView | None = None
         if _HAS_WEB and parent_app is not None:
             self._plot_view = _CliffPlotView(parent_app, self)
@@ -96,21 +96,18 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
             missing.setAlignment(Qt.AlignCenter)
             self._root.addWidget(missing, 1)
 
-        self._detail = QLabel("Click a point to inspect the cliff pair.")
-        self._detail.setWordWrap(True)
-        self._detail.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._root.addWidget(self._detail)
-
-        actions = QHBoxLayout()
+        foot = self._footer_bar.layout()
         self._btn_browse = QPushButton("Browse pair")
         self._btn_browse.setEnabled(False)
         self._btn_browse.setToolTip("Open the MMP pair browser for the selected cliff point")
+        style_plot_footer_text_button(self._btn_browse)
         self._btn_select = QPushButton("Select pair in table")
         self._btn_select.setEnabled(False)
-        actions.addWidget(self._btn_browse)
-        actions.addWidget(self._btn_select)
-        actions.addStretch()
-        self._root.addLayout(actions)
+        style_plot_footer_text_button(self._btn_select)
+        clear_idx = foot.indexOf(self._clear_sel_btn)
+        insert_at = clear_idx + 1 if clear_idx >= 0 else 2
+        foot.insertWidget(insert_at, self._btn_browse)
+        foot.insertWidget(insert_at + 1, self._btn_select)
         self._btn_browse.clicked.connect(self._browse_current)
         self._btn_select.clicked.connect(self._select_current)
 
@@ -136,15 +133,44 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
                 self._x_combo.blockSignals(False)
         self._points = build_activity_cliff_points(self._pairs)
         self._current_index = None
-        self._meta.setText(
-            f"{len(self._points)} matched pair(s)  ·  Δ relative to {self._activity_column}  ·  "
-            "default color = signed Δ (red/blue)"
-        )
-        self._detail.setText("Click a point to inspect the cliff pair.")
         self._btn_browse.setEnabled(False)
         self._btn_select.setEnabled(False)
         self._reload_color_columns()
         self._rebuild_figure()
+
+    def collect_session_state(self) -> dict:
+        return {
+            "kind": self.SESSION_KIND,
+            **self._collect_encoding_chrome_state(),
+            "activity_column": self._activity_column,
+            "x_mode": str(self._x_combo.currentData() or self._x_mode),
+            "pairs": [asdict(p) for p in self._pairs],
+        }
+
+    def apply_session_state(self, state: dict | None) -> None:
+        if not isinstance(state, dict):
+            return
+        from ..mmp_analysis import MmpPair
+
+        pairs: list[MmpPair] = []
+        raw_pairs = state.get("pairs")
+        if isinstance(raw_pairs, list):
+            for raw in raw_pairs:
+                if isinstance(raw, dict):
+                    pairs.append(MmpPair(**raw))
+        self._apply_encoding_chrome_state(state)
+        x_mode = str(state.get("x_mode") or "heavy_atoms")
+        self.set_pairs(
+            pairs,
+            activity_column=str(state.get("activity_column") or ""),
+            x_mode=x_mode,
+        )
+
+    @classmethod
+    def from_session_state(cls, parent_app, state: dict | None) -> "ActivityCliffMapPanel":
+        panel = cls(parent_app, pairs=[], activity_column="")
+        panel.apply_session_state(state)
+        return panel
 
     def _encoding_sample_values(self):
         color_col = self.color_combo.currentText()
@@ -177,15 +203,6 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
             self._btn_select.setEnabled(False)
             return
         self._current_index = int(point_index)
-        point = self._points[self._current_index]
-        sign = "+" if point.signed_delta >= 0 else ""
-        self._detail.setText(
-            f"IDs {point.oid_a} ↔ {point.oid_b}  ·  "
-            f"Δ{self._activity_column} = {sign}{point.signed_delta:.4g}  ·  "
-            f"change HA={point.change_heavy_atoms}  ·  "
-            f"frag distance={point.frag_distance:.3f}\n"
-            f"{point.transform}"
-        )
         self._btn_browse.setEnabled(True)
         self._btn_select.setEnabled(True)
         # Table selection is applied by the plot view (both pair partners).
@@ -224,7 +241,6 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
         self._current_index = None
         self._btn_browse.setEnabled(False)
         self._btn_select.setEnabled(False)
-        self._detail.setText("Click a point to inspect the cliff pair.")
         if self._plot_view is not None:
             try:
                 self._plot_view.clear_table_selection(update_plot=True)
@@ -282,9 +298,9 @@ class ActivityCliffMapDialog(QDialog):
             self._panel.set_pairs(*args, **kwargs)
 
     def closeEvent(self, event) -> None:  # noqa: N802 — Qt API name
-        if self._force_close:
-            self._force_close = False
-        event.accept()
+        from .dockable_plot import handle_floating_plot_close_event
+
+        handle_floating_plot_close_event(self, event)
 
 
 class _CliffPlotView(PlotlyInteractiveView):

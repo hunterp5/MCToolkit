@@ -26,6 +26,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSizePolicy,
     QSplitter,
@@ -38,7 +39,11 @@ from PyQt5.QtWidgets import (
 from ..dockable_plot import (
     PLOT_PANEL_BASE_MINIMUM_WIDTH,
     PLOT_PANEL_DEFAULT_WIDTH,
+    adopt_dock_header_buttons,
     embed_in_plot_pane,
+    plot_widget_display_title,
+    restore_dock_header_buttons,
+    style_plot_pane_title_edit,
     unembed_from_plot_pane,
 )
 
@@ -93,52 +98,120 @@ class PlotPane(QFrame):
         self._root.setContentsMargins(2, 2, 2, 2)
         self._root.setSpacing(0)
 
+        self._nav_host = QWidget()
+        self._nav_host.setObjectName("PlotPaneNav")
+        nav_ly = QHBoxLayout(self._nav_host)
+        nav_ly.setContentsMargins(0, 0, 0, 0)
+        nav_ly.setSpacing(3)
+        self._prev_btn = QPushButton("‹")
+        self._next_btn = QPushButton("›")
+        for btn in (self._prev_btn, self._next_btn):
+            btn.setFixedSize(22, 20)
+            btn.setFlat(False)
+            btn.setAutoDefault(False)
+            btn.setDefault(False)
+            btn.setFocusPolicy(Qt.NoFocus)
+            btn.setStyleSheet(
+                "QPushButton { font-size: 13px; font-weight: 700; padding: 0px; min-width: 22px; }"
+            )
+        self._prev_btn.setToolTip("Previous plot in this pane")
+        self._next_btn.setToolTip("Next plot in this pane")
+        self._prev_btn.clicked.connect(self.show_previous_page)
+        self._next_btn.clicked.connect(self.show_next_page)
+        self._title_edit = QLineEdit()
+        self._title_edit.setObjectName("PlotPaneTitle")
+        self._title_edit.setReadOnly(True)
+        self._title_edit.setFocusPolicy(Qt.ClickFocus)
+        self._title_edit.setToolTip("Double-click to rename this plot")
+        style_plot_pane_title_edit(self._title_edit)
+        self._title_edit.installEventFilter(self)
+        self._title_edit.editingFinished.connect(self._commit_title_edit)
+        # Compatibility alias for older tests/callers.
+        self._title_label = self._title_edit
+        self._page_label = QLabel("")
+        self._page_label.setObjectName("PlotPanePage")
+        self._page_label.setAlignment(Qt.AlignCenter)
+        self._page_label.setFixedWidth(38)
+        self._page_label.setStyleSheet("QLabel { font-size: 11px; padding: 0px 1px; }")
+        nav_ly.addWidget(self._prev_btn)
+        nav_ly.addWidget(self._title_edit)
+        nav_ly.addWidget(self._page_label)
+        nav_ly.addWidget(self._next_btn)
+        # Compatibility alias used by older tests.
+        self._pager = self._nav_host
+
+        # Header: equal side strips keep the pager geometrically centered in the pane.
         self._header = QWidget()
         self._header.setObjectName("PlotPaneHeader")
+        self._header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         header_ly = QHBoxLayout(self._header)
-        header_ly.setContentsMargins(2, 0, 2, 0)
-        header_ly.setSpacing(0)
-        header_ly.addStretch(1)
+        header_ly.setContentsMargins(3, 1, 3, 1)
+        header_ly.setSpacing(3)
+
+        self._header_left = QWidget()
+        self._header_left.setObjectName("PlotPaneHeaderLeft")
+        left_ly = QHBoxLayout(self._header_left)
+        left_ly.setContentsMargins(0, 0, 0, 0)
+        left_ly.setSpacing(3)
+        self._leading_opts_host = QWidget()
+        self._leading_opts_host.setObjectName("PlotPaneLeadingOpts")
+        self._leading_opts_ly = QHBoxLayout(self._leading_opts_host)
+        self._leading_opts_ly.setContentsMargins(0, 0, 0, 0)
+        self._leading_opts_ly.setSpacing(3)
+        left_ly.addWidget(self._leading_opts_host, 0)
+        self._chrome_host = QWidget()
+        self._chrome_host.setObjectName("PlotPaneChrome")
+        self._chrome_ly = QHBoxLayout(self._chrome_host)
+        self._chrome_ly.setContentsMargins(0, 0, 0, 0)
+        self._chrome_ly.setSpacing(3)
+        left_ly.addWidget(self._chrome_host, 0)
+        left_ly.addStretch(1)
+
+        self._header_right = QWidget()
+        self._header_right.setObjectName("PlotPaneHeaderRight")
+        right_ly = QHBoxLayout(self._header_right)
+        right_ly.setContentsMargins(0, 0, 0, 0)
+        right_ly.setSpacing(3)
+        right_ly.addStretch(1)
+        self._send_host = QWidget()
+        self._send_host.setObjectName("PlotPaneSend")
+        self._send_ly = QHBoxLayout(self._send_host)
+        self._send_ly.setContentsMargins(0, 0, 0, 0)
+        self._send_ly.setSpacing(3)
+        right_ly.addWidget(self._send_host, 0)
+        self._trailing_close_host = QWidget()
+        self._trailing_close_host.setObjectName("PlotPaneTrailingClose")
+        self._trailing_close_ly = QHBoxLayout(self._trailing_close_host)
+        self._trailing_close_ly.setContentsMargins(0, 0, 0, 0)
+        self._trailing_close_ly.setSpacing(3)
+        right_ly.addWidget(self._trailing_close_host, 0)
         self._close_btn = QPushButton("×")
         self._close_btn.setObjectName("PlotPaneClose")
-        self._close_btn.setFixedSize(22, 22)
-        self._close_btn.setFlat(True)
+        self._close_btn.setFixedSize(20, 20)
+        self._close_btn.setFlat(False)
         self._close_btn.setFocusPolicy(Qt.NoFocus)
         self._close_btn.setAutoDefault(False)
         self._close_btn.setDefault(False)
         self._close_btn.setToolTip("Close this plot pane")
+        self._close_btn.setStyleSheet(
+            "QPushButton {"
+            " color: #c0392b;"
+            " font-size: 13px;"
+            " font-weight: 700;"
+            " padding: 0px;"
+            " }"
+            "QPushButton:hover { color: #e74c3c; }"
+            "QPushButton:pressed { color: #922b21; }"
+        )
         self._close_btn.clicked.connect(lambda *_a: self.close_requested.emit(self))
-        header_ly.addWidget(self._close_btn)
-        self._root.addWidget(self._header)
+        right_ly.addWidget(self._close_btn, 0)
 
-        self._pager = QWidget()
-        self._pager.setObjectName("PlotPanePager")
-        pager_ly = QHBoxLayout(self._pager)
-        pager_ly.setContentsMargins(4, 2, 4, 2)
-        pager_ly.setSpacing(4)
-        self._prev_btn = QPushButton("‹")
-        self._next_btn = QPushButton("›")
-        for btn in (self._prev_btn, self._next_btn):
-            btn.setFixedWidth(28)
-            btn.setAutoDefault(False)
-            btn.setDefault(False)
-            btn.setFocusPolicy(Qt.NoFocus)
-            btn.setToolTip("Switch plots in this pane")
-        self._prev_btn.setToolTip("Previous plot in this pane")
-        self._next_btn.setToolTip("Next plot in this pane")
-        self._page_label = QLabel("1 / 1")
-        self._page_label.setMinimumWidth(36)
-        self._page_label.setAlignment(Qt.AlignCenter)
-        self._title_label = QLabel("")
-        self._title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self._title_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._prev_btn.clicked.connect(self.show_previous_page)
-        self._next_btn.clicked.connect(self.show_next_page)
-        pager_ly.addWidget(self._prev_btn)
-        pager_ly.addWidget(self._page_label)
-        pager_ly.addWidget(self._next_btn)
-        pager_ly.addWidget(self._title_label, 1)
-        self._pager.hide()
+        header_ly.addWidget(self._header_left, 1)
+        header_ly.addWidget(self._nav_host, 0)
+        header_ly.addWidget(self._header_right, 1)
+        # Alias so callers/tests that still look at ``_footer`` find the chrome bar.
+        self._footer = self._header
+        self._root.addWidget(self._header)
 
         self._stack = QStackedWidget()
         self._stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -152,11 +225,14 @@ class PlotPane(QFrame):
         self._placeholder.setAlignment(Qt.AlignCenter)
         self._placeholder.setWordWrap(True)
         self._placeholder.setStyleSheet("color: palette(mid); padding: 12px;")
-        self._root.addWidget(self._pager)
         self._root.addWidget(self._stack, 1)
         self._root.addWidget(self._placeholder, 1)
+        self._header_button_owner = None
+        self._title_edit_base = ""
+
         self._active = False
         self._set_active_style(False)
+        self._refresh_pager()
 
     def refresh_theme(self) -> None:
         """Re-apply palette-backed chrome after a GUI theme or application font change."""
@@ -169,12 +245,19 @@ class PlotPane(QFrame):
             self.setPalette(pal)
             for widget in (
                 self._header,
+                self._footer,
+                self._header_left,
+                self._header_right,
+                self._leading_opts_host,
+                self._chrome_host,
+                self._send_host,
+                self._trailing_close_host,
+                self._nav_host,
                 self._close_btn,
-                self._pager,
                 self._prev_btn,
                 self._next_btn,
+                self._title_edit,
                 self._page_label,
-                self._title_label,
                 self._placeholder,
             ):
                 widget.setPalette(pal)
@@ -184,6 +267,12 @@ class PlotPane(QFrame):
                     style.unpolish(widget)
                     style.polish(widget)
                 widget.update()
+        for btn in (self._prev_btn, self._next_btn):
+            btn.setFixedSize(22, 20)
+            btn.setStyleSheet(
+                "QPushButton { font-size: 13px; font-weight: 700; padding: 0px; min-width: 22px; }"
+            )
+        style_plot_pane_title_edit(self._title_edit)
         self.update()
 
     def plot_widget(self) -> QWidget | None:
@@ -214,28 +303,55 @@ class PlotPane(QFrame):
         return not self._pages
 
     def display_title(self) -> str:
-        return self._title_for_widget(self.plot_widget())
+        return plot_widget_display_title(self.plot_widget())
 
     @staticmethod
     def _title_for_widget(w: QWidget | None) -> str:
-        if w is None:
-            return "empty"
-        title = getattr(w, "_window_title", None)
-        if isinstance(title, str) and title.strip():
-            return title.strip()
-        win_title = ""
-        try:
-            win_title = str(w.windowTitle() or "").strip()
-        except RuntimeError:
-            win_title = ""
-        if win_title:
-            return win_title
-        name = w.__class__.__name__
-        if name.endswith("PlotPanel"):
-            return name[: -len("PlotPanel")] or name
-        if name.endswith("Widget"):
-            return name[: -len("Widget")] or name
-        return name
+        return plot_widget_display_title(w)
+
+    def eventFilter(self, obj, event):  # noqa: N802 — Qt API name
+        if obj is self._title_edit and event.type() == QEvent.MouseButtonDblClick:
+            if event.button() == Qt.LeftButton and self.plot_widget() is not None:
+                self._begin_title_edit()
+                return True
+        if obj is self._title_edit and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Escape and not self._title_edit.isReadOnly():
+                self._cancel_title_edit()
+                return True
+        return super().eventFilter(obj, event)
+
+    def _begin_title_edit(self) -> None:
+        self._title_edit_base = self._title_for_widget(self.plot_widget())
+        self._title_edit.blockSignals(True)
+        self._title_edit.setText(self._title_edit_base)
+        self._title_edit.blockSignals(False)
+        self._title_edit.setReadOnly(False)
+        self._title_edit.setFocus(Qt.MouseFocusReason)
+        self._title_edit.selectAll()
+
+    def _cancel_title_edit(self) -> None:
+        self._title_edit.blockSignals(True)
+        self._title_edit.setText(self._title_edit_base)
+        self._title_edit.blockSignals(False)
+        self._title_edit.setReadOnly(True)
+        self._title_edit.clearFocus()
+        self._refresh_pager()
+
+    def _commit_title_edit(self) -> None:
+        if self._title_edit.isReadOnly():
+            return
+        widget = self.plot_widget()
+        text = self._title_edit.text().strip()
+        self._title_edit.setReadOnly(True)
+        if widget is not None:
+            if text:
+                widget._pane_display_title = text
+            elif hasattr(widget, "_pane_display_title"):
+                try:
+                    delattr(widget, "_pane_display_title")
+                except Exception:
+                    widget._pane_display_title = ""
+        self._refresh_pager()
 
     def set_plot_widget(self, widget: QWidget | None) -> QWidget | None:
         """Replace this pane's stack with ``widget`` (or clear when ``None``)."""
@@ -254,6 +370,10 @@ class PlotPane(QFrame):
             current_id = id(cur) if cur is not None else None
         self._stack.blockSignals(True)
         try:
+            owner = getattr(self, "_header_button_owner", None)
+            if owner is not None:
+                restore_dock_header_buttons(owner)
+                self._header_button_owner = None
             for old in list(self._pages):
                 self._uninstall_activate_filter(old)
                 self._stack.removeWidget(old)
@@ -305,6 +425,9 @@ class PlotPane(QFrame):
         """Detach ``widget`` from this pane. Returns True if it was present."""
         if widget not in self._pages:
             return False
+        if getattr(self, "_header_button_owner", None) is widget:
+            restore_dock_header_buttons(widget)
+            self._header_button_owner = None
         idx = self._pages.index(widget)
         self._uninstall_activate_filter(widget)
         self._pages.remove(widget)
@@ -344,33 +467,67 @@ class PlotPane(QFrame):
         self._sync_visible_footer()
 
     def _sync_visible_footer(self) -> None:
-        w = self.plot_widget()
-        if w is None:
+        current = self.plot_widget()
+        owner = getattr(self, "_header_button_owner", None)
+        if owner is not None and owner is not current:
+            restore_dock_header_buttons(owner)
+            self._header_button_owner = None
+        if current is None:
             return
-        sync = getattr(w, "_sync_footer_chrome", None)
+        sync = getattr(current, "_sync_footer_chrome", None)
         if callable(sync):
             try:
                 sync()
             except RuntimeError:
                 pass
+        adopt_dock_header_buttons(
+            self._chrome_ly,
+            current,
+            leading_opts_layout=self._leading_opts_ly,
+            send_window_layout=self._send_ly,
+            trailing_close_layout=self._trailing_close_ly,
+        )
+        self._header_button_owner = current
 
     def _refresh_pager(self) -> None:
         n = len(self._pages)
+        self._header.show()
         if n == 0:
-            self._pager.hide()
+            owner = getattr(self, "_header_button_owner", None)
+            if owner is not None:
+                restore_dock_header_buttons(owner)
+                self._header_button_owner = None
+            self._nav_host.hide()
             self._stack.hide()
             self._placeholder.show()
             return
         self._placeholder.hide()
         self._stack.show()
-        self._pager.show()
-        i = self.page_index()
-        self._page_label.setText(f"{i + 1} / {n}")
-        self._title_label.setText(self._title_for_widget(self.plot_widget()))
-        self._title_label.setToolTip(self._title_label.text())
-        enabled = n > 1
-        self._prev_btn.setEnabled(enabled)
-        self._next_btn.setEnabled(enabled)
+        self._nav_host.show()
+        multi = n > 1
+        self._prev_btn.setVisible(multi)
+        self._next_btn.setVisible(multi)
+        self._prev_btn.setEnabled(multi)
+        self._next_btn.setEnabled(multi)
+        title = self._title_for_widget(self.plot_widget())
+        editing = not self._title_edit.isReadOnly() and self._title_edit.hasFocus()
+        if not editing:
+            self._title_edit.blockSignals(True)
+            self._title_edit.setText(title)
+            self._title_edit.blockSignals(False)
+        if multi:
+            i = self.page_index()
+            tip = f"Plot {i + 1} of {n}"
+            self._page_label.setText(f"({i + 1}/{n})")
+            self._page_label.setVisible(True)
+            self._prev_btn.setToolTip(f"Previous plot ({tip})")
+            self._next_btn.setToolTip(f"Next plot ({tip})")
+        else:
+            self._page_label.clear()
+            self._page_label.setVisible(False)
+            self._prev_btn.setToolTip("Previous plot in this pane")
+            self._next_btn.setToolTip("Next plot in this pane")
+        self._title_edit.setToolTip(f"{title}\nDouble-click to rename")
 
     def _install_activate_filter(self, widget: QWidget) -> None:
         widget.installEventFilter(self._activate_filter)
@@ -503,27 +660,66 @@ class WorkspaceLayoutManager(QWidget):
     def collect_splitter_sizes(self) -> dict:
         """Serializable nested splitter sizes for the current layout."""
         sizes: dict[str, list[int]] = {}
+        ratios: dict[str, list[float]] = {}
         for i, sp in enumerate(self._splitters):
             try:
-                sizes[f"splitter_{i}"] = [int(s) for s in sp.sizes()]
+                vals = [int(s) for s in sp.sizes()]
             except RuntimeError:
-                pass
+                continue
+            key = f"splitter_{i}"
+            sizes[key] = vals
+            total = float(sum(vals)) or 1.0
+            ratios[key] = [float(v) / total for v in vals]
         return {
             "layout_id": self._layout_id,
             "sizes": sizes,
+            "ratios": ratios,
             "preferred_pane_id": self._preferred_pane_id,
         }
 
     def restore_splitter_sizes(self, payload: dict | None) -> None:
         if not isinstance(payload, dict):
             return
-        sizes_map = payload.get("sizes")
-        if not isinstance(sizes_map, dict):
+        lid = payload.get("layout_id")
+        # Sizes are layout-shaped; never apply a side-by-side snapshot onto stacked panes.
+        if isinstance(lid, str) and lid and lid != self._layout_id:
             return
+        sizes_map = payload.get("sizes")
+        ratios_map = payload.get("ratios")
+        if not isinstance(sizes_map, dict):
+            sizes_map = {}
+        if not isinstance(ratios_map, dict):
+            ratios_map = {}
         for i, sp in enumerate(self._splitters):
             key = f"splitter_{i}"
+            try:
+                count = int(sp.count())
+            except RuntimeError:
+                continue
+            applied = False
+            ratios = ratios_map.get(key)
+            if isinstance(ratios, list) and len(ratios) == count and count > 0:
+                try:
+                    orient = sp.orientation()
+                    span = int(sp.width() if orient == Qt.Horizontal else sp.height())
+                    if span <= 0:
+                        span = int(sum(int(s) for s in sp.sizes()))
+                    if span > 0:
+                        floats = [max(0.0, float(r)) for r in ratios]
+                        rsum = sum(floats) or 1.0
+                        floats = [r / rsum for r in floats]
+                        ints = [max(0, int(round(r * span))) for r in floats]
+                        drift = span - sum(ints)
+                        if ints:
+                            ints[-1] = max(0, ints[-1] + drift)
+                        sp.setSizes(ints)
+                        applied = True
+                except (RuntimeError, TypeError, ValueError):
+                    applied = False
+            if applied:
+                continue
             vals = sizes_map.get(key)
-            if isinstance(vals, list) and len(vals) == sp.count():
+            if isinstance(vals, list) and len(vals) == count:
                 try:
                     sp.setSizes([max(0, int(v)) for v in vals])
                 except (RuntimeError, TypeError, ValueError):
@@ -584,8 +780,11 @@ class WorkspaceLayoutManager(QWidget):
             root = self._build_table_with_plot_area(Qt.Horizontal, 2)
         elif layout_id == LAYOUT_TABLE_SINGLE:
             root = self._build_table_with_plot_area(None, 1)
-        else:
+        elif layout_id == LAYOUT_TABLE_STACK:
             root = self._build_table_with_plot_area(Qt.Vertical, 2)
+        else:
+            self._layout_id = DEFAULT_LAYOUT_ID
+            root = self._build_table_only()
 
         self._workspace_root = root
         self._root_ly.addWidget(root, 1)

@@ -25,7 +25,7 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 - **Size by**, marker **Min size** / **Max size** (pixels).
 - **Components** - number of principal components.
 - **Run PCA**.
-- **Add to Main Window**, **Send to New Window**, **Close Plot**, **Plot Options**, **Clear Selection**.
+- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
 
 ## Workflow
 

@@ -18,18 +18,19 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Any
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QDialog,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QVBoxLayout,
 )
 
 from ..sali_analysis import SaliPoint
+from .dockable_plot import style_plot_footer_text_button
 from .plotly_interactive_view import PlotlyInteractiveView
 from .qt_widget_utils import make_window_minimizable
 from .result_plot_panel import DockableResultPlotPanel
@@ -45,6 +46,8 @@ except Exception:
 
 class SaliMapPanel(DockableResultPlotPanel):
     """Interactive SALI scatter; click a point to select both molecules."""
+
+    SESSION_KIND = "sali_map"
 
     def __init__(
         self,
@@ -69,10 +72,6 @@ class SaliMapPanel(DockableResultPlotPanel):
         self._metric = metric or "Tanimoto"
         self._current_index: int | None = None
 
-        self._meta = QLabel()
-        self._meta.setWordWrap(True)
-        self._root.addWidget(self._meta)
-
         self._plot_view: PlotlyInteractiveView | None = None
         if _HAS_WEB and parent_app is not None:
             self._plot_view = _SaliPlotView(parent_app, self)
@@ -83,23 +82,20 @@ class SaliMapPanel(DockableResultPlotPanel):
             missing.setAlignment(Qt.AlignCenter)
             self._root.addWidget(missing, 1)
 
-        self._detail = QLabel("Click a point to select the pair.")
-        self._detail.setWordWrap(True)
-        self._detail.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._root.addWidget(self._detail)
-
-        actions = QHBoxLayout()
+        foot = self._footer_bar.layout()
         self._btn_browse = QPushButton("Browse pair")
         self._btn_browse.setEnabled(False)
         self._btn_browse.setToolTip(
             "Open the SALI pair browser for the selected point (step through plot pairs)."
         )
+        style_plot_footer_text_button(self._btn_browse)
         self._btn_select = QPushButton("Select pair in table")
         self._btn_select.setEnabled(False)
-        actions.addWidget(self._btn_browse)
-        actions.addWidget(self._btn_select)
-        actions.addStretch()
-        self._root.addLayout(actions)
+        style_plot_footer_text_button(self._btn_select)
+        clear_idx = foot.indexOf(self._clear_sel_btn)
+        insert_at = clear_idx + 1 if clear_idx >= 0 else 2
+        foot.insertWidget(insert_at, self._btn_browse)
+        foot.insertWidget(insert_at + 1, self._btn_select)
         self._btn_browse.clicked.connect(self._browse_current)
         self._btn_select.clicked.connect(self._select_current)
 
@@ -129,14 +125,41 @@ class SaliMapPanel(DockableResultPlotPanel):
         self._current_index = None
         self._btn_browse.setEnabled(False)
         self._btn_select.setEnabled(False)
-        fp_txt = self._fp_choice or "fingerprint"
-        self._meta.setText(
-            f"{len(self._points)} pair(s)  ·  {fp_txt} / {self._metric}  ·  "
-            f"default color = SALI = |Δ| / (1 − similarity)  ·  Δ relative to {self._activity_column}"
-        )
-        self._detail.setText("Click a point to select the pair.")
         self._reload_color_columns()
         self._rebuild_figure()
+
+    def collect_session_state(self) -> dict:
+        return {
+            "kind": self.SESSION_KIND,
+            **self._collect_encoding_chrome_state(),
+            "activity_column": self._activity_column,
+            "fp_choice": self._fp_choice,
+            "metric": self._metric,
+            "points": [asdict(p) for p in self._points],
+        }
+
+    def apply_session_state(self, state: dict | None) -> None:
+        if not isinstance(state, dict):
+            return
+        points: list[SaliPoint] = []
+        raw_pts = state.get("points")
+        if isinstance(raw_pts, list):
+            for raw in raw_pts:
+                if isinstance(raw, dict):
+                    points.append(SaliPoint(**raw))
+        self._apply_encoding_chrome_state(state)
+        self.set_points(
+            points,
+            activity_column=str(state.get("activity_column") or ""),
+            fp_choice=str(state.get("fp_choice") or ""),
+            metric=str(state.get("metric") or "Tanimoto"),
+        )
+
+    @classmethod
+    def from_session_state(cls, parent_app, state: dict | None) -> "SaliMapPanel":
+        panel = cls(parent_app, points=[], activity_column="", fp_choice="", metric="Tanimoto")
+        panel.apply_session_state(state)
+        return panel
 
     def _encoding_sample_values(self):
         color_col = self.color_combo.currentText()
@@ -171,14 +194,6 @@ class SaliMapPanel(DockableResultPlotPanel):
             self._btn_select.setEnabled(False)
             return
         self._current_index = int(point_index)
-        point = self._points[self._current_index]
-        sign = "+" if point.signed_delta >= 0 else ""
-        self._detail.setText(
-            f"IDs {point.oid_a} ↔ {point.oid_b}  ·  "
-            f"similarity={point.similarity:.3f}  ·  "
-            f"Δ{self._activity_column} = {sign}{point.signed_delta:.4g}  ·  "
-            f"SALI={point.sali:.4g}"
-        )
         self._btn_browse.setEnabled(True)
         self._btn_select.setEnabled(True)
         # Table selection is applied by the plot view (both pair partners).
@@ -219,7 +234,6 @@ class SaliMapPanel(DockableResultPlotPanel):
         self._current_index = None
         self._btn_browse.setEnabled(False)
         self._btn_select.setEnabled(False)
-        self._detail.setText("Click a point to select the pair.")
         if self._plot_view is not None:
             try:
                 self._plot_view.clear_table_selection(update_plot=True)
@@ -279,9 +293,9 @@ class SaliMapDialog(QDialog):
             self._panel.set_points(*args, **kwargs)
 
     def closeEvent(self, event) -> None:  # noqa: N802 — Qt API name
-        if self._force_close:
-            self._force_close = False
-        event.accept()
+        from .dockable_plot import handle_floating_plot_close_event
+
+        handle_floating_plot_close_event(self, event)
 
 
 class _SaliPlotView(PlotlyInteractiveView):

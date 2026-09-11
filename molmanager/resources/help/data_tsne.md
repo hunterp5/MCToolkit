@@ -26,7 +26,7 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 - **Perplexity**, **Learning rate**, **Max iterations**.
 - **Max points**, **Random seed**.
 - **Run t-SNE**.
-- **Add to Main Window**, **Send to New Window**, **Close Plot**, **Plot Options**, **Clear Selection**.
+- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
 
 ## Workflow
 

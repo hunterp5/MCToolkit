@@ -44,6 +44,8 @@ class IngestExportMixin:
     def load_file(self, path: str) -> None:
         self._ingest_append_mode = False
         self._structure_field_override = None
+        self._session_mutation_paused = True
+        self._pending_session_clean_on_ready = True
         self.clear_all()
         self._apply_table_only_layout_for_file_load()
         self._set_ingest_loading(True)
@@ -79,6 +81,10 @@ class IngestExportMixin:
         self._last_batch_received = False
         self._structure_field_override = None
         self._ingest_append_mode = True
+        self._pending_session_clean_on_ready = False
+        mark = getattr(self, "_mark_session_dirty", None)
+        if callable(mark):
+            mark()
         self._set_ingest_loading(True)
         self._structures_queued = 0
         self._import_building_progress_shown = False

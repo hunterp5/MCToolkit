@@ -31,6 +31,7 @@ from ..plot_color import (
     resolve_plot_colorscale,
     scatter_marker_from_column_values,
 )
+from .dockable_plot import resolve_plot_title_text
 from .plotly_html import finalize_plot_legend
 
 
@@ -65,6 +66,9 @@ def build_mmp_neighborhood_figure(
     size_label: str | None = None,
     size_min_px: float = DEFAULT_MARKER_SIZE_MIN_PX,
     size_max_px: float = DEFAULT_MARKER_SIZE_MAX_PX,
+    plot_title: str = "",
+    xaxis_title: str = "",
+    yaxis_title: str = "",
 ) -> go.Figure:
     """Node+edge scatter: edge color by signed Δ; nodes color/size by options or defaults.
 
@@ -193,7 +197,7 @@ def build_mmp_neighborhood_figure(
 
     fig = go.Figure(data=traces)
     fig.update_layout(
-        title="MMP Pair Network",
+        title=resolve_plot_title_text(plot_title, ""),
         template="plotly_white",
         dragmode="lasso",
         clickmode="event+select",
@@ -202,13 +206,15 @@ def build_mmp_neighborhood_figure(
             "visible": False,
             "range": x_range,
             "constrain": "domain",
+            "title": resolve_plot_title_text(xaxis_title, ""),
         },
         yaxis={
             "visible": False,
             "range": y_range,
             "constrain": "domain",
+            "title": resolve_plot_title_text(yaxis_title, ""),
         },
-        margin=dict(l=24, r=24, t=48, b=24),
+        margin=dict(l=24, r=24, t=24, b=24),
         legend={"orientation": "h", "yanchor": "bottom", "y": 1.02},
         meta={
             "molmanager_selection_traces": [node_trace_index],

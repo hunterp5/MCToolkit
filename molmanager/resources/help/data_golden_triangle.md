@@ -21,15 +21,15 @@ Requires the property/structure inputs the plot expects; scope via **Selected Ro
 - **Color by**, **Spectrum**, **Min** / **Max**.
 - **Size by**, marker **Min size** / **Max size** (pixels).
 - **Summary**.
-- **Select in triangle**.
-- **Add to Main Window**, **Send to New Window**, **Close Plot**, **Plot Options**, **Clear Selection**.
+- **Triangle** region select.
+- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
 
 ## Workflow
 
 1. Ensure descriptor columns used by the triangle exist.
 2. Open **Golden Triangle** and configure source/color.
 3. Review in-triangle vs outside compounds.
-4. **Select in triangle** to focus follow-up tools.
+4. Use **Triangle** to focus follow-up tools.
 
 ## Use cases
 

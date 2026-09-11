@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from PyQt5.QtCore import QEvent, Qt, QTimer
@@ -31,12 +32,26 @@ from PyQt5.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from ..dockable_plot import make_plot_options_dialog, show_plot_options_dialog
+from ..dockable_plot import (
+    PlotTitlesControls,
+    apply_plot_chrome_glyphs,
+    handle_floating_plot_close_event,
+    make_add_to_main_button,
+    make_clear_selection_button,
+    make_close_plot_button,
+    make_plot_options_button,
+    make_plot_options_dialog,
+    make_send_window_button,
+    request_close_plot_widget,
+    show_plot_options_dialog,
+    style_plot_footer_text_button,
+)
 from ...config import load_config
 from ...plot_color import (
     PLOT_COLORSCALE_CHOICES,
@@ -51,6 +66,7 @@ from ...medchem_space import (
     MedChemRowSnapshot,
     MedChemSpaceBuildResult,
     MedChemSpaceDataset,
+    MedChemSpacePoint,
     medchem_plot_max_points,
     oids_in_egg_gia,
     oids_in_egg_yolk,
@@ -83,6 +99,7 @@ MedChemPlotKind = Literal["boiled_egg", "golden_triangle"]
 class MedChemPlotPanel(QWidget):
     """BOILED-Egg or golden-triangle controls + plot (dialog or docked beside the table)."""
 
+    MEDCHEM_SESSION_KIND = "medchem_space"
     owns_docked_plot_actions = True
 
     def __init__(
@@ -91,6 +108,7 @@ class MedChemPlotPanel(QWidget):
         *,
         plot_kind: MedChemPlotKind,
         window_title: str,
+        session_restore: bool = False,
     ):
         super().__init__(None)
         self.parent_app = parent_app
@@ -111,8 +129,9 @@ class MedChemPlotPanel(QWidget):
         self._have_selection = n_sel > 0
 
         root = QVBoxLayout(self)
+        # Top inset matches spacing: same toolbar→plot gap when floating or docked.
         root.setContentsMargins(4, 4, 4, 4)
-        root.setSpacing(6)
+        root.setSpacing(4)
 
         plot_host = QWidget()
         plot_ly = QVBoxLayout(plot_host)
@@ -136,6 +155,10 @@ class MedChemPlotPanel(QWidget):
         opts = QVBoxLayout(self._opts_panel)
         opts.setContentsMargins(0, 0, 0, 0)
         opts.setSpacing(6)
+
+        self._titles = PlotTitlesControls(self._opts_panel)
+        self._titles.changed.connect(self._on_titles_changed)
+        opts.addWidget(self._titles)
 
         options_gb = QGroupBox("Options")
         options_ly = QVBoxLayout(options_gb)
@@ -184,9 +207,7 @@ class MedChemPlotPanel(QWidget):
         size_row.addWidget(self._size_by_label)
         self.size_combo = QComboBox()
         self.size_combo.setMinimumWidth(120)
-        self.size_combo.setToolTip(
-            "Size points by a table column (numeric or categorical)."
-        )
+        self.size_combo.setToolTip("Size points by a table column (numeric or categorical).")
         self.size_combo.currentIndexChanged.connect(self._on_size_column_changed)
         size_row.addWidget(self.size_combo, 1)
         self.size_range = PlotSizeRangeControls()
@@ -203,54 +224,172 @@ class MedChemPlotPanel(QWidget):
 
         self._opts_dialog = make_plot_options_dialog(self, self._opts_panel)
 
-        foot = QHBoxLayout()
-        foot.setContentsMargins(0, 4, 0, 0)
-        self._add_to_main_btn = QPushButton("Add to Main Window")
-        self._add_to_main_btn.setToolTip("Dock this plot beside the compound table.")
+        self._footer_bar = QWidget(self)
+        self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        foot = QHBoxLayout(self._footer_bar)
+        foot.setContentsMargins(0, 0, 0, 0)
+        foot.setSpacing(4)
+        self._opts_btn = make_plot_options_button(
+            self,
+            tooltip="Configure structure source, color, and summary options.",
+        )
+        self._opts_btn.clicked.connect(self._open_plot_options)
+        foot.addWidget(self._opts_btn)
+        self._clear_sel_btn = make_clear_selection_button(self)
+        self._clear_sel_btn.clicked.connect(self._clear_selection)
+        foot.addWidget(self._clear_sel_btn)
+        if plot_kind == "golden_triangle":
+            self.select_region_btn = QPushButton("Triangle")
+            self.select_region_btn.setToolTip("Select compounds inside the golden triangle.")
+            self.select_region_btn.clicked.connect(self._on_select_in_triangle)
+            style_plot_footer_text_button(self.select_region_btn)
+            foot.addWidget(self.select_region_btn)
+        else:
+            self.select_egg_btn = QPushButton("Egg")
+            self.select_egg_btn.setToolTip("Select compounds inside the boiled egg.")
+            self.select_egg_btn.clicked.connect(self._on_select_in_egg)
+            self.select_yolk_btn = QPushButton("Yolk")
+            self.select_yolk_btn.setToolTip("Select compounds inside the egg yolk.")
+            self.select_yolk_btn.clicked.connect(self._on_select_in_yolk)
+            style_plot_footer_text_button(self.select_egg_btn)
+            style_plot_footer_text_button(self.select_yolk_btn)
+            foot.addWidget(self.select_egg_btn)
+            foot.addWidget(self.select_yolk_btn)
+        foot.addStretch(1)
+        self._add_to_main_btn = make_add_to_main_button(
+            self,
+            tooltip="Dock this plot beside the compound table.",
+        )
         self._add_to_main_btn.clicked.connect(self._add_to_main_window)
         foot.addWidget(self._add_to_main_btn)
-        self._send_window_btn = QPushButton("Send to New Window")
-        self._send_window_btn.setToolTip(
-            "Open this docked plot in a separate floating window."
+        self._send_window_btn = make_send_window_button(
+            self,
+            tooltip="Open this docked plot in a separate floating window.",
         )
         self._send_window_btn.clicked.connect(self._send_to_new_window)
         foot.addWidget(self._send_window_btn)
-        self._close_plot_btn = QPushButton("Close Plot")
-        self._close_plot_btn.setToolTip(
-            "Close this docked plot and free the panel so another plot can be docked."
-        )
+        self._close_plot_btn = make_close_plot_button(self)
         self._close_plot_btn.clicked.connect(self._close_docked_plot)
         foot.addWidget(self._close_plot_btn)
-        self._opts_btn = QPushButton("Plot Options")
-        self._opts_btn.setToolTip("Configure structure source, color, and summary options.")
-        self._opts_btn.clicked.connect(self._open_plot_options)
-        foot.addWidget(self._opts_btn)
-        foot.addStretch(1)
-        if plot_kind == "golden_triangle":
-            self.select_region_btn = QPushButton("Select in triangle")
-            self.select_region_btn.clicked.connect(self._on_select_in_triangle)
-            foot.addWidget(self.select_region_btn)
-        else:
-            self.select_egg_btn = QPushButton("Select in egg")
-            self.select_egg_btn.clicked.connect(self._on_select_in_egg)
-            self.select_yolk_btn = QPushButton("Select in yolk")
-            self.select_yolk_btn.clicked.connect(self._on_select_in_yolk)
-            foot.addWidget(self.select_egg_btn)
-            foot.addWidget(self.select_yolk_btn)
-        self._clear_sel_btn = QPushButton("Clear Selection")
-        self._clear_sel_btn.setToolTip("Clear the current table and plot selection.")
-        self._clear_sel_btn.clicked.connect(self._clear_selection)
-        foot.addWidget(self._clear_sel_btn)
-        root.addLayout(foot)
+        root.insertWidget(0, self._footer_bar)
 
         self._refresh_structure_sources()
         self._reload_color_columns()
         self._update_spectrum_controls()
         self._update_size_controls()
         self._sync_footer_chrome()
-        self.summary_text.setPlainText("Preparing plot…")
         self.setMinimumWidth(self.embedded_minimum_width())
-        QTimer.singleShot(0, self._start_refresh_job)
+        if session_restore:
+            self.summary_text.setPlainText("")
+        else:
+            self.summary_text.setPlainText("Preparing plot…")
+            QTimer.singleShot(0, self._start_refresh_job)
+
+    @staticmethod
+    def _set_combo_text(combo: QComboBox, text: str | None) -> None:
+        if not text:
+            return
+        idx = combo.findText(str(text))
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+
+    def _medchem_dataset_to_dict(self, ds: MedChemSpaceDataset | None) -> dict | None:
+        if ds is None:
+            return None
+        return {
+            "points": [asdict(p) for p in ds.points],
+            "skipped": ds.skipped,
+            "subsample_note": ds.subsample_note,
+            "gia_count": ds.gia_count,
+            "bbb_count": ds.bbb_count,
+            "golden_triangle_count": ds.golden_triangle_count,
+        }
+
+    @staticmethod
+    def _medchem_dataset_from_dict(raw: object) -> MedChemSpaceDataset | None:
+        if not isinstance(raw, dict):
+            return None
+        points: list[MedChemSpacePoint] = []
+        for pt in raw.get("points") or []:
+            if isinstance(pt, dict):
+                points.append(MedChemSpacePoint(**pt))
+        return MedChemSpaceDataset(
+            points=tuple(points),
+            skipped=int(raw.get("skipped") or 0),
+            subsample_note=str(raw.get("subsample_note") or ""),
+            gia_count=raw.get("gia_count"),
+            bbb_count=raw.get("bbb_count"),
+            golden_triangle_count=raw.get("golden_triangle_count"),
+        )
+
+    def collect_session_state(self) -> dict:
+        return {
+            "kind": self.MEDCHEM_SESSION_KIND,
+            "plot_kind": self._plot_kind,
+            "window_title": self._window_title,
+            "only_selected": bool(self.only_selected_cb.isChecked()),
+            "struct_src": self.struct_src_combo.currentText(),
+            "color": self.color_combo.currentText(),
+            "colorscale": self.colorscale_combo.currentText(),
+            "color_min": self.color_range.color_min.text(),
+            "color_max": self.color_range.color_max.text(),
+            "size": self.size_combo.currentText(),
+            "size_min": float(self.size_range.size_min.value()),
+            "size_max": float(self.size_range.size_max.value()),
+            **self._titles.title_overrides(),
+            "full_dataset": self._medchem_dataset_to_dict(self._full_dataset),
+            "plot_dataset": self._medchem_dataset_to_dict(self._plot_dataset),
+            "summary": self.summary_text.toPlainText(),
+        }
+
+    def apply_session_state(self, state: dict | None) -> None:
+        if not isinstance(state, dict):
+            return
+        self._reload_color_columns()
+        if "only_selected" in state:
+            self.only_selected_cb.setChecked(bool(state.get("only_selected")))
+        self._set_combo_text(self.struct_src_combo, state.get("struct_src"))
+        self._set_combo_text(self.color_combo, state.get("color"))
+        self._set_combo_text(self.colorscale_combo, state.get("colorscale"))
+        self._set_combo_text(self.size_combo, state.get("size"))
+        cmin, cmax = state.get("color_min"), state.get("color_max")
+        if isinstance(cmin, str):
+            self.color_range.color_min.setText(cmin)
+        if isinstance(cmax, str):
+            self.color_range.color_max.setText(cmax)
+        try:
+            if state.get("size_min") is not None:
+                self.size_range.size_min.setValue(float(state["size_min"]))
+            if state.get("size_max") is not None:
+                self.size_range.size_max.setValue(float(state["size_max"]))
+        except (TypeError, ValueError):
+            pass
+        for edit, key in (
+            (self._titles.plot_title_edit, "plot_title"),
+            (self._titles.xaxis_title_edit, "xaxis_title"),
+            (self._titles.yaxis_title_edit, "yaxis_title"),
+        ):
+            val = state.get(key)
+            if isinstance(val, str):
+                edit.setText(val)
+        self._full_dataset = self._medchem_dataset_from_dict(state.get("full_dataset"))
+        self._plot_dataset = self._medchem_dataset_from_dict(state.get("plot_dataset"))
+        summary = state.get("summary")
+        if isinstance(summary, str):
+            self.summary_text.setPlainText(summary)
+        elif self._full_dataset is not None:
+            total = len(self._full_dataset.points)
+            self.summary_text.setPlainText(
+                self._full_dataset.summary_text(plot_kind=self._plot_kind, total_in_scope=total)
+            )
+        self._update_spectrum_controls()
+        self._update_size_controls()
+        if self._plot_dataset is not None and self._plot_dataset.points:
+            QTimer.singleShot(0, self._push_plot_figure)
+
+    @classmethod
+    def from_session_state(cls, parent_app, state: dict | None) -> "MedChemPlotPanel":
+        return medchem_plot_panel_from_session(parent_app, state)
 
     def embedded_minimum_width(self) -> int:
         """Minimum dock width for the figure (options open in a separate dialog)."""
@@ -299,8 +438,7 @@ class MedChemPlotPanel(QWidget):
             self.parent_app.undock_plot_to_window(self)
 
     def _close_docked_plot(self) -> None:
-        if self.parent_app is not None:
-            self.parent_app.close_docked_plot(self)
+        request_close_plot_widget(self)
 
     def _is_docked_in_main_window(self) -> bool:
         app = self.parent_app
@@ -312,12 +450,16 @@ class MedChemPlotPanel(QWidget):
         return getattr(app, "_docked_plot_widget", None) is self
 
     def _sync_footer_chrome(self) -> None:
-        """Floating: Add to Main. Docked: Send/Close. Region select + Clear Selection always."""
+        """Floating: opts + clear + Add. Docked: opts + clear + region + Send + Close."""
+        from ..dockable_plot import sync_docked_footer_bar
+
+        apply_plot_chrome_glyphs(self)
         floating = isinstance(self.window(), MedChemSpaceDialog)
         docked = self._is_docked_in_main_window()
         self._add_to_main_btn.setVisible(floating)
         self._send_window_btn.setVisible(docked)
         self._close_plot_btn.setVisible(docked)
+        sync_docked_footer_bar(self, docked=docked)
 
     def event(self, event):  # noqa: N802 — Qt API name
         if event.type() == QEvent.ParentChange:
@@ -394,6 +536,9 @@ class MedChemPlotPanel(QWidget):
 
     def _on_color_column_changed(self, _index: int = 0) -> None:
         self._update_spectrum_controls()
+        self._push_plot_figure()
+
+    def _on_titles_changed(self) -> None:
         self._push_plot_figure()
 
     def _on_size_column_changed(self, _index: int = 0) -> None:
@@ -589,9 +734,7 @@ class MedChemPlotPanel(QWidget):
             wlogp_col=wlogp_col,
         )
         app = self.parent_app
-        id_col = resolve_descriptor_column(
-            app.headers, ("id", "name", "compound", "compound name")
-        )
+        id_col = resolve_descriptor_column(app.headers, ("id", "name", "compound", "compound name"))
         src = self.struct_src_combo.currentText()
         self._cancel_snapshot_collect()
         gen = self._snapshot_collect_gen
@@ -911,6 +1054,7 @@ class MedChemPlotPanel(QWidget):
                     size_label=size_label,
                     size_min_px=size_min_px,
                     size_max_px=size_max_px,
+                    **self._titles.title_overrides(),
                 )
             else:
                 fig = build_boiled_egg_figure(
@@ -924,6 +1068,7 @@ class MedChemPlotPanel(QWidget):
                     size_label=size_label,
                     size_min_px=size_min_px,
                     size_max_px=size_max_px,
+                    **self._titles.title_overrides(),
                 )
             self._plot_view.push_figure(fig, self._plot_dataset.oids)
             self._update_spectrum_controls()
@@ -939,7 +1084,9 @@ class MedChemPlotPanel(QWidget):
     def _on_select_in_triangle(self) -> None:
         self._select_region_oids(oids_in_golden_triangle_region, region_label="triangle")
 
-    def _select_region_oids(self, picker: Callable[[MedChemSpaceDataset], list[int]], *, region_label: str) -> None:
+    def _select_region_oids(
+        self, picker: Callable[[MedChemSpaceDataset], list[int]], *, region_label: str
+    ) -> None:
         if self.parent_app is None:
             return
         if self._full_dataset is None or not self._full_dataset.points:
@@ -963,6 +1110,29 @@ class MedChemPlotPanel(QWidget):
                 self._window_title,
                 f"No table rows matched the {region_label} region selection.",
             )
+
+
+def medchem_plot_panel_from_session(
+    parent_app: ChemicalTableApp | None,
+    state: dict | None,
+) -> MedChemPlotPanel:
+    plot_kind: MedChemPlotKind = "boiled_egg"
+    window_title = "BOILED-Egg"
+    if isinstance(state, dict):
+        pk = state.get("plot_kind")
+        if pk in ("boiled_egg", "golden_triangle"):
+            plot_kind = pk
+        wt = state.get("window_title")
+        if isinstance(wt, str) and wt.strip():
+            window_title = wt.strip()
+    panel = MedChemPlotPanel(
+        parent_app,
+        plot_kind=plot_kind,
+        window_title=window_title,
+        session_restore=True,
+    )
+    panel.apply_session_state(state)
+    return panel
 
 
 class MedChemSpaceDialog(QDialog):
@@ -1002,6 +1172,4 @@ class MedChemSpaceDialog(QDialog):
         make_window_minimizable(self)
 
     def closeEvent(self, event) -> None:  # noqa: N802 — Qt API name
-        if self._force_close:
-            self._force_close = False
-        event.accept()
+        handle_floating_plot_close_event(self, event)

@@ -425,6 +425,9 @@ class IngestRenderMixin:
         self._ingest_prep_before_reveal = False
         self._set_ingest_loading(False)
         self._table_stack.setCurrentIndex(1)
+        finish_clean = getattr(self, "_finish_session_clean_if_pending", None)
+        if callable(finish_clean):
+            finish_clean()
         app = QApplication.instance()
         if app is not None:
             app.processEvents(QEventLoop.ExcludeUserInputEvents)
@@ -819,6 +822,9 @@ class IngestRenderMixin:
 
     def _resize_columns_after_render2d(self, pix_target: str | None) -> None:
         """Set structure / pixmap column width from depict size (O(1), safe for huge tables)."""
+        # Session restore owns column widths until chrome is fully reapplied.
+        if getattr(self, "_pending_session_table_layout", None):
+            return
         pad = STRUCTURE_COLUMN_HORIZONTAL_PADDING
         need = max(1, int(structure_depiict_width()) + pad)
         try:

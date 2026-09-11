@@ -26,6 +26,7 @@ from plotly import graph_objects as go
 from ..dimensionality_reduction import DimensionReductionResult
 from ..plot_color import DEFAULT_PLOT_COLORSCALE, attach_marker_size_legend, scatter_marker_from_column_values
 from ..ui.plotly_html import finalize_plot_legend
+from .dockable_plot import resolve_plot_title_text
 
 
 def dimension_reduction_result_with_color(
@@ -59,6 +60,9 @@ def build_dimension_reduction_figure(
     size_label: str | None = None,
     size_min_px: float | None = None,
     size_max_px: float | None = None,
+    plot_title: str = "",
+    xaxis_title: str = "",
+    yaxis_title: str = "",
 ) -> go.Figure:
     if result.method == "pca":
         x_label, y_label = "PC1", "PC2"
@@ -68,6 +72,9 @@ def build_dimension_reduction_figure(
         x_label, y_label = "SOM column", "SOM row"
     else:
         x_label, y_label = "t-SNE 1", "t-SNE 2"
+    title = resolve_plot_title_text(plot_title, result.title or "")
+    x_label = resolve_plot_title_text(xaxis_title, x_label)
+    y_label = resolve_plot_title_text(yaxis_title, y_label)
     marker_kwargs: dict[str, Any] = {
         "color_label": result.color_label,
         "colorscale": colorscale,
@@ -99,7 +106,7 @@ def build_dimension_reduction_figure(
         ]
     )
     fig.update_layout(
-        title=result.title,
+        title=title or None,
         xaxis_title=x_label,
         yaxis_title=y_label,
         template="plotly_white",

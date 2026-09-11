@@ -86,7 +86,18 @@ from PyQt5.QtWidgets import (
 )
 from plotly import graph_objects as go
 
-from .dockable_plot import make_plot_options_dialog, show_plot_options_dialog
+from .dockable_plot import (
+    apply_plot_chrome_glyphs,
+    handle_floating_plot_close_event,
+    make_add_to_main_button,
+    make_clear_selection_button,
+    make_close_plot_button,
+    make_plot_options_button,
+    make_plot_options_dialog,
+    make_send_window_button,
+    request_close_plot_widget,
+    show_plot_options_dialog,
+)
 from ..plot_analysis import (
     FIT_NONE,
     FIT_TRUNCATED_GAUSSIAN,
@@ -366,6 +377,8 @@ class PlotWidget(QWidget):
         self._radar_oids: list[int] = []
 
         root = QVBoxLayout(self)
+        # Top inset matches root spacing so floating (chrome→plot) and docked
+        # (pane header→plot) share the same gap under the toolbar.
         root.setContentsMargins(4, 4, 4, 4)
         root.setSpacing(4)
 
@@ -693,36 +706,37 @@ class PlotWidget(QWidget):
 
         root.addWidget(self.web, 1)
 
-        foot = QHBoxLayout()
-        foot.setContentsMargins(0, 4, 0, 0)
-        self._add_to_main_btn = QPushButton("Add to Main Window")
-        self._add_to_main_btn.setAutoDefault(False)
-        self._add_to_main_btn.setDefault(False)
-        self._add_to_main_btn.setToolTip(
-            "Dock this plot beside the table in the main window (like the filter panel)."
+        self._footer_bar = QWidget(self)
+        self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        foot = QHBoxLayout(self._footer_bar)
+        foot.setContentsMargins(0, 0, 0, 0)
+        foot.setSpacing(4)
+        self._opts_btn = make_plot_options_button(
+            self,
+            tooltip="Configure plot type, axes, titles, color, fit, and statistics.",
+        )
+        self._opts_btn.clicked.connect(self._open_plot_options)
+        foot.addWidget(self._opts_btn)
+        self._clear_sel_btn = make_clear_selection_button(self)
+        self._clear_sel_btn.clicked.connect(self._on_clear_selection_clicked)
+        foot.addWidget(self._clear_sel_btn)
+        foot.addStretch(1)
+        self._add_to_main_btn = make_add_to_main_button(
+            self,
+            tooltip="Dock this plot beside the table in the main window (like the filter panel).",
         )
         self._add_to_main_btn.clicked.connect(self._add_to_main_window)
         foot.addWidget(self._add_to_main_btn)
-        self._send_window_btn = QPushButton("Send to New Window")
-        self._send_window_btn.setToolTip("Open this docked plot in a separate floating window.")
+        self._send_window_btn = make_send_window_button(
+            self,
+            tooltip="Open this docked plot in a separate floating window.",
+        )
         self._send_window_btn.clicked.connect(self._send_to_new_window)
         foot.addWidget(self._send_window_btn)
-        self._close_plot_btn = QPushButton("Close Plot")
-        self._close_plot_btn.setToolTip(
-            "Close this docked plot and free the panel so another plot can be docked."
-        )
+        self._close_plot_btn = make_close_plot_button(self)
         self._close_plot_btn.clicked.connect(self._close_docked_plot)
         foot.addWidget(self._close_plot_btn)
-        self._opts_btn = QPushButton("Plot Options")
-        self._opts_btn.setToolTip("Configure plot type, axes, titles, color, fit, and statistics.")
-        self._opts_btn.clicked.connect(self._open_plot_options)
-        foot.addWidget(self._opts_btn)
-        foot.addStretch(1)
-        self._clear_sel_btn = QPushButton("Clear Selection")
-        self._clear_sel_btn.setToolTip("Clear the current table and plot selection.")
-        self._clear_sel_btn.clicked.connect(self._on_clear_selection_clicked)
-        foot.addWidget(self._clear_sel_btn)
-        root.addLayout(foot)
+        root.insertWidget(0, self._footer_bar)
         self._sync_footer_chrome()
         self.setMinimumWidth(self.embedded_minimum_width())
 
@@ -784,8 +798,7 @@ class PlotWidget(QWidget):
             self.parent_app.undock_plot_to_window(self)
 
     def _close_docked_plot(self) -> None:
-        if self.parent_app is not None:
-            self.parent_app.close_docked_plot(self)
+        request_close_plot_widget(self)
 
     def _is_docked_in_main_window(self) -> bool:
         app = self.parent_app
@@ -797,12 +810,16 @@ class PlotWidget(QWidget):
         return getattr(app, "_docked_plot_widget", None) is self
 
     def _sync_footer_chrome(self) -> None:
-        """Floating: Add to Main. Docked: Send/Close. Clear Selection always."""
+        """Floating: opts + clear + Add. Docked: opts + clear + Send + Close Plot."""
+        from .dockable_plot import sync_docked_footer_bar
+
+        apply_plot_chrome_glyphs(self)
         floating = isinstance(self.window(), PlotDialog)
         docked = self._is_docked_in_main_window()
         self._add_to_main_btn.setVisible(floating)
         self._send_window_btn.setVisible(docked)
         self._close_plot_btn.setVisible(docked)
+        sync_docked_footer_bar(self, docked=docked)
 
     def _on_clear_selection_clicked(self) -> None:
         """Clear table and plot point selection from the footer button."""
@@ -2770,6 +2787,4 @@ class PlotDialog(QDialog):
         super().keyPressEvent(event)
 
     def closeEvent(self, event):
-        if self._force_close:
-            self._force_close = False
-        event.accept()
+        handle_floating_plot_close_event(self, event)
