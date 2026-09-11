@@ -22,8 +22,8 @@ from molmanager import science_citations as sc
 
 
 def test_plain_citations_contain_dois() -> None:
-    assert "10.3389/fchem.2022.866585" in sc.PKASOLVER
-    assert "10.1186/s13321-019-0336-9" in sc.DIMORPHITE_DL
+    assert "10.1021/jacsau.4c00271" in sc.UNIPKA
+    assert "10.1021/acs.jcim.1c00075" in sc.MOLGPKA
     assert "10.1021/ci034243x" in sc.ESOL_DELANEY
     assert "10.1021/cn100008c" in sc.WAGER_CNS_MPO
     assert "10.1186/s13321-023-00772-2" in sc.EASYDOCK
@@ -37,12 +37,12 @@ def test_plain_citations_contain_dois() -> None:
 def test_descriptor_footer_html_links() -> None:
     html = sc.descriptor_dialog_footer_html()
     assert "doi.org" in html
-    assert "Mayr" in html
+    assert "Luo" in html
 
 
 def test_descriptor_checkbox_citations() -> None:
     assert sc.descriptor_checkbox_citation_html("LOGD74") is not None
-    assert "Mayr" in sc.descriptor_checkbox_citation_html("LOGD74") or ""
+    assert "Luo" in sc.descriptor_checkbox_citation_html("LOGD74") or ""
     assert sc.descriptor_checkbox_citation_html("FP_Pharm2D_Gobbi") is not None
     assert sc.descriptor_checkbox_citation_html("AB_MPS") is not None
     assert "Shultz" in (sc.descriptor_checkbox_citation_html("AB_MPS") or "")

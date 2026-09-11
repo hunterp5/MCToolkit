@@ -32,9 +32,7 @@ dependencies = [
 [project.optional-dependencies]
 # ML extras expect a matching PyTorch stack (see requirements.txt / install_pytorch_pka.*).
 pka = [
-    "pkasolver @ git+https://github.com/mayrf/pkasolver.git",
-    "torch-geometric==2.0.1",
-    "svgutils",
+    "unipkainfer>=0.2.0",
 ]
 permeability = [
     "chemprop>=2.1.0,<2.3",
@@ -64,6 +62,7 @@ molmanager = [
     "ui/static/*",
     "resources/README.md",
     "resources/help/**/*.md",
+    "resources/unipka/**",
     "resources/models/**/README.md",
     "resources/models/**/.gitkeep",
     "resources/bin/**/.gitkeep",

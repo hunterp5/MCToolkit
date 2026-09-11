@@ -43,7 +43,7 @@ from .scope import selection_scope_checked
 
 
 class ProtomerGeneratorDialog(QDialog):
-    """Enumerate protomers from pkasolver microstates and estimate populations at a target pH."""
+    """Enumerate protomers from a Uni-pKa ionization ensemble and estimate populations at a target pH."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -203,8 +203,8 @@ class ProtomerGeneratorDialog(QDialog):
         self.parent_app._begin_tool_progress("Generate protomers", n)
         self.parent_app.process_queue.enqueue(
             f"Generate protomers ({n} molecules)",
-            lambda ev, r=rows, ph=pH, ws=self.parent_app.signals, ps=self._prot_signals, st=prog: ProtomerGeneratorWorker(
-                r, ph, ws, ps, cancel_event=ev, progress_state=st
+            lambda ev, r=rows, ph=pH, ws=self.parent_app.signals, ps=self._prot_signals, st=prog: (
+                ProtomerGeneratorWorker(r, ph, ws, ps, cancel_event=ev, progress_state=st)
             ),
         )
 
@@ -269,6 +269,8 @@ class ProtomerGeneratorDialog(QDialog):
     def _add_selected_to_main(self) -> None:
         sel = {i.row() for i in self.results_table.selectedIndexes()}
         if not sel:
-            QMessageBox.information(self, "Generate Protomers", "Select one or more rows in the results table.")
+            QMessageBox.information(
+                self, "Generate Protomers", "Select one or more rows in the results table."
+            )
             return
         self._add_rows_to_main(sel)

@@ -40,7 +40,7 @@ from .scope import selection_scope_checked
 
 
 class PKaPredictorDialog(QDialog):
-    """Predict microstate pKa values (pkasolver) from a structure column or a SMILES string."""
+    """Predict macro pKa values (Uni-pKa) from a structure column or a SMILES string."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -96,7 +96,7 @@ class PKaPredictorDialog(QDialog):
         self.most_basic_only_cb = QCheckBox("Only calculate most basic pKa")
         self.most_basic_only_cb.setToolTip(
             "When checked, write a single value: the highest predicted pKa (strongest base / "
-            "most basic ionization step). Otherwise all microstate pKas are listed."
+            "most basic ionization step). Otherwise all macro pKas are listed."
         )
         self.most_basic_only_cb.toggled.connect(self._on_most_basic_toggled)
         root.addWidget(self.most_basic_only_cb)
@@ -196,8 +196,16 @@ class PKaPredictorDialog(QDialog):
         self.parent_app._begin_tool_progress("pKa prediction", n)
         self.parent_app.process_queue.enqueue(
             f"pKa prediction ({n} molecules)",
-            lambda ev, r=rows, ws=self.parent_app.signals, ps=pka_signals, mb=most_basic, ma=most_acidic, st=prog: PKaPredictorWorker(
-                r, ws, ps, cancel_event=ev, most_basic_only=mb, most_acidic_only=ma, progress_state=st
+            lambda ev, r=rows, ws=self.parent_app.signals, ps=pka_signals, mb=most_basic, ma=most_acidic, st=prog: (
+                PKaPredictorWorker(
+                    r,
+                    ws,
+                    ps,
+                    cancel_event=ev,
+                    most_basic_only=mb,
+                    most_acidic_only=ma,
+                    progress_state=st,
+                )
             ),
         )
         self.close()

@@ -21,18 +21,17 @@ Canonical citations (plain text, copy-paste friendly) live in ``molmanager.scien
 * **CNS MPO** — Wager et al., ACS Chem. Neurosci. 2010 (doi:10.1021/cn100008c); Table 1 / PMC3368654.
 * **AB-MPS** — Shultz et al., J. Med. Chem. 2018 (doi:10.1021/acs.jmedchem.7b00717); |cLogD7.4 − 3| + NAR + NRB.
 * **ESOL intrinsic log S** — Delaney, J. Chem. Inf. Comput. Sci. 2004 (doi:10.1021/ci034243x).
-* **pkasolver microstates** — Mayr et al., Front. Chem. 2022 (doi:10.3389/fchem.2022.866585); GitHub mayrf/pkasolver.
-* **Dimorphite-DL** (inside pkasolver) — Ropp et al., J. Cheminform. 2019 (doi:10.1186/s13321-019-0336-9).
+* **Uni-pKa microstates** — Luo et al., JACS Au 2024 (doi:10.1021/jacsau.4c00271); runtime unipkainfer.
+* **MolGpKa SMARTS** (Uni-pKa enumerator templates) — Pan et al., J. Chem. Inf. Model. 2021
+  (doi:10.1021/acs.jcim.1c00075).
 
-When pkasolver microstates are available (``pkasolver_descriptor_support``), LogD 7.4, LogS 7.4, and the
+When a Uni-pKa ionization ensemble is available (``molmanager.ionization``), LogD 7.4, LogS 7.4, and the
 CNS MPO cLogD / pKa legs use those predictions plus RDKit ``Crippen.MolLogP``; otherwise cLogD / pKa fall back
-to simple heuristics. LogD 7.4 and LogS 7.4 prefer pkasolver microstates and fall back to heuristics when
-none are returned. Neutral fractions at pH 7.4 reuse the
-same Henderson–Hasselbalch protomer pooling as ``estimate_protomer_populations_from_states`` (independent
-sites; approximate).
+to simple heuristics. LogD 7.4 and LogS 7.4 prefer Uni-pKa Boltzmann populations at pH 7.4 and fall back to
+heuristics when none are returned.
 
 **LogS intrinsic** uses the original Delaney ESOL equation (log10 mol L⁻¹). **LogS 7.4** augments that with
-−log10(f_neutral) from pkasolver populations (same f_neutral as LogD 7.4).
+−log10(f_neutral) from Uni-pKa populations (same f_neutral as LogD 7.4).
 """
 
 from __future__ import annotations
@@ -42,7 +41,7 @@ import math
 from rdkit import Chem
 from rdkit.Chem import Crippen, Descriptors, Lipinski, inchi, rdMolDescriptors
 
-from molmanager.pkasolver_descriptor_support import (
+from molmanager.ionization import (
     logd74_from_microstates,
     logs74_from_microstates,
     microstates_for_mol,
@@ -94,7 +93,7 @@ def ro5_pass(mol: Chem.Mol) -> str:
 
 
 def _approx_pka_most_basic(mol: Chem.Mol) -> float:
-    """Rough conjugate-acid pKa proxy when pkasolver microstates are unavailable."""
+    """Rough conjugate-acid pKa proxy when a Uni-pKa ensemble is unavailable."""
     n_n = sum(1 for a in mol.GetAtoms() if a.GetAtomicNum() == 7)
     if n_n == 0:
         return 2.0
@@ -131,9 +130,9 @@ def esol_logS_intrinsic(mol: Chem.Mol) -> float:
 
 def logd74_value(mol: Chem.Mol, states: list | None = None) -> float:
     """
-    LogD 7.4 from RDKit cLogP and pkasolver microstates when available.
+    LogD 7.4 from RDKit cLogP and a Uni-pKa ionization ensemble when available.
 
-    If pkasolver returns no microstates (e.g. salts, quaternary centers), falls back to the
+    If Uni-pKa returns no ensemble (e.g. salts, missing extra), falls back to the
     same monoprotic-base heuristic used for CNS MPO cLogD.
     """
     clogp = float(Crippen.MolLogP(mol))
@@ -145,7 +144,7 @@ def logd74_value(mol: Chem.Mol, states: list | None = None) -> float:
 
 def logs74_value(mol: Chem.Mol, states: list | None = None) -> float:
     """
-    Approximate aqueous log10(S / mol L⁻¹) at pH 7.4 from ESOL intrinsic log S and pkasolver states.
+    Approximate aqueous log10(S / mol L⁻¹) at pH 7.4 from ESOL intrinsic log S and Uni-pKa states.
 
     Without microstates, returns the intrinsic ESOL value (no ionization correction).
     """
@@ -173,8 +172,8 @@ def cns_mpo_score(mol: Chem.Mol, states: list | None = None) -> float:
     """
     Composite CNS MPO-style score (0–6) from Wager 2010 Table 1 desirability functions.
 
-    If ``states`` is omitted, pkasolver is attempted once per call; pass precomputed microstates
-    from a shared row context when computing multiple pkasolver-backed columns for one molecule.
+    If ``states`` is omitted, Uni-pKa is attempted once per call; pass a precomputed ensemble
+    from a shared row context when computing multiple ionization-backed columns for one molecule.
     """
     clogp = float(Crippen.MolLogP(mol))
     st = states if states is not None else microstates_for_mol(mol)

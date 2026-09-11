@@ -22,7 +22,7 @@ import importlib
 from typing import Any
 
 # ``chemistry_tools`` pulls in ``medchem_descriptors`` and must not load during ``workers``
-# package init (e.g. ``pkasolver_descriptor_support`` imports ``workers.pka_predictor``).
+# package init (e.g. ``ionization`` imports stay lazy from descriptor callables).
 _CHEMISTRY_TOOLS_EXPORTS = frozenset(
     {
         "CalcWorker",

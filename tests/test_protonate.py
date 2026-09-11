@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Dominant protomer selection from pkasolver microstates."""
+"""Dominant protomer selection from ionization ensembles / HA–A− pairs."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from types import SimpleNamespace
 
 from rdkit import Chem
 
+from molmanager.ionization import LN10, build_ensemble_from_scored
 from molmanager.workers.protonate_worker import (
     _dominant_smiles_from_microstates,
     dominant_results_from_microstate_cache,
@@ -35,6 +36,18 @@ def _acetic_microstates():
     return [
         SimpleNamespace(pka=4.76, protonated_mol=ha, deprotonated_mol=a, ph7_mol=a),
     ]
+
+
+def _acetic_ensemble():
+    ha = Chem.MolFromSmiles("CC(=O)O")
+    a = Chem.MolFromSmiles("CC(=O)[O-]")
+    assert ha is not None and a is not None
+    return build_ensemble_from_scored(
+        [
+            (0, "CC(=O)O", ha, 0.0),
+            (-1, "CC(=O)[O-]", a, LN10 * 4.76),
+        ]
+    )
 
 
 def test_dominant_protomer_acetic_acid_at_ph_7_4():
@@ -69,3 +82,11 @@ def test_dominant_results_replicate_across_duplicate_oids():
     assert len(rows) == 2
     assert {oid for oid, _smi, _pct in rows} == {10, 20}
     assert all(pct > 90.0 for _oid, _smi, pct in rows)
+
+
+def test_dominant_protomer_from_unipka_ensemble_at_ph_7_4():
+    smi, pct = _dominant_smiles_from_microstates(_acetic_ensemble(), 7.4)
+    mol = Chem.MolFromSmiles(smi)
+    assert mol is not None
+    assert Chem.GetFormalCharge(mol) == -1
+    assert pct > 90.0

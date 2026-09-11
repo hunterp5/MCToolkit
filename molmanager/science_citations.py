@@ -23,18 +23,18 @@ from __future__ import annotations
 
 # --- Plain-text blocks (for logs, tooltips, or copying) ---------------------------------
 
-PKASOLVER = (
-    "Microstate pKa (pkasolver): Mayr, F.; Wieder, M.; Wieder, O.; Langer, T. Improving Small "
-    "Molecule pKa Prediction Using Transfer Learning With Graph Neural Networks. Front. Chem. "
-    "2022, 10, 866585. https://doi.org/10.3389/fchem.2022.866585 — "
-    "https://github.com/mayrf/pkasolver"
+UNIPKA = (
+    "Microstate pKa (Uni-pKa): Luo, Y.; Liu, Y.; Peng, J.; Tang, H.; Nie, H.; Zhong, W.; "
+    "Chen, X.; Zheng, S. Toward Universal Cell Environment pKa Prediction via Multi-task "
+    "Learning. JACS Au 2024, 4, 1721. https://doi.org/10.1021/jacsau.4c00271 — "
+    "https://github.com/dptech-corp/Uni-pKa — runtime https://pypi.org/project/unipkainfer/"
 )
 
-DIMORPHITE_DL = (
-    "Ionization-state enumeration (Dimorphite-DL, used inside pkasolver): Ropp, P. J.; Kaminsky, "
-    "J. C.; Yablonski, S.; Durrant, J. D. Dimorphite-DL: an open-source program for enumerating the "
-    "ionization states of drug-like small molecules. J. Cheminform. 2019, 11, 14. "
-    "https://doi.org/10.1186/s13321-019-0336-9"
+MOLGPKA = (
+    "Ionization-state enumeration (MolGpKa SMARTS templates used by Uni-pKa): Pan, X.; "
+    "Wang, H.; Li, C.; Zhang, J. Z. H.; Ji, C. MolGpKa: A Web Server for Small Molecule "
+    "pKa Prediction Using a Graph-Convolutional Neural Network. J. Chem. Inf. Model. 2021, "
+    "61 (7), 3159–3165. https://doi.org/10.1021/acs.jcim.1c00075"
 )
 
 ESOL_DELANEY = (
@@ -52,9 +52,11 @@ WAGER_CNS_MPO = (
 
 LOGD_LOGS_ION = (
     "LogD 7.4 and LogS 7.4 at pH 7.4: RDKit Wildman–Crippen log P (rdkit.Chem.Crippen.MolLogP) "
-    "combined with the mole fraction of net-neutral protomer states at pH 7.4 from pkasolver "
-    "microstates, using the same independent-site Henderson–Hasselbalch pooling as "
-    "Tools → Prepare Structures → Protonate Structures → Generate Protomers (approximate; not Schrödinger Epik-grade)."
+    "combined with the mole fraction of net-neutral protomer states at pH 7.4 from Uni-pKa "
+    "ensemble Boltzmann populations (Luo et al., JACS Au 2024), the same weights as "
+    "Tools → Prepare Structures → Protonate Structures → Generate Protomers. "
+    "log D = clogP + log10(f_neutral). Re-running after the Uni-pKa switch is a new method, "
+    "not a refresh of previous pkasolver values."
 )
 
 PHARM2D_GOBBI = (
@@ -124,12 +126,12 @@ def descriptor_checkbox_citation_html(internal_key: str) -> str | None:
     key = (internal_key or "").strip()
     citations: dict[str, str] = {
         "LOGD74": (
-            '<a href="https://doi.org/10.3389/fchem.2022.866585">Mayr et al., 2022</a> '
-            "(pkasolver) + RDKit log P / neutral fraction at pH 7.4"
+            '<a href="https://doi.org/10.1021/jacsau.4c00271">Luo et al., 2024</a> '
+            "(Uni-pKa) + RDKit log P / neutral fraction at pH 7.4"
         ),
         "LOGS74": (
-            '<a href="https://doi.org/10.3389/fchem.2022.866585">Mayr et al., 2022</a> '
-            "(pkasolver) + RDKit log P / neutral fraction at pH 7.4"
+            '<a href="https://doi.org/10.1021/jacsau.4c00271">Luo et al., 2024</a> '
+            "(Uni-pKa) + RDKit log P / neutral fraction at pH 7.4"
         ),
         "LOGS_ESOL": (
             '<a href="https://doi.org/10.1021/ci034243x">Delaney, J. Chem. Inf. Comput. Sci. 2004</a> '
@@ -160,18 +162,21 @@ def descriptor_dialog_footer_html() -> str:
     return (
         "<small><b>Further reading — methods not limited to a single RDKit descriptor call</b><br>"
         "<b>pKa, LogD 7.4, LogS 7.4, CNS MPO (pKa / logD legs):</b> "
-        '<a href="https://doi.org/10.3389/fchem.2022.866585">Mayr et al., Front. Chem. 2022</a>; '
-        '<a href="https://github.com/mayrf/pkasolver">pkasolver</a>.<br>'
-        "<b>Ionization enumeration (inside pkasolver):</b> "
-        '<a href="https://doi.org/10.1186/s13321-019-0336-9">Ropp et al., J. Cheminform. 2019</a> '
-        "(Dimorphite-DL).<br>"
+        '<a href="https://doi.org/10.1021/jacsau.4c00271">Luo et al., JACS Au 2024</a>; '
+        '<a href="https://github.com/dptech-corp/Uni-pKa">Uni-pKa</a> '
+        '(runtime <a href="https://pypi.org/project/unipkainfer/">unipkainfer</a>).<br>'
+        "<b>Ionization enumeration (Uni-pKa SMARTS):</b> "
+        '<a href="https://doi.org/10.1021/acs.jcim.1c00075">Pan et al., J. Chem. Inf. Model. 2021</a> '
+        "(MolGpKa templates).<br>"
         "<b>LogS intrinsic (ESOL):</b> "
         '<a href="https://doi.org/10.1021/ci034243x">Delaney, J. Chem. Inf. Comput. Sci. 2004</a>.<br>'
         "<b>CNS MPO score:</b> "
         '<a href="https://doi.org/10.1021/cn100008c">Wager et al., ACS Chem. Neurosci. 2010</a> '
         '(<a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3368654/">PMC3368654</a>).<br>'
         "<b>LogD / LogS at pH 7.4:</b> RDKit <code>Crippen.MolLogP</code> + neutral protomer fractions "
-        "from pkasolver (same HH-style pooling as <i>Tools → Prepare Structures → Protonate Structures → Generate Protomers</i>).<br>"
+        "from Uni-pKa Boltzmann populations at pH 7.4 (same ensemble as "
+        "<i>Tools → Prepare Structures → Protonate Structures → Generate Protomers</i>). "
+        "Re-running these columns after switching from pkasolver is a new method, not a refresh.<br>"
         "<b>QED:</b> "
         '<a href="https://doi.org/10.1038/nchem.1243">Bickerton et al., Nat. Chem. 2012</a> (RDKit QED).<br>'
         "<b>Ro5:</b> Lipinski et al., Adv. Drug Deliv. Rev. 1997 (RDKit Lipinski counts).<br>"
@@ -182,10 +187,14 @@ def descriptor_dialog_footer_html() -> str:
 def pka_dialog_footer_html() -> str:
     """Rich text for the Predict pKa dialog."""
     return (
-        "<small><b>Method</b>: neural-network microstate pKas from "
-        '<a href="https://doi.org/10.3389/fchem.2022.866585">Mayr et al., Front. Chem. 2022</a> '
-        '(<a href="https://github.com/mayrf/pkasolver">pkasolver</a>); ionization states via '
-        '<a href="https://doi.org/10.1186/s13321-019-0336-9">Dimorphite-DL</a> (Ropp et al., 2019).</small>'
+        "<small><b>Method</b>: Uni-pKa free-energy microstates from "
+        '<a href="https://doi.org/10.1021/jacsau.4c00271">Luo et al., JACS Au 2024</a> '
+        '(<a href="https://github.com/dptech-corp/Uni-pKa">Uni-pKa</a> / '
+        '<a href="https://pypi.org/project/unipkainfer/">unipkainfer</a>); ionization ensembles via '
+        '<a href="https://doi.org/10.1021/acs.jcim.1c00075">MolGpKa SMARTS</a> (Pan et al., 2021). '
+        "Macro pKa = (G_base − G_acid) / ln(10) for β-scaled G. First run downloads fold weights "
+        "from Hugging Face (<code>unipka-download-model</code> / optional <code>model_dir</code>). "
+        "Re-running after the pkasolver era is a new method, not a refresh.</small>"
     )
 
 
@@ -258,10 +267,10 @@ def systematic_conformations_dialog_footer_html() -> str:
 def protomer_dialog_footer_html() -> str:
     """Rich text appended under the protomer generator hint."""
     return (
-        "<small><b>Microstate pKas</b>: "
-        '<a href="https://doi.org/10.3389/fchem.2022.866585">Mayr et al., 2022</a> / pkasolver. '
-        "<b>Population model</b>: independent-site Henderson–Hasselbalch over those microstates "
-        "(same pooling code path as LogD 7.4 / LogS 7.4 descriptors).</small>"
+        "<small><b>Ionization ensemble</b>: "
+        '<a href="https://doi.org/10.1021/jacsau.4c00271">Luo et al., 2024</a> / Uni-pKa. '
+        "<b>Population model</b>: Boltzmann weights of β-scaled free energies at the dialog pH "
+        "(same ensemble as LogD 7.4 / LogS 7.4 descriptors).</small>"
     )
 
 

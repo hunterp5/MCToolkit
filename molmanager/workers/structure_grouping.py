@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Deduplicate table rows by chemical structure for pkasolver-backed tools."""
+"""Deduplicate table rows by chemical structure for ionization-backed tools."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from ..utils import mol_to_canonical_smiles
 
 
 def structure_key(mol: Chem.Mol) -> str:
-    """Stable key for deduplicating pkasolver work across rows with the same structure."""
+    """Stable key for deduplicating ionization work across rows with the same structure."""
     s = mol_to_canonical_smiles(mol)
     if s:
         return s

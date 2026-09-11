@@ -35,7 +35,7 @@ from molmanager.medchem_descriptors import (
     mol_net_formal_charge,
     ro5_pass,
 )
-from molmanager.pkasolver_descriptor_support import int_fns_need_pkasolver
+from molmanager.ionization import int_fns_need_ionization
 from molmanager.workers.chemistry_tools import descriptor_callable_for_int_fn
 
 
@@ -95,11 +95,11 @@ def test_descriptor_dispatch_custom_ids(_mock_ms: object) -> None:
     assert isinstance(descriptor_callable_for_int_fn("LOGS_ESOL", cache)(mol), float)
 
 
-def test_int_fns_need_pkasolver() -> None:
-    assert int_fns_need_pkasolver(("MolWt", "LOGD74"))
-    assert int_fns_need_pkasolver(("LOGS74",))
-    assert int_fns_need_pkasolver(("CNS_MPO",))
-    assert not int_fns_need_pkasolver(("QED", "MolWt", "LOGS_ESOL"))
+def test_int_fns_need_ionization() -> None:
+    assert int_fns_need_ionization(("MolWt", "LOGD74"))
+    assert int_fns_need_ionization(("LOGS74",))
+    assert int_fns_need_ionization(("CNS_MPO",))
+    assert not int_fns_need_ionization(("QED", "MolWt", "LOGS_ESOL"))
 
 
 def test_logd74_value_heuristic_when_no_microstates() -> None:

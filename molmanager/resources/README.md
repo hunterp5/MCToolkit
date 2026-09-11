@@ -21,7 +21,7 @@ Override the search directory with environment variable `MOLMANAGER_BUNDLE_DIR`.
 | **AutoDock Vina / smina** | Academic/free; small binary | [vina.scripps.edu](https://vina.scripps.edu) — copy `vina` / `vina.exe` (or `smina`) into `bin/<platform>/` |
 | **Open Babel (`obabel`)** | GPL; Confab systematic conformers | `pip install openbabel` (project dependency). Systematic defaults to the wheel’s `openbabel/bin/obabel`. Optional: copy `obabel` into `bin/<platform>/` to override. |
 
-Python dependencies (RDKit, PyQt5, PyTorch, pkasolver, Chemprop, Meeko, pytest) are installed via `pip install -r requirements.txt` and `pip install -e .` — see root **README** and **docs/PACKAGING.md**.
+Python dependencies (RDKit, PyQt5, PyTorch, unipkainfer, Chemprop, Meeko, pytest) are installed via `pip install -r requirements.txt` and `pip install -e .` — see root **README** and **docs/PACKAGING.md**.
 
 ## GNN-MTL permeability model (optional, not in git)
 

@@ -14,17 +14,15 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Background pKa prediction using pkasolver (mayrf/pkasolver).
+"""Background pKa prediction using Uni-pKa (Luo et al., JACS Au 2024).
 
-**pkasolver** — graph neural network microstate pKas: Mayr, F.; Wieder, M.; Wieder, O.; Langer, T.
-*Improving Small Molecule pKa Prediction Using Transfer Learning With Graph Neural Networks.*
-Front. Chem. 2022, 10, 866585. https://doi.org/10.3389/fchem.2022.866585
-Code: https://github.com/mayrf/pkasolver
+**Uni-pKa** — Luo, Y.; Liu, Y.; Peng, J.; Tang, H.; Nie, H.; Zhong, W.; Chen, X.;
+Zheng, S. Toward Universal Cell Environment pKa Prediction via Multi-task Learning.
+JACS Au 2024, 4, 1721. https://doi.org/10.1021/jacsau.4c00271
+Code: https://github.com/dptech-corp/Uni-pKa — runtime: unipkainfer.
 
-**Dimorphite-DL** (protonation-state enumeration inside pkasolver): Ropp, P. J.; et al.
-*J. Cheminform.* 2019, 11, 14. https://doi.org/10.1186/s13321-019-0336-9
-
-Shorter copy-paste block: ``molmanager.science_citations.PKASOLVER`` and ``.DIMORPHITE_DL``.
+Enumeration uses MolGpKa-derived SMARTS (Pan et al., J. Chem. Inf. Model. 2021).
+Shorter copy-paste block: ``molmanager.science_citations.UNIPKA``.
 """
 
 from __future__ import annotations
@@ -32,51 +30,49 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
-import sys
 import threading
 import time
-import types
-import warnings
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 
+from PyQt5 import sip
+from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+from rdkit import Chem
+
+from molmanager.ionization import (
+    format_pka_values,
+    pka_values_from_states,
+    pin_unipka_torch_threads,
+    predict_ionization_ensemble,
+    predict_ionization_ensembles,
+    prepare_mol_for_ionization,
+    unipka_import_error,
+    unipka_use_gpu,
+)
 from .process_pool_utils import (
     application_is_shutting_down,
     register_process_pool,
     should_terminate_process_pool,
     shutdown_process_pool_executor,
 )
-
-from PyQt5 import sip
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
-from rdkit import Chem
-
 from .structure_grouping import group_rows_by_structure
 
 logger = logging.getLogger(__name__)
 
-_query_model_singleton = None
-# pkasolver / PyTorch QueryModel is not safe for concurrent use from multiple threads.
-_query_model_lock = threading.Lock()
+_unipka_lock = threading.Lock()
 
-# Per-child-process cache: the 25-model GNN ensemble costs ~0.5 s to load, so a process pool
-# must build it once per worker, not once per structure.
-_worker_query_model = None
-_worker_threads_pinned = False
-
-# Loggers that become noisy when pkasolver imports RDKit PandasTools (pandas 3.x API drift) or logs steps.
-_PKA_SUPPRESSED_LOGGER_NAMES = (
+_UNIPKA_SUPPRESSED_LOGGER_NAMES = (
     "rdkit.Chem.PandasPatcher",
     "rdkit.Chem.PandasTools",
-    "pkasolver",
-    "pkasolver.query",
+    "unipkainfer",
+    "unicoreinfer",
 )
 
 
 @contextlib.contextmanager
-def _quieter_pkasolver_dependency_loggers():
-    """Temporarily raise log levels so RDKit/pkasolver chatter does not flood the molmanager console."""
+def _quieter_unipka_loggers():
+    """Temporarily raise log levels so Uni-pKa / RDKit chatter does not flood the console."""
     saved: list[tuple[logging.Logger, int]] = []
-    for name in _PKA_SUPPRESSED_LOGGER_NAMES:
+    for name in _UNIPKA_SUPPRESSED_LOGGER_NAMES:
         lg = logging.getLogger(name)
         saved.append((lg, lg.level))
         lg.setLevel(logging.ERROR)
@@ -89,7 +85,7 @@ def _quieter_pkasolver_dependency_loggers():
 
 @contextlib.contextmanager
 def _discard_stdio():
-    """Hide pkasolver ``print`` output and Dimorphite help banners (they bypass logging)."""
+    """Hide Uni-pKa ``print`` output (it bypasses logging)."""
     with open(os.devnull, "w", encoding="utf-8") as dn:
         with contextlib.redirect_stdout(dn), contextlib.redirect_stderr(dn):
             yield
@@ -97,26 +93,14 @@ def _discard_stdio():
 
 @contextlib.contextmanager
 def _discard_stdout_only():
-    """Hide chatty ``print`` on stdout while keeping stderr for tracebacks in the console."""
+    """Hide chatty ``print`` on stdout while keeping stderr for tracebacks."""
     with open(os.devnull, "w", encoding="utf-8") as dn:
         with contextlib.redirect_stdout(dn):
             yield
 
 
-@contextlib.contextmanager
-def isolated_sys_argv_for_embedded_cli():
-    """Dimorphite-DL and similar tools parse ``sys.argv``; strip molmanager flags (e.g. ``-o file``)."""
-    old = sys.argv[:]
-    prog = old[0] if old else "python"
-    sys.argv = [prog]
-    try:
-        yield
-    finally:
-        sys.argv = old
-
-
 def _safe_emit(obj, emitter_name: str, *args) -> None:
-    """Emit on a QObject-owned signal if the C++ object still exists (avoids shutdown / close races)."""
+    """Emit on a QObject-owned signal if the C++ object still exists."""
     if obj is None:
         return
     try:
@@ -130,7 +114,9 @@ def _safe_emit(obj, emitter_name: str, *args) -> None:
         pass
 
 
-def _acquire_lock_cooperative(lock: threading.Lock, cancel_event: threading.Event | None, timeout_s: float = 0.05) -> bool:
+def _acquire_lock_cooperative(
+    lock: threading.Lock, cancel_event: threading.Event | None, timeout_s: float = 0.05
+) -> bool:
     """Acquire lock in short slices so cancellation can abort long waits."""
     while True:
         if cancel_event is not None and cancel_event.is_set():
@@ -139,214 +125,97 @@ def _acquire_lock_cooperative(lock: threading.Lock, cancel_event: threading.Even
             return True
 
 
-def _ensure_cairosvg_importable() -> None:
-    """pkasolver.query imports cairosvg at module level; stub it if native Cairo is unavailable."""
-    existing = sys.modules.get("cairosvg")
-    if existing is not None and getattr(existing, "_MOLMANAGER_CAIROSVG_STUB", False):
-        return
-    if existing is not None:
-        for name in list(sys.modules):
-            if name == "cairosvg" or name.startswith("cairosvg."):
-                del sys.modules[name]
-    try:
-        import cairosvg  # noqa: F401
-    except Exception:
-
-        def _svg2png(**_kwargs):
-            return None
-
-        stub = types.ModuleType("cairosvg")
-        stub.svg2png = _svg2png
-        stub._MOLMANAGER_CAIROSVG_STUB = True
-        sys.modules["cairosvg"] = stub
-
-
-def _pin_worker_torch_threads() -> None:
-    """
-    Pin intra-op threads to 1 inside pool children.
-
-    A process pool runs one pkasolver worker per core; letting each PyTorch model spawn its
-    default thread pool (``torch.get_num_threads()`` cores) oversubscribes the CPU and thrashes
-    caches, so parallel throughput collapses. Runs once per process.
-    """
-    global _worker_threads_pinned
-    if _worker_threads_pinned:
-        return
-    _worker_threads_pinned = True
-    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
-        os.environ.setdefault(var, "1")
-    try:
-        import torch
-
-        torch.set_num_threads(1)
-    except Exception:
-        logger.debug("could not pin torch thread count in worker", exc_info=True)
-
-
-def get_worker_query_model():
-    """Return this process's cached pkasolver ``QueryModel`` (loads the 25-model ensemble once)."""
-    global _worker_query_model
-    if _worker_query_model is None:
-        _pin_worker_torch_threads()
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            from pkasolver.query import QueryModel
-
-            _worker_query_model = QueryModel()
-    return _worker_query_model
-
-
-@contextlib.contextmanager
-def pkasolver_inference_mode():
-    """Disable autograd during pkasolver GNN inference (prediction never needs gradients)."""
-    try:
-        import torch
-    except Exception:
-        yield
-        return
-    with torch.inference_mode():
-        yield
-
-
-def _patch_pkasolver_dimorphite() -> None:
-    """Use in-process Dimorphite-DL instead of pkasolver's subprocess + test.pkl path."""
-    import pkasolver.query as pq
-    from pkasolver import run_with_mol_list
-
-    if getattr(pq, "_MOLMANAGER_DIMORPHITE_PATCHED", False):
-        return
-
-    def _inline(mol, min_ph, max_ph, pka_precision=1.0):
-        # Dimorphite-DL's main() calls argparse on sys.argv before merging kwargs, so molmanager
-        # flags (e.g. ``-o file.sdf``) would otherwise be parsed as Dimorphite args and fail.
-        old_argv = sys.argv[:]
-        prog = old_argv[0] if old_argv else "python"
-        sys.argv = [prog]
-        try:
-            return run_with_mol_list(
-                [mol],
-                min_ph=float(min_ph),
-                max_ph=float(max_ph),
-                pka_precision=float(pka_precision),
-                silent=True,
-            )
-        finally:
-            sys.argv = old_argv
-
-    pq._call_dimorphite_dl = _inline
-    pq._MOLMANAGER_DIMORPHITE_PATCHED = True
-
-
-def _mol_props_dict_safe(mol: Chem.Mol) -> None:
-    """Raise ``UnicodeDecodeError`` if Dimorphite-style ``GetPropsAsDict`` would fail."""
-    fn = getattr(mol, "GetPropsAsDict", None)
-    if callable(fn):
-        fn()
-
-
-def _strip_mol_props_with_bad_encoding(mol: Chem.Mol) -> None:
-    """Remove SDF tags whose values are not valid UTF-8 (common in legacy drug SD files)."""
-    for key in list(mol.GetPropNames(includePrivate=True)):
-        try:
-            mol.GetProp(key)
-        except UnicodeDecodeError:
-            mol.ClearProp(key)
-
-
-def prepare_mol_for_pkasolver(mol: Chem.Mol | None) -> Chem.Mol | None:
-    """
-    Return a molecule safe for pkasolver / Dimorphite (``GetPropsAsDict`` expects UTF-8 strings).
-
-    Many SD files (e.g. vendor deposits) attach Latin-1 or binary metadata; pkasolver then raises
-    ``UnicodeDecodeError``. We first drop unreadable properties on a copy, then fall back to an
-    isomeric SMILES round-trip (structure only, no tags).
-    """
-    if mol is None or mol.GetNumAtoms() == 0:
-        return None
-    copy = Chem.Mol(mol)
-    _strip_mol_props_with_bad_encoding(copy)
-    try:
-        _mol_props_dict_safe(copy)
-        return copy
-    except UnicodeDecodeError:
-        pass
-    try:
-        smi = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
-    except Exception:
-        return None
-    if not smi:
-        return None
-    return Chem.MolFromSmiles(smi)
+def _format_microstate_pkas(
+    states, *, most_basic_only: bool = False, most_acidic_only: bool = False
+) -> str:
+    return format_pka_values(
+        pka_values_from_states(states),
+        most_basic_only=most_basic_only,
+        most_acidic_only=most_acidic_only,
+    )
 
 
 def _mp_compute_pka_text(
     task: tuple[str, bytes, bool, bool],
-) -> tuple[str, str, list | None, bool]:
-    """
-    Child-process entry: load pkasolver, predict one structure.
+) -> tuple[str, str, object | None, bool]:
+    """Child-process entry: load Uni-pKa, predict one structure."""
+    return _mp_compute_pka_chunk([task])[0]
 
-    Returns ``(key, formatted_text, picklable_states_or_none, cacheable)``.
-    ``cacheable`` is False on hard errors so the session cache is not poisoned.
-    """
-    key, mol_blob, most_basic_only, most_acidic_only = task
-    if not mol_blob:
-        return key, "N/A", None, True
-    with _quieter_pkasolver_dependency_loggers():
+
+def _mp_compute_pka_chunk(
+    tasks: list[tuple[str, bytes, bool, bool]],
+) -> list[tuple[str, str, object | None, bool]]:
+    """Score a chunk of structures in one Uni-pKa free-energy call."""
+    pin_unipka_torch_threads()
+    err = unipka_import_error()
+    if err:
+        logger.error("pKa subprocess: %s", err)
+        return [(task[0], "Error (see log)", None, False) for task in tasks]
+
+    keys: list[str] = []
+    flags: list[tuple[bool, bool]] = []
+    mols: list[Chem.Mol | None] = []
+    na_results: dict[int, tuple[str, str, object | None, bool]] = {}
+    for i, (key, mol_blob, most_basic_only, most_acidic_only) in enumerate(tasks):
+        keys.append(key)
+        flags.append((most_basic_only, most_acidic_only))
+        if not mol_blob:
+            mols.append(None)
+            na_results[i] = (key, "N/A", None, True)
+            continue
         try:
-            _ensure_cairosvg_importable()
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                _patch_pkasolver_dimorphite()
-                from pkasolver.query import calculate_microstate_pka_values
-            qm = get_worker_query_model()
+            mol = Chem.Mol(mol_blob)
         except Exception:
-            logger.exception("pKa subprocess: pkasolver import failed")
-            return key, "Error (see log)", None, False
-    try:
-        mol = Chem.Mol(mol_blob)
-    except Exception:
-        return key, "N/A", None, True
-    if mol is None or mol.GetNumAtoms() == 0:
-        return key, "N/A", None, True
-    safe = prepare_mol_for_pkasolver(mol)
-    if safe is None:
-        return key, "N/A", None, True
-    try:
-        with pkasolver_inference_mode(), _discard_stdout_only(), isolated_sys_argv_for_embedded_cli():
-            states = calculate_microstate_pka_values(safe, query_model=qm)
+            mols.append(None)
+            na_results[i] = (key, "N/A", None, True)
+            continue
+        if mol is None or mol.GetNumAtoms() == 0:
+            mols.append(None)
+            na_results[i] = (key, "N/A", None, True)
+            continue
+        safe = prepare_mol_for_ionization(mol)
+        if safe is None:
+            mols.append(None)
+            na_results[i] = (key, "N/A", None, True)
+        else:
+            mols.append(safe)
+
+    usable_idx = [i for i, mol in enumerate(mols) if mol is not None]
+    ensembles: list[object | None] = [None] * len(keys)
+    failed = False
+    if usable_idx:
+        try:
+            with _discard_stdout_only():
+                scored = predict_ionization_ensembles([mols[i] for i in usable_idx])
+            for i, ens in zip(usable_idx, scored):
+                ensembles[i] = ens
+        except Exception:
+            failed = True
+            logger.exception(
+                "pKa subprocess: batched prediction failed for %s structure(s)",
+                len(usable_idx),
+            )
+
+    out: list[tuple[str, str, object | None, bool]] = []
+    for i, key in enumerate(keys):
+        if i in na_results:
+            out.append(na_results[i])
+            continue
+        most_basic_only, most_acidic_only = flags[i]
+        ensemble = ensembles[i]
+        if failed and ensemble is None:
+            out.append((key, "Error (see log)", None, False))
+            continue
+        if ensemble is None:
+            out.append((key, "N/A", None, True))
+            continue
         txt = _format_microstate_pkas(
-            states,
+            ensemble,
             most_basic_only=most_basic_only,
             most_acidic_only=most_acidic_only,
         )
-        if not states:
-            return key, txt, None, True
-        from molmanager.pkasolver_descriptor_support import microstates_to_picklable
-
-        return key, txt, microstates_to_picklable(states), True
-    except UnicodeDecodeError:
-        return key, "N/A (SDF metadata)", None, True
-    except Exception:
-        logger.exception("pKa subprocess: prediction failed for key=%s", key[:48])
-        return key, "Error (see log)", None, False
-
-
-def _format_microstate_pkas(
-    states, *, most_basic_only: bool = False, most_acidic_only: bool = False
-) -> str:
-    if not states:
-        return "N/A"
-    vals = [float(s.pka) for s in states]
-    if most_basic_only and most_acidic_only:
-        most_acidic_only = False
-    if most_basic_only:
-        return f"{max(vals):.2f}"
-    if most_acidic_only:
-        return f"{min(vals):.2f}"
-    vals.sort()
-    parts = [f"{v:.2f}" for v in vals[:12]]
-    tail = " …" if len(vals) > 12 else ""
-    return "; ".join(parts) + tail
+        out.append((key, txt, ensemble, True))
+    return out
 
 
 class PKaPredictorSignals(QObject):
@@ -357,7 +226,7 @@ class PKaPredictorSignals(QObject):
 
 
 class PKaPredictorWorker(QRunnable):
-    """Predict microstate pKa values per row; writes are applied on the GUI thread via ``finished``."""
+    """Predict macro pKa values per row; writes are applied on the GUI thread via ``finished``."""
 
     def __init__(
         self,
@@ -380,23 +249,16 @@ class PKaPredictorWorker(QRunnable):
         self.progress_state = progress_state
 
     def run(self) -> None:
-        global _query_model_singleton
-        with _quieter_pkasolver_dependency_loggers():
-            try:
-                _ensure_cairosvg_importable()
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    _patch_pkasolver_dimorphite()
-                    from pkasolver.query import QueryModel, calculate_microstate_pka_values
-            except Exception as e:
-                logger.exception("pKa predictor: failed to import pkasolver stack")
-                _safe_emit(
-                    self.pka_signals,
-                    "failed",
-                    "Could not load pkasolver (missing PyTorch / torch-geometric / pkasolver?). "
-                    f"Details: {e}",
-                )
+        with _quieter_unipka_loggers():
+            err = unipka_import_error()
+            if err:
+                logger.exception("pKa predictor: Uni-pKa import failed")
+                _safe_emit(self.pka_signals, "failed", err)
                 return
+
+            from molmanager.ionization import warn_if_cuda_torch_missing
+
+            warn_if_cuda_torch_missing()
 
             cancel_ev = self.cancel_event
             row_text: dict[int | None, str] = {}
@@ -405,14 +267,19 @@ class PKaPredictorWorker(QRunnable):
                     row_text[oid] = "N/A"
 
             order, rep, oids_map = group_rows_by_structure(self.rows)
-            n_work = sum(len(oids_map[k]) for k in order) + sum(1 for oid, mol in self.rows if mol is None)
+            n_work = sum(len(oids_map[k]) for k in order) + sum(
+                1 for oid, mol in self.rows if mol is None
+            )
             tot = max(n_work, 1)
             n_unique = len(order)
 
             from ..config import load_config
-            from .pkasolver_parallel import plan_pkasolver_process_workers
+            from .ionization_parallel import (
+                chunk_structure_keys,
+                plan_ionization_process_workers,
+            )
 
-            use_mp, proc_workers = plan_pkasolver_process_workers(
+            use_mp, proc_workers = plan_ionization_process_workers(
                 n_unique, load_config().pka_process_workers
             )
 
@@ -449,30 +316,48 @@ class PKaPredictorWorker(QRunnable):
 
             if use_mp:
                 from molmanager.microstate_cache import store as cache_store
+                from .ionization_parallel import (
+                    _restore_unipka_mmff_thread_env,
+                    _set_unipka_mmff_thread_env,
+                )
 
-                tasks = [
-                    (k, rep[k].ToBinary(), self.most_basic_only, self.most_acidic_only) for k in order
+                key_chunks = chunk_structure_keys(order, proc_workers)
+                task_chunks = [
+                    [
+                        (k, rep[k].ToBinary(), self.most_basic_only, self.most_acidic_only)
+                        for k in chunk
+                    ]
+                    for chunk in key_chunks
                 ]
                 results_by_key: dict[str, str] = {}
+                wrote_mmff = (
+                    os.environ.get("MOLMANAGER_UNIPKA_MMFF_THREADS") is None and proc_workers > 1
+                )
+                prev_mmff = _set_unipka_mmff_thread_env(proc_workers)
                 ex = register_process_pool(ProcessPoolExecutor(max_workers=proc_workers))
                 try:
-                    pending = {ex.submit(_mp_compute_pka_text, t) for t in tasks}
+                    pending = {ex.submit(_mp_compute_pka_chunk, chunk) for chunk in task_chunks}
                     while pending:
-                        if should_terminate_process_pool(cancel_ev) or application_is_shutting_down():
+                        if (
+                            should_terminate_process_pool(cancel_ev)
+                            or application_is_shutting_down()
+                        ):
                             cancelled = True
                             for f in pending:
                                 f.cancel()
                             break
-                        completed, pending = wait(pending, timeout=0.25, return_when=FIRST_COMPLETED)
+                        completed, pending = wait(
+                            pending, timeout=0.25, return_when=FIRST_COMPLETED
+                        )
                         for f in completed:
                             if f.cancelled():
                                 continue
                             try:
-                                key, txt, picklable, cacheable = f.result()
-                                results_by_key[key] = txt
-                                if cacheable:
-                                    cache_store(key, picklable)
-                                done_cum += len(oids_map.get(key, ()))
+                                for key, txt, ensemble, cacheable in f.result():
+                                    results_by_key[key] = txt
+                                    if cacheable:
+                                        cache_store(key, ensemble)
+                                    done_cum += len(oids_map.get(key, ()))
                             except Exception:
                                 logger.exception("pKa process-pool task failed")
                             _emit(done_cum)
@@ -480,82 +365,61 @@ class PKaPredictorWorker(QRunnable):
                     shutdown_process_pool_executor(
                         ex, kill_workers=should_terminate_process_pool(cancel_ev)
                     )
+                    _restore_unipka_mmff_thread_env(prev_mmff, wrote_mmff)
                 for key in order:
                     txt = results_by_key.get(key, "Error (see log)")
                     for oid in oids_map.get(key, ()):
                         row_text[oid] = txt
             else:
                 from molmanager.microstate_cache import store as cache_store
-                from molmanager.pkasolver_descriptor_support import microstates_to_picklable
 
-                try:
-                    if not _acquire_lock_cooperative(_query_model_lock, cancel_ev):
+                pin_unipka_torch_threads()
+                if unipka_use_gpu():
+                    logger.info("pKa: scoring on GPU in-process (%s unique structure(s))", n_unique)
+                for key in order:
+                    if should_terminate_process_pool(cancel_ev):
                         cancelled = True
-                        out = [(oid, row_text.get(oid, "N/A")) for oid, _ in self.rows]
-                        _safe_emit(self.pka_signals, "finished", out)
-                        return
-                    try:
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("ignore", FutureWarning)
-                            if _query_model_singleton is None:
-                                _query_model_singleton = QueryModel()
-                            qm = _query_model_singleton
-                    finally:
-                        _query_model_lock.release()
-                except Exception as e:
-                    logger.exception("pKa predictor: model load failed")
-                    _safe_emit(self.pka_signals, "failed", f"Could not load pkasolver neural models: {e}")
-                    return
-
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    for key in order:
-                        if should_terminate_process_pool(cancel_ev):
-                            cancelled = True
-                            break
-                        mol = rep[key]
-                        safe_mol = prepare_mol_for_pkasolver(mol)
-                        if safe_mol is None:
-                            txt = "N/A"
-                            cache_store(key, None)
-                        else:
+                        break
+                    mol = rep[key]
+                    safe_mol = prepare_mol_for_ionization(mol)
+                    if safe_mol is None:
+                        txt = "N/A"
+                        cache_store(key, None)
+                    else:
+                        try:
+                            if not _acquire_lock_cooperative(_unipka_lock, cancel_ev):
+                                cancelled = True
+                                break
                             try:
-                                with pkasolver_inference_mode(), _discard_stdout_only(), isolated_sys_argv_for_embedded_cli():
-                                    if not _acquire_lock_cooperative(_query_model_lock, cancel_ev):
-                                        cancelled = True
-                                        break
-                                    try:
-                                        states = calculate_microstate_pka_values(safe_mol, query_model=qm)
-                                    finally:
-                                        _query_model_lock.release()
-                                txt = _format_microstate_pkas(
-                                    states,
-                                    most_basic_only=self.most_basic_only,
-                                    most_acidic_only=self.most_acidic_only,
-                                )
-                                if not states:
-                                    cache_store(key, None)
-                                else:
-                                    cache_store(key, microstates_to_picklable(states))
-                            except UnicodeDecodeError as e:
-                                logger.warning(
-                                    "pKa prediction skipped %s row(s) (non-UTF8 structure metadata): %s",
-                                    len(oids_map[key]),
-                                    e,
-                                )
-                                txt = "N/A (SDF metadata)"
-                                cache_store(key, None)
-                            except Exception:
-                                logger.exception(
-                                    "pKa prediction failed for %s row(s) (key prefix %.40s…)",
-                                    len(oids_map[key]),
-                                    key,
-                                )
-                                txt = "Error (see log)"
-                        for oid in oids_map[key]:
-                            row_text[oid] = txt
-                        done_cum += len(oids_map[key])
-                        _emit(done_cum)
+                                with _discard_stdout_only():
+                                    ensemble = predict_ionization_ensemble(safe_mol)
+                            finally:
+                                _unipka_lock.release()
+                            txt = _format_microstate_pkas(
+                                ensemble,
+                                most_basic_only=self.most_basic_only,
+                                most_acidic_only=self.most_acidic_only,
+                            )
+                            cache_store(key, ensemble)
+                        except UnicodeDecodeError as e:
+                            logger.warning(
+                                "pKa prediction skipped %s row(s) (non-UTF8 structure metadata): %s",
+                                len(oids_map[key]),
+                                e,
+                            )
+                            txt = "N/A (SDF metadata)"
+                            cache_store(key, None)
+                        except Exception:
+                            logger.exception(
+                                "pKa prediction failed for %s row(s) (key prefix %.40s…)",
+                                len(oids_map[key]),
+                                key,
+                            )
+                            txt = "Error (see log)"
+                    for oid in oids_map[key]:
+                        row_text[oid] = txt
+                    done_cum += len(oids_map[key])
+                    _emit(done_cum)
 
             out = [(oid, row_text.get(oid, "N/A")) for oid, _ in self.rows]
             _emit(tot, force=True)

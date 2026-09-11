@@ -25,7 +25,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _reset_worker_global_state() -> None:
-    """Avoid cross-test pollution of process-pool shutdown (pKa / pkasolver workers)."""
+    """Avoid cross-test pollution of process-pool shutdown (pKa / Uni-pKa workers)."""
     from molmanager.workers import process_pool_utils as ppu
 
     ppu._SHUTDOWN.clear()

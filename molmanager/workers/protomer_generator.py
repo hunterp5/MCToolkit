@@ -14,14 +14,11 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Generate protomer sets from pkasolver microstate pKas (approximate populations at a target pH).
+"""Generate protomer sets from a Uni-pKa ionization ensemble at a target pH.
 
-Microstate pKas: **pkasolver** (Mayr et al., Front. Chem. 2022, doi:10.3389/fchem.2022.866585;
-https://github.com/mayrf/pkasolver). Enumeration path matches the pKa predictor (Dimorphite-DL;
-Ropp et al., J. Cheminform. 2019, doi:10.1186/s13321-019-0336-9).
-
-Population math: independent-site Henderson–Hasselbalch pooling over those microstates (same
-neutral-fraction idea as LogD 7.4 / LogS 7.4 descriptors; approximate). See ``science_citations``.
+**Uni-pKa** — Luo et al., JACS Au 2024, doi:10.1021/jacsau.4c00271.
+Populations are Boltzmann weights of β-scaled free energies plus
+``charge · ln(10) · pH`` (same ensemble as Predict pKa / LogD 7.4).
 """
 
 from __future__ import annotations
@@ -29,127 +26,25 @@ from __future__ import annotations
 import logging
 import threading
 import time
-import warnings
-from collections import defaultdict
-from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
-
-from .process_pool_utils import (
-    register_process_pool,
-    should_terminate_process_pool,
-    shutdown_process_pool_executor,
-)
 
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
-from ..utils import mol_to_canonical_smiles
+from molmanager.ionization import populations_from_states, unipka_import_error
+from ..config import load_config
+from .ionization_parallel import build_microstates_cache_by_key
+from .pka_predictor import _quieter_unipka_loggers, _safe_emit
+from .process_pool_utils import should_terminate_process_pool
 from .structure_grouping import group_rows_by_structure
-from .pka_predictor import (
-    _discard_stdout_only,
-    _ensure_cairosvg_importable,
-    _patch_pkasolver_dimorphite,
-    _quieter_pkasolver_dependency_loggers,
-    _safe_emit,
-    get_worker_query_model,
-    isolated_sys_argv_for_embedded_cli,
-    pkasolver_inference_mode,
-    prepare_mol_for_pkasolver,
-)
 
 logger = logging.getLogger(__name__)
 
 
-def _mp_compute_protomer_smiles_pct(task: tuple[str, bytes, float]) -> tuple[str, list[tuple[str, float]]]:
-    """
-    Child-process entry: load pkasolver, run one structure, return SMILES + approximate %.
-
-    The 25-model ``QueryModel`` ensemble is cached per worker process (see
-    :func:`get_worker_query_model`) so only inference cost is paid per structure.
-    """
-    key, mol_blob, ph = task
-    if not mol_blob:
-        return key, []
-    with _quieter_pkasolver_dependency_loggers():
-        try:
-            _ensure_cairosvg_importable()
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                _patch_pkasolver_dimorphite()
-                from pkasolver.query import calculate_microstate_pka_values
-            qm = get_worker_query_model()
-        except Exception:
-            logger.exception("Protomer subprocess: pkasolver import failed")
-            return key, []
-    try:
-        mol = Chem.Mol(mol_blob)
-    except Exception:
-        return key, []
-    if mol is None or mol.GetNumAtoms() == 0:
-        return key, []
-    safe = prepare_mol_for_pkasolver(mol)
-    if safe is None:
-        return key, []
-    try:
-        with pkasolver_inference_mode(), _discard_stdout_only(), isolated_sys_argv_for_embedded_cli():
-            states = calculate_microstate_pka_values(safe, query_model=qm)
-        pops = estimate_protomer_populations_from_states(states, ph)
-        return key, [(smi, float(pct)) for smi, pct, _m in pops]
-    except Exception:
-        logger.exception("Protomer subprocess: prediction failed for key=%s", key[:48])
-        return key, []
-
-
-def estimate_protomer_populations_from_states(states, pH: float) -> list[tuple[str, float, Chem.Mol]]:
-    """
-    Approximate protomer mole fractions at ``pH`` from pkasolver microstates.
-
-    Each microstate is treated as an independent Henderson–Hasselbalch equilibrium between
-    ``protonated_mol`` and ``deprotonated_mol``; contributions are summed per canonical SMILES
-    and renormalized. This ignores coupling between sites and is only a rough guide.
-    """
-    from molmanager.pkasolver_descriptor_support import hydrate_microstates
-
-    states = hydrate_microstates(states)
-    if not states:
-        return []
-    key_to_mol: dict[str, Chem.Mol] = {}
-    acc: defaultdict[str, float] = defaultdict(float)
-    for s in states:
-        pka = float(s.pka)
-        pm = s.protonated_mol
-        dm = s.deprotonated_mol
-        if pm is None or dm is None:
-            continue
-        sp = mol_to_canonical_smiles(pm)
-        sd = mol_to_canonical_smiles(dm)
-        if not sp or not sd:
-            continue
-        if sp not in key_to_mol:
-            key_to_mol[sp] = Chem.Mol(pm)
-        if sd not in key_to_mol:
-            key_to_mol[sd] = Chem.Mol(dm)
-        # Acid dissociation HA ⇌ H⁺ + A⁻ with macro/micro pKa: fraction A⁻ = 1 / (1 + 10^(pKa − pH))
-        frac_deprot = 1.0 / (1.0 + 10.0 ** (pka - pH))
-        frac_prot = 1.0 - frac_deprot
-        acc[sp] += frac_prot
-        acc[sd] += frac_deprot
-    total = sum(acc.values())
-    if total <= 0:
-        ref = states[0].ph7_mol
-        if ref is None:
-            return []
-        smi = mol_to_canonical_smiles(ref)
-        if not smi:
-            return []
-        return [(smi, 100.0, Chem.Mol(ref))]
-    out: list[tuple[str, float, Chem.Mol]] = []
-    for k, v in acc.items():
-        mol = key_to_mol.get(k)
-        if mol is None:
-            continue
-        out.append((k, 100.0 * v / total, mol))
-    out.sort(key=lambda t: -t[1])
-    return out
+def estimate_protomer_populations_from_states(
+    states, pH: float
+) -> list[tuple[str, float, Chem.Mol]]:
+    """Protomer mole fractions at ``pH`` from a Uni-pKa ensemble (or HA/A− HH fallback)."""
+    return populations_from_states(states, pH)
 
 
 class ProtomerGeneratorSignals(QObject):
@@ -178,23 +73,11 @@ class ProtomerGeneratorWorker(QRunnable):
         self.progress_state = progress_state
 
     def run(self) -> None:
-        from . import pka_predictor as pka_mod
-
-        with _quieter_pkasolver_dependency_loggers():
-            try:
-                _ensure_cairosvg_importable()
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    _patch_pkasolver_dimorphite()
-                    from pkasolver.query import QueryModel, calculate_microstate_pka_values
-            except Exception as e:
-                logger.exception("Protomer generator: failed to import pkasolver stack")
-                _safe_emit(
-                    self.protomer_signals,
-                    "failed",
-                    "Could not load pkasolver (missing PyTorch / torch-geometric / pkasolver?). "
-                    f"Details: {e}",
-                )
+        with _quieter_unipka_loggers():
+            err = unipka_import_error()
+            if err:
+                logger.error("Protomer generator: %s", err)
+                _safe_emit(self.protomer_signals, "failed", err)
                 return
 
             cancel_ev = self.cancel_event
@@ -204,13 +87,6 @@ class ProtomerGeneratorWorker(QRunnable):
             n_work = sum(len(oids_map[k]) for k in order)
             tot = max(n_work, 1)
             n_unique = len(order)
-
-            from ..config import load_config
-            from .pkasolver_parallel import plan_pkasolver_process_workers
-
-            use_mp, proc_workers = plan_pkasolver_process_workers(
-                n_unique, load_config().protomer_process_workers
-            )
 
             done_cum = 0
             prog_last = 0.0
@@ -242,79 +118,40 @@ class ProtomerGeneratorWorker(QRunnable):
                 _safe_emit(self.protomer_signals, "finished", combined)
                 return
 
-            if use_mp:
-                tasks = [(k, rep[k].ToBinary(), self.pH) for k in order]
-                results_by_key: dict[str, list[tuple[str, float]]] = {}
-                ex = register_process_pool(ProcessPoolExecutor(max_workers=proc_workers))
+            mols = [rep[k] for k in order if rep.get(k) is not None]
+            by_key = build_microstates_cache_by_key(
+                mols,
+                workers_cfg=load_config().protomer_process_workers,
+                cancel_event=cancel_ev,
+                progress_state=self.progress_state,
+                signals=self.worker_signals,
+                progress_message="Generate protomers",
+                progress_total=tot,
+            )
+            for key in order:
+                if should_terminate_process_pool(cancel_ev):
+                    cancelled = True
+                    break
+                states = by_key.get(key)
+                if not states:
+                    done_cum += len(oids_map.get(key, ()))
+                    _emit(done_cum)
+                    continue
                 try:
-                    pending = {ex.submit(_mp_compute_protomer_smiles_pct, t) for t in tasks}
-                    while pending:
-                        if should_terminate_process_pool(cancel_ev):
-                            cancelled = True
-                            for f in pending:
-                                f.cancel()
-                            break
-                        completed, pending = wait(pending, timeout=0.25, return_when=FIRST_COMPLETED)
-                        for f in completed:
-                            if f.cancelled():
-                                continue
-                            try:
-                                key, pops = f.result()
-                                results_by_key[key] = pops
-                                done_cum += len(oids_map.get(key, ()))
-                            except Exception:
-                                logger.exception("Protomer process-pool task failed")
-                            _emit(done_cum)
-                finally:
-                    shutdown_process_pool_executor(
-                        ex, kill_workers=should_terminate_process_pool(cancel_ev)
-                    )
-                for key in order:
-                    pops = results_by_key.get(key, [])
-                    for oid in oids_map.get(key, ()):
-                        for smi, pct in pops:
-                            combined.append((oid, smi, pct))
-            else:
-                try:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore", FutureWarning)
-                        with pka_mod._query_model_lock:
-                            if pka_mod._query_model_singleton is None:
-                                pka_mod._query_model_singleton = QueryModel()
-                            qm = pka_mod._query_model_singleton
+                    pops = estimate_protomer_populations_from_states(states, self.pH)
                 except Exception as e:
-                    logger.exception("Protomer generator: model load failed")
-                    _safe_emit(self.protomer_signals, "failed", f"Could not load pkasolver neural models: {e}")
-                    return
-
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    for key in order:
-                        if cancel_ev is not None and cancel_ev.is_set():
-                            cancelled = True
-                            break
-                        mol = rep[key]
-                        safe_mol = prepare_mol_for_pkasolver(mol)
-                        if safe_mol is None:
-                            continue
-                        try:
-                            with pkasolver_inference_mode(), _discard_stdout_only(), isolated_sys_argv_for_embedded_cli():
-                                with pka_mod._query_model_lock:
-                                    states = calculate_microstate_pka_values(safe_mol, query_model=qm)
-                            pops = estimate_protomer_populations_from_states(states, self.pH)
-                            for oid in oids_map[key]:
-                                for smi, pct, _m in pops:
-                                    combined.append((oid, smi, pct))
-                        except Exception as e:
-                            oids_here = oids_map[key]
-                            logger.warning(
-                                "Protomer generation failed for %s row(s) (structure key prefix %.40s…): %s",
-                                len(oids_here),
-                                key,
-                                e,
-                            )
-                        done_cum += len(oids_map[key])
-                        _emit(done_cum)
+                    logger.warning(
+                        "Protomer generation failed for %s row(s) (structure key prefix %.40s…): %s",
+                        len(oids_map.get(key, ())),
+                        key,
+                        e,
+                    )
+                    pops = []
+                for oid in oids_map.get(key, ()):
+                    for smi, pct, _m in pops:
+                        combined.append((oid, smi, pct))
+                done_cum += len(oids_map.get(key, ()))
+                _emit(done_cum)
 
             _emit(tot, force=True)
             if cancelled and done_cum > 0:
@@ -322,18 +159,9 @@ class ProtomerGeneratorWorker(QRunnable):
                     self.worker_signals.partial_results.emit("Generate protomers", done_cum, tot)
                 except Exception:
                     pass
-            if use_mp:
-                logger.debug(
-                    "Protomer: %s table row(s), %s unique structure(s), process pool=%s",
-                    n_work,
-                    n_unique,
-                    proc_workers,
-                )
-            else:
-                logger.debug(
-                    "Protomer: %s table row(s), %s unique structure(s), sequential (set "
-                    "MOLMANAGER_PROTOmer_PROCESSES>1 to allow parallel workers when unique≥2)",
-                    n_work,
-                    n_unique,
-                )
+            logger.debug(
+                "Protomer: %s table row(s), %s unique structure(s)",
+                n_work,
+                n_unique,
+            )
             _safe_emit(self.protomer_signals, "finished", combined)

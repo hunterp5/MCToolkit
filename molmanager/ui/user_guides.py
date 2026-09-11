@@ -169,7 +169,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "tools_protonate",
                 "Protonate",
                 "Protonate",
-                "Dominant protomer at a chosen pH (pkasolver).",
+                "Dominant protomer at a chosen pH (Uni-pKa).",
             ),
             _e(
                 "tools_generate_protomers",
@@ -311,6 +311,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Predict SOM",
                 "SOM",
                 "FAME3R sites of metabolism for Phase 1, Phase 2, both, or CYP.",
+            ),
+            _e(
+                "tools_pka",
+                "Predict pKa",
+                "pKa",
+                "Uni-pKa macro pKa values from a structure column or SMILES.",
             ),
             _e("data_qsar", "QSAR", "QSAR", "Train and apply QSAR models on table features."),
             _e("data_mpo", "MPO Scoring", "MPO Scoring", "Multi-parameter desirability scores."),

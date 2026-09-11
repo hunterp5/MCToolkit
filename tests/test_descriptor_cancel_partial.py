@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Calculate Descriptors must emit partial results when cancelled mid-pkasolver."""
+"""Calculate Descriptors must emit partial results when cancelled mid-ionization."""
 
 from __future__ import annotations
 
@@ -29,9 +29,9 @@ class _AlwaysCancelled:
         return True
 
 
-def test_calc_worker_emits_partial_results_when_cancelled_during_pkasolver():
+def test_calc_worker_emits_partial_results_when_cancelled_during_ionization():
     """
-    Regression: cancelling while pkasolver (ClogD / LogS 7.4) microstates are still computing
+    Regression: cancelling while Uni-pKa (ClogD / LogS 7.4) ensembles are still computing
     must still emit the rows already finished instead of crashing with a NameError.
     """
     sigs = WorkerSignals()
@@ -49,7 +49,7 @@ def test_calc_worker_emits_partial_results_when_cancelled_during_pkasolver():
 
     with (
         patch(
-            "molmanager.workers.chemistry_descriptors.int_fns_need_pkasolver",
+            "molmanager.workers.chemistry_descriptors.int_fns_need_ionization",
             return_value=True,
         ),
         patch(

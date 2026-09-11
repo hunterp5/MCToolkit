@@ -37,4 +37,4 @@ Rows with valid molecules in the chosen **Target Column** / structure source. Op
 
 ## Tips and limits
 
-Each selected descriptor costs time and memory on large libraries - prefer the minimum set. Failed molecules leave blanks. Re-running may overwrite or refresh columns with the same names.
+LogD 7.4, LogS 7.4, CNS MPO, and AB-MPS use a Uni-pKa ionization ensemble when the pka extra is installed; otherwise they fall back to heuristics. Re-running those columns after switching from pkasolver is a new method, not a refresh.

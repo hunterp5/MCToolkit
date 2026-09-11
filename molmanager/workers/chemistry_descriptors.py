@@ -17,7 +17,7 @@
 
 Fingerprint columns use RDKit implementations. The **2D pharmacophore (Gobbi)** on-bits column uses
 ``rdkit.Chem.Pharm2D`` with ``Gobbi_Pharm2D`` (Gobbi & Poppinger, *Perspect. Drug Discov. Des.* 1998).
-Drug-likeness columns that invoke ``medchem_descriptors`` / **pkasolver** cite
+Drug-likeness columns that invoke ``medchem_descriptors`` / Uni-pKa cite
 ``molmanager.science_citations`` and the worker module docstrings there.
 """
 
@@ -50,6 +50,7 @@ else:
             return int(fp.GetNumOnBits())
         return int(sum(fp))
 
+
 from ..config import load_config
 from ..medchem_descriptors import (
     ab_mps_score,
@@ -63,8 +64,8 @@ from ..medchem_descriptors import (
     mol_net_formal_charge,
     ro5_pass,
 )
-from ..pkasolver_descriptor_support import int_fns_need_pkasolver, microstates_for_mol
-from .pkasolver_parallel import build_microstates_cache_for_rows
+from ..ionization import int_fns_need_ionization, microstates_for_mol
+from .ionization_parallel import build_microstates_cache_for_rows
 from ..utils import mol_to_canonical_smiles, parse_molecule_from_cell_text
 from ..rdkit_fingerprints import (
     fingerprint_onbits_for_descriptor,
@@ -75,7 +76,6 @@ from ..rdkit_fingerprints import (
 from .signals import emit_partial_results_if_cancelled
 
 logger = logging.getLogger(__name__)
-
 
 
 def _descriptor_int_fns_include_pharm2d(int_fns) -> bool:
@@ -103,11 +103,11 @@ def _calc_descriptor_row_values(
     pka_cache_used: bool,
 ) -> tuple[int, dict[str, str]]:
     row_ctx: dict = {"oid": int(idx)}
-    if mol is not None and int_fns_need_pkasolver(int_fns):
+    if mol is not None and int_fns_need_ionization(int_fns):
         if pka_cache_used:
-            row_ctx["pkasolver_states"] = pka_states
+            row_ctx["ionization_states"] = pka_states
         else:
-            row_ctx["pkasolver_states"] = microstates_for_mol(mol)
+            row_ctx["ionization_states"] = microstates_for_mol(mol)
     callables = [descriptor_callable_for_int_fn(i_f, smarts_cache, row_ctx) for i_f in int_fns]
     row_data: dict[str, str] = {}
     if mol:
@@ -138,15 +138,15 @@ def descriptor_callable_for_int_fn(i_f, smarts_cache, row_ctx=None):
     if i_f == "RO5_PASS":
         return lambda m: ro5_pass(m) if m is not None else "No"
     if i_f == "LOGD74":
-        return lambda m: logd74_value(m, ctx.get("pkasolver_states"))
+        return lambda m: logd74_value(m, ctx.get("ionization_states"))
     if i_f == "LOGS_ESOL":
         return lambda m: esol_logS_intrinsic(m) if m is not None else 0.0
     if i_f == "LOGS74":
-        return lambda m: logs74_value(m, ctx.get("pkasolver_states"))
+        return lambda m: logs74_value(m, ctx.get("ionization_states"))
     if i_f == "AB_MPS":
-        return lambda m: ab_mps_score(m, ctx.get("pkasolver_states")) if m is not None else 0.0
+        return lambda m: ab_mps_score(m, ctx.get("ionization_states")) if m is not None else 0.0
     if i_f == "CNS_MPO":
-        return lambda m: cns_mpo_score(m, ctx.get("pkasolver_states")) if m is not None else 0.0
+        return lambda m: cns_mpo_score(m, ctx.get("ionization_states")) if m is not None else 0.0
     if i_f == "QED":
         return lambda m: QED.qed(m)
     if i_f == "NET_FORMAL_CHARGE":
@@ -298,9 +298,7 @@ def _run_descriptor_process_pool(
                 except Exception:
                     logger.exception("Process-pool descriptor batch failed")
     finally:
-        shutdown_process_pool_executor(
-            ex, kill_workers=should_terminate_process_pool(cancel_event)
-        )
+        shutdown_process_pool_executor(ex, kill_workers=should_terminate_process_pool(cancel_event))
     emit_progress(done_count, force=True)
     results = [(oid, mp_results_dict[oid]) for oid, _ in prepared if oid in mp_results_dict]
     return results, cancelled
@@ -323,7 +321,6 @@ def _calc_descriptor_row_task(args):
         pka_states=pka_states,
         pka_cache_used=bool(pka_cache_used),
     )
-
 
 
 class CalcWorker(QRunnable):
@@ -423,7 +420,7 @@ class CalcWorker(QRunnable):
 
         pka_by_idx: dict[int, list | None] = {}
         pka_cache_used = False
-        if int_fns_need_pkasolver(self.int_fns) and nrows > 0:
+        if int_fns_need_ionization(self.int_fns) and nrows > 0:
             pka_by_idx = build_microstates_cache_for_rows(
                 prepared,
                 cancel_event=self.cancel_event,
@@ -444,10 +441,10 @@ class CalcWorker(QRunnable):
                 force_signal=True,
             )
 
-            # If the user cancelled while pkasolver was still computing microstates, we can still
-            # return partial descriptor results for the structures whose microstates we already
+            # If the user cancelled while Uni-pKa was still computing ensembles, we can still
+            # return partial descriptor results for the structures whose ensembles we already
             # have. This prevents "blank columns" after cancellation for LogD/LogS and similar
-            # pkasolver-dependent descriptors.
+            # ionization-dependent descriptors.
             if cancel_ev is not None and cancel_ev.is_set():
                 cancelled = True
                 results = []
@@ -563,5 +560,3 @@ class CalcWorker(QRunnable):
             self.signals, "Calculate descriptors", len(results), tot, cancelled
         )
         self.signals.calculated.emit(results, self.disp_headers)
-
-

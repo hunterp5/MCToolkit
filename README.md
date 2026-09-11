@@ -225,7 +225,7 @@ python3 -m pip install --upgrade pip
 pip install -r requirements-core.txt
 ```
 
-**Full stack:** desktop app plus machine-learning tools (PyTorch, pkasolver, Chemprop), docking helpers (Meeko), and development tools (pytest). It can take **15–30 minutes** depending on your internet speed.
+**Full stack:** desktop app plus machine-learning tools (PyTorch, Uni-pKa / unipkainfer, Chemprop), docking helpers (Meeko), and development tools (pytest). It can take **15–30 minutes** depending on your internet speed.
 
 ```bash
 pip install -r requirements.txt
@@ -288,7 +288,7 @@ If **Tools → Predict → pKa** fails with a PyTorch version error (often after
 bash scripts/install_pytorch_pka.sh
 ```
 
-This removes conflicting packages (such as **admet-ai**) and reinstalls from `requirements.txt`.
+This removes conflicting packages (such as **admet-ai**) and reinstalls from `requirements.txt` (CPU PyTorch). With an NVIDIA GPU, pass `-Cuda` (Windows) or `--cuda` (macOS/Linux) to replace that wheel with the CUDA 12.4 build so **Predict pKa** can run on the GPU. The first **Predict pKa** run downloads Uni-pKa fold weights from Hugging Face (`unipka-download-model`). For offline machines, prefetch with that CLI or copy the fold into unipkainfer’s `model_dir`.
 
 ### Docking (EasyDock)
 

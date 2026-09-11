@@ -14,27 +14,22 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Generate dominant protomer per molecule using pkasolver microstates."""
+"""Generate the dominant protomer per molecule from a Uni-pKa ionization ensemble."""
 
 from __future__ import annotations
 
 import logging
 import threading
 import time
-import warnings
 
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
+from molmanager.ionization import populations_from_states, unipka_import_error
 from ..config import load_config
-from .pka_predictor import (
-    _ensure_cairosvg_importable,
-    _patch_pkasolver_dimorphite,
-    _quieter_pkasolver_dependency_loggers,
-)
-from .pkasolver_parallel import build_microstates_cache_by_key
+from .ionization_parallel import build_microstates_cache_by_key
+from .pka_predictor import _quieter_unipka_loggers
 from .process_pool_utils import should_terminate_process_pool
-from .protomer_generator import estimate_protomer_populations_from_states
 from .structure_grouping import group_rows_by_structure
 
 logger = logging.getLogger(__name__)
@@ -46,7 +41,7 @@ class ProtonateSignals(QObject):
 
 
 def _dominant_smiles_from_microstates(states, pH: float) -> tuple[str, float] | None:
-    pops = estimate_protomer_populations_from_states(states, float(pH))
+    pops = populations_from_states(states, float(pH))
     if not pops:
         return None
     smi, pct, _mol = pops[0]
@@ -58,12 +53,12 @@ def _dominant_smiles_from_microstates(states, pH: float) -> tuple[str, float] | 
 def dominant_results_from_microstate_cache(
     order: list[str],
     oids_map: dict[str, list],
-    by_key: dict[str, list | None],
+    by_key: dict[str, object | None],
     pH: float,
     *,
     cancel_event: threading.Event | None = None,
 ) -> tuple[list[tuple[int, str, float]], bool]:
-    """Map cached microstates to per-row dominant SMILES. Returns ``(rows, cancelled)``."""
+    """Map cached ensembles to per-row dominant SMILES. Returns ``(rows, cancelled)``."""
     partial: list[tuple[int, str, float]] = []
     cancelled = False
     for key in order:
@@ -112,19 +107,11 @@ class ProtonateWorker(QRunnable):
     def run(self) -> None:
         from ..tool_progress import report_tool_progress
 
-        with _quieter_pkasolver_dependency_loggers():
-            try:
-                _ensure_cairosvg_importable()
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)
-                    _patch_pkasolver_dimorphite()
-                    import pkasolver.query  # noqa: F401
-            except Exception as e:
-                logger.exception("Protonate: failed to import pkasolver stack")
-                self.signals.failed.emit(
-                    "Could not load pkasolver (missing PyTorch / torch-geometric / pkasolver?). "
-                    f"Details: {e}"
-                )
+        with _quieter_unipka_loggers():
+            err = unipka_import_error()
+            if err:
+                logger.error("Protonate: %s", err)
+                self.signals.failed.emit(err)
                 return
 
             cancel_ev = self.cancel_event

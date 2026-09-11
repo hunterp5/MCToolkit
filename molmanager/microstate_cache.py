@@ -14,10 +14,10 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Session in-memory cache of pkasolver microstates (structure key → picklable states).
+"""Session in-memory cache of Uni-pKa ionization ensembles (structure key → picklable ensemble).
 
 Keyed by :func:`molmanager.workers.structure_grouping.structure_key` (canonical SMILES).
-Used so Predict pKa and descriptor jobs (LogD/LogS 7.4, CNS MPO, …) share one GNN pass
+Used so Predict pKa and descriptor jobs (LogD/LogS 7.4, CNS MPO, …) share one Uni-pKa pass
 per unique structure within the same app session. Cleared on Clear / shutdown.
 Does not persist to SDF/CSV exports.
 """

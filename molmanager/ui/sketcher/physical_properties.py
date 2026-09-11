@@ -40,13 +40,13 @@ from molmanager.medchem_descriptors import (
     lipinski_violations,
     ro5_pass,
 )
-from molmanager.pkasolver_descriptor_support import (
-    hydrate_microstates,
+from molmanager.ionization import (
     logd74_from_microstates,
+    pka_values_from_states,
 )
 from molmanager.ui.qt_widget_utils import make_window_minimizable
 from molmanager.ui.threadpool_access import start_runnable_on_app_pool
-from molmanager.workers.pkasolver_parallel import predict_microstates_for_sketch
+from molmanager.workers.ionization_parallel import predict_microstates_for_sketch
 
 if TYPE_CHECKING:
     from .dialog import SketcherDialog
@@ -111,7 +111,7 @@ def compute_ionization_properties(
     states: list | None = None,
 ) -> dict[str, Any]:
     """
-    Return LogD / pKa / AB-MPS / CNS MPO from pkasolver microstates.
+    Return LogD / pKa / AB-MPS / CNS MPO from a Uni-pKa ionization ensemble.
 
     Raises ``ValueError`` when pKa cannot be calculated (callers should show
     ``Error`` for pKa and pKa-dependent descriptors).
@@ -128,8 +128,7 @@ def compute_ionization_properties(
     if not states:
         raise ValueError(_PKA_CALC_FAILED)
     clogp = float(Crippen.MolLogP(safe))
-    hydrated = hydrate_microstates(states)
-    pkas = tuple(sorted(float(s.pka) for s in hydrated))
+    pkas = tuple(sorted(pka_values_from_states(states)))
     if not pkas:
         raise ValueError(_PKA_CALC_FAILED)
     logd = float(logd74_from_microstates(states, clogp))
@@ -222,9 +221,7 @@ class _IonizationWorker(QRunnable):
             if self._cancel_event.is_set():
                 self._signals.failed.emit(self._generation, "cancelled")
                 return
-            result = compute_ionization_properties(
-                self._mol, cancel_event=self._cancel_event
-            )
+            result = compute_ionization_properties(self._mol, cancel_event=self._cancel_event)
         except Exception as exc:
             msg = str(exc) or _PKA_CALC_FAILED
             if msg != "cancelled":

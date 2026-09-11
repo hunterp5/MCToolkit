@@ -14,23 +14,28 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-# Repair or install the CPU PyTorch 2.5.1 + pkasolver stack in the *active* Python (no extra venv).
-# On a fresh install, `pip install -r requirements.txt` already includes these packages.
+# Repair or install the PyTorch 2.5.1 + Uni-pKa (unipkainfer) stack in the *active* Python.
+# On a fresh install, `pip install -r requirements.txt` already includes the CPU wheel.
 # Run this script when pKa fails due to a conflicting torch build (e.g. after installing admet-ai).
+# Pass -Cuda to replace the CPU wheel with the CUDA 12.4 build (NVIDIA GPU pKa).
+param(
+    [switch]$Cuda
+)
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
-Write-Host "Installing CPU PyTorch 2.5.1 and pkasolver stack into:" (python -c "import sys; print(sys.executable)")
+$stackLabel = if ($Cuda) { "CUDA 12.4 PyTorch 2.5.1" } else { "CPU PyTorch 2.5.1" }
+Write-Host "Installing $stackLabel and Uni-pKa stack into:" (python -c "import sys; print(sys.executable)")
 python -m pip install -U pip
 
-Write-Host "`nRemoving ADMET-AI (requires torch>=2.8; conflicts with pkasolver)..."
+Write-Host "`nRemoving ADMET-AI (requires torch>=2.8; conflicts with this torch pin)..."
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 python -m pip uninstall -y admet-ai 2>&1 | Out-Host
 $ErrorActionPreference = $prevEap
 
-Write-Host "`nRemoving mismatched torch builds (e.g. 2.8.x breaks torch-sparse)..."
+Write-Host "`nRemoving mismatched torch builds..."
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 python -m pip uninstall -y torch torchvision torchaudio 2>&1 | Out-Host
@@ -38,14 +43,33 @@ $ErrorActionPreference = $prevEap
 
 Write-Host "`nReinstalling dependencies from requirements.txt..."
 python -m pip install -r requirements.txt
+Write-Host "If pip reported dependency conflicts for molscribe/openchemie/opennmt-py, they are unrelated to Uni-pKa and can be ignored."
+
+if ($Cuda) {
+    Write-Host "`nRemoving the CPU PyTorch wheel so the CUDA build can replace it..."
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    python -m pip uninstall -y torch torchvision torchaudio 2>&1 | Out-Host
+    $ErrorActionPreference = $prevEap
+    Write-Host "`nInstalling CUDA 12.4 PyTorch 2.5.1 (this can take several minutes)..."
+    python -m pip install --index-url https://download.pytorch.org/whl/cu124 --force-reinstall --no-cache-dir --no-deps torch==2.5.1 torchvision==0.20.1
+}
 
 Write-Host "`nVerifying imports..."
+$env:MOLMANAGER_REQUIRE_CUDA = $(if ($Cuda) { "1" } else { "0" })
 python -c @"
+import os
+import sys
 import torch
-import torch_geometric
-import torch_scatter
-import pkasolver
-print('OK: torch', torch.__version__, 'pyg', torch_geometric.__version__)
+import unipkainfer
+print('OK: torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'unipkainfer', getattr(unipkainfer, '__version__', 'ok'))
+if torch.cuda.is_available():
+    print('GPU:', torch.cuda.get_device_name(0))
+elif os.environ.get('MOLMANAGER_REQUIRE_CUDA') == '1':
+    sys.exit('CUDA was requested but torch.cuda.is_available() is False. Close MolManager if it is running and retry.')
 "@
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
 
-Write-Host "`nDone. Run MolManager with this same Python (no .venvs/pka or admet-ai venv)."
+Write-Host "`nDone. First pKa run downloads Uni-pKa weights (unipka-download-model). Run MolManager with this same Python."

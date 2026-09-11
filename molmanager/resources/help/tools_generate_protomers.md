@@ -12,7 +12,7 @@ Use for tricky acidic/basic centers, tautomer-sensitive series, or when you want
 
 ## Inputs / scope
 
-**Input** mode is **Table rows** or **SMILES string**. Table mode uses **Source** and optional **Selected Rows Only**. **pH** influences approximate weights.
+**Input** mode is **Table rows** or **SMILES string**. Table mode uses **Source** and optional **Selected Rows Only**. **pH** influences Uni-pKa Boltzmann weights (same ensemble as Protonate / LogD).
 
 ## Options
 
@@ -38,4 +38,4 @@ Use for tricky acidic/basic centers, tautomer-sensitive series, or when you want
 
 ## Tips and limits
 
-Enumeration can multiply row counts quickly - filter afterward. Weights are approximate. pkasolver availability affects quality; treat outputs as candidates, not ground truth.
+Enumeration can multiply row counts quickly - filter afterward. Weights are Uni-pKa Boltzmann populations at the chosen pH. Requires `unipkainfer`; treat outputs as candidates, not ground truth. Re-running after pkasolver is a new method, not a refresh.

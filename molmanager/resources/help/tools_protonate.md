@@ -1,6 +1,6 @@
 # Protonate
 
-Protonate writes the dominant protomer at a chosen pH into an output column using pkasolver microstate pKas (Dimorphite-DL site enumeration + GNN). It also writes **% Protomer**, the approximate mole fraction of that form. Optional **Render 2D** depicts that column the same way as **Structure** (image cells; SMILES stay stored, not shown as text).
+Protonate writes the dominant protomer at a chosen pH into an output column using a **Uni-pKa** ionization ensemble (MolGpKa SMARTS enumeration + Uni-Mol free energies). It also writes **% Protomer**, the Boltzmann mole fraction of that form at the dialog pH. Optional **Render 2D** depicts that column the same way as **Structure** (image cells; SMILES stay stored, not shown as text).
 
 ## Goal
 
@@ -12,7 +12,7 @@ Use when default microstates are wrong for your assay pH, or before comparisons 
 
 ## Inputs / scope
 
-Input structures from the selected source; optional **Selected Rows Only**. Requires pkasolver (PyTorch / torch-geometric). Duplicate structures are predicted once and reused; a session cache is shared with Predict pKa and LogD/LogS so a second run on the same molecules is cheap.
+Input structures from the selected source; optional **Selected Rows Only**. Requires Uni-pKa (`unipkainfer`). Duplicate structures are predicted once and reused; a session cache is shared with Predict pKa and LogD/LogS so a second run on the same molecules is cheap.
 
 ## Options
 
@@ -38,4 +38,4 @@ Input structures from the selected source; optional **Selected Rows Only**. Requ
 
 ## Tips and limits
 
-Populations are independent-site Henderson–Hasselbalch over pkasolver microstates — approximate, not a full tautomer/coupled multi-site model. **% Protomer** below ~80% means other forms still matter; use **Generate Protomers**. Parallelism is `MOLMANAGER_PROTOMER_PROCESSES` (`1`–`8`). Always keep the original column if you need neutral parents.
+Populations are Boltzmann weights of Uni-pKa free energies at the dialog pH (not independent-site Henderson–Hasselbalch). **% Protomer** below ~80% means other forms still matter; use **Generate Protomers**. Parallelism is `MOLMANAGER_PROTOMER_PROCESSES` (`1`–`8`). Always keep the original column if you need neutral parents. Re-running after pkasolver is a new method, not a refresh.

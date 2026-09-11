@@ -34,7 +34,7 @@ pip install -r requirements-core.txt
 pip install -e ".[dev]"
 ```
 
-Full stack (PyTorch, pkasolver, Chemprop, Meeko, pytest):
+Full stack (PyTorch, unipkainfer, Chemprop, Meeko, pytest):
 
 ```bash
 pip install -U pip

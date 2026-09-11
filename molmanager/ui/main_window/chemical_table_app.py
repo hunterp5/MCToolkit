@@ -798,7 +798,7 @@ class ChemicalTableApp(
             (
                 "Protonate…",
                 self.run_protonate,
-                "Generate the dominant protomer (pkasolver) into a column and optionally render it like Structure.",
+                "Generate the dominant protomer (Uni-pKa) into a column and optionally render it like Structure.",
             ),
             (
                 "Generate Protomers…",
@@ -1451,7 +1451,7 @@ class ChemicalTableApp(
         pq = getattr(self, "process_queue", None)
         if pq is not None:
             # Must be first: kill process pools and cancel running/queued jobs so
-            # long-running pkasolver/descriptor work does not keep the interpreter alive
+            # long-running Uni-pKa/descriptor work does not keep the interpreter alive
             # after the window closes.
             try:
                 pq.shutdown_for_exit()

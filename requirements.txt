@@ -5,11 +5,10 @@
 #   pip install -r requirements.txt
 #   pip install -e .
 #
-# Includes the desktop app, pKa predictor (PyTorch + pkasolver), permeability (Chemprop),
+# Includes the desktop app, pKa predictor (PyTorch + unipkainfer), permeability (Chemprop),
 # docking helpers (Meeko, PDBFixer), and development tools (pytest).
 
 --extra-index-url https://download.pytorch.org/whl/cpu
---find-links https://data.pyg.org/whl/torch-2.5.1+cpu.html
 
 # --- Desktop app and chemistry core ---
 PyQt5>=5.15
@@ -33,13 +32,9 @@ umap-learn>=0.5.5
 # --- PyTorch (CPU 2.5.1; pKa and permeability tools) ---
 torch==2.5.1
 torchvision==0.20.1
-torch-scatter
-torch-sparse
 
-# --- pKa predictor (Tools → pKa Predictor) ---
-pkasolver @ git+https://github.com/mayrf/pkasolver.git
-torch-geometric==2.0.1
-svgutils
+# --- pKa predictor (Tools → Predict → pKa; Uni-pKa / unipkainfer) ---
+unipkainfer>=0.2.0
 
 # --- Permeability prediction (Tools → Predict Permeability / GNN-MTL) ---
 chemprop>=2.1.0,<2.3
