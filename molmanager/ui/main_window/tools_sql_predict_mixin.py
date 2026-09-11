@@ -38,6 +38,7 @@ from ..strings import (
     TOOL_CALCULATOR,
     TOOL_PREDICT_SOM,
     TOOL_RANDOM_NUMBER,
+    TOOL_SPLIT_COLUMN,
     loaded_sql_status,
 )
 from ...workers import (
@@ -250,6 +251,109 @@ class ToolsSqlPredictMixin:
             _factory,
             self._on_data_analysis_dialog_destroyed,
             on_reused_visible=_on_reused,
+        )
+
+    def open_split_column_dialog(self) -> None:
+        if not self.headers or self._table_model.rowCount() == 0:
+            QMessageBox.information(
+                self,
+                TOOL_SPLIT_COLUMN,
+                "Open a file or add rows so the table has a column to split.",
+            )
+            return
+        columns = self._filterable_data_column_names()
+        if not columns:
+            QMessageBox.information(
+                self,
+                TOOL_SPLIT_COLUMN,
+                "No text columns are available to split.",
+            )
+            return
+        from ..dialogs import SplitColumnDialog
+
+        d = SplitColumnDialog(columns, len(self._selected_logical_rows()), self)
+        self._prepare_tool_dialog(d)
+        d.setAttribute(Qt.WA_DeleteOnClose, True)
+        d.accepted.connect(lambda *_, dlg=d: self._on_split_column_dialog_accepted(dlg))
+        d.show()
+
+    def _on_split_column_dialog_accepted(self, d) -> None:
+        from ...column_split import (
+            MAX_SPLIT_COLUMNS,
+            apply_keep_mode,
+            output_column_names,
+            pad_split_rows,
+            split_column_values,
+            split_width,
+        )
+
+        p = d.params()
+        source = p.source_column
+        if not source or source not in self.headers:
+            QMessageBox.warning(self, TOOL_SPLIT_COLUMN, "Choose a column to split.")
+            return
+        only_selected = d.only_selected_rows()
+        allowed = self._selected_oids_set() if only_selected else None
+        if self._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_SPLIT_COLUMN):
+            return
+        oids = self._all_oids_in_table_order()
+        if allowed is not None:
+            oids = [o for o in oids if o in allowed]
+        if not oids:
+            QMessageBox.information(self, TOOL_SPLIT_COLUMN, "No rows to process for this scope.")
+            return
+        try:
+            ci = self.headers.index(source)
+        except ValueError:
+            QMessageBox.warning(self, TOOL_SPLIT_COLUMN, "Choose a column to split.")
+            return
+        texts: list[str] = []
+        for oid in oids:
+            row = self._table_model.logical_row_for_oid(int(oid))
+            if row < 0:
+                texts.append("")
+                continue
+            raw = self._table_model.backing_value_for_row_header(row, source) or ""
+            if not raw:
+                raw = self._table_cell_text(row, ci) or ""
+            texts.append(raw)
+        try:
+            _delim, parts = split_column_values(texts, p.mode, custom=p.custom)
+        except ValueError as exc:
+            QMessageBox.warning(self, TOOL_SPLIT_COLUMN, str(exc) or "Could not split the column.")
+            return
+        keep = getattr(p, "keep", "all") or "all"
+        if keep in ("largest", "smallest"):
+            parts = apply_keep_mode(parts, keep)
+        n_cols = split_width(parts)
+        if keep == "all" and n_cols < 2:
+            QMessageBox.information(
+                self,
+                TOOL_SPLIT_COLUMN,
+                "No split fields were found. Check the separator and try again.",
+            )
+            return
+        if n_cols < 1:
+            QMessageBox.information(
+                self,
+                TOOL_SPLIT_COLUMN,
+                "No values were found. Check the separator and try again.",
+            )
+            return
+        truncated = any(len(row) > MAX_SPLIT_COLUMNS for row in parts)
+        padded = pad_split_rows(parts, n_cols)
+        if keep in ("largest", "smallest"):
+            headers = [p.prefix or source]
+        else:
+            headers = output_column_names(p.prefix or source, n_cols)
+        rows = [
+            (int(oid), {headers[i]: padded[j][i] for i in range(n_cols)})
+            for j, oid in enumerate(oids)
+        ]
+        written = self.on_calc_finished(rows, headers, progress_label=TOOL_SPLIT_COLUMN)
+        extra = f" (capped at {n_cols})" if truncated else ""
+        self.status_label.setText(
+            f'{TOOL_SPLIT_COLUMN}: {len(written)} column(s) from "{source}"{extra}.'
         )
 
     def open_plot(self):

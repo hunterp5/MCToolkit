@@ -33,6 +33,7 @@ TOOL_MMP_PAIR_NETWORK = "Pair Network"
 TOOL_SALI_MAP = "SALI"
 TOOL_RANDOM_NUMBER = "Random Number"
 TOOL_RANDOM_MOLECULE = "Random Molecule"
+TOOL_SPLIT_COLUMN = "Split Column"
 TOOL_PREDICT_SOM = "Predict SOM"
 
 # Column header when importing similarity hits (PubChem, ChEMBL, SureChEMBL) or adding FP similarity scores.

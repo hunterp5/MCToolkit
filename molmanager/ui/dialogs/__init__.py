@@ -48,6 +48,7 @@ from .mmp_neighborhood import MmpNeighborhoodDialog, MmpNeighborhoodDialogParams
 from .sali import SaliDialog, SaliDialogParams
 from .random_molecule import RandomMoleculeDialog, RandomMoleculeDialogParams
 from .random_number import RandomNumberDialog, RandomNumberDialogParams
+from .split_column import SplitColumnDialog, SplitColumnDialogParams
 from .permeability import PermeabilityPredictorDialog
 from .pka import PKaPredictorDialog
 from .som import SomPredictorDialog
@@ -105,6 +106,8 @@ __all__ = [
     "RandomMoleculeDialogParams",
     "RandomNumberDialog",
     "RandomNumberDialogParams",
+    "SplitColumnDialog",
+    "SplitColumnDialogParams",
     "ReactionEnumerationDialog",
     "Render2DStructureDialog",
     "SketchWidget",

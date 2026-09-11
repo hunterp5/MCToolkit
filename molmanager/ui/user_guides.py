@@ -349,6 +349,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Summary statistics for table columns.",
             ),
             _e(
+                "data_split_column",
+                "Split Column",
+                "Split Column",
+                "Split a delimited column into new columns.",
+            ),
+            _e(
                 "data_plotter",
                 "Plotter",
                 "Plotter",
