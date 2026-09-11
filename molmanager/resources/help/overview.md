@@ -22,7 +22,7 @@ Works on the current session table (structures plus property columns). Most tool
 - **Data** - analyze table, plotter, dimensionality reduction, QSAR, MPO, medchem plots.
 - **External** - SQL, PubChem, ChEMBL, patents.
 - **Settings** - theme, fonts, hotkeys.
-- **Help** - this User Manual.
+- **Help** - User Guide (this manual) and Citations (papers and licenses for external tools).
 - **Layout** - rearrange or restore workspace panes.
 - **Processes** - inspect running/queued background jobs.
 

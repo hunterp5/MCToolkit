@@ -141,7 +141,7 @@ def descriptor_checkbox_citation_html(internal_key: str) -> str | None:
             '<a href="https://doi.org/10.1021/cn100008c">Wager et al., ACS Chem. Neurosci. 2010</a>'
         ),
         "AB_MPS": (
-            '<a href="https://doi.org/10.1021/acs.jmedchem.7b00717">Shultz et al., J. Med. Chem. 2018</a> '
+            '<a href="https://doi.org/10.1021/acs.jmedchem.7b00717">DeGoey et al., J. Med. Chem. 2018</a> '
             "(|LogD7.4 − 3| + aromatic rings + rotatable bonds)"
         ),
         "QED": (

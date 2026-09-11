@@ -1,0 +1,89 @@
+# This file is part of MolManager.
+# Copyright (C) 2026 Hunter Picard
+#
+# MolManager is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# MolManager is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+
+"""Tests for Help → Citations catalog and dialog."""
+
+from __future__ import annotations
+
+from molmanager.citations_catalog import (
+    CITATION_SECTIONS,
+    iter_tool_citations,
+    tool_citation,
+    tool_citation_html_fragment,
+)
+from molmanager.ui.citations_dialog import citation_html, open_citations_dialog
+from molmanager.ui.hotkeys import default_shortcuts
+
+
+def test_catalog_ids_unique_and_licensed() -> None:
+    tools = iter_tool_citations()
+    ids = [t.tool_id for t in tools]
+    assert len(ids) == len(set(ids))
+    assert sum(len(s.tools) for s in CITATION_SECTIONS) == len(tools)
+    assert len(tools) >= 20
+    for tool in tools:
+        assert tool.name.strip()
+        assert tool.used_in.strip()
+        assert tool.license_name.strip()
+        assert tool.license_url.startswith("https://")
+
+
+def test_catalog_includes_key_dois() -> None:
+    html_all = " ".join(tool_citation_html_fragment(t) for t in iter_tool_citations())
+    for doi in (
+        "10.1021/jacsau.4c00271",
+        "10.1021/acs.jcim.1c00075",
+        "10.1021/ci034243x",
+        "10.1021/cn100008c",
+        "10.1186/s13321-023-00772-2",
+        "10.1021/acs.jcim.5b00654",
+        "10.1186/1758-2946-3-8",
+        "10.1021/acs.jmedchem.7b00717",
+        "10.1093/bioinformatics/btu829",
+    ):
+        assert doi in html_all
+    fame = tool_citation("fame3r")
+    assert fame is not None
+    assert "non-commercial" in fame.notes.lower()
+    assert "University of Milan" in fame.notes
+    assert "gnu.org/licenses/gpl-3.0" in tool_citation("molmanager").license_url  # type: ignore[union-attr]
+
+
+def test_citation_html_renders_license_link() -> None:
+    html = citation_html("rdkit")
+    assert "RDKit" in html
+    assert "License" in html
+    assert "opensource.org/license/bsd-3-clause" in html
+    assert "Topic unavailable" not in html
+
+
+def test_open_citations_dialog_reuses_window(qapp):  # noqa: ARG001
+    from PyQt5.QtWidgets import QWidget
+
+    host = QWidget()
+    open_citations_dialog(host, tool_id="smina")
+    dlg = host._citations_dialog
+    assert dlg is not None
+    assert "Smina" in dlg.windowTitle()
+    open_citations_dialog(host, tool_id="rdkit")
+    assert host._citations_dialog is dlg
+    assert "RDKit" in dlg.windowTitle()
+    dlg.close()
+
+
+def test_citations_hotkey_registered() -> None:
+    assert default_shortcuts("help.user_guides") == ["F1"]
+    assert default_shortcuts("help.citations") == []

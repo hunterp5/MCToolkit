@@ -19,7 +19,7 @@
 Canonical citations (plain text, copy-paste friendly) live in ``molmanager.science_citations``.
 
 * **CNS MPO** — Wager et al., ACS Chem. Neurosci. 2010 (doi:10.1021/cn100008c); Table 1 / PMC3368654.
-* **AB-MPS** — Shultz et al., J. Med. Chem. 2018 (doi:10.1021/acs.jmedchem.7b00717); |cLogD7.4 − 3| + NAR + NRB.
+* **AB-MPS** — DeGoey et al., J. Med. Chem. 2018 (doi:10.1021/acs.jmedchem.7b00717); |cLogD7.4 − 3| + NAR + NRB.
 * **ESOL intrinsic log S** — Delaney, J. Chem. Inf. Comput. Sci. 2004 (doi:10.1021/ci034243x).
 * **Uni-pKa microstates** — Luo et al., JACS Au 2024 (doi:10.1021/jacsau.4c00271); runtime unipkainfer.
 * **MolGpKa SMARTS** (Uni-pKa enumerator templates) — Pan et al., J. Chem. Inf. Model. 2021
@@ -159,7 +159,7 @@ def ab_mps_score(mol: Chem.Mol, states: list | None = None) -> float:
     """
     AbbVie multiparameter score (bRo5): |cLogD7.4 − 3| + aromatic rings + rotatable bonds.
 
-    Shultz et al., J. Med. Chem. 2018 (doi:10.1021/acs.jmedchem.7b00717); values ≤ 14 often
+    DeGoey et al., J. Med. Chem. 2018 (doi:10.1021/acs.jmedchem.7b00717); values ≤ 14 often
     associated with higher oral/PK success in beyond-Ro5 space.
     """
     clogd = logd74_value(mol, states)

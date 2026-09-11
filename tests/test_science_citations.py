@@ -45,7 +45,7 @@ def test_descriptor_checkbox_citations() -> None:
     assert "Luo" in sc.descriptor_checkbox_citation_html("LOGD74") or ""
     assert sc.descriptor_checkbox_citation_html("FP_Pharm2D_Gobbi") is not None
     assert sc.descriptor_checkbox_citation_html("AB_MPS") is not None
-    assert "Shultz" in (sc.descriptor_checkbox_citation_html("AB_MPS") or "")
+    assert "DeGoey" in (sc.descriptor_checkbox_citation_html("AB_MPS") or "")
     assert sc.descriptor_checkbox_citation_html("MolWt") is None
 
 
