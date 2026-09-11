@@ -416,24 +416,24 @@ class PlotToolsMixin:
         target._scope_sync_disconnect = teardown
 
     def _target_plot_pane(self):
-        """Return the active plot pane, expanding Table Only to 2 stacked if needed."""
-        from .workspace_layout import LAYOUT_TABLE_STACK
+        """Return the active plot pane, expanding Table Only to a table|plot split."""
+        from .workspace_layout import LAYOUT_TABLE_SINGLE
 
         mgr = self._workspace()
         if mgr is None:
             return None
         if mgr.plot_panes():
             return mgr.preferred_pane()
-        # No panes (Table Only): switch to 2 stacked and use the upper-right pane.
-        self.apply_workspace_layout(LAYOUT_TABLE_STACK)
+        # No panes (Table Only): split the table with a single plot pane.
+        self.apply_workspace_layout(LAYOUT_TABLE_SINGLE)
         panes = mgr.plot_panes()
         if not panes:
             return None
-        upper = panes[0]
-        mgr.set_preferred_pane(upper)
-        return upper
+        pane = panes[0]
+        mgr.set_preferred_pane(pane)
+        return pane
 
-    def dock_plot_widget(self, plot_widget) -> bool:
+    def dock_plot_widget(self, plot_widget, pane=None) -> bool:
         """Move a plot or viewer widget into the active workspace plot pane."""
         from ..dockable_plot import is_dockable_workspace_widget
         from ..plot import PlotWidget
@@ -446,15 +446,29 @@ class PlotToolsMixin:
         if mgr is None:
             return False
 
-        pane = self._target_plot_pane()
-        if pane is None:
+        target = pane if pane is not None else self._target_plot_pane()
+        if target is None:
             return False
 
         prior_teardown = getattr(plot_widget, "_scope_sync_disconnect", None)
         if callable(prior_teardown):
             prior_teardown()
-        mgr.dock_into_pane(pane, plot_widget)
+        mgr.dock_into_pane(target, plot_widget)
         self.show_docked_plot_panel()
+        self._wire_docked_plot_widget(plot_widget)
+        kind = self._docked_widget_kind(plot_widget)
+        pane_n = mgr.plot_panes().index(target) + 1
+        n_pages = target.page_count()
+        if n_pages > 1:
+            self.status_label.setText(
+                f"{kind}: docked in pane {pane_n} ({target.page_index() + 1}/{n_pages})."
+            )
+        else:
+            self.status_label.setText(f"{kind}: docked in pane {pane_n}.")
+        return True
+
+    def _wire_docked_plot_widget(self, plot_widget) -> None:
+        """Attach session/scope hooks used for any docked plot or viewer."""
         self._prepare_tool_plot(plot_widget)
         try:
             plot_widget.destroyed.disconnect(self._on_docked_plot_destroyed)
@@ -465,16 +479,6 @@ class PlotToolsMixin:
         sync_footer = getattr(plot_widget, "_sync_footer_chrome", None)
         if callable(sync_footer):
             sync_footer()
-        kind = self._docked_widget_kind(plot_widget)
-        pane_n = mgr.plot_panes().index(pane) + 1
-        n_pages = pane.page_count()
-        if n_pages > 1:
-            self.status_label.setText(
-                f"{kind}: docked in pane {pane_n} ({pane.page_index() + 1}/{n_pages})."
-            )
-        else:
-            self.status_label.setText(f"{kind}: docked in pane {pane_n}.")
-        return True
 
     def _float_released_plot_widget(self, plot_widget) -> None:
         """Open a released docked plot in a floating dialog when possible."""

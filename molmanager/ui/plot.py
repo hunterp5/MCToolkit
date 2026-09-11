@@ -23,6 +23,7 @@ __all__ = [
     "PLOT_TYPE_SCATTER",
     "PLOT_TYPE_HISTOGRAM",
     "PLOT_TYPE_CHOICES",
+    "PLOT_SESSION_KIND",
     "PlotDialog",
     "PlotWidget",
     "compute_histogram_bin_edges",
@@ -51,6 +52,8 @@ PLOT_TYPE_CHOICES: tuple[tuple[str, str], ...] = (
     ("Violin", PLOT_TYPE_VIOLIN),
     ("Radar", PLOT_TYPE_RADAR),
 )
+
+PLOT_SESSION_KIND = "plotter"
 
 import json
 import math
@@ -303,6 +306,7 @@ class _PlotBridge(QObject):
     def hoverCardsJson(self, indices_json: str) -> str:  # noqa: N802
         return self._plot_widget._hover_card_json_for_points(indices_json)
 
+
 class PlotStatisticsPanel(QWidget):
     """Embedded statistics and curve-fit summary beside the plot options."""
 
@@ -338,7 +342,9 @@ class PlotWidget(QWidget):
         super().__init__(None)
         self.parent_app = parent_app
 
-        self._plot_shell_path = Path(tempfile.gettempdir()) / f"MOLMANAGER_plot_shell_{id(self)}.html"
+        self._plot_shell_path = (
+            Path(tempfile.gettempdir()) / f"MOLMANAGER_plot_shell_{id(self)}.html"
+        )
         self._last_browser_opened_path: str | None = None
         self._plotted_oids: list[int] = []
         self._oid_point_index: dict[int, list[int]] = {}
@@ -410,7 +416,9 @@ class PlotWidget(QWidget):
         self.zmax.setFixedWidth(range_edit_w)
         self.hist_bin_width = QLineEdit()
         self.hist_bin_width.setFixedWidth(range_edit_w)
-        self.hist_bin_width.setToolTip("X-axis bin width for histogram or heatmap (empty = automatic).")
+        self.hist_bin_width.setToolTip(
+            "X-axis bin width for histogram or heatmap (empty = automatic)."
+        )
         self.hist_bin_width.editingFinished.connect(self._schedule_plot)
         self.heatmap_y_bin_width_label = QLabel("Y bin width:")
         self.heatmap_y_bin_width = QLineEdit()
@@ -696,9 +704,7 @@ class PlotWidget(QWidget):
         self._add_to_main_btn.clicked.connect(self._add_to_main_window)
         foot.addWidget(self._add_to_main_btn)
         self._send_window_btn = QPushButton("Send to New Window")
-        self._send_window_btn.setToolTip(
-            "Open this docked plot in a separate floating window."
-        )
+        self._send_window_btn.setToolTip("Open this docked plot in a separate floating window.")
         self._send_window_btn.clicked.connect(self._send_to_new_window)
         foot.addWidget(self._send_window_btn)
         self._close_plot_btn = QPushButton("Close Plot")
@@ -708,9 +714,7 @@ class PlotWidget(QWidget):
         self._close_plot_btn.clicked.connect(self._close_docked_plot)
         foot.addWidget(self._close_plot_btn)
         self._opts_btn = QPushButton("Plot Options")
-        self._opts_btn.setToolTip(
-            "Configure plot type, axes, titles, color, fit, and statistics."
-        )
+        self._opts_btn.setToolTip("Configure plot type, axes, titles, color, fit, and statistics.")
         self._opts_btn.clicked.connect(self._open_plot_options)
         foot.addWidget(self._opts_btn)
         foot.addStretch(1)
@@ -990,6 +994,7 @@ class PlotWidget(QWidget):
         finally:
             for cb in combos:
                 cb.blockSignals(False)
+
     def _selected_hover_columns(self) -> list[str]:
         cols: list[str] = []
         for cb in getattr(self, "_hover_combos", None) or []:
@@ -1002,7 +1007,9 @@ class PlotWidget(QWidget):
         if point_index < 0 or point_index >= len(self._plotted_oids):
             return ""
         oid = int(self._plotted_oids[point_index])
-        show_struct = bool(getattr(self, "hover_structure_cb", None) and self.hover_structure_cb.isChecked())
+        show_struct = bool(
+            getattr(self, "hover_structure_cb", None) and self.hover_structure_cb.isChecked()
+        )
         payload = hover_cards_payload(
             self.parent_app,
             [oid],
@@ -1024,7 +1031,9 @@ class PlotWidget(QWidget):
                 oids.append(int(self._plotted_oids[i]))
         if not oids:
             return ""
-        show_struct = bool(getattr(self, "hover_structure_cb", None) and self.hover_structure_cb.isChecked())
+        show_struct = bool(
+            getattr(self, "hover_structure_cb", None) and self.hover_structure_cb.isChecked()
+        )
         payload = hover_cards_payload(
             self.parent_app,
             oids,
@@ -1039,7 +1048,9 @@ class PlotWidget(QWidget):
     def _sync_hover_persist_visual(self) -> None:
         if not self._web_ready:
             return
-        persist = bool(getattr(self, "hover_persist_cb", None) and self.hover_persist_cb.isChecked())
+        persist = bool(
+            getattr(self, "hover_persist_cb", None) and self.hover_persist_cb.isChecked()
+        )
         self.web.page().runJavaScript(
             f"window.molmanagerSetHoverPersist && molmanagerSetHoverPersist({json.dumps(persist)});"
         )
@@ -1061,6 +1072,7 @@ class PlotWidget(QWidget):
         self.web.page().runJavaScript(
             f"window.molmanagerPinHoverPoints && molmanagerPinHoverPoints({json.dumps(js_idxs)});"
         )
+
     def _attach_point_hover(self, trace_kwargs: dict, oids: list[int]) -> dict:
         """Disable native Plotly hover labels; custom overlay uses OIDs via the bridge."""
         out = dict(trace_kwargs)
@@ -1341,9 +1353,7 @@ class PlotWidget(QWidget):
         self._spectrum_label.setEnabled(spectrum_on)
         self.colorscale_combo.setEnabled(spectrum_on)
         numeric = (
-            not heatmap
-            and spectrum_on
-            and color_values_are_numeric(self._probe_color_values())
+            not heatmap and spectrum_on and color_values_are_numeric(self._probe_color_values())
         )
         self.color_range.set_enabled(numeric)
         self._update_size_controls()
@@ -1392,7 +1402,9 @@ class PlotWidget(QWidget):
         lay.addStretch(0)
         return row
 
-    def _set_axis_range_edits(self, axis_name: str, edit_min: QLineEdit, edit_max: QLineEdit) -> None:
+    def _set_axis_range_edits(
+        self, axis_name: str, edit_min: QLineEdit, edit_max: QLineEdit
+    ) -> None:
         meta = self.parent_app.global_bounds.get(axis_name)
         if not meta:
             edit_min.setText("")
@@ -1423,7 +1435,11 @@ class PlotWidget(QWidget):
         return {"range": [lo, hi], "autorange": False}
 
     def _numeric_column_names(self) -> list[str]:
-        cols = list(self.parent_app.global_bounds.keys()) if getattr(self.parent_app, "global_bounds", None) else []
+        cols = (
+            list(self.parent_app.global_bounds.keys())
+            if getattr(self.parent_app, "global_bounds", None)
+            else []
+        )
         if not cols and self.parent_app is not None:
             cols = [h for h in self.parent_app.headers[2:]]
         return cols
@@ -1447,7 +1463,9 @@ class PlotWidget(QWidget):
         combo.addItems(cols)
         if previous and combo.findText(previous) >= 0:
             combo.setCurrentText(previous)
-        elif allow_none and (not previous or previous == AXIS_NONE or normalize_axis_name(previous) is None):
+        elif allow_none and (
+            not previous or previous == AXIS_NONE or normalize_axis_name(previous) is None
+        ):
             combo.setCurrentIndex(0)
         elif cols:
             combo.setCurrentIndex(0 if not allow_none else 1)
@@ -1524,7 +1542,9 @@ class PlotWidget(QWidget):
             return range(model.rowCount())
         return rows
 
-    def _collect_points(self) -> tuple[list[float], list[float], list[float], list[int], str, str, str | None]:
+    def _collect_points(
+        self,
+    ) -> tuple[list[float], list[float], list[float], list[int], str, str, str | None]:
         mode = self._effective_plot_mode()
         if mode not in ("2D", "3D", "Heatmap"):
             return [], [], [], [], "", "", None
@@ -1540,11 +1560,15 @@ class PlotWidget(QWidget):
         if xi is None or yi is None:
             return [], [], [], [], xname, yname, None
 
-        n_sel_now = len(self.parent_app._selected_logical_rows()) if self.parent_app is not None else 0
+        n_sel_now = (
+            len(self.parent_app._selected_logical_rows()) if self.parent_app is not None else 0
+        )
         only_sel = n_sel_now > 0 and self.only_selected_cb.isChecked()
         allowed = self.parent_app._selected_oids_set() if only_sel else None
         if only_sel and not allowed:
-            QMessageBox.warning(self, "Plot", "“Selected Rows Only” is checked but nothing is selected.")
+            QMessageBox.warning(
+                self, "Plot", "“Selected Rows Only” is checked but nothing is selected."
+            )
             return [], [], [], [], xname, yname, None
 
         is3d = mode == "3D"
@@ -1608,11 +1632,15 @@ class PlotWidget(QWidget):
         if xi is None:
             return [], [], xname
 
-        n_sel_now = len(self.parent_app._selected_logical_rows()) if self.parent_app is not None else 0
+        n_sel_now = (
+            len(self.parent_app._selected_logical_rows()) if self.parent_app is not None else 0
+        )
         only_sel = n_sel_now > 0 and self.only_selected_cb.isChecked()
         allowed = self.parent_app._selected_oids_set() if only_sel else None
         if only_sel and not allowed:
-            QMessageBox.warning(self, "Plot", "“Selected Rows Only” is checked but nothing is selected.")
+            QMessageBox.warning(
+                self, "Plot", "“Selected Rows Only” is checked but nothing is selected."
+            )
             return [], [], xname
 
         xmin = self._parse_edit_float(self.xmin)
@@ -1658,7 +1686,9 @@ class PlotWidget(QWidget):
                     indices.append(i)
             if indices:
                 meta["molmanager_selection_traces"] = indices
-        persist = bool(getattr(self, "hover_persist_cb", None) and self.hover_persist_cb.isChecked())
+        persist = bool(
+            getattr(self, "hover_persist_cb", None) and self.hover_persist_cb.isChecked()
+        )
         meta["molmanager_hover_persist"] = persist
         if meta:
             fig.update_layout(meta=meta)
@@ -1684,7 +1714,9 @@ class PlotWidget(QWidget):
         self._arm_ignore_plot_clear()
         QTimer.singleShot(300, self.sync_from_table_selection)
 
-    def sync_from_table_selection(self, selected_oids: set[int] | frozenset[int] | None = None) -> None:
+    def sync_from_table_selection(
+        self, selected_oids: set[int] | frozenset[int] | None = None
+    ) -> None:
         """Highlight plot points for the current table row selection."""
         if not self._plotted_oids or self.parent_app is None:
             return
@@ -1736,7 +1768,16 @@ class PlotWidget(QWidget):
             title=title,
             xaxis={"visible": False},
             yaxis={"visible": False},
-            annotations=[{"text": title, "xref": "paper", "yref": "paper", "x": 0.5, "y": 0.5, "showarrow": False}],
+            annotations=[
+                {
+                    "text": title,
+                    "xref": "paper",
+                    "yref": "paper",
+                    "x": 0.5,
+                    "y": 0.5,
+                    "showarrow": False,
+                }
+            ],
             margin={"l": 20, "r": 20, "t": 50, "b": 20},
         )
         self._push_plotly_figure(fig)
@@ -1748,7 +1789,9 @@ class PlotWidget(QWidget):
 
         def _after_probe(result) -> None:
             if not bool(result):
-                self._fallback_open_in_browser("Embedded Plotly renderer is not supported on this system.")
+                self._fallback_open_in_browser(
+                    "Embedded Plotly renderer is not supported on this system."
+                )
                 return
             self._web_ready = True
             self._apply_pending_payload()
@@ -1856,8 +1899,12 @@ class PlotWidget(QWidget):
             return
 
         self._plotted_oids = list(foids)
-        self._selected_point_indices = {i for i in self._selected_point_indices if 0 <= i < len(self._plotted_oids)}
-        selected_points = sorted(self._selected_point_indices) if self._selected_point_indices else []
+        self._selected_point_indices = {
+            i for i in self._selected_point_indices if 0 <= i < len(self._plotted_oids)
+        }
+        selected_points = (
+            sorted(self._selected_point_indices) if self._selected_point_indices else []
+        )
         from ..config import load_config
 
         overlay_max = int(load_config().plot_selection_overlay_max_points)
@@ -1968,13 +2015,19 @@ class PlotWidget(QWidget):
             )
             self._stats_panel.set_lines(["No statistics for the current plot."])
             self._push_plotly_figure(fig)
-            self.parent_app.status_label.setText("Line plot: no points for current axis/range/scope.")
+            self.parent_app.status_label.setText(
+                "Line plot: no points for current axis/range/scope."
+            )
             return
         ordered = sorted(zip(fx, fy, foids), key=lambda t: t[0])
         fx, fy, foids = [list(c) for c in zip(*ordered)]
         self._plotted_oids = list(foids)
-        self._selected_point_indices = {i for i in self._selected_point_indices if 0 <= i < len(self._plotted_oids)}
-        selected_points = sorted(self._selected_point_indices) if self._selected_point_indices else []
+        self._selected_point_indices = {
+            i for i in self._selected_point_indices if 0 <= i < len(self._plotted_oids)
+        }
+        selected_points = (
+            sorted(self._selected_point_indices) if self._selected_point_indices else []
+        )
         marker = self._scatter_marker_for_oids(foids, point_size=5)
         fig = go.Figure()
         fig.add_trace(
@@ -2029,7 +2082,9 @@ class PlotWidget(QWidget):
             )
             self._stats_panel.set_lines(["No statistics for the current plot."])
             self._push_plotly_figure(fig)
-            self.parent_app.status_label.setText(f"{label}: no values for current column/range/scope.")
+            self.parent_app.status_label.setText(
+                f"{label}: no values for current column/range/scope."
+            )
             return
         self._plotted_oids = list(oids)
         self._selected_point_indices = set()
@@ -2076,15 +2131,15 @@ class PlotWidget(QWidget):
             )
             self._stats_panel.set_lines(["No statistics for the current plot."])
             self._push_plotly_figure(fig)
-            self.parent_app.status_label.setText("Histogram: no values for current column/range/scope.")
+            self.parent_app.status_label.setText(
+                "Histogram: no values for current column/range/scope."
+            )
             return
         self._hist_vals = list(vals)
         self._hist_oids = list(oids)
         self._plotted_oids = list(oids)
         self._selected_point_indices = set()
-        edges, width = compute_histogram_bin_edges(
-            vals, bin_width=bin_width, xmin=xmin, xmax=xmax
-        )
+        edges, width = compute_histogram_bin_edges(vals, bin_width=bin_width, xmin=xmin, xmax=xmax)
         self._hist_edges = edges
         hist_kwargs: dict = {
             "x": vals,
@@ -2208,9 +2263,7 @@ class PlotWidget(QWidget):
         if row < 0:
             return
         apply_table_selection_for_source_rows(self.parent_app, [row])
-        self.parent_app.status_label.setText(
-            f"Radar Plot: selected row {row + 1:,} (OID {oid})."
-        )
+        self.parent_app.status_label.setText(f"Radar Plot: selected row {row + 1:,} (OID {oid}).")
 
     def _clear_heatmap_state(self) -> None:
         self._heat_x = []
@@ -2330,7 +2383,9 @@ class PlotWidget(QWidget):
             return
         self._arm_ignore_plot_clear()
         self._select_rows_for_oids(oids)
-        self.parent_app.status_label.setText(f"Histogram: selected {len(oids):,} row(s) in bin {bin_index + 1}.")
+        self.parent_app.status_label.setText(
+            f"Histogram: selected {len(oids):,} row(s) in bin {bin_index + 1}."
+        )
 
     def _select_rows_for_oids(self, oids: list[int]) -> None:
         source_rows: list[int] = []
@@ -2343,7 +2398,9 @@ class PlotWidget(QWidget):
         self._select_rows_for_source_rows(source_rows)
 
     def _select_rows_for_point_indices(self, point_indices: list[int]) -> None:
-        source_rows = source_rows_for_point_indices(self.parent_app, self._plotted_oids, point_indices)
+        source_rows = source_rows_for_point_indices(
+            self.parent_app, self._plotted_oids, point_indices
+        )
         # Do not scroll the table — keeps docked-plot clicks from flashing scrollbars.
         apply_table_selection_for_source_rows(
             self.parent_app,
@@ -2407,7 +2464,9 @@ class PlotWidget(QWidget):
         self.parent_app.status_label.setText(f"Plot: selected {len(sel_sorted):,} point(s).")
         self._sync_plot_selection_visual()
 
-    def _maybe_default_axis_range_edits(self, axis_key: str, axis_name: str, edit_min: QLineEdit, edit_max: QLineEdit) -> None:
+    def _maybe_default_axis_range_edits(
+        self, axis_key: str, axis_name: str, edit_min: QLineEdit, edit_max: QLineEdit
+    ) -> None:
         """Fill min/max from column bounds only when that axis column changes."""
         if self._prev_range_axis.get(axis_key) == axis_name:
             return
@@ -2514,6 +2573,160 @@ class PlotWidget(QWidget):
             self._maybe_default_axis_range_edits("z", zname, self.zmin, self.zmax)
         self._update_color_controls()
         self._schedule_plot()
+
+    def collect_session_state(self) -> dict:
+        """JSON-safe Plotter settings for ``.cms`` session files."""
+        hover = []
+        for cb in getattr(self, "_hover_combos", None) or []:
+            h = cb.currentData()
+            hover.append(str(h) if h else "")
+        spokes = [c.currentText() for c in getattr(self, "spoke_combos", None) or []]
+        entries = [e.text() for e in getattr(self, "entry_edits", None) or []]
+        fit_key = self.fit_combo.currentData()
+        return {
+            "kind": PLOT_SESSION_KIND,
+            "plot_type": self._current_plot_type(),
+            "x": self.x_combo.currentText(),
+            "y": self.y_combo.currentText(),
+            "z": self.z_combo.currentText(),
+            "xmin": self.xmin.text(),
+            "xmax": self.xmax.text(),
+            "ymin": self.ymin.text(),
+            "ymax": self.ymax.text(),
+            "zmin": self.zmin.text(),
+            "zmax": self.zmax.text(),
+            "hist_bin_width": self.hist_bin_width.text(),
+            "heatmap_y_bin_width": self.heatmap_y_bin_width.text(),
+            "color": self.color_combo.currentText(),
+            "colorscale": self.colorscale_combo.currentText(),
+            "color_min": self.color_range.color_min.text(),
+            "color_max": self.color_range.color_max.text(),
+            "size": self.size_combo.currentText(),
+            "size_min": float(self.size_range.size_min.value()),
+            "size_max": float(self.size_range.size_max.value()),
+            "fit": fit_key if isinstance(fit_key, str) else "",
+            "show_fit_formula": bool(self.show_fit_formula_cb.isChecked()),
+            "fit_trunc_lower": self.fit_trunc_lower.text(),
+            "fit_trunc_upper": self.fit_trunc_upper.text(),
+            "plot_title": self.plot_title_edit.text(),
+            "xaxis_title": self.xaxis_title_edit.text(),
+            "yaxis_title": self.yaxis_title_edit.text(),
+            "zaxis_title": self.zaxis_title_edit.text(),
+            "only_selected": bool(self.only_selected_cb.isChecked()),
+            "hover_structure": bool(self.hover_structure_cb.isChecked()),
+            "hover_persist": bool(self.hover_persist_cb.isChecked()),
+            "hover_columns": hover,
+            "radar_spokes": spokes,
+            "radar_entries": entries,
+        }
+
+    @staticmethod
+    def _set_combo_text(combo: QComboBox, text: str | None) -> None:
+        if not text:
+            return
+        idx = combo.findText(str(text))
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+
+    def apply_session_state(self, state: dict | None) -> None:
+        """Restore Plotter controls from ``collect_session_state``."""
+        if not isinstance(state, dict):
+            return
+        ptype = state.get("plot_type")
+        self.plot_type_combo.blockSignals(True)
+        self.x_combo.blockSignals(True)
+        self.y_combo.blockSignals(True)
+        self.z_combo.blockSignals(True)
+        try:
+            if isinstance(ptype, str):
+                idx = self.plot_type_combo.findData(ptype)
+                if idx >= 0:
+                    self.plot_type_combo.setCurrentIndex(idx)
+            self._set_combo_text(self.x_combo, state.get("x"))
+            self._set_combo_text(self.y_combo, state.get("y"))
+            self._set_combo_text(self.z_combo, state.get("z"))
+        finally:
+            self.plot_type_combo.blockSignals(False)
+            self.x_combo.blockSignals(False)
+            self.y_combo.blockSignals(False)
+            self.z_combo.blockSignals(False)
+        self._prev_range_axis = {
+            "x": self.x_combo.currentText(),
+            "y": self._combo_axis_name(self.y_combo) or "",
+            "z": self._combo_axis_name(self.z_combo) or "",
+        }
+        for edit, key in (
+            (self.xmin, "xmin"),
+            (self.xmax, "xmax"),
+            (self.ymin, "ymin"),
+            (self.ymax, "ymax"),
+            (self.zmin, "zmin"),
+            (self.zmax, "zmax"),
+            (self.hist_bin_width, "hist_bin_width"),
+            (self.heatmap_y_bin_width, "heatmap_y_bin_width"),
+            (self.plot_title_edit, "plot_title"),
+            (self.xaxis_title_edit, "xaxis_title"),
+            (self.yaxis_title_edit, "yaxis_title"),
+            (self.zaxis_title_edit, "zaxis_title"),
+            (self.fit_trunc_lower, "fit_trunc_lower"),
+            (self.fit_trunc_upper, "fit_trunc_upper"),
+        ):
+            val = state.get(key)
+            if isinstance(val, str):
+                edit.setText(val)
+        self._on_plot_type_change()
+        self._set_combo_text(self.color_combo, state.get("color"))
+        self._set_combo_text(self.colorscale_combo, state.get("colorscale"))
+        self._set_combo_text(self.size_combo, state.get("size"))
+        cmin, cmax = state.get("color_min"), state.get("color_max")
+        if isinstance(cmin, str):
+            self.color_range.color_min.setText(cmin)
+        if isinstance(cmax, str):
+            self.color_range.color_max.setText(cmax)
+        try:
+            if state.get("size_min") is not None:
+                self.size_range.size_min.setValue(float(state["size_min"]))
+            if state.get("size_max") is not None:
+                self.size_range.size_max.setValue(float(state["size_max"]))
+        except (TypeError, ValueError):
+            pass
+        fit_key = state.get("fit")
+        if isinstance(fit_key, str) and fit_key:
+            fidx = self.fit_combo.findData(fit_key)
+            if fidx >= 0:
+                self.fit_combo.setCurrentIndex(fidx)
+        if "show_fit_formula" in state:
+            self.show_fit_formula_cb.setChecked(bool(state.get("show_fit_formula")))
+        if "only_selected" in state:
+            self.only_selected_cb.setChecked(bool(state.get("only_selected")))
+        if "hover_structure" in state:
+            self.hover_structure_cb.setChecked(bool(state.get("hover_structure")))
+        if "hover_persist" in state:
+            self.hover_persist_cb.setChecked(bool(state.get("hover_persist")))
+        hover_cols = state.get("hover_columns")
+        if isinstance(hover_cols, list):
+            for cb, name in zip(self._hover_combos, hover_cols, strict=False):
+                if name:
+                    self._set_combo_text(cb, str(name))
+                else:
+                    cb.setCurrentIndex(0)
+        spokes = state.get("radar_spokes")
+        if isinstance(spokes, list):
+            for combo, name in zip(self.spoke_combos, spokes, strict=False):
+                self._set_combo_text(combo, str(name) if name else SPOKE_NONE)
+        entries = state.get("radar_entries")
+        if isinstance(entries, list):
+            for edit, text in zip(self.entry_edits, entries, strict=False):
+                edit.setText(str(text) if text is not None else "")
+        self._update_color_controls()
+        self._schedule_plot()
+
+    @classmethod
+    def from_session_state(cls, parent_app, state: dict | None) -> "PlotWidget":
+        widget = cls(parent_app)
+        widget.apply_session_state(state)
+        return widget
+
 
 class PlotDialog(QDialog):
     """Floating window hosting a :class:`PlotWidget`."""

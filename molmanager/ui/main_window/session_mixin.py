@@ -24,7 +24,7 @@ import sys
 import tempfile
 import time
 
-from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtCore import QByteArray, QTimer, Qt
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
 from rdkit import Chem
@@ -225,6 +225,8 @@ class SessionMixin:
             ),
             "plot_panel_visible": True,
             "plot_panel_width": (self._plot_panel_splitter_sizes() or [0, 0])[1],
+            "docked_plots": self._collect_docked_plots(),
+            "table_layout": self._collect_table_layout(),
             "filters": filters_out,
             "column_logical_order": logical_order,
             "sort_column": sort_col,
@@ -249,6 +251,273 @@ class SessionMixin:
         if not records:
             records = records_from_table(self)
         return serialize_som_browse_records(records)
+
+    @staticmethod
+    def _header_state_b64(header) -> str | None:
+        if header is None:
+            return None
+        try:
+            raw = header.saveState()
+        except RuntimeError:
+            return None
+        if raw is None or raw.isEmpty():
+            return None
+        return bytes(raw.toBase64()).decode("ascii")
+
+    @staticmethod
+    def _restore_header_state_b64(header, payload: object) -> bool:
+        if header is None or not isinstance(payload, str) or not payload:
+            return False
+        try:
+            raw = QByteArray.fromBase64(payload.encode("ascii"))
+            return bool(header.restoreState(raw))
+        except (RuntimeError, ValueError):
+            return False
+
+    def _collect_table_layout(self) -> dict:
+        """Column widths, hidden columns, row chrome, and Qt header state."""
+        widths: dict[str, int] = {}
+        hidden: list[str] = []
+        hh = None
+        try:
+            hh = self.table.horizontalHeader()
+        except RuntimeError:
+            hh = None
+        updates = False
+        try:
+            updates = bool(self.table.updatesEnabled())
+            self.table.setUpdatesEnabled(False)
+        except RuntimeError:
+            pass
+        try:
+            for i, h in enumerate(self.headers):
+                if not h:
+                    continue
+                was_hidden = False
+                try:
+                    was_hidden = bool(self.table.isColumnHidden(i))
+                    if was_hidden and i != 0 and hh is not None:
+                        hh.showSection(i)
+                    width = int(self.table.columnWidth(i))
+                except RuntimeError:
+                    width = 0
+                if was_hidden:
+                    try:
+                        self.table.setColumnHidden(i, True)
+                    except RuntimeError:
+                        pass
+                    if i != 0:
+                        hidden.append(h)
+                if width > 0 and h != "ID_HIDDEN":
+                    widths[h] = width
+        finally:
+            if updates:
+                try:
+                    self.table.setUpdatesEnabled(True)
+                except RuntimeError:
+                    pass
+        default_h = None
+        vh = None
+        try:
+            vh = self.table.verticalHeader()
+            if vh is not None:
+                default_h = int(vh.defaultSectionSize())
+        except RuntimeError:
+            vh = None
+        return {
+            "column_widths": widths,
+            "hidden_columns": hidden,
+            "default_row_height": default_h,
+            "hheader_state": self._header_state_b64(hh),
+            "vheader_state": self._header_state_b64(vh),
+        }
+
+    def _restore_table_layout(self, payload: object) -> None:
+        if not isinstance(payload, dict):
+            return
+        try:
+            hh = self.table.horizontalHeader()
+        except RuntimeError:
+            hh = None
+        self._restore_header_state_b64(hh, payload.get("hheader_state"))
+        widths = payload.get("column_widths")
+        if isinstance(widths, dict):
+            for name, raw in widths.items():
+                if not isinstance(name, str) or name not in self.headers:
+                    continue
+                try:
+                    width = int(raw)
+                except (TypeError, ValueError):
+                    continue
+                if width <= 0:
+                    continue
+                col = self.headers.index(name)
+                try:
+                    self.table.setColumnWidth(col, width)
+                except RuntimeError:
+                    pass
+        hidden = payload.get("hidden_columns")
+        if isinstance(hidden, list):
+            for name in hidden:
+                if not isinstance(name, str) or name not in self.headers or name == "ID_HIDDEN":
+                    continue
+                try:
+                    self.table.setColumnHidden(self.headers.index(name), True)
+                except RuntimeError:
+                    pass
+        try:
+            vh = self.table.verticalHeader()
+        except RuntimeError:
+            vh = None
+        self._restore_header_state_b64(vh, payload.get("vheader_state"))
+        raw_h = payload.get("default_row_height")
+        try:
+            row_h = int(raw_h)
+        except (TypeError, ValueError):
+            row_h = 0
+        if row_h > 0:
+            try:
+                if vh is not None:
+                    vh.setDefaultSectionSize(row_h)
+            except RuntimeError:
+                pass
+        try:
+            self.table.setColumnHidden(0, True)
+        except RuntimeError:
+            pass
+
+    def _collect_docked_plots(self) -> dict:
+        """Docked Plotter widgets keyed by workspace pane."""
+        mgr = getattr(self, "_workspace_layout", None)
+        if mgr is None:
+            return {"panes": [], "preferred_pane_id": None}
+        panes_out: list[dict] = []
+        for i, pane in enumerate(mgr.plot_panes()):
+            plots: list[dict] = []
+            for widget in pane.plot_widgets():
+                collect = getattr(widget, "collect_session_state", None)
+                if not callable(collect):
+                    continue
+                try:
+                    state = collect()
+                except RuntimeError:
+                    continue
+                if not isinstance(state, dict):
+                    continue
+                kind = str(state.get("kind") or "plotter")
+                plots.append({"kind": kind, "state": state})
+            if not plots:
+                continue
+            panes_out.append(
+                {
+                    "pane_id": pane.pane_id,
+                    "pane_index": i,
+                    "current": pane.page_index(),
+                    "plots": plots,
+                }
+            )
+        pref = mgr.preferred_pane()
+        return {
+            "panes": panes_out,
+            "preferred_pane_id": pref.pane_id if pref is not None else None,
+        }
+
+    def _discard_docked_plot_widgets(self) -> None:
+        """Detach and delete docked plot widgets so a session restore starts clean."""
+        mgr = getattr(self, "_workspace_layout", None)
+        if mgr is None:
+            return
+        widgets = []
+        for pane in mgr.plot_panes():
+            widgets.extend(pane.plot_widgets())
+            pane.set_plot_widgets([])
+        for widget in widgets:
+            try:
+                widget.setParent(None)
+                widget.deleteLater()
+            except RuntimeError:
+                pass
+
+    def _restore_docked_plot_widget(self, spec: dict):
+        state = spec.get("state")
+        if not isinstance(state, dict):
+            state = spec
+        kind = str(spec.get("kind") or state.get("kind") or "plotter")
+        if kind != "plotter":
+            return None
+        try:
+            from ..plot import PlotWidget
+        except Exception:
+            logger.exception("Could not import Plotter to restore a docked plot")
+            return None
+        return PlotWidget.from_session_state(self, state)
+
+    def _restore_docked_plots(self, payload: object) -> None:
+        from .workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
+
+        mgr = getattr(self, "_workspace_layout", None)
+        if mgr is None:
+            return
+        panes_data = payload.get("panes") if isinstance(payload, dict) else None
+        if not isinstance(panes_data, list):
+            panes_data = []
+        if panes_data and not mgr.plot_panes():
+            layout_id = LAYOUT_TABLE_SINGLE if len(panes_data) <= 1 else LAYOUT_TABLE_STACK
+            mgr.apply_layout(layout_id, preserve_plots=False)
+        for pane in mgr.plot_panes():
+            leftover = pane.plot_widgets()
+            pane.set_plot_widgets([])
+            for widget in leftover:
+                try:
+                    widget.setParent(None)
+                    widget.deleteLater()
+                except RuntimeError:
+                    pass
+        if not panes_data:
+            return
+        for spec in panes_data:
+            if not isinstance(spec, dict):
+                continue
+            pane = None
+            pane_id = spec.get("pane_id")
+            if isinstance(pane_id, str) and pane_id:
+                pane = mgr.find_pane(pane_id)
+            if pane is None:
+                try:
+                    idx = int(spec.get("pane_index", 0))
+                except (TypeError, ValueError):
+                    idx = 0
+                panes = mgr.plot_panes()
+                if not panes:
+                    continue
+                pane = panes[max(0, min(idx, len(panes) - 1))]
+            widgets = []
+            for plot_spec in spec.get("plots") or []:
+                if not isinstance(plot_spec, dict):
+                    continue
+                widget = self._restore_docked_plot_widget(plot_spec)
+                if widget is None:
+                    continue
+                widgets.append(widget)
+            if not widgets:
+                continue
+            for widget in widgets:
+                wire = getattr(self, "_wire_docked_plot_widget", None)
+                if callable(wire):
+                    wire(widget)
+            try:
+                current = int(spec.get("current", 0))
+            except (TypeError, ValueError):
+                current = 0
+            pane.set_plot_widgets(widgets, current=current)
+        pref_id = payload.get("preferred_pane_id")
+        if isinstance(pref_id, str) and pref_id:
+            pref = mgr.find_pane(pref_id)
+            if pref is not None:
+                mgr.set_preferred_pane(pref)
+        show = getattr(self, "show_docked_plot_panel", None)
+        if callable(show):
+            show()
 
     def _restore_column_visual_order(self, logical_order: list[int]) -> None:
         h = self.table.horizontalHeader()
@@ -445,16 +714,13 @@ class SessionMixin:
                     bool(spec.get("enabled", True)), bool(spec.get("inverted", False))
                 )
         self.f_panel.setVisible(bool(doc.get("filter_panel_visible", False)))
+        self._discard_docked_plot_widgets()
         ws = doc.get("workspace_layout")
         mgr = getattr(self, "_workspace_layout", None)
         if mgr is not None and isinstance(ws, dict):
             layout_id = ws.get("layout_id")
             if isinstance(layout_id, str) and layout_id:
-                apply = getattr(self, "apply_workspace_layout", None)
-                if callable(apply):
-                    apply(layout_id)
-                else:
-                    mgr.apply_layout(layout_id, preserve_plots=False)
+                mgr.apply_layout(layout_id, preserve_plots=False)
             mgr.restore_splitter_sizes(ws)
         elif getattr(self, "_workspace_layout", None) is not None:
             saved_w = doc.get("plot_panel_width")
@@ -462,6 +728,10 @@ class SessionMixin:
                 ensure = getattr(self, "_ensure_plot_panel_width", None)
                 if callable(ensure):
                     QTimer.singleShot(0, lambda: ensure(int(saved_w)))
+        self._restore_docked_plots(doc.get("docked_plots"))
+        ws_after = doc.get("workspace_layout")
+        if mgr is not None and isinstance(ws_after, dict):
+            mgr.restore_splitter_sizes(ws_after)
         co = doc.get("column_logical_order")
         if isinstance(co, list):
             self._restore_column_visual_order([int(x) for x in co])
@@ -501,6 +771,8 @@ class SessionMixin:
 
         restore_som_maps_for_session(self, doc.get("som_browse"))
         restore_ionization_sidecar(doc.get("ionization_sidecar"))
+        self._pending_session_table_layout = doc.get("table_layout")
+        self._restore_table_layout(self._pending_session_table_layout)
         QTimer.singleShot(0, self._deferred_session_post_load_follow_up)
 
     def save_session_as(self) -> None:
@@ -655,8 +927,12 @@ class SessionMixin:
             migrate()
         n = self._table_model.rowCount()
         render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
+        pending = getattr(self, "_pending_session_table_layout", None)
         if callable(render) and render():
+            self._restore_table_layout(pending)
             return
+        self._restore_table_layout(pending)
+        self._pending_session_table_layout = None
         self.status_label.setText(loaded_session_status(n) if n else "Ready.")
 
     def _finalize_session_csv_load(self) -> None:

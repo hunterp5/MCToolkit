@@ -93,6 +93,18 @@ def test_new_window_and_file_load_use_table_only_layout(qapp):  # noqa: ARG001
     assert w._workspace_layout.layout_id == LAYOUT_TABLE_ONLY
 
 
+def test_docking_from_table_only_uses_split_view(qapp):  # noqa: ARG001
+    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_ONLY, LAYOUT_TABLE_SINGLE
+
+    w = ChemicalTableApp()
+    assert w._workspace_layout.layout_id == LAYOUT_TABLE_ONLY
+    pane = w._target_plot_pane()
+    assert pane is not None
+    assert w._workspace_layout.layout_id == LAYOUT_TABLE_SINGLE
+    assert len(w._workspace_layout.plot_panes()) == 1
+    assert w._workspace_layout.preferred_pane() is pane
+
+
 def test_clear_all_re_enables_menubar_after_ingest(qapp):  # noqa: ARG001
     w = ChemicalTableApp()
     _seed_two_rows(w)

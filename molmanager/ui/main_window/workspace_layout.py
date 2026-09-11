@@ -508,7 +508,11 @@ class WorkspaceLayoutManager(QWidget):
                 sizes[f"splitter_{i}"] = [int(s) for s in sp.sizes()]
             except RuntimeError:
                 pass
-        return {"layout_id": self._layout_id, "sizes": sizes}
+        return {
+            "layout_id": self._layout_id,
+            "sizes": sizes,
+            "preferred_pane_id": self._preferred_pane_id,
+        }
 
     def restore_splitter_sizes(self, payload: dict | None) -> None:
         if not isinstance(payload, dict):
@@ -524,6 +528,11 @@ class WorkspaceLayoutManager(QWidget):
                     sp.setSizes([max(0, int(v)) for v in vals])
                 except (RuntimeError, TypeError, ValueError):
                     pass
+        pref_id = payload.get("preferred_pane_id")
+        if isinstance(pref_id, str) and pref_id:
+            pane = self.find_pane(pref_id)
+            if pane is not None:
+                self.set_preferred_pane(pane)
 
     def apply_layout(
         self,

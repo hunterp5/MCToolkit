@@ -134,6 +134,7 @@ def test_splitter_size_roundtrip(qapp):
     payload = mgr.collect_splitter_sizes()
     assert payload["layout_id"] == LAYOUT_TABLE_STACK
     assert "sizes" in payload
+    assert "preferred_pane_id" in payload
     mgr.apply_layout(LAYOUT_TABLE_SIDE, preserve_plots=False)
     mgr.restore_splitter_sizes(payload)  # different layout; sizes keys may not match count
     payload2 = mgr.collect_splitter_sizes()

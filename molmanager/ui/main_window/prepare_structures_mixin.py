@@ -966,6 +966,13 @@ class PrepareStructuresMixin:
         self._render2d_pixmap_target = None
         self._render2d_column_pixmap_mode = True
         self._resize_columns_after_render2d(pix_target)
+        finishing_batch = bool(getattr(self, "_render2d_batch_active", False))
+        if finishing_batch:
+            pending = getattr(self, "_pending_session_table_layout", None)
+            restore = getattr(self, "_restore_table_layout", None)
+            if pending and callable(restore):
+                restore(pending)
+                self._pending_session_table_layout = None
         try:
             self.table.setUpdatesEnabled(True)
         except Exception:

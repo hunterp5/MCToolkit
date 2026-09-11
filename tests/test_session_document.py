@@ -20,11 +20,22 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 from rdkit import Chem
 
 from molmanager.ui.main_window import ChemicalTableApp
+
+
+@pytest.fixture(autouse=True)
+def _skip_session_auto_render(monkeypatch) -> None:
+    """Session tests restore table chrome; skip the async 2D render that hangs teardown."""
+    monkeypatch.setattr(
+        ChemicalTableApp,
+        "_try_auto_render_all_structures_after_ingest",
+        lambda self: False,
+    )
 
 
 def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
@@ -45,6 +56,10 @@ def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
     assert len(doc2["rows"]) == 1
     assert doc2["rows"][0]["id"] == 0
     assert "CC" in (doc2["rows"][0]["cells"].get("SMILES") or "")
+    assert "table_layout" in doc2
+    assert "docked_plots" in doc2
+    assert "column_widths" in doc2["table_layout"]
+    assert "hidden_columns" in doc2["table_layout"]
 
 
 def test_apply_session_document_restores_row(qapp):  # noqa: ARG001
@@ -245,3 +260,157 @@ def test_apply_session_document_auto_renders_like_file_ingest(qapp, monkeypatch)
     qapp.processEvents()
 
     assert calls == [1]
+
+
+def test_session_roundtrip_restores_table_layout(qapp, monkeypatch) -> None:  # noqa: ARG001
+    monkeypatch.setattr(
+        ChemicalTableApp,
+        "_try_auto_render_all_structures_after_ingest",
+        lambda self: False,
+    )
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
+    w.mols[0] = Chem.MolFromSmiles("CC")
+    w.next_oid = 1
+    w.resize(900, 400)
+    w.show()
+    qapp.processEvents()
+    mwi = w.headers.index("MW")
+    w.table.setColumnWidth(mwi, 142)
+    w.table.setColumnHidden(mwi, True)
+    w.table.verticalHeader().setDefaultSectionSize(88)
+    doc = w._build_session_document()
+    layout = doc["table_layout"]
+    assert layout["column_widths"]["MW"] == 142
+    assert layout["default_row_height"] == 88
+    assert "MW" in layout["hidden_columns"]
+    assert "ID_HIDDEN" not in layout["hidden_columns"]
+
+    w2 = ChemicalTableApp()
+    w2.resize(900, 400)
+    w2.show()
+    qapp.processEvents()
+    w2._apply_session_document(doc)
+    qapp.processEvents()
+    mwi2 = w2.headers.index("MW")
+    assert w2.table.isColumnHidden(mwi2)
+    w2.table.setColumnHidden(mwi2, False)
+    assert int(w2.table.columnWidth(mwi2)) == 142
+    assert int(w2.table.verticalHeader().defaultSectionSize()) == 88
+    assert w2.table.isColumnHidden(0)
+
+
+def test_session_roundtrip_restores_docked_plotter(qapp, monkeypatch) -> None:  # noqa: ARG001
+    from PyQt5.QtWidgets import QWidget
+
+    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+
+    class FakePlot(QWidget):
+        def __init__(self, state: dict | None = None) -> None:
+            super().__init__(None)
+            self._state = state or {
+                "kind": "plotter",
+                "x": "MW",
+                "y": "LogP",
+                "plot_title": "MW vs LogP",
+                "color": "MW",
+            }
+
+        def collect_session_state(self) -> dict:
+            return dict(self._state)
+
+        def _sync_footer_chrome(self) -> None:
+            return None
+
+    restored: list[FakePlot] = []
+
+    def fake_restore(self, spec):  # noqa: ARG001
+        state = spec.get("state") if isinstance(spec, dict) else None
+        w = FakePlot(state if isinstance(state, dict) else None)
+        restored.append(w)
+        return w
+
+    monkeypatch.setattr(ChemicalTableApp, "_restore_docked_plot_widget", fake_restore)
+    monkeypatch.setattr(
+        ChemicalTableApp,
+        "_try_auto_render_all_structures_after_ingest",
+        lambda self: False,
+    )
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW", "LogP"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CC", "MW": "30", "LogP": "1.2"})
+    w.mols[0] = Chem.MolFromSmiles("CC")
+    w.next_oid = 1
+    w.apply_workspace_layout(LAYOUT_TABLE_SINGLE)
+    pane = w._workspace_layout.plot_panes()[0]
+    w._workspace_layout.dock_into_pane(pane, FakePlot())
+    doc = w._build_session_document()
+    panes = doc["docked_plots"]["panes"]
+    assert panes
+    assert panes[0]["plots"][0]["state"]["x"] == "MW"
+    assert panes[0]["plots"][0]["state"]["y"] == "LogP"
+    assert panes[0]["plots"][0]["state"]["plot_title"] == "MW vs LogP"
+    wire = json.dumps(doc)
+    doc2 = json.loads(wire)
+
+    w2 = ChemicalTableApp()
+    w2._apply_session_document(doc2)
+    assert restored
+    docked = list(w2.iter_docked_plot_widgets())
+    assert docked
+    assert docked[0] is restored[0]
+    assert restored[0]._state["x"] == "MW"
+    assert restored[0]._state["plot_title"] == "MW vs LogP"
+
+
+def test_session_open_clears_previous_docked_plots(qapp, monkeypatch) -> None:  # noqa: ARG001
+    from PyQt5.QtWidgets import QWidget
+
+    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+
+    class FakePlot(QWidget):
+        def collect_session_state(self) -> dict:
+            return {"kind": "plotter", "x": "MW"}
+
+        def _sync_footer_chrome(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        ChemicalTableApp,
+        "_restore_docked_plot_widget",
+        lambda self, spec: FakePlot(),  # noqa: ARG005
+    )
+    monkeypatch.setattr(
+        ChemicalTableApp,
+        "_try_auto_render_all_structures_after_ingest",
+        lambda self: False,
+    )
+
+    leftover_host = ChemicalTableApp()
+    leftover_host.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
+    leftover_host._table_model.set_headers(list(leftover_host.headers))
+    leftover_host._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
+    leftover_host.mols[0] = Chem.MolFromSmiles("CC")
+    leftover_host.next_oid = 1
+    leftover_host.apply_workspace_layout(LAYOUT_TABLE_SINGLE)
+    leftover_host._workspace_layout.dock_into_pane(
+        leftover_host._workspace_layout.plot_panes()[0], FakePlot()
+    )
+    assert list(leftover_host.iter_docked_plot_widgets())
+
+    source = ChemicalTableApp()
+    source.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+    source._table_model.set_headers(list(source.headers))
+    source._table_model.append_row(0, {"SMILES": "CCO"})
+    source.mols[0] = Chem.MolFromSmiles("CCO")
+    source.next_oid = 1
+    doc = source._build_session_document()
+    assert not doc["docked_plots"]["panes"]
+
+    leftover_host._apply_session_document(doc)
+    qapp.processEvents()
+    assert list(leftover_host.iter_docked_plot_widgets()) == []
