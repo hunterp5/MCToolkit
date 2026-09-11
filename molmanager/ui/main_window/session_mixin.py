@@ -31,6 +31,7 @@ from rdkit import Chem
 
 from ...config import load_config
 from ...confs_codec import deserialize_confs_sidecar, serialize_confs_sidecar
+from ...microstate_cache import restore_ionization_sidecar, serialize_ionization_sidecar
 from ...utils import mol_to_canonical_smiles
 from ..strings import loaded_session_status
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
@@ -237,6 +238,7 @@ class SessionMixin:
                 getattr(self, "_confs_blocks_sidecar", {}) or {}
             ),
             "som_browse": self._session_som_browse_payload(),
+            "ionization_sidecar": serialize_ionization_sidecar(),
         }
 
     def _session_som_browse_payload(self) -> list[dict]:
@@ -498,7 +500,8 @@ class SessionMixin:
         from ..som_browser import restore_som_maps_for_session
 
         restore_som_maps_for_session(self, doc.get("som_browse"))
-        QTimer.singleShot(0, self._migrate_legacy_confs_cells_to_sidecar)
+        restore_ionization_sidecar(doc.get("ionization_sidecar"))
+        QTimer.singleShot(0, self._deferred_session_post_load_follow_up)
 
     def save_session_as(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -645,6 +648,17 @@ class SessionMixin:
         self._csv_session_ctx = None
         self._finalize_session_csv_load()
 
+    def _deferred_session_post_load_follow_up(self) -> None:
+        """Migrate packed ensembles, then auto-render 2D using the same rules as file ingest."""
+        migrate = getattr(self, "_migrate_legacy_confs_cells_to_sidecar", None)
+        if callable(migrate):
+            migrate()
+        n = self._table_model.rowCount()
+        render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
+        if callable(render) and render():
+            return
+        self.status_label.setText(loaded_session_status(n) if n else "Ready.")
+
     def _finalize_session_csv_load(self) -> None:
         self.schedule_calculate_global_bounds()
         self.table.setSortingEnabled(False)
@@ -654,4 +668,4 @@ class SessionMixin:
             schedule = getattr(self, "_schedule_sqlite_rebuild", None)
             if callable(schedule) and rows_n > 0:
                 schedule()
-        self.status_label.setText(loaded_session_status(rows_n))
+        QTimer.singleShot(0, self._deferred_session_post_load_follow_up)

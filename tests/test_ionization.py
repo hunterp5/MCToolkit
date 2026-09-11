@@ -169,6 +169,15 @@ def test_close_unipka_task_lmdb_closes_env() -> None:
     assert task.datasets == {}
 
 
+def test_pka_gpu_forced_off_env(monkeypatch) -> None:
+    from molmanager.ionization import pka_gpu_forced_off
+
+    monkeypatch.delenv("MOLMANAGER_PKA_GPU", raising=False)
+    assert pka_gpu_forced_off() is False
+    monkeypatch.setenv("MOLMANAGER_PKA_GPU", "0")
+    assert pka_gpu_forced_off() is True
+
+
 def test_unipka_use_gpu_honors_env(monkeypatch) -> None:
     monkeypatch.setenv("MOLMANAGER_PKA_GPU", "0")
     monkeypatch.setattr("molmanager.ionization.unipka_cuda_available", lambda: True)
@@ -182,6 +191,7 @@ def test_unipka_use_gpu_honors_env(monkeypatch) -> None:
 
 def test_cuda_missing_hint_emits_once(monkeypatch, caplog) -> None:
     monkeypatch.delenv("MOLMANAGER_UNIPKA_GPU_HINT_EMITTED", raising=False)
+    monkeypatch.setattr("molmanager.ionization.torch_is_cuda_build", lambda: False)
     monkeypatch.setattr("molmanager.ionization.unipka_use_gpu", lambda: False)
     monkeypatch.setattr("molmanager.ionization.unipka_cuda_available", lambda: False)
     monkeypatch.setattr("molmanager.ionization._nvidia_gpu_present", lambda: True)

@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from concurrent.futures import ProcessPoolExecutor
 
@@ -98,9 +99,15 @@ def _terminate_executor_children(ex: ProcessPoolExecutor) -> None:
         if proc is None:
             continue
         try:
-            proc.join(timeout=0.5)
+            proc.join(timeout=0.4)
         except Exception:
             pass
+        try:
+            if proc.is_alive():
+                proc.kill()
+                proc.join(timeout=0.4)
+        except Exception:
+            logger.debug("kill process-pool child failed", exc_info=True)
 
 
 def shutdown_all_process_pools(*, kill_workers: bool = False) -> None:
@@ -110,3 +117,16 @@ def shutdown_all_process_pools(*, kill_workers: bool = False) -> None:
         _ACTIVE_POOLS.clear()
     for ex in pools:
         shutdown_process_pool_executor(ex, kill_workers=kill_workers)
+
+
+def reap_after_gui_exit(status: int = 0) -> None:
+    """Kill leftover Uni-pKa workers and exit so the shell is not held by QThreadPool/CUDA."""
+    try:
+        code = int(status)
+    except (TypeError, ValueError):
+        code = 0
+    try:
+        signal_application_shutdown()
+        shutdown_all_process_pools(kill_workers=True)
+    finally:
+        os._exit(code)

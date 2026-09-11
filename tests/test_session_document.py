@@ -168,3 +168,80 @@ def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
     assert recs and recs[0].oid == 7 and recs[0].atoms[0].is_som
     table_recs = records_from_table(w2)
     assert table_recs and table_recs[0].smiles == "CCO"
+
+
+def test_session_roundtrip_restores_ionization_cache(qapp, monkeypatch) -> None:  # noqa: ARG001
+    from molmanager import microstate_cache as mc
+    from molmanager.ionization import (
+        PicklableIonizationEnsemble,
+        PicklableIonizationMicrostate,
+        microstates_for_mol,
+    )
+    from molmanager.workers.structure_grouping import structure_key
+
+    mc.clear()
+    try:
+        mol = Chem.MolFromSmiles("CCO")
+        assert mol is not None
+        key = structure_key(mol)
+        fake = PicklableIonizationEnsemble(
+            microstates=(PicklableIonizationMicrostate("CCO", 0, 0.0, mol.ToBinary()),),
+            macro_pkas=(15.9,),
+        )
+        w = ChemicalTableApp()
+        w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+        w._table_model.set_headers(list(w.headers))
+        w._table_model.append_row(0, {"SMILES": "CCO"})
+        w.mols[0] = mol
+        w.next_oid = 1
+        mc.store(key, fake)
+
+        doc = w._build_session_document()
+        assert doc["ionization_sidecar"]["entries"][key]["macro_pkas"] == [15.9]
+        wire = json.dumps(doc)
+        doc2 = json.loads(wire)
+
+        w2 = ChemicalTableApp()
+        w2._apply_session_document(doc2)
+        hit, cached = mc.lookup(key)
+        assert hit is True
+        assert cached.macro_pkas == (15.9,)
+
+        def boom(_m):
+            raise AssertionError("Uni-pKa should not run after session restore")
+
+        monkeypatch.setattr("molmanager.ionization.predict_ionization_ensemble", boom)
+        out = microstates_for_mol(Chem.MolFromSmiles("CCO"))
+        assert out.macro_pkas == (15.9,)
+    finally:
+        mc.clear()
+
+
+def test_apply_session_document_auto_renders_like_file_ingest(qapp, monkeypatch):  # noqa: ARG001
+    """Opening a session queues the same auto 2D render used after file ingest."""
+    calls: list[int] = []
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CCO"})
+    w.mols[0] = Chem.MolFromSmiles("CCO")
+    w.next_oid = 1
+    doc = w._build_session_document()
+
+    w2 = ChemicalTableApp()
+
+    def fake_auto_render(self) -> bool:
+        if self is w2:
+            calls.append(self._table_model.rowCount())
+        return False
+
+    monkeypatch.setattr(
+        ChemicalTableApp,
+        "_try_auto_render_all_structures_after_ingest",
+        fake_auto_render,
+    )
+    w2._apply_session_document(doc)
+    qapp.processEvents()
+
+    assert calls == [1]

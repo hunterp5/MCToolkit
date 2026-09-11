@@ -46,7 +46,6 @@ from molmanager.ionization import (
     predict_ionization_ensembles,
     prepare_mol_for_ionization,
     unipka_import_error,
-    unipka_use_gpu,
 )
 from .process_pool_utils import (
     application_is_shutting_down,
@@ -334,6 +333,11 @@ class PKaPredictorWorker(QRunnable):
                     os.environ.get("MOLMANAGER_UNIPKA_MMFF_THREADS") is None and proc_workers > 1
                 )
                 prev_mmff = _set_unipka_mmff_thread_env(proc_workers)
+                logger.info(
+                    "pKa: scoring in %s worker process(es) (%s unique structure(s))",
+                    proc_workers,
+                    n_unique,
+                )
                 ex = register_process_pool(ProcessPoolExecutor(max_workers=proc_workers))
                 try:
                     pending = {ex.submit(_mp_compute_pka_chunk, chunk) for chunk in task_chunks}
@@ -374,8 +378,6 @@ class PKaPredictorWorker(QRunnable):
                 from molmanager.microstate_cache import store as cache_store
 
                 pin_unipka_torch_threads()
-                if unipka_use_gpu():
-                    logger.info("pKa: scoring on GPU in-process (%s unique structure(s))", n_unique)
                 for key in order:
                     if should_terminate_process_pool(cancel_ev):
                         cancelled = True

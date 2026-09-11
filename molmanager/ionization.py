@@ -150,8 +150,28 @@ _WORKER_THREADS_PINNED = False
 _UNIPKA_DEVICE_LOGGED = False
 
 
+def pka_gpu_forced_off() -> bool:
+    """True when ``MOLMANAGER_PKA_GPU`` forces CPU (does not initialize CUDA)."""
+    raw = (os.environ.get("MOLMANAGER_PKA_GPU") or "").strip().lower()
+    return raw in {"0", "false", "no", "off", "cpu"}
+
+
+def torch_is_cuda_build() -> bool:
+    """True when this PyTorch wheel was built with CUDA (does not initialize the runtime)."""
+    try:
+        import torch
+
+        return bool(getattr(torch, "version", None) and torch.version.cuda)
+    except Exception:
+        return False
+
+
 def unipka_cuda_available() -> bool:
-    """True when the installed PyTorch can see a CUDA device."""
+    """True when the installed PyTorch can see a CUDA device.
+
+    Initializes the CUDA runtime. Call only from Uni-pKa worker processes, never
+    from the GUI process (Windows spawn hangs afterward; WebEngine GL breaks).
+    """
     try:
         import torch
 
@@ -162,9 +182,9 @@ def unipka_cuda_available() -> bool:
 
 def unipka_use_gpu() -> bool:
     """Whether Uni-pKa inference should run on CUDA (env ``MOLMANAGER_PKA_GPU``)."""
-    raw = (os.environ.get("MOLMANAGER_PKA_GPU") or "").strip().lower()
-    if raw in {"0", "false", "no", "off", "cpu"}:
+    if pka_gpu_forced_off():
         return False
+    raw = (os.environ.get("MOLMANAGER_PKA_GPU") or "").strip().lower()
     cuda = unipka_cuda_available()
     if raw in {"1", "true", "yes", "on", "cuda", "gpu"} and not cuda:
         logger.warning(
@@ -199,7 +219,7 @@ def warn_if_cuda_torch_missing() -> None:
     """Log once if an NVIDIA GPU is present but this PyTorch build cannot use it."""
     if os.environ.get("MOLMANAGER_UNIPKA_GPU_HINT_EMITTED"):
         return
-    if unipka_use_gpu() or unipka_cuda_available():
+    if torch_is_cuda_build():
         return
     if not _nvidia_gpu_present():
         return

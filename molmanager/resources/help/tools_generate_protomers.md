@@ -38,4 +38,4 @@ Use for tricky acidic/basic centers, tautomer-sensitive series, or when you want
 
 ## Tips and limits
 
-Enumeration can multiply row counts quickly - filter afterward. Weights are Uni-pKa Boltzmann populations at the chosen pH. Requires `unipkainfer`; treat outputs as candidates, not ground truth. Re-running after pkasolver is a new method, not a refresh.
+Enumeration can multiply row counts quickly - filter afterward. Weights are Uni-pKa Boltzmann populations at the chosen pH. Requires `unipkainfer`; treat outputs as candidates, not ground truth. Re-running after pkasolver is a new method, not a refresh. If Predict pKa already ran, the saved session restores the ensemble so Generate Protomers does not need another Uni-pKa pass.

@@ -37,9 +37,12 @@ logger = logging.getLogger(__name__)
 
 
 def unipka_cuda_available() -> bool:
-    from molmanager.ionization import unipka_use_gpu
+    """CUDA wheel present and GPU not forced off. Does not initialize the CUDA runtime."""
+    from molmanager.ionization import pka_gpu_forced_off, torch_is_cuda_build
 
-    return unipka_use_gpu()
+    if pka_gpu_forced_off():
+        return False
+    return torch_is_cuda_build()
 
 
 def chunk_structure_keys(keys: list[str], n_workers: int) -> list[list[str]]:
@@ -81,11 +84,14 @@ def plan_ionization_process_workers(
     Decide whether to use a process pool and how many workers.
 
     ``configured`` is the tool-specific env override (``None`` = auto).
-    CUDA always runs in-process: spawning workers after ``torch.cuda`` is
-    initialized hangs on Windows and progress stays at 0 until the child dies.
+    CUDA wheels use a one-worker process pool so GPU scoring stays in a child
+    that can be terminated on app close. The GUI process must not call
+    ``torch.cuda.is_available()`` (Windows spawn then hangs; WebEngine GL breaks).
     """
     if unipka_cuda_available():
-        return False, 1
+        if configured is not None and int(configured) <= 0:
+            return False, 1
+        return n_unique >= 1, 1
     cpu = os.cpu_count() or 4
     auto_workers = min(n_unique, max(1, min(8, cpu - 1)))
     if configured is None:
@@ -157,7 +163,7 @@ def predict_microstates_for_sketch(
     """
     import time
 
-    from molmanager.ionization import microstates_for_mol, unipka_use_gpu
+    from molmanager.ionization import microstates_for_mol
     from molmanager.microstate_cache import lookup as cache_lookup
     from molmanager.microstate_cache import store as cache_store
 
@@ -176,10 +182,6 @@ def predict_microstates_for_sketch(
     cfg = load_config()
     configured = cfg.pka_process_workers
     if configured is not None and int(configured) <= 0:
-        return microstates_for_mol(mol)
-
-    if unipka_use_gpu():
-        # CUDA cannot be initialized in the GUI process and then used in a spawn child.
         return microstates_for_mol(mol)
 
     ex = register_process_pool(ProcessPoolExecutor(max_workers=1))
@@ -346,12 +348,18 @@ def build_microstates_cache_by_key(
             )
             _restore_unipka_mmff_thread_env(prev_mmff, wrote_mmff)
         if pool_failed or any(k not in cache for k in need):
+            # Do not score leftover structures in this process when a CUDA wheel is
+            # installed — that would initialize CUDA in the GUI and block shutdown.
+            sequential_ok = not unipka_cuda_available()
             for key in need:
                 if key in cache:
                     continue
                 if should_terminate_process_pool(cancel_event):
                     break
-                cache[key] = microstates_for_mol(rep[key])
+                if sequential_ok:
+                    cache[key] = microstates_for_mol(rep[key])
+                else:
+                    cache[key] = None
                 _report_ionization(len(cache))
         _report_ionization(len(cache), force=True)
         cache_store_many({k: cache[k] for k in need if k in cache})

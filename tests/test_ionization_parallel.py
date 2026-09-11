@@ -47,9 +47,12 @@ def test_plan_ionization_auto_uses_mp_from_two_unique(monkeypatch) -> None:
     assert workers >= 2
 
 
-def test_plan_ionization_cuda_runs_in_process(monkeypatch) -> None:
+def test_plan_ionization_cuda_uses_one_worker_pool(monkeypatch) -> None:
     monkeypatch.setattr(ionization_parallel, "unipka_cuda_available", lambda: True)
     use_mp, workers = plan_ionization_process_workers(12, None)
+    assert use_mp is True
+    assert workers == 1
+    use_mp, workers = plan_ionization_process_workers(12, 0)
     assert use_mp is False
     assert workers == 1
 

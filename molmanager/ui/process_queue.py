@@ -110,7 +110,11 @@ class ProcessQueueManager(QObject):
 
     def enqueue_fast(self, title: str, factory: Callable[[threading.Event], QRunnable]) -> str:
         """Start an interactive job on a separate small pool (does not block heavy queue)."""
-        if self.has_running_job() or self.has_pending_jobs() or self.is_blocked_by_external_activity():
+        if (
+            self.has_running_job()
+            or self.has_pending_jobs()
+            or self.is_blocked_by_external_activity()
+        ):
             return self.enqueue(title, factory)
         job_id = str(uuid.uuid4())[:8]
         cancel_ev = threading.Event()
@@ -180,6 +184,8 @@ class ProcessQueueManager(QObject):
         shutdown_all_process_pools(kill_workers=True)
         self._pool.clear()
         self._fast_pool.clear()
+        self._pool.waitForDone(500)
+        self._fast_pool.waitForDone(500)
 
     def clear_queued(self) -> int:
         """Remove all jobs waiting in the queue (not the running job). Returns number removed."""
@@ -215,7 +221,8 @@ class ProcessQueueManager(QObject):
                 "job_id": self._current_job_id,
                 "title": self._current_title or "",
                 "status": "Running",
-                "cancellable": self._running_cancel is not None and not self._running_cancel.is_set(),
+                "cancellable": self._running_cancel is not None
+                and not self._running_cancel.is_set(),
                 "started_at": self._current_started_at,
             }
         fast_running = []

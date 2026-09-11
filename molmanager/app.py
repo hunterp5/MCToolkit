@@ -116,4 +116,11 @@ def main(argv: list[str] | None = None) -> int:
                 logger.warning("Startup file load failed (%s): %s", path, e, exc_info=True)
 
         QTimer.singleShot(0, _do_open)
-    return app.exec_()
+    code = app.exec_()
+    try:
+        from .workers.process_pool_utils import reap_after_gui_exit
+
+        reap_after_gui_exit(code)
+    except Exception:
+        logger.debug("post-GUI process reap failed", exc_info=True)
+    return code

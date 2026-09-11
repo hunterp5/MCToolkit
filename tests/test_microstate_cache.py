@@ -121,3 +121,71 @@ def test_picklable_roundtrip_for_cache_payload() -> None:
     assert abs(hydrated[0].pka - 7.4) < 1e-9
     assert hydrated[0].protonated_mol is not None
     assert hydrated[0].deprotonated_mol is not None
+
+
+def _acetic_ensemble() -> PicklableIonizationEnsemble:
+    acid = Chem.MolFromSmiles("CC(=O)O")
+    base = Chem.MolFromSmiles("CC(=O)[O-]")
+    assert acid is not None and base is not None
+    return PicklableIonizationEnsemble(
+        microstates=(
+            PicklableIonizationMicrostate("CC(=O)O", 0, 0.0, acid.ToBinary()),
+            PicklableIonizationMicrostate("CC(=O)[O-]", -1, 10.78, base.ToBinary()),
+        ),
+        macro_pkas=(4.68,),
+    )
+
+
+def test_ionization_sidecar_roundtrip_json() -> None:
+    import json
+
+    ens = _acetic_ensemble()
+    mc.store("CC(=O)O", ens)
+    mc.store("failed-key", None)
+    raw = mc.serialize_ionization_sidecar()
+    wire = json.dumps(raw)
+    back = json.loads(wire)
+    assert "failed-key" not in back["entries"]
+    restored = mc.deserialize_ionization_sidecar(back)
+    assert "CC(=O)O" in restored
+    got = restored["CC(=O)O"]
+    assert isinstance(got, PicklableIonizationEnsemble)
+    assert got.macro_pkas == (4.68,)
+    assert got.microstates[1].charge == -1
+    assert got.microstates[0].mol_binary
+    mol = Chem.Mol(got.microstates[0].mol_binary)
+    assert Chem.MolToSmiles(mol) == Chem.MolToSmiles(Chem.MolFromSmiles("CC(=O)O"))
+
+
+def test_ionization_sidecar_skips_corrupt_and_unknown_version() -> None:
+    ens = _tiny_ensemble()
+    mc.store("CCO", ens)
+    raw = mc.serialize_ionization_sidecar()
+    raw["entries"]["bad"] = {"kind": "unipka", "macro_pkas": "nope"}
+    restored = mc.deserialize_ionization_sidecar(raw)
+    assert "CCO" in restored
+    assert "bad" not in restored
+    raw["v"] = 99
+    assert mc.deserialize_ionization_sidecar(raw) == {}
+    assert mc.deserialize_ionization_sidecar(None) == {}
+
+
+def test_restore_ionization_sidecar_replaces_store() -> None:
+    mc.store("old", _tiny_ensemble(1.0))
+    payload = {
+        "v": 1,
+        "engine": "unipka",
+        "entries": {
+            "CCO": {
+                "kind": "unipka",
+                "macro_pkas": [9.5],
+                "microstates": [{"smiles": "CCO", "charge": 0, "free_energy": 0.0}],
+            }
+        },
+    }
+    n = mc.restore_ionization_sidecar(payload)
+    assert n == 1
+    assert mc.lookup("old") == (False, None)
+    hit, cached = mc.lookup("CCO")
+    assert hit is True
+    assert cached.macro_pkas == (9.5,)
