@@ -404,9 +404,40 @@ def test_pixmap_column_size_hint_matches_image(qapp) -> None:  # noqa: ARG001
     delegate = RowHighlightDelegate(model)
     idx = model.index(0, 2)
     assert delegate._index_is_pixmap_column(idx)
+    assert delegate._cell_has_pixmap(idx)
     hint = delegate.sizeHint(QStyleOptionViewItem(), idx)
     assert hint.width() >= 80
     assert hint.height() >= 60
+
+
+def test_empty_som_map_cells_skip_pixmap_background(qapp) -> None:  # noqa: ARG001
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtGui import QPixmap
+    from PyQt5.QtWidgets import QStyleOptionViewItem
+
+    from molmanager.display_constants import structure_depiict_height
+    from molmanager.ui.compound_table_model import CompoundTableModel
+    from molmanager.ui.table_selection_delegate import RowHighlightDelegate
+
+    model = CompoundTableModel(["ID_HIDDEN", "Structure", "SOM Map"])
+    model.append_row(1, {})
+    model.append_row(2, {})
+    model.register_pixmap_column("SOM Map")
+    pm = QPixmap(80, 60)
+    pm.fill(Qt.white)
+    model.set_column_pixmap(1, "SOM Map", pm)
+    delegate = RowHighlightDelegate(model)
+    populated = model.index(0, 2)
+    empty = model.index(1, 2)
+    assert delegate._index_is_pixmap_column(populated)
+    assert delegate._index_is_pixmap_column(empty)
+    assert delegate._cell_has_pixmap(populated)
+    assert not delegate._cell_has_pixmap(empty)
+    empty_hint = delegate.sizeHint(QStyleOptionViewItem(), empty)
+    populated_hint = delegate.sizeHint(QStyleOptionViewItem(), populated)
+    assert populated_hint.height() >= 60
+    assert empty_hint.height() < populated_hint.height()
+    assert empty_hint.height() < structure_depiict_height()
 
 
 def test_som_map_export_filename() -> None:

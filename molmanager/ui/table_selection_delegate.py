@@ -18,7 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QModelIndex, QSortFilterProxyModel
+from PyQt5.QtCore import QModelIndex, Qt, QSortFilterProxyModel
+from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QStyle, QStyleOptionViewItem, QStyledItemDelegate
 
 from .compound_table_model import CompoundTableModel
@@ -70,6 +71,13 @@ class RowHighlightDelegate(QStyledItemDelegate):
             return False
         return bool(self._compound_model.is_pixmap_data_column(headers[col]))
 
+    def _cell_has_pixmap(self, index: QModelIndex) -> bool:
+        """True only when this pixmap-column cell actually has an image to paint."""
+        if not self._index_is_pixmap_column(index):
+            return False
+        pix = index.data(Qt.DecorationRole)
+        return isinstance(pix, QPixmap) and not pix.isNull()
+
     def _pixmap_style_delegate(self):
         delg = self._pixmap_delegate
         if delg is None:
@@ -80,7 +88,7 @@ class RowHighlightDelegate(QStyledItemDelegate):
         return delg
 
     def paint(self, painter, option, index) -> None:  # noqa: N802
-        if self._index_is_pixmap_column(index):
+        if self._cell_has_pixmap(index):
             self._pixmap_style_delegate().paint(painter, option, index)
             return
         opt = QStyleOptionViewItem(option)
@@ -92,6 +100,6 @@ class RowHighlightDelegate(QStyledItemDelegate):
         style.drawControl(QStyle.CE_ItemViewItem, opt, painter, widget)
 
     def sizeHint(self, option, index):  # noqa: N802
-        if self._index_is_pixmap_column(index):
+        if self._cell_has_pixmap(index):
             return self._pixmap_style_delegate().sizeHint(option, index)
         return super().sizeHint(option, index)

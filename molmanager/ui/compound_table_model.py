@@ -618,7 +618,7 @@ class CompoundTableModel(QAbstractTableModel):
                 pix = self._extra_pixmaps.get((oid, h))
                 if pix is not None and not pix.isNull():
                     return QSize(pix.width(), pix.height())
-                return QSize(structure_depiict_width(), structure_depiict_height())
+                return None
             return None
 
         cell_pix = self._extra_pixmaps.get((oid, h))
