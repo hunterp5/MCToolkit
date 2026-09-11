@@ -45,7 +45,7 @@ from ...exception_policy import log_swallowed_exception
 logger = logging.getLogger(__name__)
 from ...memory_usage import format_process_memory_status
 from ...performance import PerformanceTracker
-from ...tool_progress import ToolProgressState
+from ...tool_progress import ToolProgressState, format_tool_progress_text
 from ...storage import SqliteTableStore
 from ...workers import (
     FilterApplySignals,
@@ -1603,20 +1603,15 @@ class ChemicalTableApp(
     def _on_tool_progress(self, message: str, done: int, total: int) -> None:
         if total >= 0 and message:
             self._tool_progress_state.update(message, done, total)
-        if total < 0:
-            text = message or ""
-        else:
-            dv = min(max(done, 0), total)
-            pct = int(100 * dv / total) if total > 0 else 100
-            if message:
-                text = f"{message} — {dv}/{total} ({pct}%)"
-            else:
-                text = f"{dv}/{total} ({pct}%)"
+        text = format_tool_progress_text(message, done, total)
         if text and text == getattr(self, "_last_tool_progress_status", ""):
             return
         self._last_tool_progress_status = text
         if text:
             self.status_label.setText(text)
+        hub = getattr(self, "background_activity", None)
+        if hub is not None:
+            hub.notify_changed()
 
     def _on_partial_results_notice(self, tool_label: str, done: int, total: int) -> None:
         d = max(0, int(done))
@@ -1634,10 +1629,14 @@ class ChemicalTableApp(
         """Stop polled tool progress; reset status line unless ``status_message`` is ``None``."""
         self._tool_progress_state.end()
         self._tool_progress_active_label = ""
+        self._last_tool_progress_status = ""
         if self._tool_progress_poll_timer.isActive():
             self._tool_progress_poll_timer.stop()
         if status_message is not None:
             self.status_label.setText(status_message)
+        hub = getattr(self, "background_activity", None)
+        if hub is not None:
+            hub.notify_changed()
 
     def _on_table_double_clicked(self, index) -> None:
         if index.isValid():

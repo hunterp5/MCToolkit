@@ -51,12 +51,13 @@ class ProcessesDialog(QDialog):
 
         root = QVBoxLayout(self)
 
-        self._table = QTableWidget(0, 4)
-        self._table.setHorizontalHeaderLabels(["Status", "Elapsed", "Job ID", "Title"])
+        self._table = QTableWidget(0, 5)
+        self._table.setHorizontalHeaderLabels(["Status", "Progress", "Elapsed", "Job ID", "Title"])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self._table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -69,7 +70,9 @@ class ProcessesDialog(QDialog):
             "stop Smina docking, or remove a queued job from the line without running it."
         )
         self._btn_clear = QPushButton("Clear queue")
-        self._btn_clear.setToolTip("Remove all jobs waiting to run (does not stop the current job).")
+        self._btn_clear.setToolTip(
+            "Remove all jobs waiting to run (does not stop the current job)."
+        )
         self._btn_refresh = QPushButton("Refresh")
         row.addWidget(self._btn_cancel)
         row.addWidget(self._btn_clear)
@@ -112,7 +115,9 @@ class ProcessesDialog(QDialog):
             return
         if m.get("kind") == "render2d":
             hub = getattr(self._app, "background_activity", None)
-            self._btn_cancel.setEnabled(bool(hub.render2d_batch_active()) if hub is not None else False)
+            self._btn_cancel.setEnabled(
+                bool(hub.render2d_batch_active()) if hub is not None else False
+            )
         elif m.get("kind") == "smina":
             hub = getattr(self._app, "background_activity", None)
             self._btn_cancel.setEnabled(bool(hub.smina_dock_active()) if hub is not None else False)
@@ -141,15 +146,23 @@ class ProcessesDialog(QDialog):
             it0 = QTableWidgetItem(st)
             it0.setData(Qt.UserRole, meta)
             self._table.setItem(i, 0, it0)
-            self._table.setItem(i, 1, QTableWidgetItem(self._format_elapsed(meta)))
-            self._table.setItem(i, 2, QTableWidgetItem(jid))
-            self._table.setItem(i, 3, QTableWidgetItem(title))
+            progress = ""
+            if isinstance(meta, dict):
+                progress = str(meta.get("progress") or "")
+            self._table.setItem(i, 1, QTableWidgetItem(progress))
+            self._table.setItem(i, 2, QTableWidgetItem(self._format_elapsed(meta)))
+            self._table.setItem(i, 3, QTableWidgetItem(jid))
+            self._table.setItem(i, 4, QTableWidgetItem(title))
 
         if prev:
             for i in range(self._table.rowCount()):
                 it0 = self._table.item(i, 0)
                 cur = it0.data(Qt.UserRole) if it0 else None
-                if isinstance(cur, dict) and isinstance(prev, dict) and self._meta_matches_row(prev, cur):
+                if (
+                    isinstance(cur, dict)
+                    and isinstance(prev, dict)
+                    and self._meta_matches_row(prev, cur)
+                ):
                     self._table.selectRow(i)
                     break
 
@@ -221,7 +234,9 @@ class ProcessesDialog(QDialog):
             if pq and pq.cancel_fast_job(jid):
                 app.status_label.setText("Cancelling interactive job…")
             else:
-                QMessageBox.information(self, "Cancel", "That interactive job is no longer running.")
+                QMessageBox.information(
+                    self, "Cancel", "That interactive job is no longer running."
+                )
         else:
             QMessageBox.information(self, "Cancel", "Unknown row type.")
         self._reload()

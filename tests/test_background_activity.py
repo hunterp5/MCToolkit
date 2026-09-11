@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from molmanager.tool_progress import ToolProgressState
 from molmanager.ui.background_activity import BackgroundActivityHub
 
 
@@ -66,6 +67,35 @@ def test_processes_view_shows_render2d_row_when_not_on_queue(qapp) -> None:  # n
     assert len(rows) == 1
     assert rows[0][1] == "(render-2d)"
     assert metas[0]["kind"] == "render2d"
+
+
+def test_processes_view_includes_tool_progress_on_running_job(qapp) -> None:  # noqa: ARG001
+    state = ToolProgressState()
+    state.begin("Calculate descriptors", 500)
+    state.update("Calculate descriptors", 120, 500)
+    app = SimpleNamespace(
+        process_queue=_FakeProcessQueue(
+            {
+                "running": {
+                    "job_id": "desc01",
+                    "title": "Calculate descriptors",
+                    "status": "Running",
+                    "cancellable": True,
+                },
+                "queued": [{"job_id": "next", "title": "Export", "status": "Queued"}],
+                "fast_running": [],
+            }
+        ),
+        render2d_batch_active=lambda: False,
+        _background_jobs={},
+        _tool_progress_state=state,
+    )
+    hub = BackgroundActivityHub(app, qapp)
+    _rows, metas = hub.processes_view_rows()
+    assert "120/500" in metas[0]["progress"]
+    assert "(24%)" in metas[0]["progress"]
+    assert metas[1]["kind"] == "pq_queued"
+    assert metas[1]["progress"] == ""
 
 
 def test_try_cancel_pq_running_render2d_uses_batch_cancel(qapp) -> None:  # noqa: ARG001

@@ -60,6 +60,19 @@ class ToolProgressState:
             return (self._message, self._done, self._total, self._active)
 
 
+def format_tool_progress_text(message: str, done: int, total: int) -> str:
+    """Status-bar / Processes text for a tool progress snapshot."""
+    if total < 0:
+        return str(message or "")
+    dv = min(max(int(done), 0), int(total))
+    tot = int(total)
+    pct = int(100 * dv / tot) if tot > 0 else 100
+    msg = str(message or "")
+    if msg:
+        return f"{msg} — {dv}/{tot} ({pct}%)"
+    return f"{dv}/{tot} ({pct}%)"
+
+
 def report_tool_progress(
     *,
     message: str,

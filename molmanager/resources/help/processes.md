@@ -16,15 +16,14 @@ Applies to jobs launched from the current session. Scope of each job (all rows v
 
 ## Options
 
-- Job list showing running and queued work.
+- Job list showing running and queued work, including live **Progress** (the same counts shown in the status bar).
 - **Cancel** - stop the active or selected job when the worker supports cancellation.
 - **Clear queue** - drop pending jobs that have not started yet.
-- Status / progress text for the current operation.
 
 ## Workflow
 
 1. Start a tool that runs asynchronously.
-2. Open **Processes** to confirm the job appears and progresses.
+2. Open **Processes** to confirm the job appears and progresses. Progress stays in that window even if the status bar is later overwritten.
 3. **Cancel** if you launched the wrong scope or settings.
 4. **Clear queue** to remove jobs waiting behind a long run.
 

@@ -22,6 +22,8 @@ from typing import Any
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
+from ..tool_progress import format_tool_progress_text
+
 
 class BackgroundActivityHub(QObject):
     """
@@ -63,6 +65,17 @@ class BackgroundActivityHub(QObject):
             snap = pq.snapshot()
         return bool(snap.get("running"))
 
+    def current_tool_progress_text(self) -> str:
+        """Formatted tool progress, independent of the status-bar label."""
+        state = getattr(self._app, "_tool_progress_state", None)
+        if state is not None:
+            snapshot = getattr(state, "snapshot", None)
+            if callable(snapshot):
+                message, done, total, active = snapshot()
+                if active:
+                    return format_tool_progress_text(message, done, total)
+        return str(getattr(self._app, "_last_tool_progress_status", "") or "")
+
     def processes_view_rows(
         self,
     ) -> tuple[list[tuple[str, str, str]], list[dict[str, Any]]]:
@@ -94,7 +107,13 @@ class BackgroundActivityHub(QObject):
                 }
             )
         for fr in snap.get("fast_running") or []:
-            rows.append((fr.get("status", "Running"), fr.get("job_id", ""), fr.get("title", "Interactive job")))
+            rows.append(
+                (
+                    fr.get("status", "Running"),
+                    fr.get("job_id", ""),
+                    fr.get("title", "Interactive job"),
+                )
+            )
             metas.append(
                 {
                     "kind": "pq_fast_running",
@@ -115,6 +134,23 @@ class BackgroundActivityHub(QObject):
         for job_id, title in sorted((getattr(self._app, "_background_jobs", None) or {}).items()):
             rows.append(("Running", job_id, title))
             metas.append({"kind": "background", "job_id": job_id})
+
+        progress = self.current_tool_progress_text()
+        if progress:
+            assigned = False
+            for meta in metas:
+                kind = meta.get("kind")
+                if kind == "pq_queued":
+                    meta["progress"] = ""
+                    continue
+                if not assigned:
+                    meta["progress"] = progress
+                    assigned = True
+                else:
+                    meta["progress"] = ""
+        else:
+            for meta in metas:
+                meta["progress"] = ""
 
         return rows, metas
 

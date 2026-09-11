@@ -18,7 +18,15 @@ from __future__ import annotations
 
 import threading
 
-from molmanager.tool_progress import ToolProgressState
+from molmanager.tool_progress import ToolProgressState, format_tool_progress_text
+
+
+def test_format_tool_progress_text() -> None:
+    assert format_tool_progress_text("Calculate descriptors", 120, 500) == (
+        "Calculate descriptors — 120/500 (24%)"
+    )
+    assert format_tool_progress_text("", 1, 1) == "1/1 (100%)"
+    assert format_tool_progress_text("Building table…", -1, -1) == "Building table…"
 
 
 def test_tool_progress_state_threaded_updates():
