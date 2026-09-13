@@ -81,8 +81,9 @@ def test_dominant_results_replicate_across_duplicate_oids():
     )
     assert cancelled is False
     assert len(rows) == 2
-    assert {oid for oid, _smi, _pct in rows} == {10, 20}
-    assert all(pct > 90.0 for _oid, _smi, pct in rows)
+    assert {oid for oid, _smi, _pct, _pi in rows} == {10, 20}
+    assert all(pct > 90.0 for _oid, _smi, pct, _pi in rows)
+    assert all(pi == "N/A" for _oid, _smi, _pct, pi in rows)
 
 
 def test_protomer_percent_column_includes_ph() -> None:

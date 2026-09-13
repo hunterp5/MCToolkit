@@ -80,7 +80,7 @@ def test_pka_worker_emits_partial_results_on_cancel(monkeypatch) -> None:
     ws = WorkerSignals()
     ps = PKaPredictorSignals()
     partial: list[tuple[str, int, int]] = []
-    finished: list[list[tuple[int | None, str]]] = []
+    finished: list[list[tuple[int | None, str, str]]] = []
     ws.partial_results.connect(lambda tool, done, total: partial.append((tool, done, total)))
     ps.finished.connect(lambda rows: finished.append(rows))
 
@@ -108,7 +108,7 @@ def test_pka_worker_deduplicates_identical_structures(monkeypatch) -> None:
     monkeypatch.setattr("molmanager.workers.pka_predictor.predict_ionization_ensemble", _predict)
     ws = WorkerSignals()
     ps = PKaPredictorSignals()
-    finished: list[list[tuple[int | None, str]]] = []
+    finished: list[list[tuple[int | None, str, str]]] = []
     ps.finished.connect(lambda rows: finished.append(rows))
 
     m = Chem.MolFromSmiles("CCO")
@@ -119,6 +119,6 @@ def test_pka_worker_deduplicates_identical_structures(monkeypatch) -> None:
 
     assert call_count == 2
     assert finished
-    by_oid = {oid: txt for oid, txt in finished[0]}
+    by_oid = {oid: txt for oid, txt, _pi in finished[0]}
     assert by_oid[1] == by_oid[2] == "7.00"
     assert by_oid[3] == "7.00"

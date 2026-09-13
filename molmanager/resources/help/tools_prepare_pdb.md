@@ -39,4 +39,4 @@ An input PDB path on disk; writes an output PDB path. Not a table-row tool.
 
 ## Tips and limits
 
-Automated fixes can mis-handle cofactors - inspect the site. This does not flex side chains for induced fit. Always visually check the binding pocket after prep.
+Automated fixes can mis-handle cofactors - inspect the site. This does not flex side chains for induced fit. Always visually check the binding pocket after prep. Protein Viewer **Prepare…** runs a fuller pipeline (pdb2pqr/PROPKA protein protonation, Uni-pKa ligand protomer at the same pH with optional pocket Coulomb reweight, and OpenMM GBn2 GBSA restrained minimization with GAFF2 ligand parameters) on the structure already in the 3D canvas.

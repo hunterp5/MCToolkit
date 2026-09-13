@@ -134,48 +134,67 @@ def _format_microstate_pkas(
     )
 
 
+def _format_pka_and_pi(
+    states, *, most_basic_only: bool = False, most_acidic_only: bool = False
+) -> tuple[str, str]:
+    from molmanager.ionization import format_isoelectric_point, isoelectric_point_from_states
+
+    pka_txt = _format_microstate_pkas(
+        states, most_basic_only=most_basic_only, most_acidic_only=most_acidic_only
+    )
+    try:
+        pi_txt = format_isoelectric_point(isoelectric_point_from_states(states))
+    except Exception:
+        pi_txt = "N/A"
+    return pka_txt, pi_txt
+
+
 def _mp_compute_pka_text(
     task: tuple[str, bytes, bool, bool],
-) -> tuple[str, str, object | None, bool]:
+) -> tuple[str, str, str, object | None, bool]:
     """Child-process entry: load Uni-pKa, predict one structure."""
     return _mp_compute_pka_chunk([task])[0]
 
 
+def _na_pka_row(key: str, *, cacheable: bool = True) -> tuple[str, str, str, object | None, bool]:
+    return (key, "N/A", "N/A", None, cacheable)
+
+
 def _mp_compute_pka_chunk(
     tasks: list[tuple[str, bytes, bool, bool]],
-) -> list[tuple[str, str, object | None, bool]]:
+) -> list[tuple[str, str, str, object | None, bool]]:
     """Score a chunk of structures in one Uni-pKa free-energy call."""
     pin_unipka_torch_threads()
     err = unipka_import_error()
     if err:
         logger.error("pKa subprocess: %s", err)
-        return [(task[0], "Error (see log)", None, False) for task in tasks]
+        return [(task[0], "Error (see log)", "N/A", None, False) for task in tasks]
 
     keys: list[str] = []
     flags: list[tuple[bool, bool]] = []
     mols: list[Chem.Mol | None] = []
-    na_results: dict[int, tuple[str, str, object | None, bool]] = {}
+    na_results: dict[int, tuple[str, str, str, object | None, bool]] = {}
     for i, (key, mol_blob, most_basic_only, most_acidic_only) in enumerate(tasks):
         keys.append(key)
         flags.append((most_basic_only, most_acidic_only))
         if not mol_blob:
             mols.append(None)
-            na_results[i] = (key, "N/A", None, True)
+            na_results[i] = _na_pka_row(key)
             continue
         try:
             mol = Chem.Mol(mol_blob)
         except Exception:
             mols.append(None)
-            na_results[i] = (key, "N/A", None, True)
+            na_results[i] = _na_pka_row(key)
             continue
         if mol is None or mol.GetNumAtoms() == 0:
             mols.append(None)
-            na_results[i] = (key, "N/A", None, True)
+            na_results[i] = _na_pka_row(key)
             continue
         safe = prepare_mol_for_ionization(mol)
         if safe is None:
             mols.append(None)
-            na_results[i] = (key, "N/A", None, True)
+            na_results[i] = _na_pka_row(key)
         else:
             mols.append(safe)
 
@@ -195,7 +214,7 @@ def _mp_compute_pka_chunk(
                 len(usable_idx),
             )
 
-    out: list[tuple[str, str, object | None, bool]] = []
+    out: list[tuple[str, str, str, object | None, bool]] = []
     for i, key in enumerate(keys):
         if i in na_results:
             out.append(na_results[i])
@@ -203,24 +222,24 @@ def _mp_compute_pka_chunk(
         most_basic_only, most_acidic_only = flags[i]
         ensemble = ensembles[i]
         if failed and ensemble is None:
-            out.append((key, "Error (see log)", None, False))
+            out.append((key, "Error (see log)", "N/A", None, False))
             continue
         if ensemble is None:
-            out.append((key, "N/A", None, True))
+            out.append(_na_pka_row(key))
             continue
-        txt = _format_microstate_pkas(
+        pka_txt, pi_txt = _format_pka_and_pi(
             ensemble,
             most_basic_only=most_basic_only,
             most_acidic_only=most_acidic_only,
         )
-        out.append((key, txt, ensemble, True))
+        out.append((key, pka_txt, pi_txt, ensemble, True))
     return out
 
 
 class PKaPredictorSignals(QObject):
     """Emits from :class:`PKaPredictorWorker` back to the dialog (owned on the GUI thread)."""
 
-    finished = pyqtSignal(list)  # list[tuple[int | None, str]]  oid None = SMILES-only preview
+    finished = pyqtSignal(list)  # list[tuple[int | None, str, str]] oid, pKa text, pI text
     failed = pyqtSignal(str)
 
 
@@ -260,10 +279,10 @@ class PKaPredictorWorker(QRunnable):
             warn_if_cuda_torch_missing()
 
             cancel_ev = self.cancel_event
-            row_text: dict[int | None, str] = {}
+            row_text: dict[int | None, tuple[str, str]] = {}
             for oid, mol in self.rows:
                 if mol is None:
-                    row_text[oid] = "N/A"
+                    row_text[oid] = ("N/A", "N/A")
 
             order, rep, oids_map = group_rows_by_structure(self.rows)
             n_work = sum(len(oids_map[k]) for k in order) + sum(
@@ -308,7 +327,7 @@ class PKaPredictorWorker(QRunnable):
             _emit(done_cum, force=True)
 
             if not order:
-                out = [(oid, row_text.get(oid, "N/A")) for oid, _ in self.rows]
+                out = [(oid, *(row_text.get(oid, ("N/A", "N/A")))) for oid, _ in self.rows]
                 _emit(tot, force=True)
                 _safe_emit(self.pka_signals, "finished", out)
                 return
@@ -328,7 +347,7 @@ class PKaPredictorWorker(QRunnable):
                     ]
                     for chunk in key_chunks
                 ]
-                results_by_key: dict[str, str] = {}
+                results_by_key: dict[str, tuple[str, str]] = {}
                 wrote_mmff = (
                     os.environ.get("MOLMANAGER_UNIPKA_MMFF_THREADS") is None and proc_workers > 1
                 )
@@ -357,8 +376,8 @@ class PKaPredictorWorker(QRunnable):
                             if f.cancelled():
                                 continue
                             try:
-                                for key, txt, ensemble, cacheable in f.result():
-                                    results_by_key[key] = txt
+                                for key, txt, pi_txt, ensemble, cacheable in f.result():
+                                    results_by_key[key] = (txt, pi_txt)
                                     if cacheable:
                                         cache_store(key, ensemble)
                                     done_cum += len(oids_map.get(key, ()))
@@ -371,9 +390,9 @@ class PKaPredictorWorker(QRunnable):
                     )
                     _restore_unipka_mmff_thread_env(prev_mmff, wrote_mmff)
                 for key in order:
-                    txt = results_by_key.get(key, "Error (see log)")
+                    txt, pi_txt = results_by_key.get(key, ("Error (see log)", "N/A"))
                     for oid in oids_map.get(key, ()):
-                        row_text[oid] = txt
+                        row_text[oid] = (txt, pi_txt)
             else:
                 from molmanager.microstate_cache import store as cache_store
 
@@ -385,7 +404,7 @@ class PKaPredictorWorker(QRunnable):
                     mol = rep[key]
                     safe_mol = prepare_mol_for_ionization(mol)
                     if safe_mol is None:
-                        txt = "N/A"
+                        pair = ("N/A", "N/A")
                         cache_store(key, None)
                     else:
                         try:
@@ -397,7 +416,7 @@ class PKaPredictorWorker(QRunnable):
                                     ensemble = predict_ionization_ensemble(safe_mol)
                             finally:
                                 _unipka_lock.release()
-                            txt = _format_microstate_pkas(
+                            pair = _format_pka_and_pi(
                                 ensemble,
                                 most_basic_only=self.most_basic_only,
                                 most_acidic_only=self.most_acidic_only,
@@ -409,7 +428,7 @@ class PKaPredictorWorker(QRunnable):
                                 len(oids_map[key]),
                                 e,
                             )
-                            txt = "N/A (SDF metadata)"
+                            pair = ("N/A (SDF metadata)", "N/A")
                             cache_store(key, None)
                         except Exception:
                             logger.exception(
@@ -417,13 +436,13 @@ class PKaPredictorWorker(QRunnable):
                                 len(oids_map[key]),
                                 key,
                             )
-                            txt = "Error (see log)"
+                            pair = ("Error (see log)", "N/A")
                     for oid in oids_map[key]:
-                        row_text[oid] = txt
+                        row_text[oid] = pair
                     done_cum += len(oids_map[key])
                     _emit(done_cum)
 
-            out = [(oid, row_text.get(oid, "N/A")) for oid, _ in self.rows]
+            out = [(oid, *(row_text.get(oid, ("N/A", "N/A")))) for oid, _ in self.rows]
             _emit(tot, force=True)
             if cancelled and done_cum > 0:
                 try:

@@ -187,8 +187,8 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "unipka",
                 "Uni-pKa (unipkainfer)",
-                "Predict pKa, Protonate, Generate Protomers, and pH-dependent LogD/LogS 7.4, "
-                "CNS MPO, and AB-MPS ionization legs.",
+                "Predict pKa, Protonate, Generate Protomers, Protein Viewer Prepare ligand "
+                "protomer, and pH-dependent LogD/LogS 7.4, CNS MPO, and AB-MPS ionization legs.",
                 (
                     (
                         "Luo, Y.; et al. Toward Universal Cell Environment pKa Prediction via "
@@ -418,17 +418,27 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "openmm",
                 "OpenMM",
-                "Optional docking extra: molecular mechanics backend used with PDBFixer.",
+                "Optional docking extra: PDBFixer backend and Protein Viewer restrained minimization.",
                 (
                     (
                         "Eastman, P.; et al. OpenMM 7: Rapid development of high performance algorithms "
                         "for molecular dynamics. PLoS Comput. Biol. 2017, 13, e1005659.",
                         "https://doi.org/10.1371/journal.pcbi.1005659",
                     ),
+                    (
+                        "Nguyen, H.; Roe, D. R.; Simmerling, C. Improved Generalized Born Solvent "
+                        "Model Parameters for Protein Simulations. J. Chem. Theory Comput. 2013, "
+                        "9, 2020–2034.",
+                        "https://doi.org/10.1021/ct3010485",
+                    ),
                 ),
                 LIC_MIT,
                 homepage="https://openmm.org",
-                notes="OpenMM also includes LGPL components; see the OpenMM license files in that package.",
+                notes=(
+                    "Protein Viewer Prepare minimization defaults to GBn2 GBSA with 0.15 M salt "
+                    "and backbone restraints (Cα or vacuum optional). OpenMM also includes LGPL "
+                    "components; see the OpenMM license files in that package."
+                ),
             ),
             _t(
                 "pdbfixer",
@@ -442,6 +452,55 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 ),
                 LIC_MIT,
                 homepage="https://github.com/openmm/pdbfixer",
+            ),
+            _t(
+                "pdb2pqr",
+                "PDB2PQR",
+                "Protein Viewer Prepare: pH-based protonation and hydrogen placement.",
+                (
+                    (
+                        "Dolinsky, T. J.; et al. PDB2PQR: expanding and upgrading automated "
+                        "preparation of biomolecular structures for molecular simulations. "
+                        "Nucleic Acids Res. 2007, 35, W522–W525.",
+                        "https://doi.org/10.1093/nar/gkm276",
+                    ),
+                    (
+                        "Olsson, M. H. M.; Søndergaard, C. R.; Rostkowski, M.; Jensen, J. H. "
+                        "PROPKA3: Consistent Treatment of Internal and Surface Residues in "
+                        "Empirical pKa Predictions. J. Chem. Theory Comput. 2011, 7, 525–537.",
+                        "https://doi.org/10.1021/ct100578z",
+                    ),
+                ),
+                LIC_BSD3,
+                homepage="https://pdb2pqr.readthedocs.io/",
+                notes="PROPKA assigns protein titration states at the chosen pH. Ligand ionization is Uni-pKa, not PROPKA.",
+            ),
+            _t(
+                "gaff2",
+                "GAFF2",
+                "Protein Viewer Prepare: organic ligand parameters for OpenMM restrained minimization.",
+                (
+                    (
+                        "Wang, J.; Wolf, R. M.; Caldwell, J. W.; Kollman, P. A.; Case, D. A. "
+                        "Development and testing of a general amber force field. "
+                        "J. Comput. Chem. 2004, 25, 1157–1174.",
+                        "https://doi.org/10.1002/jcc.20035",
+                    ),
+                    (
+                        "He, X.; Man, V. H.; Yang, W.; Lee, T.-S.; Wang, J. A fast and high-quality "
+                        "charge model for the next generation general AMBER force field. "
+                        "J. Chem. Phys. 2020, 153, 114502.",
+                        "https://doi.org/10.1063/5.0019056",
+                    ),
+                ),
+                LIC_GPL2,
+                homepage="https://ambermd.org/antechamber/gaff.html",
+                notes=(
+                    "Applied via OpenMM Force Fields (openmmforcefields) GAFF2 templates. "
+                    "Ligand bond orders come from optional SMILES/SDF/MOL2, mmCIF "
+                    "_chem_comp_bond, or RDKit geometry. "
+                    "OpenFF Toolkit is conda-forge only (not PyPI)."
+                ),
             ),
         ),
     ),

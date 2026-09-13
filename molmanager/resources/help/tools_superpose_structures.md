@@ -29,7 +29,7 @@ Multiple rows with 3D (or embedable) structures; **Selected Rows Only** recommen
 1. Select the series and pick a reference row.
 2. Open **Tools → Conformations → Superpose → Structures…**. Provide a SMARTS core or allow MCS fallback.
 3. Run superposition.
-4. Review the 3D results window (overlay plus energy table). Check **Selected Conformers** to highlight a subset.
+4. Review the 3D results window (overlay plus energy table). Browser arrows step through poses in table order and select each row. Check **Selected Conformers** to overlay an explicit table selection.
 
 ## Use cases
 

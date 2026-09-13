@@ -281,6 +281,7 @@ class ChemicalTableApp(
         self._sali_map_dialog = None
         self._sali_browser_dialog = None
         self._sketcher_dialog = None
+        self._protein_viewer_dialog = None
         self._calculator_dialog = None
         self._data_analysis_dialog = None
         self._cluster_dialog = None
@@ -1069,6 +1070,14 @@ class ChemicalTableApp(
         act_sketch.setToolTip("Open the structure sketcher to draw or edit molecules.")
         tools.addAction(act_sketch)
 
+        protein_menu = mb.addMenu("&Protein")
+        protein_menu.setToolTipsVisible(True)
+        act_protein_viewer = QAction("&Viewer", self, triggered=self.open_protein_viewer)
+        act_protein_viewer.setToolTip(
+            "Load a PDB, mmCIF, or other crystallographic file and inspect chains in 3D."
+        )
+        protein_menu.addAction(act_protein_viewer)
+
         data_menu = mb.addMenu("&Data")
         data_menu.addAction(
             self._bind_hotkey(
@@ -1347,6 +1356,21 @@ class ChemicalTableApp(
             layout_btn.setEnabled(enabled)
         # Processes stays enabled so the user can cancel a long open/import.
 
+    def open_protein_viewer(self) -> None:
+        """Open the Protein Viewer window (3Dmol.js + chain Manager)."""
+        from ..protein_viewer import ProteinViewerDialog
+        from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
+
+        def _on_destroyed() -> None:
+            self._protein_viewer_dialog = None
+
+        reuse_or_show_modeless_singleton(
+            self,
+            "_protein_viewer_dialog",
+            lambda: ProteinViewerDialog(self),
+            _on_destroyed,
+        )
+
     def open_workspace_layout_picker(self) -> None:
         """Show the graphic layout picker and apply the chosen preset."""
         from ..dialogs.workspace_layout_picker import WorkspaceLayoutPickerDialog
@@ -1549,6 +1573,7 @@ class ChemicalTableApp(
             "_sali_map_dialog",
             "_sali_browser_dialog",
             "_sketcher_dialog",
+            "_protein_viewer_dialog",
             "_calculator_dialog",
             "_data_analysis_dialog",
             "_cluster_dialog",

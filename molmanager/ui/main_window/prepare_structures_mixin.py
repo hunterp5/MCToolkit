@@ -136,9 +136,10 @@ class PrepareStructuresMixin:
             return
 
         res = [
-            (int(oid), {out_col: str(smi), pct_col: f"{float(pct):.2f}"}) for oid, smi, pct in rows
+            (int(oid), {out_col: str(smi), pct_col: f"{float(pct):.2f}", "pI": str(pi)})
+            for oid, smi, pct, pi in rows
         ]
-        written = self.on_calc_finished(res, [out_col, pct_col], progress_label="Protonate")
+        written = self.on_calc_finished(res, [out_col, pct_col, "pI"], progress_label="Protonate")
         if written:
             out_col = written[0]
 

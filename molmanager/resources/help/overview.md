@@ -19,6 +19,7 @@ Works on the current session table (structures plus property columns). Most tool
 - **File** - open/import data, sessions, export, selection browser.
 - **Edit** - undo/redo, clipboard, and selection commands.
 - **Tools** - prepare structures, fingerprints, docking helpers, design tools, predictors (pKa, permeability, SOM), random generators.
+- **Protein** - 3D structure viewer for PDB, mmCIF, and related crystallographic files.
 - **Data** - analyze table, plotter, dimensionality reduction, QSAR, MPO, medchem plots.
 - **External** - SQL, PubChem, ChEMBL, patents.
 - **Settings** - theme, fonts, hotkeys.

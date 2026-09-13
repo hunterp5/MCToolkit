@@ -1,6 +1,6 @@
 # Predict pKa
 
-Predict pKa writes Uni-pKa **macro pKa** values into a column (or previews them from a SMILES string). Most-acidic and most-basic checkboxes keep a single number (min / max of those macros).
+Predict pKa writes Uni-pKa **macro pKa** values into a column (or previews them from a SMILES string), plus **pI** (isoelectric point). Most-acidic and most-basic checkboxes keep a single pKa number (min / max of those macros); pI is still from the full ensemble.
 
 ## Goal
 
@@ -17,7 +17,7 @@ A structure column or a SMILES string. Optional **Selected Rows Only**. Requires
 ## Options
 
 - **Input** — table column or SMILES.
-- **Most basic only** / **Most acidic only** — single value instead of the full macro-pKa list.
+- **Most basic only** / **Most acidic only** — single pKa value instead of the full macro-pKa list. **pI** is still written from the ensemble.
 - **Selected Rows Only** — limit to the selection.
 
 ## Workflow

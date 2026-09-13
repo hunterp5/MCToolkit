@@ -1409,13 +1409,18 @@ class ToolsSqlPredictMixin:
         return sig
 
     def _on_pka_prediction_finished(self, results: list) -> None:
-        table_rows = [(o, t) for o, t in results if o is not None]
-        lone = [t for o, t in results if o is None]
+        table_rows = [(o, t, pi) for o, t, pi in results if o is not None]
+        lone = [(t, pi) for o, t, pi in results if o is None]
         if table_rows:
-            res = [(int(o), {"pKa": text}) for o, text in table_rows]
-            self.on_calc_finished(res, ["pKa"], progress_label="pKa prediction")
+            res = [(int(o), {"pKa": text, "pI": pi}) for o, text, pi in table_rows]
+            self.on_calc_finished(res, ["pKa", "pI"], progress_label="pKa prediction")
         if lone:
-            QMessageBox.information(self, "Predict pKa", lone[0])
+            pka_txt, pi_txt = lone[0]
+            QMessageBox.information(
+                self,
+                "Predict pKa",
+                f"pKa: {pka_txt}\npI: {pi_txt}",
+            )
         if not table_rows:
             self._finish_tool_progress("pKa prediction")
 

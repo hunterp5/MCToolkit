@@ -292,7 +292,7 @@ This removes conflicting packages (such as **admet-ai**) and reinstalls from `re
 
 ### Docking (EasyDock)
 
-Table docking is **Tools → Dock → EasyDock…**. Receptor PDBQT still comes from **Prepare → Receptor PDB…** then **Prepare → PDBQT…**. Ligands are prepared by EasyDock/Meeko from table structures. Python pieces are in the docking extra (`pip install -e ".[docking]"` or `requirements.txt`).
+Table docking is **Tools → Dock → EasyDock…**. Receptor PDBQT still comes from **Prepare → Receptor PDB…** then **Prepare → PDBQT…**. Ligands are prepared by EasyDock/Meeko from table structures. Python pieces are in the docking extra (`pip install -e ".[docking]"` or `requirements.txt`). Protein Viewer **Prepare…** GAFF2 ligand min also needs OpenFF Toolkit from conda-forge (`conda install -c conda-forge openff-toolkit`) on Linux, macOS, or WSL — it is not on PyPI and is not supported on native Windows.
 
 The **Smina** engine is not included in the Python install. Download a binary from [https://sourceforge.net/projects/smina](https://sourceforge.net/projects/smina) or your package manager, then either:
 

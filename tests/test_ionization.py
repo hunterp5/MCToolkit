@@ -33,7 +33,9 @@ from molmanager.ionization import (
     _close_unipka_task_lmdb,
     build_ensemble_from_scored,
     calibrate_unipka_free_energy,
+    format_isoelectric_point,
     format_pka_values,
+    isoelectric_point_from_states,
     logd74_from_microstates,
     most_acidic_pka_from_states,
     most_basic_pka_from_states,
@@ -68,6 +70,26 @@ def test_fe2pka_acetic_acid_two_decimals() -> None:
     assert most_acidic_pka_from_states(ens) == pytest.approx(4.76, abs=0.005)
     assert most_basic_pka_from_states(ens) == pytest.approx(4.76, abs=0.005)
     assert format_pka_values(list(ens.macro_pkas)) == "4.76"
+    assert isoelectric_point_from_states(ens) is None
+    assert format_isoelectric_point(None) == "N/A"
+
+
+def test_isoelectric_point_zwitterion_average_of_flanking_pkas() -> None:
+    cat = Chem.MolFromSmiles("C[NH3+]")
+    zw = Chem.MolFromSmiles("CN")
+    an = Chem.MolFromSmiles("C[NH-]")
+    assert cat is not None and zw is not None and an is not None
+    pka1, pka2 = 2.34, 9.60
+    ens = build_ensemble_from_scored(
+        [
+            (1, "C[NH3+]", cat, 0.0),
+            (0, "CN", zw, LN10 * pka1),
+            (-1, "C[NH-]", an, LN10 * (pka1 + pka2)),
+        ]
+    )
+    pi = isoelectric_point_from_states(ens)
+    assert pi == pytest.approx(0.5 * (pka1 + pka2), abs=0.02)
+    assert format_isoelectric_point(pi) == "5.97"
 
 
 def test_unipka_dwar_mean_shift_restores_aqueous_pka() -> None:

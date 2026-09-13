@@ -103,7 +103,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Append or merge data into the current table.",
             ),
             _e("file_sessions", "Sessions", "Sessions", "Open, save, new, and duplicate sessions."),
-            _e("file_export", "Save File", "Save File", "Save all or selected rows to common formats."),
+            _e(
+                "file_export",
+                "Save File",
+                "Save File",
+                "Save all or selected rows to common formats.",
+            ),
             _e(
                 "file_browser",
                 "Selection Browser",
@@ -274,7 +279,18 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "8 — Design and modeling",
+        "8 — Protein",
+        (
+            _e(
+                "protein_viewer",
+                "Protein Viewer",
+                "Protein Viewer",
+                "Load PDB/mmCIF structures, manage chains in 3D, and prepare docking-ready receptors.",
+            ),
+        ),
+    ),
+    GuideSection(
+        "9 — Design and modeling",
         (
             _e(
                 "tools_rgroup",
@@ -317,7 +333,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "9 — Random",
+        "10 — Random",
         (
             _e(
                 "tools_random_number",
@@ -334,7 +350,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "10 — Charts and analysis",
+        "11 — Charts and analysis",
         (
             _e(
                 "data_analyze_table",
@@ -385,7 +401,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "11 — External data",
+        "12 — External data",
         (
             _e(
                 "ext_sql", "SQL Database", "SQL Database", "Load query results from a SQL database."

@@ -42,7 +42,7 @@ def protomer_percent_column_name(ph: float) -> str:
 
 
 class ProtonateSignals(QObject):
-    finished = pyqtSignal(list)  # list[tuple[int, str, float]] oid, dominant_smiles, pct
+    finished = pyqtSignal(list)  # list[tuple[int, str, float, str]] oid, smiles, pct, pI
     failed = pyqtSignal(str)
 
 
@@ -63,9 +63,11 @@ def dominant_results_from_microstate_cache(
     pH: float,
     *,
     cancel_event: threading.Event | None = None,
-) -> tuple[list[tuple[int, str, float]], bool]:
+) -> tuple[list[tuple[int, str, float, str]], bool]:
     """Map cached ensembles to per-row dominant SMILES. Returns ``(rows, cancelled)``."""
-    partial: list[tuple[int, str, float]] = []
+    from molmanager.ionization import format_isoelectric_point, isoelectric_point_from_states
+
+    partial: list[tuple[int, str, float, str]] = []
     cancelled = False
     for key in order:
         if should_terminate_process_pool(cancel_event):
@@ -82,8 +84,12 @@ def dominant_results_from_microstate_cache(
         if dom is None:
             continue
         smi, pct = dom
+        try:
+            pi_txt = format_isoelectric_point(isoelectric_point_from_states(states))
+        except Exception:
+            pi_txt = "N/A"
         for oid in oids_map.get(key, ()):
-            partial.append((int(oid), str(smi), float(pct)))
+            partial.append((int(oid), str(smi), float(pct), pi_txt))
     return partial, cancelled
 
 

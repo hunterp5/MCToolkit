@@ -458,6 +458,64 @@ def format_pka_values(
     return "; ".join(parts) + tail
 
 
+def _ensemble_microstates(states) -> tuple[PicklableIonizationMicrostate, ...] | None:
+    if states is None:
+        return None
+    if isinstance(states, PicklableIonizationEnsemble):
+        return states.microstates
+    if states and isinstance(states[0], PicklableIonizationMicrostate):
+        return tuple(states)
+    return None
+
+
+def mean_charge_from_states(states, ph: float) -> float | None:
+    """Boltzmann-average formal charge at *ph* (Uni-pKa ensembles only)."""
+    microstates = _ensemble_microstates(states)
+    if not microstates:
+        return None
+    geffs = [g_effective(ms.free_energy, ms.charge, ph) for ms in microstates]
+    weights = _lse_weights(geffs)
+    return float(sum(ms.charge * w for ms, w in zip(microstates, weights)))
+
+
+def isoelectric_point_from_states(
+    states, *, ph_lo: float = 0.0, ph_hi: float = 14.0
+) -> float | None:
+    """pH where mean net charge crosses zero, or ``None`` if it never does.
+
+    Simple acids/bases that stay non-positive or non-negative across 0–14 have
+    no isoelectric point. Zwitterions (charge + → −) yield the interpolated pH.
+    """
+    q_lo = mean_charge_from_states(states, ph_lo)
+    q_hi = mean_charge_from_states(states, ph_hi)
+    if q_lo is None or q_hi is None:
+        return None
+    if q_lo * q_hi > 0:
+        return None
+    if abs(q_lo) < 1e-8 and abs(q_hi) < 1e-8:
+        return 0.5 * (float(ph_lo) + float(ph_hi))
+    lo, hi = float(ph_lo), float(ph_hi)
+    for _ in range(48):
+        mid = 0.5 * (lo + hi)
+        q_mid = mean_charge_from_states(states, mid)
+        if q_mid is None:
+            return None
+        if abs(q_mid) < 1e-8:
+            return mid
+        if q_lo * q_mid <= 0:
+            hi, q_hi = mid, q_mid
+        else:
+            lo, q_lo = mid, q_mid
+    return 0.5 * (lo + hi)
+
+
+def format_isoelectric_point(value: float | None) -> str:
+    """Two-decimal pI, or ``N/A`` when charge never crosses zero."""
+    if value is None:
+        return "N/A"
+    return f"{float(value):.2f}"
+
+
 class _UnipkaTemporaryDirectory(tempfile.TemporaryDirectory):
     """Windows: unipkainfer keeps the LMDB env open, so default rmtree raises WinError 32."""
 

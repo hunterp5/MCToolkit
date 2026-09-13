@@ -1,6 +1,6 @@
 # Protonate
 
-Protonate writes the dominant protomer at a chosen pH into an output column using a **Uni-pKa** ionization ensemble (MolGpKa SMARTS enumeration + Uni-Mol free energies). It also writes **% Protomer (pH …)** with the dialog pH in the header, the Boltzmann mole fraction of that form at that pH. Optional **Render 2D** depicts that column the same way as **Structure** (image cells; SMILES stay stored, not shown as text). Right-click a Protonated cell for the same structure actions as **Structure**: Open in Sketcher, View in 3D/2D, Render 2D, Copy, Copy as SMILES, and Paste.
+Protonate writes the dominant protomer at a chosen pH into an output column using a **Uni-pKa** ionization ensemble (MolGpKa SMARTS enumeration + Uni-Mol free energies). It also writes **% Protomer (pH …)** with the dialog pH in the header, the Boltzmann mole fraction of that form at that pH, and **pI** (isoelectric point) when mean charge crosses zero. Optional **Render 2D** depicts that column the same way as **Structure** (image cells; SMILES stay stored, not shown as text). Right-click a Protonated cell for the same structure actions as **Structure**: Open in Sketcher, View in 3D/2D, Render 2D, Copy, Copy as SMILES, and Paste.
 
 ## Goal
 
@@ -18,7 +18,7 @@ Input structures from the selected source; optional **Selected Rows Only**. Requ
 
 - **Structure source** - which structure column to read.
 - **pH** - target pH for dominant protomer selection.
-- **Output column** - destination column name. A companion **% Protomer (pH …)** column records the population at this pH.
+- **Output column** - destination column name. A companion **% Protomer (pH …)** column records the population at this pH, and **pI** is the pH where net charge crosses zero (N/A for simple acids/bases).
 - **Selected Rows Only** - limit to the selection.
 - **Render 2D in output column** - depict the output column like **Structure** (pixmap cells). Unchecked leaves SMILES text.
 - **Run** - start the job.

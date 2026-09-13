@@ -33,6 +33,7 @@ from molmanager.utils import canonical_structure_key_from_smiles, mol_from_binar
 def test_skip_chemistry_tool_column_dropdown():
     assert skip_chemistry_tool_column_dropdown("Structure")
     assert skip_chemistry_tool_column_dropdown("pKa")
+    assert skip_chemistry_tool_column_dropdown("pI")
     assert skip_chemistry_tool_column_dropdown("SOM Map")
     assert skip_chemistry_tool_column_dropdown("SOM Sites Phase 1")
     assert skip_chemistry_tool_column_dropdown("SOM Phase")

@@ -37,7 +37,7 @@ Scoped rows with valid structures; **Selected Rows Only** when checked. Output m
 2. Choose force field, seed, RMS pruning, max keep, and optional **Align on** substructure.
 3. Set ETKDG flags and hydrogen handling under **Options** when you need them.
 4. Run generation (watch **Processes**).
-5. Inspect the 3D results window: click a row to show that pose; check **Superpose** to overlay the ensemble, or **Selected Conformers** to overlay the table selection with a color legend. **View Conformers** on a packed cell reopens the same energy table. If several rows were processed, the window is the first ensemble; open the others from the table.
+5. Inspect the 3D results window: use **← →** to step through poses in table order (each step selects that row); click a row to select it and show that pose; check **Superpose** to overlay the ensemble, or **Selected Conformers** to overlay the table selection with a color legend. **View Conformers** on a packed cell reopens the same energy table. If several rows were processed, the window is the first ensemble; open the others from the table.
 6. Optional: add results to the table and/or save SDF.
 
 ## Use cases

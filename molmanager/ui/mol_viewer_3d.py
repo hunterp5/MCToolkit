@@ -1642,11 +1642,20 @@ class Molecule3DViewerWidget(QWidget):
         self._close_viewer_btn.setToolTip("Close this viewer.")
         self._close_viewer_btn.clicked.connect(self._close_docked_viewer)
         style_plot_footer_text_button(self._close_viewer_btn)
+        foot.addStretch(1)
+        foot.addWidget(self._add_to_main_btn)
+        foot.addWidget(self._send_window_btn)
+        foot.addWidget(self._close_viewer_btn)
+        self._apply_footer_size_constraints(foot)
+        root.insertWidget(0, footer)
+
         if multi_conf_blocks_json_b64 is not None:
-            foot.addWidget(self._add_to_main_btn)
-            foot.addWidget(self._send_window_btn)
-            foot.addWidget(self._close_viewer_btn)
-            self._add_conf_nav_controls(foot)
+            nav = QWidget(self)
+            nav.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+            nav_row = QHBoxLayout(nav)
+            nav_row.setContentsMargins(0, 0, 0, 0)
+            nav_row.setSpacing(4)
+            self._add_conf_nav_controls(nav_row)
             self._btn_export_table = QPushButton("Export to Table")
             self._btn_export_table.setAutoDefault(False)
             self._btn_export_table.setDefault(False)
@@ -1657,21 +1666,17 @@ class Molecule3DViewerWidget(QWidget):
             self._btn_export_table.clicked.connect(self._on_export_to_table)
             if web is None:
                 self._btn_export_table.setEnabled(False)
-            foot.addWidget(self._btn_export_table)
-            self._conf_nav_host = footer
-            self._export_host = footer
-            foot.addStretch(1)
+            nav_row.addWidget(self._btn_export_table)
+            nav_row.addStretch(1)
             self._viewer_status = QLabel("")
             self._viewer_status.setStyleSheet("color: #333;")
             self._viewer_status.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-            foot.addWidget(self._viewer_status)
-        else:
-            foot.addStretch(1)
-            foot.addWidget(self._add_to_main_btn)
-            foot.addWidget(self._send_window_btn)
-            foot.addWidget(self._close_viewer_btn)
-        self._apply_footer_size_constraints(foot)
-        root.insertWidget(0, footer)
+            nav_row.addWidget(self._viewer_status)
+            self._apply_footer_size_constraints(nav_row)
+            root.addWidget(nav)
+            self._conf_nav_host = nav
+            self._export_host = nav
+
         self._sync_footer_chrome()
         self._sync_options_chrome()
         self.setMinimumWidth(self.embedded_minimum_width())

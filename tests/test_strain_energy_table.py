@@ -81,9 +81,12 @@ def test_strain_energy_viewer_shows_conformer_table(qapp) -> None:  # noqa: ARG0
 
     assert isinstance(viewer._conf_nav_host.layout(), QHBoxLayout)
     assert viewer._btn_conf_back.parent() is viewer._conf_nav_host
-    assert viewer._add_to_main_btn.parent() is viewer._conf_nav_host
+    assert viewer._add_to_main_btn.parent() is viewer._footer_bar
     assert viewer._btn_export_table is not None
     assert viewer._btn_export_table.parent() is viewer._conf_nav_host
+    root = viewer.layout()
+    assert root.indexOf(viewer._footer_bar) == 0
+    assert root.indexOf(viewer._conf_nav_host) == root.count() - 1
     assert viewer.embedded_minimum_width() >= 1200
     assert not hasattr(viewer, "_toggle_options_btn")
     assert viewer._btn_conf_back.text() == "←"
