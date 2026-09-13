@@ -117,6 +117,22 @@ HETATM  101  O1  LIG A  99       5.400   1.400   0.200  1.00  0.00           O
 END
 """
 
+_POCKET_H_PDB = """\
+ATOM      1  N   SER A  10       0.000   0.000   0.000  1.00  0.00           N
+ATOM      2  CA  SER A  10       1.450   0.000   0.000  1.00  0.00           C
+ATOM      3  CB  SER A  10       2.000   1.400   0.000  1.00  0.00           C
+ATOM      4  OG  SER A  10       3.350   1.400   0.000  1.00  0.00           O
+ATOM      5  HG  SER A  10       3.900   2.100   0.000  1.00  0.00           H
+ATOM      6  HA  SER A  10       1.700  -0.500   0.900  1.00  0.00           H
+ATOM      7  N   ALA A  50      40.000  40.000  40.000  1.00  0.00           N
+ATOM      8  CA  ALA A  50      41.500  40.000  40.000  1.00  0.00           C
+HETATM  100  C1  LIG A  99       4.200   1.400   0.200  1.00  0.00           C
+HETATM  101  O1  LIG A  99       5.400   1.400   0.200  1.00  0.00           O
+HETATM  102  HO1 LIG A  99       5.900   2.100   0.200  1.00  0.00           H
+HETATM  103  H1  LIG A  99       4.000   0.500   0.700  1.00  0.00           H
+END
+"""
+
 
 def test_parse_pdb_splits_chains_ligand_metal_water():
     comps = parse_structure_components(_MINI_PDB, "pdb")
@@ -393,6 +409,8 @@ def test_build_protein_viewer_html_has_setters():
     assert "molmanagerZoomToComponents" in html
     assert "molmanagerSetResidueHighlight" in html
     assert "molmanagerSetPocket" in html
+    assert "molmanagerSetHydrogens" in html
+    assert "applyHydrogenVisibility" in html
     assert "applyPocketOverlay" in html
     assert "addPocketResidueLabels" in html
     assert "addResLabels" in html
@@ -426,6 +444,20 @@ def test_pocket_view_plan_near_ligand_residues_and_polar_h():
         for line in plan.polar_h_pdb.splitlines()
         if line.startswith(("ATOM", "HETATM"))
     )
+
+
+def test_pocket_view_plan_keeps_only_polar_hydrogens():
+    plan = pocket_view_plan(_POCKET_H_PDB, "pdb")
+    assert plan is not None
+    h_names = {
+        line[12:16].strip()
+        for line in plan.polar_h_pdb.splitlines()
+        if line.startswith(("ATOM", "HETATM")) and line[76:78].strip() == "H"
+    }
+    assert "HG" in h_names
+    assert "HO1" in h_names
+    assert "HA" not in h_names
+    assert "H1" not in h_names
 
 
 def test_protein_menu_opens_viewer(qapp):  # noqa: ARG001
@@ -634,6 +666,12 @@ def test_pocket_view_menu_builds_overlay(qapp, tmp_path):  # noqa: ARG001
     dlg = ProteinViewerDialog()
     dlg.load_structure_path(path)
     assert not dlg._act_pocket.isCheckable()
+    assert dlg._act_hydrogens_polar.isChecked()
+    assert not dlg._act_hydrogens_all.isChecked()
+    dlg._act_hydrogens_all.trigger()
+    assert dlg._hydrogen_mode() == "all"
+    dlg._act_hydrogens_polar.trigger()
+    assert dlg._hydrogen_mode() == "polar"
     dlg._on_pocket()
     payload = dlg._pocket_payload_data
     assert payload is not None

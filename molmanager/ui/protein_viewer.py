@@ -363,8 +363,77 @@ def _viewer_protein_init_script() -> str:
           try { v.setStyle({}, {}); } catch (eH) {}
           var comps = window.molmanagerComponents || [];
           for (var i = 0; i < comps.length; i++) applyOneStyle(v, comps[i]);
-          applyPocketOverlay(v);
           applyResidueHighlight(v);
+          applyHydrogenVisibility(v);
+          applyPocketOverlay(v);
+        }
+        function isHydrogenAtom(at) {
+          var e = String((at && at.elem) || "").toUpperCase();
+          return e === "H" || e === "D";
+        }
+        function atomModelId(at) {
+          if (at && at.model && typeof at.model.id === "number") return at.model.id;
+          if (typeof at.model === "number") return at.model;
+          return 0;
+        }
+        function polarHeavy(elem) {
+          var e = String(elem || "").toUpperCase();
+          return e === "N" || e === "O" || e === "S" || e === "F";
+        }
+        function bondedAtom(at, bondRef) {
+          if (bondRef && typeof bondRef === "object" && bondRef.elem != null) return bondRef;
+          var idx = typeof bondRef === "number" ? bondRef : parseInt(bondRef, 10);
+          if (isNaN(idx)) return null;
+          var model = at && at.model;
+          if (model && model.atoms && model.atoms[idx]) return model.atoms[idx];
+          return null;
+        }
+        function nearestSameResidueHeavy(at, atoms) {
+          var best = null;
+          var bestD = 1.35 * 1.35;
+          for (var i = 0; i < atoms.length; i++) {
+            var o = atoms[i];
+            if (!o || o === at || isHydrogenAtom(o)) continue;
+            if ((o.chain || "") !== (at.chain || "")) continue;
+            if (String(o.resi) !== String(at.resi)) continue;
+            if ((o.icode || "") !== (at.icode || "")) continue;
+            if (atomModelId(o) !== atomModelId(at)) continue;
+            var dx = o.x - at.x, dy = o.y - at.y, dz = o.z - at.z;
+            var d = dx * dx + dy * dy + dz * dz;
+            if (d <= bestD) { bestD = d; best = o; }
+          }
+          return best;
+        }
+        function hydrogenParentIsPolar(at, atoms) {
+          var bonds = at.bonds || [];
+          if (bonds.length) {
+            for (var i = 0; i < bonds.length; i++) {
+              var other = bondedAtom(at, bonds[i]);
+              if (other && polarHeavy(other.elem)) return true;
+            }
+            return false;
+          }
+          var parent = nearestSameResidueHeavy(at, atoms);
+          return !!(parent && polarHeavy(parent.elem));
+        }
+        function hideAtom(v, at) {
+          try {
+            v.addStyle({model: atomModelId(at), serial: at.serial}, {hidden: true});
+          } catch (eHideAt) {}
+        }
+        function applyHydrogenVisibility(v) {
+          v = v || window.molmanagerViewer;
+          if (!v) return;
+          if (window.molmanagerHydrogens === "all") return;
+          var atoms;
+          try { atoms = v.selectedAtoms({}); } catch (eA) { return; }
+          if (!atoms || !atoms.length) return;
+          for (var i = 0; i < atoms.length; i++) {
+            var at = atoms[i];
+            if (!isHydrogenAtom(at)) continue;
+            if (hydrogenParentIsPolar(at, atoms)) continue;
+            hideAtom(v, at);
+          }
         }
         function addPocketResidueLabels(v, residueSels) {
           if (!residueSels || !residueSels.length || typeof v.addResLabels !== "function") return;
@@ -411,8 +480,10 @@ def _viewer_protein_init_script() -> str:
               v.addStyle(sel, {stick: {radius: 0.18}, sphere: {scale: 0.26}});
             } catch (eBs) {}
             try {
-              v.addStyle({and: [sel, {elem: "H"}]}, {hidden: true});
-              v.addStyle({and: [sel, {elem: "D"}]}, {hidden: true});
+              var pocketAtoms = v.selectedAtoms(sel);
+              for (var pi = 0; pi < pocketAtoms.length; pi++) {
+                if (isHydrogenAtom(pocketAtoms[pi])) hideAtom(v, pocketAtoms[pi]);
+              }
             } catch (eHide) {}
           }
           addPocketResidueLabels(v, resSels);
@@ -467,6 +538,7 @@ def _viewer_protein_init_script() -> str:
         window.molmanagerResidueHighlight = [];
         window.molmanagerPocket = null;
         window.molmanagerPocketHModel = null;
+        window.molmanagerHydrogens = "polar";
         installResetStructureMenu();
         connectBridge();
         bindPicking(viewer);
@@ -480,6 +552,9 @@ def _viewer_protein_init_script() -> str:
             window.molmanagerResidueHighlight = payload.residueHighlight;
           }
           window.molmanagerPocket = payload.pocket || null;
+          if (payload.hydrogens) {
+            window.molmanagerHydrogens = payload.hydrogens === "all" ? "all" : "polar";
+          }
           var refit = !!payload.refit;
           v.clear();
           window.molmanagerPocketHModel = null;
@@ -552,6 +627,12 @@ def _viewer_protein_init_script() -> str:
         };
         window.molmanagerSetPocket = function (pocket) {
           window.molmanagerPocket = pocket || null;
+          if (!window.molmanagerViewer) return;
+          applyAll(window.molmanagerViewer);
+          keepViewResize(window.molmanagerViewer);
+        };
+        window.molmanagerSetHydrogens = function (mode) {
+          window.molmanagerHydrogens = mode === "all" ? "all" : "polar";
           if (!window.molmanagerViewer) return;
           applyAll(window.molmanagerViewer);
           keepViewResize(window.molmanagerViewer);
@@ -682,6 +763,7 @@ class ProteinEmbedView(QWidget):
         self._pending_payload: dict | None = None
         self._pending_residue_highlight: list | None = None
         self._pending_pocket: dict | None = None
+        self._pending_hydrogens: str | None = None
         self._web = None
         self._bootstrapped = False
         self._bridge = _ProteinViewerBridge(self)
@@ -776,6 +858,7 @@ class ProteinEmbedView(QWidget):
         if self._web_ready and self._pending_payload is not None:
             payload = self._pending_payload
             self._pending_payload = None
+            self._pending_hydrogens = None
             self._run_js("molmanagerSetProteinPayload", payload)
         elif self._web_ready and self._pending_residue_highlight is not None:
             highlight = self._pending_residue_highlight
@@ -785,6 +868,10 @@ class ProteinEmbedView(QWidget):
             pocket = self._pending_pocket
             self._pending_pocket = None
             self._run_js("molmanagerSetPocket", pocket)
+        if self._web_ready and self._pending_hydrogens is not None:
+            mode = self._pending_hydrogens
+            self._pending_hydrogens = None
+            self._run_js("molmanagerSetHydrogens", mode)
         if self._web_ready:
             self.schedule_resize_keep_view()
             QTimer.singleShot(200, self.resize_keep_view)
@@ -810,6 +897,10 @@ class ProteinEmbedView(QWidget):
                 self._pending_pocket = payload
                 if self._pending_payload is not None:
                     self._pending_payload["pocket"] = payload
+            elif fn_name == "molmanagerSetHydrogens":
+                self._pending_hydrogens = payload
+                if self._pending_payload is not None:
+                    self._pending_payload["hydrogens"] = payload
             return
         js = f"if (window.{fn_name}) window.{fn_name}({json.dumps(payload)});"
         try:
@@ -843,6 +934,9 @@ class ProteinEmbedView(QWidget):
 
     def set_pocket(self, pocket: dict | None) -> None:
         self._run_js("molmanagerSetPocket", pocket)
+
+    def set_hydrogens(self, mode: str) -> None:
+        self._run_js("molmanagerSetHydrogens", "all" if mode == "all" else "polar")
 
 
 class ProteinChainManager(QWidget):
@@ -1020,6 +1114,8 @@ class ProteinViewerDialog(QDialog):
         self._ligand_style_actions: dict[str, QAction] = {}
         self._protein_color_actions: dict[str, QAction] = {}
         self._ligand_color_actions: dict[str, QAction] = {}
+        self._act_hydrogens_all: QAction | None = None
+        self._act_hydrogens_polar: QAction | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -1064,6 +1160,22 @@ class ProteinViewerDialog(QDialog):
             ligand_menu.addMenu("&Color"),
             kind="ligand",
         )
+        hydrogens_menu = view_menu.addMenu("&Hydrogens")
+        hydrogen_group = QActionGroup(self)
+        hydrogen_group.setExclusive(True)
+        self._act_hydrogens_all = QAction("&All", self)
+        self._act_hydrogens_all.setCheckable(True)
+        self._act_hydrogens_all.setToolTip("Show all explicit hydrogens on the 3D canvas.")
+        self._act_hydrogens_polar = QAction("&Polar", self)
+        self._act_hydrogens_polar.setCheckable(True)
+        self._act_hydrogens_polar.setChecked(True)
+        self._act_hydrogens_polar.setToolTip("Show only polar hydrogens (bonded to N, O, S, or F).")
+        hydrogen_group.addAction(self._act_hydrogens_all)
+        hydrogen_group.addAction(self._act_hydrogens_polar)
+        hydrogens_menu.addAction(self._act_hydrogens_all)
+        hydrogens_menu.addAction(self._act_hydrogens_polar)
+        self._act_hydrogens_all.triggered.connect(lambda: self._set_hydrogen_mode("all"))
+        self._act_hydrogens_polar.triggered.connect(lambda: self._set_hydrogen_mode("polar"))
         self._act_pocket = QAction("&Pocket", self)
         self._act_pocket.setToolTip(
             "Zoom to the ligand, show nearby protein residues as ball-and-stick "
@@ -1324,6 +1436,7 @@ class ProteinViewerDialog(QDialog):
                 "components": [],
                 "residueHighlight": [],
                 "pocket": None,
+                "hydrogens": self._hydrogen_mode(),
                 "refit": True,
             }
         )
@@ -1427,6 +1540,15 @@ class ProteinViewerDialog(QDialog):
         style = "ballstick" if checked else "cartoon"
         self._check_style_action(self._protein_style_actions, style)
         self._apply_kind_style("polymer", style)
+
+    def _hydrogen_mode(self) -> str:
+        if self._act_hydrogens_all is not None and self._act_hydrogens_all.isChecked():
+            return "all"
+        return "polar"
+
+    def _set_hydrogen_mode(self, mode: str) -> None:
+        chosen = "all" if mode == "all" else "polar"
+        self.viewer.set_hydrogens(chosen)
 
     def _apply_kind_style(self, kind: str, style: str) -> None:
         allowed = {key for key, _label in COMPONENT_STYLE_CHOICES}
@@ -1970,6 +2092,7 @@ class ProteinViewerDialog(QDialog):
                 "components": self._component_payloads(),
                 "residueHighlight": self._residue_highlight,
                 "pocket": self._pocket_payload_data,
+                "hydrogens": self._hydrogen_mode(),
                 "refit": bool(refit),
             }
         )

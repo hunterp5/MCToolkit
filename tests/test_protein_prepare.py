@@ -305,11 +305,25 @@ def test_ligand_chem_tables_keep_input_cif_doubles():
         fmt="cif",
         keep_ligand=True,
         ligand_keys={("A", "1", "")},
-        ligand_mols=None,
         input_text=_CIF_CARBONYL,
         input_fmt="cif",
     )
-    assert any(b.order == 2 for b in bonds["LIG"])
+    assert any({b.atom_id_1, b.atom_id_2} == {"C80", "O81"} and b.order == 2 for b in bonds["LIG"])
+
+
+def test_ligand_chem_tables_prefer_input_cif_over_rewritten():
+    from molmanager.workers.protein_prepare_runtime import _ligand_chem_tables
+
+    rewritten = _CIF_CARBONYL.replace("doub", "sing")
+    _atoms, bonds = _ligand_chem_tables(
+        rewritten,
+        fmt="cif",
+        keep_ligand=True,
+        ligand_keys={("A", "1", "")},
+        input_text=_CIF_CARBONYL,
+        input_fmt="cif",
+    )
+    assert any({b.atom_id_1, b.atom_id_2} == {"C80", "O81"} and b.order == 2 for b in bonds["LIG"])
 
 
 def test_residue_names_by_key_reads_cif_auth_ids():
@@ -502,6 +516,10 @@ def test_prepare_ligands_for_gaff_cif_keeps_chem_comp_bond():
     assert "_atom_site." in rewritten
     assert "_chem_comp_bond.value_order" in rewritten
     assert "LIG" in rewritten
+    from molmanager.structure_components import parse_cif_chem_comp_bonds
+
+    bonds = parse_cif_chem_comp_bonds(rewritten).get("LIG") or ()
+    assert any({b.atom_id_1, b.atom_id_2} == {"C80", "O81"} and b.order == 2 for b in bonds)
 
 
 def test_hetatm_line_keeps_pdb_resname_columns():

@@ -2059,7 +2059,8 @@ def _polar_hydrogen_overlay_pdb(atoms: list[StructureAtom]) -> str:
     if not atoms:
         return ""
     hydrogens = _existing_polar_hydrogens(atoms)
-    hydrogens.extend(_rdkit_polar_hydrogens(_pdb_from_atoms(atoms)))
+    if not hydrogens:
+        hydrogens = _rdkit_polar_hydrogens(_pdb_from_atoms(atoms))
     hydrogens = _unique_atoms_by_xyz(hydrogens)
     if not hydrogens:
         return ""
@@ -2068,14 +2069,26 @@ def _polar_hydrogen_overlay_pdb(atoms: list[StructureAtom]) -> str:
 
 
 def _existing_polar_hydrogens(atoms: list[StructureAtom]) -> list[StructureAtom]:
-    heavies = [a for a in atoms if a.elem in POLAR_HEAVY_ELEMENTS]
+    heavies = [a for a in atoms if not _is_hydrogen(a)]
     bond_sq = _POLAR_H_BOND_ANGSTROM**2
     out: list[StructureAtom] = []
     for atom in atoms:
         if not _is_hydrogen(atom):
             continue
-        if any(_dist_sq(atom, heavy) <= bond_sq for heavy in heavies):
-            out.append(replace(atom, elem="H", het=True))
+        parent = min(
+            (
+                heavy
+                for heavy in heavies
+                if (heavy.chain, heavy.resi, heavy.icode) == (atom.chain, atom.resi, atom.icode)
+            ),
+            key=lambda heavy: _dist_sq(atom, heavy),
+            default=None,
+        )
+        if parent is None or parent.elem not in POLAR_HEAVY_ELEMENTS:
+            continue
+        if _dist_sq(atom, parent) > bond_sq:
+            continue
+        out.append(replace(atom, elem="H", het=True))
     return out
 
 

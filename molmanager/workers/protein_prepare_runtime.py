@@ -1080,11 +1080,10 @@ def _ligand_chem_tables(
     fmt: str,
     keep_ligand: bool,
     ligand_keys: set[ResidueKey],
-    ligand_mols: list | None,
     input_text: str,
     input_fmt: str,
 ) -> tuple[dict, dict]:
-    """``_chem_comp_*`` tables for remaining ligands in the prepared file."""
+    """Copy original mmCIF ``_chem_comp_*`` tables for ligands still in the file."""
     if not keep_ligand or not ligand_keys:
         return {}, {}
     remaining = _ligand_residue_names(text, fmt, ligand_keys)
@@ -1096,34 +1095,25 @@ def _ligand_chem_tables(
 
     atoms: dict = {}
     bonds: dict = {}
-    if _is_cif_fmt(input_fmt):
-        atoms.update(
-            {
-                key: val
-                for key, val in parse_cif_chem_comp_atoms(input_text).items()
-                if key in remaining
-            }
-        )
-        bonds.update(
-            {
-                key: val
-                for key, val in parse_cif_chem_comp_bonds(input_text).items()
-                if key in remaining
-            }
-        )
-    if _is_cif_fmt(fmt):
-        atoms.update(
-            {key: val for key, val in parse_cif_chem_comp_atoms(text).items() if key in remaining}
-        )
-        bonds.update(
-            {key: val for key, val in parse_cif_chem_comp_bonds(text).items() if key in remaining}
-        )
-    if ligand_mols:
-        from .protein_prepare_ligand import chem_comp_tables_from_mols
 
-        mol_atoms, mol_bonds = chem_comp_tables_from_mols(ligand_mols)
-        atoms.update({key: val for key, val in mol_atoms.items() if key in remaining})
-        bonds.update({key: val for key, val in mol_bonds.items() if key in remaining})
+    def _take(src: str, src_fmt: str, *, overwrite: bool) -> None:
+        if not _is_cif_fmt(src_fmt):
+            return
+        parsed_atoms = parse_cif_chem_comp_atoms(src)
+        parsed_bonds = parse_cif_chem_comp_bonds(src)
+        for key, val in parsed_atoms.items():
+            if key not in remaining:
+                continue
+            if overwrite or key not in atoms:
+                atoms[key] = val
+        for key, val in parsed_bonds.items():
+            if key not in remaining:
+                continue
+            if overwrite or key not in bonds:
+                bonds[key] = val
+
+    _take(text, fmt, overwrite=True)
+    _take(input_text, input_fmt, overwrite=True)
     return atoms, bonds
 
 
@@ -1575,7 +1565,6 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
             fmt=work_fmt,
             keep_ligand=keep_ligand_out,
             ligand_keys=ligand_keys,
-            ligand_mols=ligand_mols,
             input_text=input_text,
             input_fmt=fmt,
         )

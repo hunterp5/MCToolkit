@@ -653,9 +653,6 @@ def _prepare_ligands_for_gaff_cif(
     new_atoms = kept + [atom for atoms in replacements.values() for atom in atoms]
     chem_atoms = parse_cif_chem_comp_atoms(cif_text)
     chem_bonds = parse_cif_chem_comp_bonds(cif_text)
-    extra_atoms, extra_bonds = chem_comp_tables_from_mols(mols)
-    chem_atoms.update(extra_atoms)
-    chem_bonds.update(extra_bonds)
     remaining = {atom.resn.upper() for atom in new_atoms if atom.resn}
     chem_atoms = {comp: rows for comp, rows in chem_atoms.items() if comp in remaining}
     chem_bonds = {comp: rows for comp, rows in chem_bonds.items() if comp in remaining}
