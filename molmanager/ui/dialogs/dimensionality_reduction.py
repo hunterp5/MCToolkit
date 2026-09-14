@@ -57,7 +57,11 @@ from ..dockable_plot import (
     request_close_plot_widget,
     show_plot_options_dialog,
 )
-from ...dimensionality_reduction import DimensionReductionResult, is_fingerprint_bitcount_column
+from ...dimensionality_reduction import (
+    DimensionReductionResult,
+    is_fingerprint_bitcount_column,
+    subset_dimension_reduction_result,
+)
 from ...workers import SIMILARITY_FP_TYPE_LABELS
 from ...workers.dimensionality_reduction import DimensionReductionSignals, DimensionReductionWorker
 from ..data_analysis import numeric_subset, table_to_dataframe
@@ -73,6 +77,7 @@ from ..plot_on_hover_controls import PlotOnHoverControls
 from ..plot_size_controls import PlotSizeRangeControls
 from ..dimred_plot import build_dimension_reduction_figure, dimension_reduction_result_with_color
 from ..plotly_interactive_view import PlotlyInteractiveView
+from ..plot_table_sync import visible_oids_for_plot
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -525,7 +530,7 @@ class DimensionReductionPanel(QWidget):
             self._refresh_structure_sources()
             only_sel = selection_scope_checked(self)
             df, _rows = table_to_dataframe(
-                self.parent_app, visible_only=True, only_selected=only_sel
+                self.parent_app, visible_only=False, only_selected=only_sel
             )
             num = numeric_subset(df, exclude_id=True)
             for col in num.columns:
@@ -645,16 +650,35 @@ class DimensionReductionPanel(QWidget):
     def _on_titles_changed(self) -> None:
         self._refresh_plot_colors()
 
+    def _schedule_plot(self) -> None:
+        """Re-draw the last embedding using the currently visible table rows."""
+        if self._last_result is None or self._job_running:
+            return
+        self._refresh_plot_colors()
+
+    def _displayed_dimred_result(self) -> DimensionReductionResult | None:
+        if self._last_result is None:
+            return None
+        return subset_dimension_reduction_result(
+            self._last_result, visible_oids_for_plot(self.parent_app)
+        )
+
     def _refresh_plot_colors(self) -> None:
-        if self._last_result is None or self._plot_view is None or self._job_running:
+        result = self._displayed_dimred_result()
+        if result is None or self._plot_view is None or self._job_running:
+            return
+        if not result.oids:
+            from plotly import graph_objects as go
+
+            self._plot_view.push_figure(go.Figure(), [])
             return
         color_col = self.color_combo.currentText()
         if color_col == "(none)":
             color_col = None
-        color_vals = self._color_values_for_oids(self._last_result.oids, color_col)
+        color_vals = self._color_values_for_oids(result.oids, color_col)
         color_vals, color_col = normalize_color_column(color_vals, color_col)
         updated = dimension_reduction_result_with_color(
-            self._last_result,
+            result,
             color_values=color_vals,
             color_label=color_col,
         )
@@ -687,19 +711,21 @@ class DimensionReductionPanel(QWidget):
         return cols
 
     def _collect_table_mols(self, src: str, only_selected: bool) -> list[tuple[int, Chem.Mol]]:
+        """Fingerprint mols for Run: all table rows; table filters only hide points at draw time."""
         app = self.parent_app
         assert app is not None
         return app.collect_scoped_table_mols(
             src,
             only_selected=only_selected,
-            only_visible=True,
+            only_visible=False,
         )
 
     def _scoped_dataframe_and_oids(self) -> tuple[pd.DataFrame, list[int]]:
+        """Feature rows for Run: full table (Selected Rows Only still applies)."""
         app = self.parent_app
         assert app is not None
         only_sel = selection_scope_checked(self)
-        df, source_rows = table_to_dataframe(app, visible_only=True, only_selected=only_sel)
+        df, source_rows = table_to_dataframe(app, visible_only=False, only_selected=only_sel)
         oids: list[int] = []
         for r in source_rows:
             t0 = app._table_model.cell_text(r, 0)
@@ -851,41 +877,14 @@ class DimensionReductionPanel(QWidget):
             if self.parent_app is not None:
                 self.parent_app.status_label.setText(f"{self._window_title}: done.")
             return
-        color_col = self.color_combo.currentText()
-        if color_col == "(none)":
-            color_col = None
-        color_vals = self._color_values_for_oids(result.oids, color_col)
-        color_vals, color_col = normalize_color_column(color_vals, color_col)
-        plotted = dimension_reduction_result_with_color(
-            result,
-            color_values=color_vals,
-            color_label=color_col,
-        )
-        try:
-            color_min, color_max = self._current_color_bounds()
-            size_vals, size_label, size_min_px, size_max_px = self._size_encoding_for_oids(
-                plotted.oids
+        self._refresh_plot_colors()
+        self._update_spectrum_controls()
+        if self.parent_app is not None:
+            shown = self._displayed_dimred_result()
+            n = len(shown.oids) if shown is not None else 0
+            self.parent_app.status_label.setText(
+                f"{self._window_title}: rendered {n:,} point(s). Lasso or click to select table rows."
             )
-            fig = build_dimension_reduction_figure(
-                plotted,
-                colorscale=self._current_colorscale(),
-                color_min=color_min,
-                color_max=color_max,
-                size_values=size_vals,
-                size_label=size_label,
-                size_min_px=size_min_px,
-                size_max_px=size_max_px,
-                **self._titles.title_overrides(),
-            )
-            self._plot_view.push_figure(fig, list(plotted.oids))
-            self._update_spectrum_controls()
-            if self.parent_app is not None:
-                n = len(result.oids)
-                self.parent_app.status_label.setText(
-                    f"{self._window_title}: rendered {n:,} point(s). Lasso or click to select table rows."
-                )
-        except Exception as exc:
-            QMessageBox.warning(self, self._window_title, f"Plot failed: {exc}")
 
     def _on_failed(self, message: str) -> None:
         self._clear_dimred_background_job()

@@ -47,7 +47,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ..bundled_paths import default_external_executable, resolve_user_executable, smina_launch_env
-from ..easydock_backend import AUTOBOX_LIGAND_FILTER
+from ..dock_io import AUTOBOX_LIGAND_FILTER
 from .qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 
 _LIGAND_FILE_FILTER = (
@@ -460,7 +460,7 @@ class SminaDockDialog(QDialog):
             self.edit_out.setText(str(path.with_suffix(".pdbqt")))
 
     def _effective_out_path(self, out: str | None = None) -> str:
-        from ..easydock_backend import sdf_path_for_pdbqt
+        from ..dock_io import sdf_path_for_pdbqt
 
         text = (out if out is not None else self.edit_out.text() or "").strip()
         if not text:
@@ -616,7 +616,7 @@ class SminaDockDialog(QDialog):
         self._notify_activity()
 
     def _write_sidecar_sdf(self, pdbqt_out: str) -> None:
-        from ..easydock_backend import is_sdf_path, write_pdbqt_poses_sdf
+        from ..dock_io import is_sdf_path, write_pdbqt_poses_sdf
 
         stamp = time.strftime("%H:%M:%S")
         src = Path(pdbqt_out)
@@ -656,7 +656,7 @@ class SminaDockDialog(QDialog):
 
     def _present_dock_results(self, out_path: str) -> None:
         """Load finished poses (all Smina fields) into a new interactive table window."""
-        from ..easydock_backend import is_sdf_path, mols_from_dock_output, write_pose_mols_sdf
+        from ..dock_io import is_sdf_path, mols_from_dock_output, write_pose_mols_sdf
 
         path = str(self._resolve_path(out_path))
         templates = self._ligand_template_mols()
@@ -682,7 +682,7 @@ class SminaDockDialog(QDialog):
         self.log.append(f"[{stamp}][system] Opened {len(mols)} pose(s) in a results table.")
 
     def _restore_sdf_bonds(self, sdf_path: str) -> None:
-        from ..easydock_backend import is_sdf_path, restore_sdf_bond_orders
+        from ..dock_io import is_sdf_path, restore_sdf_bond_orders
 
         if not is_sdf_path(sdf_path):
             return
@@ -711,7 +711,7 @@ class SminaDockDialog(QDialog):
         self._notify_activity()
 
     def _start_minimize_phase(self, placement_path: str) -> bool:
-        from ..easydock_backend import is_sdf_path, load_sdf_mols, split_ligand_pdbqt_records
+        from ..dock_io import is_sdf_path, load_sdf_mols, split_ligand_pdbqt_records
 
         src = Path(placement_path)
         if not src.is_file():
@@ -778,7 +778,7 @@ class SminaDockDialog(QDialog):
         self._clear_batch()
 
     def _write_combined_minimize_results(self) -> None:
-        from ..easydock_backend import (
+        from ..dock_io import (
             combine_placement_and_minimized,
             combine_sdf_placement_and_minimized,
             is_sdf_path,
@@ -875,7 +875,7 @@ class SminaDockDialog(QDialog):
         return p
 
     def _is_openbabel_ligand(self, path: str) -> bool:
-        from ..easydock_backend import ligand_is_openbabel_format
+        from ..dock_io import ligand_is_openbabel_format
 
         return ligand_is_openbabel_format(self._resolve_path(path))
 
@@ -883,7 +883,7 @@ class SminaDockDialog(QDialog):
         """Input ligand molecules used to restore Kekulé/aromatic bonds on SDF poses."""
         from rdkit import Chem
 
-        from ..easydock_backend import load_sdf_mols
+        from ..dock_io import load_sdf_mols
 
         mols: list = []
         seen: set[str] = set()
@@ -916,7 +916,7 @@ class SminaDockDialog(QDialog):
 
     def _prepare_smina_ligands(self, ligand: str) -> list[Path]:
         """Return ligand files to pass to Smina (SDF when bond orders can be restored)."""
-        from ..easydock_backend import (
+        from ..dock_io import (
             ligand_is_openbabel_format,
             split_ligand_pdbqt_records,
             write_ligand_pdbqt_as_sdf,

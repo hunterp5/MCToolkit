@@ -123,21 +123,74 @@ def test_session_load_uses_loading_page_then_reveals(qapp, monkeypatch):  # noqa
         "headers": ["ID_HIDDEN", "Structure", "SMILES", "MW"],
         "rows": [{"id": 0, "cells": {"SMILES": "CCO", "MW": "46"}}],
         "next_oid": 1,
+        "filter_panel_visible": True,
     }
-    seen = {"loading": False}
+    seen = {"loading": False, "filters_covered": False}
 
     orig_begin = w._begin_session_finalize
+    orig_filters = w._finalize_session_filters
 
     def wrap_begin(d, max_id, *, gen):
-        seen["loading"] = w._table_stack.currentIndex() == 0
+        seen["loading"] = w._table_stack.currentWidget() is w._loading_page
         return orig_begin(d, max_id, gen=gen)
 
+    def wrap_filters(d, max_id):
+        orig_filters(d, max_id)
+        seen["filters_covered"] = not w.f_panel.isVisibleTo(w._workspace_stack)
+        seen["filters_restored"] = not w.f_panel.isHidden()
+
     monkeypatch.setattr(w, "_begin_session_finalize", wrap_begin)
+    monkeypatch.setattr(w, "_finalize_session_filters", wrap_filters)
     w._apply_session_document(doc)
     assert seen["loading"] is True
-    assert w._table_stack.currentIndex() == 1
+    assert seen["filters_covered"] is True
+    assert seen["filters_restored"] is True
+    assert w._table_stack.currentWidget() is w._workspace_ready_page
+    assert w.f_panel.isVisibleTo(w._workspace_stack)
     assert not w._session_has_unsaved_changes()
     assert not w._ingest_loading
+
+
+def test_session_load_holds_table_until_render_finishes(qapp, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtCore import QTimer
+
+    held = {"loading": False}
+
+    def fake_render(self):
+        held["loading"] = self._table_stack.currentIndex() == 0
+        QTimer.singleShot(0, self._session_on_render2d_batch_finished)
+        return True
+
+    monkeypatch.setattr(
+        ChemicalTableApp,
+        "_try_auto_render_all_structures_after_ingest",
+        fake_render,
+    )
+    w = ChemicalTableApp()
+    doc = {
+        "format": "molmanager_session",
+        "version": w._SESSION_VERSION,
+        "headers": ["ID_HIDDEN", "Structure", "SMILES", "MW"],
+        "rows": [{"id": 0, "cells": {"SMILES": "CCO", "MW": "46"}}],
+        "next_oid": 1,
+    }
+    w._apply_session_document(doc)
+    assert held["loading"] is True
+    assert w._table_stack.currentIndex() == 1
+    assert not w._session_awaiting_ready
+    assert not w._ingest_loading
+
+
+def test_search_open_does_not_inset_filter_cards(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    w.f_panel.setVisible(True)
+    w._search_panel.setVisible(True)
+    w._search_panel.resize(400, 64)
+    w._sync_filter_panel_scroll_content()
+    assert getattr(w, "_filter_table_top_pad", None) is None
+    layout = w.f_panel.layout()
+    assert layout is not None
+    assert layout.itemAt(0).widget() is w._filter_scroll
 
 
 def test_select_table_oids_updates_selection_set(qapp):  # noqa: ARG001
@@ -185,16 +238,23 @@ def test_structure_header_menu_offers_duplicate_not_rename(qapp):  # noqa: ARG00
 
 
 def test_duplicate_structure_column_is_chemistry_source(qapp):  # noqa: ARG001
+    from molmanager.display_constants import structure_column_minimum_width
+    from molmanager.ui.compound_table_model import CompoundTableModel
     from molmanager.ui.main_window.table_undo_commands import UndoDuplicateColumnCommand
 
     w = ChemicalTableApp()
     _seed_two_rows(w)
+    struct_w = structure_column_minimum_width() + 40
+    w.table.setColumnWidth(CompoundTableModel.STRUCTURE_COL, struct_w)
     w._undo_stack.push(UndoDuplicateColumnCommand(w, 1, "Structure"))
     assert "Structure (Copy)" in w.headers
     assert w._table_model.is_pixmap_data_column("Structure (Copy)")
     assert w._table_model.backing_value_for_row_header(0, "Structure (Copy)") == "CCO"
     assert w._table_model.backing_value_for_row_header(1, "Structure (Copy)") == "CC"
     assert "Structure (Copy)" in w.chemistry_tool_structure_sources()
+    copy_col = w.headers.index("Structure (Copy)")
+    assert w.table.columnWidth(copy_col) == w.table.columnWidth(CompoundTableModel.STRUCTURE_COL)
+    assert w.table.columnWidth(copy_col) == struct_w
     assert w._undo_stack.canUndo()
     w._undo_stack.undo()
     assert "Structure (Copy)" not in w.headers

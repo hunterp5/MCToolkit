@@ -320,18 +320,60 @@ class PlotToolsMixin:
             return
         timer.start(40)
 
+    def _iter_active_plot_hosts(self) -> list:
+        """Docked / floating plot panels that can rebuild from the current table."""
+        hosts: list = []
+        seen: set[int] = set()
+
+        def add(candidate) -> None:
+            if candidate is None:
+                return
+            key = id(candidate)
+            if key in seen:
+                return
+            seen.add(key)
+            hosts.append(candidate)
+
+        for docked in self.iter_docked_plot_widgets():
+            add(docked)
+        for plot_dlg in self._iter_plot_dialogs():
+            add(getattr(plot_dlg, "_plot_widget", None) or plot_dlg)
+        for attr in (
+            "_pca_dialog",
+            "_tsne_dialog",
+            "_umap_dialog",
+            "_som_dialog",
+            "_boiled_egg_dialog",
+            "_golden_triangle_dialog",
+            "_sali_map_dialog",
+            "_activity_cliff_map_dialog",
+            "_mmp_neighborhood_map_dialog",
+        ):
+            dlg = getattr(self, attr, None)
+            if dlg is None:
+                continue
+            add(getattr(dlg, "_panel", None) or dlg)
+        for dlg in list(getattr(self, "_floating_result_dialogs", [])):
+            add(getattr(dlg, "_panel", None) or dlg)
+        return hosts
+
     def _replot_active_plots(self) -> None:
         """Refresh plot data after filters or table edits change visible rows."""
-        for view in self._iter_active_plot_selection_views():
-            schedule = getattr(view, "_schedule_plot", None)
-            if callable(schedule):
-                try:
-                    schedule()
-                except RuntimeError:
-                    pass
+        for host in self._iter_active_plot_hosts():
+            fn = getattr(host, "_schedule_plot", None) or getattr(host, "_rebuild_figure", None)
+            if not callable(fn):
+                continue
+            try:
+                fn()
+            except RuntimeError:
+                pass
 
-    def _schedule_active_plots_replot(self, *, delay_ms: int = 80) -> None:
-        if getattr(self, "_background_job_ui_active", None) and self._background_job_ui_active():
+    def _schedule_active_plots_replot(self, *, delay_ms: int = 80, force: bool = False) -> None:
+        if (
+            not force
+            and getattr(self, "_background_job_ui_active", None)
+            and self._background_job_ui_active()
+        ):
             return
         timer = getattr(self, "_plot_replot_timer", None)
         if timer is None:

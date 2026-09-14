@@ -98,15 +98,6 @@ GNN_MTL_PERMEABILITY = (
     "https://doi.org/10.5281/zenodo.16948542 (Chemprop v2.1.0, graph-only GNN-MTL)."
 )
 
-EASYDOCK = (
-    "EasyDock (ligand docking pipeline): Minibaeva, G.; Ivanova, A.; Polishchuk, P. EasyDock: "
-    "customizable and scalable docking tool. J. Cheminform. 2023, 15, 102. "
-    "https://doi.org/10.1186/s13321-023-00772-2 ; Minibaeva, G.; Yap, V.; Polishchuk, P. "
-    "EasyDock 1.3: An Automated Pipeline for Molecular Docking. J. Chem. Inf. Model. 2026. "
-    "https://doi.org/10.1021/acs.jcim.6c01221 — https://github.com/ci-lab-cz/easydock "
-    "(Meeko ligand PDBQT prep; AutoDock Vina or Smina engine; MolManager writes scores/poses to the table)."
-)
-
 CONFAB = (
     "Confab (Open Babel systematic conformer generator): O'Boyle, N. M.; Vandermeersch, T.; "
     "Flynn, C. J.; Maguire, A. R.; Hutchison, G. R. Confab — Systematic generation of diverse "
@@ -226,18 +217,6 @@ def permeability_dialog_footer_html() -> str:
         'weights <a href="https://doi.org/10.5281/zenodo.16948542">Zenodo 10.5281/zenodo.16948542</a>. '
         "<b>Outputs</b>: linear Caco-2 ER and intrinsic Papp (Papp in ×10⁻⁶ cm/s); MDCK-MDR1 and NIH MDCK "
         "<b>efflux ratios</b> (not passive MDCK Papp). Assay conditions match AstraZeneca training data.</small>"
-    )
-
-
-def easydock_dialog_footer_html() -> str:
-    """Rich text for Tools → Dock → EasyDock…."""
-    return (
-        "<small><b>Method</b>: EasyDock — "
-        '<a href="https://doi.org/10.1186/s13321-023-00772-2">Minibaeva et al., J. Cheminform. 2023</a>; '
-        '<a href="https://doi.org/10.1021/acs.jcim.6c01221">Minibaeva et al., J. Chem. Inf. Model. 2026</a>. '
-        "Ligand PDBQT via Meeko; engine is Smina (CLI) or AutoDock Vina (Python). "
-        "Scores are vacuum AutoDock-family affinities (kcal/mol), not experimental ΔG. "
-        "This tool does not protonate ligands or prepare the protein.</small>"
     )
 
 

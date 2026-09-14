@@ -22,6 +22,8 @@ from rdkit import Chem
 
 from molmanager.medchem_space import (
     MedChemRowSnapshot,
+    MedChemSpaceDataset,
+    MedChemSpacePoint,
     build_medchem_space_dataset,
     build_medchem_space_from_snapshots,
     classify_boiled_egg,
@@ -55,7 +57,9 @@ def test_required_descriptor_columns_ok():
     assert not required_descriptor_columns_ok(
         "boiled_egg", tpsa_col="TPSA", logp_col="LogP", mw_col=None, wlogp_col="LogP"
     )
-    assert required_descriptor_columns_ok("golden_triangle", tpsa_col=None, logp_col="LogP", mw_col="MW")
+    assert required_descriptor_columns_ok(
+        "golden_triangle", tpsa_col=None, logp_col="LogP", mw_col="MW"
+    )
 
 
 def test_golden_triangle_uses_table_without_rdkit_when_populated():
@@ -68,7 +72,9 @@ def test_golden_triangle_uses_table_without_rdkit_when_populated():
         mw_text="300.12",
         logp_text="2.50",
     )
-    assert snapshot_table_values_complete("golden_triangle", tpsa=None, wlogp=None, mw=300.12, logp=2.5)
+    assert snapshot_table_values_complete(
+        "golden_triangle", tpsa=None, wlogp=None, mw=300.12, logp=2.5
+    )
     ds, updates = build_medchem_space_from_snapshots(
         [snap],
         plot_kind="golden_triangle",
@@ -169,3 +175,35 @@ def test_build_dataset_and_figures_from_ethanol():
     fig_c = build_boiled_egg_figure(ds, color_values=[p.mw, p.mw + 10], color_label="MW")
     assert fig_c.data[0].marker.showscale is True
     assert len(fig_c.data[0].marker.color) == 2
+
+
+def test_medchem_dataset_subset_oids():
+    pts = (
+        MedChemSpacePoint(
+            oid=1,
+            tpsa=40.0,
+            wlogp=1.0,
+            mw=100.0,
+            logp=1.0,
+            hover="a",
+            gia=True,
+            bbb=False,
+            golden_triangle=False,
+        ),
+        MedChemSpacePoint(
+            oid=2,
+            tpsa=50.0,
+            wlogp=2.0,
+            mw=200.0,
+            logp=2.0,
+            hover="b",
+            gia=True,
+            bbb=False,
+            golden_triangle=False,
+        ),
+    )
+    ds = MedChemSpaceDataset(points=pts, skipped=0)
+    assert ds.subset_oids(None) is ds
+    sub = ds.subset_oids(frozenset({2}))
+    assert sub.oids == [2]
+    assert len(sub.points) == 1

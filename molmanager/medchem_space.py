@@ -69,6 +69,7 @@ def snapshot_scope_row_indices(
         return list(visible_row_indices)
     return None
 
+
 # GIA (intestinal absorption) and BBB (brain penetration) boundaries — [TPSA, WLOGP].
 _GIA_POLYGON: list[tuple[float, float]] = [
     (97.80552243681136, -2.227039047489081),
@@ -321,9 +322,7 @@ def _point_in_polygon(x: float, y: float, polygon: list[tuple[float, float]]) ->
     for i in range(n):
         xi, yi = polygon[i]
         xj, yj = polygon[j]
-        if ((yi > y) != (yj > y)) and (
-            x < (xj - xi) * (y - yi) / (yj - yi + 1e-30) + xi
-        ):
+        if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi + 1e-30) + xi):
             inside = not inside
         j = i
     return inside
@@ -381,7 +380,22 @@ class MedChemSpaceDataset:
     def oids(self) -> list[int]:
         return [p.oid for p in self.points]
 
-    def summary_text(self, *, plot_kind: str = "boiled_egg", total_in_scope: int | None = None) -> str:
+    def subset_oids(self, keep: frozenset[int] | None) -> MedChemSpaceDataset:
+        """Keep points whose OIDs are still visible in the table."""
+        if keep is None:
+            return self
+        pts = tuple(p for p in self.points if int(p.oid) in keep)
+        if len(pts) == len(self.points):
+            return self
+        return MedChemSpaceDataset(
+            points=pts,
+            skipped=self.skipped,
+            subsample_note=self.subsample_note,
+        )
+
+    def summary_text(
+        self, *, plot_kind: str = "boiled_egg", total_in_scope: int | None = None
+    ) -> str:
         n = len(self.points)
         if n == 0:
             return "No compounds with valid descriptors in the current scope."

@@ -92,10 +92,6 @@ class WorkerSignals(QObject):
     cluster_failed = pyqtSignal(str)
     # Exploratory clustering: list of dict rows (method, params, settings, metrics, notes)
     cluster_explore_finished = pyqtSignal(list)
-    # EasyDock: list of (oid, score_text, confs_cell[, pose_payloads])
-    easydock_finished = pyqtSignal(list)
-    easydock_failed = pyqtSignal(str)
-
     # --- Progress banner (message, done, total; total < 0 => indeterminate) ---
     tool_progress = pyqtSignal(str, int, int)
     # Partial results were emitted before cancellation (tool_label, done, total).

@@ -355,28 +355,9 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
         "Docking and biomolecular simulation",
         (
             _t(
-                "easydock",
-                "EasyDock",
-                "Tools → Dock → EasyDock (ligand docking pipeline).",
-                (
-                    (
-                        "Minibaeva, G.; Ivanova, A.; Polishchuk, P. EasyDock: customizable and scalable "
-                        "docking tool. J. Cheminform. 2023, 15, 102.",
-                        "https://doi.org/10.1186/s13321-023-00772-2",
-                    ),
-                    (
-                        "Minibaeva, G.; Yap, V.; Polishchuk, P. EasyDock 1.3: An Automated Pipeline "
-                        "for Molecular Docking. J. Chem. Inf. Model. 2026.",
-                        "https://doi.org/10.1021/acs.jcim.6c01221",
-                    ),
-                ),
-                LIC_MIT,
-                homepage="https://github.com/ci-lab-cz/easydock",
-            ),
-            _t(
                 "vina",
                 "AutoDock Vina",
-                "EasyDock Vina engine (Python `vina` package when installed).",
+                "Smina is a fork of AutoDock Vina; pose logs may include VINA RESULT remarks.",
                 (
                     (
                         "Trott, O.; Olson, A. J. AutoDock Vina: Improving the speed and accuracy of docking "
@@ -391,7 +372,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "smina",
                 "Smina",
-                "EasyDock Smina engine and Smina docking helpers.",
+                "Tools → Dock → Smina (file-based docking).",
                 (
                     (
                         "Koes, D. R.; Baumgartner, M. P.; Camacho, C. J. Lessons Learned in Empirical Scoring "

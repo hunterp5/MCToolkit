@@ -343,14 +343,6 @@ class PdbqtGeneratorDialog(QDialog):
                     dock.edit_ligand.setText(ligand_pdbqt)
             except RuntimeError:
                 pass
-        easy = getattr(app, "_easydock_dialog", None)
-        if easy is not None and receptor_pdbqt:
-            try:
-                setter = getattr(easy, "set_receptor_pdbqt", None)
-                if callable(setter):
-                    setter(receptor_pdbqt)
-            except RuntimeError:
-                pass
 
     def _on_finished(self, receptor_pdbqt: str, ligand_pdbqt: str) -> None:
         self._end_job()

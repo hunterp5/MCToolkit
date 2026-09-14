@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""EasyDock dialog configuration."""
+"""Dock menu, Smina results viewer, and dock-results chrome."""
 
 from __future__ import annotations
 
@@ -22,85 +22,13 @@ import pytest
 
 pytest.importorskip("PyQt5.QtWidgets")
 
-from molmanager.easydock_backend import ENGINE_SMINA
-from molmanager.ui.dialogs.easydock import EasyDockDialog
 
-
-def test_easydock_dialog_params(qapp, tmp_path):  # noqa: ARG001
-    rec = tmp_path / "rec.pdbqt"
-    rec.write_text("REMARK dummy\n", encoding="utf-8")
-    dlg = EasyDockDialog(3)
-    dlg.receptor_edit.setText(str(rec))
-    dlg.spin_cx.setValue(11.0)
-    dlg.spin_sy.setValue(24.0)
-    dlg.spin_exhaust.setValue(4)
-    dlg.score_col_edit.setText("Affinity")
-    dlg.write_poses_cb.setChecked(False)
-    p = dlg.params()
-    assert p.engine in (ENGINE_SMINA, "vina")
-    assert p.center_x == pytest.approx(11.0)
-    assert p.size_y == pytest.approx(24.0)
-    assert p.exhaustiveness == 4
-    assert dlg.score_column() == "Affinity"
-    assert dlg.write_poses() is False
-    dlg.close()
-
-
-def test_easydock_dialog_smina_autobox(qapp, tmp_path):  # noqa: ARG001
-    rec = tmp_path / "rec.pdbqt"
-    rec.write_text("REMARK dummy\n", encoding="utf-8")
-    ref = tmp_path / "crystal.pdbqt"
-    ref.write_text("REMARK lig\n", encoding="utf-8")
-    dlg = EasyDockDialog(0)
-    idx = dlg.engine_combo.findData(ENGINE_SMINA)
-    assert idx >= 0
-    dlg.engine_combo.setCurrentIndex(idx)
-    dlg.receptor_edit.setText(str(rec))
-    dlg.autobox_cb.setChecked(True)
-    assert not dlg.spin_cx.isEnabled()
-    assert dlg.edit_autobox_ligand.isEnabled()
-    dlg.edit_autobox_ligand.setText(str(ref))
-    dlg.spin_autobox_add.setValue(6.0)
-    p = dlg.params()
-    assert p.autobox is True
-    assert p.autobox_ligand == str(ref)
-    assert p.autobox_add == pytest.approx(6.0)
-    vina_idx = dlg.engine_combo.findData("vina")
-    if vina_idx >= 0:
-        dlg.engine_combo.setCurrentIndex(vina_idx)
-        assert not dlg.autobox_cb.isChecked()
-        assert dlg.spin_cx.isEnabled()
-    dlg.close()
-
-
-def test_easydock_dialog_autobox_accepts_pdb(qapp, tmp_path):  # noqa: ARG001
-    rec = tmp_path / "rec.pdbqt"
-    rec.write_text("REMARK dummy\n", encoding="utf-8")
-    ref = tmp_path / "crystal.pdb"
-    ref.write_text("ATOM      1  C   LIG A   1       0.000   0.000   0.000\n", encoding="utf-8")
-    dlg = EasyDockDialog(0)
-    idx = dlg.engine_combo.findData(ENGINE_SMINA)
-    assert idx >= 0
-    dlg.engine_combo.setCurrentIndex(idx)
-    dlg.receptor_edit.setText(str(rec))
-    dlg.autobox_cb.setChecked(True)
-    dlg.edit_autobox_ligand.setText(str(ref))
-    p = dlg.params()
-    assert p.autobox is True
-    assert p.autobox_ligand == str(ref)
-    from molmanager.easydock_backend import AUTOBOX_LIGAND_FILTER, is_autobox_ligand_path
-
-    assert is_autobox_ligand_path(ref)
-    assert "*.pdb" in AUTOBOX_LIGAND_FILTER
-    assert "*.pdbqt" in AUTOBOX_LIGAND_FILTER
-    dlg.close()
-
-
-def test_dock_menu_includes_easydock(qapp):  # noqa: ARG001
+def test_dock_menu_includes_smina(qapp):  # noqa: ARG001
     from molmanager.ui.main_window import ChemicalTableApp
 
     w = ChemicalTableApp()
-    assert hasattr(w, "open_easydock")
+    assert hasattr(w, "open_smina_dock")
+    assert not hasattr(w, "open_easydock")
     tools = None
     for act in w.menuBar().actions():
         menu = act.menu()
@@ -120,7 +48,7 @@ def test_dock_menu_includes_easydock(qapp):  # noqa: ARG001
     assert dock_actions[0].text().replace("&", "") == "Prepare"
     assert dock_actions[1].isSeparator()
     labels = [a.text() for a in dock_actions if a.text()]
-    assert any(t.startswith("EasyDock") for t in labels)
+    assert not any(t.startswith("EasyDock") for t in labels)
     assert any(t.startswith("Smina") for t in labels)
     assert any(t.replace("&", "") == "Viewer" for t in labels)
     assert not any("Smina CLI" in t for t in labels)

@@ -24,7 +24,7 @@ Receptor from **Input PDB**. Ligands from **SDF**, **PDB**, **SMILES**, or **Row
 
 1. Set receptor input PDB and PDBQT output, then **Generate PDBQT** in the Receptor box.
 2. Choose ligand input (SDF, ligand PDB, SMILES, or selected rows) and **Generate PDBQT** in the Ligand box.
-3. Point **EasyDock…** (or **Smina…**) at the resulting receptor file. Ligand PDBQT is optional for EasyDock… (table molecules are prepared by EasyDock).
+3. Point **Smina…** at the resulting receptor and ligand files.
 
 ## Use cases
 

@@ -882,3 +882,72 @@ def test_session_restore_dispatches_analysis_plot_kind(qapp, monkeypatch) -> Non
     assert created
     assert created[0].get("activity_column") == "pIC50"
     assert list(w2.iter_docked_plot_widgets())
+
+
+def test_session_omits_idle_table_search(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
+    w.mols[0] = Chem.MolFromSmiles("CC")
+    w.next_oid = 1
+
+    doc = w._build_session_document()
+    assert "table_search" not in doc
+
+
+def test_session_document_roundtrip_table_search(qapp):  # noqa: ARG001
+    from molmanager.session_codec import expand_session_document
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
+    w._table_model.append_row(1, {"SMILES": "C", "Note": "methane"})
+    w.mols[0] = Chem.MolFromSmiles("CC")
+    w.mols[1] = Chem.MolFromSmiles("C")
+    w.next_oid = 2
+    w._search_panel.setVisible(True)
+    w._populate_table_search_columns_combo()
+    note_col = w.headers.index("Note")
+    for j in range(w._search_col_combo.count()):
+        if w._search_col_combo.itemData(j) == note_col:
+            w._search_col_combo.setCurrentIndex(j)
+            break
+    w._search_partial_cb.setChecked(False)
+    w._search_query_edit.setText('"ethane"')
+    w._add_search_criterion_row()
+    second = w._search_criterion_rows[1]
+    w._populate_search_row_columns(second, preferred_header="SMILES")
+    second.query_edit.setText('"CC"')
+    glue_idx = second.glue_combo.findData("or")
+    assert glue_idx >= 0
+    second.glue_combo.setCurrentIndex(glue_idx)
+    second.partial_cb.setChecked(True)
+
+    doc = w._build_session_document()
+    search = expand_session_document(doc).get("table_search")
+    assert isinstance(search, dict)
+    assert search.get("visible") is True
+    criteria = search.get("criteria") or []
+    assert len(criteria) == 2
+    assert criteria[0]["column"] == "Note"
+    assert criteria[0]["query"] == '"ethane"'
+    assert criteria[1]["column"] == "SMILES"
+    assert criteria[1]["query"] == '"CC"'
+    assert criteria[1]["glue"] == "or"
+
+    w2 = ChemicalTableApp()
+    w2._apply_session_document(doc)
+    assert not w2._search_panel.isHidden()
+    assert len(w2._search_criterion_rows) == 2
+    assert w2._search_criterion_rows[0].query_edit.text() == '"ethane"'
+    assert w2._search_criterion_rows[1].query_edit.text() == '"CC"'
+    assert w2._search_criterion_rows[1].glue() == "or"
+    first_col = w2._search_criterion_rows[0].col_combo.currentData()
+    assert first_col == w2.headers.index("Note")
+    second_col = w2._search_criterion_rows[1].col_combo.currentData()
+    assert second_col == w2.headers.index("SMILES")
+    sm = w2.table.selectionModel()
+    rows_hit = {ix.row() for ix in sm.selectedIndexes()}
+    assert rows_hit == {0}

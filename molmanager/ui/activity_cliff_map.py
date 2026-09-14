@@ -36,6 +36,7 @@ from ..mmp_analysis import MmpPair
 from .activity_cliff_plot import build_activity_cliff_figure
 from .dockable_plot import style_plot_footer_text_button
 from .plotly_interactive_view import PlotlyInteractiveView
+from .plot_table_sync import visible_oids_for_plot
 from .qt_widget_utils import make_window_minimizable
 from .result_plot_panel import DockableResultPlotPanel
 
@@ -70,6 +71,7 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
         )
         self._pairs: list[MmpPair] = []
         self._points: list[ActivityCliffPoint] = []
+        self._plotted_points: list[ActivityCliffPoint] = []
         self._activity_column = activity_column or ""
         self._x_mode = x_mode or "heavy_atoms"
         self._current_index: int | None = None
@@ -177,21 +179,30 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
         if self._plot_view is None:
             return
         self._x_mode = str(self._x_combo.currentData() or "heavy_atoms")
-        pairs = [(p.oid_a, p.oid_b) for p in self._points]
+        points = self._points_for_visible_rows()
+        self._plotted_points = points
+        pairs = [(p.oid_a, p.oid_b) for p in points]
         enc = self._resolved_encoding(oid_pairs=pairs)
         fig = build_activity_cliff_figure(
-            self._points,
+            points,
             activity_column=self._activity_column,
             x_mode=self._x_mode,
             **enc,
         )
-        oids = [p.oid_a for p in self._points]
-        partners = [p.oid_b for p in self._points]
+        oids = [p.oid_a for p in points]
+        partners = [p.oid_b for p in points]
         self._plot_view.push_figure(fig, oids, partner_oids=partners)
         self._update_spectrum_controls()
 
+    def _points_for_visible_rows(self) -> list[ActivityCliffPoint]:
+        keep = visible_oids_for_plot(self.parent_app)
+        if keep is None:
+            return list(self._points)
+        return [p for p in self._points if int(p.oid_a) in keep and int(p.oid_b) in keep]
+
     def _on_point_activated(self, point_index: int) -> None:
-        if not (0 <= point_index < len(self._points)):
+        plotted = self._plotted_points
+        if not (0 <= point_index < len(plotted)):
             self._current_index = None
             self._btn_browse.setEnabled(False)
             return
@@ -202,9 +213,10 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
     def _current_pair(self) -> MmpPair | None:
         if self._current_index is None:
             return None
-        if not (0 <= self._current_index < len(self._points)):
+        plotted = self._plotted_points
+        if not (0 <= self._current_index < len(plotted)):
             return None
-        pair_index = self._points[self._current_index].pair_index
+        pair_index = plotted[self._current_index].pair_index
         if not (0 <= pair_index < len(self._pairs)):
             return None
         return self._pairs[pair_index]

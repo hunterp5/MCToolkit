@@ -202,8 +202,6 @@ class ChemicalTableApp(
         self.signals.sali_failed.connect(self.on_sali_failed, _qc)
         self.signals.cluster_failed.connect(self.on_cluster_failed, _qc)
         self.signals.cluster_explore_finished.connect(self.on_cluster_explore_finished, _qc)
-        self.signals.easydock_finished.connect(self.on_easydock_finished, _qc)
-        self.signals.easydock_failed.connect(self.on_easydock_failed, _qc)
         self.signals.export_finished.connect(self._on_export_finished_message, _qc)
         self.signals.tool_progress.connect(self._on_tool_progress, _qc)
         self._substructure_filter_signals = SubstructureFilterSignals()
@@ -510,7 +508,18 @@ class ChemicalTableApp(
         cw = QWidget()
         self.setCentralWidget(cw)
         main_v = QVBoxLayout(cw)
-        content_h = QHBoxLayout()
+        self._loading_page = QWidget()
+        load_lyt = QVBoxLayout(self._loading_page)
+        load_lyt.addStretch()
+        self._loading_detail = QLabel("")
+        self._loading_detail.setAlignment(Qt.AlignCenter)
+        self._loading_detail.setWordWrap(True)
+        self._loading_detail.setStyleSheet("font-size: 14px; color: palette(mid); padding: 24px;")
+        load_lyt.addWidget(self._loading_detail)
+        load_lyt.addStretch()
+        self._workspace_ready_page = QWidget()
+        content_h = QHBoxLayout(self._workspace_ready_page)
+        content_h.setContentsMargins(0, 0, 0, 0)
         self._table_model = CompoundTableModel([])
         self.table = CompoundTableView()
         self.table.set_compound_model(self._table_model)
@@ -554,20 +563,6 @@ class ChemicalTableApp(
         sm = self.table.selectionModel()
         if sm is not None:
             sm.selectionChanged.connect(self._on_user_table_selection_changed)
-        self._table_stack = QStackedWidget()
-        self._table_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._loading_page = QWidget()
-        load_lyt = QVBoxLayout(self._loading_page)
-        load_lyt.addStretch()
-        self._loading_detail = QLabel("")
-        self._loading_detail.setAlignment(Qt.AlignCenter)
-        self._loading_detail.setWordWrap(True)
-        self._loading_detail.setStyleSheet("font-size: 14px; color: palette(mid); padding: 24px;")
-        load_lyt.addWidget(self._loading_detail)
-        load_lyt.addStretch()
-        self._table_stack.addWidget(self._loading_page)
-        self._table_stack.addWidget(self.table)
-        self._table_stack.setCurrentIndex(1)
         self._search_panel = QFrame(cw)
         self._search_panel.setVisible(False)
         self._search_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -577,7 +572,7 @@ class ChemicalTableApp(
         table_area_lyt = QVBoxLayout(self._table_area)
         table_area_lyt.setContentsMargins(0, 0, 0, 0)
         table_area_lyt.setSpacing(0)
-        table_area_lyt.addWidget(self._table_stack, 1)
+        table_area_lyt.addWidget(self.table, 1)
 
         from .workspace_layout import WorkspaceLayoutManager
 
@@ -602,15 +597,9 @@ class ChemicalTableApp(
         self.f_panel.setFixedWidth(_filter_panel_w)
         self.f_panel.setVisible(False)
         sb_lyt = QVBoxLayout(self.f_panel)
-        # Left/right inset only: top/bottom 0 so cards and footer align with the table edges.
+        # Left/right inset only: top/bottom 0 so the first card sits at the top of this panel.
         sb_lyt.setContentsMargins(5, 0, 5, 0)
         sb_lyt.setSpacing(5)
-
-        # When search is open above the table, pad so the first card lines up with the table top.
-        self._filter_table_top_pad = QWidget()
-        self._filter_table_top_pad.setFixedHeight(0)
-        self._filter_table_top_pad.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        sb_lyt.addWidget(self._filter_table_top_pad)
 
         self._filter_cards_host = FilterCardsHost(on_reorder=self.reorder_filter_card)
         # Ignored horizontal policy: scroll viewport sets width (prevents cards wider than panel).
@@ -654,7 +643,14 @@ class ChemicalTableApp(
         panel_btns.addStretch(1)
         sb_lyt.addLayout(panel_btns)
         content_h.addWidget(self.f_panel)
-        main_v.addLayout(content_h, 1)
+        self._workspace_stack = QStackedWidget()
+        self._workspace_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._workspace_stack.addWidget(self._loading_page)
+        self._workspace_stack.addWidget(self._workspace_ready_page)
+        self._workspace_stack.setCurrentIndex(1)
+        # Loading overlay covers table, plots, Search, and the filter panel.
+        self._table_stack = self._workspace_stack
+        main_v.addWidget(self._workspace_stack, 1)
         status_row = QHBoxLayout()
         status_row.setContentsMargins(0, 0, 0, 0)
         status_row.setSpacing(8)
@@ -942,11 +938,6 @@ class ChemicalTableApp(
         )
         prepare_menu.addAction(act_dock_prepare_pdb)
         dock_menu.addSeparator()
-        act_dock = QAction("EasyDock…", self, triggered=self.open_easydock)
-        act_dock.setToolTip(
-            "Dock table ligands with EasyDock (Smina or Vina): scores and poses written to the table."
-        )
-        dock_menu.addAction(act_dock)
         act_dock_smina = QAction("Smina…", self, triggered=self.open_smina_dock)
         act_dock_smina.setToolTip(
             "Run Smina as a file-based CLI on PDBQT inputs (log only; no table writeback)."
@@ -1070,7 +1061,9 @@ class ChemicalTableApp(
             "tools.search",
             QAction("&Search…", self, triggered=self.toggle_table_search_panel),
         )
-        act_search.setToolTip("Open or focus the in-table search panel (Ctrl+F).")
+        act_search.setToolTip(
+            "Open or hide the in-table search panel (Ctrl+F). Queries stay until deleted with −."
+        )
         tools.addAction(act_search)
 
         tools.addSeparator()
@@ -1433,23 +1426,9 @@ class ChemicalTableApp(
             return
 
         def _on_data_changed(top_left, bottom_right, roles=()) -> None:
-            # Structure pixmap paints while scrolling emit DecorationRole (etc.) only —
-            # those must not replot, or plot↔table selection sync fights the scrollbar.
-            structure_col = CompoundTableModel.STRUCTURE_COL
-            if (
-                top_left.isValid()
-                and bottom_right.isValid()
-                and top_left.column() == structure_col
-                and bottom_right.column() == structure_col
-            ):
-                paint_roles = {
-                    Qt.DecorationRole,
-                    Qt.SizeHintRole,
-                    Qt.DisplayRole,
-                    Qt.ToolTipRole,
-                }
-                if not roles or set(roles) <= paint_roles:
-                    return
+            # Structure pixmap paints while scrolling must not replot (status bar / WebEngine).
+            if CompoundTableModel.is_structure_paint_data_change(top_left, bottom_right, roles):
+                return
             self._schedule_active_plots_replot()
 
         model.dataChanged.connect(_on_data_changed)
@@ -1690,6 +1669,13 @@ class ChemicalTableApp(
         self._last_tool_progress_status = text
         if text:
             self.status_label.setText(text)
+        if getattr(self, "_session_awaiting_ready", False) and text:
+            detail = getattr(self, "_loading_detail", None)
+            if detail is not None:
+                try:
+                    detail.setText(text)
+                except RuntimeError:
+                    pass
         hub = getattr(self, "background_activity", None)
         if hub is not None:
             hub.notify_changed()

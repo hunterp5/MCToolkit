@@ -22,7 +22,7 @@ Requires the property/structure inputs the plot expects; scope via **Selected Ro
 - **Size by**, marker **Min size** / **Max size** (pixels).
 - **Summary**.
 - **Triangle** region select.
-- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
+- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **Ã—** when docked).
 
 ## Workflow
 
@@ -39,4 +39,4 @@ Requires the property/structure inputs the plot expects; scope via **Selected Ro
 
 ## Tips and limits
 
-Heuristic guidance only - many successful drugs sit outside cartoon regions. Descriptor errors move points misleadingly. Use with MPO rather than as a hard gate alone.
+Heuristic guidance only - many successful drugs sit outside cartoon regions. Descriptor errors move points misleadingly. Use with MPO rather than as a hard gate alone. Table filters hide points after Run; coordinates are computed for all rows (or **Selected Rows Only**).

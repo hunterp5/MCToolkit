@@ -339,3 +339,34 @@ def test_insert_rows_batch_restores_order(model: CompoundTableModel):
     assert model.row_oid(0) == 10
     assert model.row_oid(1) == 30
     assert model.cell_text(0, model._headers.index("SMILES")) == "A"
+
+
+def test_is_structure_paint_data_change(model: CompoundTableModel):
+    model.append_row(1, {"SMILES": "C", "MW": "16"})
+    struct = model.index(0, CompoundTableModel.STRUCTURE_COL)
+    mw = model.index(0, model._headers.index("MW"))
+    paint = list(CompoundTableModel.STRUCTURE_PAINT_ROLES)
+    assert CompoundTableModel.is_structure_paint_data_change(struct, struct, paint)
+    assert CompoundTableModel.is_structure_paint_data_change(struct, struct, ())
+    assert (
+        CompoundTableModel.is_structure_paint_data_change(
+            mw, mw, [Qt.DisplayRole, Qt.EditRole, Qt.BackgroundRole]
+        )
+        is False
+    )
+
+
+def test_data_cells_are_not_inline_editable(model: CompoundTableModel):
+    model.append_row(1, {"SMILES": "C", "MW": "16"})
+    smiles = model.index(0, model._headers.index("SMILES"))
+    assert not (model.flags(smiles) & Qt.ItemIsEditable)
+
+
+def test_compound_table_view_disables_inline_edit_triggers(qapp):  # noqa: ARG001
+    from PyQt5.QtWidgets import QAbstractItemView
+
+    from molmanager.ui.compound_table_model import CompoundTableView
+
+    view = CompoundTableView()
+    assert view.editTriggers() == QAbstractItemView.NoEditTriggers
+    view.deleteLater()

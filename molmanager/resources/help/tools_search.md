@@ -20,7 +20,8 @@ Searches the current table columns. Structure criteria need a valid structure/SM
 - **Column** chooser and query field.
 - **Partial match** and **Case Sensitive** options.
 - **Substructure** / SMARTS mode for structure search.
-- **Add** / remove (−) criteria rows.
+- **Add** / **−** on every criterion row. **−** on the last remaining row deletes that search and closes Search.
+- Closing Search from the menu or shortcut hides the panel but keeps query rows until they are deleted.
 
 ## Workflow
 
@@ -37,4 +38,4 @@ Searches the current table columns. Structure criteria need a valid structure/SM
 
 ## Tips and limits
 
-AND/OR mixes follow the criterion list order - keep queries simple when unsure. Invalid SMARTS yield no matches. Search is complementary to Filters; use Filters for persistent constraints.
+AND/OR mixes follow the criterion list order - keep queries simple when unsure. Invalid SMARTS yield no matches. Search is complementary to Filters; use Filters for persistent constraints. An open Search panel and its active query rows are stored in the session file and restored on Open. Toggling Search off keeps the current queries; use **−** to delete a row, or the last **−** to clear Search and close the panel.

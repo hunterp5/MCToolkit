@@ -311,16 +311,35 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             return proxy.mapFromSource(self._table_model.index(source_row, 0)).isValid()
         return not self.table.isRowHidden(source_row)
 
+    def _visible_oids_set(self) -> frozenset[int] | None:
+        """OIDs currently shown by table filters. ``None`` means every row is visible."""
+        if self._use_filter_proxy_for_table():
+            proxy = self._filter_proxy_model
+            oids = proxy.visible_oids()
+            if oids is None:
+                return None
+            src_n = self._table_model.rowCount()
+            if src_n > 0 and len(oids) >= src_n:
+                return None
+            return oids
+        n = self._table_model.rowCount()
+        hidden = [r for r in range(n) if self.table.isRowHidden(r)]
+        if not hidden:
+            return None
+        return frozenset(
+            int(self._table_model.row_oid(r)) for r in range(n) if not self.table.isRowHidden(r)
+        )
+
     def _visible_source_row_indices(self) -> list[int] | None:
         """Source-model row indices for rows currently shown in the table view.
 
         Returns ``None`` when every source row is visible (no list allocation).
         """
+        oids = self._visible_oids_set()
+        if oids is None:
+            return None
         if self._use_filter_proxy_for_table():
             proxy = self._filter_proxy_model
-            src_n = self._table_model.rowCount()
-            if proxy.rowCount() == src_n:
-                return None
             out: list[int] = []
             for pr in range(proxy.rowCount()):
                 pidx = proxy.index(pr, 0)
@@ -329,10 +348,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
                     out.append(int(sidx.row()))
             return out
         n = self._table_model.rowCount()
-        for r in range(n):
-            if self.table.isRowHidden(r):
-                return [r for r in range(n) if not self.table.isRowHidden(r)]
-        return None
+        return [r for r in range(n) if int(self._table_model.row_oid(r)) in oids]
 
     def _iter_visible_source_row_indices(self):
         """Iterate visible source rows without building a full index list when possible."""
@@ -1301,9 +1317,6 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
     def _on_smina_dock_dialog_destroyed(self):
         self._smina_dock_dialog = None
 
-    def _on_easydock_dialog_destroyed(self):
-        self._easydock_dialog = None
-
     def _on_pdbqt_generator_dialog_destroyed(self):
         self._pdbqt_generator_dialog = None
 
@@ -2165,6 +2178,18 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         self._pending_session_table_layout = None
         self._pending_session_workspace_layout = None
         self._pending_session_column_order = None
+        self._session_awaiting_ready = False
+        self._session_waiting_for_render = False
+        self._session_hold_workspace_surfaces = False
+        self._session_plot_wait_deadline = None
+        self._session_search_want_visible = False
+        self._session_search_rerun = False
+        reset_search = getattr(self, "_reset_table_search_panel", None)
+        if callable(reset_search):
+            reset_search()
+        show_ws = getattr(self, "_show_session_workspace_when_ready", None)
+        if callable(show_ws):
+            show_ws()
         self._restore_render2d_batch_environment()
         self._session_restore_ctx = None
         abort_csv = getattr(self, "_abort_csv_session_load", None)

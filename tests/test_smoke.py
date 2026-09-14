@@ -104,14 +104,6 @@ def test_smina_dock_guide_html(qapp):  # noqa: ARG001
     assert "Topic unavailable" not in h
 
 
-def test_easydock_guide_html(qapp):  # noqa: ARG001
-    from molmanager.ui.user_guides import guide_html
-
-    h = guide_html("tools_easydock")
-    assert "EasyDock" in h and "Dock score" in h
-    assert "Topic unavailable" not in h
-
-
 def test_systematic_conformations_guide_html(qapp):  # noqa: ARG001
     from molmanager.ui.user_guides import guide_html
 
@@ -197,6 +189,41 @@ def test_app_table_search_works_when_sqlite_index_stale(qapp):  # noqa: ARG001
     sm = w.table.selectionModel()
     rows_hit = {ix.row() for ix in sm.selectedIndexes()}
     assert rows_hit == {42}
+
+
+def test_search_minus_deletes_last_row_and_toggle_keeps_query(qapp):  # noqa: ARG001
+    from rdkit import Chem
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
+    w.mols[0] = Chem.MolFromSmiles("CC")
+    w.next_oid = 1
+
+    w.toggle_table_search_panel()
+    first = w._search_criterion_rows[0]
+    assert not first.remove_btn.isHidden()
+    first.query_edit.setText('"ethane"')
+
+    w.toggle_table_search_panel()
+    assert w._search_panel.isHidden()
+    assert first.query_edit.text() == '"ethane"'
+
+    w.toggle_table_search_panel()
+    assert not w._search_panel.isHidden()
+    assert first.query_edit.text() == '"ethane"'
+
+    w._add_search_criterion_row()
+    assert len(w._search_criterion_rows) == 2
+    w._remove_search_criterion_row(w._search_criterion_rows[0])
+    assert len(w._search_criterion_rows) == 1
+    assert not w._search_panel.isHidden()
+    assert not w._search_criterion_rows[0].add_btn.isHidden()
+
+    w._remove_search_criterion_row(w._search_criterion_rows[0])
+    assert w._search_panel.isHidden()
+    assert w._search_query_edit.text() == ""
 
 
 def test_table_chemistry_context_menu_column_eligibility(qapp):  # noqa: ARG001

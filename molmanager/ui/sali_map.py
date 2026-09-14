@@ -32,6 +32,7 @@ from PyQt5.QtWidgets import (
 from ..sali_analysis import SaliPoint
 from .dockable_plot import style_plot_footer_text_button
 from .plotly_interactive_view import PlotlyInteractiveView
+from .plot_table_sync import visible_oids_for_plot
 from .qt_widget_utils import make_window_minimizable
 from .result_plot_panel import DockableResultPlotPanel
 from .sali_plot import build_sali_figure
@@ -67,6 +68,7 @@ class SaliMapPanel(DockableResultPlotPanel):
             parent=parent,
         )
         self._points: list[SaliPoint] = []
+        self._plotted_points: list[SaliPoint] = []
         self._activity_column = activity_column or ""
         self._fp_choice = fp_choice or ""
         self._metric = metric or "Tanimoto"
@@ -168,21 +170,30 @@ class SaliMapPanel(DockableResultPlotPanel):
         sim_label = f"{self._metric} similarity"
         if self._fp_choice:
             sim_label = f"{self._fp_choice} ({self._metric})"
-        pairs = [(p.oid_a, p.oid_b) for p in self._points]
+        points = self._points_for_visible_rows()
+        self._plotted_points = points
+        pairs = [(p.oid_a, p.oid_b) for p in points]
         enc = self._resolved_encoding(oid_pairs=pairs)
         fig = build_sali_figure(
-            self._points,
+            points,
             activity_column=self._activity_column,
             similarity_label=sim_label,
             **enc,
         )
-        oids = [p.oid_a for p in self._points]
-        partners = [p.oid_b for p in self._points]
+        oids = [p.oid_a for p in points]
+        partners = [p.oid_b for p in points]
         self._plot_view.push_figure(fig, oids, partner_oids=partners)
         self._update_spectrum_controls()
 
+    def _points_for_visible_rows(self) -> list[SaliPoint]:
+        keep = visible_oids_for_plot(self.parent_app)
+        if keep is None:
+            return list(self._points)
+        return [p for p in self._points if int(p.oid_a) in keep and int(p.oid_b) in keep]
+
     def _on_point_activated(self, point_index: int) -> None:
-        if not (0 <= point_index < len(self._points)):
+        plotted = self._plotted_points
+        if not (0 <= point_index < len(plotted)):
             self._current_index = None
             self._btn_browse.setEnabled(False)
             return
@@ -193,18 +204,24 @@ class SaliMapPanel(DockableResultPlotPanel):
     def _browse_current(self) -> None:
         if self._current_index is None or self.parent_app is None:
             return
-        if not (0 <= self._current_index < len(self._points)):
+        plotted = self._plotted_points
+        if not (0 <= self._current_index < len(plotted)):
             return
         open_browser = getattr(self.parent_app, "_open_sali_browser", None)
         if not callable(open_browser):
             return
         try:
+            point = plotted[self._current_index]
+            start_index = next(
+                (i for i, p in enumerate(self._points) if p is point or p == point),
+                0,
+            )
             open_browser(
                 self._points,
                 activity_column=self._activity_column,
                 fp_choice=self._fp_choice,
                 metric=self._metric,
-                start_index=self._current_index,
+                start_index=start_index,
             )
         except Exception:
             pass

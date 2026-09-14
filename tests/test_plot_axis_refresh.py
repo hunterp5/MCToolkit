@@ -39,6 +39,33 @@ def test_set_axis_combo_items_preserves_selection(qapp):
     assert combo.currentText() == "MW"
 
 
+def test_on_table_data_changed_ignores_structure_paint(qapp):  # noqa: ARG001
+    from PyQt5.QtCore import Qt
+
+    from molmanager.ui.compound_table_model import CompoundTableModel
+
+    class _Host:
+        def __init__(self) -> None:
+            self.n = 0
+
+        def _schedule_plot(self) -> None:
+            self.n += 1
+
+    model = CompoundTableModel(["ID_HIDDEN", "Structure", "SMILES", "MW"])
+    model.append_row(0, {"SMILES": "C", "MW": "10"})
+    host = _Host()
+    struct = model.index(0, CompoundTableModel.STRUCTURE_COL)
+    PlotWidget._on_table_data_changed(
+        host, struct, struct, list(CompoundTableModel.STRUCTURE_PAINT_ROLES)
+    )
+    assert host.n == 0
+    mw = model.index(0, model._headers.index("MW"))
+    PlotWidget._on_table_data_changed(
+        host, mw, mw, [Qt.DisplayRole, Qt.EditRole, Qt.BackgroundRole]
+    )
+    assert host.n == 1
+
+
 def test_set_axis_combo_items_optional_none(qapp):
     combo = QComboBox()
     PlotWidget._set_axis_combo_items(combo, ["MW", "LogP"], previous=AXIS_NONE, allow_none=True)

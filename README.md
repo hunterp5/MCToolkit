@@ -290,9 +290,9 @@ bash scripts/install_pytorch_pka.sh
 
 This removes conflicting packages (such as **admet-ai**) and reinstalls from `requirements.txt` (CPU PyTorch). With an NVIDIA GPU, pass `-Cuda` (Windows) or `--cuda` (macOS/Linux) to replace that wheel with the CUDA 12.4 build so **Predict pKa** can run on the GPU. The first **Predict pKa** run downloads Uni-pKa fold weights from Hugging Face (`unipka-download-model`). For offline machines, prefetch with that CLI or copy the fold into unipkainfer’s `model_dir`.
 
-### Docking (EasyDock)
+### Docking (Smina)
 
-Table docking is **Tools → Dock → EasyDock…**. Receptor PDBQT still comes from **Prepare → Receptor PDB…** then **Prepare → PDBQT…**. Ligands are prepared by EasyDock/Meeko from table structures. Python pieces are in the docking extra (`pip install -e ".[docking]"` or `requirements.txt`). Protein Viewer **Prepare…** GAFF2 ligand min also needs OpenFF Toolkit from conda-forge (`conda install -c conda-forge openff-toolkit`) on Linux, macOS, or WSL — it is not on PyPI and is not supported on native Windows.
+Docking is **Tools → Dock → Smina…** (file-based CLI). Receptor PDBQT still comes from **Prepare → Receptor PDB…** then **Prepare → PDBQT…**. Ligand PDBQT can come from the same PDBQT dialog (Meeko). Python pieces are in the docking extra (`pip install -e ".[docking]"` or `requirements.txt`). Protein Viewer **Prepare…** GAFF2 ligand min also needs OpenFF Toolkit from conda-forge (`conda install -c conda-forge openff-toolkit`) on Linux, macOS, or WSL — it is not on PyPI and is not supported on native Windows.
 
 The **Smina** engine is not included in the Python install. Download a binary from [https://sourceforge.net/projects/smina](https://sourceforge.net/projects/smina) or your package manager, then either:
 
@@ -301,8 +301,6 @@ The **Smina** engine is not included in the Python install. Download a binary fr
   - `molmanager/resources/bin/mac/` (macOS)
   - `molmanager/resources/bin/linux/` (Linux)
 - Or set the environment variable `MOLMANAGER_BUNDLE_DIR` to a folder that contains the executable.
-
-The optional **Vina** engine needs `pip install vina` (often Linux/macOS only). **Smina…** remains for file-based PDBQT runs without table writeback.
 
 See **Tools → Dock** in the app after the binary is in place.
 

@@ -59,6 +59,23 @@ def test_run_umap_subsample_note():
     assert "n_neighbors" in summary
 
 
+def test_run_umap_seeded_run_does_not_warn_about_n_jobs():
+    pytest.importorskip("umap")
+    import warnings
+
+    rng = np.random.default_rng(3)
+    X = rng.normal(size=(40, 4))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        run_umap(X, max_points=None, random_state=0)
+    n_jobs_warns = [
+        w
+        for w in caught
+        if issubclass(w.category, UserWarning) and "n_jobs" in str(w.message)
+    ]
+    assert not n_jobs_warns
+
+
 def test_run_tsne_subsample_note():
     rng = np.random.default_rng(1)
     X = rng.normal(size=(80, 4))

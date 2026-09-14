@@ -56,7 +56,7 @@ LOADING_DETAIL_APPEND = (
 )
 LOADING_DETAIL_SESSION = (
     "Loading session…\n"
-    "Restoring table, filters, and workspace; 2D images draw when ready."
+    "Restoring table, filters, plots, and 2D structures before the workspace is shown."
 )
 
 DISCONNECT_FRAGMENTS_HELP = (

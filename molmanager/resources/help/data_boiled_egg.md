@@ -22,7 +22,7 @@ Structures/properties required by the plot for rows in scope; **Selected Rows On
 - **Size by**, marker **Min size** / **Max size** (pixels).
 - **Summary** panel.
 - **Egg** / **Yolk** region select.
-- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
+- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **Ã—** when docked).
 
 ## Workflow
 
@@ -39,4 +39,4 @@ Structures/properties required by the plot for rows in scope; **Selected Rows On
 
 ## Tips and limits
 
-The plot is a heuristic model visualization, not clinical BBB truth. Missing descriptors exclude points. Always pair with experimental ADME when decisions matter.
+The plot is a heuristic model visualization, not clinical BBB truth. Missing descriptors exclude points. Always pair with experimental ADME when decisions matter. Table filters hide points after Run; coordinates are computed for all rows (or **Selected Rows Only**).

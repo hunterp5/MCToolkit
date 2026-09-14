@@ -54,6 +54,7 @@ _OMIT_IF_EMPTY = frozenset(
         "ionization_sidecar",
         "mmp_ledger",
         "structure_smiles",
+        "table_search",
     }
 )
 

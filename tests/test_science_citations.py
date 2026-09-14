@@ -26,8 +26,6 @@ def test_plain_citations_contain_dois() -> None:
     assert "10.1021/acs.jcim.1c00075" in sc.MOLGPKA
     assert "10.1021/ci034243x" in sc.ESOL_DELANEY
     assert "10.1021/cn100008c" in sc.WAGER_CNS_MPO
-    assert "10.1186/s13321-023-00772-2" in sc.EASYDOCK
-    assert "EasyDock" in sc.easydock_dialog_footer_html()
     assert "10.1186/1758-2946-3-8" in sc.CONFAB
     assert "Confab" in sc.systematic_conformations_dialog_footer_html()
     assert "10.1021/acs.jcim.5b00654" in sc.stochastic_conformations_dialog_footer_html()

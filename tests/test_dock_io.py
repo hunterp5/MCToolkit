@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""EasyDock backend helpers (PDBQT parse, setup file, pose merge)."""
+"""Docking I/O helpers (PDBQT parse, setup file, pose merge)."""
 
 from __future__ import annotations
 
@@ -24,15 +24,11 @@ import pytest
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.easydock_backend import (
-    ENGINE_SMINA,
-    EasyDockParams,
-    _smina_argv,
+from molmanager.dock_io import (
     affinity_from_pdbqt,
     combine_placement_and_minimized,
     combine_pose_mols,
     combine_sdf_placement_and_minimized,
-    dock_mol,
     dock_result_headers,
     is_autobox_ligand_path,
     load_sdf_mols,
@@ -334,74 +330,12 @@ def test_mol_from_pdbqt_template_restores_sdf_bond_orders():
     assert combined.GetNumConformers() == 2
 
 
-def test_easydock_params_defaults():
-    p = EasyDockParams(receptor_pdbqt="rec.pdbqt")
-    assert p.engine == ENGINE_SMINA
-    assert p.n_poses == 9
-    assert p.size_x == 20.0
-
-
 def test_smina_executable_ok(tmp_path):
     exe = tmp_path / "smina.exe"
     exe.write_bytes(b"")
     assert smina_executable_ok(str(exe))
     assert not smina_executable_ok("")
     assert not smina_executable_ok(str(tmp_path / "missing.bin"))
-
-
-def test_smina_argv_includes_box_and_cpu(tmp_path):
-    rec = tmp_path / "rec.pdbqt"
-    rec.write_text("REMARK\n", encoding="utf-8")
-    params = EasyDockParams(
-        receptor_pdbqt=str(rec),
-        smina_executable="smina.exe",
-        energy_range=4.5,
-        ncpu=2,
-    )
-    argv = _smina_argv(
-        params, tmp_path / "lig.pdbqt", tmp_path / "out.pdbqt", tmp_path / "grid.txt"
-    )
-    assert Path(argv[0]).name.lower() in {"smina.exe", "smina"}
-    assert "--energy_range" in argv
-    assert argv[argv.index("--energy_range") + 1] == "4.5"
-    assert "--cpu" in argv
-    assert argv[argv.index("--cpu") + 1] == "2"
-
-
-def test_smina_argv_autobox_omits_config(tmp_path):
-    rec = tmp_path / "rec.pdbqt"
-    rec.write_text("REMARK\n", encoding="utf-8")
-    params = EasyDockParams(
-        receptor_pdbqt=str(rec),
-        smina_executable="smina.exe",
-        autobox=True,
-        autobox_ligand="crystal.pdbqt",
-        autobox_add=5.5,
-    )
-    argv = _smina_argv(
-        params, tmp_path / "lig.pdbqt", tmp_path / "out.pdbqt", tmp_path / "grid.txt"
-    )
-    assert "--config" not in argv
-    assert argv[argv.index("--autobox_ligand") + 1] == "crystal.pdbqt"
-    assert argv[argv.index("--autobox_add") + 1] == "5.50"
-
-
-def test_smina_argv_autobox_accepts_pdb(tmp_path):
-    rec = tmp_path / "rec.pdbqt"
-    rec.write_text("REMARK\n", encoding="utf-8")
-    lig = tmp_path / "crystal.pdb"
-    lig.write_text("ATOM      1  C   LIG A   1       0.000   0.000   0.000\n", encoding="utf-8")
-    params = EasyDockParams(
-        receptor_pdbqt=str(rec),
-        smina_executable="smina.exe",
-        autobox=True,
-        autobox_ligand=str(lig),
-        autobox_add=4.0,
-    )
-    argv = _smina_argv(
-        params, tmp_path / "lig.pdbqt", tmp_path / "out.pdbqt", tmp_path / "grid.txt"
-    )
-    assert argv[argv.index("--autobox_ligand") + 1] == str(lig.resolve())
 
 
 def test_is_autobox_ligand_path():
@@ -484,11 +418,3 @@ def test_mols_from_dock_output_merges_log(tmp_path):
     assert "mode" in headers
     assert "rmsd_lb" in headers
     assert "confs" in headers
-
-
-def test_dock_mol_unknown_engine():
-    mol = Chem.MolFromSmiles("CCO")
-    assert mol is not None
-    hit = dock_mol(mol, EasyDockParams(receptor_pdbqt="rec.pdbqt", engine="nope"))
-    assert hit.score is None
-    assert hit.error and "unknown" in hit.error

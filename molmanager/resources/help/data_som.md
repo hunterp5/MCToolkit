@@ -27,7 +27,7 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 - **Learning rate**, **Sigma**, **Point jitter**.
 - **Max points**, **Random seed**.
 - **Run SOM**.
-- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
+- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **Ã—** when docked).
 
 ## Workflow
 
@@ -44,4 +44,4 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 
 ## Tips and limits
 
-Grid size vs library size matters - too small collapses distinctions. Training epochs increase cost. Jitter helps separate overlapping points visually but is not chemical distance.
+Grid size vs library size matters - too small collapses distinctions. Training epochs increase cost. Jitter helps separate overlapping points visually but is not chemical distance. Table filters hide points after Run; the embedding is fit on all rows (or **Selected Rows Only**).

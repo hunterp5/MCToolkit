@@ -491,6 +491,10 @@ class DockableResultPlotPanel(QWidget):
     def _rebuild_figure(self) -> None:
         raise NotImplementedError
 
+    def _schedule_plot(self) -> None:
+        """Rebuild when table filters or cell values change."""
+        self._rebuild_figure()
+
     def _clear_selection(self) -> None:
         raise NotImplementedError
 

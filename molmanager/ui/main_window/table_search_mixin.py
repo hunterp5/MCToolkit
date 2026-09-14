@@ -136,32 +136,71 @@ class TableSearchMixin:
         self._populate_table_search_columns_combo()
 
     def _remove_search_criterion_row(self, row: SearchCriterionRow) -> None:
-        if not self._search_criterion_rows or row is self._search_criterion_rows[0]:
+        rows = getattr(self, "_search_criterion_rows", None) or []
+        if row not in rows:
             return
-        if row not in self._search_criterion_rows:
+        if len(rows) == 1:
+            self._clear_sole_search_and_close()
             return
-        self._search_criterion_rows.remove(row)
+        rows.remove(row)
         self._search_rows_layout.removeWidget(row)
         row.setParent(None)
         row.deleteLater()
+        self._sync_search_row_chrome()
         QTimer.singleShot(0, self._sync_filter_panel_scroll_content)
+
+    def _clear_sole_search_and_close(self) -> None:
+        """Delete the last remaining query and hide the Search panel."""
+        if getattr(self, "_search_criterion_rows", None):
+            row = self._search_criterion_rows[0]
+            row.query_edit.clear()
+            row.partial_cb.setChecked(True)
+            row.case_cb.setChecked(False)
+            row.substructure_cb.setChecked(False)
+        panel = getattr(self, "_search_panel", None)
+        if panel is not None:
+            panel.setVisible(False)
+        self._in_programmatic_table_selection = True
+        try:
+            sm = self.table.selectionModel()
+            if sm is not None:
+                sm.clearSelection()
+        finally:
+            self._in_programmatic_table_selection = False
+        self.status_label.setText("Search closed.")
+        QTimer.singleShot(0, self._sync_filter_panel_scroll_content)
+
+    def _sync_search_row_chrome(self) -> None:
+        """Keep Add on the first row, glue on later rows, and − visible on every row."""
+        rows = getattr(self, "_search_criterion_rows", None) or []
+        n = len(rows)
+        for i, row in enumerate(rows):
+            row.remove_btn.setVisible(True)
+            if n <= 1:
+                row.remove_btn.setToolTip("Delete this search and close Search.")
+            else:
+                row.remove_btn.setToolTip("Remove this search row.")
+            row.add_btn.setVisible(i == 0)
+            row.glue_combo.setVisible(i > 0)
 
     def _add_search_criterion_row(self) -> SearchCriterionRow:
         is_first = not self._search_criterion_rows
         row = SearchCriterionRow(
             self._search_rows_host,
-            show_remove=not is_first,
             show_glue=not is_first,
             show_add=is_first,
             on_add=self._add_search_criterion_row,
         )
+        row.remove_btn.clicked.connect(
+            lambda _checked=False, rw=row: self._remove_search_criterion_row(rw)
+        )
         if not is_first:
-            row.remove_btn.clicked.connect(lambda _checked=False, rw=row: self._remove_search_criterion_row(rw))
             row.copy_options_from(self._search_criterion_rows[0])
         row.query_edit.returnPressed.connect(self._run_table_search)
         self._search_rows_layout.addWidget(row)
         self._search_criterion_rows.append(row)
         self._populate_search_row_columns(row)
+        self._sync_search_row_chrome()
         if not is_first:
             row.query_edit.setFocus(Qt.ShortcutFocusReason)
         QTimer.singleShot(0, self._sync_filter_panel_scroll_content)
@@ -174,7 +213,11 @@ class TableSearchMixin:
         return header or ""
 
     def _populate_search_row_columns(
-        self, row: SearchCriterionRow, *, preferred_col: int | None = None
+        self,
+        row: SearchCriterionRow,
+        *,
+        preferred_col: int | None = None,
+        preferred_header: str | None = None,
     ) -> None:
         combo = row.col_combo
         prev = combo.currentData()
@@ -191,6 +234,17 @@ class TableSearchMixin:
                     break
                 combo.addItem(self._search_combo_label_for_header(h), i)
         combo.blockSignals(False)
+        header = str(preferred_header or "").strip()
+        if header:
+            for j in range(combo.count()):
+                data = combo.itemData(j)
+                if (
+                    isinstance(data, int)
+                    and 0 <= data < len(self.headers)
+                    and self.headers[data] == header
+                ):
+                    combo.setCurrentIndex(j)
+                    return
         if prev is not None and isinstance(prev, int) and prev >= 0:
             for j in range(combo.count()):
                 if combo.itemData(j) == prev:
@@ -204,15 +258,18 @@ class TableSearchMixin:
             self._populate_search_row_columns(row)
 
     def toggle_table_search_panel(self) -> None:
+        """Show or hide Search without clearing queries; − on the last row deletes them."""
         panel: QFrame = self._search_panel
-        panel.setVisible(not panel.isVisible())
-        if panel.isVisible():
+        opening = panel.isHidden()
+        panel.setVisible(opening)
+        if opening:
             self._populate_table_search_columns_combo()
             if self._search_criterion_rows:
                 self._search_criterion_rows[0].query_edit.setFocus(Qt.ShortcutFocusReason)
             self.status_label.setText(
                 "Search: use Add for more columns; AND/OR between rows. "
-                "Within a row: & AND, | or comma OR. Press Enter to run."
+                "Within a row: & AND, | or comma OR. Press Enter to run. "
+                "− deletes a row; deleting the last row closes Search."
             )
         QTimer.singleShot(0, self._sync_filter_panel_scroll_content)
 
@@ -227,7 +284,9 @@ class TableSearchMixin:
         self._populate_search_row_columns(self._search_criterion_rows[0], preferred_col=logical_col)
         self._search_criterion_rows[0].query_edit.setFocus(Qt.ShortcutFocusReason)
         hname = self.headers[logical_col]
-        self.status_label.setText(f'Search: column "{hname}" selected. Enter a query, then press Enter.')
+        self.status_label.setText(
+            f'Search: column "{hname}" selected. Enter a query, then press Enter.'
+        )
         QTimer.singleShot(0, self._sync_filter_panel_scroll_content)
 
     def _search_query_pattern_mol(self, text: str) -> Chem.Mol | None:
@@ -284,9 +343,7 @@ class TableSearchMixin:
         for i, row in enumerate(self._search_criterion_rows):
             needle = (row.query_edit.text() or "").strip()
             if not row.substructure_cb.isChecked():
-                err = validate_search_text_query(
-                    needle, partial=row.partial_cb.isChecked()
-                )
+                err = validate_search_text_query(needle, partial=row.partial_cb.isChecked())
                 if err:
                     self.status_label.setText(err)
                     return None
@@ -430,7 +487,9 @@ class TableSearchMixin:
                     rows.append(r)
         return rows
 
-    def _combine_search_row_sets(self, specs: list[_SearchCriterionSpec], row_sets: list[set[int]]) -> set[int]:
+    def _combine_search_row_sets(
+        self, specs: list[_SearchCriterionSpec], row_sets: list[set[int]]
+    ) -> set[int]:
         if not row_sets:
             return set()
         result = set(row_sets[0])
@@ -528,3 +587,99 @@ class TableSearchMixin:
         self.status_label.setText(
             f"Search: {len(visible_combined)} matching row(s) selected{glue_note}."
         )
+
+    def collect_table_search_session(self) -> dict | None:
+        """Serialize the Search panel when it is open or any criterion has a query."""
+        rows = list(getattr(self, "_search_criterion_rows", None) or [])
+        panel = getattr(self, "_search_panel", None)
+        visible = bool(panel is not None and not panel.isHidden())
+        criteria: list[dict] = []
+        has_query = False
+        for i, row in enumerate(rows):
+            query = str(row.query_edit.text() or "")
+            if query.strip():
+                has_query = True
+            col = row.col_combo.currentData()
+            header = ""
+            if isinstance(col, int) and 0 <= col < len(self.headers):
+                header = str(self.headers[col])
+            glue = None if i == 0 else row.glue()
+            criteria.append(
+                {
+                    "column": header,
+                    "query": query,
+                    "glue": glue,
+                    "partial": bool(row.partial_cb.isChecked()),
+                    "case_sensitive": bool(row.case_cb.isChecked()),
+                    "substructure": bool(row.substructure_cb.isChecked()),
+                }
+            )
+        if not visible and not has_query:
+            return None
+        return {"visible": visible, "criteria": criteria}
+
+    def _reset_table_search_panel(self) -> None:
+        """Collapse Search to one empty hidden row (session New / Open)."""
+        rows = list(getattr(self, "_search_criterion_rows", None) or [])
+        for row in rows[1:]:
+            self._remove_search_criterion_row(row)
+        if getattr(self, "_search_criterion_rows", None):
+            row = self._search_criterion_rows[0]
+            row.query_edit.clear()
+            row.partial_cb.setChecked(True)
+            row.case_cb.setChecked(False)
+            row.substructure_cb.setChecked(False)
+        self._sync_search_row_chrome()
+        panel = getattr(self, "_search_panel", None)
+        if panel is not None:
+            panel.setVisible(False)
+        self._session_search_want_visible = False
+        self._session_search_rerun = False
+
+    def restore_table_search_session(self, payload: object | None) -> None:
+        """Rebuild Search rows from a session document; keep the panel hidden until reveal."""
+        self._reset_table_search_panel()
+        if not isinstance(payload, dict):
+            return
+        raw_criteria = payload.get("criteria")
+        criteria = raw_criteria if isinstance(raw_criteria, list) else []
+        restored_any = False
+        for i, spec in enumerate(criteria):
+            if not isinstance(spec, dict):
+                continue
+            row = (
+                self._search_criterion_rows[0]
+                if i == 0 and self._search_criterion_rows
+                else self._add_search_criterion_row()
+            )
+            header = str(spec.get("column") or "")
+            self._populate_search_row_columns(row, preferred_header=header)
+            row.query_edit.setText(str(spec.get("query") or ""))
+            row.partial_cb.setChecked(bool(spec.get("partial", True)))
+            row.case_cb.setChecked(bool(spec.get("case_sensitive", False)))
+            row.substructure_cb.setChecked(bool(spec.get("substructure", False)))
+            glue = spec.get("glue")
+            if i > 0 and glue in ("and", "or"):
+                idx = row.glue_combo.findData(glue)
+                if idx >= 0:
+                    row.glue_combo.setCurrentIndex(idx)
+            restored_any = True
+        if restored_any:
+            self._populate_table_search_columns_combo()
+        has_query = any(
+            (row.query_edit.text() or "").strip()
+            for row in (getattr(self, "_search_criterion_rows", None) or [])
+        )
+        visible = bool(payload.get("visible", False))
+        self._session_search_want_visible = visible
+        self._session_search_rerun = has_query
+        panel = getattr(self, "_search_panel", None)
+        if panel is not None:
+            panel.setVisible(False)
+
+    def _rerun_restored_table_search(self) -> None:
+        """Re-apply saved queries after the table is visible so the selection matches."""
+        if not getattr(self, "_session_search_rerun", False):
+            return
+        self._session_search_rerun = False
+        self._run_table_search()

@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from PyQt5.QtCore import QAbstractItemModel, QAbstractTableModel, QModelIndex, QRect, QSize, Qt
 from PyQt5.QtGui import QColor, QPalette, QPixmap
 from PyQt5.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QHeaderView,
     QStyledItemDelegate,
@@ -110,6 +111,33 @@ class CompoundTableModel(QAbstractTableModel):
     """
 
     STRUCTURE_COL = 1
+    STRUCTURE_PAINT_ROLES = frozenset(
+        {
+            Qt.DecorationRole,
+            Qt.SizeHintRole,
+            Qt.DisplayRole,
+            Qt.ToolTipRole,
+        }
+    )
+
+    @classmethod
+    def is_structure_paint_data_change(cls, top_left, bottom_right, roles=()) -> bool:
+        """True when ``dataChanged`` is a Structure pixmap paint (lazy-scroll flush)."""
+        if top_left is None or bottom_right is None:
+            return False
+        try:
+            if not top_left.isValid() or not bottom_right.isValid():
+                return False
+            if top_left.column() != cls.STRUCTURE_COL or bottom_right.column() != cls.STRUCTURE_COL:
+                return False
+        except Exception:
+            return False
+        if not roles:
+            return True
+        try:
+            return set(roles) <= cls.STRUCTURE_PAINT_ROLES
+        except TypeError:
+            return True
 
     def __init__(self, headers: list[str], parent=None):
         super().__init__(parent)
@@ -479,7 +507,7 @@ class CompoundTableModel(QAbstractTableModel):
             len(self._rows) - 1 if row_hi is None else max(0, min(int(row_hi), len(self._rows) - 1))
         )
         lo = max(0, min(int(row_lo), hi))
-        roles = [Qt.DecorationRole, Qt.SizeHintRole, Qt.DisplayRole, Qt.ToolTipRole]
+        roles = list(self.STRUCTURE_PAINT_ROLES)
         self.dataChanged.emit(
             self.index(lo, self.STRUCTURE_COL), self.index(hi, self.STRUCTURE_COL), roles
         )
@@ -522,9 +550,7 @@ class CompoundTableModel(QAbstractTableModel):
         if r < 0:
             return
         idx = self.index(r, self.STRUCTURE_COL)
-        self.dataChanged.emit(
-            idx, idx, [Qt.DecorationRole, Qt.SizeHintRole, Qt.DisplayRole, Qt.ToolTipRole]
-        )
+        self.dataChanged.emit(idx, idx, list(self.STRUCTURE_PAINT_ROLES))
 
     def register_pixmap_column(self, header_name: str) -> None:
         """Mark a data column as image-only (2D pixmap via ``set_column_pixmap``)."""
@@ -722,13 +748,7 @@ class CompoundTableModel(QAbstractTableModel):
     def flags(self, index: QModelIndex) -> Qt.ItemFlags:  # noqa: N802
         if not index.isValid():
             return Qt.NoItemFlags
-        col = index.column()
-        base = Qt.ItemIsEnabled | Qt.ItemIsSelectable
-        if col >= 2:
-            h = self._headers[col]
-            if h not in self._pixmap_columns:
-                base |= Qt.ItemIsEditable
-        return base
+        return Qt.ItemIsEnabled | Qt.ItemIsSelectable
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):  # noqa: N802
         if role == Qt.TextAlignmentRole:
@@ -862,9 +882,7 @@ class CompoundTableModel(QAbstractTableModel):
         if r < 0:
             return
         idx = self.index(r, self.STRUCTURE_COL)
-        self.dataChanged.emit(
-            idx, idx, [Qt.DecorationRole, Qt.SizeHintRole, Qt.DisplayRole, Qt.ToolTipRole]
-        )
+        self.dataChanged.emit(idx, idx, list(self.STRUCTURE_PAINT_ROLES))
 
     def extra_column_pixmaps_copy(self, oid: int) -> dict[str, QPixmap]:
         """Detached copies of extra pixmap-column images for this oid."""
@@ -1791,6 +1809,7 @@ class CompoundTableView(QTableView):
         self.setAlternatingRowColors(True)
         self.setSelectionBehavior(QTableView.SelectItems)
         self.setSelectionMode(QTableView.ExtendedSelection)
+        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.verticalHeader().setDefaultSectionSize(structure_row_default_height())
         self.verticalHeader().setSectionsMovable(True)
         self.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
@@ -1806,25 +1825,43 @@ class CompoundTableView(QTableView):
     def structure_column_minimum_width(self) -> int:
         return self._structure_column_min_width
 
+    def _column_is_structure_sized(self, logical_index: int) -> bool:
+        """True for Structure and 2D pixmap columns that share its depiction size."""
+        if logical_index == CompoundTableModel.STRUCTURE_COL:
+            return True
+        model = self._compound_model
+        if model is None:
+            return False
+        headers = getattr(model, "_headers", ())
+        if logical_index < 0 or logical_index >= len(headers):
+            return False
+        return bool(model.is_pixmap_data_column(headers[logical_index]))
+
     def set_structure_column_minimum_width(self, width: int) -> None:
-        """Keep the Structure column at least wide enough for depictions (+ padding)."""
+        """Keep Structure and 2D pixmap columns at least wide enough for depictions."""
         w = max(1, int(width))
         if w == self._structure_column_min_width:
             return
         self._structure_column_min_width = w
-        col = CompoundTableModel.STRUCTURE_COL
-        if self.columnWidth(col) < w:
-            hh = self.horizontalHeader()
-            hh.blockSignals(True)
-            try:
-                self.setColumnWidth(col, w)
-            finally:
-                hh.blockSignals(False)
+        hh = self.horizontalHeader()
+        hh.blockSignals(True)
+        try:
+            model = self._compound_model
+            n = model.columnCount() if model is not None else 0
+            if n <= 0:
+                n = 2
+            for col in range(n):
+                if not self._column_is_structure_sized(col):
+                    continue
+                if self.columnWidth(col) < w:
+                    self.setColumnWidth(col, w)
+        finally:
+            hh.blockSignals(False)
 
     def _on_horizontal_section_resized(
         self, logical_index: int, _old_size: int, new_size: int
     ) -> None:
-        if logical_index != CompoundTableModel.STRUCTURE_COL:
+        if not self._column_is_structure_sized(logical_index):
             return
         min_w = self._structure_column_min_width
         if new_size >= min_w:

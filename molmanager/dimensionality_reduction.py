@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -36,6 +36,42 @@ class DimensionReductionResult:
     summary: str
     color_values: list[Any] | None = None
     color_label: str | None = None
+
+
+def subset_dimension_reduction_result(
+    result: DimensionReductionResult,
+    keep: frozenset[int] | None,
+) -> DimensionReductionResult:
+    """Keep coordinates for OIDs that are still visible in the table."""
+    if keep is None:
+        return result
+    xs: list[float] = []
+    ys: list[float] = []
+    oids: list[int] = []
+    hover: list[str] = []
+    has_color = result.color_values is not None
+    colors: list[Any] = []
+    n_x = len(result.x)
+    n_y = len(result.y)
+    n_h = len(result.hover)
+    n_c = len(result.color_values) if has_color else 0
+    for i, oid in enumerate(result.oids):
+        if int(oid) not in keep:
+            continue
+        oids.append(int(oid))
+        xs.append(result.x[i] if i < n_x else 0.0)
+        ys.append(result.y[i] if i < n_y else 0.0)
+        hover.append(result.hover[i] if i < n_h else f"OID {oid}")
+        if has_color:
+            colors.append(result.color_values[i] if i < n_c else None)
+    return replace(
+        result,
+        x=xs,
+        y=ys,
+        oids=oids,
+        hover=hover,
+        color_values=colors if has_color else None,
+    )
 
 
 def prepare_numeric_matrix(
@@ -247,6 +283,7 @@ def run_umap(
         n_neighbors=n_neigh,
         min_dist=float(min_dist),
         random_state=int(random_state),
+        n_jobs=1,
     )
     coords = reducer.fit_transform(Xs)
     summary = (
@@ -294,8 +331,7 @@ def run_som(
     n_nodes = gw * gh
     if n_nodes > 2_500:
         raise ValueError(
-            f"SOM grid {gw}×{gh} ({n_nodes:,} nodes) exceeds 2,500. "
-            "Reduce map width/height."
+            f"SOM grid {gw}×{gh} ({n_nodes:,} nodes) exceeds 2,500. Reduce map width/height."
         )
     epochs = max(1, int(n_epochs))
     lr0 = max(1e-6, float(learning_rate))
@@ -306,7 +342,9 @@ def run_som(
     # Sample subspace for weight init so maps start near the data cloud.
     init_n = min(n_used, max(n_nodes, 8))
     init_pick = rng.choice(n_used, size=init_n, replace=False)
-    weights = Xs[init_pick][rng.integers(0, init_n, size=n_nodes)].reshape(gh, gw, n_features).copy()
+    weights = (
+        Xs[init_pick][rng.integers(0, init_n, size=n_nodes)].reshape(gh, gw, n_features).copy()
+    )
 
     yy, xx = np.indices((gh, gw))
     order = np.arange(n_used)

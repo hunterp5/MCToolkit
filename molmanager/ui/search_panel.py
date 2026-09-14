@@ -43,13 +43,12 @@ _PLACEHOLDER_SUBSTRUCTURE = (
 
 
 class SearchCriterionRow(QWidget):
-    """One column + query line; optional glue, Add/Remove, and per-row search options."""
+    """One column + query line; Add, −, optional glue, and per-row search options."""
 
     def __init__(
         self,
         parent: QWidget | None = None,
         *,
-        show_remove: bool = False,
         show_glue: bool = False,
         show_add: bool = False,
         on_add: Callable[[], None] | None = None,
@@ -62,8 +61,8 @@ class SearchCriterionRow(QWidget):
 
         self.remove_btn = QPushButton("−")
         self.remove_btn.setFixedWidth(28)
-        self.remove_btn.setVisible(show_remove)
-        self.remove_btn.setToolTip("Remove this search row.")
+        self.remove_btn.setVisible(True)
+        self.remove_btn.setToolTip("Delete this search and close Search.")
         if on_remove is not None:
             self.remove_btn.clicked.connect(on_remove)
         lay.addWidget(self.remove_btn)

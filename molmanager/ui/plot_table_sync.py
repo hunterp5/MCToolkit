@@ -32,6 +32,19 @@ if TYPE_CHECKING:
 _PLOT_TABLE_SELECT_DEBOUNCE_MS = 60
 
 
+def visible_oids_for_plot(app: ChemicalTableApp | None) -> frozenset[int] | None:
+    """OIDs currently shown by table filters. ``None`` means every row is visible."""
+    if app is None:
+        return None
+    fn = getattr(app, "_visible_oids_set", None)
+    if not callable(fn):
+        return None
+    oids = fn()
+    if oids is None:
+        return None
+    return frozenset(int(x) for x in oids)
+
+
 def selection_visual_push_key(indices: set[int] | frozenset[int]) -> tuple[int, int]:
     """Cheap dedupe key for plot selection restyles (avoids sorting large index sets)."""
     if not indices:
@@ -45,7 +58,9 @@ def run_javascript_apply_figure(page, payload_json: str) -> None:
     page.runJavaScript(f"window.molmanagerApply({payload_json});")
 
 
-def run_javascript_set_selection(page, point_indices: list[int] | set[int] | frozenset[int]) -> None:
+def run_javascript_set_selection(
+    page, point_indices: list[int] | set[int] | frozenset[int]
+) -> None:
     """Push selection indices as a JS array (``parseSelectionIndices`` accepts arrays)."""
     import json
 

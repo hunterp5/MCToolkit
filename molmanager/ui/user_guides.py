@@ -265,12 +265,6 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Build receptor/ligand PDBQT (SDF, PDB, SMILES, or table rows).",
             ),
             _e(
-                "tools_easydock",
-                "EasyDock",
-                "EasyDock",
-                "Dock table ligands with EasyDock (Smina or Vina) into a receptor box.",
-            ),
-            _e(
                 "tools_smina",
                 "Smina",
                 "Smina",

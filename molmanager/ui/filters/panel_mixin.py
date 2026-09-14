@@ -245,9 +245,7 @@ class FilterPanelMixin:
                 self._bounds_chunk_row_i = end
         self._bounds_chunk_col_i = ci
         if ci < len(headers):
-            self._set_bounds_prep_progress(
-                f"Preparing filters…\n({ci}/{len(headers)} columns)"
-            )
+            self._set_bounds_prep_progress(f"Preparing filters…\n({ci}/{len(headers)} columns)")
             QTimer.singleShot(0, lambda g=gen: self._bounds_chunk_step(g))
             return
         self._bounds_chunk_active = False
@@ -280,7 +278,10 @@ class FilterPanelMixin:
         cfg = load_config()
         # Substructure matching runs RDKit per row — debounce earlier and slightly longer while typing SMARTS.
         if self._filters_include_substructure():
-            threshold, delay_ms = cfg.filter_debounce_substructure_rows, cfg.filter_debounce_substructure_ms
+            threshold, delay_ms = (
+                cfg.filter_debounce_substructure_rows,
+                cfg.filter_debounce_substructure_ms,
+            )
         else:
             threshold, delay_ms = cfg.filter_debounce_default_rows, cfg.filter_debounce_default_ms
         if n < threshold:
@@ -429,16 +430,13 @@ class FilterPanelMixin:
             oid = self._table_model.row_oid(r)
             if sqlite_oids is not None:
                 hide = oid not in sqlite_oids
-            for f in ([] if sqlite_oids is not None else self.filters):
+            for f in [] if sqlite_oids is not None else self.filters:
                 if isinstance(f, SubstructureFilterCard):
                     if not f.filter_enabled():
                         continue
                     inv = f.filter_inverted()
-                    if (
-                        override_oids is not None
-                        and self._substructure_override_matches_card(
-                            f, override_smarts, override_source
-                        )
+                    if override_oids is not None and self._substructure_override_matches_card(
+                        f, override_smarts, override_source
                     ):
                         matched = oid in override_oids
                         if inv:
@@ -506,7 +504,11 @@ class FilterPanelMixin:
             finish = getattr(self, "_finish_tool_progress", None)
             if callable(finish):
                 finish("Applying filters", status_message=None)
-            if sqlite_oids is not None and override_oids is not None and override_smarts is not None:
+            if (
+                sqlite_oids is not None
+                and override_oids is not None
+                and override_smarts is not None
+            ):
                 visible_oids = self._apply_substructure_override_to_visible(
                     frozenset(sqlite_oids),
                     override_smarts,
@@ -562,9 +564,11 @@ class FilterPanelMixin:
             self.status_label.setText(f"Showing {vis} / {len(self.mols)} molecules")
         schedule_replot = getattr(self, "_schedule_active_plots_replot", None)
         if callable(schedule_replot):
-            schedule_replot()
+            schedule_replot(force=True)
 
-    def _substructure_filter_targets(self, structure_source: str = "Structure") -> list[tuple[int, object]]:
+    def _substructure_filter_targets(
+        self, structure_source: str = "Structure"
+    ) -> list[tuple[int, object]]:
         """(oid, Mol) per row for ``SubstructureFilterWorker``.
 
         Prefer in-memory mols for ``Structure``; for other sources resolve via
@@ -622,7 +626,9 @@ class FilterPanelMixin:
             return
         dispatched = getattr(self, "_substructure_job_smarts", None) or ""
         dispatched_src = getattr(self, "_substructure_job_source", None) or "Structure"
-        ss_cards = [f for f in self.filters if isinstance(f, SubstructureFilterCard) and f.filter_enabled()]
+        ss_cards = [
+            f for f in self.filters if isinstance(f, SubstructureFilterCard) and f.filter_enabled()
+        ]
         if len(ss_cards) != 1:
             self._route_filter_apply(None)
             return
@@ -708,7 +714,7 @@ class FilterPanelMixin:
             self.status_label.setText(f"Showing {n_rows} / {len(self.mols)} molecules")
             schedule_replot = getattr(self, "_schedule_active_plots_replot", None)
             if callable(schedule_replot):
-                schedule_replot()
+                schedule_replot(force=True)
             return
 
         override_smarts, override_source, override_oids = self._unpack_substructure_matches(
@@ -728,7 +734,11 @@ class FilterPanelMixin:
                 if sqlite_oids is not None and override_oids is None:
                     visible_oids = set(sqlite_oids)
                     vis = len(visible_oids)
-                elif sqlite_oids is not None and override_oids is not None and override_smarts is not None:
+                elif (
+                    sqlite_oids is not None
+                    and override_oids is not None
+                    and override_smarts is not None
+                ):
                     visible_oids = self._apply_substructure_override_to_visible(
                         sqlite_oids,
                         override_smarts,
@@ -762,13 +772,16 @@ class FilterPanelMixin:
                         oid = self._table_model.row_oid(r)
                         if sqlite_oids is not None:
                             hide = oid not in sqlite_oids
-                        for f in ([] if sqlite_oids is not None else self.filters):
+                        for f in [] if sqlite_oids is not None else self.filters:
                             if isinstance(f, SubstructureFilterCard):
                                 if not f.filter_enabled():
                                     continue
                                 inv = f.filter_inverted()
-                                if override_oids is not None and self._substructure_override_matches_card(
-                                    f, override_smarts, override_source
+                                if (
+                                    override_oids is not None
+                                    and self._substructure_override_matches_card(
+                                        f, override_smarts, override_source
+                                    )
                                 ):
                                     matched = oid in override_oids
                                     if inv:
@@ -779,9 +792,7 @@ class FilterPanelMixin:
                                         hide = True
                                         break
                                     continue
-                                mol = self._mol_for_substructure_filter_row(
-                                    r, f.structure_source()
-                                )
+                                mol = self._mol_for_substructure_filter_row(r, f.structure_source())
                                 matched = f.match_mol(mol)
                                 if inv:
                                     if matched:
@@ -853,7 +864,9 @@ class FilterPanelMixin:
             self._apply_filters_impl_sync(None)
             return
 
-        ss_cards = [f for f in self.filters if isinstance(f, SubstructureFilterCard) and f.filter_enabled()]
+        ss_cards = [
+            f for f in self.filters if isinstance(f, SubstructureFilterCard) and f.filter_enabled()
+        ]
         thresh = cfg.substructure_async_rows
 
         if len(ss_cards) == 1:
@@ -867,7 +880,9 @@ class FilterPanelMixin:
                 self._substructure_job_smarts = smarts
                 self._substructure_job_source = src
                 perf = getattr(self, "_perf", None)
-                scope = perf.track if perf is not None else (lambda *_args, **_kwargs: nullcontext())
+                scope = (
+                    perf.track if perf is not None else (lambda *_args, **_kwargs: nullcontext())
+                )
                 with scope("filters.substructure_targets"):
                     targets = self._substructure_filter_targets(src)
                 sigs = getattr(self, "_substructure_filter_signals", None)
@@ -1024,7 +1039,6 @@ class FilterPanelMixin:
 
     def _sync_filter_panel_scroll_content(self) -> None:
         """Refresh scroll-area geometry after cards are added or the panel is shown."""
-        self._sync_filter_panel_table_top_align()
         scroll = getattr(self, "_filter_scroll", None)
         if scroll is None:
             return
@@ -1035,19 +1049,6 @@ class FilterPanelMixin:
         if host is not None:
             host.updateGeometry()
         scroll.updateGeometry()
-
-    def _sync_filter_panel_table_top_align(self) -> None:
-        """Keep the first filter card flush with the table top (below the search bar if open)."""
-        pad = getattr(self, "_filter_table_top_pad", None)
-        if pad is None:
-            return
-        search = getattr(self, "_search_panel", None)
-        if search is not None and search.isVisible():
-            # Match workspace_column: search height + spacing above the table/plots.
-            spacing = 4
-            pad.setFixedHeight(max(0, int(search.height()) + spacing))
-        else:
-            pad.setFixedHeight(0)
 
     def toggle_filter_panel(self) -> None:
         """Show or hide the filter panel and resync card width when opening."""

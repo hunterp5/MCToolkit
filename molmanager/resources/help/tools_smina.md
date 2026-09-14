@@ -1,6 +1,6 @@
 # Smina
 
-Smina runs the Smina docking engine with a receptor PDBQT, a ligand file, box center/size, and search settings. This is the file-based CLI; for table ligands and score writeback use **Tools → Dock → EasyDock…**.
+Smina runs the Smina docking engine with a receptor PDBQT, a ligand file, box center/size, and search settings.
 
 ## Goal
 

@@ -27,6 +27,7 @@ from PyQt5.QtWidgets import QUndoCommand
 from rdkit import Chem
 
 from ...config import load_config
+from ...display_constants import structure_column_minimum_width
 from ...utils import mol_to_canonical_smiles
 from ..compound_table_model import CompoundTableModel
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
@@ -517,6 +518,29 @@ class UndoPrecisionColumnCommand(QUndoCommand):
         self._app.status_label.setText(f"Undo: column '{self._hdr}' precision restored.")
 
 
+def _match_duplicated_column_width(
+    app: TableUIMixin, src_col: int, dest_col: int, src_name: str
+) -> None:
+    """Give the inserted copy the same section width as its source.
+
+    Structure (and other 2D pixmap columns) otherwise keep Qt's default header
+    size, which is narrower than the depiction and squashes the render.
+    """
+    try:
+        table = app.table
+        width = int(table.columnWidth(src_col))
+    except RuntimeError:
+        return
+    if src_name == "Structure" or app._table_model.is_pixmap_data_column(src_name):
+        width = max(width, int(structure_column_minimum_width()))
+    if width <= 0:
+        return
+    try:
+        table.setColumnWidth(dest_col, width)
+    except RuntimeError:
+        return
+
+
 def _unique_copy_header(headers: list[str], src_name: str) -> str:
     """Next unused ``{src} (Copy)`` / ``{src} (Copy N)`` header."""
     base = f"{src_name} (Copy)"
@@ -597,6 +621,7 @@ class UndoDuplicateColumnCommand(QUndoCommand):
             else:
                 app._table_model.duplicate_column_at(dup_col, self._dup_name, src)
             app.headers.insert(dup_col, self._dup_name)
+            _match_duplicated_column_width(app, src, dup_col, self._src_name)
             app.calculate_global_bounds()
             mark = getattr(app, "_mark_sqlite_store_dirty", None)
             if callable(mark):

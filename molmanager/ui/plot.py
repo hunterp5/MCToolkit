@@ -830,8 +830,12 @@ class PlotWidget(QWidget):
             self._clear_plot_table_selection(update_plot=False)
         self._schedule_plot()
 
-    def _on_table_data_changed(self, *_args) -> None:
+    def _on_table_data_changed(self, top_left=None, bottom_right=None, roles=()) -> None:
         """Refresh plot when cell values change (filters, descriptors, edits)."""
+        from .compound_table_model import CompoundTableModel
+
+        if CompoundTableModel.is_structure_paint_data_change(top_left, bottom_right, roles):
+            return
         self._schedule_plot()
 
     def _on_table_model_reset(self, *_args) -> None:

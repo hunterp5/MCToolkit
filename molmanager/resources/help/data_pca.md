@@ -25,7 +25,7 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 - **Size by**, marker **Min size** / **Max size** (pixels).
 - **Components** - number of principal components.
 - **Run PCA**.
-- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
+- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **Ã—** when docked).
 
 ## Workflow
 
@@ -42,4 +42,4 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 
 ## Tips and limits
 
-PCA is linear - nonlinear manifolds may need t-SNE/UMAP. Standardize when mixing units. Interpret axes as variance directions, not automatic chemical labels.
+PCA is linear - nonlinear manifolds may need t-SNE/UMAP. Standardize when mixing units. Interpret axes as variance directions, not automatic chemical labels. Table filters hide points after Run; the embedding is fit on all rows (or **Selected Rows Only**).

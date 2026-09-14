@@ -1020,6 +1020,9 @@ class PrepareStructuresMixin:
         pq = getattr(self, "process_queue", None)
         if pq is not None:
             pq.schedule_resume()
+        on_session = getattr(self, "_session_on_render2d_batch_finished", None)
+        if callable(on_session):
+            on_session()
 
     def cancel_render_2d_batch(self) -> bool:
         """Stop a Tools → Render 2D batch: no further chunks, workers skip drawing if not started."""

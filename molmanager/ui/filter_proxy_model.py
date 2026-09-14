@@ -28,6 +28,10 @@ class FilterProxyModel(QSortFilterProxyModel):
         super().__init__(parent)
         self._visible_oids: frozenset[int] | None = None
 
+    def visible_oids(self) -> frozenset[int] | None:
+        """OIDs currently accepted by the filter. ``None`` means every row is visible."""
+        return self._visible_oids
+
     def set_visible_oids(self, oids: frozenset[int] | None) -> None:
         new_oids = None if oids is None else frozenset(int(x) for x in oids)
         if new_oids == self._visible_oids:
@@ -46,4 +50,3 @@ class FilterProxyModel(QSortFilterProxyModel):
         except Exception:
             return False
         return oid in self._visible_oids
-

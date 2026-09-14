@@ -26,7 +26,7 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 - **Perplexity**, **Learning rate**, **Max iterations**.
 - **Max points**, **Random seed**.
 - **Run t-SNE**.
-- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
+- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **Ã—** when docked).
 
 ## Workflow
 
@@ -43,4 +43,4 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 
 ## Tips and limits
 
-t-SNE distances are not global metrics - do not over-read far-point spacing. Perplexity and seed change layouts; fix seed for comparisons. **Max points** subsamples large sets.
+t-SNE distances are not global metrics - do not over-read far-point spacing. Perplexity and seed change layouts; fix seed for comparisons. **Max points** subsamples large sets. Table filters hide points after Run; the embedding is fit on all rows (or **Selected Rows Only**).

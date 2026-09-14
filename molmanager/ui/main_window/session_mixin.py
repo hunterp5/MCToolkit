@@ -266,6 +266,11 @@ class SessionMixin:
             "ionization_sidecar": serialize_ionization_sidecar(),
             "mmp_ledger": self._session_mmp_ledger_payload(),
         }
+        collect_search = getattr(self, "collect_table_search_session", None)
+        if callable(collect_search):
+            search_payload = collect_search()
+            if search_payload:
+                doc["table_search"] = search_payload
         return compact_session_document(doc)
 
     def _session_som_browse_payload(self) -> list[dict]:
@@ -762,8 +767,12 @@ class SessionMixin:
             if callable(sync):
                 sync()
             try:
-                widget.show()
-                dlg.show()
+                if getattr(self, "_session_hold_workspace_surfaces", False):
+                    widget.hide()
+                    dlg.hide()
+                else:
+                    widget.show()
+                    dlg.show()
             except RuntimeError:
                 pass
 
@@ -892,8 +901,12 @@ class SessionMixin:
         self._session_restore_ctx = None
         self._session_finalize_ctx = None
         self._session_parse_busy = False
+        self._session_awaiting_ready = False
+        self._session_waiting_for_render = False
+        self._session_plot_wait_deadline = None
         self._discard_floating_plot_dialogs()
         self.clear_all()
+        self._session_hold_workspace_surfaces = True
         # clear_all() bumps the load generation; capture after that so callbacks match.
         self._session_load_generation = int(getattr(self, "_session_load_generation", 0)) + 1
         gen = self._session_load_generation
@@ -973,6 +986,7 @@ class SessionMixin:
             busy = bool(getattr(self, "_session_parse_busy", False))
             busy = busy or getattr(self, "_session_restore_ctx", None) is not None
             busy = busy or getattr(self, "_session_finalize_ctx", None) is not None
+            busy = busy or bool(getattr(self, "_session_awaiting_ready", False))
             if not busy:
                 return
             QApplication.processEvents()
@@ -986,6 +1000,10 @@ class SessionMixin:
         if generation != getattr(self, "_session_load_generation", 0):
             return
         self._session_parse_busy = False
+        self._session_awaiting_ready = False
+        self._session_waiting_for_render = False
+        self._session_hold_workspace_surfaces = False
+        self._show_session_workspace_when_ready()
         try:
             self.table.setUpdatesEnabled(True)
         except Exception:
@@ -1096,6 +1114,10 @@ class SessionMixin:
             self._session_finalize_ctx = None
         except Exception:
             self._session_finalize_ctx = None
+            self._session_awaiting_ready = False
+            self._session_waiting_for_render = False
+            self._session_hold_workspace_surfaces = False
+            self._show_session_workspace_when_ready()
             try:
                 self.table.setUpdatesEnabled(True)
             except Exception:
@@ -1207,6 +1229,7 @@ class SessionMixin:
             if isinstance(ws, dict):
                 mgr.restore_splitter_sizes(ws)
         self._restore_floating_plots(doc.get("floating_plots"))
+        self._hide_session_workspace_until_ready()
         self._restore_pending_workspace_layout()
         co = self._pending_session_column_order
         if isinstance(co, list):
@@ -1256,18 +1279,17 @@ class SessionMixin:
         restore_mmp_ledger_for_session(self, doc.get("mmp_ledger"))
         self._pending_session_table_layout = doc.get("table_layout")
         self._restore_table_layout(self._pending_session_table_layout)
-        self._reveal_table_after_session_prep()
-        # Same timing as file ingest: auto-render Structure after the table is visible.
-        from PyQt5.QtCore import QEventLoop
-        from PyQt5.QtWidgets import QApplication
-
-        app = QApplication.instance()
-        if app is not None:
-            app.processEvents(QEventLoop.ExcludeUserInputEvents)
+        restore_search = getattr(self, "restore_table_search_session", None)
+        if callable(restore_search):
+            restore_search(doc.get("table_search"))
+        self._session_awaiting_ready = True
+        self._session_waiting_for_render = False
+        self._session_plot_wait_deadline = None
+        self._hide_session_workspace_until_ready()
         self._deferred_session_post_load_follow_up()
 
     def _reveal_table_after_session_prep(self) -> None:
-        """Leave the loading page once session rows and chrome are restored."""
+        """Leave the loading overlay once session rows, 2D renders, and plots are ready."""
         self._set_ingest_loading(False)
         self._table_stack.setCurrentIndex(1)
         finish_clean = getattr(self, "_finish_session_clean_if_pending", None)
@@ -1277,6 +1299,119 @@ class SessionMixin:
             self.table.setUpdatesEnabled(True)
         except Exception:
             pass
+
+    def _hide_session_workspace_until_ready(self) -> None:
+        """Keep independent floating plot windows hidden until the workspace overlay lifts."""
+        if not getattr(self, "_session_hold_workspace_surfaces", False):
+            return
+        for dlg in self._iter_floating_plot_hosts():
+            try:
+                dlg.hide()
+            except RuntimeError:
+                pass
+
+    def _show_session_workspace_when_ready(self) -> None:
+        """Show restored floating plot windows and Search with the rest of the workspace."""
+        self._session_hold_workspace_surfaces = False
+        for dlg in self._iter_floating_plot_hosts():
+            try:
+                dlg.show()
+            except RuntimeError:
+                pass
+        panel = getattr(self, "_search_panel", None)
+        if panel is not None and getattr(self, "_session_search_want_visible", False):
+            try:
+                panel.setVisible(True)
+                populate = getattr(self, "_populate_table_search_columns_combo", None)
+                if callable(populate):
+                    populate()
+            except RuntimeError:
+                pass
+        self._session_search_want_visible = False
+
+    def _session_plot_host_waiting_for_web(self, host) -> bool:
+        """True when a restored plot still has a Plotly payload waiting on the WebEngine."""
+        stack = [host]
+        seen: set[int] = set()
+        while stack:
+            widget = stack.pop()
+            if widget is None:
+                continue
+            key = id(widget)
+            if key in seen:
+                continue
+            seen.add(key)
+            if hasattr(widget, "_web_ready") and not bool(getattr(widget, "_web_ready", False)):
+                if getattr(widget, "_pending_payload_json", None):
+                    return True
+            for attr in ("_plot_widget", "_panel", "_viewer_widget", "_view"):
+                child = getattr(widget, attr, None)
+                if child is not None:
+                    stack.append(child)
+        return False
+
+    def _session_plots_ready_for_reveal(self) -> bool:
+        """Skip waiting in tests; otherwise poll briefly so Plotly views are not blank."""
+        if "pytest" in sys.modules:
+            return True
+        hosts_fn = getattr(self, "_iter_active_plot_hosts", None)
+        hosts = list(hosts_fn()) if callable(hosts_fn) else []
+        if not hosts:
+            return True
+        now = time.monotonic()
+        deadline = getattr(self, "_session_plot_wait_deadline", None)
+        if deadline is None:
+            self._session_plot_wait_deadline = now + 8.0
+            deadline = self._session_plot_wait_deadline
+        if now >= float(deadline):
+            return True
+        for host in hosts:
+            if self._session_plot_host_waiting_for_web(host):
+                return False
+        return True
+
+    def _session_on_render2d_batch_finished(self) -> None:
+        """Continue session reveal after auto Render 2D (or cancel) completes."""
+        if getattr(self, "_session_waiting_for_render", False):
+            self._session_waiting_for_render = False
+        if not getattr(self, "_session_awaiting_ready", False):
+            return
+        detail = getattr(self, "_loading_detail", None)
+        if detail is not None:
+            try:
+                detail.setText("Preparing plots…")
+            except RuntimeError:
+                pass
+        QTimer.singleShot(0, self._session_try_reveal_when_ready)
+
+    def _session_try_reveal_when_ready(self) -> None:
+        """Show the workspace once 2D drawing and plot views have settled."""
+        if not getattr(self, "_session_awaiting_ready", False):
+            return
+        if getattr(self, "_session_waiting_for_render", False):
+            return
+        if not self._session_plots_ready_for_reveal():
+            detail = getattr(self, "_loading_detail", None)
+            if detail is not None:
+                try:
+                    detail.setText("Preparing plots…")
+                except RuntimeError:
+                    pass
+            QTimer.singleShot(50, self._session_try_reveal_when_ready)
+            return
+        self._session_awaiting_ready = False
+        self._session_plot_wait_deadline = None
+        self._show_session_workspace_when_ready()
+        self._restore_pending_workspace_layout()
+        self._reveal_table_after_session_prep()
+        rerun = getattr(self, "_rerun_restored_table_search", None)
+        if callable(rerun):
+            rerun()
+        finish = getattr(self, "_finish_deferred_session_workspace_restore", None)
+        if callable(finish):
+            QTimer.singleShot(0, finish)
+        n = self._table_model.rowCount()
+        self.status_label.setText(loaded_session_status(n) if n else "Ready.")
 
     def save_session_as(self) -> bool:
         """Prompt for a path and save the session. Returns True if a file was written."""
@@ -1465,20 +1600,23 @@ class SessionMixin:
         migrate = getattr(self, "_migrate_legacy_confs_cells_to_sidecar", None)
         if callable(migrate):
             migrate()
-        n = self._table_model.rowCount()
         render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
         pending = getattr(self, "_pending_session_table_layout", None)
         self._restore_pending_workspace_layout()
         if callable(render) and render():
+            self._session_waiting_for_render = True
+            detail = getattr(self, "_loading_detail", None)
+            if detail is not None:
+                try:
+                    detail.setText("Drawing 2D structures…")
+                except RuntimeError:
+                    pass
             self._restore_session_table_chrome(pending)
             self._restore_pending_workspace_layout()
             QTimer.singleShot(0, self._restore_pending_workspace_layout)
             return
         self._restore_session_table_chrome(pending)
-        self._pending_session_table_layout = None
-        self._restore_pending_workspace_layout()
-        QTimer.singleShot(0, self._finish_deferred_session_workspace_restore)
-        self.status_label.setText(loaded_session_status(n) if n else "Ready.")
+        self._session_try_reveal_when_ready()
 
     def _restore_session_table_chrome(self, payload: object | None = None) -> None:
         """Re-apply saved table layout and column order after other session side effects."""
@@ -1510,11 +1648,8 @@ class SessionMixin:
             schedule = getattr(self, "_schedule_sqlite_rebuild", None)
             if callable(schedule) and rows_n > 0:
                 schedule()
-        self._reveal_table_after_session_prep()
-        from PyQt5.QtCore import QEventLoop
-        from PyQt5.QtWidgets import QApplication
-
-        app = QApplication.instance()
-        if app is not None:
-            app.processEvents(QEventLoop.ExcludeUserInputEvents)
+        self._session_hold_workspace_surfaces = True
+        self._session_awaiting_ready = True
+        self._session_waiting_for_render = False
+        self._session_plot_wait_deadline = None
         self._deferred_session_post_load_follow_up()

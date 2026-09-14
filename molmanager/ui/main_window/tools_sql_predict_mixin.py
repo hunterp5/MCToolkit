@@ -444,150 +444,6 @@ class ToolsSqlPredictMixin:
             self._on_patent_query_dialog_destroyed,
         )
 
-    def open_easydock(self):
-        from ...easydock_backend import ensure_easydock_stack_ready
-        from ..dialogs.easydock import EasyDockDialog
-
-        err = ensure_easydock_stack_ready()
-        if err:
-            QMessageBox.warning(self, "Dock", err)
-            return
-        if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(
-                self,
-                "Dock",
-                "Open a file or add rows so the table has ligands to dock.",
-            )
-            return
-        n_sel = len(self._selected_logical_rows())
-
-        def _factory():
-            d = EasyDockDialog(n_sel, self)
-            self._prepare_tool_dialog(d)
-            d.setAttribute(Qt.WA_DeleteOnClose, True)
-            d.accepted.connect(lambda *_, dlg=d: self._on_easydock_dialog_accepted(dlg))
-            return d
-
-        reuse_or_show_modeless_singleton(
-            self,
-            "_easydock_dialog",
-            _factory,
-            self._on_easydock_dialog_destroyed,
-        )
-
-    def _on_easydock_dialog_accepted(self, dlg) -> None:
-        from ...workers import EasyDockWorker
-
-        only_selected = dlg.only_selected_rows()
-        allowed = self._selected_oids_set() if only_selected else None
-        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Dock"):
-            return
-        data = self._collect_mols_for_conformer_tools(only_selected=only_selected)
-        if not data:
-            QMessageBox.information(
-                self,
-                "Dock",
-                "No parseable structures for those rows.",
-            )
-            return
-        params = dlg.params()
-        items: list[tuple[int, bytes]] = []
-        for oid, mol in data:
-            try:
-                items.append((int(oid), mol.ToBinary()))
-            except Exception:
-                continue
-        if not items:
-            QMessageBox.information(self, "Dock", "Could not serialize any ligands.")
-            return
-        self._easydock_score_column = dlg.score_column()
-        self._easydock_write_poses = dlg.write_poses()
-        self._easydock_receptor_path = (params.receptor_pdbqt or "").strip()
-        n = len(items)
-        self._begin_tool_progress("Dock", n)
-        self.process_queue.enqueue(
-            f"Dock ({n} ligand(s))",
-            lambda ev, it=items, p=params, sigs=self.signals, wp=dlg.write_poses(), sdf=dlg.sdf_path(): (
-                EasyDockWorker(
-                    it,
-                    p,
-                    sigs,
-                    write_poses=wp,
-                    sdf_path=sdf,
-                    cancel_event=ev,
-                )
-            ),
-        )
-
-    def on_easydock_finished(self, results: list) -> None:
-        self._finish_tool_progress("Dock")
-        score_col = getattr(self, "_easydock_score_column", None) or "Dock score"
-        write_poses = bool(getattr(self, "_easydock_write_poses", True))
-        self._easydock_score_column = "Dock score"
-        self._easydock_write_poses = True
-        if not results:
-            self.status_label.setText("Dock: no results.")
-            return
-        ensure = [score_col]
-        if write_poses:
-            ensure.append("confs")
-        self._ensure_columns(ensure)
-        score_pairs: list[tuple[int, str]] = []
-        confs_pairs: list[tuple[int, str]] = []
-        sc = getattr(self, "_confs_blocks_sidecar", None)
-        if sc is None:
-            self._confs_blocks_sidecar = {}
-            sc = self._confs_blocks_sidecar
-        from ...confs_codec import demote_v1_cell_to_sidecar
-
-        n_ok = 0
-        for item in results:
-            if len(item) < 3:
-                continue
-            oid, score_txt, cell = int(item[0]), str(item[1] or ""), str(item[2] or "")
-            score_pairs.append((oid, score_txt))
-            if write_poses and cell:
-                light, b64 = demote_v1_cell_to_sidecar(cell, "confs")
-                if b64 is not None:
-                    sc[(oid, "confs")] = b64
-                confs_pairs.append((oid, light))
-                n_ok += 1
-        if score_pairs:
-            self._table_model.set_column_text_by_oids(score_col, score_pairs)
-        if confs_pairs:
-            self._table_model.set_column_text_by_oids("confs", confs_pairs)
-        self.schedule_calculate_global_bounds()
-        notice = self._consume_partial_results_notice()
-        n_scored = sum(1 for _oid, s in score_pairs if s)
-        msg = f"Dock: {n_scored} score(s) in “{score_col}”."
-        if notice:
-            msg = f"{notice} {msg}"
-        self.status_label.setText(msg)
-        pose_mols: list[Chem.Mol] = []
-        from ...easydock_backend import mols_from_pose_payloads
-
-        for item in results:
-            if len(item) >= 4 and item[3]:
-                pose_mols.extend(mols_from_pose_payloads(item[3]))
-        if pose_mols:
-            rec = str(getattr(self, "_easydock_receptor_path", "") or "").strip()
-            self.open_dock_results_window(
-                pose_mols, title="Dock results", receptor_path=rec or None
-            )
-        elif write_poses and n_ok:
-            packed = [
-                (int(item[0]), None, str(item[2] or ""))
-                for item in results
-                if len(item) >= 3 and item[2]
-            ]
-            if packed:
-                self._auto_open_first_conformer_results(
-                    packed,
-                    title="Docked poses",
-                    confs_column="confs",
-                    initial_superpose=False,
-                )
-
     def open_dock_results_window(
         self,
         mols: list,
@@ -596,7 +452,7 @@ class ToolsSqlPredictMixin:
         receptor_path: str | None = None,
     ):
         """Open a new main-table window populated with docked poses and Smina fields."""
-        from ...easydock_backend import dock_result_headers
+        from ...dock_io import dock_result_headers
         from .chemical_table_app import ChemicalTableApp
 
         usable = [m for m in (mols or []) if m is not None]
@@ -700,7 +556,7 @@ class ToolsSqlPredictMixin:
             QMessageBox.information(
                 self,
                 "Dock Viewer",
-                "No docking results to show. Run EasyDock or Smina first.",
+                "No docking results to show. Run Smina first.",
             )
             return None
         return self.open_dock_results_window(
@@ -774,11 +630,6 @@ class ToolsSqlPredictMixin:
         setter = getattr(viewer, "set_ligand_mol", None)
         if callable(setter):
             setter(mol)
-
-    def on_easydock_failed(self, message: str) -> None:
-        self._finish_tool_progress("Dock")
-        QMessageBox.warning(self, "Dock", message or "EasyDock failed.")
-        self.status_label.setText("Dock failed.")
 
     def open_smina_dock(self):
         from ..smina_dock import SminaDockDialog

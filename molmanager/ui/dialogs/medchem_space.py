@@ -80,6 +80,7 @@ from ...workers.medchem_space_worker import MedChemSpaceSignals, MedChemSpaceWor
 from ..data_analysis import numeric_subset, table_to_dataframe
 from ..medchem_space_plot import build_boiled_egg_figure, build_golden_triangle_figure
 from ..plotly_interactive_view import PlotlyInteractiveView
+from ..plot_table_sync import visible_oids_for_plot
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -501,7 +502,7 @@ class MedChemPlotPanel(QWidget):
             else:
                 only_sel = selection_scope_checked(self)
                 df, _rows = table_to_dataframe(
-                    self.parent_app, visible_only=True, only_selected=only_sel
+                    self.parent_app, visible_only=False, only_selected=only_sel
                 )
                 for col in numeric_subset(df, exclude_id=True).columns:
                     self.color_combo.addItem(col)
@@ -637,17 +638,17 @@ class MedChemPlotPanel(QWidget):
         self._snapshot_collect_ctx = None
 
     def _snapshot_scope_rows(self) -> list[int] | None:
+        """Rows to snapshot for Run: full table (Selected Rows Only still applies)."""
         app = self.parent_app
         assert app is not None
         only_sel = selection_scope_checked(self)
         if only_sel and not app._selected_oids_set():
             raise ValueError("\u201cSelected Rows Only\u201d is checked but nothing is selected.")
         only_rows = app._selected_logical_rows() if only_sel else None
-        visible_rows = app._visible_source_row_indices()
         return snapshot_scope_row_indices(
             app._table_model.rowCount(),
             only_selected_rows=only_rows,
-            visible_row_indices=visible_rows,
+            visible_row_indices=None,
         )
 
     def _snapshot_export_headers(
@@ -1044,13 +1045,28 @@ class MedChemPlotPanel(QWidget):
             out.append(raw if (raw or "").strip() else None)
         return out
 
+    def _displayed_plot_dataset(self) -> MedChemSpaceDataset | None:
+        if self._plot_dataset is None:
+            return None
+        return self._plot_dataset.subset_oids(visible_oids_for_plot(self.parent_app))
+
+    def _schedule_plot(self) -> None:
+        """Re-draw using the currently visible table rows."""
+        self._push_plot_figure()
+
     def _push_plot_figure(self) -> None:
-        if self._plot_view is None or self._plot_dataset is None or not self._plot_dataset.points:
+        dataset = self._displayed_plot_dataset()
+        if self._plot_view is None or dataset is None:
+            return
+        if not dataset.points:
+            from plotly import graph_objects as go
+
+            self._plot_view.push_figure(go.Figure(), [])
             return
         color_col = self.color_combo.currentText()
         if color_col == "(none)":
             color_col = None
-        color_vals = self._color_values_for_oids(self._plot_dataset.oids, color_col)
+        color_vals = self._color_values_for_oids(dataset.oids, color_col)
         from ...plot_color import normalize_color_column
 
         color_vals, color_col = normalize_color_column(color_vals, color_col)
@@ -1059,13 +1075,13 @@ class MedChemPlotPanel(QWidget):
         size_col = self.size_combo.currentText()
         if size_col == "(none)":
             size_col = None
-        size_vals = self._color_values_for_oids(self._plot_dataset.oids, size_col)
+        size_vals = self._color_values_for_oids(dataset.oids, size_col)
         size_vals, size_label = normalize_size_column(size_vals, size_col)
         size_min_px, size_max_px = self._current_size_bounds()
         try:
             if self._plot_kind == "golden_triangle":
                 fig = build_golden_triangle_figure(
-                    self._plot_dataset,
+                    dataset,
                     color_values=color_vals,
                     color_label=color_col,
                     colorscale=colorscale,
@@ -1079,7 +1095,7 @@ class MedChemPlotPanel(QWidget):
                 )
             else:
                 fig = build_boiled_egg_figure(
-                    self._plot_dataset,
+                    dataset,
                     color_values=color_vals,
                     color_label=color_col,
                     colorscale=colorscale,
@@ -1091,7 +1107,7 @@ class MedChemPlotPanel(QWidget):
                     size_max_px=size_max_px,
                     **self._titles.title_overrides(),
                 )
-            self._plot_view.push_figure(fig, self._plot_dataset.oids)
+            self._plot_view.push_figure(fig, dataset.oids)
             self._update_spectrum_controls()
         except Exception as exc:
             QMessageBox.warning(self, self._window_title, f"Plot failed: {exc}")
@@ -1114,6 +1130,9 @@ class MedChemPlotPanel(QWidget):
             QMessageBox.information(self, self._window_title, "Refresh the plot first.")
             return
         oids = picker(self._full_dataset)
+        keep = visible_oids_for_plot(self.parent_app)
+        if keep is not None:
+            oids = [int(o) for o in oids if int(o) in keep]
         if not oids:
             QMessageBox.information(
                 self,
