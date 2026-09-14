@@ -72,14 +72,11 @@ def dominant_results_from_microstate_cache(
     """Map cached ensembles to per-row dominant SMILES and pKa.
 
     Returns ``(rows, cancelled)`` where each row is
-    ``(oid, smiles, pct, pKa)``.
+    ``(oid, smiles, pct, pKa)``. Cancel must not skip this mapping: ionization
+    may already have finished for some structures.
     """
     partial: list[tuple[int, str, float, str]] = []
-    cancelled = False
     for key in order:
-        if should_terminate_process_pool(cancel_event):
-            cancelled = True
-            break
         states = by_key.get(key)
         if not states:
             continue
@@ -94,6 +91,7 @@ def dominant_results_from_microstate_cache(
         pka_txt = format_pka_values(pka_values_from_states(states))
         for oid in oids_map.get(key, ()):
             partial.append((int(oid), str(smi), float(pct), pka_txt))
+    cancelled = should_terminate_process_pool(cancel_event)
     return partial, cancelled
 
 
@@ -176,7 +174,7 @@ class ProtonateWorker(QRunnable):
             if should_terminate_process_pool(cancel_ev):
                 cancelled = True
 
-            _emit(tot, force=True)
+            _emit(min(len(partial), tot) if cancelled else tot, force=True)
             if cancelled and self.worker_signals is not None:
                 try:
                     from .signals import emit_partial_results_if_cancelled
@@ -187,5 +185,3 @@ class ProtonateWorker(QRunnable):
                 except Exception:
                     pass
             self.signals.finished.emit(partial)
-            if cancelled:
-                self.signals.failed.emit("Cancelled.")

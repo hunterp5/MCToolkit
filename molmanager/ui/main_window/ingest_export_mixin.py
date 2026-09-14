@@ -51,7 +51,7 @@ class IngestExportMixin:
         self._set_ingest_loading(True)
         self._structures_queued = 0
         self._import_building_progress_shown = False
-        self._table_stack.setCurrentIndex(0)
+        self._set_workspace_stack_index(0)
         self._loading_detail.setText(LOADING_DETAIL_READING_DISK)
         self.status_label.setText("Reading file…")
         self._ensure_structure_choice_event().set()
@@ -88,7 +88,7 @@ class IngestExportMixin:
         self._set_ingest_loading(True)
         self._structures_queued = 0
         self._import_building_progress_shown = False
-        self._table_stack.setCurrentIndex(0)
+        self._set_workspace_stack_index(0)
         self._loading_detail.setText(
             LOADING_DETAIL_APPEND
         )

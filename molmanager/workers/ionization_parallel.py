@@ -348,6 +348,15 @@ def build_microstates_cache_by_key(
             pending = {ex.submit(_mp_compute_microstates_chunk, chunk) for chunk in task_chunks}
             while pending:
                 if should_terminate_process_pool(cancel_event):
+                    completed, pending = wait(pending, timeout=0)
+                    for f in completed:
+                        if f.cancelled():
+                            continue
+                        try:
+                            for key, states in f.result():
+                                cache[key] = states
+                        except Exception:
+                            logger.debug("Uni-pKa process-pool task failed", exc_info=True)
                     for f in pending:
                         f.cancel()
                     break

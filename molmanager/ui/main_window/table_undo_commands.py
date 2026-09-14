@@ -39,6 +39,7 @@ __all__ = [
     "UndoDeleteRowsCommand",
     "UndoPasteCellCommand",
     "UndoCellTextChangeCommand",
+    "UndoClearCellsCommand",
     "UndoDeleteColumnCommand",
     "UndoDuplicateColumnCommand",
     "UndoInsertRowCommand",
@@ -318,6 +319,33 @@ class UndoCellTextChangeCommand(QUndoCommand):
         app.calculate_global_bounds()
         app.apply_filters()
         app.status_label.setText("Undo: cell value reverted.")
+
+
+class UndoClearCellsCommand(QUndoCommand):
+    """Undo/redo clearing many text cells in one Edit → Delete Selection action."""
+
+    def __init__(self, app: TableUIMixin, changes: list[tuple[int, str, str]]) -> None:
+        n = len(changes)
+        super().__init__(f"Clear {n} cell(s)" if n != 1 else "Clear cell")
+        self._app = app
+        self._changes = [(int(oid), str(header), str(old)) for oid, header, old in changes]
+
+    def redo(self) -> None:
+        app = self._app
+        for oid, header, _old in self._changes:
+            app._table_model.set_cell_text(oid, header, "")
+        app.calculate_global_bounds()
+        app.apply_filters()
+        n = len(self._changes)
+        app.status_label.setText(f"Cleared {n:,} cell(s)." if n != 1 else "Cleared cell.")
+
+    def undo(self) -> None:
+        app = self._app
+        for oid, header, old in self._changes:
+            app._table_model.set_cell_text(oid, header, old)
+        app.calculate_global_bounds()
+        app.apply_filters()
+        app.status_label.setText("Undo: cell values restored.")
 
 
 def _sync_filters_after_column_removed(app: TableUIMixin, hdr: str) -> None:

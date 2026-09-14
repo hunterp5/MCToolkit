@@ -67,6 +67,28 @@ def test_dominant_protomer_acetic_acid_at_ph_2():
     assert pct > 90.0
 
 
+def test_dominant_results_still_map_cache_when_cancel_is_set():
+    import threading
+
+    states = _acetic_microstates()
+    ha = states[0].protonated_mol
+    from molmanager.workers.structure_grouping import structure_key
+
+    key = structure_key(ha)
+    ev = threading.Event()
+    ev.set()
+    rows, cancelled = dominant_results_from_microstate_cache(
+        [key],
+        {key: [10, 20]},
+        {key: states},
+        7.4,
+        cancel_event=ev,
+    )
+    assert cancelled is True
+    assert len(rows) == 2
+    assert {oid for oid, _smi, _pct, _pka in rows} == {10, 20}
+
+
 def test_dominant_results_replicate_across_duplicate_oids():
     states = _acetic_microstates()
     ha = states[0].protonated_mol

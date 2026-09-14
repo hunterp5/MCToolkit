@@ -12,7 +12,7 @@ Start a new analysis from disk, replace the current table with a fresh file, or 
 
 ## Inputs / scope
 
-File on disk. Structure columns are parsed when the format carries molecules; tabular files need a SMILES/structure column the importer can recognize.
+File on disk. Structure columns are parsed when the format carries molecules; CSV/TSV-style tables with a SMILES or structure column (comma, semicolon, tab, or pipe).
 
 ## Options
 
@@ -35,4 +35,4 @@ File on disk. Structure columns are parsed when the format carries molecules; ta
 
 ## Tips and limits
 
-Very large files may take time and memory; prefer filtered exports when possible. Malformed SMILES rows may appear empty or invalid for structure tools. Opening typically replaces or defines the working table - use Import when you need to append.
+Very large files may take time and memory; prefer filtered exports when possible. Malformed SMILES rows may appear empty or invalid for structure tools. Opening typically replaces or defines the working table - use Import when you need to append. A loading page stays up until the table is built and auto **Render 2D** finishes (skipped when the row count is over the auto-2D limit). CSV/TSV tables may use comma, semicolon (common for ChEMBL downloads), tab, or pipe; the delimiter is detected from the header.

@@ -219,6 +219,7 @@ class ChemicalTableApp(
         self._partial_results_notice = None
         self._ingest_loading = False
         self._ingest_prep_before_reveal = False
+        self._ingest_waiting_for_render = False
         self._ingest_sqlite_bulk_active = False
         self._ingest_sqlite_paused_dirty = False
         self._ingest_sqlite_bulk_headers = None
@@ -346,12 +347,45 @@ class ChemicalTableApp(
         self._last_tool_progress_status = ""
         self._init_status_memory_tracker(cfg)
 
+    def _workspace_loading_overlay_visible(self) -> bool:
+        """True while file/session load is covering the workspace."""
+        if bool(getattr(self, "_ingest_loading", False)):
+            return True
+        stack = getattr(self, "_table_stack", None)
+        try:
+            return stack is not None and int(stack.currentIndex()) == 0
+        except RuntimeError:
+            return False
+
+    def _sync_status_chrome_for_workspace(self) -> None:
+        """Hide status/memory on the loading page; restore the user's status-bar setting after."""
+        apply_bar = getattr(self, "_apply_status_bar_visible", None)
+        if not callable(apply_bar):
+            return
+        act = getattr(self, "_act_status_bar", None)
+        if act is not None:
+            want = bool(act.isChecked())
+        else:
+            from ..theme import load_status_bar_visible
+
+            want = bool(load_status_bar_visible())
+        apply_bar(want, persist=False)
+
+    def _set_workspace_stack_index(self, index: int) -> None:
+        stack = getattr(self, "_table_stack", None)
+        if stack is None:
+            return
+        stack.setCurrentIndex(int(index))
+        self._sync_status_chrome_for_workspace()
+
     def _status_memory_should_poll(self) -> bool:
         """True unless the status-bar host was explicitly hidden.
 
         ``isVisible()`` is False until the top-level window is shown, so it
         cannot be used during ``__init__`` to decide whether polling starts.
         """
+        if self._workspace_loading_overlay_visible():
+            return False
         host = getattr(self, "_status_host", None)
         return host is None or not host.isHidden()
 
@@ -713,12 +747,15 @@ class ChemicalTableApp(
         edit.addAction(
             self._bind_hotkey("edit.paste", QAction("&Paste", self, triggered=self.edit_paste))
         )
-        edit.addAction(
-            self._bind_hotkey(
-                "edit.delete_selection",
-                QAction("Delete &Selection", self, triggered=self.edit_delete_selection),
-            )
+        act_del_sel = self._bind_hotkey(
+            "edit.delete_selection",
+            QAction("Delete &Selection", self, triggered=self.edit_delete_selection),
         )
+        act_del_sel.setToolTip(
+            "Delete selected rows, selected columns, or cell values, depending on the selection. "
+            "When both rows and columns are selected, you choose which to delete."
+        )
+        edit.addAction(act_del_sel)
         edit.addSeparator()
         act_invert_sel = self._bind_hotkey(
             "edit.invert_selection",
@@ -1333,6 +1370,7 @@ class ChemicalTableApp(
         """Track file/import ingest and gray out the main toolbar until the table is ready."""
         self._ingest_loading = bool(loading)
         self._sync_main_toolbar_for_table_ready()
+        self._sync_status_chrome_for_workspace()
 
     def _sync_main_toolbar_for_table_ready(self) -> None:
         """Disable File/Edit/Tools menus and Layout while ``_ingest_loading``; keep Processes usable."""
@@ -1669,7 +1707,7 @@ class ChemicalTableApp(
         self._last_tool_progress_status = text
         if text:
             self.status_label.setText(text)
-        if getattr(self, "_session_awaiting_ready", False) and text:
+        if text and self._workspace_loading_overlay_visible():
             detail = getattr(self, "_loading_detail", None)
             if detail is not None:
                 try:

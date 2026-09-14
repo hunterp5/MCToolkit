@@ -173,15 +173,20 @@ class GuiSettingsMixin:
         self._apply_status_bar_visible(bool(checked), persist=True)
 
     def _apply_status_bar_visible(self, visible: bool, *, persist: bool = True) -> None:
+        overlay = False
+        overlay_fn = getattr(self, "_workspace_loading_overlay_visible", None)
+        if callable(overlay_fn):
+            overlay = bool(overlay_fn())
+        show = bool(visible) and not overlay
         host = getattr(self, "_status_host", None)
         if host is not None:
-            host.setVisible(bool(visible))
+            host.setVisible(show)
         if persist:
             save_status_bar_visible(bool(visible))
         timer = getattr(self, "_memory_status_timer", None)
         if timer is None:
             return
-        if visible:
+        if show:
             from ..config import load_config
 
             cfg = load_config()

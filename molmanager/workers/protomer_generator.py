@@ -130,9 +130,6 @@ class ProtomerGeneratorWorker(QRunnable):
                 reserve_final_tick=False,
             )
             for key in order:
-                if should_terminate_process_pool(cancel_ev):
-                    cancelled = True
-                    break
                 states = by_key.get(key)
                 if not states:
                     done_cum += len(oids_map.get(key, ()))
@@ -154,7 +151,9 @@ class ProtomerGeneratorWorker(QRunnable):
                 done_cum += len(oids_map.get(key, ()))
                 _emit(done_cum)
 
-            _emit(tot, force=True)
+            if should_terminate_process_pool(cancel_ev):
+                cancelled = True
+            _emit(tot if not cancelled else min(done_cum, tot), force=True)
             if cancelled and done_cum > 0:
                 try:
                     self.worker_signals.partial_results.emit("Generate protomers", done_cum, tot)

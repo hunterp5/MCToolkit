@@ -181,6 +181,88 @@ def test_session_load_holds_table_until_render_finishes(qapp, monkeypatch):  # n
     assert not w._ingest_loading
 
 
+def test_file_ingest_holds_table_until_render_finishes(qapp, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtCore import QTimer
+
+    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+
+    held = {"loading": False}
+
+    def fake_render(self):
+        held["loading"] = self._table_stack.currentIndex() == 0
+        QTimer.singleShot(0, self._ingest_on_render2d_batch_finished)
+        return True
+
+    monkeypatch.setattr(
+        ChemicalTableApp,
+        "_try_auto_render_all_structures_after_ingest",
+        fake_render,
+    )
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    w._set_ingest_loading(True)
+    w._ingest_prep_before_reveal = True
+    w._set_workspace_stack_index(0)
+    w._post_ingest_after_color_caches()
+    assert held["loading"] is True
+    assert w._table_stack.currentIndex() == 0
+    assert w._ingest_waiting_for_render is True
+    assert "Render 2D" in (w._loading_detail.text() or "")
+    assert w._status_host.isHidden()
+    assert not w._memory_status_timer.isActive()
+    qapp.processEvents()
+    assert w._table_stack.currentIndex() == 1
+    assert not w._ingest_waiting_for_render
+    assert not w._ingest_loading
+    assert not w._status_host.isHidden()
+    assert w._memory_status_timer.isActive()
+
+
+def test_file_ingest_reveals_immediately_when_auto_render_skipped(qapp, monkeypatch):  # noqa: ARG001
+    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+
+    def fake_render(self):
+        self.status_label.setText("Loaded 2 rows — auto 2D render skipped (limit 1).")
+        return False
+
+    monkeypatch.setattr(
+        ChemicalTableApp,
+        "_try_auto_render_all_structures_after_ingest",
+        fake_render,
+    )
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    w._set_ingest_loading(True)
+    w._ingest_prep_before_reveal = True
+    w._set_workspace_stack_index(0)
+    w._post_ingest_after_color_caches()
+    assert w._table_stack.currentIndex() == 1
+    assert not w._ingest_waiting_for_render
+    assert not w._ingest_loading
+    assert "auto 2D render skipped" in w.status_label.text()
+    assert not w._status_host.isHidden()
+
+
+def test_file_ingest_progress_updates_loading_overlay(qapp, monkeypatch):  # noqa: ARG001
+    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    w._set_ingest_loading(True)
+    w._set_workspace_stack_index(0)
+    w._on_tool_progress("Render 2D", 3, 10)
+    assert "Render 2D" in (w._loading_detail.text() or "")
+    assert "3/10" in (w._loading_detail.text() or "")
+    assert w._status_host.isHidden()
+    assert not w._memory_status_timer.isActive()
+    w._set_ingest_loading(False)
+    w._set_workspace_stack_index(1)
+    assert not w._status_host.isHidden()
+    assert w._memory_status_timer.isActive()
+
+
 def test_search_open_does_not_inset_filter_cards(qapp):  # noqa: ARG001
     w = ChemicalTableApp()
     w.f_panel.setVisible(True)
@@ -213,6 +295,92 @@ def test_selected_oids_override_preferred(qapp):  # noqa: ARG001
     w._selected_oids_override = frozenset({1})
 
     assert w._selected_oids_set() == {1}
+
+
+def test_delete_selection_kind_rows_columns_cells(qapp):  # noqa: ARG001
+    from PyQt5.QtCore import QItemSelectionModel
+
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    assert w._delete_selection_kind() == "empty"
+
+    w.select_table_oids({0})
+    qapp.processEvents()
+    assert w._delete_selection_kind() == "rows"
+
+    w.clear_table_selection()
+    w._select_columns([3])
+    qapp.processEvents()
+    assert w._delete_selection_kind() == "columns"
+    assert w._selected_full_column_indices() == [3]
+
+    w.clear_table_selection()
+    sm = w.table.selectionModel()
+    view = w.table.model()
+    sm.select(view.index(0, 3), QItemSelectionModel.ClearAndSelect)
+    qapp.processEvents()
+    assert w._delete_selection_kind() == "cells"
+
+    w._selected_oids_override = frozenset({0})
+    w._select_columns([3])
+    qapp.processEvents()
+    assert w._delete_selection_kind() == "both"
+
+
+def test_delete_selection_clears_cells_after_confirm(qapp, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtCore import QItemSelectionModel
+    from PyQt5.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    sm = w.table.selectionModel()
+    view = w.table.model()
+    sm.select(view.index(0, 3), QItemSelectionModel.ClearAndSelect)
+    w.edit_delete_selection()
+    assert w._table_model.cell_text(0, 3) == ""
+    assert w._table_model.cell_text(1, 3) == "30.07"
+
+
+def test_delete_selection_deletes_column_after_confirm(qapp, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    w._select_columns([3])
+    w.edit_delete_selection()
+    assert "MW" not in w.headers
+    assert w._table_model.rowCount() == 2
+
+
+def test_delete_selection_both_can_choose_columns(qapp, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    w._selected_oids_override = frozenset({0})
+    w._select_columns([3])
+    monkeypatch.setattr(w, "_ask_delete_rows_or_columns", lambda *a, **k: "columns")
+    w.edit_delete_selection()
+    assert "MW" not in w.headers
+    assert w._table_model.rowCount() == 2
+
+
+def test_delete_selection_both_can_choose_rows(qapp, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    w._selected_oids_override = frozenset({0})
+    w._select_columns([3])
+    monkeypatch.setattr(w, "_ask_delete_rows_or_columns", lambda *a, **k: "rows")
+    w.edit_delete_selection()
+    assert "MW" in w.headers
+    assert w._table_model.rowCount() == 1
+    assert w._table_model.cell_text(0, 0) == "1"
 
 
 def test_chemistry_tool_structure_sources_smoke(qapp):  # noqa: ARG001

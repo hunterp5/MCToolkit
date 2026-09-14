@@ -18,6 +18,50 @@
 
 from __future__ import annotations
 
+import csv
+import io
+
+
+_TABLE_DELIMS = (",", ";", "\t", "|")
+_SMILES_FIELD_NAMES = frozenset({"smiles", "smi", "structure", "mol"})
+
+
+def _header_fields(line: str, delimiter: str) -> list[str]:
+    return next(csv.reader(io.StringIO(line), delimiter=delimiter), [])
+
+
+def sniff_table_delimiter(sample: str, *, default: str = ",") -> str:
+    """Pick comma, semicolon, tab, or pipe from a CSV/TSV sample (ChEMBL uses ``;``)."""
+    text = (sample or "").lstrip("\ufeff")
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return default
+    header = lines[0]
+    ranked: list[tuple[int, int, int, str]] = []
+    prefer = {",": 4, "\t": 3, ";": 2, "|": 1}
+    for delim in _TABLE_DELIMS:
+        fields = [f.strip() for f in _header_fields(header, delim) if f is not None]
+        n = len(fields)
+        if n <= 1:
+            continue
+        names = [f.lower() for f in fields]
+        has_smi = int(
+            any(
+                name in _SMILES_FIELD_NAMES or name.endswith("smiles") or name.endswith(" smiles")
+                for name in names
+            )
+        )
+        ranked.append((has_smi, n, prefer.get(delim, 0), delim))
+    if ranked:
+        ranked.sort(reverse=True)
+        return ranked[0][3]
+    try:
+        dialect = csv.Sniffer().sniff("\n".join(lines[:20]), delimiters=",;\t|")
+    except csv.Error:
+        return default
+    delim = str(getattr(dialect, "delimiter", "") or "")
+    return delim if delim in _TABLE_DELIMS else default
+
 
 def csv_row_to_cells(
     row: dict[str, str],

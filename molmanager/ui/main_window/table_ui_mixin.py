@@ -73,6 +73,7 @@ from .table_search_mixin import TableSearchMixin
 from .table_undo_commands import (
     DeleteRowSnapshot,
     UndoCellTextChangeCommand,
+    UndoClearCellsCommand,
     UndoDeleteColumnCommand,
     UndoDeleteRowsCommand,
     UndoDuplicateColumnCommand,
@@ -220,8 +221,13 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             bottom = view_model.index(n - 1, col)
             sel.select(top, bottom)
         sm = self.table.selectionModel()
-        if sm is not None:
-            sm.select(sel, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Columns)
+        was_programmatic = bool(getattr(self, "_in_programmatic_table_selection", False))
+        self._in_programmatic_table_selection = True
+        try:
+            if sm is not None:
+                sm.select(sel, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Columns)
+        finally:
+            self._in_programmatic_table_selection = was_programmatic
         self.table.setSelectionBehavior(prev_behavior)
         focus_col = (
             int(anchor_col)
@@ -1699,6 +1705,217 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         self._table_delete_job_gen = int(getattr(self, "_table_delete_job_gen", 0)) + 1
         self._table_delete_ctx = None
 
+    def _selected_full_column_indices(self) -> list[int]:
+        """Source-model columns where every visible row is selected (full-column select)."""
+        sm = self.table.selectionModel()
+        view_model = self.table.model()
+        if sm is None or view_model is None:
+            return []
+        proxy = getattr(self, "_filter_proxy_model", None)
+        use_proxy = proxy is not None and view_model is proxy
+        cols: list[int] = []
+        seen: set[int] = set()
+        for ix in sm.selectedColumns():
+            if not ix.isValid():
+                continue
+            if use_proxy:
+                sidx = proxy.mapToSource(view_model.index(ix.row(), ix.column()))
+                col = int(sidx.column()) if sidx.isValid() else int(ix.column())
+            else:
+                col = int(ix.column())
+            if col <= 0 or col >= len(self.headers) or col in seen:
+                continue
+            seen.add(col)
+            cols.append(col)
+        return cols
+
+    def _has_full_row_selection(self) -> bool:
+        override = getattr(self, "_selected_oids_override", None)
+        if override:
+            return True
+        sm = self.table.selectionModel()
+        if sm is None:
+            return False
+        return any(ix.isValid() for ix in sm.selectedRows())
+
+    def _selected_clearable_cells(self) -> list[tuple[int, str, str]]:
+        """``(oid, header, old_text)`` for selected text cells that currently have a value."""
+        sm = self.table.selectionModel()
+        view_model = self.table.model()
+        if sm is None or view_model is None:
+            return []
+        proxy = getattr(self, "_filter_proxy_model", None)
+        use_proxy = proxy is not None and view_model is proxy
+        out: list[tuple[int, str, str]] = []
+        seen: set[tuple[int, str]] = set()
+        model = self._table_model
+        for ix in sm.selectedIndexes():
+            if not ix.isValid():
+                continue
+            if use_proxy:
+                sidx = proxy.mapToSource(ix)
+                if not sidx.isValid():
+                    continue
+                row, col = int(sidx.row()), int(sidx.column())
+            else:
+                row, col = int(ix.row()), int(ix.column())
+            if not model.column_accepts_text_edit(col):
+                continue
+            header = self.headers[col]
+            t0 = model.cell_text(row, 0)
+            if not t0.isdigit():
+                continue
+            oid = int(t0)
+            key = (oid, header)
+            if key in seen:
+                continue
+            seen.add(key)
+            old = model.cell_text(row, col) or ""
+            if old == "":
+                continue
+            out.append((oid, header, old))
+        return out
+
+    def _delete_selection_kind(self) -> str:
+        """``rows``, ``columns``, ``cells``, ``both``, or ``empty`` for Edit → Delete Selection."""
+        has_rows = self._has_full_row_selection()
+        has_cols = bool(self._selected_full_column_indices())
+        if has_rows and has_cols:
+            return "both"
+        if has_rows:
+            return "rows"
+        if has_cols:
+            return "columns"
+        sm = self.table.selectionModel()
+        if sm is not None and any(ix.isValid() for ix in sm.selectedIndexes()):
+            return "cells"
+        return "empty"
+
+    def _ask_delete_rows_or_columns(self, n_rows: int, col_names: list[str]) -> str | None:
+        """Prompt when both rows and columns are selected. Returns ``rows``, ``columns``, or None."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        box.setWindowTitle("Delete Selection")
+        n_cols = len(col_names)
+        box.setText("Both rows and columns are selected. What should be deleted?")
+        shown = ", ".join(col_names[:8])
+        if n_cols > 8:
+            shown += f", … ({n_cols:,} columns)"
+        box.setInformativeText(
+            f"{n_rows:,} selected row(s); {n_cols:,} selected column(s)"
+            + (f" ({shown})." if shown else ".")
+        )
+        rows_btn = box.addButton(
+            f"Delete {n_rows:,} row(s)",
+            QMessageBox.AcceptRole,
+        )
+        cols_btn = box.addButton(
+            f"Delete {n_cols:,} column(s)",
+            QMessageBox.DestructiveRole,
+        )
+        box.addButton(QMessageBox.Cancel)
+        box.setDefaultButton(box.button(QMessageBox.Cancel))
+        box.exec_()
+        clicked = box.clickedButton()
+        if clicked is rows_btn:
+            return "rows"
+        if clicked is cols_btn:
+            return "columns"
+        return None
+
+    def _confirm_and_push_delete_columns(self, cols: list[int]) -> None:
+        """Confirm then delete selected data columns (not ID or Structure)."""
+        names = []
+        skipped: list[str] = []
+        for col in cols:
+            if col < 0 or col >= len(self.headers):
+                continue
+            hdr = self.headers[col]
+            if hdr in ("ID_HIDDEN", "Structure"):
+                skipped.append(hdr)
+                continue
+            names.append(hdr)
+        # Preserve first-seen order while dropping duplicates.
+        unique_names: list[str] = []
+        seen: set[str] = set()
+        for hdr in names:
+            if hdr in seen:
+                continue
+            seen.add(hdr)
+            unique_names.append(hdr)
+        if not unique_names:
+            if skipped:
+                QMessageBox.information(
+                    self,
+                    "Delete Selection",
+                    "The Structure column cannot be deleted.",
+                )
+            else:
+                QMessageBox.information(self, "Delete Selection", "No columns selected.")
+            return
+        n = len(unique_names)
+        shown = ", ".join(f"'{h}'" for h in unique_names[:8])
+        if n > 8:
+            shown += f", … ({n:,} columns)"
+        extra = ""
+        if skipped:
+            extra = " The Structure column will be kept."
+        msg = (
+            f"Delete column {shown}? This cannot be undone except with Edit → Undo.{extra}"
+            if n == 1
+            else f"Delete {n:,} selected columns ({shown})? "
+            f"This cannot be undone except with Edit → Undo.{extra}"
+        )
+        reply = QMessageBox.question(
+            self,
+            "Delete Selection",
+            msg,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        label = (
+            f"Delete {n} column(s)" if n != 1 else f"Delete column '{unique_names[0]}'"
+        )
+        self._undo_stack.beginMacro(label)
+        try:
+            for hdr in unique_names:
+                try:
+                    idx = self.headers.index(hdr)
+                except ValueError:
+                    continue
+                self._undo_stack.push(UndoDeleteColumnCommand(self, idx))
+        finally:
+            self._undo_stack.endMacro()
+
+    def _confirm_and_push_clear_cells(self) -> None:
+        changes = self._selected_clearable_cells()
+        if not changes:
+            QMessageBox.information(
+                self,
+                "Delete Selection",
+                "No cell values to delete. Structure and image columns cannot be cleared this way.",
+            )
+            return
+        n = len(changes)
+        msg = (
+            "Delete the data in this cell? This cannot be undone except with Edit → Undo."
+            if n == 1
+            else f"Delete data from {n:,} selected cells? "
+            "This cannot be undone except with Edit → Undo."
+        )
+        reply = QMessageBox.question(
+            self,
+            "Delete Selection",
+            msg,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        self._undo_stack.push(UndoClearCellsCommand(self, changes))
+
     def _confirm_and_push_delete_rows(
         self, rows: list[int] | None = None, *, oids: frozenset[int] | None = None
     ) -> None:
@@ -1818,7 +2035,37 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         self._undo_stack.push(cmd)
 
     def edit_delete_selection(self) -> None:
-        """Remove every row that has at least one selected cell."""
+        """Delete selected rows, columns, or cell values depending on what is selected."""
+        kind = self._delete_selection_kind()
+        if kind == "empty":
+            QMessageBox.information(self, "Delete Selection", "Nothing selected.")
+            return
+        if kind == "both":
+            oids = self._selected_oids_for_delete()
+            cols = self._selected_full_column_indices()
+            names = [
+                self.headers[c]
+                for c in cols
+                if 0 <= c < len(self.headers) and self.headers[c] not in ("ID_HIDDEN", "Structure")
+            ]
+            if not oids:
+                self._confirm_and_push_delete_columns(cols)
+                return
+            if not names:
+                self._confirm_and_push_delete_rows(oids=oids)
+                return
+            choice = self._ask_delete_rows_or_columns(len(oids), names)
+            if choice == "rows":
+                self._confirm_and_push_delete_rows(oids=oids)
+            elif choice == "columns":
+                self._confirm_and_push_delete_columns(cols)
+            return
+        if kind == "columns":
+            self._confirm_and_push_delete_columns(self._selected_full_column_indices())
+            return
+        if kind == "cells":
+            self._confirm_and_push_clear_cells()
+            return
         self._confirm_and_push_delete_rows(oids=self._selected_oids_for_delete())
 
     def clear_table_after_confirm(self) -> None:
@@ -2153,7 +2400,10 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         except Exception:
             log_swallowed_exception(logger, "microstate_cache.clear failed during clear_all")
         self._table_model.clear()
-        if getattr(self, "_table_stack", None) is not None:
+        set_stack = getattr(self, "_set_workspace_stack_index", None)
+        if callable(set_stack):
+            set_stack(1)
+        elif getattr(self, "_table_stack", None) is not None:
             self._table_stack.setCurrentIndex(1)
         self.zoomed_ids = set()
         for f in self.filters:
@@ -2170,6 +2420,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         self._pending_session_column_order = None
         self._session_awaiting_ready = False
         self._session_waiting_for_render = False
+        self._ingest_waiting_for_render = False
         self._session_hold_workspace_surfaces = False
         self._session_plot_wait_deadline = None
         self._session_search_want_visible = False

@@ -34,7 +34,7 @@ from rdkit import Chem
 from ..display_constants import structure_depiict_height, structure_depiict_width
 from ..config import load_config
 from ..import_structure import needs_structure_source_picker
-from ..ingest_text import csv_row_to_cells, smi_line_to_cells
+from ..ingest_text import csv_row_to_cells, smi_line_to_cells, sniff_table_delimiter
 from ..fragment_disconnect import largest_fragment_and_rest
 from ..structure_draw import render_molecule_png
 from ..structure_neutralize import neutralize_mol
@@ -293,8 +293,8 @@ class UniversalLoadWorker(QRunnable):
                             first_emit = False
                             batch = []
             elif ext in [".smi", ".txt", ".csv"]:
-                delim = "," if ext == ".csv" else "\t"
-                with open(self.path, "r", encoding="utf-8", errors="replace") as f:
+                default_delim = "," if ext == ".csv" else "\t"
+                with open(self.path, "r", encoding="utf-8-sig", errors="replace") as f:
                     if ext == ".smi" and text_first:
                         headers.append("SMILES")
                         if self._wait_for_structure_source_choice(headers):
@@ -312,6 +312,9 @@ class UniversalLoadWorker(QRunnable):
                                     first_emit = False
                                     batch = []
                     else:
+                        sample = f.read(65536)
+                        f.seek(0)
+                        delim = sniff_table_delimiter(sample, default=default_delim)
                         reader = csv.DictReader(f, delimiter=delim)
                         fieldnames = list(reader.fieldnames or [])
                         smi_col = next(

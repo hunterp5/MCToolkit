@@ -45,6 +45,7 @@ from ..structure_pixmap import pixmap_from_structure_render_png
 from ..strings import (
     LOADING_DETAIL_AFTER_FILE_READ,
     STATUS_READY_RENDER_2D,
+    TOOL_RENDER_2D,
     loaded_session_status,
 )
 from ...storage import SqliteTableStore
@@ -341,7 +342,7 @@ class IngestRenderMixin:
                 self.status_label.setText(f"Loaded {n:,} molecules — preparing table…")
                 if self._table_stack.currentIndex() == 0:
                     self._loading_detail.setText(
-                        f"Building table…\n{n} molecule(s); 2D structures draw when ready"
+                        f"Building table…\n{n} molecule(s); 2D structures draw before the workspace is shown"
                     )
                 if getattr(self, "_ingest_loading", False) and not self._import_building_progress_shown:
                     self._import_building_progress_shown = True
@@ -360,7 +361,7 @@ class IngestRenderMixin:
             self._processing_batches = False
 
     def _finalize_ingest_on_gui_thread(self) -> None:
-        """Finish ingest on the loading page; reveal the table once filters are prepared."""
+        """Finish ingest on the loading page; reveal once filters and auto 2D are ready."""
         if self._table_model.silent_appending:
             self._table_model.end_silent_appends()
         if not self._ingest_sqlite_finalize_bulk():
@@ -382,14 +383,14 @@ class IngestRenderMixin:
         self._processing_batches = False
         n = self._table_model.rowCount()
         self._loading_detail.setText(
-            f"Table built ({n:,} row(s)).\nPreparing filters and formatting…"
+            f"Table built ({n:,} row(s)).\nPreparing table, then {TOOL_RENDER_2D}…"
         )
         if "confs" in self.headers or "superpose" in self.headers:
             QTimer.singleShot(0, self._migrate_legacy_confs_cells_to_sidecar)
         QTimer.singleShot(0, self._deferred_post_ingest_follow_up)
 
     def _deferred_post_ingest_follow_up(self) -> None:
-        """Runs on the loading page: color caches, bounds, then reveal the table."""
+        """Runs on the loading page: color caches, bounds, auto 2D, then reveal the table."""
         headers = self._table_model.pending_color_cache_headers()
         if headers:
             self._post_ingest_color_headers = headers
@@ -414,29 +415,41 @@ class IngestRenderMixin:
         self._post_ingest_after_color_caches()
 
     def _post_ingest_after_color_caches(self) -> None:
-        # Reveal as soon as rows + color caches are ready. The numeric-bounds scan only feeds
-        # filter ranges / plot axes, and it is already time-budget chunked, so it can run behind
-        # the live table instead of holding the loading page for seconds on wide files.
-        self._reveal_table_after_ingest_prep()
+        # Set Render 2D copy before enqueue so the overlay cannot lag behind the batch start.
+        n = self._table_model.rowCount()
+        self._loading_detail.setText(f"{TOOL_RENDER_2D}…\n{n:,} row(s)")
+        started_render = self._try_auto_render_all_structures_after_ingest()
         self.calculate_global_bounds()
+        if started_render:
+            self._ingest_waiting_for_render = True
+            return
+        keep_status = "auto 2D render skipped" in (self.status_label.text() or "")
+        self._reveal_table_after_ingest_prep(keep_status=keep_status)
 
-    def _reveal_table_after_ingest_prep(self) -> None:
-        """Switch from the loading page to the table once prep work is finished."""
+    def _ingest_on_render2d_batch_finished(self) -> None:
+        """Reveal the workspace after auto Render 2D (or cancel) completes for a file load."""
+        if not getattr(self, "_ingest_waiting_for_render", False):
+            return
+        self._ingest_waiting_for_render = False
+        self._reveal_table_after_ingest_prep()
+
+    def _reveal_table_after_ingest_prep(self, *, keep_status: bool = False) -> None:
+        """Switch from the loading page to the table once prep and auto 2D are finished."""
         self._ingest_prep_before_reveal = False
+        self._ingest_waiting_for_render = False
         self._set_ingest_loading(False)
-        self._table_stack.setCurrentIndex(1)
+        self._set_workspace_stack_index(1)
         finish_clean = getattr(self, "_finish_session_clean_if_pending", None)
         if callable(finish_clean):
             finish_clean()
         app = QApplication.instance()
         if app is not None:
             app.processEvents(QEventLoop.ExcludeUserInputEvents)
-        started_render = self._try_auto_render_all_structures_after_ingest()
         try:
             self.table.setUpdatesEnabled(True)
         except Exception:
             pass
-        if started_render:
+        if keep_status:
             return
         n = self._table_model.rowCount()
         self.status_label.setText(STATUS_READY_RENDER_2D if n else "Ready.")
@@ -771,9 +784,9 @@ class IngestRenderMixin:
             if done <= 1 or done >= total_g or (done - last_d) >= step or (now - last_t) >= 0.12:
                 self._render2d_progress_last_emit = now
                 self._render2d_progress_last_done = done
-                self._on_tool_progress("Drawing 2D structures…", done, total_g)
+                self._on_tool_progress(TOOL_RENDER_2D, done, total_g)
         else:
-            self._on_tool_progress("Drawing 2D structures…", done, total_g)
+            self._on_tool_progress(TOOL_RENDER_2D, done, total_g)
         if self._import_render_done >= self._import_render_goal:
             self._import_progress_active = False
             self._clear_tool_progress()

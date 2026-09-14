@@ -17,6 +17,7 @@ Operates on the current table and selection. Undo depth depends on recent editab
 ## Options
 
 - **Undo** / **Redo** - reverse or reapply recent table edits.
+- **Delete Selection** - delete selected rows, delete selected columns (when no rows are selected), or clear values from selected cells. When both rows and columns are selected, choose which to delete. Structure cannot be removed as a column.
 - Clipboard commands (copy/paste as available).
 - Selection commands (select all, clear, invert - per menu entries).
 - Related edit actions exposed in the menu for the active table focus.

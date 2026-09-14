@@ -37,4 +37,4 @@ All loaded rows and columns in the session. Structure columns supply depictions 
 
 ## Tips and limits
 
-Sorting does not by itself change chemistry - only order. Invalid molecules show empty/failed depictions and fail structure tools. Wide tables are easier if you hide unused columns when the UI allows.
+Sorting does not by itself change chemistry - only order. Invalid molecules show empty/failed depictions and fail structure tools. Wide tables are easier if you hide unused columns when the UI allows. Drag a column's right border to resize it; if that border sits at the edge of the window, grab the right edge of the table (pixel scrolling keeps the column on screen).

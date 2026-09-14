@@ -45,14 +45,14 @@ STATUS_READY_RENDER_2D = f"Ready — use {TOOLS_ARROW_RENDER_2D} to refresh or r
 
 LOADING_DETAIL_AFTER_FILE_READ = (
     "File read; building table…\n"
-    "2D structure images are drawn automatically when the table is ready."
+    "2D structure images are drawn before the workspace is shown."
 )
 LOADING_DETAIL_READING_DISK = (
-    "Reading file from disk…\n2D structure images are drawn automatically after the table is built."
+    "Reading file from disk…\n2D structure images are drawn before the workspace is shown."
 )
 LOADING_DETAIL_APPEND = (
     "Reading file from disk…\n"
-    "New rows are appended; 2D images refresh automatically when import finishes."
+    "New rows are appended; 2D images are drawn before the workspace is shown."
 )
 LOADING_DETAIL_SESSION = (
     "Loading session…\n"

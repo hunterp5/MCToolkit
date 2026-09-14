@@ -35,4 +35,4 @@ Current table plus an external file. Matching/merge behavior depends on the impo
 
 ## Tips and limits
 
-Column name collisions can overwrite or require renaming after import. Structure validity is still required for chemistry tools. Prefer Sessions for full project snapshots rather than repeated ad-hoc imports.
+Column name collisions can overwrite or require renaming after import. Structure validity is still required for chemistry tools. Prefer Sessions for full project snapshots rather than repeated ad-hoc imports. A loading page stays up until imported rows are merged and auto **Render 2D** finishes (skipped when the row count is over the auto-2D limit).

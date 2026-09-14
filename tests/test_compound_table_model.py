@@ -370,3 +370,71 @@ def test_compound_table_view_disables_inline_edit_triggers(qapp):  # noqa: ARG00
     view = CompoundTableView()
     assert view.editTriggers() == QAbstractItemView.NoEditTriggers
     view.deleteLater()
+
+
+def test_compound_table_view_pixel_scrolls_and_keeps_edge_grip(qapp):
+    from PyQt5.QtCore import QEvent, QPoint, Qt
+    from PyQt5.QtGui import QMouseEvent
+    from PyQt5.QtWidgets import QAbstractItemView, QApplication
+
+    from molmanager.ui.compound_table_model import (
+        CompoundTableHeaderView,
+        CompoundTableModel,
+        CompoundTableView,
+    )
+
+    model = CompoundTableModel(["ID_HIDDEN", "Structure", "SMILES"])
+    model.append_row(1, {"SMILES": "CCO"})
+    view = CompoundTableView()
+    view.set_compound_model(model)
+    view.resize(800, 360)
+    view.show()
+    QApplication.processEvents()
+
+    assert view.horizontalScrollMode() == QAbstractItemView.ScrollPerPixel
+    assert view.verticalScrollMode() == QAbstractItemView.ScrollPerPixel
+    hh = view.horizontalHeader()
+    assert isinstance(hh, CompoundTableHeaderView)
+    assert hh.stretchLastSection() is False
+
+    smiles = model._headers.index("SMILES")
+    left = int(hh.sectionViewportPosition(smiles))
+    vp_w = int(hh.viewport().width())
+    view.setColumnWidth(smiles, max(40, vp_w - left))
+    QApplication.processEvents()
+    assert hh.section_for_viewport_right_grip(vp_w - 1) == smiles
+
+    old_w = int(view.columnWidth(smiles))
+    press = QMouseEvent(
+        QEvent.MouseButtonPress,
+        QPoint(vp_w - 1, 4),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
+    )
+    hh.mousePressEvent(press)
+    move = QMouseEvent(
+        QEvent.MouseMove,
+        QPoint(max(1, vp_w - 80), 4),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
+    )
+    hh.mouseMoveEvent(move)
+    release = QMouseEvent(
+        QEvent.MouseButtonRelease,
+        QPoint(max(1, vp_w - 80), 4),
+        Qt.LeftButton,
+        Qt.NoButton,
+        Qt.NoModifier,
+    )
+    hh.mouseReleaseEvent(release)
+    assert int(view.columnWidth(smiles)) < old_w
+
+    view.setColumnWidth(smiles, 2400)
+    view.updateGeometries()
+    bar = view.horizontalScrollBar()
+    length = int(hh.length())
+    width = int(view.viewport().width())
+    assert int(bar.maximum()) >= length - width
+    view.deleteLater()

@@ -42,7 +42,7 @@ from ...session_codec import (
     session_version_ok,
 )
 from ...utils import mol_to_canonical_smiles
-from ..strings import LOADING_DETAIL_SESSION, loaded_session_status
+from ..strings import LOADING_DETAIL_SESSION, TOOL_RENDER_2D, loaded_session_status
 from ..threadpool_access import start_runnable_on_app_pool
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
 from ...workers.session_rows_parse import (
@@ -911,7 +911,7 @@ class SessionMixin:
         self._session_load_generation = int(getattr(self, "_session_load_generation", 0)) + 1
         gen = self._session_load_generation
         self._set_ingest_loading(True)
-        self._table_stack.setCurrentIndex(0)
+        self._set_workspace_stack_index(0)
         self._loading_detail.setText(LOADING_DETAIL_SESSION)
         self.status_label.setText("Loading session…")
         headers = doc.get("headers") or ["ID_HIDDEN", "Structure", "SMILES"]
@@ -1011,7 +1011,7 @@ class SessionMixin:
         self._set_ingest_loading(False)
         self._session_mutation_paused = False
         self._pending_session_clean_on_ready = False
-        self._table_stack.setCurrentIndex(1)
+        self._set_workspace_stack_index(1)
         QMessageBox.warning(self, "Open Session", message or "Session row parse failed.")
 
     def _on_session_rows_parsed(self, result: object, generation: int, doc: dict) -> None:
@@ -1125,7 +1125,7 @@ class SessionMixin:
             self._set_ingest_loading(False)
             self._session_mutation_paused = False
             self._pending_session_clean_on_ready = False
-            self._table_stack.setCurrentIndex(1)
+            self._set_workspace_stack_index(1)
             raise
 
     def _finalize_session_filters(self, doc: dict, max_id: int) -> None:
@@ -1291,7 +1291,7 @@ class SessionMixin:
     def _reveal_table_after_session_prep(self) -> None:
         """Leave the loading overlay once session rows, 2D renders, and plots are ready."""
         self._set_ingest_loading(False)
-        self._table_stack.setCurrentIndex(1)
+        self._set_workspace_stack_index(1)
         finish_clean = getattr(self, "_finish_session_clean_if_pending", None)
         if callable(finish_clean):
             finish_clean()
@@ -1497,7 +1497,7 @@ class SessionMixin:
         self._pending_session_clean_on_ready = True
         self.clear_all()
         self._set_ingest_loading(True)
-        self._table_stack.setCurrentIndex(0)
+        self._set_workspace_stack_index(0)
         self._loading_detail.setText(LOADING_DETAIL_SESSION)
         self.status_label.setText("Loading session…")
 
@@ -1603,14 +1603,14 @@ class SessionMixin:
         render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
         pending = getattr(self, "_pending_session_table_layout", None)
         self._restore_pending_workspace_layout()
+        detail = getattr(self, "_loading_detail", None)
+        if detail is not None:
+            try:
+                detail.setText(f"{TOOL_RENDER_2D}…")
+            except RuntimeError:
+                pass
         if callable(render) and render():
             self._session_waiting_for_render = True
-            detail = getattr(self, "_loading_detail", None)
-            if detail is not None:
-                try:
-                    detail.setText("Drawing 2D structures…")
-                except RuntimeError:
-                    pass
             self._restore_session_table_chrome(pending)
             self._restore_pending_workspace_layout()
             QTimer.singleShot(0, self._restore_pending_workspace_layout)

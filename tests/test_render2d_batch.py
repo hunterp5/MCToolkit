@@ -173,7 +173,7 @@ def test_batched_handler_stores_results_and_finishes_batch() -> None:
     app.on_render2d_rows_ready(_png_rows([3, 4]), 7)
     assert app._import_render_done == 4
     assert app.flushed and app.restored
-    assert app.progress[-1] == ("Drawing 2D structures…", 4, 4)
+    assert app.progress[-1] == ("Render 2D", 4, 4)
 
 
 def test_batched_handler_ignores_superseded_session() -> None:

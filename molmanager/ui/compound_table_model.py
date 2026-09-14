@@ -68,6 +68,7 @@ from .strings import STRUCTURE_PENDING_HINT
 STRUCTURE_COLUMN_PENDING_HINT = STRUCTURE_PENDING_HINT
 
 __all__ = [
+    "CompoundTableHeaderView",
     "CompoundTableModel",
     "CompoundTableView",
     "StructureDelegate",
@@ -1791,6 +1792,100 @@ class StructureDelegate(QStyledItemDelegate):
         return QSize(structure_depiict_width(), max(sh.height(), structure_depiict_height()))
 
 
+def _header_grip_px(header: QHeaderView) -> int:
+    """Pixel slop for a column resize grip, floored so the viewport edge stays hittable."""
+    style = header.style()
+    pm = 4
+    if style is not None:
+        raw = int(style.pixelMetric(QStyle.PM_HeaderGripMargin, None, header))
+        if raw > 0:
+            pm = raw
+    return max(12, pm)
+
+
+class CompoundTableHeaderView(QHeaderView):
+    """Horizontal header that can still resize a column flush with the viewport edge.
+
+    Qt's native grip sits on the section's true right border. When that border is at or
+    past the visible edge, the handle is clipped and ScrollPerItem jumps the column away.
+    Clicks on the last few pixels of the viewport resize the section under that edge.
+    """
+
+    def __init__(self, orientation=Qt.Horizontal, parent=None):
+        super().__init__(orientation, parent)
+        self.setSectionsMovable(True)
+        self.setFirstSectionMovable(False)
+        self.setSectionResizeMode(QHeaderView.Interactive)
+        self.setStretchLastSection(False)
+        self.setMouseTracking(True)
+        self._edge_resize_logical = -1
+        self._edge_resize_origin_x = 0
+        self._edge_resize_origin_size = 0
+        vp = self.viewport()
+        if vp is not None:
+            vp.setMouseTracking(True)
+
+    def section_for_viewport_right_grip(self, x: int) -> int:
+        """Logical section resized by a click at ``x`` on the viewport's right edge, or -1."""
+        vp = self.viewport()
+        if vp is None:
+            return -1
+        vp_w = int(vp.width())
+        grip = _header_grip_px(self)
+        if vp_w <= 0 or int(x) < vp_w - grip:
+            return -1
+        logical = int(self.logicalIndexAt(max(0, vp_w - 1)))
+        if logical < 0 or self.isSectionHidden(logical):
+            return -1
+        if self.sectionResizeMode(logical) != QHeaderView.Interactive:
+            return -1
+        right = int(self.sectionViewportPosition(logical)) + int(self.sectionSize(logical))
+        if right < vp_w - grip:
+            return -1
+        return logical
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.LeftButton:
+            logical = self.section_for_viewport_right_grip(event.pos().x())
+            if logical >= 0:
+                self._edge_resize_logical = logical
+                self._edge_resize_origin_x = int(event.pos().x())
+                self._edge_resize_origin_size = int(self.sectionSize(logical))
+                self.setCursor(Qt.SplitHCursor)
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self._edge_resize_logical >= 0:
+            dx = int(event.pos().x()) - self._edge_resize_origin_x
+            new_size = max(int(self.minimumSectionSize()), self._edge_resize_origin_size + dx)
+            self.resizeSection(self._edge_resize_logical, new_size)
+            self.setCursor(Qt.SplitHCursor)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+        hovering_edge = (
+            event.buttons() == Qt.NoButton
+            and self.section_for_viewport_right_grip(event.pos().x()) >= 0
+        )
+        if hovering_edge:
+            self.setCursor(Qt.SplitHCursor)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if self._edge_resize_logical >= 0:
+            self._edge_resize_logical = -1
+            self.unsetCursor()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        if self._edge_resize_logical < 0:
+            self.unsetCursor()
+        super().leaveEvent(event)
+
+
 class CompoundTableView(QTableView):
     """
     QTableView pre-wired for ``CompoundTableModel`` + structure delegate.
@@ -1803,17 +1898,37 @@ class CompoundTableView(QTableView):
         self.setSelectionBehavior(QTableView.SelectItems)
         self.setSelectionMode(QTableView.ExtendedSelection)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.verticalHeader().setDefaultSectionSize(structure_row_default_height())
         self.verticalHeader().setSectionsMovable(True)
         self.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
-        hh = self.horizontalHeader()
-        hh.setSectionsMovable(True)
-        hh.setFirstSectionMovable(False)
-        hh.setSectionResizeMode(QHeaderView.Interactive)
+        hh = CompoundTableHeaderView(Qt.Horizontal, self)
+        self.setHorizontalHeader(hh)
         self.setSortingEnabled(False)
         self._compound_model: CompoundTableModel | None = None
         self._structure_column_min_width = structure_column_minimum_width()
         hh.sectionResized.connect(self._on_horizontal_section_resized)
+
+    def updateGeometries(self) -> None:  # noqa: N802
+        super().updateGeometries()
+        self._extend_horizontal_scroll_for_resize_grip()
+
+    def _extend_horizontal_scroll_for_resize_grip(self) -> None:
+        """Keep a few pixels of scroll past the last section so its right grip stays on-screen."""
+        hh = self.horizontalHeader()
+        bar = self.horizontalScrollBar()
+        vp = self.viewport()
+        if hh is None or bar is None or vp is None:
+            return
+        width = int(vp.width())
+        length = int(hh.length())
+        if width <= 0 or length <= 0:
+            return
+        grip = _header_grip_px(hh)
+        needed_max = max(int(bar.maximum()), length - width + grip)
+        if needed_max != int(bar.maximum()):
+            bar.setRange(int(bar.minimum()), needed_max)
 
     def structure_column_minimum_width(self) -> int:
         return self._structure_column_min_width
