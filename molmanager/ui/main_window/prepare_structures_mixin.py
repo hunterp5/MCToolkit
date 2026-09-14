@@ -135,11 +135,20 @@ class PrepareStructuresMixin:
             self.status_label.setText("Protonate: no results.")
             return
 
-        res = [
-            (int(oid), {out_col: str(smi), pct_col: f"{float(pct):.2f}", "pI": str(pi)})
-            for oid, smi, pct, pi in rows
-        ]
-        written = self.on_calc_finished(res, [out_col, pct_col, "pI"], progress_label="Protonate")
+        res = []
+        for row in rows:
+            oid, smi, pct, pka = row[0], row[1], row[2], row[3]
+            res.append(
+                (
+                    int(oid),
+                    {
+                        out_col: str(smi),
+                        pct_col: f"{float(pct):.2f}",
+                        "pKa": str(pka),
+                    },
+                )
+            )
+        written = self.on_calc_finished(res, [out_col, pct_col, "pKa"], progress_label="Protonate")
         if written:
             out_col = written[0]
 

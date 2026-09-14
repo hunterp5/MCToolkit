@@ -46,15 +46,51 @@ def unipka_cuda_available() -> bool:
 
 
 def chunk_structure_keys(keys: list[str], n_workers: int) -> list[list[str]]:
-    """Split unique keys into about one chunk per worker (capped for LMDB size)."""
+    """Split unique keys into process-pool tasks.
+
+    A 1-worker CUDA pool uses one structure per task so the status bar can
+    update as each Uni-pKa future completes. Multiple CPU workers still batch
+    a few structures per call.
+    """
     if not keys:
         return []
     n_w = max(1, int(n_workers))
-    chunk_size = max(1, (len(keys) + n_w - 1) // n_w)
-    if len(keys) >= 8:
-        chunk_size = max(chunk_size, 4)
-    chunk_size = min(chunk_size, 32)
+    max_chunk = 4 if n_w > 1 else 1
+    chunk_size = min(max_chunk, max(1, (len(keys) + n_w - 1) // n_w))
     return [keys[i : i + chunk_size] for i in range(0, len(keys), chunk_size)]
+
+
+def map_ionization_progress(
+    done_unique: int,
+    n_unique: int,
+    *,
+    progress_total: int | None = None,
+    reserve_final_tick: bool = True,
+) -> tuple[int, int]:
+    """Map finished unique structures onto a status-bar ``(done, total)``.
+
+    When ``progress_total`` is set (row count), ionization is scaled onto that
+    range. ``reserve_final_tick`` leaves the last count for a later phase
+    (descriptor rows). Protonate / Generate Protomers pass False so the bar
+    moves during Uni-pKa instead of staying at 0% until the worker finishes.
+    """
+    n_u = max(0, int(n_unique))
+    done_u = max(0, int(done_unique))
+    if n_u:
+        done_u = min(done_u, n_u)
+    if progress_total is None:
+        tot = max(n_u, 1)
+        return min(done_u, tot), tot
+    tot = max(1, int(progress_total))
+    ceiling = tot if not reserve_final_tick else max(0, tot - 1)
+    if n_u <= 0 or ceiling <= 0:
+        return 0, tot
+    if done_u >= n_u:
+        return ceiling, tot
+    mapped = int(round((float(done_u) / float(n_u)) * float(ceiling)))
+    if done_u > 0:
+        mapped = max(1, mapped)
+    return min(mapped, ceiling), tot
 
 
 def _set_unipka_mmff_thread_env(proc_workers: int) -> str | None:
@@ -236,6 +272,7 @@ def build_microstates_cache_by_key(
     signals=None,
     progress_message: str = "Uni-pKa ionization…",
     progress_total: int | None = None,
+    reserve_final_tick: bool = True,
 ) -> dict[str, object | None]:
     """
     Predict Uni-pKa ionization ensembles once per unique structure.
@@ -274,20 +311,12 @@ def build_microstates_cache_by_key(
     n_need = len(need)
 
     def _report_ionization(done_unique: int, *, force: bool = False) -> None:
-        if progress_total is None:
-            done_mapped = done_unique
-            total_mapped = n_unique
-        else:
-            tot = max(1, int(progress_total))
-            ceiling = max(0, tot - 1)
-            if n_unique <= 0:
-                done_mapped = 0
-            elif ceiling <= 0:
-                done_mapped = 0
-            else:
-                done_mapped = int((float(done_unique) / float(n_unique)) * float(ceiling))
-                done_mapped = max(0, min(done_mapped, ceiling))
-            total_mapped = tot
+        done_mapped, total_mapped = map_ionization_progress(
+            done_unique,
+            n_unique,
+            progress_total=progress_total,
+            reserve_final_tick=reserve_final_tick,
+        )
         report_tool_progress(
             message=progress_message,
             done=done_mapped,
@@ -329,7 +358,7 @@ def build_microstates_cache_by_key(
                     try:
                         for key, states in f.result():
                             cache[key] = states
-                        _report_ionization(len(cache))
+                        _report_ionization(len(cache), force=True)
                     except BrokenExecutor:
                         pool_failed = True
                         logger.warning(
@@ -360,7 +389,7 @@ def build_microstates_cache_by_key(
                     cache[key] = microstates_for_mol(rep[key])
                 else:
                     cache[key] = None
-                _report_ionization(len(cache))
+                _report_ionization(len(cache), force=True)
         _report_ionization(len(cache), force=True)
         cache_store_many({k: cache[k] for k in need if k in cache})
         logger.debug(
@@ -375,7 +404,7 @@ def build_microstates_cache_by_key(
         if should_terminate_process_pool(cancel_event):
             break
         cache[key] = microstates_for_mol(rep[key])
-        _report_ionization(len(cache))
+        _report_ionization(len(cache), force=True)
     _report_ionization(len(cache), force=True)
     cache_store_many({k: cache[k] for k in need if k in cache})
     logger.debug(
@@ -395,6 +424,7 @@ def build_microstates_cache_for_rows(
     signals=None,
     progress_message: str = "Uni-pKa ionization…",
     progress_total: int | None = None,
+    reserve_final_tick: bool = True,
 ) -> dict[int, object | None]:
     """Map each row index to an ionization ensemble (deduplicated by structure)."""
     mols = [mol for _idx, mol in rows if mol is not None]
@@ -406,6 +436,7 @@ def build_microstates_cache_for_rows(
         signals=signals,
         progress_message=progress_message,
         progress_total=progress_total,
+        reserve_final_tick=reserve_final_tick,
     )
     out: dict[int, object | None] = {}
     for idx, mol in rows:

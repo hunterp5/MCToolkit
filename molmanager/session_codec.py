@@ -53,6 +53,7 @@ _OMIT_IF_EMPTY = frozenset(
         "som_browse",
         "ionization_sidecar",
         "mmp_ledger",
+        "structure_smiles",
     }
 )
 
@@ -119,6 +120,33 @@ def _is_empty_optional(value: Any) -> bool:
     return False
 
 
+def row_structure_smiles(cells: dict[str, Any] | None, saved_smiles: str = "") -> str:
+    """Structure-column SMILES for one row: saved identity first, then a SMILES cell.
+
+    Tool-generated columns such as Protonated are never used as a fallback.
+    """
+    smi = str(saved_smiles or "").strip()
+    if smi:
+        return smi
+    if not isinstance(cells, dict):
+        return ""
+    return str(cells.get("SMILES") or "").strip()
+
+
+def _structure_smiles_from_v1_rows(rows: Any, saved: Any) -> list[str]:
+    out: list[str] = []
+    saved_list = saved if isinstance(saved, list) else None
+    if not isinstance(rows, list):
+        return [str(s or "") for s in saved_list] if saved_list is not None else []
+    for i, entry in enumerate(rows):
+        cells = entry.get("cells") if isinstance(entry, dict) else None
+        saved_smi = ""
+        if saved_list is not None and i < len(saved_list):
+            saved_smi = str(saved_list[i] or "")
+        out.append(row_structure_smiles(cells if isinstance(cells, dict) else None, saved_smi))
+    return out
+
+
 def compact_session_document(doc: dict[str, Any]) -> dict[str, Any]:
     """Convert an internal (v1-shaped) document to compact session version 2."""
     headers = list(doc.get("headers") or [])
@@ -126,8 +154,12 @@ def compact_session_document(doc: dict[str, Any]) -> dict[str, Any]:
     rows = doc.get("rows") or []
     ids: list[int] = []
     values: list[list[str]] = []
+    structure_smiles: list[str] = []
+    saved_structure = doc.get("structure_smiles")
+    if not isinstance(saved_structure, list):
+        saved_structure = None
     if isinstance(rows, list):
-        for entry in rows:
+        for row_i, entry in enumerate(rows):
             if not isinstance(entry, dict):
                 continue
             try:
@@ -139,6 +171,10 @@ def compact_session_document(doc: dict[str, Any]) -> dict[str, Any]:
                 cells = {}
             ids.append(oid)
             values.append([str(cells.get(h, "") or "") for h in data_headers])
+            saved_smi = ""
+            if saved_structure is not None and row_i < len(saved_structure):
+                saved_smi = str(saved_structure[row_i] or "")
+            structure_smiles.append(row_structure_smiles(cells, saved_smi))
 
     out: dict[str, Any] = {
         "format": doc.get("format") or SESSION_FORMAT,
@@ -147,6 +183,7 @@ def compact_session_document(doc: dict[str, Any]) -> dict[str, Any]:
         "data_headers": data_headers,
         "ids": ids,
         "values": values,
+        "structure_smiles": structure_smiles,
         "next_oid": int(doc.get("next_oid", 0) or 0),
         "filter_panel_visible": bool(doc.get("filter_panel_visible", False)),
         "plot_panel_visible": bool(doc.get("plot_panel_visible", True)),
@@ -154,7 +191,14 @@ def compact_session_document(doc: dict[str, Any]) -> dict[str, Any]:
         "sort_ascending": bool(doc.get("sort_ascending", True)),
     }
     for key, value in doc.items():
-        if key in out or key in ("rows", "version", "data_headers", "ids", "values"):
+        if key in out or key in (
+            "rows",
+            "version",
+            "data_headers",
+            "ids",
+            "values",
+            "structure_smiles",
+        ):
             continue
         if key in _OMIT_IF_EMPTY and _is_empty_optional(value):
             continue
@@ -176,6 +220,9 @@ def expand_session_document(doc: dict[str, Any]) -> dict[str, Any]:
     if version == 1 or ("rows" in doc and "ids" not in doc):
         out = dict(doc)
         out.setdefault("version", 1)
+        out["structure_smiles"] = _structure_smiles_from_v1_rows(
+            out.get("rows"), out.get("structure_smiles")
+        )
         return out
     if version != 2 and "ids" not in doc:
         raise ValueError(f"Unsupported session version: {version}")
@@ -186,7 +233,11 @@ def expand_session_document(doc: dict[str, Any]) -> dict[str, Any]:
         data_headers = [h for h in headers if h and h not in ("ID_HIDDEN", "Structure")]
     ids = list(doc.get("ids") or [])
     values = list(doc.get("values") or [])
+    saved_structure = doc.get("structure_smiles")
+    if not isinstance(saved_structure, list):
+        saved_structure = []
     rows: list[dict[str, Any]] = []
+    structure_smiles: list[str] = []
     n = min(len(ids), len(values))
     for i in range(n):
         try:
@@ -203,10 +254,13 @@ def expand_session_document(doc: dict[str, Any]) -> dict[str, Any]:
             else:
                 cells[str(h)] = ""
         rows.append({"id": oid, "cells": cells})
+        saved_smi = str(saved_structure[i] or "") if i < len(saved_structure) else ""
+        structure_smiles.append(row_structure_smiles(cells, saved_smi))
 
     out = dict(doc)
     out["version"] = 2
     out["rows"] = rows
+    out["structure_smiles"] = structure_smiles
     # Keep columnar keys out of restore workers that only need rows.
     out.pop("ids", None)
     out.pop("values", None)

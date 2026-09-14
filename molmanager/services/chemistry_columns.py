@@ -19,7 +19,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 
-from ..import_structure import header_looks_like_structure_text
+from ..import_structure import (
+    header_looks_like_structure_text,
+    is_tool_generated_structure_header,
+)
 from ..utils import (
     looks_like_mol_block,
     looks_like_structure_cell_text,
@@ -85,17 +88,17 @@ def ordered_headers_for_molecule_lookup(
     """Column names to probe for parseable chemistry (likely names first)."""
     seen: set[str] = set()
     out: list[str] = []
+    ov = (structure_field_override or "").strip()
 
     def add(name: str | None) -> None:
         if not name or name not in headers:
             return
-        if should_skip_chemical_scan_column(name, is_pixmap_column=is_pixmap_column):
+        if name != ov and should_skip_chemical_scan_column(name, is_pixmap_column=is_pixmap_column):
             return
         if name not in seen:
             seen.add(name)
             out.append(name)
 
-    ov = (structure_field_override or "").strip()
     if ov:
         add(ov)
     for h in headers[2:]:
@@ -104,9 +107,13 @@ def ordered_headers_for_molecule_lookup(
         if is_smiles_named_header(h):
             add(h)
     for h in headers[2:]:
+        if is_tool_generated_structure_header(h):
+            continue
         if header_looks_like_structure_text(h):
             add(h)
     for h in headers[2:]:
+        if is_tool_generated_structure_header(h):
+            continue
         if not should_skip_chemical_scan_column(h, is_pixmap_column=is_pixmap_column):
             add(h)
     return out

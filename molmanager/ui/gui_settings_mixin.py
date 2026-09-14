@@ -186,6 +186,9 @@ class GuiSettingsMixin:
 
             cfg = load_config()
             if cfg.status_memory_enabled:
+                mem_label = getattr(self, "_memory_status_label", None)
+                if mem_label is not None:
+                    mem_label.show()
                 timer.start()
                 refresh = getattr(self, "_refresh_status_memory_label", None)
                 if callable(refresh):

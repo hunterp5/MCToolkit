@@ -531,6 +531,10 @@ class CompoundTableModel(QAbstractTableModel):
         if header_name in self._headers:
             self._pixmap_columns.add(header_name)
 
+    def pixmap_data_column_headers(self) -> list[str]:
+        """Data-column headers currently displayed as 2D images rather than text."""
+        return [h for h in self._headers[2:] if h in self._pixmap_columns]
+
     def column_accepts_text_edit(self, logical_col: int) -> bool:
         """Plain string cells: not id, not structure, not pixmap-only columns."""
         if logical_col < 2 or logical_col >= len(self._headers):
@@ -566,10 +570,9 @@ class CompoundTableModel(QAbstractTableModel):
         except ValueError:
             return
         idx = self.index(r, c)
-        roles = [Qt.DecorationRole, Qt.SizeHintRole]
-        if header_name not in self._pixmap_columns:
-            roles.append(Qt.DisplayRole)
-        self.dataChanged.emit(idx, idx, roles)
+        self.dataChanged.emit(
+            idx, idx, [Qt.DecorationRole, Qt.SizeHintRole, Qt.DisplayRole, Qt.ToolTipRole]
+        )
 
     def cell_pixmap_copy(self, oid: int, header_name: str) -> QPixmap | None:
         return self.column_pixmap_copy(oid, header_name)
@@ -657,15 +660,19 @@ class CompoundTableModel(QAbstractTableModel):
             return None
 
         if h in self._pixmap_columns:
+            pix = self._extra_pixmaps.get((oid, h))
+            has_pix = pix is not None and not pix.isNull()
+            backing = self._rows[row].values.get(h, "") or ""
             if role == Qt.DecorationRole:
-                return self._extra_pixmaps.get((oid, h))
+                return pix if has_pix else None
             if role == Qt.DisplayRole:
-                return ""
+                return "" if has_pix else backing
+            if role == Qt.ToolTipRole:
+                return None if has_pix else (backing or None)
             if role == Qt.TextAlignmentRole:
-                return int(Qt.AlignCenter)
+                return int(Qt.AlignCenter) if has_pix else None
             if role == Qt.SizeHintRole:
-                pix = self._extra_pixmaps.get((oid, h))
-                if pix is not None and not pix.isNull():
+                if has_pix:
                     return QSize(pix.width(), pix.height())
                 return None
             return None
@@ -1099,23 +1106,55 @@ class CompoundTableModel(QAbstractTableModel):
             out[row.oid] = str(row.values.get(header_name, ""))
         return out
 
-    def duplicate_column_at(self, dest_col: int, header_name: str, src_logical: int) -> None:
-        """Insert a column and bulk-copy values from *src_logical* with one model notification."""
+    def duplicate_column_at(
+        self,
+        dest_col: int,
+        header_name: str,
+        src_logical: int,
+        *,
+        value_by_oid: dict[int, str] | None = None,
+        pixmap_by_oid: dict[int, QPixmap] | None = None,
+        as_pixmap: bool = False,
+    ) -> None:
+        """Insert a column and bulk-copy values from *src_logical* with one model notification.
+
+        ``value_by_oid`` / ``pixmap_by_oid`` override the source cells (used when
+        duplicating Structure, which does not store SMILES in ``row.values``).
+        Pixmap source columns are copied as pixmap columns unless *as_pixmap* is
+        forced on for Structure.
+        """
         n = len(self._headers)
         if dest_col < 0 or dest_col > n or src_logical < 0 or src_logical >= n:
             return
         src_key = self._headers[src_logical]
+        src_is_pixmap = src_key in self._pixmap_columns
+        copy_as_pixmap = bool(as_pixmap) or src_is_pixmap
         self.beginInsertColumns(QModelIndex(), dest_col, dest_col)
         self._headers.insert(dest_col, header_name)
         for row in self._rows:
-            row.values[header_name] = str(row.values.get(src_key, ""))
+            if value_by_oid is not None:
+                row.values[header_name] = str(value_by_oid.get(int(row.oid), "") or "")
+            else:
+                row.values[header_name] = str(row.values.get(src_key, "") or "")
         if src_key in self._column_color_rules:
             self._column_color_rules[header_name] = self._column_color_rules[src_key]
             self._rebuild_column_color_cache(header_name)
+        if copy_as_pixmap:
+            self._pixmap_columns.add(header_name)
+            if pixmap_by_oid:
+                for oid, pm in pixmap_by_oid.items():
+                    if pm is not None and not pm.isNull():
+                        self._extra_pixmaps[(int(oid), header_name)] = QPixmap(pm)
+            elif src_is_pixmap:
+                for (oid, h), pm in list(self._extra_pixmaps.items()):
+                    if h == src_key and pm is not None and not pm.isNull():
+                        self._extra_pixmaps[(oid, header_name)] = QPixmap(pm)
         self._mark_headers_added_for_bounds([header_name])
         self.endInsertColumns()
         if self._rows:
             roles = [Qt.DisplayRole, Qt.EditRole, Qt.BackgroundRole]
+            if copy_as_pixmap:
+                roles.extend([Qt.DecorationRole, Qt.SizeHintRole, Qt.ToolTipRole])
             self.dataChanged.emit(
                 self.index(0, dest_col),
                 self.index(len(self._rows) - 1, dest_col),

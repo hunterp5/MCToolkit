@@ -18,7 +18,7 @@ All loaded rows and columns in the session. Structure columns supply depictions 
 
 - **Column headers** - sort and header context actions.
 - **Row selection** - single or multi-select for scoped tools.
-- **Context menus** - column/row operations and related actions. Structure cells and tool-generated structure columns (for example **Protonated** after Render 2D) offer Open in Sketcher, View in 3D/2D, Render 2D, Copy, Copy as SMILES, and Paste.
+- **Context menus** - column/row operations and related actions. Structure cells and tool-generated structure columns (for example **Protonated** after Render 2D) offer Open in Sketcher, View in 3D/2D, Render 2D, Copy, Copy as SMILES, and Paste. **Duplicate** on the Structure header copies molecules into a new chemistry column you can rename, delete, and use as a tool source.
 - **Structure cells** - 2D depictions from the active render cache.
 - **Precision / display** - numeric presentation controls where offered.
 

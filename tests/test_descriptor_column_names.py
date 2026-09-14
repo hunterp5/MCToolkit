@@ -80,3 +80,26 @@ def test_on_calc_finished_colors_qed_score(qapp):  # noqa: ARG001
     assert spec is not None
     assert spec["mode"] == "numeric3"
     w.close()
+
+
+def test_on_calc_finished_updates_pka_and_pi_in_place(qapp):  # noqa: ARG001
+    from molmanager.ui.main_window import ChemicalTableApp
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "pKa", "pI"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"pKa": "4.76", "pI": "N/A"})
+    w.mols = {}
+    w.next_oid = 1
+
+    written = w.on_calc_finished(
+        [(0, {"pKa": "9.50", "pI": "5.97"})],
+        ["pKa", "pI"],
+        finish_progress=False,
+    )
+    assert written == ["pKa", "pI"]
+    assert w.headers.count("pKa") == 1
+    assert "pKa (1)" not in w.headers
+    assert w._table_model.value_for_header(0, "pKa") == "9.50"
+    assert w._table_model.value_for_header(0, "pI") == "5.97"
+    w.close()

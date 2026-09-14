@@ -74,6 +74,30 @@ def header_looks_like_structure_text(name: str) -> bool:
         return True
     if n.startswith("largest fragment"):
         return True
+    if is_duplicated_structure_header(name):
+        return True
+    return False
+
+
+def is_duplicated_structure_header(name: str) -> bool:
+    """True for a Duplicate of the Structure column (``Structure (Copy)``, ``Structure (Copy 2)``, …)."""
+    n = _norm(name)
+    return n == "structure (copy)" or n.startswith("structure (copy ")
+
+
+def is_tool_generated_structure_header(name: str) -> bool:
+    """True for chemistry-tool output columns that must not replace Structure on restore."""
+    n = _norm(name)
+    if not n:
+        return False
+    if n == "protonated" or n.startswith("protonated "):
+        return True
+    if n == "fragments" or n.startswith("fragments "):
+        return True
+    if n.startswith("largest fragment"):
+        return True
+    if is_duplicated_structure_header(name):
+        return True
     return False
 
 

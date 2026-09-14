@@ -39,8 +39,7 @@ from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
 from molmanager.ionization import (
-    format_pka_values,
-    pka_values_from_states,
+    format_pka_and_pi,
     pin_unipka_torch_threads,
     predict_ionization_ensemble,
     predict_ionization_ensembles,
@@ -124,29 +123,12 @@ def _acquire_lock_cooperative(
             return True
 
 
-def _format_microstate_pkas(
-    states, *, most_basic_only: bool = False, most_acidic_only: bool = False
-) -> str:
-    return format_pka_values(
-        pka_values_from_states(states),
-        most_basic_only=most_basic_only,
-        most_acidic_only=most_acidic_only,
-    )
-
-
 def _format_pka_and_pi(
     states, *, most_basic_only: bool = False, most_acidic_only: bool = False
 ) -> tuple[str, str]:
-    from molmanager.ionization import format_isoelectric_point, isoelectric_point_from_states
-
-    pka_txt = _format_microstate_pkas(
+    return format_pka_and_pi(
         states, most_basic_only=most_basic_only, most_acidic_only=most_acidic_only
     )
-    try:
-        pi_txt = format_isoelectric_point(isoelectric_point_from_states(states))
-    except Exception:
-        pi_txt = "N/A"
-    return pka_txt, pi_txt
 
 
 def _mp_compute_pka_text(
@@ -239,7 +221,7 @@ def _mp_compute_pka_chunk(
 class PKaPredictorSignals(QObject):
     """Emits from :class:`PKaPredictorWorker` back to the dialog (owned on the GUI thread)."""
 
-    finished = pyqtSignal(list)  # list[tuple[int | None, str, str]] oid, pKa text, pI text
+    finished = pyqtSignal(list, bool)  # list[tuple[int | None, str, str]] oid, pKa, pI; include_pi
     failed = pyqtSignal(str)
 
 
@@ -255,6 +237,7 @@ class PKaPredictorWorker(QRunnable):
         *,
         most_basic_only: bool = False,
         most_acidic_only: bool = False,
+        include_pi: bool = False,
         progress_state=None,
     ):
         super().__init__()
@@ -264,6 +247,7 @@ class PKaPredictorWorker(QRunnable):
         self.cancel_event = cancel_event
         self.most_basic_only = most_basic_only
         self.most_acidic_only = most_acidic_only
+        self.include_pi = bool(include_pi)
         self.progress_state = progress_state
 
     def run(self) -> None:
@@ -289,16 +273,12 @@ class PKaPredictorWorker(QRunnable):
                 1 for oid, mol in self.rows if mol is None
             )
             tot = max(n_work, 1)
-            n_unique = len(order)
 
             from ..config import load_config
+            from molmanager.microstate_cache import lookup as cache_lookup
             from .ionization_parallel import (
                 chunk_structure_keys,
                 plan_ionization_process_workers,
-            )
-
-            use_mp, proc_workers = plan_ionization_process_workers(
-                n_unique, load_config().pka_process_workers
             )
 
             done_cum = sum(1 for oid, mol in self.rows if mol is None)
@@ -326,10 +306,32 @@ class PKaPredictorWorker(QRunnable):
 
             _emit(done_cum, force=True)
 
+            score_order: list[str] = []
+            for key in order:
+                hit, states = cache_lookup(key)
+                if not hit:
+                    score_order.append(key)
+                    continue
+                pka_txt, pi_txt = format_pka_and_pi(
+                    states,
+                    most_basic_only=self.most_basic_only,
+                    most_acidic_only=self.most_acidic_only,
+                )
+                for oid in oids_map.get(key, ()):
+                    row_text[oid] = (pka_txt, pi_txt)
+                done_cum += len(oids_map.get(key, ()))
+            order = score_order
+            n_unique = len(order)
+            _emit(done_cum, force=True)
+
+            use_mp, proc_workers = plan_ionization_process_workers(
+                n_unique, load_config().pka_process_workers
+            )
+
             if not order:
                 out = [(oid, *(row_text.get(oid, ("N/A", "N/A")))) for oid, _ in self.rows]
                 _emit(tot, force=True)
-                _safe_emit(self.pka_signals, "finished", out)
+                _safe_emit(self.pka_signals, "finished", out, self.include_pi)
                 return
 
             if use_mp:
@@ -463,4 +465,4 @@ class PKaPredictorWorker(QRunnable):
                     n_work,
                     n_unique,
                 )
-            _safe_emit(self.pka_signals, "finished", out)
+            _safe_emit(self.pka_signals, "finished", out, self.include_pi)

@@ -173,6 +173,33 @@ def test_chemistry_tool_structure_sources_smoke(qapp):  # noqa: ARG001
     assert w._canonical_smiles_header_for_updates() == "SMILES"
 
 
+def test_structure_header_menu_offers_duplicate_not_rename(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    menu = w._create_header_context_menu(1)
+    assert menu is not None
+    names = [a.objectName() for a in menu.actions()]
+    assert "header_duplicate" in names
+    assert "header_rename" not in names
+    assert "header_delete" not in names
+
+
+def test_duplicate_structure_column_is_chemistry_source(qapp):  # noqa: ARG001
+    from molmanager.ui.main_window.table_undo_commands import UndoDuplicateColumnCommand
+
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    w._undo_stack.push(UndoDuplicateColumnCommand(w, 1, "Structure"))
+    assert "Structure (Copy)" in w.headers
+    assert w._table_model.is_pixmap_data_column("Structure (Copy)")
+    assert w._table_model.backing_value_for_row_header(0, "Structure (Copy)") == "CCO"
+    assert w._table_model.backing_value_for_row_header(1, "Structure (Copy)") == "CC"
+    assert "Structure (Copy)" in w.chemistry_tool_structure_sources()
+    assert w._undo_stack.canUndo()
+    w._undo_stack.undo()
+    assert "Structure (Copy)" not in w.headers
+
+
 def test_new_window_and_file_load_use_table_only_layout(qapp):  # noqa: ARG001
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_ONLY, LAYOUT_TABLE_STACK
 
@@ -281,3 +308,38 @@ def test_clear_all_re_enables_menubar_after_ingest(qapp):  # noqa: ARG001
 
     assert file_menu.isEnabled()
     assert w._btn_workspace_layout.isEnabled()
+
+
+def test_status_memory_tracker_starts_before_window_shown(qapp, monkeypatch):  # noqa: ARG001
+    """Polling must start during __init__; isVisible() is False until show()."""
+    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+    w = ChemicalTableApp()
+    assert not w.isVisible()
+    assert not w._status_host.isHidden()
+    assert w._memory_status_timer.isActive()
+    assert w._memory_status_label.text().startswith("Mem: ")
+
+
+def test_status_memory_tracker_stops_when_status_bar_hidden(qapp, monkeypatch):  # noqa: ARG001
+    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+    w = ChemicalTableApp()
+    w._apply_status_bar_visible(False, persist=False)
+    assert w._status_host.isHidden()
+    assert not w._memory_status_timer.isActive()
+    w._apply_status_bar_visible(True, persist=False)
+    assert w._memory_status_timer.isActive()
+    assert w._memory_status_label.text().startswith("Mem: ")
+
+
+def test_pka_prediction_writes_pi_only_when_requested(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    w._on_pka_prediction_finished([(0, "4.76", "N/A")], False)
+    assert "pKa" in w.headers
+    assert "pI" not in w.headers
+    assert w._table_model.value_for_header(0, "pKa") == "4.76"
+    w._on_pka_prediction_finished([(0, "4.76", "5.97")], True)
+    assert "pI" in w.headers
+    assert w._table_model.value_for_header(0, "pI") == "5.97"

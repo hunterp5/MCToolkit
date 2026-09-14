@@ -38,4 +38,4 @@ Rows with valid molecules in the chosen **Target Column** / structure source. Op
 
 ## Tips and limits
 
-LogD 7.4, LogS 7.4, CNS MPO, and AB-MPS use a Uni-pKa ionization ensemble when the pka extra is installed; otherwise they fall back to heuristics. Re-running a descriptor that already exists writes a new column (`Name (1)`, …) and leaves the original. Re-running ionization-dependent scores after switching from pkasolver is a new method, not a refresh. QED / AB-MPS / CNS MPO coloring uses fixed score ranges, not min/max of the current table.
+LogD 7.4, LogS 7.4, CNS MPO, and AB-MPS use a Uni-pKa ionization ensemble when the pka extra is installed; otherwise they fall back to heuristics. Those jobs also write a shared **pKa** column (updated in place). For **pI**, use Predict pKa with **Calculate isoelectric point**. Re-running any other descriptor that already exists writes a new column (`Name (1)`, …) and leaves the original. Re-running ionization-dependent scores after switching from pkasolver is a new method, not a refresh. QED / AB-MPS / CNS MPO coloring uses fixed score ranges, not min/max of the current table.

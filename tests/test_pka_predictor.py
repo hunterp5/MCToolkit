@@ -40,12 +40,17 @@ def _ensemble(*pkas: float, smiles: str = "CCO") -> PicklableIonizationEnsemble:
 @pytest.fixture(autouse=True)
 def _force_sequential_pka_worker(monkeypatch) -> None:
     """Keep pKa worker tests on the in-process path (mocked scorer), not a process pool."""
+    from molmanager import microstate_cache as mc
+
+    mc.clear()
     monkeypatch.setenv("MOLMANAGER_PKA_PROCESS_WORKERS", "1")
     monkeypatch.setattr(
         "molmanager.workers.ionization_parallel.plan_ionization_process_workers",
         lambda _n, _c: (False, 1),
     )
     monkeypatch.setattr("molmanager.workers.pka_predictor.unipka_import_error", lambda: None)
+    yield
+    mc.clear()
 
 
 def test_prepare_mol_for_ionization_strips_non_utf8_sdf_prop() -> None:
@@ -82,7 +87,7 @@ def test_pka_worker_emits_partial_results_on_cancel(monkeypatch) -> None:
     partial: list[tuple[str, int, int]] = []
     finished: list[list[tuple[int | None, str, str]]] = []
     ws.partial_results.connect(lambda tool, done, total: partial.append((tool, done, total)))
-    ps.finished.connect(lambda rows: finished.append(rows))
+    ps.finished.connect(lambda rows, _include_pi=False: finished.append(rows))
 
     rows = [(1, Chem.MolFromSmiles("CCO")), (2, Chem.MolFromSmiles("CCN"))]
     worker = PKaPredictorWorker(rows, ws, ps, cancel_event=cancel)
@@ -109,7 +114,7 @@ def test_pka_worker_deduplicates_identical_structures(monkeypatch) -> None:
     ws = WorkerSignals()
     ps = PKaPredictorSignals()
     finished: list[list[tuple[int | None, str, str]]] = []
-    ps.finished.connect(lambda rows: finished.append(rows))
+    ps.finished.connect(lambda rows, _include_pi=False: finished.append(rows))
 
     m = Chem.MolFromSmiles("CCO")
     assert m is not None
@@ -122,3 +127,64 @@ def test_pka_worker_deduplicates_identical_structures(monkeypatch) -> None:
     by_oid = {oid: txt for oid, txt, _pi in finished[0]}
     assert by_oid[1] == by_oid[2] == "7.00"
     assert by_oid[3] == "7.00"
+
+
+def test_pka_worker_reuses_session_cache(monkeypatch) -> None:
+    from molmanager import microstate_cache as mc
+    from molmanager.workers.structure_grouping import structure_key
+
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    mc.store(structure_key(mol), _ensemble(4.2, 9.1))
+
+    call_count = 0
+
+    def _predict(_mol):
+        nonlocal call_count
+        call_count += 1
+        return _ensemble(0.0)
+
+    monkeypatch.setattr("molmanager.workers.pka_predictor.predict_ionization_ensemble", _predict)
+    ws = WorkerSignals()
+    ps = PKaPredictorSignals()
+    finished: list[list[tuple[int | None, str, str]]] = []
+    ps.finished.connect(lambda rows, _include_pi=False: finished.append(rows))
+
+    class _CancelNever:
+        def is_set(self) -> bool:
+            return False
+
+    worker = PKaPredictorWorker([(1, Chem.Mol(mol))], ws, ps, cancel_event=_CancelNever())
+    worker.run()
+
+    assert call_count == 0
+    assert finished
+    oid, txt, pi = finished[0][0]
+    assert oid == 1
+    assert txt == "4.20; 9.10"
+    assert pi == "7.00"
+
+
+def test_pka_worker_emits_include_pi_flag(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "molmanager.workers.pka_predictor.predict_ionization_ensemble",
+        lambda _mol: _ensemble(7.0),
+    )
+    ws = WorkerSignals()
+    ps = PKaPredictorSignals()
+    flags: list[bool] = []
+    ps.finished.connect(lambda _rows, include_pi: flags.append(bool(include_pi)))
+
+    class _CancelNever:
+        def is_set(self) -> bool:
+            return False
+
+    mol = Chem.MolFromSmiles("CCO")
+    PKaPredictorWorker(
+        [(1, mol)],
+        ws,
+        ps,
+        cancel_event=_CancelNever(),
+        include_pi=True,
+    ).run()
+    assert flags == [True]

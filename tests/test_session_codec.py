@@ -52,6 +52,49 @@ def test_compact_expand_roundtrip_preserves_cells():
     assert expanded["rows"][1]["cells"]["MW"] == ""
 
 
+def test_compact_expand_preserves_structure_smiles_not_protonated():
+    doc = {
+        "format": "molmanager_session",
+        "version": 1,
+        "headers": ["ID_HIDDEN", "Structure", "Protonated"],
+        "rows": [{"id": 1, "cells": {"Protonated": "CC[NH3+]"}}],
+        "structure_smiles": ["CCN"],
+        "next_oid": 2,
+    }
+    compact = compact_session_document(doc)
+    assert compact["structure_smiles"] == ["CCN"]
+    expanded = expand_session_document(compact)
+    assert expanded["rows"][0]["cells"]["Protonated"] == "CC[NH3+]"
+    assert expanded["structure_smiles"] == ["CCN"]
+
+
+def test_compact_does_not_treat_protonated_as_structure():
+    doc = {
+        "format": "molmanager_session",
+        "version": 1,
+        "headers": ["ID_HIDDEN", "Structure", "Protonated"],
+        "rows": [{"id": 1, "cells": {"Protonated": "CC[NH3+]"}}],
+        "next_oid": 2,
+    }
+    compact = compact_session_document(doc)
+    assert compact["structure_smiles"] == [""]
+    expanded = expand_session_document(compact)
+    assert expanded["structure_smiles"] == [""]
+    assert expanded["rows"][0]["cells"]["Protonated"] == "CC[NH3+]"
+
+
+def test_expand_v1_does_not_invent_structure_from_protonated():
+    v1 = {
+        "format": "molmanager_session",
+        "version": 1,
+        "headers": ["ID_HIDDEN", "Structure", "Protonated"],
+        "rows": [{"id": 1, "cells": {"Protonated": "CC[NH3+]"}}],
+        "next_oid": 2,
+    }
+    expanded = expand_session_document(v1)
+    assert expanded["structure_smiles"] == [""]
+
+
 def test_gzip_dumps_loads_roundtrip():
     compact = compact_session_document(
         {

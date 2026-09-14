@@ -25,6 +25,8 @@ from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
+from ..session_codec import row_structure_smiles
+
 
 def _safe_emit(obj: QObject | None, emitter_name: str, *args) -> None:
     if obj is None:
@@ -66,11 +68,13 @@ class SessionRowsParseWorker(QRunnable):
         data_headers: list[str],
         signals: SessionRowsParseSignals,
         generation: int,
+        structure_smiles: list[str] | None = None,
     ):
         super().__init__()
         self.setAutoDelete(True)
         self.rows = rows
         self.data_headers = list(data_headers)
+        self.structure_smiles = list(structure_smiles or [])
         self.signals = signals
         self.generation = int(generation)
 
@@ -80,7 +84,7 @@ class SessionRowsParseWorker(QRunnable):
             mols: dict[int, Any] = {}
             max_id = -1
             headers = self.data_headers
-            for entry in self.rows:
+            for i, entry in enumerate(self.rows):
                 if not isinstance(entry, dict):
                     continue
                 try:
@@ -91,7 +95,10 @@ class SessionRowsParseWorker(QRunnable):
                 cells = entry.get("cells") or {}
                 if not isinstance(cells, dict):
                     cells = {}
-                smi = (cells.get("SMILES", "") or "").strip()
+                saved_smi = ""
+                if i < len(self.structure_smiles):
+                    saved_smi = str(self.structure_smiles[i] or "")
+                smi = row_structure_smiles(cells, saved_smi)
                 row_cells = {cname: str(cells.get(cname, "") or "") for cname in headers}
                 prepared.append((oid, row_cells))
                 if smi:

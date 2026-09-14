@@ -223,11 +223,43 @@ class ProtomerGeneratorDialog(QDialog):
             "Generate protomers",
             status_message=self.parent_app._consume_partial_results_notice() or "Ready.",
         )
+        source_oids = {int(oid) for oid, _smi, _pct in rows if oid is not None}
+        self._write_unipka_pka_for_oids(source_oids)
 
     def _on_failed(self, msg: str) -> None:
         self.generate_btn.setEnabled(True)
         self.parent_app._finish_tool_progress("Generate protomers")
         QMessageBox.warning(self, "Generate Protomers", msg or "Generation failed.")
+
+    def _pka_for_source_oid(self, oid: int | None) -> str:
+        if oid is None or self.parent_app is None:
+            return "N/A"
+        from molmanager.ionization import format_pka_values, pka_values_from_states
+        from molmanager.microstate_cache import lookup as cache_lookup
+        from molmanager.workers.structure_grouping import structure_key
+
+        mol = self.parent_app.mols.get(int(oid))
+        if mol is None:
+            row = self.parent_app._table_model.logical_row_for_oid(int(oid))
+            if row >= 0:
+                mol = self.parent_app._mol_for_structure_row(row)
+        if mol is None:
+            return "N/A"
+        hit, states = cache_lookup(structure_key(mol))
+        if not hit:
+            return "N/A"
+        return format_pka_values(pka_values_from_states(states))
+
+    def _write_unipka_pka_for_oids(self, source_oids: set[int]) -> None:
+        if not source_oids or self.parent_app is None:
+            return
+        rows = []
+        for oid in sorted(source_oids):
+            rows.append((int(oid), {"pKa": self._pka_for_source_oid(oid)}))
+        if rows:
+            self.parent_app.on_calc_finished(
+                rows, ["pKa"], finish_progress=False, progress_label=None
+            )
 
     def _unique_col(self, base: str) -> str:
         name = base
@@ -254,7 +286,10 @@ class ProtomerGeneratorDialog(QDialog):
                 continue
             oid_txt = (oid_item.text() if oid_item is not None else "").strip()
             pct_txt = (pct_item.text() or "").strip()
-            batch.append((smi, {pct_col: pct_txt, src_col: oid_txt}))
+            fields = {pct_col: pct_txt, src_col: oid_txt}
+            src_oid = int(oid_txt) if oid_txt.isdigit() else None
+            fields["pKa"] = self._pka_for_source_oid(src_oid)
+            batch.append((smi, fields))
         if not batch:
             return
         added = self.parent_app.add_rows_from_external_records_batch(batch)

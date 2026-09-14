@@ -16,10 +16,11 @@
 
 """Session cache of Uni-pKa ionization ensembles (structure key → picklable ensemble).
 
-Keyed by :func:`molmanager.workers.structure_grouping.structure_key` (canonical SMILES).
-Used so Predict pKa and descriptor jobs (LogD/LogS 7.4, CNS MPO, …) share one Uni-pKa pass
-per unique structure. Saved into ``.cms`` session files and restored on Open / Duplicate.
-Cleared on Clear / shutdown. Does not persist to SDF/CSV exports.
+Keyed by :func:`molmanager.workers.structure_grouping.structure_key` (canonical SMILES)
+and by each microstate SMILES in the ensemble so Protonated / protomer rows reuse the
+same prediction. Shared by Predict pKa, Protonate, Generate Protomers, and ionization
+descriptors (LogD/LogS 7.4, CNS MPO, AB-MPS). Saved into ``.cms`` session files and
+restored on Open / Duplicate. Cleared on Clear / shutdown. Does not persist to SDF/CSV.
 """
 
 from __future__ import annotations
@@ -37,6 +38,44 @@ _store: dict[str, list[Any] | None] = {}
 
 IONIZATION_SIDECAR_VERSION = 1
 _SIDECAR_ENGINE = "unipka"
+
+
+def _alias_keys_for_states(states: Any) -> list[str]:
+    """Canonical SMILES for every microstate so later tools can look up the same ensemble."""
+    from molmanager.ionization import PicklableIonizationEnsemble
+    from molmanager.utils import mol_to_canonical_smiles
+    from rdkit import Chem
+
+    if not isinstance(states, PicklableIonizationEnsemble):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for ms in states.microstates:
+        mol = None
+        blob = getattr(ms, "mol_binary", None)
+        if blob:
+            try:
+                mol = Chem.Mol(blob)
+            except Exception:
+                mol = None
+        smi = str(getattr(ms, "smiles", "") or "").strip()
+        if mol is None and smi:
+            mol = Chem.MolFromSmiles(smi)
+        key = mol_to_canonical_smiles(mol) if mol is not None else ""
+        if not key:
+            key = smi
+        if key and key not in seen:
+            seen.add(key)
+            out.append(key)
+    return out
+
+
+def _write_entry(store: dict[str, Any], structure_key: str, states: list[Any] | None) -> None:
+    store[structure_key] = states
+    if states is None:
+        return
+    for alias in _alias_keys_for_states(states):
+        store[alias] = states
 
 
 def lookup(structure_key: str) -> tuple[bool, list[Any] | None]:
@@ -60,7 +99,7 @@ def store(structure_key: str, states: list[Any] | None) -> None:
     if not key:
         return
     with _lock:
-        _store[key] = states
+        _write_entry(_store, key, states)
 
 
 def store_many(items: dict[str, list[Any] | None]) -> None:
@@ -70,7 +109,7 @@ def store_many(items: dict[str, list[Any] | None]) -> None:
         for key, states in items.items():
             k = str(key or "")
             if k:
-                _store[k] = states
+                _write_entry(_store, k, states)
 
 
 def clear() -> None:
@@ -191,18 +230,39 @@ def serialize_ionization_sidecar(store: dict[str, Any] | None = None) -> dict[st
     """JSON-safe Uni-pKa ensembles for ``.cms`` sessions (successful predictions only)."""
     src = snapshot() if store is None else store
     entries: dict[str, Any] = {}
+    seen_ids: set[int] = set()
     for key, states in src.items():
         packed = _entry_to_json(states)
         if packed is None:
             continue
         k = str(key or "")
-        if k:
-            entries[k] = packed
+        if not k:
+            continue
+        obj_id = id(states)
+        if obj_id in seen_ids:
+            continue
+        seen_ids.add(obj_id)
+        entries[k] = packed
     return {
         "v": IONIZATION_SIDECAR_VERSION,
         "engine": _SIDECAR_ENGINE,
+        "pka_mean": _sidecar_pka_mean(),
         "entries": entries,
     }
+
+
+def _sidecar_pka_mean() -> float:
+    from molmanager.ionization import UNIPKA_DWAR_PKA_MEAN
+
+    return float(UNIPKA_DWAR_PKA_MEAN)
+
+
+def _sidecar_pka_mean_matches(raw: dict[str, Any]) -> bool:
+    try:
+        mean = float(raw.get("pka_mean"))
+    except (TypeError, ValueError):
+        return False
+    return abs(mean - _sidecar_pka_mean()) < 1e-6
 
 
 def deserialize_ionization_sidecar(raw: Any) -> dict[str, Any]:
@@ -214,6 +274,8 @@ def deserialize_ionization_sidecar(raw: Any) -> dict[str, Any]:
     except (TypeError, ValueError):
         return {}
     if ver != IONIZATION_SIDECAR_VERSION:
+        return {}
+    if not _sidecar_pka_mean_matches(raw):
         return {}
     blob = raw.get("entries")
     if not isinstance(blob, dict):
@@ -229,7 +291,7 @@ def deserialize_ionization_sidecar(raw: Any) -> dict[str, Any]:
             logger.debug("skipping corrupt ionization sidecar entry %s", k[:48], exc_info=True)
             continue
         if restored is not None:
-            out[k] = restored
+            _write_entry(out, k, restored)
     return out
 
 

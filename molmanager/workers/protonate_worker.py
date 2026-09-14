@@ -25,7 +25,12 @@ import time
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
-from molmanager.ionization import populations_from_states, unipka_import_error
+from molmanager.ionization import (
+    format_pka_values,
+    pka_values_from_states,
+    populations_from_states,
+    unipka_import_error,
+)
 from ..config import load_config
 from .ionization_parallel import build_microstates_cache_by_key
 from .pka_predictor import _quieter_unipka_loggers
@@ -42,7 +47,7 @@ def protomer_percent_column_name(ph: float) -> str:
 
 
 class ProtonateSignals(QObject):
-    finished = pyqtSignal(list)  # list[tuple[int, str, float, str]] oid, smiles, pct, pI
+    finished = pyqtSignal(list)  # list[tuple[int, str, float, str]] oid, smiles, pct, pKa
     failed = pyqtSignal(str)
 
 
@@ -64,9 +69,11 @@ def dominant_results_from_microstate_cache(
     *,
     cancel_event: threading.Event | None = None,
 ) -> tuple[list[tuple[int, str, float, str]], bool]:
-    """Map cached ensembles to per-row dominant SMILES. Returns ``(rows, cancelled)``."""
-    from molmanager.ionization import format_isoelectric_point, isoelectric_point_from_states
+    """Map cached ensembles to per-row dominant SMILES and pKa.
 
+    Returns ``(rows, cancelled)`` where each row is
+    ``(oid, smiles, pct, pKa)``.
+    """
     partial: list[tuple[int, str, float, str]] = []
     cancelled = False
     for key in order:
@@ -84,12 +91,9 @@ def dominant_results_from_microstate_cache(
         if dom is None:
             continue
         smi, pct = dom
-        try:
-            pi_txt = format_isoelectric_point(isoelectric_point_from_states(states))
-        except Exception:
-            pi_txt = "N/A"
+        pka_txt = format_pka_values(pka_values_from_states(states))
         for oid in oids_map.get(key, ()):
-            partial.append((int(oid), str(smi), float(pct), pi_txt))
+            partial.append((int(oid), str(smi), float(pct), pka_txt))
     return partial, cancelled
 
 
@@ -164,6 +168,7 @@ class ProtonateWorker(QRunnable):
                 signals=self.worker_signals,
                 progress_message=self.progress_message,
                 progress_total=tot,
+                reserve_final_tick=False,
             )
             partial, cancelled = dominant_results_from_microstate_cache(
                 order, oids_map, by_key, self.pH, cancel_event=cancel_ev

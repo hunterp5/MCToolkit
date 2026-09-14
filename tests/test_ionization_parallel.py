@@ -62,15 +62,76 @@ def test_chunk_structure_keys_spreads_across_workers() -> None:
 
     keys = [f"k{i}" for i in range(10)]
     chunks = chunk_structure_keys(keys, 2)
-    assert len(chunks) == 2
+    assert len(chunks) >= 2
     assert sum(len(c) for c in chunks) == 10
+    assert max(len(c) for c in chunks) <= 4
     assert chunk_structure_keys([], 4) == []
+
+
+def test_chunk_structure_keys_single_worker_splits_for_progress() -> None:
+    from molmanager.workers.ionization_parallel import chunk_structure_keys
+
+    keys = [f"k{i}" for i in range(8)]
+    chunks = chunk_structure_keys(keys, 1)
+    assert len(chunks) == 8
+    assert sum(len(c) for c in chunks) == 8
+    assert max(len(c) for c in chunks) == 1
+
+
+def test_map_ionization_progress_protonate_moves_before_last_tick() -> None:
+    from molmanager.workers.ionization_parallel import map_ionization_progress
+
+    done, total = map_ionization_progress(
+        1, 3, progress_total=3, reserve_final_tick=False
+    )
+    assert (done, total) == (1, 3)
+    done, total = map_ionization_progress(
+        3, 3, progress_total=3, reserve_final_tick=False
+    )
+    assert (done, total) == (3, 3)
+    # Descriptor jobs still leave the last tick, but the first unique is not stuck at 0.
+    done, total = map_ionization_progress(
+        1, 3, progress_total=3, reserve_final_tick=True
+    )
+    assert total == 3
+    assert done >= 1
+    assert done < 3
 
 
 def test_plan_ionization_respects_force_sequential() -> None:
     use_mp, workers = plan_ionization_process_workers(10, 1)
     assert workers == 1
     _ = use_mp
+
+
+def test_build_microstates_cache_reports_progress_during_sequential(monkeypatch) -> None:
+    cache_clear()
+    monkeypatch.setattr(
+        ionization_parallel,
+        "plan_ionization_process_workers",
+        lambda _n, _c: (False, 1),
+    )
+    monkeypatch.setattr(
+        "molmanager.ionization.microstates_for_mol",
+        lambda _mol: [{"pka": 7.0}],
+    )
+    seen: list[tuple[int, int]] = []
+
+    def _capture(**kwargs):
+        seen.append((int(kwargs["done"]), int(kwargs["total"])))
+
+    monkeypatch.setattr("molmanager.tool_progress.report_tool_progress", _capture)
+    mols = [Chem.MolFromSmiles(s) for s in ("CCO", "CCN", "CCC")]
+    assert all(m is not None for m in mols)
+    ionization_parallel.build_microstates_cache_by_key(
+        mols,
+        progress_message="Protonate",
+        progress_total=3,
+        reserve_final_tick=False,
+    )
+    assert seen
+    assert any(done > 0 and done < 3 for done, _total in seen)
+    assert seen[-1][0] == 3
 
 
 def test_build_microstates_cache_dedupes(monkeypatch) -> None:

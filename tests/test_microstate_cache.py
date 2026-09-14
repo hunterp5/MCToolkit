@@ -143,6 +143,7 @@ def test_ionization_sidecar_roundtrip_json() -> None:
     mc.store("CC(=O)O", ens)
     mc.store("failed-key", None)
     raw = mc.serialize_ionization_sidecar()
+    assert abs(float(raw["pka_mean"]) - 6.504894871171601) < 1e-6
     wire = json.dumps(raw)
     back = json.loads(wire)
     assert "failed-key" not in back["entries"]
@@ -168,6 +169,9 @@ def test_ionization_sidecar_skips_corrupt_and_unknown_version() -> None:
     raw["v"] = 99
     assert mc.deserialize_ionization_sidecar(raw) == {}
     assert mc.deserialize_ionization_sidecar(None) == {}
+    raw["v"] = 1
+    raw.pop("pka_mean", None)
+    assert mc.deserialize_ionization_sidecar(raw) == {}
 
 
 def test_restore_ionization_sidecar_replaces_store() -> None:
@@ -175,6 +179,7 @@ def test_restore_ionization_sidecar_replaces_store() -> None:
     payload = {
         "v": 1,
         "engine": "unipka",
+        "pka_mean": 6.504894871171601,
         "entries": {
             "CCO": {
                 "kind": "unipka",
@@ -189,3 +194,19 @@ def test_restore_ionization_sidecar_replaces_store() -> None:
     hit, cached = mc.lookup("CCO")
     assert hit is True
     assert cached.macro_pkas == (9.5,)
+
+
+def test_microstate_cache_aliases_other_microstate_smiles() -> None:
+    ens = _acetic_ensemble()
+    acid = Chem.MolFromSmiles("CC(=O)O")
+    base = Chem.MolFromSmiles("CC(=O)[O-]")
+    assert acid is not None and base is not None
+    mc.store(structure_key(acid), ens)
+    hit, cached = mc.lookup(structure_key(base))
+    assert hit is True
+    assert cached is ens
+    raw = mc.serialize_ionization_sidecar()
+    assert len(raw["entries"]) == 1
+    restored = mc.deserialize_ionization_sidecar(raw)
+    assert structure_key(acid) in restored
+    assert structure_key(base) in restored

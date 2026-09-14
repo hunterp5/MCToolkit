@@ -34,6 +34,7 @@ from molmanager.ionization import (
     build_ensemble_from_scored,
     calibrate_unipka_free_energy,
     format_isoelectric_point,
+    format_pka_and_pi,
     format_pka_values,
     isoelectric_point_from_states,
     logd74_from_microstates,
@@ -70,6 +71,7 @@ def test_fe2pka_acetic_acid_two_decimals() -> None:
     assert most_acidic_pka_from_states(ens) == pytest.approx(4.76, abs=0.005)
     assert most_basic_pka_from_states(ens) == pytest.approx(4.76, abs=0.005)
     assert format_pka_values(list(ens.macro_pkas)) == "4.76"
+    assert format_pka_and_pi(ens) == ("4.76", "N/A")
     assert isoelectric_point_from_states(ens) is None
     assert format_isoelectric_point(None) == "N/A"
 
@@ -90,6 +92,7 @@ def test_isoelectric_point_zwitterion_average_of_flanking_pkas() -> None:
     pi = isoelectric_point_from_states(ens)
     assert pi == pytest.approx(0.5 * (pka1 + pka2), abs=0.02)
     assert format_isoelectric_point(pi) == "5.97"
+    assert format_pka_and_pi(ens) == ("2.34; 9.60", "5.97")
 
 
 def test_unipka_dwar_mean_shift_restores_aqueous_pka() -> None:
@@ -115,6 +118,28 @@ def test_unipka_dwar_mean_shift_restores_aqueous_pka() -> None:
     high = populations_from_states(ens, 7.4)
     assert Chem.GetFormalCharge(high[0][2]) == -1
     assert high[0][1] > 90.0
+
+
+def test_unipka_dwar_mean_shift_restores_amine_conjugate_acid_pka() -> None:
+    """Aliphatic amines use the BH+/B pair (charge +1 → 0); literature pKa is that of BH+."""
+    raw_pka = 4.22
+    g_acid_raw = 0.0
+    g_base_raw = raw_pka * LN10
+    g_acid = calibrate_unipka_free_energy(g_acid_raw, 1)
+    g_base = calibrate_unipka_free_energy(g_base_raw, 0)
+    assert pka_from_delta_g(g_base, g_acid) == pytest.approx(
+        raw_pka + UNIPKA_DWAR_PKA_MEAN, abs=1e-9
+    )
+    bh = Chem.MolFromSmiles("C[NH2+]C")
+    b = Chem.MolFromSmiles("CNC")
+    assert bh is not None and b is not None
+    ens = build_ensemble_from_scored(
+        [
+            (1, "C[NH2+]C", bh, g_acid),
+            (0, "CNC", b, g_base),
+        ]
+    )
+    assert ens.macro_pkas[0] == pytest.approx(raw_pka + UNIPKA_DWAR_PKA_MEAN, abs=1e-9)
 
 
 def test_boltzmann_acetic_acid_ph_populations() -> None:

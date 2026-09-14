@@ -27,6 +27,7 @@ from PyQt5.QtWidgets import QUndoCommand
 from rdkit import Chem
 
 from ...config import load_config
+from ...utils import mol_to_canonical_smiles
 from ..compound_table_model import CompoundTableModel
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
 
@@ -516,6 +517,46 @@ class UndoPrecisionColumnCommand(QUndoCommand):
         self._app.status_label.setText(f"Undo: column '{self._hdr}' precision restored.")
 
 
+def _unique_copy_header(headers: list[str], src_name: str) -> str:
+    """Next unused ``{src} (Copy)`` / ``{src} (Copy N)`` header."""
+    base = f"{src_name} (Copy)"
+    if base not in headers:
+        return base
+    n = 2
+    while f"{src_name} (Copy {n})" in headers:
+        n += 1
+    return f"{src_name} (Copy {n})"
+
+
+def _snapshot_structure_column(app: TableUIMixin) -> tuple[dict[int, str], dict[int, QPixmap]]:
+    """Backing SMILES and 2D images for a Structure-column duplicate."""
+    model = app._table_model
+    smiles: dict[int, str] = {}
+    pixmaps: dict[int, QPixmap] = {}
+    mols = getattr(app, "mols", None) or {}
+    n = model.rowCount()
+    for r in range(n):
+        oid = int(model.row_oid(r))
+        if oid < 0:
+            continue
+        mol = mols.get(oid)
+        if mol is None:
+            resolve = getattr(app, "_mol_for_structure_row", None)
+            if callable(resolve):
+                mol = resolve(r)
+        if mol is not None:
+            try:
+                smiles[oid] = mol_to_canonical_smiles(mol) or ""
+            except Exception:
+                smiles[oid] = ""
+        pix = model.structure_pixmap_for_oid(oid)
+        if pix is None or pix.isNull():
+            pix = model.structure_pixmap_copy(oid)
+        if pix is not None and not pix.isNull():
+            pixmaps[oid] = QPixmap(pix)
+    return smiles, pixmaps
+
+
 class UndoDuplicateColumnCommand(QUndoCommand):
     """Undo/redo duplicating a column (insert copy next to source)."""
 
@@ -523,7 +564,13 @@ class UndoDuplicateColumnCommand(QUndoCommand):
         super().__init__(f"Duplicate column '{src_name}'")
         self._app = app
         self._src_name = src_name
-        self._dup_name = f"{src_name} (Copy)"
+        self._dup_name = _unique_copy_header(list(app.headers), src_name)
+        self._structure_smiles: dict[int, str] | None = None
+        self._structure_pixmaps: dict[int, QPixmap] | None = None
+        if src_name == "Structure":
+            smiles, pixmaps = _snapshot_structure_column(app)
+            self._structure_smiles = smiles
+            self._structure_pixmaps = pixmaps
 
     def redo(self) -> None:
         app = self._app
@@ -538,9 +585,22 @@ class UndoDuplicateColumnCommand(QUndoCommand):
         except Exception:
             pass
         try:
-            app._table_model.duplicate_column_at(dup_col, self._dup_name, src)
+            if self._structure_smiles is not None:
+                app._table_model.duplicate_column_at(
+                    dup_col,
+                    self._dup_name,
+                    src,
+                    value_by_oid=self._structure_smiles,
+                    pixmap_by_oid=self._structure_pixmaps or {},
+                    as_pixmap=True,
+                )
+            else:
+                app._table_model.duplicate_column_at(dup_col, self._dup_name, src)
             app.headers.insert(dup_col, self._dup_name)
             app.calculate_global_bounds()
+            mark = getattr(app, "_mark_sqlite_store_dirty", None)
+            if callable(mark):
+                mark()
         finally:
             try:
                 app.table.setUpdatesEnabled(True)
@@ -564,6 +624,9 @@ class UndoDuplicateColumnCommand(QUndoCommand):
             app._table_model.remove_column_at(idx)
             app.headers.pop(idx)
             _sync_filters_after_column_removed(app, self._dup_name)
+            mark = getattr(app, "_mark_sqlite_store_dirty", None)
+            if callable(mark):
+                mark()
         finally:
             try:
                 app.table.setUpdatesEnabled(True)

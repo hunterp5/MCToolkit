@@ -23,6 +23,7 @@ from rdkit import Chem
 from molmanager.config import load_config
 from molmanager.rdkit_fingerprints import int_fns_include_fingerprints
 from molmanager.workers.chemistry_descriptors import (
+    _descriptor_output_headers,
     _descriptor_process_pool_min_rows,
     _mp_calc_descriptor_batch,
 )
@@ -35,7 +36,10 @@ def test_int_fns_include_fingerprints():
 
 def test_descriptor_pool_min_rows_morgan_uses_fp_threshold():
     cfg = load_config()
-    assert _descriptor_process_pool_min_rows(cfg, ["FP_Morgan_2_2048"]) == cfg.descriptor_fp_process_pool_min_rows
+    assert (
+        _descriptor_process_pool_min_rows(cfg, ["FP_Morgan_2_2048"])
+        == cfg.descriptor_fp_process_pool_min_rows
+    )
 
 
 def test_descriptor_pool_min_rows_pharm2d_is_two():
@@ -54,11 +58,30 @@ def test_mp_calc_descriptor_batch_fingerprint_rows():
     assert mol is not None
     blob = mol.ToBinary()
     items = [(10, blob, None), (11, blob, None)]
-    rows = _mp_calc_descriptor_batch(
-        (items, ("Morgan on-bits",), ("FP_Morgan_2_2048",), False)
-    )
+    rows = _mp_calc_descriptor_batch((items, ("Morgan on-bits",), ("FP_Morgan_2_2048",), False))
     assert len(rows) == 2
     assert rows[0][0] == 10
     assert rows[1][0] == 11
     assert int(rows[0][1]["Morgan on-bits"]) > 0
     assert rows[0][1]["Morgan on-bits"] == rows[1][1]["Morgan on-bits"]
+
+
+def test_descriptor_output_headers_appends_shared_pka_column() -> None:
+    assert _descriptor_output_headers(["LogD 7.4"], False) == ["LogD 7.4"]
+    assert _descriptor_output_headers(["LogD 7.4"], True) == ["LogD 7.4", "pKa"]
+    assert _descriptor_output_headers(["pKa", "LogD 7.4"], True) == ["pKa", "LogD 7.4"]
+
+
+def test_calc_descriptor_row_values_adds_pka_from_ensemble() -> None:
+    from molmanager.ionization import PicklableIonizationEnsemble, PicklableIonizationMicrostate
+    from molmanager.workers.chemistry_descriptors import _calc_descriptor_row_values
+
+    mol = Chem.MolFromSmiles("CCO")
+    ens = PicklableIonizationEnsemble(
+        microstates=(PicklableIonizationMicrostate("CCO", 0, 0.0, None),),
+        macro_pkas=(4.2,),
+    )
+    oid, row = _calc_descriptor_row_values(1, mol, [], (), {}, pka_states=ens, pka_cache_used=True)
+    assert oid == 1
+    assert row["pKa"] == "4.20"
+    assert "pI" not in row

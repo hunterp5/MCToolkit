@@ -39,7 +39,11 @@ def _skip_session_auto_render(monkeypatch) -> None:
 
 
 def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
-    from molmanager.session_codec import dumps_session_document, expand_session_document, loads_session_bytes
+    from molmanager.session_codec import (
+        dumps_session_document,
+        expand_session_document,
+        loads_session_bytes,
+    )
 
     w = ChemicalTableApp()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
@@ -88,6 +92,94 @@ def test_apply_session_document_restores_row(qapp):  # noqa: ARG001
     smi_col = w2.headers.index("SMILES")
     assert "CC" in (w2._table_model.cell_text(0, smi_col) or "")
     assert 0 in w2.mols
+
+
+def test_session_roundtrip_keeps_structure_independent_of_protonated(qapp):  # noqa: ARG001
+    """Structure mols stay parent even when a Protonated column holds the ionized form."""
+    from molmanager.utils import mol_to_canonical_smiles
+
+    parent = Chem.MolFromSmiles("CCN")
+    ionized = "CC[NH3+]"
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "Protonated"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"Protonated": ionized})
+    w.mols[0] = parent
+    w._table_model.register_pixmap_column("Protonated")
+    w.next_oid = 1
+
+    doc = w._build_session_document()
+    assert doc["structure_smiles"][0] == mol_to_canonical_smiles(parent)
+    assert ionized in (doc["values"][0][0] if doc.get("values") else "")
+    layout = doc.get("table_layout") or {}
+    assert "Protonated" in (layout.get("pixmap_columns") or [])
+
+    w2 = ChemicalTableApp()
+    w2._apply_session_document(doc)
+    assert 0 in w2.mols
+    restored = mol_to_canonical_smiles(w2.mols[0])
+    assert restored == mol_to_canonical_smiles(parent)
+    assert "+" not in restored
+    backing = w2._table_model.backing_value_for_row_header(0, "Protonated")
+    assert ionized in backing
+    assert w2._table_model.is_pixmap_data_column("Protonated")
+    prot_col = w2.headers.index("Protonated")
+    prot_idx = w2._table_model.index(0, prot_col)
+    assert ionized in (w2._table_model.data(prot_idx, Qt.DisplayRole) or "")
+    assert w2._mol_for_structure_row(0) is not None
+    assert mol_to_canonical_smiles(w2._mol_for_structure_row(0)) == restored
+
+
+def test_mol_for_structure_row_ignores_protonated_without_cached_mol(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "Protonated"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"Protonated": "CC[NH3+]"})
+    w.mols = {}
+    assert w._mol_for_structure_row(0) is None
+
+
+def test_legacy_session_without_structure_smiles_does_not_use_protonated(qapp):  # noqa: ARG001
+    """Older compact sessions omitted Structure identity; do not rebuild it from Protonated."""
+    compact = {
+        "format": "molmanager_session",
+        "version": 2,
+        "headers": ["ID_HIDDEN", "Structure", "Protonated"],
+        "data_headers": ["Protonated"],
+        "ids": [0],
+        "values": [["CC[NH3+]"]],
+        "next_oid": 1,
+    }
+    w = ChemicalTableApp()
+    w._apply_session_document(compact)
+    assert w._table_model.rowCount() == 1
+    assert 0 not in w.mols or w.mols.get(0) is None
+    assert w._mol_for_structure_row(0) is None
+    renders, _ = w._build_render2d_tasks_in_table_order("Structure", 80, 80, None)
+    assert renders == []
+    backing = w._table_model.backing_value_for_row_header(0, "Protonated")
+    assert "CC[NH3+]" in backing
+
+
+def test_session_restore_render_tasks_keep_neutral_structure(qapp):  # noqa: ARG001
+    from molmanager.utils import mol_to_canonical_smiles
+
+    parent = Chem.MolFromSmiles("CCN")
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "Protonated"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"Protonated": "CC[NH3+]"})
+    w.mols[0] = parent
+    w.next_oid = 1
+    doc = w._build_session_document()
+
+    w2 = ChemicalTableApp()
+    w2._apply_session_document(doc)
+    renders, _ = w2._build_render2d_tasks_in_table_order("Structure", 80, 80, None)
+    assert renders
+    restored = mol_to_canonical_smiles(renders[0][1])
+    assert restored == mol_to_canonical_smiles(parent)
+    assert "+" not in restored
 
 
 def test_apply_legacy_v1_session_document(qapp):  # noqa: ARG001
@@ -765,7 +857,9 @@ def test_session_restore_dispatches_analysis_plot_kind(qapp, monkeypatch) -> Non
 
     from molmanager.ui import sali_map
 
-    monkeypatch.setattr(sali_map.SaliMapPanel, "from_session_state", classmethod(fake_sali_from_session))
+    monkeypatch.setattr(
+        sali_map.SaliMapPanel, "from_session_state", classmethod(fake_sali_from_session)
+    )
     monkeypatch.setattr(
         ChemicalTableApp,
         "_try_auto_render_all_structures_after_ingest",

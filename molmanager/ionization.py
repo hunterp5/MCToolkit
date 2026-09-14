@@ -516,6 +516,25 @@ def format_isoelectric_point(value: float | None) -> str:
     return f"{float(value):.2f}"
 
 
+def format_pka_and_pi(
+    states,
+    *,
+    most_basic_only: bool = False,
+    most_acidic_only: bool = False,
+) -> tuple[str, str]:
+    """Table text for the shared ``pKa`` column and optional ``pI`` from one Uni-pKa ensemble."""
+    pka_txt = format_pka_values(
+        pka_values_from_states(states),
+        most_basic_only=most_basic_only,
+        most_acidic_only=most_acidic_only,
+    )
+    try:
+        pi_txt = format_isoelectric_point(isoelectric_point_from_states(states))
+    except Exception:
+        pi_txt = "N/A"
+    return pka_txt, pi_txt
+
+
 class _UnipkaTemporaryDirectory(tempfile.TemporaryDirectory):
     """Windows: unipkainfer keeps the LMDB env open, so default rmtree raises WinError 32."""
 

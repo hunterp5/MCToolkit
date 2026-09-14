@@ -92,6 +92,13 @@ def _descriptor_process_pool_min_rows(cfg, int_fns) -> int:
     return int(cfg.descriptor_process_pool_min_rows)
 
 
+def _descriptor_output_headers(disp_headers: list, pka_cache_used: bool) -> list[str]:
+    headers = list(disp_headers)
+    if pka_cache_used and "pKa" not in headers:
+        headers.append("pKa")
+    return headers
+
+
 def _calc_descriptor_row_values(
     idx: int,
     mol: Chem.Mol | None,
@@ -120,6 +127,10 @@ def _calc_descriptor_row_values(
     else:
         for d_n in disp_headers:
             row_data[d_n] = "N/A"
+    if pka_cache_used:
+        from molmanager.ionization import format_pka_values, pka_values_from_states
+
+        row_data["pKa"] = format_pka_values(pka_values_from_states(pka_states))
     return int(idx), row_data
 
 
@@ -475,7 +486,9 @@ class CalcWorker(QRunnable):
                 emit_partial_results_if_cancelled(
                     self.signals, "Calculate descriptors", len(results), tot, cancelled
                 )
-                self.signals.calculated.emit(results, self.disp_headers)
+                self.signals.calculated.emit(
+                    results, _descriptor_output_headers(self.disp_headers, pka_cache_used)
+                )
                 return
         # ThreadPoolExecutor row tasks so RDKit never runs on the Qt GUI thread and small jobs
         # still use a worker thread instead of the process-queue thread doing every row inline.
@@ -559,4 +572,6 @@ class CalcWorker(QRunnable):
         emit_partial_results_if_cancelled(
             self.signals, "Calculate descriptors", len(results), tot, cancelled
         )
-        self.signals.calculated.emit(results, self.disp_headers)
+        self.signals.calculated.emit(
+            results, _descriptor_output_headers(self.disp_headers, pka_cache_used)
+        )

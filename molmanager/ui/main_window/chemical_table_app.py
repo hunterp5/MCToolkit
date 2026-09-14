@@ -348,21 +348,32 @@ class ChemicalTableApp(
         self._last_tool_progress_status = ""
         self._init_status_memory_tracker(cfg)
 
+    def _status_memory_should_poll(self) -> bool:
+        """True unless the status-bar host was explicitly hidden.
+
+        ``isVisible()`` is False until the top-level window is shown, so it
+        cannot be used during ``__init__`` to decide whether polling starts.
+        """
+        host = getattr(self, "_status_host", None)
+        return host is None or not host.isHidden()
+
     def _init_status_memory_tracker(self, cfg) -> None:
         self._memory_status_timer = QTimer(self)
         self._memory_status_timer.timeout.connect(self._refresh_status_memory_label)
+        label = getattr(self, "_memory_status_label", None)
         if cfg.status_memory_enabled:
+            if label is not None:
+                label.show()
             self._memory_status_timer.setInterval(int(cfg.status_memory_poll_ms))
-            host = getattr(self, "_status_host", None)
-            if host is None or host.isVisible():
+            if self._status_memory_should_poll():
                 self._memory_status_timer.start()
             self._refresh_status_memory_label()
-        else:
-            self._memory_status_label.hide()
+        elif label is not None:
+            label.hide()
 
     def _refresh_status_memory_label(self) -> None:
         label = getattr(self, "_memory_status_label", None)
-        if label is None or not label.isVisible():
+        if label is None or label.isHidden():
             return
         text = format_process_memory_status()
         if text is None:

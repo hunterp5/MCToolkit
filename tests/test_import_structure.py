@@ -18,6 +18,8 @@
 
 from molmanager.import_structure import (
     header_looks_like_structure_text,
+    is_duplicated_structure_header,
+    is_tool_generated_structure_header,
     needs_structure_source_picker,
     structure_source_picker_candidates,
 )
@@ -43,3 +45,14 @@ def test_tool_generated_structure_headers():
     assert not header_looks_like_structure_text("% Protomer (pH 7.4)")
     assert not header_looks_like_structure_text("Protomer %")
     assert not header_looks_like_structure_text("Fragments")
+    assert is_tool_generated_structure_header("Protonated")
+    assert is_tool_generated_structure_header("Protonated (1)")
+    assert is_tool_generated_structure_header("Largest Fragment")
+    assert not is_tool_generated_structure_header("SMILES")
+    assert header_looks_like_structure_text("Structure (Copy)")
+    assert header_looks_like_structure_text("Structure (Copy 2)")
+    assert is_tool_generated_structure_header("Structure (Copy)")
+    assert is_tool_generated_structure_header("Structure (Copy 2)")
+    assert not is_tool_generated_structure_header("Structure")
+    assert is_duplicated_structure_header("Structure (Copy)")
+    assert not is_duplicated_structure_header("Structure")

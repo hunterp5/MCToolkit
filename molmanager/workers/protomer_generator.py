@@ -127,6 +127,7 @@ class ProtomerGeneratorWorker(QRunnable):
                 signals=self.worker_signals,
                 progress_message="Generate protomers",
                 progress_total=tot,
+                reserve_final_tick=False,
             )
             for key in order:
                 if should_terminate_process_pool(cancel_ev):

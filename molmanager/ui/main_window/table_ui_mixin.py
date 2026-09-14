@@ -36,6 +36,7 @@ from ...confs_codec import (
     rehydrate_v1_confs_cell,
 )
 from ...config import load_config
+from ...import_structure import header_looks_like_structure_text, is_tool_generated_structure_header
 from ...exception_policy import log_swallowed_exception
 from ...services.chemistry_columns import (
     canonical_smiles_header_for_updates,
@@ -189,9 +190,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             cols.append(logical)
         self._select_columns(cols, anchor_col=end_col)
 
-    def _select_columns(
-        self, cols: list[int], *, anchor_col: int | None = None
-    ) -> None:
+    def _select_columns(self, cols: list[int], *, anchor_col: int | None = None) -> None:
         view_model = self.table.model()
         if view_model is None:
             self._report_table_selection_status(0)
@@ -800,6 +799,8 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         for h in self._ordered_headers_for_molecule_lookup():
             if smi_h and h == smi_h:
                 continue
+            if is_tool_generated_structure_header(h) and h != ov_s:
+                continue
             ci = self.headers.index(h)
             raw = (self._table_model.cell_text(row, ci) or "").strip()
             if not raw:
@@ -991,8 +992,6 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
 
     @staticmethod
     def _header_looks_structural(name: str) -> bool:
-        from ...import_structure import header_looks_like_structure_text
-
         return header_looks_like_structure_text(name)
 
     def _skip_chemistry_tool_column_dropdown(self, h: str) -> bool:
@@ -1086,8 +1085,12 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         ov = getattr(self, "_structure_field_override", None)
         ov_s = str(ov).strip() if isinstance(ov, str) else ""
         for h in self._ordered_headers_for_molecule_lookup():
+            if is_tool_generated_structure_header(h) and h != ov_s:
+                continue
             ci = self.headers.index(h)
             raw = (self._table_model.cell_text(row, ci) or "").strip()
+            if not raw:
+                raw = (self._table_model.backing_value_for_row_header(row, h) or "").strip()
             if not raw:
                 continue
             priority = (
@@ -1275,6 +1278,8 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         field = getattr(self, "_structure_field_override", None)
         if not field or mol is None:
             return mol
+        if is_tool_generated_structure_header(str(field)):
+            return mol
         if not mol.HasProp(field):
             return mol
         raw = (safe_mol_prop_string(mol, field) or "").strip()
@@ -1391,7 +1396,14 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
                     "Open the MMP Transform Ledger for this session's MMP results."
                 )
             menu.addSeparator()
-            if old_n != "Structure":
+            if old_n == "Structure":
+                dup_act = menu.addAction(f"Duplicate '{old_n}'")
+                dup_act.setObjectName("header_duplicate")
+                dup_act.setToolTip(
+                    "Copy structures into a new chemistry column (SMILES and 2D images). "
+                    "The copy can be renamed, deleted, and used as a tool source like Protonated."
+                )
+            else:
                 ren_act = menu.addAction(f"Rename '{old_n}'")
                 ren_act.setObjectName("header_rename")
                 dup_act = menu.addAction(f"Duplicate '{old_n}'")

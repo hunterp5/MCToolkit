@@ -75,7 +75,7 @@ def test_calc_worker_emits_partial_results_when_cancelled_during_ionization():
     assert isinstance(rows, list)
     # Only the two structures with completed microstates should be returned.
     assert {oid for oid, _ in rows} == {1, 3}
-    assert out.get("headers") == disp_headers
+    assert out.get("headers") == ["LogD 7.4", "pKa"]
     label, done, total = out["partial"]
     assert label == "Calculate descriptors"
     assert done == 2

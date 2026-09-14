@@ -109,6 +109,13 @@ class PKaPredictorDialog(QDialog):
         self.most_acidic_only_cb.toggled.connect(self._on_most_acidic_toggled)
         root.addWidget(self.most_acidic_only_cb)
 
+        self.include_pi_cb = QCheckBox("Calculate isoelectric point (pI)")
+        self.include_pi_cb.setToolTip(
+            "When checked, also write a shared pI column (pH where mean charge crosses zero). "
+            "Simple acids and bases are N/A. Off by default; Protonate and descriptors do not write pI."
+        )
+        root.addWidget(self.include_pi_cb)
+
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
         self.predict_btn = QPushButton("Predict")
@@ -190,13 +197,14 @@ class PKaPredictorDialog(QDialog):
 
         most_basic = bool(self.most_basic_only_cb.isChecked())
         most_acidic = bool(self.most_acidic_only_cb.isChecked())
+        include_pi = bool(self.include_pi_cb.isChecked())
         pka_signals = self.parent_app._ensure_pka_predictor_signals()
         n = len(rows)
         prog = self.parent_app._tool_progress_state
         self.parent_app._begin_tool_progress("pKa prediction", n)
         self.parent_app.process_queue.enqueue(
             f"pKa prediction ({n} molecules)",
-            lambda ev, r=rows, ws=self.parent_app.signals, ps=pka_signals, mb=most_basic, ma=most_acidic, st=prog: (
+            lambda ev, r=rows, ws=self.parent_app.signals, ps=pka_signals, mb=most_basic, ma=most_acidic, ip=include_pi, st=prog: (
                 PKaPredictorWorker(
                     r,
                     ws,
@@ -204,6 +212,7 @@ class PKaPredictorDialog(QDialog):
                     cancel_event=ev,
                     most_basic_only=mb,
                     most_acidic_only=ma,
+                    include_pi=ip,
                     progress_state=st,
                 )
             ),

@@ -21,7 +21,7 @@ Use for tricky acidic/basic centers, tautomer-sensitive series, or when you want
 - **Selected Rows Only** - scope table inputs.
 - **pH** - target pH for population weighting.
 - **Generate** - enumerate forms.
-- **Add all to main table** / **Add selected to main table** - write results.
+- **Add all to main table** / **Add selected to main table** - write results. Added rows copy **pKa** from the parent ensemble. Source rows also get that shared column (same header as Predict pKa).
 
 ## Workflow
 

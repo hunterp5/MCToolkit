@@ -40,6 +40,7 @@ def test_skip_chemistry_tool_column_dropdown():
     assert skip_chemistry_tool_column_dropdown("Cluster (Morgan)")
     assert not skip_chemistry_tool_column_dropdown("SMILES")
     assert not skip_chemistry_tool_column_dropdown("Protonated")
+    assert not skip_chemistry_tool_column_dropdown("Structure (Copy)")
 
 
 def test_is_smiles_named_header():
@@ -59,6 +60,21 @@ def test_ordered_headers_prefer_smiles():
     headers = ["ID_HIDDEN", "Structure", "MW", "SMILES", "Name"]
     ordered = ordered_headers_for_molecule_lookup(headers)
     assert ordered[0] == "SMILES"
+
+
+def test_ordered_headers_exclude_protonated_unless_override():
+    headers = ["ID_HIDDEN", "Structure", "Protonated", "MW"]
+    ordered = ordered_headers_for_molecule_lookup(headers)
+    assert "Protonated" not in ordered
+    overridden = ordered_headers_for_molecule_lookup(headers, structure_field_override="Protonated")
+    assert overridden[0] == "Protonated"
+
+
+def test_ordered_headers_exclude_structure_copy():
+    headers = ["ID_HIDDEN", "Structure", "Structure (Copy)", "SMILES"]
+    ordered = ordered_headers_for_molecule_lookup(headers)
+    assert "Structure (Copy)" not in ordered
+    assert "SMILES" in ordered
 
 
 def test_should_skip_pixmap_via_callback():
@@ -81,6 +97,13 @@ def test_data_headers_include_protonated_not_protomer_percent():
     assert "Protonated" in out
     assert "SMILES" in out
     assert "% Protomer (pH 7.4)" not in out
+
+
+def test_data_headers_include_structure_copy():
+    headers = ["ID_HIDDEN", "Structure", "Structure (Copy)", "MW"]
+    out = data_headers_confirmed_for_chemistry_tools(headers)
+    assert "Structure (Copy)" in out
+    assert "MW" not in out
 
 
 def test_cell_texts_have_parseable_molecule():

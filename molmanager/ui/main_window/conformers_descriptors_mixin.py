@@ -981,9 +981,11 @@ class ConformersDescriptorsMixin:
     ) -> list[str]:
         """Write tool results into the table, adding columns as needed.
 
-        Never overwrites an existing column: colliding names are rewritten to
-        ``Name (1)``, ``Name (2)``, … via :meth:`_unique_table_column_names`.
-        Returns the final header list that was written (after uniquify).
+        Colliding names are rewritten to ``Name (1)``, ``Name (2)``, … via
+        :meth:`_unique_table_column_names`, except ``pKa`` and ``pI``: those
+        Uni-pKa metadata columns are updated in place when they already exist.
+        ``pI`` is only written when Predict pKa is run with isoelectric point enabled.
+        Returns the final header list written.
         """
         if finish_progress:
             self._finish_tool_progress(progress_label, status_message=None)
@@ -992,21 +994,22 @@ class ConformersDescriptorsMixin:
             self.status_label.setText(self._consume_partial_results_notice() or "Done.")
             return []
 
-        unique_h = self._unique_table_column_names(calc_h)
-        if unique_h != calc_h:
-            rename = {old: new for old, new in zip(calc_h, unique_h) if old != new}
-            if rename:
-                remapped: list[tuple[int, dict]] = []
-                for oid, row_d in res:
-                    row_d = row_d or {}
-                    remapped.append(
-                        (
-                            int(oid),
-                            {rename.get(str(k), str(k)): v for k, v in row_d.items()},
-                        )
+        shared = {"pKa", "pI"}
+        to_unique = [h for h in calc_h if h not in shared]
+        unique_h = self._unique_table_column_names(to_unique) if to_unique else []
+        rename = {old: new for old, new in zip(to_unique, unique_h) if old != new}
+        calc_h = [rename.get(h, h) for h in calc_h]
+        if rename:
+            remapped: list[tuple[int, dict]] = []
+            for oid, row_d in res:
+                row_d = row_d or {}
+                remapped.append(
+                    (
+                        int(oid),
+                        {rename.get(str(k), str(k)): v for k, v in row_d.items()},
                     )
-                res = remapped
-            calc_h = unique_h
+                )
+            res = remapped
 
         self.table.setSortingEnabled(False)
         try:

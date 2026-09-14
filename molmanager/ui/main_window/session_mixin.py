@@ -158,9 +158,14 @@ class SessionMixin:
                 sort_asc = bool(ss.get("ascending", True))
                 sort_mode = str(ss.get("mode") or "auto")
         rows_out: list[dict] = []
+        structure_smiles: list[str] = []
         for r in range(self._table_model.rowCount()):
             t0 = self._table_model.cell_text(r, 0)
             oid = int(t0) if t0.isdigit() else r
+            mol = self.mols.get(oid)
+            if mol is None:
+                mol = self._mol_for_structure_row(r)
+            structure_smiles.append(mol_to_canonical_smiles(mol) if mol is not None else "")
             cells: dict[str, str] = {}
             for ci, h in enumerate(self.headers):
                 if h in ("ID_HIDDEN", "Structure"):
@@ -169,10 +174,8 @@ class SessionMixin:
                     cells[h] = self._table_model.backing_value_for_row_header(r, h)
                 else:
                     cells[h] = self._table_cell_text(r, ci)
-            if "SMILES" not in cells or not (cells.get("SMILES") or "").strip():
-                mol = self._mol_for_structure_row(r)
-                if mol is not None:
-                    cells["SMILES"] = mol_to_canonical_smiles(mol)
+            if "SMILES" in cells and not (cells.get("SMILES") or "").strip() and mol is not None:
+                cells["SMILES"] = mol_to_canonical_smiles(mol)
             rows_out.append({"id": oid, "cells": cells})
         filters_out: list[dict] = []
         for f in self.filters:
@@ -232,6 +235,7 @@ class SessionMixin:
             "version": self._SESSION_VERSION,
             "headers": list(self.headers),
             "rows": rows_out,
+            "structure_smiles": structure_smiles,
             "next_oid": int(self.next_oid),
             "zoomed_ids": sorted(int(x) for x in self.zoomed_ids),
             "structure_field_override": getattr(self, "_structure_field_override", None),
@@ -368,6 +372,7 @@ class SessionMixin:
         return {
             "column_widths": widths,
             "hidden_columns": hidden,
+            "pixmap_columns": self._table_model.pixmap_data_column_headers(),
             "default_row_height": default_h,
             "hheader_state": self._header_state_b64(hh),
             "vheader_state": self._header_state_b64(vh),
@@ -408,6 +413,15 @@ class SessionMixin:
                     self.table.setColumnHidden(self.headers.index(name), True)
                 except RuntimeError:
                     pass
+        pix_cols = payload.get("pixmap_columns")
+        if isinstance(pix_cols, list):
+            for name in pix_cols:
+                if (
+                    isinstance(name, str)
+                    and name in self.headers
+                    and name not in ("ID_HIDDEN", "Structure")
+                ):
+                    self._table_model.register_pixmap_column(name)
         try:
             vh = self.table.verticalHeader()
         except RuntimeError:
@@ -559,9 +573,7 @@ class SessionMixin:
             try:
                 json.dumps(state)
             except (TypeError, ValueError):
-                logger.exception(
-                    "Skipping floating plot with non-JSON-serializable session state"
-                )
+                logger.exception("Skipping floating plot with non-JSON-serializable session state")
                 continue
             kind = str(state.get("kind") or "plotter")
             entry: dict = {"kind": kind, "state": state}
@@ -721,7 +733,10 @@ class SessionMixin:
             if callable(prepare):
                 prepare(dlg)
             # Prefer plotter registration without importing PlotDialog (WebEngine).
-            if getattr(dlg, "_plot_widget", None) is not None and getattr(dlg, "_panel", None) is None:
+            if (
+                getattr(dlg, "_plot_widget", None) is not None
+                and getattr(dlg, "_panel", None) is None
+            ):
                 self._register_plot_dialog(dlg)
             elif not self._bind_undocked_browser_dialog(dlg):
                 self._register_floating_result_dialog(dlg)
@@ -895,6 +910,17 @@ class SessionMixin:
         self.table.setSortingEnabled(False)
         self._table_model.clear_rows()
         self._table_model.set_headers(list(self.headers))
+        layout_early = doc.get("table_layout")
+        if isinstance(layout_early, dict):
+            pix_cols = layout_early.get("pixmap_columns")
+            if isinstance(pix_cols, list):
+                for name in pix_cols:
+                    if (
+                        isinstance(name, str)
+                        and name in self.headers
+                        and name not in ("ID_HIDDEN", "Structure")
+                    ):
+                        self._table_model.register_pixmap_column(name)
         self.table.setColumnHidden(0, True)
         self.mols = {}
         self._clear_filter_target_smiles_cache()
@@ -908,9 +934,7 @@ class SessionMixin:
         if not rows:
             self._begin_session_finalize(doc, -1, gen=gen)
         else:
-            self._loading_detail.setText(
-                f"Parsing structures…\n0 / {len(rows):,} rows"
-            )
+            self._loading_detail.setText(f"Parsing structures…\n0 / {len(rows):,} rows")
             self.status_label.setText(f"Loading session… (parsing {len(rows):,} rows)")
             self._session_parse_busy = True
             signals = SessionRowsParseSignals(self)
@@ -926,6 +950,7 @@ class SessionMixin:
                 data_headers=list(self.headers[2:]),
                 signals=signals,
                 generation=gen,
+                structure_smiles=list(doc.get("structure_smiles") or []),
             )
             # Pytest has no lasting event-loop turn for threadpool completions; parse inline.
             if "pytest" in sys.modules:
@@ -971,9 +996,7 @@ class SessionMixin:
         self._table_stack.setCurrentIndex(1)
         QMessageBox.warning(self, "Open Session", message or "Session row parse failed.")
 
-    def _on_session_rows_parsed(
-        self, result: object, generation: int, doc: dict
-    ) -> None:
+    def _on_session_rows_parsed(self, result: object, generation: int, doc: dict) -> None:
         if generation != getattr(self, "_session_load_generation", 0):
             return
         self._session_parse_busy = False
@@ -1415,9 +1438,7 @@ class SessionMixin:
             except Exception:
                 pass
         self._csv_session_ctx = None
-        self._loading_detail.setText(
-            f"Session loaded ({loaded:,} row(s)).\nPreparing table…"
-        )
+        self._loading_detail.setText(f"Session loaded ({loaded:,} row(s)).\nPreparing table…")
         self._finalize_session_csv_load()
 
     def _restore_pending_workspace_layout(self) -> None:
@@ -1461,7 +1482,9 @@ class SessionMixin:
 
     def _restore_session_table_chrome(self, payload: object | None = None) -> None:
         """Re-apply saved table layout and column order after other session side effects."""
-        layout = payload if payload is not None else getattr(self, "_pending_session_table_layout", None)
+        layout = (
+            payload if payload is not None else getattr(self, "_pending_session_table_layout", None)
+        )
         if layout is not None:
             self._restore_table_layout(layout)
         co = getattr(self, "_pending_session_column_order", None)

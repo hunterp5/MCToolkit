@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QPixmap
 
 from molmanager.ui.compound_table_model import CompoundTableModel
 
@@ -79,6 +79,15 @@ def test_set_backing_text_updates_pixmap_column(qapp):  # noqa: ARG001
     model.set_backing_text(1, "Protonated", "CCO")
     assert model.backing_value_for_row_header(0, "Protonated") == "CCO"
     assert model.cell_text(0, prot) == ""
+    idx = model.index(0, prot)
+    assert model.data(idx, Qt.DisplayRole) == "CCO"
+    assert model.data(idx, Qt.DecorationRole) is None
+    pix = QPixmap(16, 16)
+    pix.fill(QColor(255, 255, 255))
+    model.set_column_pixmap(1, "Protonated", pix)
+    assert model.data(idx, Qt.DisplayRole) == ""
+    assert model.data(idx, Qt.DecorationRole) is not None
+    assert model.backing_value_for_row_header(0, "Protonated") == "CCO"
 
 
 def test_numeric_bounds_by_column(model: CompoundTableModel):
@@ -126,6 +135,21 @@ def test_duplicate_column_at_bulk_copy(model: CompoundTableModel):
     mwi = model._headers.index("MW (Copy)")
     assert model.cell_text(0, mwi) == "10"
     assert model.cell_text(1, mwi) == "20"
+
+
+def test_duplicate_column_at_copies_pixmap_column(qapp):  # noqa: ARG001
+    model = CompoundTableModel(["ID_HIDDEN", "Structure", "Protonated"])
+    model.append_row(1, {"Protonated": "CCO"})
+    model.register_pixmap_column("Protonated")
+    pix = QPixmap(8, 8)
+    pix.fill(QColor(255, 255, 255))
+    model.set_column_pixmap(1, "Protonated", pix)
+    dest = model.columnCount()
+    model.duplicate_column_at(dest, "Protonated (Copy)", model._headers.index("Protonated"))
+    assert model.is_pixmap_data_column("Protonated (Copy)")
+    assert model.backing_value_for_row_header(0, "Protonated (Copy)") == "CCO"
+    copied = model.column_pixmap_copy(1, "Protonated (Copy)")
+    assert copied is not None and not copied.isNull()
 
 
 def test_remove_column_at_keeps_other_bounds_cache(model: CompoundTableModel):
