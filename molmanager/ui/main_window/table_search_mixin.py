@@ -160,13 +160,7 @@ class TableSearchMixin:
         panel = getattr(self, "_search_panel", None)
         if panel is not None:
             panel.setVisible(False)
-        self._in_programmatic_table_selection = True
-        try:
-            sm = self.table.selectionModel()
-            if sm is not None:
-                sm.clearSelection()
-        finally:
-            self._in_programmatic_table_selection = False
+        self.clear_table_selection()
         self.status_label.setText("Search closed.")
         QTimer.singleShot(0, self._sync_filter_panel_scroll_content)
 
@@ -534,7 +528,7 @@ class TableSearchMixin:
         if specs is None:
             return
         if not specs:
-            self.table.clearSelection()
+            self.clear_table_selection()
             self.status_label.setText("Search: empty query; selection cleared.")
             return
 
@@ -559,20 +553,16 @@ class TableSearchMixin:
 
         combined = sorted(self._combine_search_row_sets(specs, row_sets))
         visible_combined = [r for r in combined if self._is_source_row_visible(r)]
-        sm = self.table.selectionModel()
-        self._in_programmatic_table_selection = True
-        try:
-            if sm is not None:
-                sm.clearSelection()
-        finally:
-            self._in_programmatic_table_selection = False
         if not combined:
+            self.clear_table_selection()
             self.status_label.setText("Search: no matches.")
             return
         if not visible_combined:
+            self.clear_table_selection()
             self.status_label.setText("Search: no visible matches.")
             return
         if not self._select_table_rows(visible_combined):
+            self.clear_table_selection()
             self.status_label.setText("Search: no visible matches.")
             return
 

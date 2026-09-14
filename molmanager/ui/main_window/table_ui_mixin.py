@@ -725,27 +725,18 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         self.select_table_rows(vis)
 
     def _select_all_rows(self) -> None:
-        """Select every row in the table, including rows hidden by filters."""
-        self._maybe_status_before_large_select()
-        n_rows = self._table_model.rowCount()
-        if n_rows <= 0:
-            self._report_table_selection_status(0)
-            return
-        all_rows = list(range(n_rows))
-        cfg = load_config()
-        if n_rows >= cfg.table_selection_oid_override_min:
-            self._start_chunked_oid_selection(
-                all_rows,
-                clear_oid_override=False,
-                extra_status="(includes filtered-out rows)",
-            )
-            return
-        self.select_table_rows(all_rows, clear_oid_override=False)
-        self._selected_oids_override = frozenset(self._all_oids_in_table_order())
-        self._report_table_selection_status(len(self._selected_oids_override))
+        """Select every visible table row (same as Select All on a column header)."""
+        self._select_all_visible_rows()
+
+    def _cancel_pending_plot_table_select(self) -> None:
+        timer = getattr(self, "_plot_table_select_timer", None)
+        if timer is not None:
+            timer.stop()
+        self._plot_table_select_pending = None
 
     def clear_table_selection(self) -> None:
-        """Clear Qt and logical (large) row selection."""
+        """Clear Qt, logical, and highlight selection, and sync open plots."""
+        self._cancel_pending_plot_table_select()
         self._cancel_chunked_table_selection()
         self._selected_oids_override = None
         sm = self.table.selectionModel()
@@ -757,6 +748,10 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             self._in_programmatic_table_selection = False
         self._sync_table_selection_highlight()
         self._report_table_selection_status(0)
+        self._schedule_plot_sync_after_programmatic_selection()
+        sync_dock = getattr(self, "_sync_dock_complex_viewer", None)
+        if callable(sync_dock):
+            sync_dock()
 
     def invert_table_selection(self) -> None:
         """Select every table row that is not currently selected (full table, including filtered-out rows)."""
@@ -950,6 +945,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         return frozenset(oids)
 
     def _clear_table_selection_after_delete(self) -> None:
+        self._cancel_pending_plot_table_select()
         self._cancel_chunked_table_selection()
         self._selected_oids_override = None
         sm = self.table.selectionModel()
@@ -960,6 +956,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         finally:
             self._in_programmatic_table_selection = False
         self._sync_table_selection_highlight()
+        self._schedule_plot_sync_after_programmatic_selection()
 
     def _refresh_table_after_bulk_delete(self) -> None:
         self.calculate_global_bounds()
@@ -1349,15 +1346,10 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         sel_act.setObjectName("header_select_column")
         select_sub = menu.addMenu("Select")
         select_sub.setToolTipsVisible(True)
-        select_all_visible_act = select_sub.addAction("Select All Visible")
-        select_all_visible_act.setObjectName("header_select_all_visible")
-        select_all_visible_act.setToolTip(
-            "Select every row currently visible in the table (respects active filters)."
-        )
         select_all_act = select_sub.addAction("Select All")
         select_all_act.setObjectName("header_select_all")
         select_all_act.setToolTip(
-            "Select every row in the table, including rows hidden by filters."
+            "Select every row currently visible in the table (respects active filters)."
         )
         select_sub.addSeparator()
         if self.headers[col] == "Structure":
@@ -1476,8 +1468,6 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             self._toggle_column_logarithmic(old_n)
         elif name == "header_precision":
             self._apply_column_precision(old_n)
-        elif name == "header_select_all_visible":
-            self._select_all_visible_rows()
         elif name == "header_select_all":
             self._select_all_rows()
         elif name == "header_select_first_occurrence":

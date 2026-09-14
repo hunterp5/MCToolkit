@@ -168,6 +168,10 @@ def test_dock_appends_and_paginates_in_same_pane(qapp):
     assert not pane._pager.isHidden()
     assert not pane._header.isHidden()
     assert pane._pager.parentWidget() is pane._header
+    nav_ly = pane._nav_host.layout()
+    assert nav_ly.indexOf(pane._prev_btn) == 0
+    assert nav_ly.indexOf(pane._next_btn) == 1
+    assert nav_ly.indexOf(pane._title_edit) == 2
     assert pane._title_edit.text() == "Beta"
     assert "2/2" in pane._page_label.text()
     assert pane.display_title() == "Beta"
@@ -178,6 +182,51 @@ def test_dock_appends_and_paginates_in_same_pane(qapp):
     assert pane.plot_widget() is w1
     assert mgr.pane_for_widget(w0) is pane
     assert list(mgr.iter_docked_widgets()) == [w0, w1]
+
+
+def test_reorder_arrows_move_current_plot_in_pane(qapp):
+    mgr = _manager(qapp)
+    pane = mgr.plot_panes()[0]
+    w0 = QLabel("first")
+    w0._window_title = "Alpha"
+    w1 = QLabel("second")
+    w1._window_title = "Beta"
+    w2 = QLabel("third")
+    w2._window_title = "Gamma"
+    mgr.dock_into_pane(pane, w0)
+    mgr.dock_into_pane(pane, w1)
+    mgr.dock_into_pane(pane, w2)
+    assert pane.plot_widgets() == [w0, w1, w2]
+    assert pane.page_index() == 2
+    assert "3/3" in pane._page_label.text()
+    assert pane._move_earlier_btn.isEnabled()
+    assert not pane._move_later_btn.isEnabled()
+
+    pane.move_current_page_later()
+    assert pane.plot_widgets() == [w0, w1, w2]
+    assert pane.plot_widget() is w2
+
+    pane.move_current_page_earlier()
+    assert pane.plot_widgets() == [w0, w2, w1]
+    assert pane.plot_widget() is w2
+    assert pane.page_index() == 1
+    assert "2/3" in pane._page_label.text()
+    assert pane._title_edit.text() == "Gamma"
+    assert pane._move_earlier_btn.isEnabled()
+    assert pane._move_later_btn.isEnabled()
+
+    pane.move_current_page_earlier()
+    assert pane.plot_widgets() == [w2, w0, w1]
+    assert pane.plot_widget() is w2
+    assert pane.page_index() == 0
+    assert "1/3" in pane._page_label.text()
+    assert not pane._move_earlier_btn.isEnabled()
+    assert pane._move_later_btn.isEnabled()
+    assert [pane._stack.widget(i) for i in range(pane._stack.count())] == [w2, w0, w1]
+
+    pane.move_current_page_earlier()
+    assert pane.plot_widgets() == [w2, w0, w1]
+    assert pane.page_index() == 0
 
 
 def test_release_one_page_keeps_the_other(qapp):
@@ -194,6 +243,8 @@ def test_release_one_page_keeps_the_other(qapp):
     assert not pane.is_empty()
     assert pane._prev_btn.isHidden()
     assert pane._next_btn.isHidden()
+    assert pane._move_earlier_btn.isHidden()
+    assert pane._move_later_btn.isHidden()
     assert pane._title_edit.text() == pane.display_title()
 
 
@@ -308,6 +359,9 @@ def test_plot_pane_has_close_button(qapp):
     del qapp
     pane = PlotPane("pane_test")
     assert pane._close_btn.text() == "×"
+    assert pane._prev_btn.text() == ""
+    assert not pane._prev_btn.icon().isNull()
+    assert not pane._next_btn.icon().isNull()
 
 
 def test_remove_pane_reduces_pane_count(qapp):

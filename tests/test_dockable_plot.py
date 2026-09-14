@@ -110,6 +110,7 @@ def test_clear_selection_button_is_glyph(qapp):  # noqa: ARG001
         _GLYPH_ICON_SIZE,
         make_clear_selection_button,
         make_plot_options_button,
+        make_send_window_button,
     )
 
     btn = make_clear_selection_button()
@@ -121,7 +122,30 @@ def test_clear_selection_button_is_glyph(qapp):  # noqa: ARG001
     assert "padding: 0px" in (btn.styleSheet() or "")
     opts = make_plot_options_button()
     assert opts.width() == opts.height() == _GLYPH_BTN_SIZE
+    send = make_send_window_button()
+    assert send.text() == ""
+    assert not send.icon().isNull()
+    assert send.toolTip() == "Send to New Window"
     assert _DOCK_LEADING_OPTS_ATTRS == ("_opts_btn", "_clear_sel_btn")
+
+
+def test_pane_nav_arrow_glyph_is_vector(qapp):  # noqa: ARG001
+    from PyQt5.QtWidgets import QPushButton
+
+    from molmanager.ui.dockable_plot import (
+        _GLYPH_BTN_SIZE,
+        pane_nav_arrow_glyph_icon,
+        style_plot_pane_nav_arrow,
+    )
+
+    icon = pane_nav_arrow_glyph_icon("left")
+    assert not icon.isNull()
+    btn = QPushButton("◀")
+    style_plot_pane_nav_arrow(btn, "left", "Previous plot in this pane")
+    assert btn.text() == ""
+    assert not btn.icon().isNull()
+    assert btn.width() == btn.height() == _GLYPH_BTN_SIZE
+    assert btn.toolTip() == "Previous plot in this pane"
 
 
 def test_floating_title_edit_installed_when_undocked(qapp):  # noqa: ARG001

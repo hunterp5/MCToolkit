@@ -235,6 +235,52 @@ def test_structure_header_menu_offers_duplicate_not_rename(qapp):  # noqa: ARG00
     assert "header_duplicate" in names
     assert "header_rename" not in names
     assert "header_delete" not in names
+    select_menu = next(a.menu() for a in menu.actions() if a.text() == "Select")
+    select_names = [a.objectName() for a in select_menu.actions() if a.objectName()]
+    assert "header_select_all" in select_names
+    assert "header_select_all_visible" not in select_names
+    assert "header_select_first_occurrence" in select_names
+
+
+def test_header_select_all_uses_visible_rows_only(qapp):  # noqa: ARG001
+    from molmanager.ui.widgets import FilterCard
+
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    w.calculate_global_bounds()
+    card = FilterCard(list(w.global_bounds.keys()), w, initial_property="MW")
+    card.restore_state("MW", 40.0, 50.0)
+    w.filters = [card]
+    w._apply_filters_impl_sync(None)
+    assert w._visible_oids_set() == frozenset({0})
+
+    w._select_all_rows()
+    qapp.processEvents()
+    assert w._selected_oids_set() == {0}
+    w.close()
+
+
+def test_plot_clear_selection_drops_header_select_highlight(qapp):  # noqa: ARG001
+    from molmanager.ui.plot_table_sync import clear_table_selection_from_plot
+
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    w._select_first_occurrence_per_distinct_structure()
+    qapp.processEvents()
+    assert w._selected_oids_set() == {0, 1}
+
+    w._selected_oids_override = frozenset({0, 1})
+    w._table_model.set_highlighted_oids(frozenset({0, 1}))
+    sm = w.table.selectionModel()
+    if sm is not None:
+        sm.clearSelection()
+
+    clear_table_selection_from_plot(w)
+    assert w._selected_oids_override is None
+    assert w._table_model.highlighted_oids() is None
+    assert w._selected_oids_set() == set()
+    assert sm is None or not sm.hasSelection()
+    w.close()
 
 
 def test_duplicate_structure_column_is_chemistry_source(qapp):  # noqa: ARG001

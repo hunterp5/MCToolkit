@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from molmanager.ui.plot_table_sync import (
     apply_table_selection_for_source_rows,
+    clear_table_selection_from_plot,
     point_indices_for_oids,
     selected_oids_for_plot,
     selection_visual_push_key,
@@ -142,3 +143,13 @@ def test_apply_table_selection_uses_select_table_rows() -> None:
 
     app.select_table_rows.assert_called_once_with([0, 1])
     sm.select.assert_not_called()
+
+
+def test_clear_table_selection_from_plot_uses_app_clear() -> None:
+    from unittest.mock import MagicMock
+
+    app = MagicMock()
+    app._plot_table_select_timer = None
+    clear_table_selection_from_plot(app)
+    app.clear_table_selection.assert_called_once()
+    app.table.clearSelection.assert_not_called()

@@ -37,6 +37,7 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QHeaderView,
+    QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QTableView,
@@ -1723,6 +1724,16 @@ class StructureDelegate(QStyledItemDelegate):
         pix = index.data(Qt.DecorationRole)
         return isinstance(pix, QPixmap) and not pix.isNull()
 
+    def _cell_is_selected(self, opt: QStyleOptionViewItem, index) -> bool:
+        if opt.state & QStyle.State_Selected:
+            return True
+        from .table_selection_delegate import source_row_for_view_index
+
+        if self._compound_model is None:
+            return False
+        row = source_row_for_view_index(index, self._compound_model)
+        return row >= 0 and self._compound_model.is_row_highlighted(row)
+
     def _fill_cell_background(
         self,
         painter,
@@ -1731,14 +1742,7 @@ class StructureDelegate(QStyledItemDelegate):
         *,
         has_rendered_structure: bool = False,
     ) -> None:
-        from .table_selection_delegate import source_row_for_view_index
-
-        row = source_row_for_view_index(index, self._compound_model) if self._compound_model else -1
-        if (
-            self._compound_model is not None
-            and row >= 0
-            and self._compound_model.is_row_highlighted(row)
-        ):
+        if self._cell_is_selected(opt, index):
             pal = QApplication.palette() if QApplication.instance() else opt.palette
             painter.fillRect(opt.rect, pal.color(QPalette.Highlight))
             return
@@ -1764,18 +1768,7 @@ class StructureDelegate(QStyledItemDelegate):
             text = hint if isinstance(hint, str) and hint.strip() else "—"
             painter.save()
             painter.setFont(opt.font)
-            from .table_selection_delegate import source_row_for_view_index
-
-            row = (
-                source_row_for_view_index(index, self._compound_model)
-                if self._compound_model
-                else -1
-            )
-            if (
-                self._compound_model is not None
-                and row >= 0
-                and self._compound_model.is_row_highlighted(row)
-            ):
+            if self._cell_is_selected(opt, index):
                 pal = QApplication.palette() if QApplication.instance() else opt.palette
                 painter.setPen(pal.color(QPalette.HighlightedText))
             else:

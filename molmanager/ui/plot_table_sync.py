@@ -297,12 +297,19 @@ def apply_table_selection_for_source_rows(
 
 
 def clear_table_selection_from_plot(parent_app: ChemicalTableApp) -> None:
-    """Clear Qt and large-selection override when the plot deselects."""
+    """Clear Qt, logical, and highlight selection when a plot deselects."""
     timer = getattr(parent_app, "_plot_table_select_timer", None)
     if timer is not None:
         timer.stop()
     parent_app._plot_table_select_pending = None  # type: ignore[attr-defined]
+    clear_fn = getattr(parent_app, "clear_table_selection", None)
+    if callable(clear_fn):
+        clear_fn()
+        return
     parent_app._selected_oids_override = None
+    model = getattr(parent_app, "_table_model", None)
+    if model is not None and callable(getattr(model, "set_highlighted_oids", None)):
+        model.set_highlighted_oids(None)
     table = parent_app.table
     table.clearSelection()
     table.viewport().update()

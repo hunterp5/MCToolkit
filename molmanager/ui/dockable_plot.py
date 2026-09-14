@@ -127,23 +127,25 @@ def plot_options_glyph_icon(size: int = _GLYPH_ICON_SIZE) -> QIcon:
 
 
 def send_to_window_glyph_icon(size: int = _GLYPH_ICON_SIZE) -> QIcon:
-    """Window-with-arrow icon for Send to New Window."""
+    """Single window with a pop-out arrow for Send to New Window."""
 
     def paint(p: QPainter, s: float) -> None:
-        p.setPen(_glyph_pen(max(1.5, s * 0.12)))
+        p.setPen(_glyph_pen(max(1.6, s * 0.13)))
         p.setBrush(Qt.NoBrush)
-        # Back window
-        p.drawRect(QRectF(s * 0.10, s * 0.26, s * 0.48, s * 0.50))
-        # Front window offset
-        p.drawRect(QRectF(s * 0.32, s * 0.12, s * 0.48, s * 0.50))
-        # Arrow pointing out
-        path = QPainterPath()
-        path.moveTo(s * 0.56, s * 0.40)
-        path.lineTo(s * 0.86, s * 0.14)
-        path.moveTo(s * 0.68, s * 0.14)
-        path.lineTo(s * 0.86, s * 0.14)
-        path.lineTo(s * 0.86, s * 0.32)
-        p.drawPath(path)
+        box = QRectF(s * 0.06, s * 0.34, s * 0.52, s * 0.56)
+        p.drawRect(box)
+        title_y = box.top() + s * 0.15
+        p.drawLine(QPointF(box.left(), title_y), QPointF(box.right(), title_y))
+        tip = QPointF(s * 0.92, s * 0.08)
+        p.drawLine(QPointF(s * 0.50, s * 0.50), tip)
+        head = QPainterPath()
+        head.moveTo(tip)
+        head.lineTo(QPointF(s * 0.64, s * 0.08))
+        head.lineTo(QPointF(s * 0.92, s * 0.36))
+        head.closeSubpath()
+        p.setPen(Qt.NoPen)
+        p.setBrush(_GLYPH_INK)
+        p.drawPath(head)
 
     return _paint_glyph_icon(paint, size)
 
@@ -170,23 +172,63 @@ def add_to_main_glyph_icon(size: int = _GLYPH_ICON_SIZE) -> QIcon:
 
 
 def clear_selection_glyph_icon(size: int = _GLYPH_ICON_SIZE) -> QIcon:
-    """Dashed selection box with a clear mark for Clear Selection."""
+    """Selection marquee corners with a centered X for Clear Selection."""
 
     def paint(p: QPainter, s: float) -> None:
-        pen = _glyph_pen(max(1.5, s * 0.12))
-        pen.setStyle(Qt.DashLine)
-        p.setPen(pen)
+        p.setPen(_glyph_pen(max(1.6, s * 0.13)))
         p.setBrush(Qt.NoBrush)
-        inset = s * 0.12
-        p.drawRect(QRectF(inset, inset, s - 2 * inset, s - 2 * inset))
-        pen.setStyle(Qt.SolidLine)
-        pen.setWidthF(max(1.7, s * 0.14))
-        p.setPen(pen)
-        m = s * 0.30
+        x0, y0 = s * 0.08, s * 0.08
+        x1, y1 = s * 0.92, s * 0.92
+        arm = s * 0.20
+        p.drawLine(QPointF(x0, y0), QPointF(x0 + arm, y0))
+        p.drawLine(QPointF(x0, y0), QPointF(x0, y0 + arm))
+        p.drawLine(QPointF(x1, y0), QPointF(x1 - arm, y0))
+        p.drawLine(QPointF(x1, y0), QPointF(x1, y0 + arm))
+        p.drawLine(QPointF(x0, y1), QPointF(x0 + arm, y1))
+        p.drawLine(QPointF(x0, y1), QPointF(x0, y1 - arm))
+        p.drawLine(QPointF(x1, y1), QPointF(x1 - arm, y1))
+        p.drawLine(QPointF(x1, y1), QPointF(x1, y1 - arm))
+        m = s * 0.34
         p.drawLine(QPointF(m, m), QPointF(s - m, s - m))
         p.drawLine(QPointF(s - m, m), QPointF(m, s - m))
 
     return _paint_glyph_icon(paint, size)
+
+
+def pane_nav_arrow_glyph_icon(direction: str, size: int = _GLYPH_ICON_SIZE) -> QIcon:
+    """Filled triangle for plot-pane previous / next / reorder arrows."""
+    d = str(direction or "").strip().lower()
+
+    def paint(p: QPainter, s: float) -> None:
+        tip = s * 0.16
+        back = s * 0.84
+        mid = s * 0.50
+        spread = s * 0.32
+        if d == "left":
+            pts = (QPointF(tip, mid), QPointF(back, mid - spread), QPointF(back, mid + spread))
+        elif d == "right":
+            pts = (QPointF(back, mid), QPointF(tip, mid - spread), QPointF(tip, mid + spread))
+        elif d == "up":
+            pts = (QPointF(mid, tip), QPointF(mid - spread, back), QPointF(mid + spread, back))
+        else:
+            pts = (QPointF(mid, back), QPointF(mid - spread, tip), QPointF(mid + spread, tip))
+        path = QPainterPath()
+        path.moveTo(pts[0])
+        path.lineTo(pts[1])
+        path.lineTo(pts[2])
+        path.closeSubpath()
+        p.setPen(Qt.NoPen)
+        p.setBrush(_GLYPH_INK)
+        p.drawPath(path)
+
+    return _paint_glyph_icon(paint, size)
+
+
+def style_plot_pane_nav_arrow(btn: QPushButton, direction: str, tooltip: str = "") -> None:
+    """Square antialiased triangle control for plot-pane pager / reorder."""
+    style_plot_chrome_glyph_button(
+        btn, pane_nav_arrow_glyph_icon(direction), tooltip or btn.toolTip()
+    )
 
 
 def style_plot_chrome_glyph_button(btn: QPushButton, icon: QIcon, tooltip: str) -> None:

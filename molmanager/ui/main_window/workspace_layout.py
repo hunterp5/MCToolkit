@@ -43,6 +43,7 @@ from ..dockable_plot import (
     embed_in_plot_pane,
     plot_widget_display_title,
     restore_dock_header_buttons,
+    style_plot_pane_nav_arrow,
     style_plot_pane_title_edit,
     unembed_from_plot_pane,
 )
@@ -103,21 +104,22 @@ class PlotPane(QFrame):
         nav_ly = QHBoxLayout(self._nav_host)
         nav_ly.setContentsMargins(0, 0, 0, 0)
         nav_ly.setSpacing(3)
-        self._prev_btn = QPushButton("‹")
-        self._next_btn = QPushButton("›")
-        for btn in (self._prev_btn, self._next_btn):
-            btn.setFixedSize(22, 20)
-            btn.setFlat(False)
-            btn.setAutoDefault(False)
-            btn.setDefault(False)
-            btn.setFocusPolicy(Qt.NoFocus)
-            btn.setStyleSheet(
-                "QPushButton { font-size: 13px; font-weight: 700; padding: 0px; min-width: 22px; }"
-            )
+        self._prev_btn = QPushButton()
+        self._next_btn = QPushButton()
+        self._move_earlier_btn = QPushButton()
+        self._move_later_btn = QPushButton()
+        self._style_nav_arrow(self._prev_btn, "left")
+        self._style_nav_arrow(self._next_btn, "right")
+        self._style_nav_arrow(self._move_earlier_btn, "up")
+        self._style_nav_arrow(self._move_later_btn, "down")
         self._prev_btn.setToolTip("Previous plot in this pane")
         self._next_btn.setToolTip("Next plot in this pane")
+        self._move_earlier_btn.setToolTip("Move this plot earlier in the pane")
+        self._move_later_btn.setToolTip("Move this plot later in the pane")
         self._prev_btn.clicked.connect(self.show_previous_page)
         self._next_btn.clicked.connect(self.show_next_page)
+        self._move_earlier_btn.clicked.connect(self.move_current_page_earlier)
+        self._move_later_btn.clicked.connect(self.move_current_page_later)
         self._title_edit = QLineEdit()
         self._title_edit.setObjectName("PlotPaneTitle")
         self._title_edit.setReadOnly(True)
@@ -134,9 +136,11 @@ class PlotPane(QFrame):
         self._page_label.setFixedWidth(38)
         self._page_label.setStyleSheet("QLabel { font-size: 11px; padding: 0px 1px; }")
         nav_ly.addWidget(self._prev_btn)
+        nav_ly.addWidget(self._next_btn)
         nav_ly.addWidget(self._title_edit)
         nav_ly.addWidget(self._page_label)
-        nav_ly.addWidget(self._next_btn)
+        nav_ly.addWidget(self._move_earlier_btn)
+        nav_ly.addWidget(self._move_later_btn)
         # Compatibility alias used by older tests.
         self._pager = self._nav_host
 
@@ -234,6 +238,10 @@ class PlotPane(QFrame):
         self._set_active_style(False)
         self._refresh_pager()
 
+    @staticmethod
+    def _style_nav_arrow(btn: QPushButton, direction: str) -> None:
+        style_plot_pane_nav_arrow(btn, direction)
+
     def refresh_theme(self) -> None:
         """Re-apply palette-backed chrome after a GUI theme or application font change."""
         self._set_active_style(self._active)
@@ -256,6 +264,8 @@ class PlotPane(QFrame):
                 self._close_btn,
                 self._prev_btn,
                 self._next_btn,
+                self._move_earlier_btn,
+                self._move_later_btn,
                 self._title_edit,
                 self._page_label,
                 self._placeholder,
@@ -267,11 +277,10 @@ class PlotPane(QFrame):
                     style.unpolish(widget)
                     style.polish(widget)
                 widget.update()
-        for btn in (self._prev_btn, self._next_btn):
-            btn.setFixedSize(22, 20)
-            btn.setStyleSheet(
-                "QPushButton { font-size: 13px; font-weight: 700; padding: 0px; min-width: 22px; }"
-            )
+        self._style_nav_arrow(self._prev_btn, "left")
+        self._style_nav_arrow(self._next_btn, "right")
+        self._style_nav_arrow(self._move_earlier_btn, "up")
+        self._style_nav_arrow(self._move_later_btn, "down")
         style_plot_pane_title_edit(self._title_edit)
         self.update()
 
@@ -457,6 +466,34 @@ class PlotPane(QFrame):
         self._stack.setCurrentIndex((self.page_index() + 1) % n)
         self.activated.emit(self)
 
+    def move_current_page_earlier(self) -> None:
+        """Shift the visible plot one slot toward the start of this pane."""
+        self._move_current_page(-1)
+
+    def move_current_page_later(self) -> None:
+        """Shift the visible plot one slot toward the end of this pane."""
+        self._move_current_page(1)
+
+    def _move_current_page(self, delta: int) -> None:
+        n = len(self._pages)
+        if n < 2 or delta == 0:
+            return
+        idx = self.page_index()
+        new_idx = idx + int(delta)
+        if new_idx < 0 or new_idx >= n:
+            return
+        widget = self._pages.pop(idx)
+        self._pages.insert(new_idx, widget)
+        self._stack.blockSignals(True)
+        try:
+            self._stack.insertWidget(new_idx, widget)
+            self._stack.setCurrentWidget(widget)
+        finally:
+            self._stack.blockSignals(False)
+        self._refresh_pager()
+        self._sync_visible_footer()
+        self.activated.emit(self)
+
     def set_page(self, index: int) -> None:
         if not self._pages:
             return
@@ -505,10 +542,15 @@ class PlotPane(QFrame):
         self._stack.show()
         self._nav_host.show()
         multi = n > 1
+        idx = self.page_index()
         self._prev_btn.setVisible(multi)
         self._next_btn.setVisible(multi)
         self._prev_btn.setEnabled(multi)
         self._next_btn.setEnabled(multi)
+        self._move_earlier_btn.setVisible(multi)
+        self._move_later_btn.setVisible(multi)
+        self._move_earlier_btn.setEnabled(multi and idx > 0)
+        self._move_later_btn.setEnabled(multi and 0 <= idx < n - 1)
         title = self._title_for_widget(self.plot_widget())
         editing = not self._title_edit.isReadOnly() and self._title_edit.hasFocus()
         if not editing:
@@ -516,17 +558,20 @@ class PlotPane(QFrame):
             self._title_edit.setText(title)
             self._title_edit.blockSignals(False)
         if multi:
-            i = self.page_index()
-            tip = f"Plot {i + 1} of {n}"
-            self._page_label.setText(f"({i + 1}/{n})")
+            tip = f"Plot {idx + 1} of {n}"
+            self._page_label.setText(f"({idx + 1}/{n})")
             self._page_label.setVisible(True)
             self._prev_btn.setToolTip(f"Previous plot ({tip})")
             self._next_btn.setToolTip(f"Next plot ({tip})")
+            self._move_earlier_btn.setToolTip(f"Move this plot earlier ({tip})")
+            self._move_later_btn.setToolTip(f"Move this plot later ({tip})")
         else:
             self._page_label.clear()
             self._page_label.setVisible(False)
             self._prev_btn.setToolTip("Previous plot in this pane")
             self._next_btn.setToolTip("Next plot in this pane")
+            self._move_earlier_btn.setToolTip("Move this plot earlier in the pane")
+            self._move_later_btn.setToolTip("Move this plot later in the pane")
         self._title_edit.setToolTip(f"{title}\nDouble-click to rename")
 
     def _install_activate_filter(self, widget: QWidget) -> None:
