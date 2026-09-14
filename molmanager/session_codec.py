@@ -55,6 +55,7 @@ _OMIT_IF_EMPTY = frozenset(
         "mmp_ledger",
         "structure_smiles",
         "table_search",
+        "protein_viewer",
     }
 )
 

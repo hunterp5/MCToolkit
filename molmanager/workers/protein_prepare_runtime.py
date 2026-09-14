@@ -60,11 +60,11 @@ class ProteinPrepareRequest:
     rebuild_missing_loops: bool = True
     replace_nonstandard: bool = True
     include_ligand: bool = True
-    keep_ligand: bool = False
+    keep_ligand: bool = True
     keep_water_keys: tuple[ResidueKey, ...] = ()
     keep_bridging_waters: bool = False
     remove_other_heterogens: bool = True
-    minimize: bool = True
+    minimize: bool = False
     ligand_smiles: str = ""
     ligand_ref_path: str = ""
     protonate_ligand: bool = True

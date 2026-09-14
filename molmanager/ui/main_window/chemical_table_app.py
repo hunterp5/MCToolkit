@@ -1398,7 +1398,7 @@ class ChemicalTableApp(
             layout_btn.setEnabled(enabled)
         # Processes stays enabled so the user can cancel a long open/import.
 
-    def open_protein_viewer(self) -> None:
+    def open_protein_viewer(self):
         """Open the Protein Viewer window (3Dmol.js + chain Manager)."""
         from ..protein_viewer import ProteinViewerDialog
         from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
@@ -1412,6 +1412,7 @@ class ChemicalTableApp(
             lambda: ProteinViewerDialog(self),
             _on_destroyed,
         )
+        return self._protein_viewer_dialog
 
     def open_workspace_layout_picker(self) -> None:
         """Show the graphic layout picker and apply the chosen preset."""

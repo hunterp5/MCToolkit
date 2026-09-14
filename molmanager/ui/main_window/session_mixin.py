@@ -42,6 +42,7 @@ from ...session_codec import (
     session_version_ok,
 )
 from ...utils import mol_to_canonical_smiles
+from ..qt_widget_utils import qobject_is_deleted
 from ..strings import LOADING_DETAIL_SESSION, TOOL_RENDER_2D, loaded_session_status
 from ..threadpool_access import start_runnable_on_app_pool
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
@@ -265,6 +266,7 @@ class SessionMixin:
             "som_browse": self._session_som_browse_payload(),
             "ionization_sidecar": serialize_ionization_sidecar(),
             "mmp_ledger": self._session_mmp_ledger_payload(),
+            "protein_viewer": self._collect_protein_viewer(),
         }
         collect_search = getattr(self, "collect_table_search_session", None)
         if callable(collect_search):
@@ -290,6 +292,58 @@ class SessionMixin:
             getattr(self, "_mmp_last_pairs", None),
             activity_column=str(getattr(self, "_mmp_last_activity_column", "") or ""),
         )
+
+    def _collect_protein_viewer(self) -> dict | None:
+        dlg = getattr(self, "_protein_viewer_dialog", None)
+        if dlg is None or qobject_is_deleted(dlg):
+            return None
+        collect = getattr(dlg, "collect_session_state", None)
+        if not callable(collect):
+            return None
+        try:
+            state = collect()
+        except Exception:
+            logger.exception("Skipping Protein Viewer while collecting session state")
+            return None
+        if not isinstance(state, dict) or not state.get("structures"):
+            return None
+        try:
+            json.dumps(state)
+        except (TypeError, ValueError):
+            logger.exception("Skipping Protein Viewer with non-JSON-serializable session state")
+            return None
+        return state
+
+    def _discard_protein_viewer(self) -> None:
+        dlg = getattr(self, "_protein_viewer_dialog", None)
+        if dlg is None or qobject_is_deleted(dlg):
+            self._protein_viewer_dialog = None
+            return
+        try:
+            close_struct = getattr(dlg, "close_structure", None)
+            if callable(close_struct):
+                close_struct(mark_dirty=False)
+            dlg.hide()
+            dlg.close()
+        except RuntimeError:
+            pass
+        try:
+            dlg.setParent(None)
+        except RuntimeError:
+            pass
+        self._protein_viewer_dialog = None
+
+    def _restore_protein_viewer(self, payload: object) -> None:
+        if not isinstance(payload, dict) or not payload.get("structures"):
+            self._discard_protein_viewer()
+            return
+        open_viewer = getattr(self, "open_protein_viewer", None)
+        if not callable(open_viewer):
+            return
+        dlg = open_viewer()
+        apply_state = getattr(dlg, "apply_session_state", None)
+        if callable(apply_state):
+            apply_state(payload)
 
     @staticmethod
     def _header_state_b64(header) -> str | None:
@@ -1229,6 +1283,7 @@ class SessionMixin:
             if isinstance(ws, dict):
                 mgr.restore_splitter_sizes(ws)
         self._restore_floating_plots(doc.get("floating_plots"))
+        self._restore_protein_viewer(doc.get("protein_viewer"))
         self._hide_session_workspace_until_ready()
         self._restore_pending_workspace_layout()
         co = self._pending_session_column_order

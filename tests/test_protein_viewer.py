@@ -410,7 +410,9 @@ def test_build_protein_viewer_html_has_setters():
     assert "molmanagerSetResidueHighlight" in html
     assert "molmanagerSetPocket" in html
     assert "molmanagerSetHydrogens" in html
+    assert "molmanagerSetHbonds" in html
     assert "applyHydrogenVisibility" in html
+    assert "applyHydrogenBonds" in html
     assert "applyPocketOverlay" in html
     assert "addPocketResidueLabels" in html
     assert "addResLabels" in html
@@ -672,6 +674,10 @@ def test_pocket_view_menu_builds_overlay(qapp, tmp_path):  # noqa: ARG001
     assert dlg._hydrogen_mode() == "all"
     dlg._act_hydrogens_polar.trigger()
     assert dlg._hydrogen_mode() == "polar"
+    assert dlg._act_hbond_protein is not None
+    assert not dlg._act_hbond_protein.isChecked()
+    assert not dlg._act_hbond_ligand.isChecked()
+    assert not dlg._act_hbond_complex.isChecked()
     dlg._on_pocket()
     payload = dlg._pocket_payload_data
     assert payload is not None
@@ -679,6 +685,49 @@ def test_pocket_view_menu_builds_overlay(qapp, tmp_path):  # noqa: ARG001
     assert payload["ligandSels"]
     assert any(s.get("resn") == "SER" for s in payload["residueSels"])
     assert payload["polarHPdb"]
+    dlg.close()
+
+
+def test_hbond_menu_filters_kinds(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    pdb = """\
+ATOM      1  C   ALA A   1      -1.240   0.150   0.000  1.00  0.00           C
+ATOM      2  O   ALA A   1       0.000   0.000   0.000  1.00  0.00           O
+ATOM      3  N   ALA A   3       2.900   0.100   0.000  1.00  0.00           N
+ATOM      4  CA  ALA A   3       4.000   0.400   0.000  1.00  0.00           C
+ATOM      5  CB  SER A  10      10.000  10.000  10.000  1.00  0.00           C
+ATOM      6  OG  SER A  10      11.430  10.000  10.000  1.00  0.00           O
+HETATM  100  C1  LIG A  99      15.330  10.200  10.000  1.00  0.00           C
+HETATM  101  O1  LIG A  99      14.230  10.100  10.000  1.00  0.00           O
+HETATM  102  C2  LIG A  99      17.560  20.000  20.000  1.00  0.00           C
+HETATM  103  O2  LIG A  99      18.780  20.000  20.000  1.00  0.00           O
+HETATM  104  C3  LIG A  99      22.750  20.150  20.000  1.00  0.00           C
+HETATM  105  O3  LIG A  99      21.530  20.150  20.000  1.00  0.00           O
+END
+"""
+    path = tmp_path / "hbonds.pdb"
+    path.write_text(pdb, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(path)
+    empty = dlg._hbond_overlay_payload()
+    assert empty["active"] is False
+    dlg._act_hbond_protein.setChecked(True)
+    protein = dlg._hbond_overlay_payload()
+    assert protein["active"] is True
+    assert {b["kind"] for b in protein["bonds"]} == {"protein"}
+    dlg._act_hbond_complex.setChecked(True)
+    both = dlg._hbond_overlay_payload()
+    kinds = {b["kind"] for b in both["bonds"]}
+    assert "protein" in kinds
+    assert "complex" in kinds
+    dlg._act_hbond_ligand.setChecked(True)
+    all_kinds = {b["kind"] for b in dlg._hbond_overlay_payload()["bonds"]}
+    assert all_kinds == {"protein", "ligand", "complex"}
+    lig = next(r for r in dlg._rows if r.spec.kind == "ligand")
+    dlg._on_visibility_changed(lig.spec.component_id, False)
+    hidden_kinds = {b["kind"] for b in dlg._hbond_overlay_payload()["bonds"]}
+    assert hidden_kinds == {"protein"}
     dlg.close()
 
 
@@ -733,3 +782,51 @@ def test_4agc_cif_axitinib_has_carbonyl_double():
     mol = mol_from_cif_component(text, "AXI")
     assert mol is not None
     assert any(bond.GetBondType() == Chem.BondType.DOUBLE for bond in mol.GetBonds())
+
+
+def test_save_structure_writes_active_slot(qapp, tmp_path, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtWidgets import QFileDialog, QMenuBar
+
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    src = tmp_path / "mini.pdb"
+    src.write_text(_MINI_PDB, encoding="utf-8")
+    dest = tmp_path / "out.pdb"
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(src)
+    mb = dlg.findChild(QMenuBar)
+    file_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "File")
+    labels = [a.text().replace("&", "") for a in file_menu.actions()]
+    assert "Save Structure…" in labels
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(dest), "PDB (*.pdb)"))
+    dlg.save_structure_dialog()
+    saved = dest.read_bytes().decode("utf-8").replace("\r\n", "\n")
+    assert saved.replace("\r\n", "\n") == _MINI_PDB.replace("\r\n", "\n")
+    dlg.close()
+
+
+def test_collect_session_state_keeps_manager_rows(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    first = tmp_path / "first.pdb"
+    second = tmp_path / "second.pdb"
+    first.write_text(_MINI_PDB, encoding="utf-8")
+    second.write_text(_MINI_PDB.replace("MET", "SER").replace("M  ", "S  "), encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.add_structure_path(first, refit=True)
+    dlg.add_structure_path(second, refit=False)
+    lig = next(r for r in dlg._slots[0].rows if r.spec.kind == "ligand")
+    dlg._on_visibility_changed(lig.spec.component_id, False)
+    dlg._act_hbond_complex.setChecked(True)
+    state = dlg.collect_session_state()
+    assert state is not None
+    assert [s["name"] for s in state["structures"]] == ["first.pdb", "second.pdb"]
+    dlg2 = ProteinViewerDialog()
+    dlg2.apply_session_state(state)
+    assert [slot.name for slot in dlg2._slots] == ["first.pdb", "second.pdb"]
+    assert dlg2.manager.tree.topLevelItemCount() == 2
+    restored = next(r for r in dlg2._slots[0].rows if r.spec.kind == "ligand")
+    assert restored.visible is False
+    assert dlg2._act_hbond_complex.isChecked()
+    dlg.close()
+    dlg2.close()

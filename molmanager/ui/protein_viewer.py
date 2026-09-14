@@ -25,7 +25,7 @@ import shutil
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, QTemporaryDir, QTimer, QUrl, Qt, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QByteArray, QObject, QTemporaryDir, QTimer, QUrl, Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QColor, QKeySequence
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -47,6 +47,12 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from ..hydrogen_bonds import (
+    HBOND_KIND_COMPLEX,
+    HBOND_KIND_LIGAND,
+    HBOND_KIND_PROTEIN,
+    detect_hydrogen_bonds,
+)
 from ..structure_components import (
     LoadedStructure,
     PolymerChain,
@@ -57,6 +63,7 @@ from ..structure_components import (
     letter_to_resn,
     load_structure_file,
     parse_polymer_sequences,
+    parse_structure_components,
     pocket_view_plan,
     polymer_residue_for_atom,
     rewrite_pdb_residue_names,
@@ -117,6 +124,8 @@ STRUCTURE_FILE_FILTER = (
     "All files (*.*)"
 )
 
+STRUCTURE_SAVE_FILTER = "mmCIF (*.cif *.mmcif *.mcif);;PDB (*.pdb);;All files (*.*)"
+
 _ID_ROLE = Qt.UserRole
 _KIND_ROLE = Qt.UserRole + 1
 _STRUCT_ROLE = Qt.UserRole + 2
@@ -139,6 +148,18 @@ class _LoadedSlot:
     text: str
     fmt: str
     rows: list[_ComponentView]
+
+
+def _component_state_key(item) -> tuple[str, str, str, str, str]:
+    if isinstance(item, dict):
+        return (
+            str(item.get("kind") or ""),
+            str(item.get("chain") or ""),
+            str(item.get("resn") or ""),
+            str(item.get("resi") or ""),
+            str(item.get("icode") or ""),
+        )
+    return (item.kind, item.chain, item.resn, item.resi, item.icode)
 
 
 def _viewer_protein_init_script() -> str:
@@ -366,6 +387,7 @@ def _viewer_protein_init_script() -> str:
           applyResidueHighlight(v);
           applyHydrogenVisibility(v);
           applyPocketOverlay(v);
+          applyHydrogenBonds(v);
         }
         function isHydrogenAtom(at) {
           var e = String((at && at.elem) || "").toUpperCase();
@@ -503,6 +525,41 @@ def _viewer_protein_init_script() -> str:
             );
           } catch (eHmod) {}
         }
+        function applyHydrogenBonds(v) {
+          v = v || window.molmanagerViewer;
+          if (!v) return;
+          try { v.removeAllShapes(); } catch (eSh) {}
+          var spec = window.molmanagerHbonds;
+          if (!spec || !spec.active || !spec.bonds || !spec.bonds.length) return;
+          for (var i = 0; i < spec.bonds.length; i++) {
+            var b = spec.bonds[i] || {};
+            var start = b.start || {};
+            var end = b.end || {};
+            var color = b.color || "#E6C229";
+            try {
+              v.addCylinder({
+                start: {x: start.x, y: start.y, z: start.z},
+                end: {x: end.x, y: end.y, z: end.z},
+                radius: 0.06,
+                fromCap: 2,
+                toCap: 2,
+                dashed: true,
+                dashLength: 0.22,
+                gapLength: 0.14,
+                color: color
+              });
+            } catch (eCyl) {
+              try {
+                v.addLine({
+                  dashed: true,
+                  start: {x: start.x, y: start.y, z: start.z},
+                  end: {x: end.x, y: end.y, z: end.z},
+                  color: color
+                });
+              } catch (eLn) {}
+            }
+          }
+        }
         function bindPicking(v) {
           try {
             v.setClickable({}, true, function (atom) {
@@ -539,6 +596,7 @@ def _viewer_protein_init_script() -> str:
         window.molmanagerPocket = null;
         window.molmanagerPocketHModel = null;
         window.molmanagerHydrogens = "polar";
+        window.molmanagerHbonds = null;
         installResetStructureMenu();
         connectBridge();
         bindPicking(viewer);
@@ -552,6 +610,7 @@ def _viewer_protein_init_script() -> str:
             window.molmanagerResidueHighlight = payload.residueHighlight;
           }
           window.molmanagerPocket = payload.pocket || null;
+          window.molmanagerHbonds = payload.hbonds || null;
           if (payload.hydrogens) {
             window.molmanagerHydrogens = payload.hydrogens === "all" ? "all" : "polar";
           }
@@ -633,6 +692,12 @@ def _viewer_protein_init_script() -> str:
         };
         window.molmanagerSetHydrogens = function (mode) {
           window.molmanagerHydrogens = mode === "all" ? "all" : "polar";
+          if (!window.molmanagerViewer) return;
+          applyAll(window.molmanagerViewer);
+          keepViewResize(window.molmanagerViewer);
+        };
+        window.molmanagerSetHbonds = function (spec) {
+          window.molmanagerHbonds = spec || null;
           if (!window.molmanagerViewer) return;
           applyAll(window.molmanagerViewer);
           keepViewResize(window.molmanagerViewer);
@@ -764,6 +829,7 @@ class ProteinEmbedView(QWidget):
         self._pending_residue_highlight: list | None = None
         self._pending_pocket: dict | None = None
         self._pending_hydrogens: str | None = None
+        self._pending_hbonds: dict | None = None
         self._web = None
         self._bootstrapped = False
         self._bridge = _ProteinViewerBridge(self)
@@ -859,6 +925,7 @@ class ProteinEmbedView(QWidget):
             payload = self._pending_payload
             self._pending_payload = None
             self._pending_hydrogens = None
+            self._pending_hbonds = None
             self._run_js("molmanagerSetProteinPayload", payload)
         elif self._web_ready and self._pending_residue_highlight is not None:
             highlight = self._pending_residue_highlight
@@ -872,6 +939,10 @@ class ProteinEmbedView(QWidget):
             mode = self._pending_hydrogens
             self._pending_hydrogens = None
             self._run_js("molmanagerSetHydrogens", mode)
+        if self._web_ready and self._pending_hbonds is not None and self._pending_payload is None:
+            hbonds = self._pending_hbonds
+            self._pending_hbonds = None
+            self._run_js("molmanagerSetHbonds", hbonds)
         if self._web_ready:
             self.schedule_resize_keep_view()
             QTimer.singleShot(200, self.resize_keep_view)
@@ -901,6 +972,10 @@ class ProteinEmbedView(QWidget):
                 self._pending_hydrogens = payload
                 if self._pending_payload is not None:
                     self._pending_payload["hydrogens"] = payload
+            elif fn_name == "molmanagerSetHbonds":
+                self._pending_hbonds = payload
+                if self._pending_payload is not None:
+                    self._pending_payload["hbonds"] = payload
             return
         js = f"if (window.{fn_name}) window.{fn_name}({json.dumps(payload)});"
         try:
@@ -937,6 +1012,9 @@ class ProteinEmbedView(QWidget):
 
     def set_hydrogens(self, mode: str) -> None:
         self._run_js("molmanagerSetHydrogens", "all" if mode == "all" else "polar")
+
+    def set_hbonds(self, spec: dict | None) -> None:
+        self._run_js("molmanagerSetHbonds", spec or {"active": False, "bonds": []})
 
 
 class ProteinChainManager(QWidget):
@@ -1116,6 +1194,10 @@ class ProteinViewerDialog(QDialog):
         self._ligand_color_actions: dict[str, QAction] = {}
         self._act_hydrogens_all: QAction | None = None
         self._act_hydrogens_polar: QAction | None = None
+        self._act_hbond_protein: QAction | None = None
+        self._act_hbond_ligand: QAction | None = None
+        self._act_hbond_complex: QAction | None = None
+        self._hbond_cache: dict[str, tuple] = {}
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -1126,6 +1208,12 @@ class ProteinViewerDialog(QDialog):
         act_open = QAction("&Open…", self, triggered=self.open_structure_dialog)
         act_open.setShortcut(QKeySequence.Open)
         file_menu.addAction(act_open)
+        act_save = QAction("&Save Structure…", self, triggered=self.save_structure_dialog)
+        act_save.setShortcut(QKeySequence.Save)
+        act_save.setToolTip(
+            "Write the Manager-selected structure (or the last loaded file) to disk."
+        )
+        file_menu.addAction(act_save)
         act_close = QAction("&Close Structure", self, triggered=self.close_structure)
         file_menu.addAction(act_close)
         act_sequence = QAction("&Sequence", self, triggered=self.open_sequence_window)
@@ -1176,6 +1264,28 @@ class ProteinViewerDialog(QDialog):
         hydrogens_menu.addAction(self._act_hydrogens_polar)
         self._act_hydrogens_all.triggered.connect(lambda: self._set_hydrogen_mode("all"))
         self._act_hydrogens_polar.triggered.connect(lambda: self._set_hydrogen_mode("polar"))
+        hbonds_menu = view_menu.addMenu("Hydrogen &Bonds")
+        self._act_hbond_protein = QAction("&Protein", self)
+        self._act_hbond_protein.setCheckable(True)
+        self._act_hbond_protein.setToolTip(
+            "Show intramolecular hydrogen bonds within protein chains (gold)."
+        )
+        self._act_hbond_ligand = QAction("&Ligand", self)
+        self._act_hbond_ligand.setCheckable(True)
+        self._act_hbond_ligand.setToolTip(
+            "Show intramolecular hydrogen bonds within ligands (cyan)."
+        )
+        self._act_hbond_complex = QAction("Protein–&Ligand", self)
+        self._act_hbond_complex.setCheckable(True)
+        self._act_hbond_complex.setToolTip(
+            "Show intermolecular hydrogen bonds between protein and ligand (green)."
+        )
+        hbonds_menu.addAction(self._act_hbond_protein)
+        hbonds_menu.addAction(self._act_hbond_ligand)
+        hbonds_menu.addAction(self._act_hbond_complex)
+        self._act_hbond_protein.toggled.connect(self._on_hbond_toggles)
+        self._act_hbond_ligand.toggled.connect(self._on_hbond_toggles)
+        self._act_hbond_complex.toggled.connect(self._on_hbond_toggles)
         self._act_pocket = QAction("&Pocket", self)
         self._act_pocket.setToolTip(
             "Zoom to the ligand, show nearby protein residues as ball-and-stick "
@@ -1332,6 +1442,35 @@ class ProteinViewerDialog(QDialog):
         for i, path in enumerate(paths):
             self.add_structure_path(path, refit=(i == len(paths) - 1))
 
+    def save_structure_dialog(self) -> None:
+        slot = self._active_slot()
+        if slot is None:
+            QMessageBox.information(self, "Save Structure", "Open a structure first.")
+            return
+        fmt = (slot.fmt or "pdb").lower()
+        if fmt == "cif":
+            suffix = ".cif"
+            selected = "mmCIF (*.cif *.mmcif *.mcif)"
+        else:
+            suffix = ".pdb"
+            selected = "PDB (*.pdb)"
+        default_name = (
+            Path(slot.name).with_suffix(suffix) if slot.name else Path(f"structure{suffix}")
+        )
+        start = str(slot.path) if slot.path and slot.path.parent.is_dir() else str(default_name)
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save structure", start, STRUCTURE_SAVE_FILTER, selected
+        )
+        if not path:
+            return
+        rec = Path(path)
+        if not rec.suffix:
+            rec = rec.with_suffix(suffix)
+        try:
+            rec.write_bytes(slot.text.encode("utf-8"))
+        except OSError as exc:
+            QMessageBox.warning(self, "Save Structure", str(exc))
+
     def load_structure_path(self, path: str | Path) -> None:
         self.add_structure_path(path, refit=True)
 
@@ -1355,6 +1494,27 @@ class ProteinViewerDialog(QDialog):
                 "No atoms were found in that file.",
             )
             return
+        self._append_loaded_slot(
+            text=text,
+            fmt=fmt,
+            components=loaded.components,
+            name=loaded.path.name,
+            path=loaded.path,
+            refit=refit,
+        )
+
+    def _append_loaded_slot(
+        self,
+        *,
+        text: str,
+        fmt: str,
+        components,
+        name: str,
+        path: Path | None,
+        refit: bool,
+        row_states: list[dict] | None = None,
+        push: bool = True,
+    ) -> None:
         sid = f"s{self._slot_seq}"
         self._slot_seq += 1
         model = len(self._slots)
@@ -1362,44 +1522,64 @@ class ProteinViewerDialog(QDialog):
         ligand_style = self._checked_style(self._ligand_style_actions, "ballstick")
         protein_color = self._checked_style(self._protein_color_actions, "default")
         ligand_color = self._checked_style(self._ligand_color_actions, "default")
-        rows = [
-            _ComponentView(
-                spec=scope_structure_component(comp, structure_id=sid, model=model),
-                visible=comp.default_visible,
-                selected=False,
-                style=(
-                    protein_style
-                    if comp.kind == "polymer"
-                    else ligand_style
-                    if comp.kind == "ligand"
-                    else comp.default_style
-                ),
-                color_scheme=(
-                    protein_color
-                    if comp.kind == "polymer"
-                    else ligand_color
-                    if comp.kind == "ligand"
-                    else "default"
-                ),
+        state_by_key = {
+            _component_state_key(item): item
+            for item in (row_states or [])
+            if isinstance(item, dict)
+        }
+        rows = []
+        for comp in components:
+            spec = scope_structure_component(comp, structure_id=sid, model=model)
+            saved = state_by_key.get(_component_state_key(spec))
+            style = (
+                protein_style
+                if spec.kind == "polymer"
+                else ligand_style
+                if spec.kind == "ligand"
+                else spec.default_style
             )
-            for comp in loaded.components
-        ]
+            color_scheme = (
+                protein_color
+                if spec.kind == "polymer"
+                else ligand_color
+                if spec.kind == "ligand"
+                else "default"
+            )
+            visible = spec.default_visible
+            selected = False
+            if saved:
+                style = str(saved.get("style") or style)
+                color_scheme = str(saved.get("color_scheme") or color_scheme)
+                visible = bool(saved.get("visible", visible))
+                selected = bool(saved.get("selected", False))
+            rows.append(
+                _ComponentView(
+                    spec=spec,
+                    visible=visible,
+                    selected=selected,
+                    style=style,
+                    color_scheme=color_scheme,
+                )
+            )
         self._slots.append(
             _LoadedSlot(
                 structure_id=sid,
-                name=self._unique_slot_name(loaded.path.name),
-                path=loaded.path,
+                name=self._unique_slot_name(name),
+                path=path or Path(name),
                 text=text,
                 fmt=fmt,
                 rows=rows,
             )
         )
         self._residue_highlight = []
-        self._refresh_manager()
-        self._refresh_sequence_chains()
-        self._push_structure(refit=refit)
-        if self._pocket_payload_data is not None:
-            self._refresh_pocket(zoom=False)
+        self._invalidate_hbonds()
+        if push:
+            self._refresh_manager()
+            self._refresh_sequence_chains()
+            self._push_structure(refit=refit)
+            if self._pocket_payload_data is not None:
+                self._refresh_pocket(zoom=False)
+            self._mark_host_session_dirty()
 
     def _reindex_models(self) -> None:
         for model, slot in enumerate(self._slots):
@@ -1413,11 +1593,12 @@ class ProteinViewerDialog(QDialog):
                 for row in slot.rows
             ]
 
-    def close_structure(self) -> None:
+    def close_structure(self, *, mark_dirty: bool = True) -> None:
         self._slots = []
         self._sequence_chains = []
         self._residue_highlight = []
         self._pocket_payload_data = None
+        self._invalidate_hbonds()
         self._act_all_atoms.blockSignals(True)
         self._act_all_atoms.setChecked(False)
         self._act_all_atoms.blockSignals(False)
@@ -1436,10 +1617,133 @@ class ProteinViewerDialog(QDialog):
                 "components": [],
                 "residueHighlight": [],
                 "pocket": None,
+                "hbonds": {"active": False, "bonds": []},
                 "hydrogens": self._hydrogen_mode(),
                 "refit": True,
             }
         )
+        if mark_dirty:
+            self._mark_host_session_dirty()
+
+    def _mark_host_session_dirty(self) -> None:
+        parent = self.parent()
+        mark = getattr(parent, "_mark_session_dirty", None)
+        if callable(mark):
+            mark()
+
+    def collect_session_state(self) -> dict | None:
+        """JSON payload so File → Save Session can restore this viewer."""
+        if not self._slots:
+            return None
+        structures = []
+        for slot in self._slots:
+            structures.append(
+                {
+                    "name": slot.name,
+                    "path": str(slot.path) if slot.path else "",
+                    "fmt": slot.fmt,
+                    "text": slot.text,
+                    "rows": [
+                        {
+                            "kind": row.spec.kind,
+                            "chain": row.spec.chain,
+                            "resn": row.spec.resn,
+                            "resi": row.spec.resi,
+                            "icode": row.spec.icode,
+                            "visible": row.visible,
+                            "selected": row.selected,
+                            "style": row.style,
+                            "color_scheme": row.color_scheme,
+                        }
+                        for row in slot.rows
+                    ],
+                }
+            )
+        state: dict = {
+            "structures": structures,
+            "hydrogens": self._hydrogen_mode(),
+            "hbonds": {
+                "protein": bool(
+                    self._act_hbond_protein is not None and self._act_hbond_protein.isChecked()
+                ),
+                "ligand": bool(
+                    self._act_hbond_ligand is not None and self._act_hbond_ligand.isChecked()
+                ),
+                "complex": bool(
+                    self._act_hbond_complex is not None and self._act_hbond_complex.isChecked()
+                ),
+            },
+            "allAtoms": bool(self._act_all_atoms.isChecked()),
+            "pocket": bool(self._pocket_payload_data),
+        }
+        try:
+            geo = self.saveGeometry()
+            if geo is not None and not geo.isEmpty():
+                state["geometry"] = bytes(geo.toBase64()).decode("ascii")
+        except RuntimeError:
+            pass
+        return state
+
+    def apply_session_state(self, state: dict | None) -> None:
+        """Rebuild Manager rows and the 3D canvas from a session payload."""
+        if not isinstance(state, dict):
+            return
+        self.close_structure(mark_dirty=False)
+        for spec in state.get("structures") or []:
+            if not isinstance(spec, dict):
+                continue
+            text = str(spec.get("text") or "")
+            if not text.strip():
+                continue
+            fmt = str(spec.get("fmt") or "pdb").lower()
+            parse_fmt = "cif" if fmt == "cif" else "pdb"
+            try:
+                components = parse_structure_components(text, parse_fmt)
+            except Exception:
+                continue
+            if not components:
+                continue
+            name = str(spec.get("name") or "structure")
+            raw_path = str(spec.get("path") or "")
+            path = Path(raw_path) if raw_path else Path(name)
+            self._append_loaded_slot(
+                text=text,
+                fmt="cif" if fmt == "cif" else "pdb",
+                components=components,
+                name=name,
+                path=path,
+                refit=False,
+                row_states=list(spec.get("rows") or []),
+                push=False,
+            )
+        hydrogens = "all" if state.get("hydrogens") == "all" else "polar"
+        if self._act_hydrogens_all is not None and self._act_hydrogens_polar is not None:
+            target = self._act_hydrogens_all if hydrogens == "all" else self._act_hydrogens_polar
+            target.setChecked(True)
+        hbonds = state.get("hbonds") if isinstance(state.get("hbonds"), dict) else {}
+        for act, key in (
+            (self._act_hbond_protein, "protein"),
+            (self._act_hbond_ligand, "ligand"),
+            (self._act_hbond_complex, "complex"),
+        ):
+            if act is None:
+                continue
+            act.blockSignals(True)
+            act.setChecked(bool(hbonds.get(key)))
+            act.blockSignals(False)
+        geo = state.get("geometry")
+        if isinstance(geo, str) and geo.strip():
+            try:
+                self.restoreGeometry(QByteArray.fromBase64(geo.encode("ascii")))
+            except Exception:
+                logger.debug("Protein viewer restore geometry failed", exc_info=True)
+        self._refresh_manager()
+        self._refresh_sequence_chains()
+        self._sync_render_menus_from_rows()
+        if self._slots:
+            self._push_structure(refit=True)
+            if state.get("pocket"):
+                self._activate_pocket(zoom=False)
 
     def open_prepare_dialog(self) -> None:
         """Open the Prepare pipeline dialog for the loaded structure."""
@@ -1549,6 +1853,115 @@ class ProteinViewerDialog(QDialog):
     def _set_hydrogen_mode(self, mode: str) -> None:
         chosen = "all" if mode == "all" else "polar"
         self.viewer.set_hydrogens(chosen)
+
+    def _hbond_kinds_enabled(self) -> set[str]:
+        kinds: set[str] = set()
+        if self._act_hbond_protein is not None and self._act_hbond_protein.isChecked():
+            kinds.add(HBOND_KIND_PROTEIN)
+        if self._act_hbond_ligand is not None and self._act_hbond_ligand.isChecked():
+            kinds.add(HBOND_KIND_LIGAND)
+        if self._act_hbond_complex is not None and self._act_hbond_complex.isChecked():
+            kinds.add(HBOND_KIND_COMPLEX)
+        return kinds
+
+    def _invalidate_hbonds(self, structure_id: str | None = None) -> None:
+        if structure_id is None:
+            self._hbond_cache.clear()
+        else:
+            self._hbond_cache.pop(structure_id, None)
+
+    def _slot_model_index(self, slot: _LoadedSlot) -> int | None:
+        for row in slot.rows:
+            model = (row.spec.selection or {}).get("model")
+            if model is not None:
+                try:
+                    return int(model)
+                except (TypeError, ValueError):
+                    return None
+        return None
+
+    def _ensure_hbond_cache(self) -> None:
+        if not self._hbond_kinds_enabled():
+            return
+        for slot in self._slots:
+            if slot.structure_id in self._hbond_cache:
+                continue
+            self._hbond_cache[slot.structure_id] = detect_hydrogen_bonds(
+                slot.text, slot.fmt, model=self._slot_model_index(slot)
+            )
+
+    def _hbond_endpoint_visible(self, bond, *, model: int | None) -> bool:
+        return self._residue_is_visible(
+            chain=bond.donor_chain,
+            resn=bond.donor_resn,
+            resi=bond.donor_resi,
+            icode=bond.donor_icode,
+            kind=bond.donor_kind,
+            model=model,
+        ) and self._residue_is_visible(
+            chain=bond.acceptor_chain,
+            resn=bond.acceptor_resn,
+            resi=bond.acceptor_resi,
+            icode=bond.acceptor_icode,
+            kind=bond.acceptor_kind,
+            model=model,
+        )
+
+    def _residue_is_visible(
+        self,
+        *,
+        chain: str,
+        resn: str,
+        resi: str,
+        icode: str,
+        kind: str,
+        model: int | None,
+    ) -> bool:
+        resi_s = str(resi)
+        for row in self._rows:
+            if not row.visible:
+                continue
+            spec = row.spec
+            sel_model = (spec.selection or {}).get("model")
+            if model is not None and sel_model is not None:
+                try:
+                    if int(sel_model) != int(model):
+                        continue
+                except (TypeError, ValueError):
+                    continue
+            if spec.kind == "polymer" and kind == "polymer" and spec.chain == chain:
+                return True
+            if (
+                spec.kind == kind
+                and spec.chain == chain
+                and spec.resn == resn
+                and spec.resi == resi_s
+                and spec.icode == icode
+            ):
+                return True
+        return False
+
+    def _hbond_overlay_payload(self) -> dict:
+        kinds = self._hbond_kinds_enabled()
+        if not kinds or not self._slots:
+            return {"active": False, "bonds": []}
+        self._ensure_hbond_cache()
+        bonds = []
+        for slot in self._slots:
+            model = self._slot_model_index(slot)
+            for bond in self._hbond_cache.get(slot.structure_id, ()):
+                if bond.kind not in kinds:
+                    continue
+                if not self._hbond_endpoint_visible(bond, model=model):
+                    continue
+                bonds.append(bond.to_payload())
+        return {"active": True, "bonds": bonds}
+
+    def _on_hbond_toggles(self, _checked: bool = False) -> None:
+        self._push_hbonds()
+
+    def _push_hbonds(self) -> None:
+        self.viewer.set_hbonds(self._hbond_overlay_payload())
 
     def _apply_kind_style(self, kind: str, style: str) -> None:
         allowed = {key for key, _label in COMPONENT_STYLE_CHOICES}
@@ -1856,10 +2269,13 @@ class ProteinViewerDialog(QDialog):
             changes = by_slot.get(slot.structure_id)
             if changes and slot.fmt in {"pdb", "pqr"}:
                 slot.text = rewrite_pdb_residue_names(slot.text, changes)
+                self._invalidate_hbonds(slot.structure_id)
         self.viewer.mutate_residues(payload)
         dlg = self._sequence_dialog
         if dlg is not None and not qobject_is_deleted(dlg):
             self._sequence_chains = dlg.chains()
+        if self._hbond_kinds_enabled():
+            self._push_hbonds()
 
     def _on_sequence_deleted(self, residues: list) -> None:
         if not residues:
@@ -1876,6 +2292,7 @@ class ProteinViewerDialog(QDialog):
             slot_keys = by_slot.get(slot.structure_id)
             if slot_keys and slot.fmt in {"pdb", "pqr"}:
                 slot.text = delete_pdb_residues(slot.text, slot_keys)
+                self._invalidate_hbonds(slot.structure_id)
         self.viewer.delete_residues(sels)
         self._residue_highlight = [
             sel
@@ -1887,6 +2304,8 @@ class ProteinViewerDialog(QDialog):
         if dlg is not None and not qobject_is_deleted(dlg):
             self._sequence_chains = dlg.chains()
         self.viewer.set_residue_highlight(self._residue_highlight)
+        if self._hbond_kinds_enabled():
+            self._push_hbonds()
 
     def delete_selected(self) -> None:
         ids = self._selected_component_ids()
@@ -1924,6 +2343,7 @@ class ProteinViewerDialog(QDialog):
         self._push_structure(refit=False)
         if self._pocket_payload_data is not None:
             self._refresh_pocket(zoom=False)
+        self._mark_host_session_dirty()
 
     def focus_selected(self) -> None:
         ids = self._require_selection()
@@ -2092,6 +2512,7 @@ class ProteinViewerDialog(QDialog):
                 "components": self._component_payloads(),
                 "residueHighlight": self._residue_highlight,
                 "pocket": self._pocket_payload_data,
+                "hbonds": self._hbond_overlay_payload(),
                 "hydrogens": self._hydrogen_mode(),
                 "refit": bool(refit),
             }
@@ -2099,3 +2520,5 @@ class ProteinViewerDialog(QDialog):
 
     def _push_states(self) -> None:
         self.viewer.apply_component_states(self._component_payloads())
+        if self._hbond_kinds_enabled():
+            self._push_hbonds()

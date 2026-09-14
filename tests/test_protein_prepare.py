@@ -793,10 +793,11 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     assert prep.chk_include_ligand.isChecked()
     assert prep.chk_protonate_ligand.isChecked()
     assert prep.chk_pocket_ligand.isChecked()
-    assert not prep.chk_keep_ligand.isChecked()
+    assert prep.chk_keep_ligand.isChecked()
     assert not prep.chk_keep_selected_waters.isChecked()
     assert prep.chk_remove_other_heterogens.isChecked()
-    assert prep.chk_minimize.isChecked()
+    assert not prep.chk_minimize.isChecked()
+    assert not prep.combo_protein_ff.isEnabled()
     assert prep.combo_out_fmt.currentData() == "cif"
     assert prep.combo_protein_ff.currentData() == "amber14"
     assert prep.combo_ligand_ff.currentData() == "gaff2"
@@ -807,17 +808,20 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     assert prep.spin_salt.value() == 0.15
     assert prep.spin_ph.value() == 7.4
     assert prep.edit_out.text().endswith("mini_prepared.cif")
-    prep.chk_keep_ligand.setChecked(True)
-    assert prep.chk_minimize.isChecked()
+    assert not prep.chk_minimize.isChecked()
+    prep.chk_minimize.setChecked(True)
     assert prep.chk_minimize.isEnabled()
+    assert prep.combo_protein_ff.isEnabled()
     assert prep.edit_ligand_smiles.isEnabled()
     prep.chk_include_ligand.setChecked(False)
-    assert not prep.chk_keep_ligand.isChecked()
+    assert prep.chk_keep_ligand.isChecked()
     assert not prep.chk_keep_ligand.isEnabled()
     assert not prep.edit_ligand_smiles.isEnabled()
     assert not prep.chk_protonate_ligand.isEnabled()
     assert not prep.chk_pocket_ligand.isChecked()
     prep.chk_include_ligand.setChecked(True)
+    assert prep.chk_keep_ligand.isChecked()
+    assert prep.chk_keep_ligand.isEnabled()
     assert prep.chk_protonate_ligand.isEnabled()
     assert prep.chk_pocket_ligand.isChecked()
     prep.close()

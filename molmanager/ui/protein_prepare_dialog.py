@@ -150,12 +150,11 @@ class ProteinPrepareDialog(QDialog):
         opt_form.addRow(self.chk_include_ligand)
 
         self.chk_keep_ligand = QCheckBox("Keep ligand in prepared mmCIF")
-        self.chk_keep_ligand.setChecked(False)
+        self.chk_keep_ligand.setChecked(True)
         self.chk_keep_ligand.setToolTip(
-            "Leave the ligand in the output file after minimization. Uncheck for an apo "
-            "receptor that was still relaxed in the presence of the ligand (GAFF2). "
-            "The prepared file is mmCIF so ligand bond orders are kept in _chem_comp_bond. "
-            "mmCIF inputs are prepared as mmCIF (not converted to PDB)."
+            "Leave the ligand in the prepared file. Uncheck for an apo receptor "
+            "(ligand can still be present during PROPKA). The prepared file is mmCIF "
+            "so ligand bond orders are kept in _chem_comp_bond. mmCIF inputs stay mmCIF."
         )
         opt_form.addRow(self.chk_keep_ligand)
 
@@ -239,7 +238,7 @@ class ProteinPrepareDialog(QDialog):
         min_form.setSpacing(4)
 
         self.chk_minimize = QCheckBox("Restrained minimization")
-        self.chk_minimize.setChecked(True)
+        self.chk_minimize.setChecked(False)
         self.chk_minimize.setToolTip(
             "Harmonic restraints on experimental atoms so rebuilt loops, hydrogens, "
             "and the ligand can relieve clashes without the fold drifting."
@@ -387,10 +386,6 @@ class ProteinPrepareDialog(QDialog):
         protonate = include and self.chk_protonate_ligand.isChecked()
         pocket_was_enabled = self.chk_pocket_ligand.isEnabled()
         self.chk_pocket_ligand.setEnabled(protonate)
-        if not include:
-            self.chk_keep_ligand.blockSignals(True)
-            self.chk_keep_ligand.setChecked(False)
-            self.chk_keep_ligand.blockSignals(False)
         if protonate and not pocket_was_enabled:
             self.chk_pocket_ligand.setChecked(True)
         elif not protonate:

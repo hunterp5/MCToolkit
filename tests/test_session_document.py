@@ -27,6 +27,15 @@ from rdkit import Chem
 
 from molmanager.ui.main_window import ChemicalTableApp
 
+_MINI_PDB = """\
+ATOM      1  N   MET A   1      27.340  24.430   2.614  1.00  0.00           N
+ATOM      2  CA  MET A   1      26.010  13.311  -8.124  1.00  0.00           C
+ATOM      3  N   LEU B   2      10.000  11.000  12.000  1.00  0.00           N
+HETATM  100  O81 AXI A2000     -26.050  -1.540  -9.129  1.00 32.47           O
+HETATM  101  C80 AXI A2000     -26.813  -2.112  -9.925  1.00 30.83           C
+END
+"""
+
 
 @pytest.fixture(autouse=True)
 def _skip_session_auto_render(monkeypatch) -> None:
@@ -951,3 +960,35 @@ def test_session_document_roundtrip_table_search(qapp):  # noqa: ARG001
     sm = w2.table.selectionModel()
     rows_hit = {ix.row() for ix in sm.selectedIndexes()}
     assert rows_hit == {0}
+
+
+def test_session_roundtrip_restores_protein_viewer(qapp, tmp_path) -> None:  # noqa: ARG001
+    first = tmp_path / "first.pdb"
+    second = tmp_path / "second.pdb"
+    first.write_text(_MINI_PDB, encoding="utf-8")
+    second.write_text(_MINI_PDB.replace("MET", "SER").replace("M  ", "S  "), encoding="utf-8")
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+    w._table_model.set_headers(list(w.headers))
+    dlg = w.open_protein_viewer()
+    dlg.add_structure_path(first, refit=True)
+    dlg.add_structure_path(second, refit=False)
+    lig = next(r for r in dlg._slots[0].rows if r.spec.kind == "ligand")
+    dlg._on_visibility_changed(lig.spec.component_id, False)
+
+    doc = w._build_session_document()
+    pv = doc.get("protein_viewer")
+    assert isinstance(pv, dict)
+    assert [s["name"] for s in pv["structures"]] == ["first.pdb", "second.pdb"]
+
+    w2 = ChemicalTableApp()
+    w2._apply_session_document(doc)
+    dlg2 = w2._protein_viewer_dialog
+    assert dlg2 is not None
+    assert [slot.name for slot in dlg2._slots] == ["first.pdb", "second.pdb"]
+    assert dlg2.manager.tree.topLevelItemCount() == 2
+    hidden = next(r for r in dlg2._slots[0].rows if r.spec.kind == "ligand")
+    assert hidden.visible is False
+    w.close()
+    w2.close()
