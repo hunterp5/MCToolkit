@@ -71,12 +71,19 @@ class DockableResultPlotPanel(QWidget):
         floating_dialog_cls: type,
         default_color_hint: str = "",
         parent: QWidget | None = None,
+        opts_title: str | None = None,
+        opts_min_width: int = 520,
+        opts_min_height: int = 360,
+        opts_tooltip: str | None = None,
+        pair_encoding: bool = True,
+        defer_initial_reload: bool = False,
     ):
         super().__init__(parent)
         self.parent_app = parent_app
         self._window_title = window_title
         self._floating_dialog_cls = floating_dialog_cls
         self._default_color_hint = default_color_hint or ""
+        self._pair_encoding = bool(pair_encoding)
 
         self._opts_panel = QWidget(self)
         opts = QVBoxLayout(self._opts_panel)
@@ -93,10 +100,15 @@ class DockableResultPlotPanel(QWidget):
         color_row.addWidget(self._color_by_label)
         self.color_combo = QComboBox()
         self.color_combo.setMinimumWidth(120)
+        pair_note = (
+            ". For pair points, numeric columns use the mean of both molecules."
+            if self._pair_encoding
+            else ""
+        )
         self.color_combo.setToolTip(
             "Color markers by a table column. Leave as (none) for the plot’s default coloring"
             + (f" ({self._default_color_hint})" if self._default_color_hint else "")
-            + ". For pair points, numeric columns use the mean of both molecules."
+            + pair_note
         )
         self.color_combo.currentIndexChanged.connect(self._on_color_column_changed)
         color_row.addWidget(self.color_combo, 1)
@@ -119,9 +131,13 @@ class DockableResultPlotPanel(QWidget):
         size_row.addWidget(self._size_by_label)
         self.size_combo = QComboBox()
         self.size_combo.setMinimumWidth(120)
+        size_note = (
+            " For pair points, numeric columns use the mean of both molecules."
+            if self._pair_encoding
+            else ""
+        )
         self.size_combo.setToolTip(
-            "Size markers by a table column (numeric or categorical). "
-            "For pair points, numeric columns use the mean of both molecules."
+            "Size markers by a table column (numeric or categorical)." + size_note
         )
         self.size_combo.currentIndexChanged.connect(self._on_size_column_changed)
         size_row.addWidget(self.size_combo, 1)
@@ -134,9 +150,21 @@ class DockableResultPlotPanel(QWidget):
         self._hover_controls.changed.connect(self._on_hover_options_changed)
         self._hover_controls.persist_changed.connect(self._on_hover_persist_changed)
         opts.addWidget(self._hover_controls)
+
+        self._trailing_opts_host = QWidget(self._opts_panel)
+        self._trailing_opts_layout = QVBoxLayout(self._trailing_opts_host)
+        self._trailing_opts_layout.setContentsMargins(0, 0, 0, 0)
+        self._trailing_opts_layout.setSpacing(6)
+        opts.addWidget(self._trailing_opts_host)
         opts.addStretch(1)
 
-        self._opts_dialog = make_plot_options_dialog(self, self._opts_panel)
+        self._opts_dialog = make_plot_options_dialog(
+            self,
+            self._opts_panel,
+            title=opts_title or "Plot Options",
+            min_width=opts_min_width,
+            min_height=opts_min_height,
+        )
 
         self._extra_opts_host = QWidget(self._opts_panel)
         self._extra_opts_layout = QVBoxLayout(self._extra_opts_host)
@@ -158,7 +186,8 @@ class DockableResultPlotPanel(QWidget):
         foot.setSpacing(4)
         self._opts_btn = make_plot_options_button(
             self,
-            tooltip="Configure Color by, Size by, On Hover, and other plot options.",
+            tooltip=opts_tooltip
+            or "Configure Color by, Size by, On Hover, and other plot options.",
         )
         self._opts_btn.clicked.connect(self._open_plot_options)
         foot.addWidget(self._opts_btn)
@@ -182,20 +211,24 @@ class DockableResultPlotPanel(QWidget):
         self._close_plot_btn.clicked.connect(self._close_docked_plot)
         foot.addWidget(self._close_plot_btn)
 
-        self._reload_color_columns()
-        self._reload_hover_columns()
-        self._update_spectrum_controls()
-        self._update_size_controls()
-        self._sync_footer_chrome()
-        self.setMinimumWidth(self.embedded_minimum_width())
+        if not defer_initial_reload:
+            self._reload_color_columns()
+            self._reload_hover_columns()
+            self._update_spectrum_controls()
+            self._update_size_controls()
+            self._sync_footer_chrome()
+            self.setMinimumWidth(self.embedded_minimum_width())
 
     def _finish_layout(self) -> None:
         """Call after subclass adds content widgets to ``self._root``."""
         if self._extra_opts_layout.count() == 0:
             self._extra_opts_host.hide()
+        if self._trailing_opts_layout.count() == 0:
+            self._trailing_opts_host.hide()
         # Floating chrome sits as a header; docked panes hide this bar.
         self._root.insertWidget(0, self._footer_bar)
         self._sync_hover_options_to_plot_view()
+        self._sync_footer_chrome()
 
     def embedded_minimum_width(self) -> int:
         return 420

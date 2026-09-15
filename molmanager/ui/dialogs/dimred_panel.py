@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-from PyQt5.QtCore import QEvent, Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -34,26 +34,13 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
-    QSizePolicy,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 from rdkit import Chem
 
-from ..dockable_plot import (
-    PlotTitlesControls,
-    apply_plot_chrome_glyphs,
-    hide_plot_options_dialog,
-    make_add_to_main_button,
-    make_clear_selection_button,
-    make_close_plot_button,
-    make_plot_options_button,
-    make_plot_options_dialog,
-    make_send_window_button,
-    request_close_plot_widget,
-    show_plot_options_dialog,
-)
+from ..dockable_plot import hide_plot_options_dialog
 from ...dimensionality_reduction import (
     DimensionReductionResult,
     is_fingerprint_bitcount_column,
@@ -63,19 +50,15 @@ from ...workers import SIMILARITY_FP_TYPE_LABELS
 from ...workers.dimensionality_reduction import DimensionReductionSignals, DimensionReductionWorker
 from .data_analysis import numeric_subset, table_to_dataframe
 from ...plot_color import (
-    PLOT_COLORSCALE_CHOICES,
     color_values_are_numeric,
     normalize_color_column,
     normalize_size_column,
-    resolve_plot_colorscale,
 )
-from ..plot_color_range_controls import PlotColorRangeControls
-from ..plot_on_hover_controls import PlotOnHoverControls
-from ..plot_size_controls import PlotSizeRangeControls
 from ..dimred_plot import build_dimension_reduction_figure, dimension_reduction_result_with_color
 from ..plotly_interactive_view import PlotlyInteractiveView
 from ..plot_table_sync import visible_oids_for_plot
 from ..qt_widget_utils import apply_monospace_to_text_edit
+from ..result_plot_panel import DockableResultPlotPanel
 from .scope import selection_scope_checked
 
 if TYPE_CHECKING:
@@ -91,34 +74,37 @@ except ImportError:
 _FP_NONE_LABEL = "None"
 
 
-class DimensionReductionPanel(QWidget):
+class DimensionReductionPanel(DockableResultPlotPanel):
     """PCA / t-SNE / UMAP / SOM panel; owns Send/Close when docked so all actions share one footer."""
 
     DIMRED_SESSION_KIND = "dimension_reduction"
     owns_docked_plot_actions = True
 
     def __init__(self, parent: ChemicalTableApp | None, *, window_title: str, method: str):
-        super().__init__(None)
-        self.parent_app = parent
-        self._method = method
-        self._window_title = window_title
+        from .dimensionality_reduction import DimensionReductionDialog
+
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
+        self._method = method
         self._have_selection = n_sel > 0
         self._job_running = False
         self._last_result: DimensionReductionResult | None = None
+        super().__init__(
+            parent,
+            window_title=window_title,
+            floating_dialog_cls=DimensionReductionDialog,
+            parent=None,
+            opts_title=f"{window_title} — Plot Options",
+            opts_min_width=640,
+            opts_min_height=480,
+            opts_tooltip="Configure features, method parameters, color, and On Hover options.",
+            pair_encoding=False,
+            defer_initial_reload=True,
+        )
 
-        root = QVBoxLayout(self)
-        # Top inset matches spacing: same toolbar→plot gap when floating or docked.
-        root.setContentsMargins(4, 4, 4, 4)
-        root.setSpacing(4)
-
-        plot_host = QWidget()
-        plot_ly = QVBoxLayout(plot_host)
-        plot_ly.setContentsMargins(0, 0, 0, 0)
         if _HAS_WEB and parent is not None:
-            self._plot_view = PlotlyInteractiveView(parent, plot_host)
+            self._plot_view = PlotlyInteractiveView(parent, self)
             self._plot_view.setMinimumHeight(420)
-            plot_ly.addWidget(self._plot_view, 1)
+            self._root.addWidget(self._plot_view, 1)
             self._plot_placeholder = None
         else:
             self._plot_view = None
@@ -127,18 +113,9 @@ class DimensionReductionPanel(QWidget):
             )
             self._plot_placeholder.setWordWrap(True)
             self._plot_placeholder.setAlignment(Qt.AlignCenter)
-            plot_ly.addWidget(self._plot_placeholder, 1)
-        root.addWidget(plot_host, 1)
+            self._root.addWidget(self._plot_placeholder, 1)
 
-        self._opts_panel = QWidget()
-        opts = QVBoxLayout(self._opts_panel)
-        opts.setContentsMargins(0, 0, 0, 0)
-        opts.setSpacing(6)
-
-        self._titles = PlotTitlesControls(self._opts_panel)
-        self._titles.changed.connect(self._on_titles_changed)
-        opts.addWidget(self._titles)
-
+        extras = self._extra_opts_layout
         features_opts_row = QHBoxLayout()
         features_opts_row.setSpacing(8)
 
@@ -170,7 +147,7 @@ class DimensionReductionPanel(QWidget):
         method_opts = QGroupBox("Options")
         self._opts_form = QFormLayout(method_opts)
         features_opts_row.addWidget(method_opts, 1)
-        opts.addLayout(features_opts_row)
+        extras.addLayout(features_opts_row)
 
         self.only_selected_cb = QCheckBox("Selected Rows Only")
         self._only_selected_scope_prefix = "Selected Rows Only"
@@ -186,46 +163,7 @@ class DimensionReductionPanel(QWidget):
         self.standardize_cb.setChecked(True)
         self._opts_form.addRow(self.standardize_cb)
 
-        color_row = QHBoxLayout()
-        color_row.setSpacing(6)
-        self._color_by_label = QLabel("Color by:")
-        color_row.addWidget(self._color_by_label)
-        self.color_combo = QComboBox()
-        self.color_combo.setMinimumWidth(120)
-        self.color_combo.currentIndexChanged.connect(self._on_color_column_changed)
-        color_row.addWidget(self.color_combo, 1)
-        self._spectrum_label = QLabel("Spectrum:")
-        color_row.addWidget(self._spectrum_label)
-        self.colorscale_combo = QComboBox()
-        self.colorscale_combo.setMinimumWidth(100)
-        self.colorscale_combo.addItems(PLOT_COLORSCALE_CHOICES)
-        self.colorscale_combo.setToolTip("Continuous colorscale for numeric Color by columns.")
-        self.colorscale_combo.currentIndexChanged.connect(self._on_color_range_or_scale_changed)
-        color_row.addWidget(self.colorscale_combo)
-        self.color_range = PlotColorRangeControls()
-        self.color_range.connect_changed(self._on_color_range_changed)
-        color_row.addWidget(self.color_range)
-        opts.addLayout(color_row)
-
-        size_row = QHBoxLayout()
-        size_row.setSpacing(6)
-        self._size_by_label = QLabel("Size by:")
-        size_row.addWidget(self._size_by_label)
-        self.size_combo = QComboBox()
-        self.size_combo.setMinimumWidth(120)
-        self.size_combo.setToolTip("Size points by a table column (numeric or categorical).")
-        self.size_combo.currentIndexChanged.connect(self._on_size_column_changed)
-        size_row.addWidget(self.size_combo, 1)
-        self.size_range = PlotSizeRangeControls()
-        self.size_range.connect_changed(self._on_size_range_changed)
-        size_row.addWidget(self.size_range)
-        opts.addLayout(size_row)
-
-        self._hover_controls = PlotOnHoverControls(self._opts_panel)
-        self._hover_controls.changed.connect(self._on_hover_options_changed)
-        self._hover_controls.persist_changed.connect(self._on_hover_options_changed)
-        opts.addWidget(self._hover_controls)
-
+        trail = self._trailing_opts_layout
         run_row = QHBoxLayout()
         run_row.setContentsMargins(0, 10, 0, 6)
         run_row.addStretch()
@@ -235,54 +173,14 @@ class DimensionReductionPanel(QWidget):
         self.run_btn.setStyleSheet("QPushButton { padding: 8px 28px; }")
         run_row.addWidget(self.run_btn)
         run_row.addStretch()
-        opts.addLayout(run_row)
+        trail.addLayout(run_row)
 
         self.summary_text = QTextEdit()
         self.summary_text.setReadOnly(True)
         self.summary_text.setMaximumHeight(100)
         apply_monospace_to_text_edit(self.summary_text)
-        opts.addWidget(QLabel("Results"))
-        opts.addWidget(self.summary_text)
-
-        self._opts_dialog = make_plot_options_dialog(
-            self,
-            self._opts_panel,
-            title=f"{window_title} — Plot Options",
-            min_width=640,
-            min_height=480,
-        )
-
-        self._footer_bar = QWidget(self)
-        self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
-        foot = QHBoxLayout(self._footer_bar)
-        foot.setContentsMargins(0, 0, 0, 0)
-        foot.setSpacing(4)
-        self._opts_btn = make_plot_options_button(
-            self,
-            tooltip="Configure features, method parameters, color, and On Hover options.",
-        )
-        self._opts_btn.clicked.connect(self._open_plot_options)
-        foot.addWidget(self._opts_btn)
-        self._clear_sel_btn = make_clear_selection_button(self)
-        self._clear_sel_btn.clicked.connect(self._clear_selection)
-        foot.addWidget(self._clear_sel_btn)
-        foot.addStretch(1)
-        self._add_to_main_btn = make_add_to_main_button(
-            self,
-            tooltip="Dock this plot beside the compound table.",
-        )
-        self._add_to_main_btn.clicked.connect(self._add_to_main_window)
-        foot.addWidget(self._add_to_main_btn)
-        self._send_window_btn = make_send_window_button(
-            self,
-            tooltip="Open this docked plot in a separate floating window.",
-        )
-        self._send_window_btn.clicked.connect(self._send_to_new_window)
-        foot.addWidget(self._send_window_btn)
-        self._close_plot_btn = make_close_plot_button(self)
-        self._close_plot_btn.clicked.connect(self._close_docked_plot)
-        foot.addWidget(self._close_plot_btn)
-        root.insertWidget(0, self._footer_bar)
+        trail.addWidget(QLabel("Results"))
+        trail.addWidget(self.summary_text)
 
         host = parent if parent is not None else self
         self._signals = DimensionReductionSignals(host)
@@ -291,17 +189,11 @@ class DimensionReductionPanel(QWidget):
 
         self._refresh_structure_sources()
         self._reload_columns()
-        self._reload_hover_columns()
         self._on_fp_selection_changed()
         self._update_spectrum_controls()
         self._update_size_controls()
-        self._sync_hover_options_to_plot_view()
-        self._sync_footer_chrome()
+        self._finish_layout()
         self.setMinimumWidth(self.embedded_minimum_width())
-
-    def _open_plot_options(self) -> None:
-        """Open the feature/method configuration dialog."""
-        show_plot_options_dialog(self._opts_dialog)
 
     def _ui_parent(self) -> QWidget:
         """Parent for alerts: Plot Options if open, else the visible plot window."""
@@ -357,65 +249,6 @@ class DimensionReductionPanel(QWidget):
         elif self.parent_app is not None:
             self.parent_app.clear_table_selection()
 
-    def _add_to_main_window(self) -> None:
-        """Dock this panel beside the compound table (from a floating dialog)."""
-        if self.parent_app is None:
-            return
-        dlg = self.window()
-        teardown = getattr(dlg, "_scope_sync_disconnect", None)
-        if callable(teardown):
-            teardown()
-        if not self.parent_app.dock_plot_widget(self):
-            return
-        from .dimensionality_reduction import DimensionReductionDialog
-
-        if isinstance(dlg, DimensionReductionDialog):
-            dlg._panel = None
-            dlg._force_close = True
-            dlg.close()
-
-    def _send_to_new_window(self) -> None:
-        if self.parent_app is not None:
-            self.parent_app.undock_plot_to_window(self)
-
-    def _close_docked_plot(self) -> None:
-        request_close_plot_widget(self)
-
-    def _is_docked_in_main_window(self) -> bool:
-        app = self.parent_app
-        if app is None:
-            return False
-        check = getattr(app, "is_plot_docked", None)
-        if callable(check):
-            return bool(check(self))
-        return getattr(app, "_docked_plot_widget", None) is self
-
-    def _sync_footer_chrome(self) -> None:
-        """Floating: opts + clear + Add. Docked: opts + clear + Send + Close Plot."""
-        from ..dockable_plot import sync_docked_footer_bar
-
-        from .dimensionality_reduction import DimensionReductionDialog
-
-        apply_plot_chrome_glyphs(self)
-        floating = isinstance(self.window(), DimensionReductionDialog)
-        docked = self._is_docked_in_main_window()
-        self._add_to_main_btn.setVisible(floating)
-        self._send_window_btn.setVisible(docked)
-        self._close_plot_btn.setVisible(docked)
-        sync_docked_footer_bar(self, docked=docked)
-
-    def event(self, event):  # noqa: N802 — Qt API name
-        if event.type() == QEvent.ParentChange:
-            self._sync_footer_chrome()
-        return super().event(event)
-
-    def embedded_minimum_width(self) -> int:
-        """Minimum dock width for the figure (options open in a separate dialog)."""
-        return 420
-
-    def embedded_preferred_width(self) -> int:
-        return max(self.embedded_minimum_width(), 640)
-
     def create_floating_dialog(self, parent_app: ChemicalTableApp) -> QDialog:
         """Re-open this panel in a floating window after undocking from the main table."""
         from .dimensionality_reduction import _DIMRED_FLOATING_DIALOGS
@@ -440,14 +273,6 @@ class DimensionReductionPanel(QWidget):
     def _apply_method_params(self, params: dict | None) -> None:
         return None
 
-    @staticmethod
-    def _set_combo_text(combo: QComboBox, text: str | None) -> None:
-        if not text:
-            return
-        idx = combo.findText(str(text))
-        if idx >= 0:
-            combo.setCurrentIndex(idx)
-
     def collect_session_state(self) -> dict:
         from ...dimensionality_reduction import result_to_dict
 
@@ -460,16 +285,8 @@ class DimensionReductionPanel(QWidget):
             "struct_src": self.struct_src_combo.currentText(),
             "standardize": bool(self.standardize_cb.isChecked()),
             "only_selected": bool(self.only_selected_cb.isChecked()),
-            "color": self.color_combo.currentText(),
-            "colorscale": self.colorscale_combo.currentText(),
-            "color_min": self.color_range.color_min.text(),
-            "color_max": self.color_range.color_max.text(),
-            "size": self.size_combo.currentText(),
-            "size_min": float(self.size_range.size_min.value()),
-            "size_max": float(self.size_range.size_max.value()),
             "method_params": dict(self._method_params()),
-            **self._titles.title_overrides(),
-            **self._hover_controls.collect_state(),
+            **self._collect_encoding_chrome_state(),
         }
         if self._last_result is not None:
             state["result"] = result_to_dict(self._last_result)
@@ -486,51 +303,21 @@ class DimensionReductionPanel(QWidget):
             item.setCheckState(Qt.Checked if item.text() in features else Qt.Unchecked)
         self.fp_combo.blockSignals(True)
         self.struct_src_combo.blockSignals(True)
-        self.color_combo.blockSignals(True)
-        self.size_combo.blockSignals(True)
         try:
             self._set_combo_text(self.fp_combo, state.get("fingerprint"))
             self._set_combo_text(self.struct_src_combo, state.get("struct_src"))
-            self._set_combo_text(self.color_combo, state.get("color"))
-            self._set_combo_text(self.colorscale_combo, state.get("colorscale"))
-            self._set_combo_text(self.size_combo, state.get("size"))
         finally:
             self.fp_combo.blockSignals(False)
             self.struct_src_combo.blockSignals(False)
-            self.color_combo.blockSignals(False)
-            self.size_combo.blockSignals(False)
         if "standardize" in state:
             self.standardize_cb.setChecked(bool(state.get("standardize")))
         if "only_selected" in state:
             self.only_selected_cb.setChecked(bool(state.get("only_selected")))
-        cmin, cmax = state.get("color_min"), state.get("color_max")
-        if isinstance(cmin, str):
-            self.color_range.color_min.setText(cmin)
-        if isinstance(cmax, str):
-            self.color_range.color_max.setText(cmax)
-        try:
-            if state.get("size_min") is not None:
-                self.size_range.size_min.setValue(float(state["size_min"]))
-            if state.get("size_max") is not None:
-                self.size_range.size_max.setValue(float(state["size_max"]))
-        except (TypeError, ValueError):
-            pass
-        for edit, key in (
-            (self._titles.plot_title_edit, "plot_title"),
-            (self._titles.xaxis_title_edit, "xaxis_title"),
-            (self._titles.yaxis_title_edit, "yaxis_title"),
-        ):
-            val = state.get(key)
-            if isinstance(val, str):
-                edit.setText(val)
-        self._hover_controls.apply_state(state)
-        self._sync_hover_options_to_plot_view()
+        self._apply_encoding_chrome_state(state)
         params = state.get("method_params")
         if isinstance(params, dict):
             self._apply_method_params(params)
         self._on_fp_selection_changed()
-        self._update_spectrum_controls()
-        self._update_size_controls()
         raw_result = state.get("result")
         if isinstance(raw_result, dict):
             self._last_result = DimensionReductionResult(**raw_result)
@@ -606,45 +393,11 @@ class DimensionReductionPanel(QWidget):
             self.size_combo.blockSignals(False)
         self._reload_hover_columns()
 
-    def _reload_hover_columns(self) -> None:
-        headers = list(getattr(self.parent_app, "headers", []) or []) if self.parent_app else []
-        self._hover_controls.reload_columns(headers)
-        self._sync_hover_options_to_plot_view()
-
-    def _sync_hover_options_to_plot_view(self) -> None:
-        self._hover_controls.apply_to_plot_view(getattr(self, "_plot_view", None))
-
-    def _on_hover_options_changed(self) -> None:
-        self._sync_hover_options_to_plot_view()
-
-    def _column_values_for_oids(self, oids: list[int], column: str | None) -> list[Any] | None:
-        if not column or column == "(none)" or self.parent_app is None:
-            return None
-        model = self.parent_app._table_model
-        out: list[Any] = []
-        for oid in oids:
-            row = self.parent_app.logical_row_for_oid(int(oid))
-            if row < 0:
-                out.append(None)
-                continue
-            raw = model.value_for_header(row, column)
-            out.append(raw if (raw or "").strip() else None)
-        return out
-
     def _color_values_for_oids(self, oids: list[int], color_col: str | None) -> list[Any] | None:
         return self._column_values_for_oids(oids, color_col)
 
     def _size_values_for_oids(self, oids: list[int], size_col: str | None) -> list[Any] | None:
         return self._column_values_for_oids(oids, size_col)
-
-    def _current_colorscale(self) -> str:
-        return resolve_plot_colorscale(self.colorscale_combo.currentText())
-
-    def _current_color_bounds(self) -> tuple[float | None, float | None]:
-        return self.color_range.parse_bounds()
-
-    def _current_size_bounds(self) -> tuple[float, float]:
-        return self.size_range.parse_bounds()
 
     def _update_spectrum_controls(self) -> None:
         enabled = self.color_combo.currentText() != "(none)"
@@ -658,35 +411,7 @@ class DimensionReductionPanel(QWidget):
         self.color_range.set_enabled(enabled and numeric)
         self._update_size_controls()
 
-    def _update_size_controls(self) -> None:
-        size_on = self.size_combo.currentText() != "(none)"
-        self.size_range.set_enabled(size_on)
-
-    def _on_color_range_changed(self) -> None:
-        if self._last_result is None or self._job_running:
-            return
-        self._refresh_plot_colors()
-
-    def _on_size_range_changed(self) -> None:
-        if self._last_result is None or self._job_running:
-            return
-        self._refresh_plot_colors()
-
-    def _on_color_column_changed(self, _index: int = 0) -> None:
-        self._update_spectrum_controls()
-        if self._last_result is None or self._job_running:
-            return
-        self._refresh_plot_colors()
-
-    def _on_size_column_changed(self, _index: int = 0) -> None:
-        self._update_size_controls()
-        if self._last_result is None or self._job_running:
-            return
-        self._refresh_plot_colors()
-
-    def _on_color_range_or_scale_changed(self, *_args) -> None:
-        if self._last_result is None or self._job_running:
-            return
+    def _rebuild_figure(self) -> None:
         self._refresh_plot_colors()
 
     def _size_encoding_for_oids(
@@ -699,15 +424,6 @@ class DimensionReductionPanel(QWidget):
         size_vals, size_label = normalize_size_column(size_vals, size_col)
         size_min_px, size_max_px = self._current_size_bounds()
         return size_vals, size_label, size_min_px, size_max_px
-
-    def _on_titles_changed(self) -> None:
-        self._refresh_plot_colors()
-
-    def _schedule_plot(self) -> None:
-        """Re-draw the last embedding using the currently visible table rows."""
-        if self._last_result is None or self._job_running:
-            return
-        self._refresh_plot_colors()
 
     def _displayed_dimred_result(self) -> DimensionReductionResult | None:
         if self._last_result is None:

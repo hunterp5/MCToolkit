@@ -22,7 +22,7 @@ import time
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
-from PyQt5.QtCore import QEvent, Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -32,36 +32,13 @@ from PyQt5.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
-    QSizePolicy,
     QTextEdit,
     QVBoxLayout,
-    QWidget,
 )
 
-from ..dockable_plot import (
-    PlotTitlesControls,
-    apply_plot_chrome_glyphs,
-    handle_floating_plot_close_event,
-    make_add_to_main_button,
-    make_clear_selection_button,
-    make_close_plot_button,
-    make_plot_options_button,
-    make_plot_options_dialog,
-    make_send_window_button,
-    request_close_plot_widget,
-    show_plot_options_dialog,
-    style_plot_footer_text_button,
-)
+from ..dockable_plot import handle_floating_plot_close_event, style_plot_footer_text_button
 from ...config import load_config
-from ...plot_color import (
-    PLOT_COLORSCALE_CHOICES,
-    color_values_are_numeric,
-    normalize_size_column,
-    resolve_plot_colorscale,
-)
-from ..plot_color_range_controls import PlotColorRangeControls
-from ..plot_on_hover_controls import PlotOnHoverControls
-from ..plot_size_controls import PlotSizeRangeControls
+from ...plot_color import color_values_are_numeric, normalize_size_column
 from ...utils import mol_to_canonical_smiles
 from ...medchem_space import (
     MedChemRowSnapshot,
@@ -82,6 +59,7 @@ from ..medchem_space_plot import build_boiled_egg_figure, build_golden_triangle_
 from ..plotly_interactive_view import PlotlyInteractiveView
 from ..plot_table_sync import visible_oids_for_plot
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
+from ..result_plot_panel import DockableResultPlotPanel
 from .scope import selection_scope_checked
 
 if TYPE_CHECKING:
@@ -98,7 +76,7 @@ except ImportError:
 MedChemPlotKind = Literal["boiled_egg", "golden_triangle"]
 
 
-class MedChemPlotPanel(QWidget):
+class MedChemPlotPanel(DockableResultPlotPanel):
     """BOILED-Egg or golden-triangle controls + plot (dialog or docked beside the table)."""
 
     MEDCHEM_SESSION_KIND = "medchem_space"
@@ -112,36 +90,34 @@ class MedChemPlotPanel(QWidget):
         window_title: str,
         session_restore: bool = False,
     ):
-        super().__init__(None)
-        self.parent_app = parent_app
+        n_sel = len(parent_app._selected_logical_rows()) if parent_app is not None else 0
         self._plot_kind = plot_kind
-        self._window_title = window_title
+        self._have_selection = n_sel > 0
         self._full_dataset: MedChemSpaceDataset | None = None
         self._plot_dataset: MedChemSpaceDataset | None = None
         self._job_running = False
         self._snapshot_collect_gen = 0
         self._snapshot_collect_ctx: dict | None = None
+        self._table_write_ctx: dict | None = None
+        self._table_write_gen = 0
+        super().__init__(
+            parent_app,
+            window_title=window_title,
+            floating_dialog_cls=MedChemSpaceDialog,
+            parent=None,
+            opts_title=f"{window_title} — Plot Options",
+            opts_tooltip="Configure structure source, color, On Hover, and summary options.",
+            pair_encoding=False,
+            defer_initial_reload=True,
+        )
         self._medchem_signals = MedChemSpaceSignals(self)
         self._medchem_signals.finished.connect(self._on_build_finished, Qt.QueuedConnection)
         self._medchem_signals.failed.connect(self._on_build_failed, Qt.QueuedConnection)
-        self._table_write_ctx: dict | None = None
-        self._table_write_gen = 0
 
-        n_sel = len(parent_app._selected_logical_rows()) if parent_app is not None else 0
-        self._have_selection = n_sel > 0
-
-        root = QVBoxLayout(self)
-        # Top inset matches spacing: same toolbar→plot gap when floating or docked.
-        root.setContentsMargins(4, 4, 4, 4)
-        root.setSpacing(4)
-
-        plot_host = QWidget()
-        plot_ly = QVBoxLayout(plot_host)
-        plot_ly.setContentsMargins(0, 0, 0, 0)
         if _HAS_WEB and parent_app is not None:
-            self._plot_view = PlotlyInteractiveView(parent_app, plot_host)
+            self._plot_view = PlotlyInteractiveView(parent_app, self)
             self._plot_view.setMinimumHeight(420)
-            plot_ly.addWidget(self._plot_view, 1)
+            self._root.addWidget(self._plot_view, 1)
             self._plot_placeholder = None
         else:
             self._plot_view = None
@@ -150,18 +126,9 @@ class MedChemPlotPanel(QWidget):
             )
             self._plot_placeholder.setWordWrap(True)
             self._plot_placeholder.setAlignment(Qt.AlignCenter)
-            plot_ly.addWidget(self._plot_placeholder, 1)
-        root.addWidget(plot_host, 1)
+            self._root.addWidget(self._plot_placeholder, 1)
 
-        self._opts_panel = QWidget()
-        opts = QVBoxLayout(self._opts_panel)
-        opts.setContentsMargins(0, 0, 0, 0)
-        opts.setSpacing(6)
-
-        self._titles = PlotTitlesControls(self._opts_panel)
-        self._titles.changed.connect(self._on_titles_changed)
-        opts.addWidget(self._titles)
-
+        extras = self._extra_opts_layout
         options_gb = QGroupBox("Options")
         options_ly = QVBoxLayout(options_gb)
         options_ly.setSpacing(6)
@@ -180,77 +147,25 @@ class MedChemPlotPanel(QWidget):
         self.struct_src_combo = QComboBox()
         struct_row.addWidget(self.struct_src_combo, 1)
         options_ly.addLayout(struct_row)
-        opts.addWidget(options_gb)
+        extras.addWidget(options_gb)
 
-        color_row = QHBoxLayout()
-        color_row.setSpacing(6)
-        self._color_by_label = QLabel("Color by:")
-        color_row.addWidget(self._color_by_label)
-        self.color_combo = QComboBox()
-        self.color_combo.setMinimumWidth(120)
-        self.color_combo.currentIndexChanged.connect(self._on_color_column_changed)
-        color_row.addWidget(self.color_combo, 1)
-        self._spectrum_label = QLabel("Spectrum:")
-        color_row.addWidget(self._spectrum_label)
-        self.colorscale_combo = QComboBox()
-        self.colorscale_combo.setMinimumWidth(100)
-        self.colorscale_combo.addItems(PLOT_COLORSCALE_CHOICES)
-        self.colorscale_combo.setToolTip("Continuous colorscale for numeric Color by columns.")
-        self.colorscale_combo.currentIndexChanged.connect(self._on_color_column_changed)
-        color_row.addWidget(self.colorscale_combo)
-        self.color_range = PlotColorRangeControls()
-        self.color_range.connect_changed(self._on_color_column_changed)
-        color_row.addWidget(self.color_range)
-        opts.addLayout(color_row)
-
-        size_row = QHBoxLayout()
-        size_row.setSpacing(6)
-        self._size_by_label = QLabel("Size by:")
-        size_row.addWidget(self._size_by_label)
-        self.size_combo = QComboBox()
-        self.size_combo.setMinimumWidth(120)
-        self.size_combo.setToolTip("Size points by a table column (numeric or categorical).")
-        self.size_combo.currentIndexChanged.connect(self._on_size_column_changed)
-        size_row.addWidget(self.size_combo, 1)
-        self.size_range = PlotSizeRangeControls()
-        self.size_range.connect_changed(self._on_size_column_changed)
-        size_row.addWidget(self.size_range)
-        opts.addLayout(size_row)
-
-        self._hover_controls = PlotOnHoverControls(self._opts_panel)
-        self._hover_controls.changed.connect(self._on_hover_options_changed)
-        self._hover_controls.persist_changed.connect(self._on_hover_options_changed)
-        opts.addWidget(self._hover_controls)
-
+        trail = self._trailing_opts_layout
         self.summary_text = QTextEdit()
         self.summary_text.setReadOnly(True)
         self.summary_text.setMaximumHeight(52)
         apply_monospace_to_text_edit(self.summary_text)
-        opts.addWidget(QLabel("Summary"))
-        opts.addWidget(self.summary_text)
+        trail.addWidget(QLabel("Summary"))
+        trail.addWidget(self.summary_text)
 
-        self._opts_dialog = make_plot_options_dialog(self, self._opts_panel)
-
-        self._footer_bar = QWidget(self)
-        self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
-        foot = QHBoxLayout(self._footer_bar)
-        foot.setContentsMargins(0, 0, 0, 0)
-        foot.setSpacing(4)
-        self._opts_btn = make_plot_options_button(
-            self,
-            tooltip="Configure structure source, color, On Hover, and summary options.",
-        )
-        self._opts_btn.clicked.connect(self._open_plot_options)
-        foot.addWidget(self._opts_btn)
-        self._clear_sel_btn = make_clear_selection_button(self)
-        self._clear_sel_btn.clicked.connect(self._clear_selection)
-        foot.addWidget(self._clear_sel_btn)
+        foot = self._footer_bar.layout()
+        clear_idx = foot.indexOf(self._clear_sel_btn)
+        insert_at = clear_idx + 1 if clear_idx >= 0 else 2
         if plot_kind == "golden_triangle":
             self.select_region_btn = QPushButton("Triangle")
             self.select_region_btn.setToolTip("Select compounds inside the golden triangle.")
             self.select_region_btn.clicked.connect(self._on_select_in_triangle)
             style_plot_footer_text_button(self.select_region_btn)
-            foot.addWidget(self.select_region_btn)
+            foot.insertWidget(insert_at, self.select_region_btn)
         else:
             self.select_egg_btn = QPushButton("Egg")
             self.select_egg_btn.setToolTip("Select compounds inside the boiled egg.")
@@ -260,45 +175,20 @@ class MedChemPlotPanel(QWidget):
             self.select_yolk_btn.clicked.connect(self._on_select_in_yolk)
             style_plot_footer_text_button(self.select_egg_btn)
             style_plot_footer_text_button(self.select_yolk_btn)
-            foot.addWidget(self.select_egg_btn)
-            foot.addWidget(self.select_yolk_btn)
-        foot.addStretch(1)
-        self._add_to_main_btn = make_add_to_main_button(
-            self,
-            tooltip="Dock this plot beside the compound table.",
-        )
-        self._add_to_main_btn.clicked.connect(self._add_to_main_window)
-        foot.addWidget(self._add_to_main_btn)
-        self._send_window_btn = make_send_window_button(
-            self,
-            tooltip="Open this docked plot in a separate floating window.",
-        )
-        self._send_window_btn.clicked.connect(self._send_to_new_window)
-        foot.addWidget(self._send_window_btn)
-        self._close_plot_btn = make_close_plot_button(self)
-        self._close_plot_btn.clicked.connect(self._close_docked_plot)
-        foot.addWidget(self._close_plot_btn)
-        root.insertWidget(0, self._footer_bar)
+            foot.insertWidget(insert_at, self.select_egg_btn)
+            foot.insertWidget(insert_at + 1, self.select_yolk_btn)
 
         self._refresh_structure_sources()
         self._reload_color_columns()
         self._update_spectrum_controls()
         self._update_size_controls()
-        self._sync_footer_chrome()
+        self._finish_layout()
         self.setMinimumWidth(self.embedded_minimum_width())
         if session_restore:
             self.summary_text.setPlainText("")
         else:
             self.summary_text.setPlainText("Preparing plot…")
             QTimer.singleShot(0, self._start_refresh_job)
-
-    @staticmethod
-    def _set_combo_text(combo: QComboBox, text: str | None) -> None:
-        if not text:
-            return
-        idx = combo.findText(str(text))
-        if idx >= 0:
-            combo.setCurrentIndex(idx)
 
     def _medchem_dataset_to_dict(self, ds: MedChemSpaceDataset | None) -> dict | None:
         if ds is None:
@@ -336,15 +226,7 @@ class MedChemPlotPanel(QWidget):
             "window_title": self._window_title,
             "only_selected": bool(self.only_selected_cb.isChecked()),
             "struct_src": self.struct_src_combo.currentText(),
-            "color": self.color_combo.currentText(),
-            "colorscale": self.colorscale_combo.currentText(),
-            "color_min": self.color_range.color_min.text(),
-            "color_max": self.color_range.color_max.text(),
-            "size": self.size_combo.currentText(),
-            "size_min": float(self.size_range.size_min.value()),
-            "size_max": float(self.size_range.size_max.value()),
-            **self._titles.title_overrides(),
-            **self._hover_controls.collect_state(),
+            **self._collect_encoding_chrome_state(),
             "full_dataset": self._medchem_dataset_to_dict(self._full_dataset),
             "plot_dataset": self._medchem_dataset_to_dict(self._plot_dataset),
             "summary": self.summary_text.toPlainText(),
@@ -357,31 +239,7 @@ class MedChemPlotPanel(QWidget):
         if "only_selected" in state:
             self.only_selected_cb.setChecked(bool(state.get("only_selected")))
         self._set_combo_text(self.struct_src_combo, state.get("struct_src"))
-        self._set_combo_text(self.color_combo, state.get("color"))
-        self._set_combo_text(self.colorscale_combo, state.get("colorscale"))
-        self._set_combo_text(self.size_combo, state.get("size"))
-        cmin, cmax = state.get("color_min"), state.get("color_max")
-        if isinstance(cmin, str):
-            self.color_range.color_min.setText(cmin)
-        if isinstance(cmax, str):
-            self.color_range.color_max.setText(cmax)
-        try:
-            if state.get("size_min") is not None:
-                self.size_range.size_min.setValue(float(state["size_min"]))
-            if state.get("size_max") is not None:
-                self.size_range.size_max.setValue(float(state["size_max"]))
-        except (TypeError, ValueError):
-            pass
-        for edit, key in (
-            (self._titles.plot_title_edit, "plot_title"),
-            (self._titles.xaxis_title_edit, "xaxis_title"),
-            (self._titles.yaxis_title_edit, "yaxis_title"),
-        ):
-            val = state.get(key)
-            if isinstance(val, str):
-                edit.setText(val)
-        self._hover_controls.apply_state(state)
-        self._sync_hover_options_to_plot_view()
+        self._apply_encoding_chrome_state(state)
         self._full_dataset = self._medchem_dataset_from_dict(state.get("full_dataset"))
         self._plot_dataset = self._medchem_dataset_from_dict(state.get("plot_dataset"))
         summary = state.get("summary")
@@ -401,13 +259,6 @@ class MedChemPlotPanel(QWidget):
     def from_session_state(cls, parent_app, state: dict | None) -> "MedChemPlotPanel":
         return medchem_plot_panel_from_session(parent_app, state)
 
-    def embedded_minimum_width(self) -> int:
-        """Minimum dock width for the figure (options open in a separate dialog)."""
-        return 420
-
-    def embedded_preferred_width(self) -> int:
-        return max(self.embedded_minimum_width(), 640)
-
     def create_floating_dialog(self, parent_app: ChemicalTableApp) -> MedChemSpaceDialog:
         """Re-open this panel in a floating window after undocking from the main table."""
         return MedChemSpaceDialog(
@@ -423,58 +274,6 @@ class MedChemPlotPanel(QWidget):
             self._plot_view.clear_table_selection(update_plot=True)
         elif self.parent_app is not None:
             self.parent_app.clear_table_selection()
-
-    def _open_plot_options(self) -> None:
-        """Open the plot configuration dialog."""
-        show_plot_options_dialog(self._opts_dialog)
-
-    def _add_to_main_window(self) -> None:
-        """Dock this panel beside the compound table (from a floating dialog)."""
-        if self.parent_app is None:
-            return
-        dlg = self.window()
-        teardown = getattr(dlg, "_scope_sync_disconnect", None)
-        if callable(teardown):
-            teardown()
-        if not self.parent_app.dock_plot_widget(self):
-            return
-        if isinstance(dlg, MedChemSpaceDialog):
-            dlg._panel = None
-            dlg._force_close = True
-            dlg.close()
-
-    def _send_to_new_window(self) -> None:
-        if self.parent_app is not None:
-            self.parent_app.undock_plot_to_window(self)
-
-    def _close_docked_plot(self) -> None:
-        request_close_plot_widget(self)
-
-    def _is_docked_in_main_window(self) -> bool:
-        app = self.parent_app
-        if app is None:
-            return False
-        check = getattr(app, "is_plot_docked", None)
-        if callable(check):
-            return bool(check(self))
-        return getattr(app, "_docked_plot_widget", None) is self
-
-    def _sync_footer_chrome(self) -> None:
-        """Floating: opts + clear + Add. Docked: opts + clear + region + Send + Close."""
-        from ..dockable_plot import sync_docked_footer_bar
-
-        apply_plot_chrome_glyphs(self)
-        floating = isinstance(self.window(), MedChemSpaceDialog)
-        docked = self._is_docked_in_main_window()
-        self._add_to_main_btn.setVisible(floating)
-        self._send_window_btn.setVisible(docked)
-        self._close_plot_btn.setVisible(docked)
-        sync_docked_footer_bar(self, docked=docked)
-
-    def event(self, event):  # noqa: N802 — Qt API name
-        if event.type() == QEvent.ParentChange:
-            self._sync_footer_chrome()
-        return super().event(event)
 
     def _refresh_structure_sources(self) -> None:
         self.struct_src_combo.clear()
@@ -518,17 +317,6 @@ class MedChemPlotPanel(QWidget):
             self.size_combo.blockSignals(False)
         self._reload_hover_columns()
 
-    def _reload_hover_columns(self) -> None:
-        headers = list(getattr(self.parent_app, "headers", []) or []) if self.parent_app else []
-        self._hover_controls.reload_columns(headers)
-        self._sync_hover_options_to_plot_view()
-
-    def _sync_hover_options_to_plot_view(self) -> None:
-        self._hover_controls.apply_to_plot_view(getattr(self, "_plot_view", None))
-
-    def _on_hover_options_changed(self) -> None:
-        self._sync_hover_options_to_plot_view()
-
     def _on_scope_changed(self) -> None:
         self._reload_color_columns()
 
@@ -544,27 +332,7 @@ class MedChemPlotPanel(QWidget):
         self.color_range.set_enabled(enabled and numeric)
         self._update_size_controls()
 
-    def _update_size_controls(self) -> None:
-        self.size_range.set_enabled(self.size_combo.currentText() != "(none)")
-
-    def _current_color_bounds(self) -> tuple[float | None, float | None]:
-        return self.color_range.parse_bounds()
-
-    def _current_size_bounds(self) -> tuple[float, float]:
-        return self.size_range.parse_bounds()
-
-    def _current_colorscale(self) -> str:
-        return resolve_plot_colorscale(self.colorscale_combo.currentText())
-
-    def _on_color_column_changed(self, _index: int = 0) -> None:
-        self._update_spectrum_controls()
-        self._push_plot_figure()
-
-    def _on_titles_changed(self) -> None:
-        self._push_plot_figure()
-
-    def _on_size_column_changed(self, _index: int = 0) -> None:
-        self._update_size_controls()
+    def _rebuild_figure(self) -> None:
         self._push_plot_figure()
 
     def _descriptor_column_names(self) -> tuple[str | None, str | None, str | None, str | None]:
@@ -1044,27 +812,12 @@ class MedChemPlotPanel(QWidget):
 
     def _color_values_for_oids(self, oids: list[int], color_col: str | None) -> list[Any] | None:
         """One color value per plotted OID, in ``dataset.oids`` order (raw table cell)."""
-        if not color_col or color_col == "(none)" or self.parent_app is None:
-            return None
-        model = self.parent_app._table_model
-        out: list[Any] = []
-        for oid in oids:
-            row = self.parent_app.logical_row_for_oid(int(oid))
-            if row < 0:
-                out.append(None)
-                continue
-            raw = model.value_for_header(row, color_col)
-            out.append(raw if (raw or "").strip() else None)
-        return out
+        return self._column_values_for_oids(oids, color_col)
 
     def _displayed_plot_dataset(self) -> MedChemSpaceDataset | None:
         if self._plot_dataset is None:
             return None
         return self._plot_dataset.subset_oids(visible_oids_for_plot(self.parent_app))
-
-    def _schedule_plot(self) -> None:
-        """Re-draw using the currently visible table rows."""
-        self._push_plot_figure()
 
     def _push_plot_figure(self) -> None:
         dataset = self._displayed_plot_dataset()

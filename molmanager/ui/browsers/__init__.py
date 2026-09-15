@@ -14,6 +14,4 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Compatibility shim. Implementation lives in ``molmanager.ui.browsers.selection_browser``."""
-
-from .browsers.selection_browser import *  # noqa: F401,F403
+"""Result browsers (SOM, selection, MMP, SALI, metabolites)."""

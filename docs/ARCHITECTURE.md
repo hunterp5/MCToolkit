@@ -87,7 +87,7 @@ flowchart TB
 | `ReactionToolsMixin` | Reaction-based enumeration |
 | `ToolsSqlPredictMixin` | Composite: table calc, viewers, external records, dock, SQL load, predictors |
 
-**Filter bounds:** bulk load/ingest calls `schedule_calculate_global_bounds()` (debounced); undo and session JSON restore call `calculate_global_bounds()` immediately when filter cards need fresh min/max.
+**Filter bounds:** bulk load/ingest calls `schedule_calculate_global_bounds()` (debounced); undo calls `calculate_global_bounds()` immediately when filter cards need fresh min/max. Session restore installs saved `global_bounds` when present and otherwise scans immediately.
 
 ## Table and visibility
 
@@ -116,10 +116,15 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 
 - **Plotter:** `ui/plot.py` (`PlotWidget`)
 - **Dock host:** `ui/plot_dock_host.py` (`PlotDockHost`) owns dock/undock, panel width, and pane close; `PlotToolsMixin` delegates the public API
-- **PCA / radar / dimred:** `ui/plotly_interactive_view.py`; dimred panel is `ui/dialogs/dimred_panel.py`, method dialogs stay in `ui/dialogs/dimensionality_reduction.py`
+- **PCA / radar / dimred:** `ui/plotly_interactive_view.py`; dimred panel is `ui/dialogs/dimred_panel.py` (`DockableResultPlotPanel`), method dialogs stay in `ui/dialogs/dimensionality_reduction.py`
+- **MedChem space:** `ui/dialogs/medchem_space.py` (`MedChemPlotPanel` also subclasses `DockableResultPlotPanel`)
 - **Shared helpers:** `ui/plot_table_sync.py` (selection mapping, clear override); `ui/plotly_shell.py` + `ui/plotly_shell.html` (interactive Plotly HTML/JS for Plotter + Plotly views)
+- **Result maps:** `ui/result_plot_panel.py` (`DockableResultPlotPanel`) is the shared dock chrome for SALI / MMP / cliffs / dimred / MedChem
 - **Docked-plot chrome:** `ui/dockable_plot.py` re-exports glyphs, floating titles, footer buttons, and pane embed (`dockable_plot_glyphs.py`, `_title.py`, `_chrome.py`, `_embed.py`)
-- **Filters:** `FilterPanelMixin` composes cards, apply, substructure, and bounds mixins under `ui/filters/`
+- **Workspace panes:** `ui/main_window/plot_pane.py` (`PlotPane`); `ui/main_window/workspace_layout.py` (`WorkspaceLayoutManager`)
+- **Result browsers:** `ui/browsers/` (SOM, selection, MMP, SALI, metabolites) with shims at `ui/*_browser.py`
+- **Filters:** `FilterPanelMixin` composes cards, apply, substructure, and bounds mixins under `ui/filters/` (`card_chrome.py` plus per-type card modules; `cards.py` is the barrel)
+- **Conformer writeback:** `ui/main_window/conformer_writeback.py` (table append / packed ensemble / superpose mol lookup); `ConformersToolsMixin` stays the UI adapter
 - **Table → plot:** debounced `_schedule_sync_active_plots_from_table_selection`
 - **Plot → table:** `apply_table_selection_for_source_rows`
 - **Filters / edits:** `_schedule_active_plots_replot` after filter apply; `dataChanged` on model for open plots
@@ -210,11 +215,12 @@ IO/residue maps are `protein_prepare_io.py`, pdb2pqr is `protein_prepare_pdb2pqr
 OpenMM min is `protein_prepare_minimize.py`. Tests patch names on the runtime module.
 
 Auto Render 2D after ingest/session: the loading overlay stays until filter bounds
-are ready, auto Structure renders finish (when started), and restored plot views
-have settled. Above `auto_render_2d_max_rows` auto 2D is skipped and the overlay
-lifts after bounds (and plots for sessions). Lazy PNG store thresholds
-(`structure_render_lazy_*`) still control how images are stored, not when the
-workspace appears.
+are ready and restored plot views have settled. Auto Structure renders start in the
+background and do not block the workspace. Above `auto_render_2d_max_rows` auto 2D
+is skipped. Lazy PNG store thresholds (`structure_render_lazy_*`) still control how
+images are stored, not when the workspace appears. Session files store 2D mol
+binaries and numeric filter bounds so Open can skip SMILES re-parse and a full
+bounds scan.
 
 ## Related docs
 

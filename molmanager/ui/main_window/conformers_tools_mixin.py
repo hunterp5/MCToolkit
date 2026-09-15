@@ -30,15 +30,11 @@ from rdkit import Chem
 
 import logging
 
-from ...conformer_output import iter_single_conformer_mols, write_conformer_results_to_sdf
+from ...conformer_output import write_conformer_results_to_sdf
 from ...confs_codec import (
-    demote_v1_cell_to_sidecar,
-    pack_confs_cell,
     rehydrate_v1_confs_cell,
     unpack_confs_blocks_json_b64,
 )
-from ...services.column_labels import COLUMN_PARENT_OID
-from ...utils import mol_to_canonical_smiles
 from ...workers import (
     ConformerGenerationWorker,
     SuperposeConformersWorker,
@@ -266,52 +262,9 @@ class ConformersToolsMixin:
 
     def _append_generated_conformers_as_rows(self, results: list) -> int:
         """Append one table row per generated conformer; keep 3D coordinates in ``self.mols``."""
-        records: list[tuple[str, dict[str, str], Chem.Mol]] = []
-        for item in results:
-            if len(item) < 2:
-                continue
-            parent_oid, mol = int(item[0]), item[1]
-            if mol is None:
-                continue
-            for conf_i, cm in enumerate(iter_single_conformer_mols(mol)):
-                smi = mol_to_canonical_smiles(cm)
-                if not smi:
-                    continue
-                records.append(
-                    (
-                        smi,
-                        {
-                            COLUMN_PARENT_OID: str(parent_oid),
-                            "Conformer": str(conf_i + 1),
-                        },
-                        cm,
-                    )
-                )
-        if not records:
-            return 0
-        field_names: set[str] = set()
-        for _smi, fields, _mol in records:
-            field_names.update(fields.keys())
-        self._ensure_columns(["SMILES"] + sorted(field_names))
-        batch_rows: list[tuple[int, dict[str, str]]] = []
-        new_mols: list[tuple[int, Chem.Mol]] = []
-        for smiles, fields, mol in records:
-            oid = self.next_oid
-            self.next_oid += 1
-            row_cells: dict[str, str] = {}
-            for h in self.headers[2:]:
-                if h == "SMILES":
-                    row_cells[h] = smiles
-                else:
-                    row_cells[h] = str(fields.get(h, "") or "")
-            batch_rows.append((oid, row_cells))
-            new_mols.append((oid, mol))
-        self._table_model.append_rows_batch(batch_rows)
-        for oid, mol in new_mols:
-            self.mols[oid] = mol
-            self.start_render_worker(oid, mol)
-        self._sync_global_bounds_for_headers(sorted(field_names), refresh_filters=False)
-        return len(batch_rows)
+        from .conformer_writeback import append_generated_conformers_as_rows
+
+        return append_generated_conformers_as_rows(self, results)
 
     def export_conformer_viewer_to_table(
         self,
@@ -329,145 +282,16 @@ class ConformersToolsMixin:
         (created if missing) so View Conformers works again. When *strain_overlay*
         is present, also writes ``E_kcal``, ``(delta)E_kcal``, and ``RMSD``.
         """
-        import base64
-        import json
+        from .conformer_writeback import export_conformer_viewer_to_table
 
-        from ..mol_viewer_3d import prepare_mol_2d
-
-        raw = (blocks_json_b64 or "").strip()
-        if not raw:
-            return 0
-        try:
-            blocks = json.loads(base64.b64decode(raw.encode("ascii")))
-        except Exception:
-            return 0
-        if not isinstance(blocks, list) or not blocks:
-            return 0
-
-        n_blocks = len(blocks)
-        if conf_indices is None:
-            indices = list(range(n_blocks))
-        else:
-            indices = [i for i in conf_indices if isinstance(i, int) and 0 <= i < n_blocks]
-        if not indices:
-            return 0
-
-        confs_col = (confs_column or "confs").strip() or "confs"
-        overlay = strain_overlay if isinstance(strain_overlay, dict) else None
-        energies = (overlay or {}).get("energies") if overlay else None
-        deltas = (overlay or {}).get("deltas") if overlay else None
-        rmsds = (overlay or {}).get("rmsds") if overlay else None
-        has_e = isinstance(energies, list) and len(energies) == n_blocks
-        has_de = isinstance(deltas, list) and len(deltas) == n_blocks
-        has_rms = isinstance(rmsds, list) and len(rmsds) == n_blocks
-
-        ensure_cols = ["SMILES", COLUMN_PARENT_OID, "Conformer", confs_col]
-        if has_e:
-            ensure_cols.append("E_kcal")
-        if has_de:
-            ensure_cols.append("(delta)E_kcal")
-        if has_rms:
-            ensure_cols.append("RMSD")
-        self._ensure_columns(ensure_cols)
-
-        sc = getattr(self, "_confs_blocks_sidecar", None)
-        if sc is None:
-            self._confs_blocks_sidecar = {}
-            sc = self._confs_blocks_sidecar
-
-        def _fmt_num(val) -> str:
-            try:
-                return f"{float(val):.6g}"
-            except Exception:
-                return ""
-
-        batch_rows: list[tuple[int, dict[str, str]]] = []
-        new_mols: list[tuple[int, Chem.Mol]] = []
-        confs_pairs: list[tuple[int, str]] = []
-        field_names: set[str] = set()
-
-        for conf_i in indices:
-            enc = blocks[conf_i]
-            if not isinstance(enc, str) or not enc.strip():
-                continue
-            try:
-                mol_block = base64.b64decode(enc.encode("ascii")).decode("utf-8")
-            except Exception:
-                continue
-            mol3d = Chem.MolFromMolBlock(mol_block, sanitize=True, removeHs=False)
-            if mol3d is None:
-                mol3d = Chem.MolFromMolBlock(mol_block, sanitize=False, removeHs=False)
-            if mol3d is None:
-                continue
-            # Structure column keeps a 2D depiction; packed confs holds the 3D coordinates.
-            depict = prepare_mol_2d(mol3d)
-            if depict is None:
-                depict = Chem.Mol(mol3d)
-
-            smi = mol_to_canonical_smiles(depict) or mol_to_canonical_smiles(mol3d) or ""
-            meta = {
-                "ok": True,
-                "op": "viewer_export",
-                "n_kept": 1,
-                "n_packed": 1,
-            }
-            packed = pack_confs_cell(meta, mol3d)
-            light, b64 = demote_v1_cell_to_sidecar(packed, confs_col)
-
-            oid = self.next_oid
-            self.next_oid += 1
-            if b64 is not None:
-                sc[(oid, confs_col)] = b64
-
-            row_cells: dict[str, str] = {}
-            for h in self.headers[2:]:
-                if h == "SMILES":
-                    row_cells[h] = smi
-                elif h == COLUMN_PARENT_OID:
-                    row_cells[h] = "" if parent_oid is None else str(int(parent_oid))
-                elif h == "Conformer":
-                    row_cells[h] = str(int(conf_i) + 1)
-                elif h == confs_col:
-                    row_cells[h] = light
-                elif h == "E_kcal" and has_e:
-                    row_cells[h] = _fmt_num(energies[conf_i])
-                elif h == "(delta)E_kcal" and has_de:
-                    row_cells[h] = _fmt_num(deltas[conf_i])
-                elif h == "RMSD" and has_rms:
-                    row_cells[h] = _fmt_num(rmsds[conf_i])
-                else:
-                    row_cells[h] = ""
-            batch_rows.append((oid, row_cells))
-            new_mols.append((oid, depict))
-            confs_pairs.append((oid, light))
-            field_names.update(row_cells.keys())
-
-        if not batch_rows:
-            return 0
-
-        self.table.setSortingEnabled(False)
-        try:
-            self.table.setUpdatesEnabled(False)
-        except Exception:
-            pass
-        try:
-            self._table_model.append_rows_batch(batch_rows)
-            for oid, mol in new_mols:
-                self.mols[oid] = mol
-                self.start_render_worker(oid, mol)
-            if confs_pairs:
-                self._table_model.set_column_text_by_oids(confs_col, confs_pairs)
-            self._sync_global_bounds_for_headers(sorted(field_names), refresh_filters=False)
-            self.schedule_calculate_global_bounds()
-        finally:
-            try:
-                self.table.setUpdatesEnabled(True)
-            except Exception:
-                pass
-        self.status_label.setText(
-            f"Exported {len(batch_rows)} conformer row(s) from the 3D viewer."
+        return export_conformer_viewer_to_table(
+            self,
+            blocks_json_b64=blocks_json_b64,
+            conf_indices=conf_indices,
+            strain_overlay=strain_overlay,
+            parent_oid=parent_oid,
+            confs_column=confs_column,
         )
-        return len(batch_rows)
 
     def open_superpose(self, default_target: str | None = None):
         if not self.headers or self._table_model.rowCount() == 0:
@@ -603,65 +427,17 @@ class ConformersToolsMixin:
 
     def _mol_3d_for_structure_superpose(self, oid: int, src: str) -> Chem.Mol | None:
         """Best-effort 3D mol for structure superposition from *src* (Structure / confs / …)."""
-        from ...confs_codec import mol_from_packed_confs_cell, mol_has_3d_coordinates
-        from ..mol_viewer_3d import prepare_mol_3d
+        from .conformer_writeback import mol_3d_for_structure_superpose
 
-        r = self.logical_row_for_oid(oid)
-        if r < 0:
-            return None
-        src_h = (src or "Structure").strip() or "Structure"
-        if src_h != "Structure" and src_h in self.headers:
-            raw = self._table_model.backing_value_for_row_header(r, src_h)
-            sc = getattr(self, "_confs_blocks_sidecar", {}) or {}
-            full = rehydrate_v1_confs_cell(raw, src_h, int(oid), sc)
-            packed = mol_from_packed_confs_cell(full, min_conformers=1)
-            if packed is not None and mol_has_3d_coordinates(packed):
-                return packed
-        m = self.mols.get(oid)
-        if m is None:
-            m = self._mol_for_structure_row(r)
-        if m is None:
-            return None
-        if mol_has_3d_coordinates(m):
-            return Chem.Mol(m)
-        # Prefer packed confs even when source is Structure.
-        for col in ("confs", "superpose"):
-            if col not in self.headers:
-                continue
-            raw = self._table_model.backing_value_for_row_header(r, col)
-            sc = getattr(self, "_confs_blocks_sidecar", {}) or {}
-            full = rehydrate_v1_confs_cell(raw, col, int(oid), sc)
-            packed = mol_from_packed_confs_cell(full, min_conformers=1)
-            if packed is not None and mol_has_3d_coordinates(packed):
-                return packed
-        return prepare_mol_3d(m)
+        return mol_3d_for_structure_superpose(self, oid, src)
 
     def _mol_for_structure_superpose(
         self, oid: int, src: str, *, geometry: str = "3d"
     ) -> Chem.Mol | None:
         """Molecule for structure superposition; 2D does not require 3D coordinates."""
-        geom = str(geometry or "3d").strip().lower()
-        if not geom.startswith("2"):
-            return self._mol_3d_for_structure_superpose(oid, src)
-        from ...confs_codec import mol_from_packed_confs_cell
+        from .conformer_writeback import mol_for_structure_superpose
 
-        r = self.logical_row_for_oid(oid)
-        if r < 0:
-            return None
-        src_h = (src or "Structure").strip() or "Structure"
-        if src_h != "Structure" and src_h in self.headers:
-            raw = self._table_model.backing_value_for_row_header(r, src_h)
-            sc = getattr(self, "_confs_blocks_sidecar", {}) or {}
-            full = rehydrate_v1_confs_cell(raw, src_h, int(oid), sc)
-            packed = mol_from_packed_confs_cell(full, min_conformers=1)
-            if packed is not None:
-                return packed
-        m = self.mols.get(oid)
-        if m is None:
-            m = self._mol_for_structure_row(r)
-        if m is None:
-            return None
-        return Chem.Mol(m)
+        return mol_for_structure_superpose(self, oid, src, geometry=geometry)
 
     def _run_superpose_structures(self, d) -> None:
         only_selected = d.only_selected_rows()
@@ -906,24 +682,12 @@ class ConformersToolsMixin:
 
     def _next_packed_ensemble_column(self, base: str) -> str:
         """Return a unique packed-ensemble header, inserting it when it is not already in the table."""
-        col = self._unique_table_column_names([base])[0]
-        if col not in self.headers:
-            col_at = len(self.headers)
-            self.headers.append(col)
-            self._table_model.insert_column_at(col_at, col, None)
-        return col
+        from .conformer_writeback import next_packed_ensemble_column
+
+        return next_packed_ensemble_column(self, base)
 
     def _write_packed_ensemble_cells(self, column: str, pairs: list[tuple[int, str]]) -> None:
         """Store packed ensembles under *column*, demoting payloads into the sidecar keyed by that header."""
-        sc = getattr(self, "_confs_blocks_sidecar", None)
-        if sc is None:
-            self._confs_blocks_sidecar = {}
-            sc = self._confs_blocks_sidecar
-        out: list[tuple[int, str]] = []
-        for oid, cell in pairs:
-            light, b64 = demote_v1_cell_to_sidecar(str(cell or ""), column)
-            if b64 is not None:
-                sc[(int(oid), column)] = b64
-            out.append((int(oid), light))
-        if out:
-            self._table_model.set_column_text_by_oids(column, out)
+        from .conformer_writeback import write_packed_ensemble_cells
+
+        return write_packed_ensemble_cells(self, column, pairs)
