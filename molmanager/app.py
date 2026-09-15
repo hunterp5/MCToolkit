@@ -84,7 +84,12 @@ def main(argv: list[str] | None = None) -> int:
         argv = sys.argv
 
     _configure_logging()
-    configure_rdkit_for_desktop_app()
+    try:
+        configure_rdkit_for_desktop_app()
+    except RuntimeError as exc:
+        logger.error("%s", exc)
+        print(exc, file=sys.stderr)
+        return 1
 
     if "--demo-table-model" in argv:
         from .table_model_demo import main as demo_main

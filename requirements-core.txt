@@ -13,14 +13,17 @@ PyQt5>=5.15
 PyQtWebEngine>=5.15
 # Keep Plotly in the v5 line for broader Qt WebEngine compatibility.
 plotly>=5.0,<6
-# RDKit wheels are built against NumPy 1.x; NumPy 2.x causes _ARRAY_API / import failures.
+# Stay on NumPy 1.x: PyTorch 2.5.1 and umap-learn/numba are still more reliable on
+# 1.26 than on NumPy 2. RDKit 2025.9+ supports either; this pin is not an RDKit ABI limit.
 numpy>=1.24,<2
 pandas>=2.0
 scipy>=1.10
 sqlalchemy>=2.0
 pubchempy>=1.0.4
 chembl_webresource_client>=0.10.9
-rdkit>=2022.9.5
+# Official PyPI name is `rdkit`. Do not install `rdkit-pypi` (last release 2022.9.5);
+# both packages share the `rdkit` import path and the old one will shadow the new wheels.
+rdkit>=2025.9.1
 # Fast JSON for compact .cms session files.
 orjson>=3.9
 # Official Open Babel wheels (obabel + Confab) for Systematic conformers.

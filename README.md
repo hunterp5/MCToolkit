@@ -13,7 +13,7 @@ This guide walks you through installation from scratch. It assumes you are new t
 | **Computer** | Windows 10 or later, macOS 10.15+, or a recent Linux distribution |
 | **Internet** | Required to download Python, MolManager, and dependencies |
 | **Disk space** | About 1–2 GB for a basic install; more if you add optional machine-learning tools (pKa prediction, permeability models) |
-| **Python** | Version **3.10**, **3.11**, or **3.12** (**3.11 is recommended**). Do **not** use 3.13 or newer — NumPy 1.x (required by RDKit) has no Windows wheels for those versions, so pip tries to compile NumPy and fails without Visual Studio |
+| **Python** | Version **3.10**, **3.11**, or **3.12** (**3.11 is recommended**). Do **not** use 3.13 or newer — MolManager pins NumPy 1.x (PyTorch 2.5 / UMAP), and NumPy 1.26 has no Windows wheels for those versions, so pip tries to compile NumPy and fails without Visual Studio |
 
 You do **not** need to know how to program. You will copy and paste a few commands into a terminal window.
 
@@ -292,7 +292,7 @@ This removes conflicting packages (such as **admet-ai**) and reinstalls from `re
 
 ### Docking (Smina)
 
-Docking is **Tools → Dock → Smina…** (file-based CLI). Receptor PDBQT still comes from **Prepare → Receptor PDB…** then **Prepare → PDBQT…**. Ligand PDBQT can come from the same PDBQT dialog (Meeko). Python pieces are in the docking extra (`pip install -e ".[docking]"` or `requirements.txt`). Protein Viewer **Prepare…** GAFF2 ligand min also needs OpenFF Toolkit from conda-forge (`conda install -c conda-forge openff-toolkit`) on Linux, macOS, or WSL — it is not on PyPI and is not supported on native Windows.
+Docking is **Tools → Dock → Smina…** (file-based CLI). Receptor PDBQT still comes from **Prepare → Receptor PDB…** then **Prepare → PDBQT…**. Ligand PDBQT can come from the same PDBQT dialog (Meeko). Python pieces are in the docking extra (`pip install -e ".[docking]"` or `requirements.txt`).
 
 The **Smina** engine is not included in the Python install. Download a binary from [https://sourceforge.net/projects/smina](https://sourceforge.net/projects/smina) or your package manager, then either:
 
@@ -336,7 +336,13 @@ python scripts/bootstrap_gnn_mtl_model.py
 
 ### BioTransformer (Predict Metabolites)
 
-The JAR is **not** in git. Install a JRE so `java` is on `PATH`, then download BioTransformer 3.0 (`biotransformer-3.0.0.jar`, `database/`, `supportfiles/`) from [GitHub](https://github.com/Wishartlab-openscience/Biotransformer) or [Bitbucket](https://bitbucket.org/wishartlab/biotransformer3.0jar). Put those files in `molmanager/resources/models/biotransformer/`, or set `MOLMANAGER_BIOTRANSFORMER_JAR` to the JAR (the two folders must sit next to it). Official docs target UNIX; on Windows try a current JRE, or run the JAR under WSL.
+The JAR is **not** in git. Install a JRE so `java` is on `PATH`, then download BioTransformer 3 once:
+
+```bash
+python scripts/bootstrap_biotransformer.py
+```
+
+That places the official Bitbucket package (`BioTransformer3.0_20230525.jar`, `btkb/`, `supportfiles/`) in `molmanager/resources/models/biotransformer/`. You can also **Browse JAR…** in Predict Metabolites, or set `MOLMANAGER_BIOTRANSFORMER_JAR` (the knowledge-base folder and `supportfiles/` must sit next to the JAR). Manual download: [Bitbucket](https://bitbucket.org/wishartlab/biotransformer3.0jar) / [GitHub](https://github.com/Wishartlab-openscience/Biotransformer). Official docs target UNIX; on Windows try a current JRE, or run the JAR under WSL.
 
 ---
 
@@ -358,7 +364,7 @@ Then activate the venv again.
 
 ### NumPy Meson / “Unknown compiler” / `vswhere.exe` (Windows)
 
-Pip is trying to **compile** NumPy from source. That happens when the venv is Python **3.13 or 3.14**: MolManager needs **NumPy 1.x** (RDKit wheels break on NumPy 2), and NumPy 1.26 has no pre-built Windows wheels for 3.13+.
+Pip is trying to **compile** NumPy from source. That happens when the venv is Python **3.13 or 3.14**: MolManager pins **NumPy 1.x** (PyTorch 2.5 / UMAP), and NumPy 1.26 has no pre-built Windows wheels for 3.13+.
 
 Do **not** install Visual Studio to “fix” this. Recreate the venv with Python 3.11:
 
@@ -376,18 +382,23 @@ pip install -e .
 
 ### RDKit or NumPy errors (`_ARRAY_API`, import failures)
 
-MolManager pins **NumPy 1.x** because current RDKit wheels are not compatible with NumPy 2.x. Reinstall dependencies:
+MolManager needs the official **`rdkit`** package (**2025.9 or newer**), not the obsolete **`rdkit-pypi`** name (last release 2022.9.5). Both install into the same `rdkit` import path, so an old `rdkit-pypi` copy will shadow newer wheels — `import rdkit` then reports 2022.x even if `pip show rdkit` lists 2026.
+
+Use this project's **`.venv`**, not a global conda/base Python that has other chemistry tools. Then:
 
 ```bash
+pip uninstall rdkit-pypi
 pip install -r requirements.txt --force-reinstall
 ```
 
-If `rdkit-pypi` still fails on your system, use **conda** for RDKit and pip for the rest:
+MolManager still pins **NumPy 1.x** because PyTorch 2.5 and UMAP/Numba are more reliable on 1.26 than on NumPy 2. That is independent of RDKit (2025.9+ supports NumPy 2).
+
+If wheels still fail on your system, use **conda** for RDKit and pip for the rest:
 
 ```bash
 conda create -n molmanager python=3.11
 conda activate molmanager
-conda install -c conda-forge rdkit pyqt
+conda install -c conda-forge "rdkit>=2025.09.1" pyqt
 pip install -r requirements.txt
 pip install -e .
 ```
@@ -475,7 +486,7 @@ Optional settings for power users and IT deployments:
 | `MOLMANAGER_LOG_DIR` | Directory for rotating `molmanager.log` (platform default under user app data / state) |
 | `MOLMANAGER_LOG_TO_FILE` | Set to `0` / `false` to disable file logging (console only) |
 | `MOLMANAGER_BUNDLE_DIR` | Folder containing optional `vina` / `smina` binaries |
-| `MOLMANAGER_BIOTRANSFORMER_JAR` | Path to `biotransformer-3.0.0.jar` (`database/` and `supportfiles/` must be siblings of the JAR) |
+| `MOLMANAGER_BIOTRANSFORMER_JAR` | Path to the BioTransformer JAR (`btkb/` or `database/`, and `supportfiles/`, must be siblings of the JAR) |
 
 **Custom calculator:** expressions always use a restricted AST interpreter (`safe_calc`). Treat them as trusted input only. `MOLMANAGER_CUSTOM_CALC_LEGACY_EVAL` is retired and ignored if set.
 

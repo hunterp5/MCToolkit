@@ -171,7 +171,7 @@ def permeability_stack_import_error() -> str | None:
         msg = str(e).lower()
         if "_array_api" in msg or "numpy" in msg:
             return (
-                "Chemprop/RDKit need NumPy 1.x (NumPy 2 breaks RDKit in this stack).\n\n"
+                "This stack needs NumPy 1.x (PyTorch 2.5 / UMAP). NumPy 2 is not supported yet.\n\n"
                 "  pip install -r requirements.txt\n\n"
                 f"Details: {e}"
             )
