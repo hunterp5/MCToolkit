@@ -70,10 +70,9 @@ _TABLE_MAX_HEIGHT = _THUMB_H * 3 + 56
 
 _COL_ROLE = 0
 _COL_STRUCT = 1
-_COL_SMILES = 2
-_COL_REACTION = 3
-_COL_ENZYME = 4
-_COL_STEP = 5
+_COL_REACTION = 2
+_COL_ENZYME = 3
+_COL_STEP = 4
 _SMILES_ROLE = Qt.UserRole
 _KIND_ROLE = Qt.UserRole + 1
 
@@ -282,17 +281,8 @@ class MetaboliteBrowserWidget(QWidget):
         preview_ly.addWidget(self._struct_label, 1)
         root.addWidget(self._preview_host, 1)
 
-        self._canvas_caption = QLabel("")
-        self._canvas_caption.setAlignment(Qt.AlignCenter)
-        self._canvas_caption.setWordWrap(True)
-        self._canvas_caption.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._canvas_caption.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        root.addWidget(self._canvas_caption)
-
-        self._table = QTableWidget(0, 6)
-        self._table.setHorizontalHeaderLabels(
-            ["Role", "Structure", "SMILES", "Reaction", "Enzyme", "Step"]
-        )
+        self._table = QTableWidget(0, 5)
+        self._table.setHorizontalHeaderLabels(["Role", "Structure", "Reaction", "Enzyme", "Step"])
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -302,7 +292,6 @@ class MetaboliteBrowserWidget(QWidget):
         hdr = self._table.horizontalHeader()
         hdr.setSectionResizeMode(_COL_ROLE, QHeaderView.ResizeToContents)
         hdr.setSectionResizeMode(_COL_STRUCT, QHeaderView.ResizeToContents)
-        hdr.setSectionResizeMode(_COL_SMILES, QHeaderView.Stretch)
         hdr.setSectionResizeMode(_COL_REACTION, QHeaderView.Stretch)
         hdr.setSectionResizeMode(_COL_ENZYME, QHeaderView.ResizeToContents)
         hdr.setSectionResizeMode(_COL_STEP, QHeaderView.ResizeToContents)
@@ -354,14 +343,14 @@ class MetaboliteBrowserWidget(QWidget):
         self._close_btn.clicked.connect(self._close_docked_browser)
         style_plot_footer_text_button(self._close_btn)
         foot.addWidget(self._close_btn)
+        foot.addStretch()
         self._cb_only_selected = QCheckBox("Browse Only Selected")
         self._cb_only_selected.setToolTip(
             "When checked, this browser walks only table rows that are currently selected."
         )
         self._cb_only_selected.toggled.connect(self._on_only_selected_toggled)
         foot.addWidget(self._cb_only_selected)
-        foot.addStretch()
-        root.insertWidget(0, self._footer_bar)
+        root.addWidget(self._footer_bar)
 
         self._btn_first.clicked.connect(self._go_first)
         self._btn_back.clicked.connect(lambda: self._step(-1))
@@ -647,18 +636,6 @@ class MetaboliteBrowserWidget(QWidget):
         self._struct_label.setPixmap(pm)
         self._struct_label.setText("")
 
-    def _refresh_caption(self) -> None:
-        smiles = self._canvas_smiles
-        kind = self._canvas_kind or ROLE_PARENT
-        rec = self._current()
-        if rec is None:
-            self._canvas_caption.setText("No metabolite results.")
-            return
-        if not smiles:
-            self._canvas_caption.setText(rec.error or "")
-            return
-        self._canvas_caption.setText(f"{kind}: {smiles}")
-
     def _on_table_selection_changed(self) -> None:
         if self._filling_table:
             return
@@ -674,7 +651,6 @@ class MetaboliteBrowserWidget(QWidget):
             return
         self._canvas_smiles = smiles
         self._canvas_kind = kind
-        self._refresh_caption()
         self._refresh_preview()
 
     def _set_table_row(
@@ -700,7 +676,6 @@ class MetaboliteBrowserWidget(QWidget):
         if thumb is not None:
             struct_item.setData(Qt.DecorationRole, thumb)
         self._table.setItem(row, _COL_STRUCT, struct_item)
-        self._table.setItem(row, _COL_SMILES, QTableWidgetItem(smiles))
         self._table.setItem(row, _COL_REACTION, QTableWidgetItem(reaction))
         self._table.setItem(row, _COL_ENZYME, QTableWidgetItem(enzyme))
         step = "" if generation is None else str(generation)
@@ -759,7 +734,6 @@ class MetaboliteBrowserWidget(QWidget):
         self._btn_last.setEnabled(enabled)
         self._btn_select.setEnabled(rec is not None and rec.oid is not None)
         self._fill_table(rec)
-        self._refresh_caption()
         self._refresh_preview()
 
 

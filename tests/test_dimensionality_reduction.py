@@ -29,8 +29,19 @@ from molmanager.dimensionality_reduction import (
     run_som,
     run_tsne,
     run_umap,
+    subsample_row_indices,
 )
 from molmanager.ui.dimred_plot import build_dimension_reduction_figure
+
+
+def test_subsample_row_indices_keeps_small_n_and_caps_huge_requests():
+    idx = subsample_row_indices(80, max_points=30, random_state=0)
+    assert len(idx) == 30
+    assert list(idx) == sorted(idx)
+    full = subsample_row_indices(40, max_points=100, random_state=0)
+    assert len(full) == 40
+    capped = subsample_row_indices(80_000, max_points=100_000, random_state=1)
+    assert len(capped) == 25_000
 
 
 def test_prepare_numeric_matrix_drops_incomplete_rows():

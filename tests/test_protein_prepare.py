@@ -114,6 +114,62 @@ def test_pdb2pqr_argv_includes_propka_and_ph():
     assert "lig.mol2" in lig
 
 
+def test_drop_uncappable_polymer_residues_n_only_gln():
+    from molmanager.workers.protein_prepare_pdb2pqr import drop_uncappable_polymer_residues
+
+    stub = _ALA_PDB.replace(
+        "END\n",
+        "ATOM      6  N   GLN A1169     -15.761  23.268   9.328  1.00 72.96           N\n"
+        "TER       7      GLN A1169\n"
+        "END\n",
+    )
+    cleaned, dropped = drop_uncappable_polymer_residues(stub, "pdb")
+    assert ("A", "1169", "") in dropped
+    assert ("A", "1", "") not in dropped
+    assert "1169" not in cleaned
+    assert "ALA" in cleaned
+
+
+def test_run_pdb2pqr_reports_chained_value_error(tmp_path, monkeypatch):
+    pytest.importorskip("pdb2pqr")
+    from molmanager.workers.protein_prepare_pdb2pqr import _run_pdb2pqr
+
+    inner = ValueError(
+        "Too few atoms present to reconstruct or cap residue GLN A 1169 in structure!"
+    )
+    outer = RuntimeError()
+    outer.__cause__ = inner
+
+    def _boom(_argv):
+        raise outer
+
+    monkeypatch.setattr("pdb2pqr.main.run_pdb2pqr", _boom)
+    inp = tmp_path / "in.pdb"
+    inp.write_text(_ALA_PDB, encoding="utf-8")
+    with pytest.raises(RuntimeError, match="GLN A 1169"):
+        _run_pdb2pqr(inp, tmp_path / "out.pqr", tmp_path / "out.pdb", ph=7.4)
+
+
+def test_run_pdb2pqr_drops_uncappable_terminal_stub(tmp_path):
+    pytest.importorskip("pdb2pqr")
+    from molmanager.workers.protein_prepare_pdb2pqr import _run_pdb2pqr
+
+    inp = tmp_path / "in.pdb"
+    inp.write_text(
+        _ALA_PDB.replace(
+            "END\n",
+            "ATOM      6  N   GLN A1169     -15.761  23.268   9.328  1.00 72.96           N\n"
+            "TER       7      GLN A1169\n"
+            "END\n",
+        ),
+        encoding="utf-8",
+    )
+    _run_pdb2pqr(inp, tmp_path / "out.pqr", tmp_path / "out.pdb", ph=7.4)
+    text = (tmp_path / "out.pdb").read_text(encoding="utf-8")
+    assert "ALA" in text
+    assert "1169" not in text
+
+
 def test_prepare_protein_structure_missing_input(tmp_path):
     req = ProteinPrepareRequest(
         input_path=str(tmp_path / "missing.pdb"),
@@ -800,8 +856,8 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     assert prep.chk_keep_ligand.isChecked()
     assert not prep.chk_keep_selected_waters.isChecked()
     assert prep.chk_remove_other_heterogens.isChecked()
-    assert not prep.chk_minimize.isChecked()
-    assert not prep.combo_protein_ff.isEnabled()
+    assert prep.chk_minimize.isChecked()
+    assert prep.combo_protein_ff.isEnabled()
     assert prep.combo_out_fmt.currentData() == "cif"
     assert prep.combo_protein_ff.currentData() == "amber14"
     assert prep.combo_solvent.currentData() == "gbn2"
@@ -819,7 +875,9 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     assert prep.spin_salt.value() == 0.15
     assert prep.spin_ph.value() == 7.4
     assert prep.edit_out.text().endswith("mini_prepared.cif")
-    assert not prep.chk_minimize.isChecked()
+    assert prep.chk_minimize.isChecked()
+    prep.chk_minimize.setChecked(False)
+    assert not prep.combo_protein_ff.isEnabled()
     prep.chk_minimize.setChecked(True)
     assert prep.chk_minimize.isEnabled()
     assert prep.combo_protein_ff.isEnabled()
@@ -1212,3 +1270,22 @@ def test_restrain_atom_backbone_and_ligand():
     assert not restrain_atom(lig_c, scheme="backbone", original_keys=orig, ligand_keys=lig_keys)
     assert restrain_atom(ca, scheme="ca", original_keys=orig, ligand_keys=lig_keys)
     assert not restrain_atom(cb, scheme="ca", original_keys=orig, ligand_keys=lig_keys)
+
+
+def test_prepare_dialog_enables_open_smina_without_receptor(qapp):  # noqa: ARG001
+    from molmanager.docking_box import DockingBox
+    from molmanager.ui.dialogs.protein_prepare import ProteinPrepareDialog
+    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+
+    dlg = ProteinPrepareDialog(None)
+    assert not dlg.btn_open_smina.isEnabled()
+    result = ProteinPrepareResult(
+        output_path="out.cif",
+        ligand_pdb="lig.pdb",
+        box=DockingBox(0.0, 0.0, 0.0, 10.0, 10.0, 10.0, padding=4.0),
+        warning="No module named 'gemmi'",
+    )
+    dlg._on_finished(result)
+    assert dlg.btn_open_smina.isEnabled()
+    assert dlg._smina_result is result
+    dlg.close()

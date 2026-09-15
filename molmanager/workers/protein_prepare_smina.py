@@ -53,6 +53,16 @@ class ProteinPrepareResult:
     box: DockingBox | None = None
     warning: str = ""
 
+    def can_open_smina(self) -> bool:
+        """True when Open Smina can prefill receptor, ligand, or search box."""
+        return bool(
+            self.receptor_pdbqt
+            or self.ligand_sdf
+            or self.ligand_pdb
+            or self.box_path
+            or self.box is not None
+        )
+
 
 def _atom_key(atom) -> ResidueKey:
     return _norm_key(atom.chain, atom.resi, atom.icode)
@@ -328,6 +338,10 @@ def write_smina_prepare_artifacts(
                 receptor_pdbqt = str(paths["receptor_pdbqt"])
                 if ignored:
                     warnings.append("Meeko skipped incomplete residues: " + ", ".join(ignored[:12]))
+        except ImportError as exc:
+            from .pdbqt_generator import meeko_import_error
+
+            warnings.append(meeko_import_error(exc))
         except Exception as exc:
             logger.exception("Smina receptor PDBQT export failed")
             warnings.append(str(exc) or "Meeko could not write receptor PDBQT.")

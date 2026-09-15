@@ -766,7 +766,7 @@ def diff_sequence_edit(old: str, new: str) -> SequenceEdit:
 
 def _pdb_residue_key(line: str) -> tuple[str, str, str] | None:
     rec = line[:6].strip().upper() if line else ""
-    if rec not in {"ATOM", "HETATM"}:
+    if rec not in {"ATOM", "HETATM", "TER"}:
         return None
     padded = line.ljust(80)
     chain = _norm_chain(padded[21:22])

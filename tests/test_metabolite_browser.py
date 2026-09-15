@@ -57,14 +57,13 @@ def test_metabolite_browser_includes_parent_row(qapp) -> None:  # noqa: ARG001
     w = MetaboliteBrowserWidget(None)
     w.set_records(recs)
     assert w._table.rowCount() == 2
+    assert w._table.columnCount() == 5
+    assert w._table.horizontalHeaderItem(2).text() == "Reaction"
     assert w._table.item(0, 0).text() == ROLE_PARENT
     assert w._table.item(1, 0).text() == ROLE_METABOLITE
-    assert w._table.item(0, 2).text() == "CCO"
-    assert w._table.item(1, 2).text() == "CC=O"
-    assert w._table.item(1, 3).text() == "oxidation"
+    assert w._table.item(1, 2).text() == "oxidation"
     assert w._canvas_smiles == "CCO"
     assert w._canvas_kind == ROLE_PARENT
-    assert w._canvas_caption.text().startswith(ROLE_PARENT)
     w.close()
 
 
@@ -85,7 +84,6 @@ def test_metabolite_browser_click_shows_metabolite_on_canvas(qapp) -> None:  # n
     w._table.selectRow(1)
     assert w._canvas_smiles == "CC=O"
     assert w._canvas_kind == ROLE_METABOLITE
-    assert "CC=O" in w._canvas_caption.text()
     w._table.selectRow(2)
     assert w._canvas_smiles == "CC(=O)O"
     w._table.selectRow(0)
@@ -120,8 +118,8 @@ def test_metabolite_browser_nav_buttons_in_footer(qapp) -> None:  # noqa: ARG001
     table_index = root.indexOf(w._table)
     preview_index = root.indexOf(w._preview_host)
     footer_index = root.indexOf(w._footer_bar)
-    assert footer_index == 0
-    assert preview_index < table_index < nav_index
+    assert preview_index < table_index < nav_index < footer_index
+    assert w._cb_only_selected.parent() is w._footer_bar
     assert "1 / 2" in w._meta.text()
     w._step(1)
     assert "2 / 2" in w._meta.text()

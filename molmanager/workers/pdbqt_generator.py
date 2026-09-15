@@ -30,6 +30,23 @@ from rdkit.Chem import AllChem
 
 logger = logging.getLogger(__name__)
 
+_MEEKO_MISSING = "Meeko is required to generate PDBQT. Install with: pip install meeko"
+_GEMMI_MISSING = (
+    "Meeko needs gemmi to write PDBQT (receptor Polymer templates). "
+    'Install with: pip install gemmi (or pip install -e ".[docking]")'
+)
+
+
+def meeko_import_error(exc: BaseException) -> str:
+    """Install hint when ``import meeko`` fails; Meeko often omits gemmi from pip deps."""
+    name = getattr(exc, "name", None)
+    text = str(exc) or ""
+    if name == "gemmi" or "No module named 'gemmi'" in text or 'No module named "gemmi"' in text:
+        return _GEMMI_MISSING
+    if name == "meeko" or "No module named 'meeko'" in text or 'No module named "meeko"' in text:
+        return _MEEKO_MISSING
+    return text or _MEEKO_MISSING
+
 
 @dataclass(frozen=True)
 class PdbqtGenRequest:
@@ -240,8 +257,11 @@ def _write_receptor_pdbqt_file(pdb_path: Path, out_path: Path) -> tuple[str | No
     Returns ``(error_message, ignored_residue_ids)``.
     """
     _apply_meeko_rdkit_compat()
-    from meeko import MoleculePreparation, PDBQTWriterLegacy, ResidueChemTemplates
-    from meeko.polymer import Polymer, PolymerCreationError
+    try:
+        from meeko import MoleculePreparation, PDBQTWriterLegacy, ResidueChemTemplates
+        from meeko.polymer import Polymer, PolymerCreationError
+    except ImportError as exc:
+        return meeko_import_error(exc), []
 
     if not pdb_path.is_file():
         return f"Receptor PDB not found: {pdb_path}", []
@@ -299,7 +319,10 @@ def _write_ligand_pdbqt_file(mols: list[Chem.Mol], out_path: Path) -> str | None
     Returns an error message on failure, or ``None`` on success.
     """
     _apply_meeko_rdkit_compat()
-    from meeko import MoleculePreparation, PDBQTWriterLegacy
+    try:
+        from meeko import MoleculePreparation, PDBQTWriterLegacy
+    except ImportError as exc:
+        return meeko_import_error(exc)
 
     preparator = MoleculePreparation()
     written = 0
@@ -354,10 +377,8 @@ class PdbqtGeneratorWorker(QRunnable):
             cancel_ev = self.cancel_event
             try:
                 import meeko  # noqa: F401
-            except Exception:
-                self.signals.failed.emit(
-                    "Meeko is required to generate PDBQT. Install with: pip install meeko"
-                )
+            except ImportError as exc:
+                self.signals.failed.emit(meeko_import_error(exc))
                 return
 
             receptor_out = ""

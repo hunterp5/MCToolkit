@@ -139,7 +139,7 @@ class TSNEPlotPanel(DimensionReductionPanel):
         self.tsne_max_points.setRange(100, dimred_cap)
         self.tsne_max_points.setValue(min(2500, dimred_cap))
         self.tsne_max_points.setToolTip(
-            "Subsample to this many rows when the table is larger (keeps the UI responsive)."
+            "Subsample to this many rows when the table is larger (cap 25,000)."
         )
         form.addRow("Max points:", self.tsne_max_points)
 
@@ -214,7 +214,7 @@ class UMAPPlotPanel(DimensionReductionPanel):
         self.umap_max_points.setRange(100, dimred_cap)
         self.umap_max_points.setValue(min(2500, dimred_cap))
         self.umap_max_points.setToolTip(
-            "Subsample to this many rows when the table is larger (keeps the UI responsive)."
+            "Subsample to this many rows when the table is larger (cap 25,000)."
         )
         form.addRow("Max points:", self.umap_max_points)
 
@@ -315,7 +315,7 @@ class SOMPlotPanel(DimensionReductionPanel):
         self.som_max_points.setRange(100, dimred_cap)
         self.som_max_points.setValue(min(2500, dimred_cap))
         self.som_max_points.setToolTip(
-            "Subsample to this many rows when the table is larger (keeps training responsive)."
+            "Subsample to this many rows when the table is larger (cap 25,000)."
         )
         form.addRow("Max points:", self.som_max_points)
 

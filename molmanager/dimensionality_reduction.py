@@ -191,6 +191,27 @@ def _maybe_pca_preprocess(
     return reduced, note
 
 
+def subsample_row_indices(
+    n_rows: int,
+    *,
+    max_points: int | None,
+    random_state: int = 42,
+) -> np.ndarray:
+    """Sorted row indices after the dimred max-points cap (all rows when under the cap)."""
+    from .config import load_config
+
+    n = max(0, int(n_rows))
+    idx = np.arange(n)
+    if max_points is None or n == 0:
+        return idx
+    cap = min(int(max_points), int(load_config().memory_guard_dimred_max_points))
+    cap = max(1, cap)
+    if n <= cap:
+        return idx
+    rng = np.random.default_rng(int(random_state))
+    return np.sort(rng.choice(n, size=cap, replace=False))
+
+
 def _tsne_init_method(n_features: int) -> str:
     """PCA init requires at least two features for a 2D embedding."""
     return "pca" if int(n_features) >= 2 else "random"
@@ -290,12 +311,14 @@ def run_tsne(
     from sklearn.manifold import TSNE
 
     n_samples = X.shape[0]
-    used_idx = np.arange(n_samples)
+    used_idx = subsample_row_indices(
+        n_samples, max_points=max_points, random_state=int(random_state)
+    )
     note = ""
-    if max_points is not None and n_samples > int(max_points):
-        rng = np.random.default_rng(int(random_state))
-        used_idx = np.sort(rng.choice(n_samples, size=int(max_points), replace=False))
-        note = f"Subsampled {int(max_points)} of {n_samples} rows (fixed seed {random_state}).\n\n"
+    if used_idx.size < n_samples:
+        note = (
+            f"Subsampled {int(used_idx.size)} of {n_samples} rows (fixed seed {random_state}).\n\n"
+        )
 
     Xs = _standardize(X[used_idx], standardize)
     cap = EMBEDDING_PCA_DIM if pca_dim is None else int(pca_dim)
@@ -355,12 +378,14 @@ def run_umap(
         ) from exc
 
     n_samples = X.shape[0]
-    used_idx = np.arange(n_samples)
+    used_idx = subsample_row_indices(
+        n_samples, max_points=max_points, random_state=int(random_state)
+    )
     note = ""
-    if max_points is not None and n_samples > int(max_points):
-        rng = np.random.default_rng(int(random_state))
-        used_idx = np.sort(rng.choice(n_samples, size=int(max_points), replace=False))
-        note = f"Subsampled {int(max_points)} of {n_samples} rows (fixed seed {random_state}).\n\n"
+    if used_idx.size < n_samples:
+        note = (
+            f"Subsampled {int(used_idx.size)} of {n_samples} rows (fixed seed {random_state}).\n\n"
+        )
 
     Xs = _standardize(X[used_idx], standardize)
     cap = EMBEDDING_PCA_DIM if pca_dim is None else int(pca_dim)
@@ -415,12 +440,14 @@ def run_som(
     share a node are slightly separated. No extra package dependency (NumPy only).
     """
     n_samples = X.shape[0]
-    used_idx = np.arange(n_samples)
+    used_idx = subsample_row_indices(
+        n_samples, max_points=max_points, random_state=int(random_state)
+    )
     note = ""
-    if max_points is not None and n_samples > int(max_points):
-        rng = np.random.default_rng(int(random_state))
-        used_idx = np.sort(rng.choice(n_samples, size=int(max_points), replace=False))
-        note = f"Subsampled {int(max_points)} of {n_samples} rows (fixed seed {random_state}).\n\n"
+    if used_idx.size < n_samples:
+        note = (
+            f"Subsampled {int(used_idx.size)} of {n_samples} rows (fixed seed {random_state}).\n\n"
+        )
 
     Xs = _standardize(X[used_idx], standardize).astype(np.float64, copy=False)
     cap = EMBEDDING_PCA_DIM if pca_dim is None else int(pca_dim)

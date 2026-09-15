@@ -84,6 +84,15 @@ def _close_dimred_panel(panel, qapp) -> None:
     qapp.processEvents()
 
 
+def test_umap_max_points_spinbox_caps_at_25k(qapp):
+    panel = UMAPPlotPanel(None)
+    try:
+        assert panel.umap_max_points.maximum() == 25_000
+        assert panel.umap_max_points.value() == 2500
+    finally:
+        _close_dimred_panel(panel, qapp)
+
+
 def test_embedding_pca_compress_option_defaults_on(qapp):
     for panel_cls in (TSNEPlotPanel, UMAPPlotPanel, SOMPlotPanel):
         panel = panel_cls(None)

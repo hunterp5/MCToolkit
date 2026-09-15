@@ -34,6 +34,7 @@ from molmanager.workers.pdbqt_generator import (
     _ligand_mols_from_request,
     _read_pdb_molecules,
     _write_receptor_pdbqt_file,
+    meeko_import_error,
     prepare_ligand_with_hydrogens,
 )
 
@@ -204,6 +205,14 @@ def test_write_receptor_pdbqt_skips_incomplete_residue(tmp_path):
     text = out.read_text(encoding="utf-8")
     assert "ATOM" in text
     assert "TYR" in text or "TYR A" in text
+
+
+def test_meeko_import_error_points_at_gemmi():
+    err = meeko_import_error(ModuleNotFoundError("No module named 'gemmi'", name="gemmi"))
+    assert "gemmi" in err.lower()
+    assert "pip install gemmi" in err
+    err = meeko_import_error(ModuleNotFoundError("No module named 'meeko'", name="meeko"))
+    assert "pip install meeko" in err
 
 
 def test_write_receptor_pdbqt_missing_file(tmp_path):

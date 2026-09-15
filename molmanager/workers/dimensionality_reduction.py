@@ -32,6 +32,7 @@ from ..dimensionality_reduction import (
     run_som,
     run_tsne,
     run_umap,
+    subsample_row_indices,
 )
 from ..feature_matrix import build_combined_feature_matrix, standardize_feature_matrix
 
@@ -94,6 +95,18 @@ def _compute(params: dict) -> DimensionReductionResult:
     feature_columns = list(params.get("feature_columns") or [])
     fp_choice = str(params.get("fingerprint") or "").strip() or None
     mol_rows = list(params.get("mol_rows") or []) if params.get("use_fingerprints") else None
+    if method != "pca":
+        pick = subsample_row_indices(
+            len(oids),
+            max_points=params.get("max_points"),
+            random_state=int(params.get("random_state", 42)),
+        )
+        if pick.size < len(oids):
+            df = df.iloc[list(pick)].reset_index(drop=True)
+            oids = [oids[int(i)] for i in pick]
+            if mol_rows:
+                keep = set(oids)
+                mol_rows = [row for row in mol_rows if int(row[0]) in keep]
 
     built = build_combined_feature_matrix(
         df=df,

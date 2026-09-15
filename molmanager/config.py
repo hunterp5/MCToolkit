@@ -195,7 +195,9 @@ def load_config() -> MolManagerConfig:
         log_level=_env_str("MOLMANAGER_LOG_LEVEL", "INFO").upper(),
         max_threadpool=_env_optional_positive_int("MOLMANAGER_MAX_THREADPOOL", lo=1, hi=64),
         render_threadpool=_env_optional_positive_int("MOLMANAGER_RENDER_THREADPOOL", lo=1, hi=32),
-        substructure_async_rows=clamp_substructure_async_rows(os.environ.get("MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS")),
+        substructure_async_rows=clamp_substructure_async_rows(
+            os.environ.get("MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS")
+        ),
         sql_max_rows_hard=hard,
         sql_precount_warn=precowarn,
         sqlite_timeout_s=_env_float("MOLMANAGER_SQLITE_TIMEOUT_S", 30.0, lo=0.1),
@@ -222,14 +224,16 @@ def load_config() -> MolManagerConfig:
         fast_prepare_process_pool_min_rows=_env_int(
             "MOLMANAGER_FAST_PREPARE_PROCESS_POOL_MIN_ROWS", 250, lo=2, hi=10_000_000
         ),
-        background_job_poll_ms=_env_int(
-            "MOLMANAGER_BACKGROUND_JOB_POLL_MS", 500, lo=100, hi=5000
-        ),
+        background_job_poll_ms=_env_int("MOLMANAGER_BACKGROUND_JOB_POLL_MS", 500, lo=100, hi=5000),
         bulk_update_defer_color_cache_rows=_env_int(
             "MOLMANAGER_BULK_UPDATE_DEFER_COLOR_CACHE_ROWS", 5000, lo=0, hi=10_000_000
         ),
-        protomer_process_workers=_env_optional_positive_int("MOLMANAGER_PROTOMER_PROCESSES", lo=1, hi=8),
-        pka_process_workers=_env_optional_positive_int("MOLMANAGER_PKA_PROCESS_WORKERS", lo=1, hi=8),
+        protomer_process_workers=_env_optional_positive_int(
+            "MOLMANAGER_PROTOMER_PROCESSES", lo=1, hi=8
+        ),
+        pka_process_workers=_env_optional_positive_int(
+            "MOLMANAGER_PKA_PROCESS_WORKERS", lo=1, hi=8
+        ),
         disable_custom_calc=_env_truthy("MOLMANAGER_DISABLE_CUSTOM_CALC"),
         filter_debounce_substructure_rows=_env_int(
             "MOLMANAGER_FILTER_DEBOUNCE_SUBSTRUCTURE_ROWS", 120, lo=1, hi=1_000_000
@@ -246,15 +250,11 @@ def load_config() -> MolManagerConfig:
         filter_async_min_rows=_env_int(
             "MOLMANAGER_FILTER_ASYNC_MIN_ROWS", 5000, lo=1, hi=10_000_000
         ),
-        filter_chunk_rows=_env_int(
-            "MOLMANAGER_FILTER_CHUNK_ROWS", 2000, lo=64, hi=100_000
-        ),
+        filter_chunk_rows=_env_int("MOLMANAGER_FILTER_CHUNK_ROWS", 2000, lo=64, hi=100_000),
         bounds_async_min_rows=_env_int(
             "MOLMANAGER_BOUNDS_ASYNC_MIN_ROWS", 5000, lo=1, hi=10_000_000
         ),
-        bounds_chunk_rows=_env_int(
-            "MOLMANAGER_BOUNDS_CHUNK_ROWS", 2000, lo=64, hi=100_000
-        ),
+        bounds_chunk_rows=_env_int("MOLMANAGER_BOUNDS_CHUNK_ROWS", 2000, lo=64, hi=100_000),
         ingest_gui_chunk_size=_env_int("MOLMANAGER_INGEST_GUI_CHUNK", 512, lo=16, hi=10_000),
         ingest_gui_subslice_rows=_env_int("MOLMANAGER_INGEST_GUI_SUBSLICE", 128, lo=16, hi=10_000),
         ingest_gui_time_budget_ms=_env_int("MOLMANAGER_INGEST_GUI_TIME_MS", 30, lo=5, hi=200),
@@ -267,7 +267,9 @@ def load_config() -> MolManagerConfig:
         ),
         perf_metrics_enabled=_env_truthy("MOLMANAGER_PERF_METRICS"),
         perf_log_every=_env_int("MOLMANAGER_PERF_LOG_EVERY", 25, lo=1, hi=10_000),
-        sqlite_backend_page_size=_env_int("MOLMANAGER_SQLITE_BACKEND_PAGE_SIZE", 5000, lo=100, hi=200_000),
+        sqlite_backend_page_size=_env_int(
+            "MOLMANAGER_SQLITE_BACKEND_PAGE_SIZE", 5000, lo=100, hi=200_000
+        ),
         auto_render_2d_max_rows=_env_int(
             "MOLMANAGER_AUTO_RENDER_2D_MAX_ROWS", 25_000, lo=0, hi=10_000_000
         ),
@@ -307,7 +309,10 @@ def load_config() -> MolManagerConfig:
         structure_render_png_max_entries=_env_int(
             # 0 = unlimited PNG bytes in the lazy structure store (decoded QPixmaps stay LRU-capped).
             # A positive cap was dropping Fast Prepare / Render 2D drawings beyond this limit.
-            "MOLMANAGER_STRUCTURE_RENDER_PNG_MAX", 0, lo=0, hi=10_000_000
+            "MOLMANAGER_STRUCTURE_RENDER_PNG_MAX",
+            0,
+            lo=0,
+            hi=10_000_000,
         ),
         memory_guard_conf_max_rows=_env_int(
             "MOLMANAGER_MEMORY_GUARD_CONF_MAX_ROWS", 5_000, lo=1, hi=10_000_000
@@ -335,7 +340,8 @@ def load_config() -> MolManagerConfig:
         ),
         memory_guard_fp_matrix_max_cells=_env_int(
             "MOLMANAGER_MEMORY_GUARD_FP_MATRIX_MAX_CELLS",
-            50_000_000,
+            # 25k dimred rows × 2048-bit fingerprints (float64 working matrix).
+            25_000 * 2048,
             lo=100_000,
             hi=2_000_000_000,
         ),
@@ -343,7 +349,7 @@ def load_config() -> MolManagerConfig:
             "MOLMANAGER_MEMORY_GUARD_ENUM_MAX_PRODUCTS", 10_000, lo=10, hi=50_000
         ),
         memory_guard_dimred_max_points=_env_int(
-            "MOLMANAGER_MEMORY_GUARD_DIMRED_MAX_POINTS", 10_000, lo=100, hi=50_000
+            "MOLMANAGER_MEMORY_GUARD_DIMRED_MAX_POINTS", 25_000, lo=100, hi=50_000
         ),
         recomp_constraint_candidate_multiplier=_env_int(
             "MOLMANAGER_RECOMP_CONSTRAINT_CANDIDATE_MULT", 100, lo=10, hi=10_000

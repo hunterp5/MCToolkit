@@ -18,14 +18,89 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
-from .protein_prepare_constants import _PDB2PQR_FF
+from .protein_prepare_constants import ResidueKey, _PDB2PQR_FF
 from .protein_prepare_io import (
+    _is_cif_fmt,
     _is_cif_path,
+    _norm_key,
     _unlink_quiet,
     _write_text,
 )
+
+_BACKBONE_HEAVY = frozenset({"N", "CA", "C"})
+
+
+class _Pdb2pqrLogCapture(logging.Handler):
+    """Collect PDB2PQR ERROR/CRITICAL lines; the Python exception is often empty."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.ERROR)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = (record.getMessage() or "").strip()
+        except Exception:
+            return
+        if msg and msg.lower() != "giving up.":
+            self.messages.append(msg)
+
+
+def _exception_chain_message(exc: BaseException) -> str:
+    texts: list[str] = []
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        text = str(current).strip()
+        if text and text not in {"0", "1"}:
+            texts.append(text)
+        current = current.__cause__ or current.__context__
+    return texts[-1] if texts else ""
+
+
+def _pdb2pqr_failure_message(exc: BaseException, capture: _Pdb2pqrLogCapture) -> str:
+    detail = ""
+    for msg in reversed(capture.messages):
+        if msg:
+            detail = msg
+            break
+    if not detail:
+        detail = _exception_chain_message(exc)
+    return f"pdb2pqr failed: {detail}" if detail else "pdb2pqr failed."
+
+
+def drop_uncappable_polymer_residues(text: str, fmt: str) -> tuple[str, tuple[ResidueKey, ...]]:
+    """Remove amino-acid residues that lack backbone N/CA/C (pdb2pqr cannot cap them)."""
+    from ..structure_component_types import AMINO_ACIDS
+    from ..structure_components import (
+        delete_cif_residues,
+        delete_pdb_residues,
+        parse_structure_atoms,
+    )
+
+    names: dict[ResidueKey, set[str]] = {}
+    resn_by: dict[ResidueKey, str] = {}
+    for atom in parse_structure_atoms(text or "", fmt):
+        key = _norm_key(atom.chain, atom.resi, atom.icode)
+        resn_by[key] = (atom.resn or "").strip().upper()
+        names.setdefault(key, set()).add((atom.name or "").strip().upper())
+    drop = tuple(
+        sorted(
+            key
+            for key, atom_names in names.items()
+            if resn_by.get(key, "") in AMINO_ACIDS and not _BACKBONE_HEAVY.issubset(atom_names)
+        )
+    )
+    if not drop:
+        return text or "", ()
+    keys = set(drop)
+    if _is_cif_fmt(fmt):
+        return delete_cif_residues(text, keys), drop
+    return delete_pdb_residues(text, keys), drop
 
 
 def pdb2pqr_argv(
@@ -97,6 +172,13 @@ def _run_pdb2pqr(
             ),
         )
         pdb_in = scratch_in
+    pdb_text = pdb_in.read_text(encoding="utf-8", errors="replace")
+    pdb_text, stubs = drop_uncappable_polymer_residues(pdb_text, "pdb")
+    if stubs:
+        if scratch_in is None:
+            scratch_in = pdb_in.with_name(pdb_in.stem + ".pdb2pqr_in.pdb")
+        _write_text(scratch_in, pdb_text)
+        pdb_in = scratch_in
     argv = pdb2pqr_argv(
         pdb_in,
         output_pqr,
@@ -105,13 +187,26 @@ def _run_pdb2pqr(
         drop_water=drop_water,
         ligand_mol2=ligand_mol2,
     )
+    capture = _Pdb2pqrLogCapture()
+    pqr_loggers: list[logging.Logger] = []
+    try:
+        from pdb2pqr.config import VERSION as _pqr_version
+
+        pqr_loggers.append(logging.getLogger(f"PDB2PQR{_pqr_version}"))
+    except Exception:
+        pass
+    pqr_loggers.append(logging.getLogger("pdb2pqr"))
+    for logger in pqr_loggers:
+        logger.addHandler(capture)
     try:
         run_pdb2pqr(argv)
     except SystemExit as exc:
-        raise RuntimeError(f"pdb2pqr failed: {exc}") from exc
+        raise RuntimeError(_pdb2pqr_failure_message(exc, capture)) from exc
     except Exception as exc:
-        raise RuntimeError(f"pdb2pqr failed: {exc}") from exc
+        raise RuntimeError(_pdb2pqr_failure_message(exc, capture)) from exc
     finally:
+        for logger in pqr_loggers:
+            logger.removeHandler(capture)
         _unlink_quiet(scratch_in)
     if not pdb_out.is_file() or pdb_out.stat().st_size < 32:
         raise RuntimeError("pdb2pqr did not write a protonated structure file.")

@@ -190,3 +190,27 @@ def test_box_from_external_ligand_file(tmp_path, monkeypatch):
     assert result.box is not None
     assert result.box.size_x == pytest.approx(0.763 + 8.0)
     assert "AXI" in Path(result.ligand_pdb).read_text(encoding="utf-8")
+
+
+def test_write_smina_artifacts_missing_gemmi_keeps_box(tmp_path, monkeypatch):
+    def _boom(_pdb_path, _out_path):
+        raise ModuleNotFoundError("No module named 'gemmi'", name="gemmi")
+
+    monkeypatch.setattr(
+        "molmanager.workers.pdbqt_generator._write_receptor_pdbqt_file",
+        _boom,
+    )
+    out = tmp_path / "rec_prepared.cif"
+    out.write_text("data_placeholder\n", encoding="utf-8")
+    result = write_smina_prepare_artifacts(
+        holo_text=_HOLO_PDB,
+        fmt="pdb",
+        output_path=out,
+        ligand_keys={("A", "2000", "")},
+        padding=4.0,
+    )
+    assert result.receptor_pdbqt == ""
+    assert result.box is not None
+    assert result.ligand_pdb
+    assert result.can_open_smina()
+    assert "pip install gemmi" in result.warning

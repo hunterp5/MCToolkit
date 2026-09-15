@@ -41,6 +41,7 @@ permeability = [
 ]
 docking = [
     "meeko>=0.5.0",
+    "gemmi>=0.6",
     "pdbfixer>=1.9",
     "openmm>=8.2,<8.3",
     "pdb2pqr>=3.6.1",

@@ -58,7 +58,7 @@ from .protein_prepare_minimize import (
     _normalize_solvent,
     _restrained_minimize_pdb,
 )
-from .protein_prepare_pdb2pqr import _run_pdb2pqr
+from .protein_prepare_pdb2pqr import _run_pdb2pqr, drop_uncappable_polymer_residues
 from .protein_prepare_pdb2pqr import pdb2pqr_argv  # noqa: F401
 
 # Re-exports so existing tests can patch this module.
@@ -96,7 +96,7 @@ class ProteinPrepareRequest:
     keep_water_keys: tuple[ResidueKey, ...] = ()
     keep_bridging_waters: bool = False
     remove_other_heterogens: bool = True
-    minimize: bool = False
+    minimize: bool = True
     ligand_smiles: str = ""
     ligand_ref_path: str = ""
     protonate_ligand: bool = True
@@ -220,7 +220,7 @@ def _write_prepared_output(
 def prepare_protein_structure(req: ProteinPrepareRequest):
     """
     Repair missing protein atoms/loops, protonate at pH with pdb2pqr/PROPKA
-    (optionally holo, with selected waters), then optionally minimize.
+    (optionally holo, with selected waters), then restrained OpenMM minimization.
 
     Raises RuntimeError when a required extra is missing or a step fails.
     """
@@ -359,6 +359,16 @@ def prepare_protein_structure(req: ProteinPrepareRequest):
         dest_names = residue_names_by_key(repaired.read_text(encoding="utf-8"), work_fmt)
         ligand_keys = remap_residue_keys(orig_ligand_keys, orig_names, dest_names)
         keep_water = remap_residue_keys(orig_keep_water, orig_names, dest_names)
+        repaired_text, stubs = drop_uncappable_polymer_residues(
+            repaired.read_text(encoding="utf-8", errors="replace"), work_fmt
+        )
+        if stubs:
+            _write_text(repaired, repaired_text)
+            labels = []
+            for key in stubs:
+                resn = dest_names.get(key, "")
+                labels.append(f"{resn} {key[0]}{key[1]}".strip())
+            remarks.append("3D DROP UNCAPPABLE " + ", ".join(labels[:12]))
         if req.include_ligand and orig_ligand_keys and not ligand_keys:
             raise RuntimeError(
                 "The ligand residue was not found after PDBFixer repair. "

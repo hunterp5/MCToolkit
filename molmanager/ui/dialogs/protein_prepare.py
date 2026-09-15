@@ -88,7 +88,7 @@ class ProteinPrepareDialog(QDialog):
 
         intro = QLabel(
             "Repair missing residues and side chains (PDBFixer), protonate at pH with "
-            "pdb2pqr/PROPKA, then optional restrained OpenMM minimization of the protein "
+            "pdb2pqr/PROPKA, then restrained OpenMM minimization of the protein "
             "(AMBER; the ligand is restored after min). Writes a Smina-ready apo receptor "
             "PDBQT, crystal ligand, and search box from a ligand in the loaded structure "
             "or a separate ligand file (4 Å padding by default). Highest-occupancy altlocs "
@@ -243,7 +243,7 @@ class ProteinPrepareDialog(QDialog):
         min_form.setSpacing(4)
 
         self.chk_minimize = QCheckBox("Restrained minimization")
-        self.chk_minimize.setChecked(False)
+        self.chk_minimize.setChecked(True)
         self.chk_minimize.setToolTip(
             "Harmonic restraints on experimental protein atoms so rebuilt loops and "
             "hydrogens can relieve clashes without the fold drifting. The ligand is "
@@ -784,14 +784,13 @@ class ProteinPrepareDialog(QDialog):
             if smina.warning:
                 self._append_log(smina.warning)
             self._smina_result = smina
-            can_smina = bool(smina.receptor_pdbqt)
-            self.btn_open_smina.setEnabled(can_smina)
+            self.btn_open_smina.setEnabled(smina.can_open_smina())
             self.smina_prepared.emit(smina)
         self.prepared.emit(path)
 
     def _on_open_smina(self) -> None:
         result = self._smina_result
-        if result is None or not getattr(result, "receptor_pdbqt", ""):
+        if result is None or not result.can_open_smina():
             QMessageBox.information(
                 self,
                 "Prepare Structure",
