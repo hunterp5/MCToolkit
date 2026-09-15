@@ -138,7 +138,7 @@ class IngestExportMixin:
         # Export in current visual column order (but always include ID/Structure first).
         vis_cols = self._visual_logical_columns()
         ordered_headers = [self.headers[i] for i in vis_cols if i < len(self.headers)]
-        t_heads = ["ID_HIDDEN", "Structure"] + [
+        headers = ["ID_HIDDEN", "Structure"] + [
             h for h in ordered_headers if h not in ("ID_HIDDEN", "Structure")
         ]
         if selected:
@@ -152,10 +152,10 @@ class IngestExportMixin:
                     "No rows are selected. Select one or more rows in the table first.",
                 )
                 return
-            t_mols = {oid: self.mols.get(oid) for oid in oids}
+            mols_by_oid = {oid: self.mols.get(oid) for oid in oids}
         else:
             oids_all = self._table_model.all_oids_in_order()
-            t_mols = {oid: self.mols.get(oid) for oid in oids_all}
+            mols_by_oid = {oid: self.mols.get(oid) for oid in oids_all}
         f_filter = "SDF (*.sdf);;Molfile (*.mol);;SMILES (*.smi);;CSV (*.csv);;TDT (*.tdt);;PDB (*.pdb)"
         path, sel_f = QFileDialog.getSaveFileName(self, "Export Data", "", f_filter)
         if path:
@@ -175,21 +175,21 @@ class IngestExportMixin:
             if not path.lower().endswith(ext.lower()):
                 path += ext
             h_map = {h: i for i, h in enumerate(self.headers)}
-            oids_list = list(t_mols.keys())
-            row_cache = {oid: self.get_row_by_id(oid) for oid in oids_list}
+            oids_list = list(mols_by_oid.keys())
+            row_cache = {oid: self.logical_row_for_oid(oid) for oid in oids_list}
             self._export_busy = True
             self._export_prep = {
                 "path": path,
                 "ext": ext,
-                "t_mols": t_mols,
-                "t_heads": t_heads,
+                "mols_by_oid": mols_by_oid,
+                "headers": headers,
                 "h_map": h_map,
                 "oids": oids_list,
                 "rows": row_cache,
-                "t_data": {},
+                "cells": {},
                 "idx": 0,
                 "chunk": 48,
-                "cols": [h for h in t_heads if h in self.headers],
+                "cols": [h for h in headers if h in self.headers],
             }
             self._on_tool_progress("Preparing export…", 0, max(len(oids_list), 1))
             QTimer.singleShot(0, self._export_snapshots_continue)
@@ -213,9 +213,9 @@ class IngestExportMixin:
                     oid = oids[j]
                     r = prep["rows"].get(oid, -1)
                     if r != -1:
-                        prep["t_data"][oid] = {h: self._export_cell_text(r, h_map[h]) for h in cols}
+                        prep["cells"][oid] = {h: self._export_cell_text(r, h_map[h]) for h in cols}
                     else:
-                        prep["t_data"][oid] = {h: "" for h in cols}
+                        prep["cells"][oid] = {h: "" for h in cols}
             prep["idx"] = end
             self._on_tool_progress("Preparing export…", end, max(n, 1))
             if end < n:
@@ -223,13 +223,13 @@ class IngestExportMixin:
                 return
             path = prep["path"]
             ext = prep["ext"]
-            t_data = prep["t_data"]
-            t_mols = prep["t_mols"]
-            t_heads = prep["t_heads"]
+            cells = prep["cells"]
+            mols_by_oid = prep["mols_by_oid"]
+            headers = prep["headers"]
             self._export_prep = None
             self.process_queue.enqueue(
                 f"Export to {path}",
-                lambda ev, p=path, e=ext, m=t_mols, h=t_heads, d=t_data, s=self.signals: ExportWorker(
+                lambda ev, p=path, e=ext, m=mols_by_oid, h=headers, d=cells, s=self.signals: ExportWorker(
                     p, e, m, h, d, s, cancel_event=ev
                 ),
             )

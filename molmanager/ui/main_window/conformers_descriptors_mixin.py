@@ -36,6 +36,7 @@ from ...confs_codec import (
     rehydrate_v1_confs_cell,
     unpack_confs_blocks_json_b64,
 )
+from ...services.column_labels import COLUMN_PARENT_OID
 from ...utils import mol_to_canonical_smiles
 from ...workers import (
     CalcWorker,
@@ -90,7 +91,7 @@ class ConformersDescriptorsMixin:
             oids_list = [o for o in oids_list if o in allowed]
         data: list[tuple[int, Chem.Mol]] = []
         for o in oids_list:
-            r = self.get_row_by_id(o)
+            r = self.logical_row_for_oid(o)
             m = self.mols.get(o) if r >= 0 else None
             if m is None and r >= 0:
                 m = self._mol_for_structure_row(r)
@@ -280,7 +281,7 @@ class ConformersDescriptorsMixin:
                     (
                         smi,
                         {
-                            "Parent OID": str(parent_oid),
+                            COLUMN_PARENT_OID: str(parent_oid),
                             "Conformer": str(conf_i + 1),
                         },
                         cm,
@@ -360,7 +361,7 @@ class ConformersDescriptorsMixin:
         has_de = isinstance(deltas, list) and len(deltas) == n_blocks
         has_rms = isinstance(rmsds, list) and len(rmsds) == n_blocks
 
-        ensure_cols = ["SMILES", "Parent OID", "Conformer", confs_col]
+        ensure_cols = ["SMILES", COLUMN_PARENT_OID, "Conformer", confs_col]
         if has_e:
             ensure_cols.append("E_kcal")
         if has_de:
@@ -422,7 +423,7 @@ class ConformersDescriptorsMixin:
             for h in self.headers[2:]:
                 if h == "SMILES":
                     row_cells[h] = smi
-                elif h == "Parent OID":
+                elif h == COLUMN_PARENT_OID:
                     row_cells[h] = "" if parent_oid is None else str(int(parent_oid))
                 elif h == "Conformer":
                     row_cells[h] = str(int(conf_i) + 1)
@@ -498,7 +499,7 @@ class ConformersDescriptorsMixin:
             oids_list = [o for o in oids_list if o in allowed]
         data: list[tuple[int, str]] = []
         for o in oids_list:
-            r = self.get_row_by_id(o)
+            r = self.logical_row_for_oid(o)
             if r < 0:
                 continue
             raw = self._table_model.backing_value_for_row_header(r, "confs")
@@ -579,7 +580,7 @@ class ConformersDescriptorsMixin:
         from ...confs_codec import mol_from_packed_confs_cell, mol_has_3d_coordinates
         from ..mol_viewer_3d import prepare_mol_3d
 
-        r = self.get_row_by_id(oid)
+        r = self.logical_row_for_oid(oid)
         if r < 0:
             return None
         src_h = (src or "Structure").strip() or "Structure"
@@ -919,14 +920,14 @@ class ConformersDescriptorsMixin:
         if not is_s:
             data = []
             for o in oids_list:
-                r = self.get_row_by_id(o)
+                r = self.logical_row_for_oid(o)
                 m = self.mols.get(o) if r >= 0 else None
                 if m is None and r >= 0:
                     m = self._mol_for_structure_row(r)
                 if m is not None:
                     data.append((o, m))
         else:
-            data = [(o, self._table_cell_text(self.get_row_by_id(o), s_idx)) for o in oids_list]
+            data = [(o, self._table_cell_text(self.logical_row_for_oid(o), s_idx)) for o in oids_list]
         if not data:
             QMessageBox.information(
                 self,

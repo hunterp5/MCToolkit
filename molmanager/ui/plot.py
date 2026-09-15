@@ -925,7 +925,7 @@ class PlotWidget(QWidget):
             oid = resolve_entry_row_oid(
                 text,
                 model=model,
-                row_for_oid=self.parent_app.get_row_by_id,
+                row_for_oid=self.parent_app.logical_row_for_oid,
             )
             if oid is None:
                 invalid.append(text)
@@ -1059,7 +1059,7 @@ class PlotWidget(QWidget):
         model = self.parent_app._table_model
         out: list = []
         for oid in oids:
-            row = self.parent_app.get_row_by_id(int(oid))
+            row = self.parent_app.logical_row_for_oid(int(oid))
             if row < 0:
                 out.append(None)
                 continue
@@ -2224,7 +2224,7 @@ class PlotWidget(QWidget):
         if self.parent_app is None:
             return
         oid = int(self._radar_oids[trace_index])
-        row = self.parent_app.get_row_by_id(oid)
+        row = self.parent_app.logical_row_for_oid(oid)
         if row < 0:
             return
         apply_table_selection_for_source_rows(self.parent_app, [row])
@@ -2355,7 +2355,7 @@ class PlotWidget(QWidget):
     def _select_rows_for_oids(self, oids: list[int]) -> None:
         source_rows: list[int] = []
         for oid in oids:
-            row = self.parent_app.get_row_by_id(int(oid))
+            row = self.parent_app.logical_row_for_oid(int(oid))
             if row >= 0:
                 source_rows.append(int(row))
         if not source_rows:
@@ -2398,7 +2398,7 @@ class PlotWidget(QWidget):
             self.parent_app.status_label.setText(f"Plot: selected {n:,} point(s).")
         elif 0 <= idx < len(self._plotted_oids):
             oid = int(self._plotted_oids[idx])
-            row = self.parent_app.get_row_by_id(oid)
+            row = self.parent_app.logical_row_for_oid(oid)
             if row >= 0:
                 self.parent_app.status_label.setText(f"Plot: selected row {row + 1:,} (OID {oid}).")
 

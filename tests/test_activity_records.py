@@ -14,10 +14,28 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Compatibility re-export — implementation lives in ``services.structure_grouping``."""
+"""Unit tests for activity record helpers."""
 
 from __future__ import annotations
 
-from ..services.structure_grouping import group_rows_by_structure, structure_key
+from molmanager.services.activity_records import (
+    build_oid_mol_activity_records,
+    parse_activity_float,
+)
 
-__all__ = ["group_rows_by_structure", "structure_key"]
+
+def test_parse_activity_float() -> None:
+    assert parse_activity_float("1.5") == 1.5
+    assert parse_activity_float("  ") is None
+    assert parse_activity_float("x") is None
+    assert parse_activity_float(None) is None
+
+
+def test_build_oid_mol_activity_records_skips_missing() -> None:
+    mols = [(1, "m1"), (2, "m2"), (3, "m3")]
+    activities = {1: 0.5, 3: 2.0}
+    out = build_oid_mol_activity_records(
+        mols,
+        activity_for_oid=lambda oid: activities.get(oid),
+    )
+    assert out == [(1, "m1", 0.5), (3, "m3", 2.0)]

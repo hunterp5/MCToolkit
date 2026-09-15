@@ -162,7 +162,7 @@ class FPSimilarityDialog(QDialog):
         return resolve_entry_row_oid(
             self.row_input.text(),
             model=app._table_model,
-            row_for_oid=app.get_row_by_id,
+            row_for_oid=app.logical_row_for_oid,
         )
 
     def _query_mol_and_oid(self, src: str) -> tuple[object | None, int | None]:

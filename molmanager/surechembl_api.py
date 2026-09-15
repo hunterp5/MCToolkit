@@ -29,7 +29,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from .ui.strings import COLUMN_TANIMOTO_SIMILARITY
+from .services.column_labels import COLUMN_TANIMOTO_SIMILARITY
 
 BASE_URL = "https://www.surechembl.org/api"
 DEFAULT_POLL_TIMEOUT_S = 120.0

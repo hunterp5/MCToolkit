@@ -59,7 +59,7 @@ for filename, class_name, start, end in RANGES:
     doc = {
         "plot_tools_mixin.py": "Plot docking, plot↔table sync, and plot panel UI.",
         "ingest_render_mixin.py": "File ingest, SQLite rebuild, and 2D structure rendering.",
-        "prepare_structures_mixin.py": "Fast prepare, wash/neutralize, and render-2D batch tools.",
+        "prepare_structures_mixin.py": "Fast prepare, disconnect/neutralize, and render-2D batch tools.",
         "conformers_descriptors_mixin.py": "Conformers, superposition, and descriptor calculation.",
         "fragment_tools_mixin.py": "BRICS/RECAP/R-group fragment tools.",
         "tools_sql_predict_mixin.py": "Calculator, SQL load, external DB, and prediction dialogs.",

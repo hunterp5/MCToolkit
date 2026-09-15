@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.workers.structure_grouping import group_rows_by_structure, structure_key
+from molmanager.services.structure_grouping import group_rows_by_structure, structure_key
 
 
 def test_structure_key_canonical_smiles_merges_tautomers_of_same_graph():

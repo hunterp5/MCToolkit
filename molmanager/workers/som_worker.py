@@ -37,12 +37,14 @@ from ..som_prediction import (
     som_output_columns,
     uses_split_phase_jobs,
 )
-from ..ui.strings import TOOL_PREDICT_SOM
 from ..utils import mol_to_canonical_smiles
 from .signals import emit_partial_results_if_cancelled
 from .structure_grouping import group_rows_by_structure, structure_key
 
 logger = logging.getLogger(__name__)
+
+# Keep UI-facing label text local so workers do not import molmanager.ui.
+_TOOL_LABEL = "Predict SOM"
 
 
 def _safe_emit(obj, emitter_name: str, *args) -> None:
@@ -267,8 +269,8 @@ class SomPredictorWorker(QRunnable):
 
         done_rows = _completed_row_count(self.rows, pred_by_key)
         emit_partial_results_if_cancelled(
-            self.worker_signals, TOOL_PREDICT_SOM, done_rows, tot, cancelled
+            self.worker_signals, _TOOL_LABEL, done_rows, tot, cancelled
         )
         done = tot
-        _emit_progress("Predict SOM", force=True)
+        _emit_progress(_TOOL_LABEL, force=True)
         _safe_emit(self.som_signals, "finished", out)

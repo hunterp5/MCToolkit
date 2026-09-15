@@ -29,6 +29,7 @@ from pathlib import Path
 from rdkit import Chem
 
 from .bundled_paths import resolve_user_executable
+from .services.column_labels import COLUMN_PARENT_OID
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ _MODE_ROW_RE = re.compile(
 _SKIP_REMARK_KEYS = frozenset({"SMILES", "H", "ROOT", "BRANCH", "status", "between"})
 DOCK_RESULT_PREFERRED_COLUMNS = (
     "SMILES",
-    "Parent OID",
+    COLUMN_PARENT_OID,
     "mode",
     "minimizedAffinity",
     "minimizedRMSD",

@@ -36,6 +36,7 @@ from PyQt5.QtWidgets import (
 from rdkit import Chem
 
 from ...science_citations import protomer_dialog_footer_html
+from ...services.column_labels import COLUMN_PARENT_OID, COLUMN_PROTOMER_SOURCE_OID_LEGACY
 from ...utils import parse_molecule_from_cell_text
 from ...workers import ProtomerGeneratorSignals, ProtomerGeneratorWorker
 from ..qt_widget_utils import make_window_minimizable
@@ -236,7 +237,7 @@ class ProtomerGeneratorDialog(QDialog):
             return "N/A"
         from molmanager.ionization import format_pka_values, pka_values_from_states
         from molmanager.microstate_cache import lookup as cache_lookup
-        from molmanager.workers.structure_grouping import structure_key
+        from molmanager.services.structure_grouping import structure_key
 
         mol = self.parent_app.mols.get(int(oid))
         if mol is None:
@@ -269,11 +270,20 @@ class ProtomerGeneratorDialog(QDialog):
             name = f"{base} ({i})"
         return name
 
+    def _parent_oid_column(self) -> str:
+        """Reuse existing lineage column when present (incl. legacy protomer header)."""
+        headers = self.parent_app.headers
+        if COLUMN_PARENT_OID in headers:
+            return COLUMN_PARENT_OID
+        if COLUMN_PROTOMER_SOURCE_OID_LEGACY in headers:
+            return COLUMN_PROTOMER_SOURCE_OID_LEGACY
+        return self._unique_col(COLUMN_PARENT_OID)
+
     def _add_rows_to_main(self, table_rows: set[int]) -> None:
         if not table_rows:
             return
         pct_col = self._unique_col("Protomer %")
-        src_col = self._unique_col("Protomer source OID")
+        src_col = self._parent_oid_column()
         batch: list[tuple[str, dict[str, str]]] = []
         for r in sorted(table_rows):
             oid_item = self.results_table.item(r, 0)

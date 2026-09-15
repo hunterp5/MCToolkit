@@ -1037,7 +1037,7 @@ class MedChemPlotPanel(QWidget):
         model = self.parent_app._table_model
         out: list[Any] = []
         for oid in oids:
-            row = self.parent_app.get_row_by_id(int(oid))
+            row = self.parent_app.logical_row_for_oid(int(oid))
             if row < 0:
                 out.append(None)
                 continue

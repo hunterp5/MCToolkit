@@ -251,6 +251,37 @@ def test_substructure_async_without_smiles_column_uses_mols(qapp, monkeypatch): 
     for r in range(1, 70):
         assert _src_row_visible(w, r) is False
 
+def test_substructure_async_multi_card_handoff(qapp, monkeypatch):  # noqa: ARG001
+    """Two SMARTS cards at async scale must finish off-thread without GUI match_mol."""
+    monkeypatch.setenv("MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS", "64")
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+    w._table_model.set_headers(list(w.headers))
+    for i in range(70):
+        if i == 0:
+            smi = "c1ccccc1O"  # phenol — matches benzene and oxygen
+        elif i == 1:
+            smi = "CCO"  # alcohol only
+        else:
+            smi = "CCCC"
+        w._table_model.append_row(i, {"SMILES": smi})
+        w.mols[i] = Chem.MolFromSmiles(smi)
+    w.next_oid = 70
+    w.calculate_global_bounds()
+    a = SubstructureFilterCard()
+    a.set_smarts("c1ccccc1")
+    b = SubstructureFilterCard()
+    b.set_smarts("O")
+    w.filters = [a, b]
+    w._apply_filters_impl()
+    assert w.threadpool.waitForDone(120_000)
+    qapp.processEvents()
+    assert _src_row_visible(w, 0) is True
+    assert _src_row_visible(w, 1) is False
+    for r in range(2, 70):
+        assert _src_row_visible(w, r) is False
+
+
 def test_reorder_filter_card_updates_list_and_layout(qapp):  # noqa: ARG001
     from PyQt5.QtWidgets import QVBoxLayout
 

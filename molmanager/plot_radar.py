@@ -23,7 +23,7 @@ from typing import Any
 import numpy as np
 from plotly import graph_objects as go
 
-from molmanager.ui.plotly_html import finalize_plot_legend
+from molmanager.plotly_legend import finalize_plot_legend
 
 SPOKE_NONE = "(none)"
 ENTRY_NONE = "(none)"

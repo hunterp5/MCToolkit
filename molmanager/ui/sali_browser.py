@@ -376,7 +376,7 @@ class SaliBrowserDialog(QDialog):
         if app is None or not header:
             return ""
         try:
-            row = app.get_row_by_id(int(oid))
+            row = app.logical_row_for_oid(int(oid))
         except Exception:
             return ""
         if row is None or row < 0:

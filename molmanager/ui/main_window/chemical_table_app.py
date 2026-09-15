@@ -172,7 +172,9 @@ class ChemicalTableApp(
         self.signals.structure_source_probe.connect(self._on_structure_source_probe, _qc)
         self.signals.rendered.connect(self.on_row_ready, _qc)
         self.signals.rendered_batch.connect(self.on_render2d_rows_ready, _qc)
-        self.signals.washed.connect(self.on_wash_finished, _qc)
+        self.signals.disconnect_fragments_finished.connect(
+            self.on_disconnect_fragments_finished, _qc
+        )
         self.signals.neutralized.connect(self.on_neutralize_finished, _qc)
         self.signals.fast_prepared.connect(self.on_fast_prepare_finished, _qc)
         self.signals.explicit_hydrogens_added.connect(self.on_add_explicit_hydrogens_finished, _qc)

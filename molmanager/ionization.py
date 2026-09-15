@@ -790,7 +790,7 @@ def microstates_for_mol(mol: Chem.Mol) -> PicklableIonizationEnsemble | list | N
     """Return a cached ionization ensemble, computing it if needed."""
     from molmanager.microstate_cache import lookup as cache_lookup
     from molmanager.microstate_cache import store as cache_store
-    from molmanager.workers.structure_grouping import structure_key
+    from molmanager.services.structure_grouping import structure_key
 
     key = structure_key(mol)
     hit, cached = cache_lookup(key)

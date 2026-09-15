@@ -14,10 +14,14 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Compatibility re-export — implementation lives in ``services.structure_grouping``."""
+"""Shared table/column display labels (no Qt)."""
 
 from __future__ import annotations
 
-from ..services.structure_grouping import group_rows_by_structure, structure_key
+COLUMN_TANIMOTO_SIMILARITY = "Tanimoto Similarity"
 
-__all__ = ["group_rows_by_structure", "structure_key"]
+# Lineage column for derived rows (conformers, protomers, dock poses, …).
+COLUMN_PARENT_OID = "Parent OID"
+
+# Legacy header written by older protomer exports; treat as Parent OID when present.
+COLUMN_PROTOMER_SOURCE_OID_LEGACY = "Protomer source OID"

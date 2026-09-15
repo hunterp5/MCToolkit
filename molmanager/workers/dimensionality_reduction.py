@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import asdict
 
 import numpy as np
 import pandas as pd
@@ -215,7 +214,3 @@ def _dataframe_for_oids(df: pd.DataFrame, oids: list[int]) -> pd.DataFrame:
     if len(df) == len(oids):
         return df.reset_index(drop=True)
     return pd.DataFrame(index=range(len(oids)))
-
-
-def result_to_dict(result: DimensionReductionResult) -> dict:
-    return asdict(result)

@@ -14,10 +14,21 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Compatibility re-export — implementation lives in ``services.structure_grouping``."""
+"""Filter card config helpers (no Qt)."""
 
 from __future__ import annotations
 
-from ..services.structure_grouping import group_rows_by_structure, structure_key
+from typing import Any, Mapping
 
-__all__ = ["group_rows_by_structure", "structure_key"]
+
+def cfg_column(cfg: Mapping[str, Any] | None) -> str:
+    """Column name from a filter card config.
+
+    Prefers ``column``; accepts legacy ``p`` from older in-memory configs.
+    """
+    if not cfg:
+        return ""
+    col = cfg.get("column")
+    if col is None or col == "":
+        col = cfg.get("p")
+    return str(col or "")

@@ -86,7 +86,7 @@ from .load_render import (
     Render2DBatchProcessWorker,
     RenderWorker,
     UniversalLoadWorker,
-    WashWorker,
+    DisconnectFragmentsWorker,
 )
 from .pka_predictor import PKaPredictorSignals, PKaPredictorWorker
 from .permeability_worker import PermeabilityPredictorSignals, PermeabilityPredictorWorker
@@ -164,7 +164,7 @@ __all__ = [
     "RemoveExplicitHydrogensWorker",
     "NeutralizeWorker",
     "UniversalLoadWorker",
-    "WashWorker",
+    "DisconnectFragmentsWorker",
     "WorkerSignals",
     "ProtonateSignals",
     "ProtonateWorker",

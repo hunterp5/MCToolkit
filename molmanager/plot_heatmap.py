@@ -21,7 +21,7 @@ from __future__ import annotations
 import numpy as np
 
 from .plot_color import resolve_plot_colorscale
-from .ui.plotly_html import finalize_plot_legend
+from .plotly_legend import finalize_plot_legend
 
 
 def binned_count_matrix(

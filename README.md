@@ -13,7 +13,7 @@ This guide walks you through installation from scratch. It assumes you are new t
 | **Computer** | Windows 10 or later, macOS 10.15+, or a recent Linux distribution |
 | **Internet** | Required to download Python, MolManager, and dependencies |
 | **Disk space** | About 1–2 GB for a basic install; more if you add optional machine-learning tools (pKa prediction, permeability models) |
-| **Python** | Version **3.10** or **3.11** (3.11 is recommended). Python 3.12+ may work but is less tested |
+| **Python** | Version **3.10**, **3.11**, or **3.12** (**3.11 is recommended**). Do **not** use 3.13 or newer — NumPy 1.x (required by RDKit) has no Windows wheels for those versions, so pip tries to compile NumPy and fails without Visual Studio |
 
 You do **not** need to know how to program. You will copy and paste a few commands into a terminal window.
 
@@ -351,6 +351,24 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
 Then activate the venv again.
+
+### NumPy Meson / “Unknown compiler” / `vswhere.exe` (Windows)
+
+Pip is trying to **compile** NumPy from source. That happens when the venv is Python **3.13 or 3.14**: MolManager needs **NumPy 1.x** (RDKit wheels break on NumPy 2), and NumPy 1.26 has no pre-built Windows wheels for 3.13+.
+
+Do **not** install Visual Studio to “fix” this. Recreate the venv with Python 3.11:
+
+1. Check the version: `python --version` (or `py -0p` to list installs).
+2. Install [Python 3.11](https://www.python.org/downloads/release/python-3119/) if needed (check **Add python.exe to PATH**).
+3. From the MolManager folder, delete `.venv`, then:
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements-core.txt
+pip install -e .
+```
 
 ### RDKit or NumPy errors (`_ARRAY_API`, import failures)
 

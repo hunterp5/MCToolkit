@@ -109,7 +109,7 @@ class ToolsSqlPredictMixin:
             (
                 o,
                 {
-                    v: (self._table_cell_text(self.get_row_by_id(o), h_map[v]) or "0")
+                    v: (self._table_cell_text(self.logical_row_for_oid(o), h_map[v]) or "0")
                     for v in numeric_vars
                 },
             )
@@ -1218,7 +1218,7 @@ class ToolsSqlPredictMixin:
                 source_rows: list[int] = []
                 for oid in picked:
                     try:
-                        row = self.get_row_by_id(int(oid))
+                        row = self.logical_row_for_oid(int(oid))
                     except (TypeError, ValueError):
                         continue
                     if row >= 0:

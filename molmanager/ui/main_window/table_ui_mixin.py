@@ -48,6 +48,16 @@ from ...services.chemistry_columns import (
     should_skip_chemical_scan_column,
 )
 from ...services.table_scope import collect_scoped_pairs, resolve_structure_row_for_oid
+from ...services.table_selection import (
+    cached_string_key,
+    collect_canonical_keys_from_column,
+    first_rows_for_distinct_keys,
+    logical_rows_for_oids,
+    oids_for_source_rows,
+    oids_from_id_hidden_cells,
+    rows_where,
+    structure_row_is_empty,
+)
 from ...utils import (
     canonical_structure_key_from_smiles as canonical_structure_key_from_smiles_fn,
     looks_like_mol_block,
@@ -418,7 +428,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         source_rows: list[int] = []
         for oid in oids:
             try:
-                row = self.get_row_by_id(int(oid))
+                row = self.logical_row_for_oid(int(oid))
             except (TypeError, ValueError):
                 continue
             if row >= 0:
@@ -446,13 +456,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         return view_rows
 
     def _oids_for_source_rows(self, source_rows: list[int]) -> frozenset[int]:
-        oids: set[int] = set()
-        for r in source_rows:
-            try:
-                oids.add(int(self._table_model.row_oid(r)))
-            except (IndexError, ValueError, TypeError):
-                continue
-        return frozenset(oids)
+        return oids_for_source_rows(source_rows, row_oid=self._table_model.row_oid)
 
     def _apply_qt_view_row_selection(
         self,
@@ -777,25 +781,19 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
     def _select_first_occurrence_per_distinct_value(self, col: int) -> None:
         """Select the first visible row for each distinct non-empty cell text in this column."""
         self._maybe_status_before_large_select()
-        seen: set[str] = set()
-        to_sel: list[int] = []
-        for r in self._iter_visible_source_row_indices():
-            txt = (self._table_model.cell_text(r, col) or "").strip()
-            if not txt:
-                continue
-            if txt in seen:
-                continue
-            seen.add(txt)
-            to_sel.append(r)
+        to_sel = first_rows_for_distinct_keys(
+            self._iter_visible_source_row_indices(),
+            key_for_row=lambda r: (self._table_model.cell_text(r, col) or "").strip(),
+        )
         self.select_table_rows(to_sel)
 
     def _select_empty_cells_in_column(self, col: int) -> None:
         """Select visible rows where this column is empty or whitespace-only."""
         self._maybe_status_before_large_select()
-        to_sel: list[int] = []
-        for r in self._iter_visible_source_row_indices():
-            if not (self._table_model.cell_text(r, col) or "").strip():
-                to_sel.append(r)
+        to_sel = rows_where(
+            self._iter_visible_source_row_indices(),
+            predicate=lambda r: not (self._table_model.cell_text(r, col) or "").strip(),
+        )
         self.select_table_rows(to_sel)
 
     def _structure_column_row_is_empty(self, row: int) -> bool:
@@ -804,40 +802,39 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             oid = self._table_model.row_oid(row)
         except (IndexError, ValueError, TypeError):
             return True
-        if self.mols.get(oid) is not None:
-            return False
         smi_h = self._canonical_smiles_header_for_updates()
+        smiles_text = ""
         if smi_h and smi_h in self.headers:
             ci = self.headers.index(smi_h)
-            if (self._table_model.cell_text(row, ci) or "").strip():
-                return False
+            smiles_text = (self._table_model.cell_text(row, ci) or "").strip()
         ov = getattr(self, "_structure_field_override", None)
         ov_s = str(ov).strip() if isinstance(ov, str) else ""
-        for h in self._ordered_headers_for_molecule_lookup():
-            if smi_h and h == smi_h:
-                continue
-            if is_tool_generated_structure_header(h) and h != ov_s:
-                continue
-            ci = self.headers.index(h)
-            raw = (self._table_model.cell_text(row, ci) or "").strip()
-            if not raw:
-                continue
-            if (
-                (ov_s and h == ov_s)
-                or self._is_smiles_named_header(h)
-                or self._header_looks_structural(h)
-            ):
-                return False
-            if looks_like_mol_block(raw):
-                return False
-        return True
+
+        def _probe():
+            for h in self._ordered_headers_for_molecule_lookup():
+                if smi_h and h == smi_h:
+                    continue
+                ci = self.headers.index(h)
+                raw = (self._table_model.cell_text(row, ci) or "").strip()
+                yield h, raw
+
+        return structure_row_is_empty(
+            mol_present=self.mols.get(oid) is not None,
+            smiles_text=smiles_text,
+            probe_cells=_probe(),
+            override_header=ov_s,
+            is_smiles_named=self._is_smiles_named_header,
+            header_looks_structural=self._header_looks_structural,
+            is_tool_generated=is_tool_generated_structure_header,
+            looks_like_mol_block=looks_like_mol_block,
+        )
 
     def _select_empty_structure_cells(self) -> None:
         self._maybe_status_before_large_select()
-        to_sel: list[int] = []
-        for r in self._iter_visible_source_row_indices():
-            if self._structure_column_row_is_empty(r):
-                to_sel.append(r)
+        to_sel = rows_where(
+            self._iter_visible_source_row_indices(),
+            predicate=self._structure_column_row_is_empty,
+        )
         self.select_table_rows(to_sel)
 
     def _structure_distinct_key_for_row(
@@ -867,39 +864,31 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         return self._canonical_structure_key_cached(raw, smiles_key_cache)
 
     def _canonical_structure_key_cached(self, smiles: str, cache: dict[str, str] | None) -> str:
-        s = (smiles or "").strip()
-        if not s:
-            return ""
-        if cache is not None and s in cache:
-            return cache[s]
-        key = self.canonical_structure_key_from_smiles(s) or s
-        if cache is not None:
-            cache[s] = key
-        return key
+        return cached_string_key(
+            smiles,
+            cache,
+            key_fn=self.canonical_structure_key_from_smiles,
+        )
 
     def _select_first_occurrence_per_distinct_structure(self) -> None:
         self._maybe_status_before_large_select()
-        seen: set[str] = set()
-        to_sel: list[int] = []
         smiles_key_cache: dict[str, str] = {}
-        for r in self._iter_visible_source_row_indices():
-            key = self._structure_distinct_key_for_row(r, smiles_key_cache=smiles_key_cache)
-            if not key or key in seen:
-                continue
-            seen.add(key)
-            to_sel.append(r)
+        to_sel = first_rows_for_distinct_keys(
+            self._iter_visible_source_row_indices(),
+            key_for_row=lambda r: self._structure_distinct_key_for_row(
+                r, smiles_key_cache=smiles_key_cache
+            ),
+        )
         self.select_table_rows(to_sel)
 
     def _selected_logical_rows(self) -> list[int]:
         """Distinct source-model row indices from the current selection (any column)."""
         override = getattr(self, "_selected_oids_override", None)
         if override:
-            rows: list[int] = []
-            for oid in override:
-                r = self._table_model.logical_row_for_oid(int(oid))
-                if r >= 0:
-                    rows.append(r)
-            return sorted(set(rows))
+            return logical_rows_for_oids(
+                override,
+                logical_row_for_oid=self._table_model.logical_row_for_oid,
+            )
         sm = self.table.selectionModel()
         if sm is None:
             return []
@@ -940,15 +929,10 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
         return frozenset(self._selected_oids_set())
 
     def _oids_for_row_indices(self, rows: list[int]) -> frozenset[int]:
-        oids: set[int] = set()
-        for r in rows:
-            try:
-                t0 = self._table_model.cell_text(int(r), 0)
-            except (IndexError, TypeError, ValueError):
-                continue
-            if t0.isdigit():
-                oids.add(int(t0))
-        return frozenset(oids)
+        return oids_from_id_hidden_cells(
+            rows,
+            cell_text_col0=lambda r: self._table_model.cell_text(r, 0),
+        )
 
     def _clear_table_selection_after_delete(self) -> None:
         self._cancel_pending_plot_table_select()
@@ -1326,8 +1310,9 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
     def _on_pdb_fixer_dialog_destroyed(self):
         self._pdb_fixer_dialog = None
 
-    def get_row_by_id(self, original_idx):
-        return self._table_model.logical_row_for_oid(int(original_idx))
+    def logical_row_for_oid(self, oid: int) -> int:
+        """Return the logical table row for a compound OID, or -1 if missing."""
+        return self._table_model.logical_row_for_oid(int(oid))
 
     def _resolve_structure_row_for_oid(self, oid: int) -> int:
         """Table row index for this molecule id (stable during a Render 2D batch)."""
@@ -1335,7 +1320,7 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
             oid,
             row_count=self._table_model.rowCount(),
             cell_text_col0=lambda r: self._table_model.cell_text(r, 0),
-            logical_row_for_oid=self.get_row_by_id,
+            logical_row_for_oid=self.logical_row_for_oid,
             render2d_row_by_oid=getattr(self, "_render2d_row_by_oid", None),
         )
 
@@ -2370,17 +2355,15 @@ class TableUIMixin(TableSearchMixin, FilterPanelMixin):
 
     def existing_canonical_structure_keys(self) -> set[str]:
         """Canonical SMILES keys already present in the primary SMILES column (for de-duplication)."""
-        keys: set[str] = set()
         h = self._canonical_smiles_header_for_updates()
         if not h or h not in self.headers:
-            return keys
+            return set()
         ci = self.headers.index(h)
-        for r in range(self._table_model.rowCount()):
-            raw = (self._table_model.cell_text(r, ci) or "").strip()
-            k = self.canonical_structure_key_from_smiles(raw)
-            if k:
-                keys.add(k)
-        return keys
+        return collect_canonical_keys_from_column(
+            self._table_model.rowCount(),
+            cell_text=lambda r: self._table_model.cell_text(r, ci),
+            key_fn=self.canonical_structure_key_from_smiles,
+        )
 
     def clear_all(self):
         self._confs_blocks_sidecar = {}

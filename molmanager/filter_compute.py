@@ -22,7 +22,7 @@ import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 
-from .ui.search_query import sqlite_text_match_clause
+from .services.sqlite_text_match import sqlite_text_match_clause
 
 
 def build_sqlite_where(

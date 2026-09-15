@@ -409,7 +409,7 @@ class PlotlyInteractiveView(QWidget):
             self.parent_app.status_label.setText(f"Plot: selected {n:,} point(s).")
         elif 0 <= idx < len(self.plotted_oids):
             oid = int(self.plotted_oids[idx])
-            row = self.parent_app.get_row_by_id(oid)
+            row = self.parent_app.logical_row_for_oid(oid)
             if row >= 0:
                 self.parent_app.status_label.setText(f"Plot: selected row {row + 1:,} (OID {oid}).")
 

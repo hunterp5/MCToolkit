@@ -574,7 +574,7 @@ class FilterCard(_FilterCardDragMixin, _FilterCardEnableInvertMixin, QFrame):
 
     def get_cfg(self):
         return {
-            "p": self.cb.currentText(),
+            "column": self.cb.currentText(),
             "min": self.range_slider.lowerValue() / self.scale,
             "max": self.range_slider.upperValue() / self.scale,
             "enabled": self._filter_enabled_on,
@@ -826,7 +826,7 @@ class TextFilterCard(_FilterCardDragMixin, _FilterCardEnableInvertMixin, QFrame)
 
     def get_cfg(self):
         return {
-            "p": self.cb.currentText(),
+            "column": self.cb.currentText(),
             "text": self.text_edit.text() or "",
             "enabled": self._filter_enabled_on,
             "inverted": self._invert_on,
@@ -1048,7 +1048,7 @@ class CategoryFilterCard(_FilterCardDragMixin, _FilterCardEnableInvertMixin, QFr
 
     def get_cfg(self):
         return {
-            "p": self.cb.currentText(),
+            "column": self.cb.currentText(),
             "values": sorted(self._checked_values()),
             "enabled": self._filter_enabled_on,
             "inverted": self._invert_on,

@@ -40,7 +40,7 @@ flowchart TB
 
 | Mixin | Responsibility |
 |--------|----------------|
-| `SessionMixin` | Open/save `.cms` sessions, CSV session import |
+| `SessionMixin` | Open/save `.cms` sessions; legacy CSV import (SMILES parse off GUI) |
 | `TableUIMixin` | Selection, search, column UI, `clear_all` |
 | `IngestExportMixin` | File/SQL ingest, export |
 | `ChemistryMixin` | Composite tools mixin (see sub-mixins below) |
@@ -56,7 +56,7 @@ flowchart TB
 |-----------|----------------|
 | `PlotToolsMixin` | Plot panel dock/undock, plot↔table sync hooks |
 | `IngestRenderMixin` | File ingest chunks, SQLite rebuild, 2D render batch |
-| `PrepareStructuresMixin` | Fast prepare, wash/neutralize, render-2D tools |
+| `PrepareStructuresMixin` | Fast prepare, disconnect/neutralize, render-2D tools |
 | `ConformersDescriptorsMixin` | Conformers, superposition, descriptor calc |
 | `FragmentToolsMixin` | BRICS/RECAP/R-group fragment tools |
 | `MmpMixin` | Matched molecular pair (MMP / rdMMPA) analysis |
@@ -91,6 +91,8 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 - **Table → plot:** debounced `_schedule_sync_active_plots_from_table_selection`
 - **Plot → table:** `apply_table_selection_for_source_rows`
 - **Filters / edits:** `_schedule_active_plots_replot` after filter apply; `dataChanged` on model for open plots
+- **Substructure (large tables):** one or more SMARTS cards run via `SubstructureFilterWorker` off the GUI; sync/chunked apply consume override OID sets
+- **UI workflow benchmark:** `scripts/benchmark_ui_workflows.py` times CSV load, `.cms` restore, filters, plot collect/replot, search, export
 
 ## Adding a new Tool
 
@@ -112,7 +114,15 @@ Heavy chemistry jobs are split by concern (compat re-exports remain in `workers/
 | `workers/chemistry_calc.py` | Custom calculator (AST `safe_calc`) |
 | `workers/chemistry_worker_common.py` | Shared progress throttling |
 
-Pure helpers live under `molmanager/services/` (e.g. `chemistry_columns.py`, `sql_load_policy.py`, `table_scope.py`).
+Pure helpers live under `molmanager/services/` (e.g. `chemistry_columns.py`, `sql_load_policy.py`,
+`table_scope.py`, `activity_records.py`, `table_selection.py`, `sqlite_text_match.py`,
+`filter_config.py`, `column_labels.py`, `structure_grouping.py`). Domain modules must not import
+`molmanager.ui`; Plotly legend cleanup lives in `molmanager/plotly_legend.py` (re-exported from
+`ui/plotly_html.py`). Shared lineage header is `COLUMN_PARENT_OID` (`"Parent OID"`).
+MMP / Activity Cliff / Pair Network / SALI share `ui/analysis_job_support.py` for scoped
+activity-record prep, process-queue enqueue (`start_scoped_activity_job`), dialog open/finish
+helpers (`ensure_activity_analysis_ready`, `finish_analysis_pairs`, `report_analysis_failure`).
+Mixins stay thin adapters over those helpers.
 
 ## Related docs
 

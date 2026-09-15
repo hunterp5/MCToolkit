@@ -8,11 +8,11 @@
 #
 # MolManager is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
 """End-to-end offscreen UI workflow benchmark for large tables."""
 
@@ -33,6 +33,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PyQt5.QtWidgets import QApplication
 
+from molmanager.session_codec import (
+    dumps_session_document,
+    expand_session_document,
+    loads_session_bytes,
+)
 from molmanager.ui.filters.cards import SubstructureFilterCard, TextFilterCard
 from molmanager.ui.main_window import ChemicalTableApp
 from molmanager.workers.export_worker import ExportWorker
@@ -71,6 +76,17 @@ def _write_session_csv(path: Path, n_rows: int) -> None:
             )
 
 
+def _drain_session(app: ChemicalTableApp) -> None:
+    drain = getattr(app, "_drain_pending_session_load", None)
+    if callable(drain):
+        drain()
+        return
+    qapp = QApplication.instance()
+    if qapp is not None:
+        for _ in range(500):
+            qapp.processEvents()
+
+
 def _build_export_snapshot(app: ChemicalTableApp) -> dict[int, dict[str, str]]:
     cols = [h for h in app.headers if h not in ("ID_HIDDEN", "Structure")]
     h_map = {h: i for i, h in enumerate(app.headers)}
@@ -83,18 +99,34 @@ def _build_export_snapshot(app: ChemicalTableApp) -> dict[int, dict[str, str]]:
 
 def _bench_one(scale: int) -> dict[str, float]:
     app = ChemicalTableApp()
+    # Measure load/filter/export; skip auto Render 2D so drain does not wait on paint.
+    app._try_auto_render_all_structures_after_ingest = lambda: False
     tmp_dir = Path(tempfile.mkdtemp(prefix="MOLMANAGER_ui_bench_"))
     csv_path = tmp_dir / f"session_{scale}.csv"
+    cms_path = tmp_dir / f"session_{scale}.cms"
     out_csv = tmp_dir / f"export_{scale}.csv"
     _write_session_csv(csv_path, scale)
 
     tracemalloc.start()
     t0 = time.perf_counter()
     app.load_session_csv(str(csv_path))
+    _drain_session(app)
     load_ms = (time.perf_counter() - t0) * 1000.0
-    cur_b, peak_b = tracemalloc.get_traced_memory()
+    _cur_b, peak_b = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    _ = cur_b
+
+    # .cms restore into the same window (avoids dual QMainWindow teardown crashes on Windows).
+    cms_bytes = dumps_session_document(app._build_session_document())
+    cms_path.write_bytes(cms_bytes)
+    doc = expand_session_document(loads_session_bytes(cms_bytes))
+    t0 = time.perf_counter()
+    app._apply_session_document(doc)
+    _drain_session(app)
+    cms_load_ms = (time.perf_counter() - t0) * 1000.0
+    if app._table_model.rowCount() != scale:
+        raise RuntimeError(
+            f".cms restore row count mismatch: got {app._table_model.rowCount()}, expected {scale}"
+        )
 
     app.delete_all_filters_from_panel()
     text_card = TextFilterCard(["SMILES", "MW", "Note"], app)
@@ -112,6 +144,28 @@ def _bench_one(scale: int) -> dict[str, float]:
     t0 = time.perf_counter()
     app._apply_filters_impl_sync(None)
     substructure_ms = (time.perf_counter() - t0) * 1000.0
+
+    # Plot-like full-table numeric collect (avoids Plotly/WebEngine in offscreen CI).
+    app.calculate_global_bounds()
+    xi = app.headers.index("MW") if "MW" in app.headers else None
+    t0 = time.perf_counter()
+    fx: list[float] = []
+    foids: list[int] = []
+    model = app._table_model
+    if xi is not None:
+        for r in range(model.rowCount()):
+            oid = int(model.row_oid(r))
+            raw = (model.cell_text(r, xi) or "").strip()
+            try:
+                fx.append(float(raw))
+                foids.append(oid)
+            except ValueError:
+                continue
+    plot_collect_ms = (time.perf_counter() - t0) * 1000.0
+    t0 = time.perf_counter()
+    app._replot_active_plots()
+    plot_replot_ms = (time.perf_counter() - t0) * 1000.0
+    _ = (fx, foids)
 
     app.delete_all_filters_from_panel()
     app._search_panel.setVisible(True)
@@ -147,12 +201,19 @@ def _bench_one(scale: int) -> dict[str, float]:
     qapp = QApplication.instance()
     if qapp is not None:
         qapp.processEvents()
-    app.close()
+    # Avoid hard-close after heavy session/filter churn (Qt teardown AV on Windows).
+    try:
+        app.hide()
+    except Exception:
+        pass
 
     return {
         "load_ms": load_ms,
+        "cms_load_ms": cms_load_ms,
         "text_filter_ms": text_filter_ms,
         "substructure_ms": substructure_ms,
+        "plot_collect_ms": plot_collect_ms,
+        "plot_replot_ms": plot_replot_ms,
         "search_ms": search_ms,
         "export_snapshot_ms": export_snapshot_ms,
         "export_write_ms": export_write_ms,
@@ -167,8 +228,11 @@ def run_benchmark(scales: list[int], runs: int) -> None:
         print(f"\nRows: {scale:,}")
         for key in (
             "load_ms",
+            "cms_load_ms",
             "text_filter_ms",
             "substructure_ms",
+            "plot_collect_ms",
+            "plot_replot_ms",
             "search_ms",
             "export_snapshot_ms",
             "export_write_ms",
@@ -198,4 +262,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -50,8 +50,8 @@ class WorkerSignals(QObject):
     # Batch renders never carry mol properties.
     rendered_batch = pyqtSignal(list, int)
 
-    # --- Batch chemistry / tools (wash, descriptors, conformers, custom calc, export) ---
-    washed = pyqtSignal(list)
+    # --- Batch chemistry / tools (disconnect, descriptors, conformers, custom calc, export) ---
+    disconnect_fragments_finished = pyqtSignal(list)
     neutralized = pyqtSignal(list)
     # Fast Prepare (fused disconnect, optional neutralize): list of
     # (oid, mol_blob_bytes, smaller_fragments_text, canonical_smiles_or_empty)
@@ -125,7 +125,7 @@ class SubstructureFilterSignals(QObject):
 
     finished = pyqtSignal(
         int, object
-    )  # job_gen, frozenset[int] of matched oids (empty = no matches)
+    )  # job_gen, list[(smarts, structure_source, frozenset[oid])]
     failed = pyqtSignal(int, str)  # job_gen, message
 
 

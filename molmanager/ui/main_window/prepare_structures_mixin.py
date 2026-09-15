@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Fast prepare, wash/neutralize, and render-2D batch tools."""
+"""Fast prepare, disconnect/neutralize, and render-2D batch tools."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ from ..strings import (
 from ...workers import (
     Render2DBatchProcessWorker,
     Render2DBatchHeldJob,
-    WashWorker,
+    DisconnectFragmentsWorker,
 )
 from ...display_constants import structure_depiict_height, structure_depiict_width
 
@@ -237,7 +237,7 @@ class PrepareStructuresMixin:
         if is_smiles:
             col = self.headers.index(src)
             for oid in oids_walk:
-                row = self.get_row_by_id(oid)
+                row = self.logical_row_for_oid(oid)
                 if row == -1:
                     continue
                 data.append((oid, self._table_cell_text(row, col)))
@@ -411,7 +411,7 @@ class PrepareStructuresMixin:
             title = f"{queue_title_prefix}disconnect largest fragments"
             self.process_queue.enqueue(
                 title,
-                lambda ev, d=data, s=self.signals: WashWorker(
+                lambda ev, d=data, s=self.signals: DisconnectFragmentsWorker(
                     d, s, is_smiles=False, cancel_event=ev
                 ),
             )
@@ -422,7 +422,7 @@ class PrepareStructuresMixin:
             if allowed is not None:
                 oids_walk = [o for o in oids_walk if o in allowed]
             for oid in oids_walk:
-                r = self.get_row_by_id(oid)
+                r = self.logical_row_for_oid(oid)
                 if r == -1:
                     continue
                 data.append((oid, self._table_cell_text(r, col)))
@@ -437,14 +437,14 @@ class PrepareStructuresMixin:
             title = f"{queue_title_prefix}disconnect largest fragments (column)"
             self.process_queue.enqueue(
                 title,
-                lambda ev, d=data, s=self.signals: WashWorker(
+                lambda ev, d=data, s=self.signals: DisconnectFragmentsWorker(
                     d, s, is_smiles=True, cancel_event=ev
                 ),
             )
 
     def _mol_for_structure_tool_oid(self, oid: int, src: str) -> Chem.Mol | None:
         """Molecule for a prepare-structures tool row and source column."""
-        row = self.get_row_by_id(oid)
+        row = self.logical_row_for_oid(oid)
         if row < 0:
             return None
         if src == "Structure":
@@ -702,7 +702,7 @@ class PrepareStructuresMixin:
             for oid, mol in results:
                 if mol is None:
                     continue
-                row = self.get_row_by_id(oid)
+                row = self.logical_row_for_oid(oid)
                 if row < 0:
                     continue
                 rw, rh = (
@@ -766,7 +766,7 @@ class PrepareStructuresMixin:
             for oid, mol in results:
                 if mol is None:
                     continue
-                row = self.get_row_by_id(oid)
+                row = self.logical_row_for_oid(oid)
                 if row < 0:
                     continue
                 rw, rh = (
@@ -830,7 +830,7 @@ class PrepareStructuresMixin:
             for oid, mol in results:
                 if mol is None:
                     continue
-                row = self.get_row_by_id(oid)
+                row = self.logical_row_for_oid(oid)
                 if row < 0:
                     continue
                 rw, rh = (
@@ -1294,7 +1294,7 @@ class PrepareStructuresMixin:
 
     def _disconnect_source_text_for_oid(self, oid: int, src: str) -> str | None:
         """Original cell text for the disconnect target column (for multi-component SMILES)."""
-        row = self.get_row_by_id(oid)
+        row = self.logical_row_for_oid(oid)
         if row < 0:
             return None
         if src == "Structure":
@@ -1329,7 +1329,7 @@ class PrepareStructuresMixin:
         self.headers.append(header_name)
         self._table_model.insert_column_at(nc, header_name, None)
 
-    def on_wash_finished(self, results):
+    def on_disconnect_fragments_finished(self, results):
         self.table.setSortingEnabled(False)
         src = getattr(self, "_disconnect_source", "Structure")
         update_target = getattr(self, "_disconnect_update_target", True)
@@ -1380,7 +1380,7 @@ class PrepareStructuresMixin:
         for oid, mol, fragments in results:
             if update_mols_cache:
                 self.mols[oid] = mol
-            row = self.get_row_by_id(oid)
+            row = self.logical_row_for_oid(oid)
             if row == -1:
                 continue
             if update_target and src == "Structure":
@@ -1412,7 +1412,7 @@ class PrepareStructuresMixin:
             for oid, mol, _frag in results:
                 if mol is None:
                     continue
-                row = self.get_row_by_id(oid)
+                row = self.logical_row_for_oid(oid)
                 if row < 0:
                     continue
                 rw, rh = (

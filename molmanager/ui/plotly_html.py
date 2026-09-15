@@ -19,12 +19,17 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 from plotly import graph_objects as go
 from plotly.io import to_json as plotly_to_json
 from plotly.offline import get_plotlyjs
+
+from ..plotly_legend import (
+    finalize_plot_legend,
+    legend_name_is_utility,
+    suppress_utility_legend_entries,
+)
 
 _DEFAULT_WEB_CONFIG = {
     "displaylogo": False,
@@ -32,59 +37,6 @@ _DEFAULT_WEB_CONFIG = {
     # Wheel zoom / middle-mouse pan are handled in plotly_shell (keeps lasso on LMB).
     "scrollZoom": False,
 }
-
-
-_UTILITY_LEGEND_NAMES = frozenset(
-    {
-        "fit",
-        "points",
-        "selected",
-        "compounds",
-        "compound",
-        "data",
-        "values",
-    }
-)
-_TRACE_LEGEND_RE = re.compile(r"^trace\s*\d+$", re.I)
-_FIT_LEGEND_RE = re.compile(r"^fit\b", re.I)
-
-
-def legend_name_is_utility(name: str | None) -> bool:
-    """True when a trace name should not appear in the Plotly legend."""
-    text = ("" if name is None else str(name)).strip()
-    if not text:
-        return True
-    low = text.lower()
-    if low in _UTILITY_LEGEND_NAMES:
-        return True
-    if _TRACE_LEGEND_RE.match(text):
-        return True
-    if _FIT_LEGEND_RE.match(text):
-        return True
-    return False
-
-
-def suppress_utility_legend_entries(fig: go.Figure) -> None:
-    """Hide generic / internal trace names from the Plotly legend (Fit, Trace 0, Compounds, …)."""
-    any_visible = False
-    for tr in fig.data:
-        # Size-scale legend entries must stay visible.
-        if getattr(tr, "legendgroup", None) == "molmanager_size":
-            tr.showlegend = True
-            any_visible = True
-            continue
-        if legend_name_is_utility(getattr(tr, "name", None)):
-            tr.showlegend = False
-        elif getattr(tr, "showlegend", True) is not False:
-            any_visible = True
-    if not any_visible:
-        fig.update_layout(showlegend=False)
-
-
-def finalize_plot_legend(fig: go.Figure) -> go.Figure:
-    """Apply legend cleanup (call from every figure builder before display)."""
-    suppress_utility_legend_entries(fig)
-    return fig
 
 
 def _scatter_point_count(tr: dict) -> int:

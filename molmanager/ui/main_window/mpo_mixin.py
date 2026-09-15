@@ -105,7 +105,7 @@ class MpoMixin:
 
         rows: list[tuple[int, dict[str, str]]] = []
         for oid in oids:
-            r = self.get_row_by_id(int(oid))
+            r = self.logical_row_for_oid(int(oid))
             if r < 0:
                 continue
             values: dict[str, float | None] = {}

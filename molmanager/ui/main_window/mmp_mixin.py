@@ -8,11 +8,11 @@
 #
 # MolManager is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
 """Matched molecular pair (MMP) analysis entry points."""
 
@@ -21,8 +21,13 @@ from __future__ import annotations
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMessageBox
 
-from rdkit import Chem
-
+from ..analysis_job_support import (
+    ensure_activity_analysis_ready,
+    finish_analysis_pairs,
+    report_analysis_failure,
+    show_activity_tool_dialog,
+    start_scoped_activity_job,
+)
 from ..strings import TOOL_MMP
 from ...workers import MmpAnalysisWorker
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
@@ -30,50 +35,26 @@ from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 class MmpMixin:
     def open_mmp_dialog(self) -> None:
-        if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(
-                self,
-                TOOL_MMP,
-                "Load a table with at least one row first.",
-            )
+        activity_cols = ensure_activity_analysis_ready(
+            self,
+            TOOL_MMP,
+            missing_activity_message="MMP requires at least one numeric activity/property column.",
+        )
+        if not activity_cols:
             return
         from ..dialogs import MmpDialog
-        from ..dialogs.mmp import activity_columns_for_mmp
 
-        activity_cols = activity_columns_for_mmp(self, only_selected=False)
-        if not activity_cols:
-            QMessageBox.information(
-                self,
-                TOOL_MMP,
-                "MMP requires at least one numeric activity/property column.",
-            )
-            return
         d = MmpDialog(
             structure_sources=self.chemistry_tool_structure_sources(),
             activity_columns=activity_cols,
             selected_row_count=len(self._selected_logical_rows()),
             parent=self,
         )
-        self._prepare_tool_dialog(d)
-        d.setAttribute(Qt.WA_DeleteOnClose, True)
-        d.accepted.connect(lambda *_, dlg=d: self._on_mmp_dialog_accepted(dlg))
-        d.show()
+        show_activity_tool_dialog(self, d, on_accepted=self._on_mmp_dialog_accepted)
 
     def _on_mmp_dialog_accepted(self, d) -> None:
         p = d.params()
         only_selected = d.only_selected_rows()
-        if self._abort_if_only_selected_but_empty(only_selected, self._selected_oids_set(), TOOL_MMP):
-            return
-        if not p.activity_column or p.activity_column.startswith("("):
-            QMessageBox.information(self, TOOL_MMP, "Select a numeric activity column.")
-            return
-        if p.activity_column not in self.headers:
-            QMessageBox.information(
-                self,
-                TOOL_MMP,
-                f"Activity column “{p.activity_column}” is not in the table.",
-            )
-            return
         if p.core_smarts:
             from ...mmp_analysis import parse_mmp_core_query
 
@@ -85,68 +66,37 @@ class MmpMixin:
                 )
                 return
 
-        mol_data = self.collect_scoped_table_mols(p.structure_source, only_selected=only_selected)
-        if not mol_data:
-            QMessageBox.information(
-                self,
-                TOOL_MMP,
-                "No valid structures were found for the selected source and scope.",
-            )
-            self.status_label.setText("Ready.")
-            return
-
-        act_col = self.headers.index(p.activity_column)
-        records: list[tuple[int, Chem.Mol, float]] = []
-        for oid, mol in mol_data:
-            row = self.get_row_by_id(oid)
-            if row < 0:
-                continue
-            raw = (self._table_cell_text(row, act_col) or "").strip()
-            if not raw:
-                raw = (self._table_model.backing_value_for_row_header(row, p.activity_column) or "").strip()
-            try:
-                activity = float(raw)
-            except (TypeError, ValueError):
-                continue
-            records.append((oid, mol, activity))
-
-        if len(records) < 2:
-            QMessageBox.information(
-                self,
-                TOOL_MMP,
-                "Need at least two molecules with both a structure and a numeric activity value.",
-            )
-            self.status_label.setText("Ready.")
-            return
-
-        ps = self._tool_progress_state
-        self._begin_tool_progress(TOOL_MMP, len(records))
-        self.process_queue.enqueue(
-            f"{TOOL_MMP} ({len(records)} rows)",
-            lambda ev, rec=records, pp=p, sigs=self.signals, prog=ps: MmpAnalysisWorker(
+        def _make_worker(rec, *, cancel_event, signals, progress_state):
+            return MmpAnalysisWorker(
                 rec,
-                activity_column=pp.activity_column,
-                max_cuts=pp.max_cuts,
-                max_variable_heavy_atoms=pp.max_variable_heavy_atoms,
-                min_activity_difference=pp.min_activity_difference,
-                max_activity_difference=pp.max_activity_difference,
-                core_smarts=pp.core_smarts,
-                signals=sigs,
-                cancel_event=ev,
-                progress_state=prog,
-            ),
+                activity_column=p.activity_column,
+                max_cuts=p.max_cuts,
+                max_variable_heavy_atoms=p.max_variable_heavy_atoms,
+                min_activity_difference=p.min_activity_difference,
+                max_activity_difference=p.max_activity_difference,
+                core_smarts=p.core_smarts,
+                signals=signals,
+                cancel_event=cancel_event,
+                progress_state=progress_state,
+            )
+
+        start_scoped_activity_job(
+            self,
+            tool_label=TOOL_MMP,
+            structure_source=p.structure_source,
+            activity_column=p.activity_column,
+            only_selected=only_selected,
+            make_worker=_make_worker,
         )
 
     def on_mmp_finished(self, pairs, activity_column: str) -> None:
-        self._finish_tool_progress(TOOL_MMP)
-        pairs = list(pairs or [])
-        if not pairs:
-            self.status_label.setText("Ready.")
-            QMessageBox.information(
-                self,
-                TOOL_MMP,
-                "No matched molecular pairs were found for the current settings.",
-            )
+        pairs = finish_analysis_pairs(
+            self,
+            TOOL_MMP,
+            pairs,
+            empty_message="No matched molecular pairs were found for the current settings.",
+        )
+        if pairs is None:
             return
 
         from ...mmp_analysis import assemble_mmp_table_annotations
@@ -166,9 +116,9 @@ class MmpMixin:
         self.status_label.setText(f"MMP: {len(pairs)} pair(s).")
 
     def on_mmp_failed(self, message: str) -> None:
-        self._clear_tool_progress()
-        self.status_label.setText("Ready.")
-        QMessageBox.warning(self, TOOL_MMP, message or "MMP analysis failed.")
+        report_analysis_failure(
+            self, TOOL_MMP, message, fallback="MMP analysis failed."
+        )
 
     def open_mmp_transform_ledger_for_last_run(self) -> None:
         """Re-open the Transform Ledger for the most recent MMP analysis."""

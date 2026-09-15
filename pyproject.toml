@@ -7,7 +7,7 @@ name = "molmanager"
 version = "0.1.0"
 description = "Desktop chemistry table manager (PyQt5 + RDKit)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 license = { file = "LICENSE" }
 authors = [{ name = "Hunter Picard" }]
 classifiers = [

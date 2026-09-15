@@ -55,7 +55,7 @@ def _run_fast_prepare_inline(win: ChemicalTableApp, src: str, *, neutralize: boo
     if is_smiles:
         col = win.headers.index(src)
         items = [
-            (oid, win._table_cell_text(win.get_row_by_id(oid), col))
+            (oid, win._table_cell_text(win.logical_row_for_oid(oid), col))
             for oid in win._all_oids_in_table_order()
         ]
     else:
@@ -109,7 +109,7 @@ def test_fast_prepare_structure_target_neutralizes_and_lists_fragments(qapp):  #
 
         frag_col = win.headers.index("Fragments")
         frag_values = {
-            win._table_cell_text(win.get_row_by_id(oid), frag_col) for oid in win.mols
+            win._table_cell_text(win.logical_row_for_oid(oid), frag_col) for oid in win.mols
         }
         assert mol_to_canonical_smiles(Chem.MolFromSmiles("[Cl-]")) in frag_values
         assert "" in frag_values  # benzene has no smaller fragments
@@ -135,7 +135,7 @@ def test_fast_prepare_new_column_target_gets_canonical_smiles(qapp):  # noqa: AR
         assert target in win.headers
         col = win.headers.index(target)
         values = [
-            win._table_cell_text(win.get_row_by_id(oid), col)
+            win._table_cell_text(win.logical_row_for_oid(oid), col)
             for oid in win._all_oids_in_table_order()
         ]
         assert all(v for v in values), f"expected SMILES in every row, got {values}"

@@ -23,6 +23,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+from ..services.sqlite_text_match import sqlite_text_match_clause
 from ..utils import safe_float
 
 SearchOp = Literal[
@@ -700,29 +701,6 @@ def sqlite_where_for_expression(
     if len(or_sql) == 1:
         return or_sql[0], args
     return "(" + " OR ".join(or_sql) + ")", args
-
-
-def sqlite_text_match_clause(
-    header_quoted: str,
-    needle: str,
-    *,
-    partial: bool,
-    case_sensitive: bool,
-) -> tuple[str, list[object]]:
-    """
-    SQLite fragment for substring or whole-cell text match.
-
-    ``LIKE`` is case-insensitive for ASCII in SQLite, so case-sensitive partial
-    matches use ``instr`` (case-sensitive) instead of ``LIKE``.
-    """
-    qh = header_quoted
-    if partial:
-        if case_sensitive:
-            return f'(instr("{qh}", ?) > 0)', [needle]
-        return f'(LOWER("{qh}") LIKE ? ESCAPE "\\")', [f"%{needle.lower()}%"]
-    if case_sensitive:
-        return f'("{qh}" = ?)', [needle]
-    return f'(LOWER("{qh}") = ?)', [needle.lower()]
 
 
 def sqlite_clause_for_condition(

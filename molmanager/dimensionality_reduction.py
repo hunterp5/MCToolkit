@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -36,6 +36,11 @@ class DimensionReductionResult:
     summary: str
     color_values: list[Any] | None = None
     color_label: str | None = None
+
+
+def result_to_dict(result: DimensionReductionResult) -> dict:
+    """Serialize a reduction result for session / UI state (no Qt)."""
+    return asdict(result)
 
 
 def subset_dimension_reduction_result(

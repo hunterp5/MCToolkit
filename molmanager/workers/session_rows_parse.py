@@ -14,10 +14,11 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Background SMILES parsing for session document restore."""
+"""Background SMILES parsing for session document and legacy CSV restore."""
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -51,8 +52,18 @@ class SessionRowsParseResult:
     max_id: int = -1
 
 
+@dataclass
+class CsvSessionParseResult:
+    """Prepared rows from a legacy session CSV (SMILES + property columns)."""
+
+    columns: list[str] = field(default_factory=list)
+    prepared_rows: list[tuple[int, dict[str, str]]] = field(default_factory=list)
+    mols: dict[int, Any] = field(default_factory=dict)
+    next_oid: int = 0
+
+
 class SessionRowsParseSignals(QObject):
-    """Signals for :class:`SessionRowsParseWorker` (owned on the GUI thread)."""
+    """Signals for session row parse workers (owned on the GUI thread)."""
 
     finished = pyqtSignal(object)
     failed = pyqtSignal(str)
@@ -116,3 +127,46 @@ class SessionRowsParseWorker(QRunnable):
             )
         except Exception as exc:
             _safe_emit(self.signals, "failed", str(exc) or "Session row parse failed.")
+
+
+class CsvSessionParseWorker(QRunnable):
+    """Read a legacy session CSV and parse SMILES off the GUI thread."""
+
+    def __init__(self, path: str, signals: SessionRowsParseSignals, generation: int):
+        super().__init__()
+        self.setAutoDelete(True)
+        self.path = str(path)
+        self.signals = signals
+        self.generation = int(generation)
+
+    def run(self) -> None:
+        try:
+            with open(self.path, "r", encoding="utf-8", errors="replace", newline="") as handle:
+                reader = csv.DictReader(handle)
+                cols = list(reader.fieldnames or [])
+                if "SMILES" not in cols:
+                    cols = ["SMILES"] + cols
+                prepared: list[tuple[int, dict[str, str]]] = []
+                mols: dict[int, Any] = {}
+                oid = 0
+                for row in reader:
+                    smi = (row.get("SMILES", "") or "").strip()
+                    row_cells = {c: str(row.get(c, "") or "") for c in cols}
+                    prepared.append((oid, row_cells))
+                    if smi:
+                        mol = Chem.MolFromSmiles(smi)
+                        if mol is not None:
+                            mols[oid] = mol
+                    oid += 1
+            _safe_emit(
+                self.signals,
+                "finished",
+                CsvSessionParseResult(
+                    columns=cols,
+                    prepared_rows=prepared,
+                    mols=mols,
+                    next_oid=oid,
+                ),
+            )
+        except Exception as exc:
+            _safe_emit(self.signals, "failed", str(exc) or "Session CSV parse failed.")

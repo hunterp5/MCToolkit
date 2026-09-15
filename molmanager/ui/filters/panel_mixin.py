@@ -27,6 +27,7 @@ from PyQt5.QtWidgets import QDialog, QMessageBox
 
 from ...config import MolManagerConfig, load_config
 from ...filter_compute import build_sqlite_where, fetch_matching_oids
+from ...services.filter_config import cfg_column
 from ...utils import mol_to_canonical_smiles, safe_float
 from ...workers import FilterApplyWorker, SubstructureFilterWorker
 from ..background_jobs import register_background_job, unregister_background_job
@@ -94,7 +95,7 @@ class FilterPanelMixin:
                     {
                         "kind": "numeric",
                         "enabled": bool(cfg.get("enabled", True)),
-                        "column": cfg.get("p"),
+                        "column": cfg_column(cfg),
                         "min": float(cfg.get("min", 0.0)),
                         "max": float(cfg.get("max", 0.0)),
                         "inverted": bool(cfg.get("inverted", False)),
@@ -107,7 +108,7 @@ class FilterPanelMixin:
                     {
                         "kind": "text",
                         "enabled": bool(cfg.get("enabled", True)),
-                        "column": cfg.get("p"),
+                        "column": cfg_column(cfg),
                         "text": str(cfg.get("text", "") or ""),
                         "case_sensitive": bool(cfg.get("case_sensitive", False)),
                         "partial_match": bool(cfg.get("partial_match", True)),
@@ -295,6 +296,7 @@ class FilterPanelMixin:
         self._substructure_job_gen = int(getattr(self, "_substructure_job_gen", 0)) + 1
         self._substructure_job_smarts = None
         self._substructure_job_source = None
+        self._substructure_job_queries = None
 
     def _invalidate_filter_jobs(self) -> None:
         """Drop in-flight SQL/chunked filter jobs (completion handler will no-op)."""
@@ -419,9 +421,12 @@ class FilterPanelMixin:
         override_smarts = None
         override_source = None
         override_oids = None
+        overrides: list[tuple[str, str | None, frozenset]] = []
         sub = state.get("substructure_matches")
         if sub:
-            override_smarts, override_source, override_oids = self._unpack_substructure_matches(sub)
+            overrides = self._normalize_substructure_overrides(sub)
+            if len(overrides) == 1:
+                override_smarts, override_source, override_oids = overrides[0]
         sqlite_oids = state.get("sqlite_oids")
         h_map = {h: i for i, h in enumerate(self.headers)}
         visible_oids: set[int] = state["visible_oids"]
@@ -435,10 +440,9 @@ class FilterPanelMixin:
                     if not f.filter_enabled():
                         continue
                     inv = f.filter_inverted()
-                    if override_oids is not None and self._substructure_override_matches_card(
-                        f, override_smarts, override_source
-                    ):
-                        matched = oid in override_oids
+                    ov_oids = self._override_for_substructure_card(f, overrides)
+                    if ov_oids is not None:
+                        matched = oid in ov_oids
                         if inv:
                             if matched:
                                 hide = True
@@ -476,7 +480,7 @@ class FilterPanelMixin:
                 fcfg = f.get_cfg()
                 if not fcfg.get("enabled", True):
                     continue
-                prop = fcfg.get("p")
+                prop = cfg_column(fcfg)
                 if not prop or prop not in h_map:
                     continue
                 v = safe_float(self._table_model.value_for_header(r, prop))
@@ -506,14 +510,27 @@ class FilterPanelMixin:
                 finish("Applying filters", status_message=None)
             if (
                 sqlite_oids is not None
-                and override_oids is not None
-                and override_smarts is not None
+                and overrides
             ):
-                visible_oids = self._apply_substructure_override_to_visible(
+                visible_oids = self._apply_substructure_overrides_to_visible(
                     frozenset(sqlite_oids),
-                    override_smarts,
-                    override_oids,
-                    override_source=override_source,
+                    overrides,
+                )
+            elif (
+                overrides
+                and sqlite_oids is None
+                and len([f for f in self.filters if f.filter_enabled()]) == len(
+                    [
+                        f
+                        for f in self.filters
+                        if isinstance(f, SubstructureFilterCard) and f.filter_enabled()
+                    ]
+                )
+            ):
+                # Only substructure filters: combine override OID sets.
+                all_oids = set(self.mols)
+                visible_oids = self._apply_substructure_overrides_to_visible(
+                    all_oids, overrides
                 )
             elif (
                 override_oids is not None
@@ -614,6 +631,43 @@ class FilterPanelMixin:
             return False
         return True
 
+    def _normalize_substructure_overrides(
+        self, substructure_matches
+    ) -> list[tuple[str, str | None, frozenset]]:
+        """Normalize async job payload to ``[(smarts, source, oids), ...]``."""
+        if not substructure_matches:
+            return []
+        if isinstance(substructure_matches, list):
+            out: list[tuple[str, str | None, frozenset]] = []
+            for item in substructure_matches:
+                if not item:
+                    continue
+                if isinstance(item, frozenset):
+                    continue
+                if len(item) >= 3:
+                    smarts, source, oids = item[0], item[1], item[2]
+                else:
+                    smarts, oids = item[0], item[1]
+                    source = "Structure"
+                if not isinstance(oids, frozenset):
+                    oids = frozenset(oids or ())
+                out.append((str(smarts or ""), source, oids))
+            return out
+        smarts, source, oids = self._unpack_substructure_matches(substructure_matches)
+        if smarts is None or oids is None:
+            return []
+        return [(smarts, source, oids)]
+
+    def _override_for_substructure_card(
+        self,
+        card: SubstructureFilterCard,
+        overrides: list[tuple[str, str | None, frozenset]],
+    ) -> frozenset | None:
+        for smarts, source, oids in overrides:
+            if self._substructure_override_matches_card(card, smarts, source):
+                return oids
+        return None
+
     def _unregister_substructure_background_job(self, job_gen: int) -> None:
         job_id = getattr(self, "_substructure_bg_job_id", None)
         if job_id == f"substructure-{job_gen}":
@@ -624,24 +678,50 @@ class FilterPanelMixin:
         self._unregister_substructure_background_job(job_gen)
         if job_gen != getattr(self, "_substructure_job_gen", 0):
             return
-        dispatched = getattr(self, "_substructure_job_smarts", None) or ""
-        dispatched_src = getattr(self, "_substructure_job_source", None) or "Structure"
+        dispatched_queries = list(getattr(self, "_substructure_job_queries", None) or [])
         ss_cards = [
             f for f in self.filters if isinstance(f, SubstructureFilterCard) and f.filter_enabled()
         ]
-        if len(ss_cards) != 1:
-            self._route_filter_apply(None)
-            return
-        card = ss_cards[0]
-        current = (card.smarts_edit.text() or "").strip()
-        if current != dispatched or card.structure_source() != dispatched_src:
-            self.apply_filters()
-            return
-        oids = matched if isinstance(matched, frozenset) else frozenset()
         finish = getattr(self, "_finish_tool_progress", None)
         if callable(finish):
             finish("Filtering substructure", status_message=None)
-        self._route_filter_apply((dispatched, dispatched_src, oids))
+
+        overrides = self._normalize_substructure_overrides(matched)
+        if not overrides and isinstance(matched, frozenset):
+            # Backward-compatible single frozenset payload.
+            if len(dispatched_queries) == 1:
+                smarts, src = dispatched_queries[0]
+                overrides = [(smarts, src, matched)]
+            elif len(ss_cards) == 1:
+                card = ss_cards[0]
+                overrides = [
+                    (
+                        (card.smarts_edit.text() or "").strip(),
+                        card.structure_source(),
+                        matched,
+                    )
+                ]
+
+        if not overrides:
+            self._route_filter_apply(None)
+            return
+
+        # Re-run if the user changed SMARTS/source while the job was running.
+        for smarts, src, _oids in overrides:
+            still = False
+            for card in ss_cards:
+                if self._substructure_override_matches_card(card, smarts, src):
+                    still = True
+                    break
+            if not still:
+                self.apply_filters()
+                return
+
+        if len(overrides) == 1:
+            smarts, src, oids = overrides[0]
+            self._route_filter_apply((smarts, src, oids))
+        else:
+            self._route_filter_apply(overrides)
 
     def _on_substructure_filter_failed(self, job_gen: int, msg: str) -> None:
         self._unregister_substructure_background_job(job_gen)
@@ -669,6 +749,24 @@ class FilterPanelMixin:
                 return {oid for oid in base if oid not in override_oids}
             return {oid for oid in base if oid in override_oids}
         return set(base)
+
+    def _apply_substructure_overrides_to_visible(
+        self,
+        base: frozenset[int] | set[int],
+        overrides: list[tuple[str, str | None, frozenset]],
+    ) -> set[int]:
+        visible = set(base)
+        for f in self.filters:
+            if not isinstance(f, SubstructureFilterCard) or not f.filter_enabled():
+                continue
+            oids = self._override_for_substructure_card(f, overrides)
+            if oids is None:
+                continue
+            if f.filter_inverted():
+                visible = {oid for oid in visible if oid not in oids}
+            else:
+                visible = {oid for oid in visible if oid in oids}
+        return visible
 
     def _unpack_substructure_matches(
         self, substructure_matches: tuple | None
@@ -717,9 +815,10 @@ class FilterPanelMixin:
                 schedule_replot(force=True)
             return
 
-        override_smarts, override_source, override_oids = self._unpack_substructure_matches(
-            substructure_matches
-        )
+        overrides = self._normalize_substructure_overrides(substructure_matches)
+        override_smarts, override_source, override_oids = (None, None, None)
+        if len(overrides) == 1:
+            override_smarts, override_source, override_oids = overrides[0]
         if sqlite_oids is None:
             sqlite_oids = self._sqlite_filter_matched_oids()
 
@@ -731,19 +830,29 @@ class FilterPanelMixin:
             table.setUpdatesEnabled(False)
         try:
             with scope("filters.apply_sync"):
-                if sqlite_oids is not None and override_oids is None:
+                if sqlite_oids is not None and not overrides:
                     visible_oids = set(sqlite_oids)
                     vis = len(visible_oids)
-                elif (
-                    sqlite_oids is not None
-                    and override_oids is not None
-                    and override_smarts is not None
-                ):
-                    visible_oids = self._apply_substructure_override_to_visible(
+                elif sqlite_oids is not None and overrides:
+                    visible_oids = self._apply_substructure_overrides_to_visible(
                         sqlite_oids,
-                        override_smarts,
-                        override_oids,
-                        override_source=override_source,
+                        overrides,
+                    )
+                    vis = len(visible_oids)
+                elif (
+                    overrides
+                    and sqlite_oids is None
+                    and len([f for f in self.filters if f.filter_enabled()])
+                    == len(
+                        [
+                            f
+                            for f in self.filters
+                            if isinstance(f, SubstructureFilterCard) and f.filter_enabled()
+                        ]
+                    )
+                ):
+                    visible_oids = self._apply_substructure_overrides_to_visible(
+                        set(self.mols), overrides
                     )
                     vis = len(visible_oids)
                 elif (
@@ -777,13 +886,9 @@ class FilterPanelMixin:
                                 if not f.filter_enabled():
                                     continue
                                 inv = f.filter_inverted()
-                                if (
-                                    override_oids is not None
-                                    and self._substructure_override_matches_card(
-                                        f, override_smarts, override_source
-                                    )
-                                ):
-                                    matched = oid in override_oids
+                                ov_oids = self._override_for_substructure_card(f, overrides)
+                                if ov_oids is not None:
+                                    matched = oid in ov_oids
                                     if inv:
                                         if matched:
                                             hide = True
@@ -821,7 +926,7 @@ class FilterPanelMixin:
                             cfg = f.get_cfg()
                             if not cfg.get("enabled", True):
                                 continue
-                            prop = cfg.get("p")
+                            prop = cfg_column(cfg)
                             if not prop or prop not in h_map:
                                 continue
                             v = safe_float(self._table_model.value_for_header(r, prop))
@@ -869,45 +974,53 @@ class FilterPanelMixin:
         ]
         thresh = cfg.substructure_async_rows
 
-        if len(ss_cards) == 1:
-            card = ss_cards[0]
+        ready: list[tuple[str, str, SubstructureFilterCard]] = []
+        for card in ss_cards:
             smarts = (card.smarts_edit.text() or "").strip()
-            src = card.structure_source()
-            if smarts and n_rows >= thresh and card._compiled_query() is not None:
-                self._invalidate_filter_jobs()
-                self._substructure_job_gen = int(getattr(self, "_substructure_job_gen", 0)) + 1
-                gen = self._substructure_job_gen
-                self._substructure_job_smarts = smarts
-                self._substructure_job_source = src
-                perf = getattr(self, "_perf", None)
-                scope = (
-                    perf.track if perf is not None else (lambda *_args, **_kwargs: nullcontext())
-                )
-                with scope("filters.substructure_targets"):
-                    targets = self._substructure_filter_targets(src)
-                sigs = getattr(self, "_substructure_filter_signals", None)
-                if sigs is None:
-                    self._route_filter_apply(None)
-                    return
-                job_id = f"substructure-{gen}"
-                self._substructure_bg_job_id = job_id
-                register_background_job(self, job_id, f"Substructure filter ({n_rows:,} rows)")
-                begin = getattr(self, "_begin_tool_progress", None)
-                if callable(begin):
-                    begin("Filtering substructure", n_rows)
-                worker_signals = getattr(self, "signals", None)
-                progress_state = getattr(self, "_tool_progress_state", None)
-                self.threadpool.start(
-                    SubstructureFilterWorker(
-                        gen,
-                        smarts,
-                        targets,
-                        sigs,
-                        progress_state=progress_state,
-                        worker_signals=worker_signals,
-                    )
-                )
+            if smarts and card._compiled_query() is not None:
+                ready.append((smarts, card.structure_source(), card))
+
+        if ready and n_rows >= thresh:
+            self._invalidate_filter_jobs()
+            self._substructure_job_gen = int(getattr(self, "_substructure_job_gen", 0)) + 1
+            gen = self._substructure_job_gen
+            self._substructure_job_queries = [(s, src) for s, src, _c in ready]
+            # Keep legacy attrs for older call sites / debugging.
+            self._substructure_job_smarts = ready[0][0]
+            self._substructure_job_source = ready[0][1]
+            perf = getattr(self, "_perf", None)
+            scope = (
+                perf.track if perf is not None else (lambda *_args, **_kwargs: nullcontext())
+            )
+            targets_by_src: dict[str, list] = {}
+            queries: list[tuple[str, str, list]] = []
+            with scope("filters.substructure_targets"):
+                for smarts, src, _card in ready:
+                    if src not in targets_by_src:
+                        targets_by_src[src] = self._substructure_filter_targets(src)
+                    queries.append((smarts, src, targets_by_src[src]))
+            sigs = getattr(self, "_substructure_filter_signals", None)
+            if sigs is None:
+                self._route_filter_apply(None)
                 return
+            job_id = f"substructure-{gen}"
+            self._substructure_bg_job_id = job_id
+            register_background_job(self, job_id, f"Substructure filter ({n_rows:,} rows)")
+            begin = getattr(self, "_begin_tool_progress", None)
+            if callable(begin):
+                begin("Filtering substructure", n_rows)
+            worker_signals = getattr(self, "signals", None)
+            progress_state = getattr(self, "_tool_progress_state", None)
+            self.threadpool.start(
+                SubstructureFilterWorker(
+                    gen,
+                    signals=sigs,
+                    queries=queries,
+                    progress_state=progress_state,
+                    worker_signals=worker_signals,
+                )
+            )
+            return
 
         self._invalidate_substructure_async_jobs()
         self._route_filter_apply(None)

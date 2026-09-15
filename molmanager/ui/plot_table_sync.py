@@ -158,11 +158,11 @@ def source_rows_for_point_indices(
         if idx < 0 or idx >= n:
             continue
         for oid in (plotted_oids[idx],):
-            row = parent_app.get_row_by_id(int(oid))
+            row = parent_app.logical_row_for_oid(int(oid))
             if row >= 0:
                 rows.append(int(row))
         if partner_oids is not None and idx < len(partner_oids):
-            row = parent_app.get_row_by_id(int(partner_oids[idx]))
+            row = parent_app.logical_row_for_oid(int(partner_oids[idx]))
             if row >= 0:
                 rows.append(int(row))
     return sorted(set(rows))

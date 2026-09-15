@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""File load, 2D render, and fragment wash workers."""
+"""File load, 2D render, and disconnect-fragments workers."""
 
 import csv
 import logging
@@ -401,7 +401,7 @@ class UniversalLoadWorker(QRunnable):
 class RenderWorker(QRunnable):
     def __init__(
         self,
-        idx,
+        compound_oid,
         mol,
         signals,
         width=None,
@@ -412,7 +412,9 @@ class RenderWorker(QRunnable):
         render_batch_session: int = 0,
     ):
         super().__init__()
-        self.idx, self.mol, self.signals = idx, mol, signals
+        self.compound_oid = int(compound_oid)
+        self.mol = mol
+        self.signals = signals
         self.w = int(width if width is not None else structure_depiict_width())
         self.h = int(height if height is not None else structure_depiict_height())
         self.props = props
@@ -422,9 +424,10 @@ class RenderWorker(QRunnable):
 
     def run(self):
         sid = self.render_batch_session
+        oid = self.compound_oid
         if self.cancel_event is not None and self.cancel_event.is_set():
             try:
-                self.signals.rendered.emit(self.idx, {}, b"", False, self.w, self.h, sid)
+                self.signals.rendered.emit(oid, {}, b"", False, self.w, self.h, sid)
             except Exception:
                 pass
             return
@@ -436,12 +439,14 @@ class RenderWorker(QRunnable):
             else:
                 p = {n: safe_mol_prop_string(self.mol, n) for n in self.mol.GetPropNames()}
             png = render_molecule_png(self.mol, int(self.w), int(self.h))
-            self.signals.rendered.emit(self.idx, p, png, True, self.w, self.h, sid)
+            self.signals.rendered.emit(oid, p, png, True, self.w, self.h, sid)
         except Exception:
-            self.signals.rendered.emit(self.idx, {}, b"", False, self.w, self.h, sid)
+            self.signals.rendered.emit(oid, {}, b"", False, self.w, self.h, sid)
 
 
-class WashWorker(QRunnable):
+class DisconnectFragmentsWorker(QRunnable):
+    """Keep the largest fragment and record smaller fragments for each row."""
+
     def __init__(self, mols_data, signals, is_smiles: bool = False, cancel_event: threading.Event | None = None):
         super().__init__()
         self.mols_data, self.signals, self.is_smiles = mols_data, signals, is_smiles
@@ -460,7 +465,7 @@ class WashWorker(QRunnable):
             done_count = done
             mol = None
             source_text: str | None = None
-            i = row[0]
+            oid = row[0]
             if self.is_smiles:
                 source_text = str(row[1] or "").strip()
                 mol = parse_molecule_from_cell_text(source_text) if source_text else None
@@ -484,7 +489,7 @@ class WashWorker(QRunnable):
                 except Exception:
                     pass
                 continue
-            res.append((i, parent, fragments))
+            res.append((oid, parent, fragments))
             try:
                 self.signals.tool_progress.emit("Disconnect fragments…", done, total)
             except Exception:
@@ -492,7 +497,7 @@ class WashWorker(QRunnable):
         emit_partial_results_if_cancelled(
             self.signals, "Disconnect fragments", done_count, total, cancelled
         )
-        self.signals.washed.emit(res)
+        self.signals.disconnect_fragments_finished.emit(res)
 
 
 class NeutralizeWorker(QRunnable):

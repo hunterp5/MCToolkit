@@ -34,5 +34,5 @@ def test_substructure_worker_uses_prebuilt_mol_targets():
     )
     worker.run()
     assert out["gen"] == 7
-    assert out["matched"] == frozenset({1})
+    assert out["matched"] == [("CO", "Structure", frozenset({1}))]
 

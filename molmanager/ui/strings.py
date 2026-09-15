@@ -16,6 +16,8 @@
 
 """User-facing tool names and recurring status copy (single place to tweak wording)."""
 
+from ..services.column_labels import COLUMN_TANIMOTO_SIMILARITY as COLUMN_TANIMOTO_SIMILARITY
+
 TOOLS_ARROW_RENDER_2D = "Tools → Render 2D"
 TOOL_RENDER_2D = "Render 2D"
 TOOL_CORE_DECOMP = "Core-Based Decomposition"
@@ -37,7 +39,7 @@ TOOL_SPLIT_COLUMN = "Split Column"
 TOOL_PREDICT_SOM = "Predict SOM"
 
 # Column header when importing similarity hits (PubChem, ChEMBL, SureChEMBL) or adding FP similarity scores.
-COLUMN_TANIMOTO_SIMILARITY = "Tanimoto Similarity"
+# Defined in services.column_labels; re-exported here for UI callers.
 
 STRUCTURE_PENDING_HINT = f"No 2D structure yet.\nUse {TOOLS_ARROW_RENDER_2D} to draw."
 
