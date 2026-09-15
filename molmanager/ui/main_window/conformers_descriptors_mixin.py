@@ -19,10 +19,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
-    QApplication,
     QDialog,
     QMessageBox,
 )
@@ -42,6 +42,7 @@ from ...workers import (
     CalcWorker,
     ConformerGenerationWorker,
     SuperposeConformersWorker,
+    SuperposeStructuresWorker,
     SystematicConformerWorker,
 )
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
@@ -469,30 +470,53 @@ class ConformersDescriptorsMixin:
         )
         return len(batch_rows)
 
-    def open_superpose_conformers(self):
+    def open_superpose(self, default_target: str | None = None):
         if not self.headers or self._table_model.rowCount() == 0:
             QMessageBox.information(
                 self,
-                "Superpose Conformers",
+                "Superpose",
                 "Open a file or add rows so the table has data to process.",
             )
             return
-        if "confs" not in self.headers:
-            QMessageBox.information(
-                self,
-                "Superpose Conformers",
-                'Add a "confs" column first by running Generate Conformations (packed multi-conformer cells).',
-            )
-            return
-        from ..dialogs import SuperposeConformersDialog
+        from ..dialogs import SuperposeDialog
 
-        d = SuperposeConformersDialog(len(self._selected_logical_rows()), self)
+        has_confs = "confs" in self.headers
+        target = (default_target or "").strip().lower()
+        if target not in {"conformers", "structures"}:
+            target = "conformers" if has_confs else "structures"
+        sources = ["Structure"] + [c for c in ("confs", "superpose") if c in self.headers]
+        d = SuperposeDialog(
+            len(self._selected_logical_rows()),
+            source_columns=sources,
+            has_confs=has_confs,
+            default_target=target,
+            parent=self,
+        )
         self._prepare_tool_dialog(d)
         if d.exec_() != QDialog.Accepted:
             return
+        if d.target() == "conformers":
+            self._run_superpose_conformers(d)
+        else:
+            self._run_superpose_structures(d)
+
+    def open_superpose_conformers(self):
+        self.open_superpose(default_target="conformers")
+
+    def open_superpose_structures(self):
+        self.open_superpose(default_target="structures")
+
+    def _run_superpose_conformers(self, d) -> None:
+        if "confs" not in self.headers:
+            QMessageBox.information(
+                self,
+                "Superpose",
+                'Add a "confs" column first by running Generate Conformations (packed multi-conformer cells).',
+            )
+            return
         only_selected = d.only_selected_rows()
         allowed = self._selected_oids_set() if only_selected else None
-        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Superpose Conformers"):
+        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Superpose"):
             return
         oids_list = self._all_oids_in_table_order()
         if allowed is not None:
@@ -511,28 +535,31 @@ class ConformersDescriptorsMixin:
         if not data:
             QMessageBox.information(
                 self,
-                "Superpose Conformers",
+                "Superpose",
                 'No rows in scope have a packed multi-conformer "confs" cell. Run Generate Conformations first.',
             )
             return
-        params = d.params()
+        params = d.conformer_params()
         from ...workers import StrainEnergyParams
 
-        self._pending_strain_params = StrainEnergyParams(
-            reference_conformer_index=int(params.reference_conformer_index or 0)
-        )
+        if str(getattr(params, "geometry", "3d") or "3d").lower().startswith("2"):
+            self._pending_strain_params = None
+        else:
+            self._pending_strain_params = StrainEnergyParams(
+                reference_conformer_index=int(params.reference_conformer_index or 0)
+            )
         n = len(data)
         ps = self._tool_progress_state
-        self._begin_tool_progress("Superpose conformers", n)
+        self._begin_tool_progress("Superpose", n)
         self.process_queue.enqueue(
-            f"Superpose conformers ({n} rows)",
+            f"Superpose ({n} rows)",
             lambda ev, d=data, p=params, sigs=self.signals, prog=ps: SuperposeConformersWorker(
                 d, p, sigs, cancel_event=ev, progress_state=prog
             ),
         )
 
     def on_superpose_finished(self, results: list) -> None:
-        self._finish_tool_progress("Superpose conformers")
+        self._finish_tool_progress("Superpose")
         superpose_col = "superpose"
         self.table.setSortingEnabled(False)
         try:
@@ -563,7 +590,7 @@ class ConformersDescriptorsMixin:
         self.status_label.setText(" ".join(parts) if parts else "Done.")
         n_ok = self._auto_open_first_conformer_results(
             results,
-            title="Superpose Conformers",
+            title="Superpose",
             confs_column=superpose_col,
             initial_superpose=True,
         )
@@ -610,30 +637,37 @@ class ConformersDescriptorsMixin:
                 return packed
         return prepare_mol_3d(m)
 
-    def open_superpose_structures(self):
-        if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(
-                self,
-                "Superpose Structures",
-                "Open a file or add rows so the table has data to process.",
-            )
-            return
-        from ...confs_codec import conformer_mol_blocks_b64_json
-        from ...workers import run_superpose_structures
-        from ..dialogs import SuperposeStructuresDialog
+    def _mol_for_structure_superpose(
+        self, oid: int, src: str, *, geometry: str = "3d"
+    ) -> Chem.Mol | None:
+        """Molecule for structure superposition; 2D does not require 3D coordinates."""
+        geom = str(geometry or "3d").strip().lower()
+        if not geom.startswith("2"):
+            return self._mol_3d_for_structure_superpose(oid, src)
+        from ...confs_codec import mol_from_packed_confs_cell
 
-        sources = ["Structure"] + [c for c in ("confs", "superpose") if c in self.headers]
-        d = SuperposeStructuresDialog(
-            len(self._selected_logical_rows()),
-            source_columns=sources,
-            parent=self,
-        )
-        self._prepare_tool_dialog(d)
-        if d.exec_() != QDialog.Accepted:
-            return
+        r = self.logical_row_for_oid(oid)
+        if r < 0:
+            return None
+        src_h = (src or "Structure").strip() or "Structure"
+        if src_h != "Structure" and src_h in self.headers:
+            raw = self._table_model.backing_value_for_row_header(r, src_h)
+            sc = getattr(self, "_confs_blocks_sidecar", {}) or {}
+            full = rehydrate_v1_confs_cell(raw, src_h, int(oid), sc)
+            packed = mol_from_packed_confs_cell(full, min_conformers=1)
+            if packed is not None:
+                return packed
+        m = self.mols.get(oid)
+        if m is None:
+            m = self._mol_for_structure_row(r)
+        if m is None:
+            return None
+        return Chem.Mol(m)
+
+    def _run_superpose_structures(self, d) -> None:
         only_selected = d.only_selected_rows()
         allowed = self._selected_oids_set() if only_selected else None
-        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Superpose Structures"):
+        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Superpose"):
             return
         oids_list = self._all_oids_in_table_order()
         if allowed is not None:
@@ -641,34 +675,51 @@ class ConformersDescriptorsMixin:
         if len(oids_list) < 2:
             QMessageBox.information(
                 self,
-                "Superpose Structures",
+                "Superpose",
                 "Select at least two rows (Selected Rows Only) to superpose structures.",
             )
             return
         src = d.source_column()
-        params = d.params()
+        params = d.structure_params()
+        geom = str(getattr(params, "geometry", "3d") or "3d")
         probes: list[tuple[int, Chem.Mol]] = []
         for o in oids_list:
-            m = self._mol_3d_for_structure_superpose(int(o), src)
+            m = self._mol_for_structure_superpose(int(o), src, geometry=geom)
             if m is None:
                 continue
             probes.append((int(o), m))
         if len(probes) < 2:
+            need = "2D structures" if str(geom).lower().startswith("2") else "3D structures"
             QMessageBox.information(
                 self,
-                "Superpose Structures",
-                "Need at least two rows with usable 3D structures in scope.",
+                "Superpose",
+                f"Need at least two rows with usable {need} in scope.",
             )
             return
         ref_oid, ref_mol = probes[0]
-        self.status_label.setText(f"Superposing {len(probes)} structures…")
-        QApplication.processEvents()
-        results = run_superpose_structures(
-            ref_mol,
-            probes,
-            params,
-            ref_oid=ref_oid,
+        n = len(probes)
+        ps = self._tool_progress_state
+        self._begin_tool_progress("Superpose", n)
+        self.process_queue.enqueue(
+            f"Superpose ({n} structures)",
+            lambda ev, rid=ref_oid, rm=ref_mol, pr=probes, p=params, sigs=self.signals, prog=ps: (
+                SuperposeStructuresWorker(
+                    rid, rm, pr, p, sigs, cancel_event=ev, progress_state=prog
+                )
+            ),
         )
+
+    def on_superpose_structures_finished(self, payload) -> None:
+        self._finish_tool_progress("Superpose")
+        from ...confs_codec import conformer_mol_blocks_b64_json, pack_mols_as_confs_cell
+
+        data = payload if isinstance(payload, dict) else {}
+        results = list(data.get("results") or [])
+        try:
+            ref_oid = int(data.get("ref_oid"))
+        except (TypeError, ValueError):
+            ref_oid = int(results[0][0]) if results else -1
+        geometry = str(data.get("geometry") or "3d")
         self.table.setSortingEnabled(False)
         try:
             self.table.setUpdatesEnabled(False)
@@ -679,17 +730,16 @@ class ConformersDescriptorsMixin:
         superpose_col = "superpose"
         try:
             superpose_col = self._next_packed_ensemble_column("superpose")
-            for oid, mol, meta in results:
-                if mol is None or not meta.get("ok"):
+            for _oid, mol, meta in results:
+                if mol is None or not (meta or {}).get("ok"):
                     continue
                 viewer_mols.append(mol)
                 ok_n += 1
-            if viewer_mols:
-                from ...confs_codec import pack_mols_as_confs_cell
-
+            if viewer_mols and ref_oid >= 0:
                 ensemble_meta = {
                     "ok": True,
                     "op": "superpose_structures",
+                    "geometry": geometry,
                     "n_kept": len(viewer_mols),
                     "n_packed": len(viewer_mols),
                     "n_conf": len(viewer_mols),
@@ -704,8 +754,7 @@ class ConformersDescriptorsMixin:
                 self.table.setUpdatesEnabled(True)
             except Exception:
                 pass
-        if viewer_mols:
-            # Build a multi-mol blocks payload for the shared 3D viewer (different atom counts OK).
+        if viewer_mols and ref_oid >= 0:
             import base64
             import json
 
@@ -716,28 +765,32 @@ class ConformersDescriptorsMixin:
                     blocks.append(base64.b64encode(block.encode("utf-8")).decode("ascii"))
                 except Exception:
                     continue
+            skip_strain = str(geometry).lower().startswith("2")
+            strain = None if skip_strain else getattr(self, "_pending_strain_params", None)
             if len(blocks) >= 2:
-                payload = base64.b64encode(json.dumps(blocks).encode("utf-8")).decode("ascii")
+                payload_b64 = base64.b64encode(json.dumps(blocks).encode("utf-8")).decode("ascii")
                 self._open_conformer_results_viewer(
-                    payload,
-                    title="Superpose Structures",
+                    payload_b64,
+                    title="Superpose",
                     confs_column=superpose_col,
                     oid=int(ref_oid),
                     initial_superpose=True,
                     mols=viewer_mols,
+                    strain_params=strain,
                 )
             elif len(blocks) == 1:
-                payload = conformer_mol_blocks_b64_json(viewer_mols[0])
+                payload_b64 = conformer_mol_blocks_b64_json(viewer_mols[0])
                 self._open_conformer_results_viewer(
-                    payload,
-                    title="Superpose Structures",
+                    payload_b64,
+                    title="Superpose",
                     confs_column=superpose_col,
                     oid=int(ref_oid),
                     initial_superpose=False,
                     mols=viewer_mols[:1],
+                    strain_params=strain,
                 )
         failed = len(results) - ok_n
-        status = f"Superpose structures: packed {ok_n} onto reference OID {ref_oid}"
+        status = f"Superpose: packed {ok_n} onto reference OID {ref_oid}"
         if failed:
             status += f" ({failed} failed)"
         if superpose_col != "superpose":
@@ -927,7 +980,9 @@ class ConformersDescriptorsMixin:
                 if m is not None:
                     data.append((o, m))
         else:
-            data = [(o, self._table_cell_text(self.logical_row_for_oid(o), s_idx)) for o in oids_list]
+            data = [
+                (o, self._table_cell_text(self.logical_row_for_oid(o), s_idx)) for o in oids_list
+            ]
         if not data:
             QMessageBox.information(
                 self,
@@ -972,6 +1027,97 @@ class ConformersDescriptorsMixin:
         if callable(refresh_search):
             refresh_search()
 
+    def _calc_writeback_async_min_rows(self) -> int:
+        from ...config import load_config
+
+        return max(500, int(load_config().table_selection_chunk_rows))
+
+    def _calc_writeback_chunk_rows(self) -> int:
+        from ...config import load_config
+
+        cfg = load_config()
+        return max(250, min(int(cfg.ingest_gui_chunk_size), int(cfg.table_selection_chunk_rows)))
+
+    def _apply_calc_bulk_rows(
+        self, calc_h: list[str], bulk_rows: list[tuple[int, dict[str, str]]]
+    ) -> None:
+        if not bulk_rows:
+            return
+        if len(calc_h) == 1:
+            hdr = calc_h[0]
+            self._table_model.set_column_text_by_oids(
+                hdr,
+                [(oid, values[hdr]) for oid, values in bulk_rows],
+            )
+            return
+        self._table_model.apply_columns_values_bulk(calc_h, bulk_rows)
+
+    def _finalize_calc_writeback(
+        self,
+        calc_h: list[str],
+        new_h: list[str],
+        *,
+        on_complete: Callable[[list[str]], None] | None = None,
+    ) -> None:
+        if self._table_model.rowCount() >= 5000:
+            dirty = {h for h in calc_h if h in self._table_model._bounds_data_headers()}
+            if dirty:
+                self._table_model._mark_numeric_bounds_dirty(dirty)
+            self.schedule_calculate_global_bounds()
+        else:
+            self._sync_global_bounds_for_headers(calc_h, refresh_filters=bool(new_h))
+        for header_name in calc_h:
+            self._table_model.apply_favorable_score_column_coloring(header_name)
+        self.table.setSortingEnabled(False)
+        try:
+            self.table.setUpdatesEnabled(True)
+        except Exception:
+            pass
+        self.status_label.setText(self._consume_partial_results_notice() or "Done.")
+        if on_complete is not None:
+            on_complete(list(calc_h))
+
+    def _calc_write_step(self) -> None:
+        ctx = getattr(self, "_calc_write_ctx", None)
+        if not ctx or ctx.get("gen") != getattr(self, "_calc_write_gen", -1):
+            return
+        bulk_rows: list[tuple[int, dict[str, str]]] = ctx["bulk_rows"]
+        calc_h: list[str] = ctx["calc_h"]
+        idx = int(ctx["idx"])
+        chunk = int(ctx["chunk"])
+        n = len(bulk_rows)
+        end = min(idx + chunk, n)
+        batch = bulk_rows[idx:end]
+        try:
+            self.table.setUpdatesEnabled(False)
+        except Exception:
+            pass
+        try:
+            self._apply_calc_bulk_rows(calc_h, batch)
+        finally:
+            try:
+                self.table.setUpdatesEnabled(True)
+            except Exception:
+                pass
+        ctx["idx"] = end
+        on_prog = getattr(self, "_on_tool_progress", None)
+        if callable(on_prog):
+            on_prog("Writing results…", end, n)
+        else:
+            self.status_label.setText(f"Writing results… ({end:,}/{n:,})")
+        if end < n:
+            QTimer.singleShot(0, self._calc_write_step)
+            return
+        self._calc_write_ctx = None
+        finish = getattr(self, "_finish_tool_progress", None)
+        if callable(finish):
+            finish("Writing results", status_message=None)
+        self._finalize_calc_writeback(
+            calc_h,
+            list(ctx.get("new_h") or []),
+            on_complete=ctx.get("on_complete"),
+        )
+
     def on_calc_finished(
         self,
         res,
@@ -979,6 +1125,7 @@ class ConformersDescriptorsMixin:
         *,
         finish_progress: bool = True,
         progress_label: str | None = None,
+        on_complete: Callable[[list[str]], None] | None = None,
     ) -> list[str]:
         """Write tool results into the table, adding columns as needed.
 
@@ -986,13 +1133,16 @@ class ConformersDescriptorsMixin:
         :meth:`_unique_table_column_names`, except ``pKa`` and ``pI``: those
         Uni-pKa metadata columns are updated in place when they already exist.
         ``pI`` is only written when Predict pKa is run with isoelectric point enabled.
-        Returns the final header list written.
+        Returns the final header list written. Large result sets are applied in
+        GUI-budgeted chunks; ``on_complete`` runs after values (and coloring) land.
         """
-        if finish_progress:
-            self._finish_tool_progress(progress_label, status_message=None)
         calc_h = [str(h) for h in (calc_h or [])]
         if not calc_h:
+            if finish_progress:
+                self._finish_tool_progress(progress_label, status_message=None)
             self.status_label.setText(self._consume_partial_results_notice() or "Done.")
+            if on_complete is not None:
+                on_complete([])
             return []
 
         shared = {"pKa", "pI"}
@@ -1017,39 +1167,46 @@ class ConformersDescriptorsMixin:
             self.table.setUpdatesEnabled(False)
         except Exception:
             pass
-        try:
-            h_map = {h: i for i, h in enumerate(self.headers)}
-            new_h = [h for h in calc_h if h not in h_map]
-            if new_h:
-                col_at = len(self.headers)
-                self.headers.extend(new_h)
-                self._table_model.insert_columns_at(col_at, new_h, None)
-            bulk_rows = [
-                (int(oid), {h: str(row_d.get(h, "N/A")) for h in calc_h}) for oid, row_d in res
-            ]
-            if bulk_rows:
-                if len(calc_h) == 1:
-                    hdr = calc_h[0]
-                    self._table_model.set_column_text_by_oids(
-                        hdr,
-                        [(oid, values[hdr]) for oid, values in bulk_rows],
-                    )
-                else:
-                    self._table_model.apply_columns_values_bulk(calc_h, bulk_rows)
-            if self._table_model.rowCount() >= 5000:
-                dirty = {h for h in calc_h if h in self._table_model._bounds_data_headers()}
-                if dirty:
-                    self._table_model._mark_numeric_bounds_dirty(dirty)
-                self.schedule_calculate_global_bounds()
-            else:
-                self._sync_global_bounds_for_headers(calc_h, refresh_filters=bool(new_h))
-            for header_name in calc_h:
-                self._table_model.apply_favorable_score_column_coloring(header_name)
-            self.table.setSortingEnabled(False)
-        finally:
+        h_map = {h: i for i, h in enumerate(self.headers)}
+        new_h = [h for h in calc_h if h not in h_map]
+        if new_h:
+            col_at = len(self.headers)
+            self.headers.extend(new_h)
+            self._table_model.insert_columns_at(col_at, new_h, None)
+        bulk_rows = [
+            (int(oid), {h: str(row_d.get(h, "N/A")) for h in calc_h}) for oid, row_d in res
+        ]
+        async_min = self._calc_writeback_async_min_rows()
+        if bulk_rows and len(bulk_rows) >= async_min:
+            self._calc_write_gen = int(getattr(self, "_calc_write_gen", 0)) + 1
+            begin = getattr(self, "_begin_tool_progress", None)
+            if callable(begin):
+                begin("Writing results", len(bulk_rows))
+            self._calc_write_ctx = {
+                "gen": self._calc_write_gen,
+                "bulk_rows": bulk_rows,
+                "calc_h": list(calc_h),
+                "new_h": list(new_h),
+                "idx": 0,
+                "chunk": self._calc_writeback_chunk_rows(),
+                "on_complete": on_complete,
+            }
             try:
                 self.table.setUpdatesEnabled(True)
             except Exception:
                 pass
-        self.status_label.setText(self._consume_partial_results_notice() or "Done.")
+            QTimer.singleShot(0, self._calc_write_step)
+            return list(calc_h)
+
+        if finish_progress:
+            self._finish_tool_progress(progress_label, status_message=None)
+        try:
+            self._apply_calc_bulk_rows(calc_h, bulk_rows)
+            self._finalize_calc_writeback(calc_h, new_h, on_complete=on_complete)
+        except Exception:
+            try:
+                self.table.setUpdatesEnabled(True)
+            except Exception:
+                pass
+            raise
         return list(calc_h)

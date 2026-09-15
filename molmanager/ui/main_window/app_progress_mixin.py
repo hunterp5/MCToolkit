@@ -158,8 +158,11 @@ class AppProgressMixin:
         self.status_label.setText(message)
 
     def _on_tool_progress(self, message: str, done: int, total: int) -> None:
-        if total >= 0 and message:
-            self._tool_progress_state.update(message, done, total)
+        if message:
+            if total < 0:
+                self._tool_progress_state.update(message, 0, -1)
+            else:
+                self._tool_progress_state.update(message, done, total)
         text = format_tool_progress_text(message, done, total)
         if text and text == getattr(self, "_last_tool_progress_status", ""):
             return

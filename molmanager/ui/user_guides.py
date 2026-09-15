@@ -195,11 +195,6 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "New numeric column from a math expression.",
             ),
             _e("tools_sketcher", "Sketcher", "Sketcher", "Draw and edit molecules interactively."),
-        ),
-    ),
-    GuideSection(
-        "5 — Conformations",
-        (
             _e(
                 "tools_gen_conformations",
                 "Generate Conformations",
@@ -213,21 +208,15 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Build 3D ensembles with Open Babel Confab.",
             ),
             _e(
-                "tools_superpose_conformers",
-                "Superpose Conformers",
-                "Superpose Conformers",
-                "Align conformers within a molecule.",
-            ),
-            _e(
-                "tools_superpose_structures",
-                "Superpose Structures",
-                "Superpose Structures",
-                "Align structures across rows (MCS options).",
+                "tools_superpose",
+                "Superpose",
+                "Superpose",
+                "Align conformers or structures in 3D (spatial) or 2D (topological).",
             ),
         ),
     ),
     GuideSection(
-        "6 — Fingerprints",
+        "5 — Fingerprints",
         (
             _e(
                 "tools_fp_similarity",
@@ -250,7 +239,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "7 — Docking",
+        "6 — Docking",
         (
             _e(
                 "tools_prepare_pdb",
@@ -273,7 +262,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "8 — Protein",
+        "7 — Protein",
         (
             _e(
                 "protein_viewer",
@@ -284,7 +273,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "9 — Design and modeling",
+        "8 — Design and modeling",
         (
             _e(
                 "tools_rgroup",
@@ -327,7 +316,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "10 — Random",
+        "9 — Random",
         (
             _e(
                 "tools_random_number",
@@ -344,7 +333,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "11 — Charts and analysis",
+        "10 — Charts and analysis",
         (
             _e(
                 "data_analyze_table",
@@ -395,7 +384,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "12 — External data",
+        "11 — External data",
         (
             _e(
                 "ext_sql", "SQL Database", "SQL Database", "Load query results from a SQL database."

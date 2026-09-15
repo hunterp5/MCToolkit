@@ -506,3 +506,78 @@ def test_som_worker_emits_partial_results_on_cancel(monkeypatch, qapp) -> None: 
     assert partial[0][0] == "Predict SOM"
     assert partial[0][1] == 1
     assert partial[0][2] == 2
+
+
+def test_job_entry_progress_uses_fallback_when_total_missing() -> None:
+    from molmanager.som_prediction import _job_entry_progress
+
+    processed, total = _job_entry_progress(
+        {"status": "created", "num_entries_total": None, "num_entries_processed": 0},
+        fallback_total=12,
+    )
+    assert processed == 0
+    assert total == 12
+
+
+def test_job_entry_progress_counts_compressed_ranges() -> None:
+    from molmanager.som_prediction import _job_entry_progress
+
+    processed, total = _job_entry_progress(
+        {
+            "status": "processing",
+            "num_entries_total": 20,
+            "entries_processed": [[0, 5], [10, 12]],
+        },
+        fallback_total=10,
+    )
+    assert processed == 7
+    assert total == 20
+
+
+def test_job_entry_progress_completed_snaps_to_total() -> None:
+    from molmanager.som_prediction import _job_entry_progress
+
+    processed, total = _job_entry_progress(
+        {"status": "completed", "num_entries_total": 8, "num_entries_processed": 8},
+        fallback_total=8,
+    )
+    assert processed == 8
+    assert total == 8
+
+
+def test_som_worker_reports_waiting_progress_before_nerdd(monkeypatch, qapp) -> None:  # noqa: ARG001
+    from molmanager.tool_progress import ToolProgressState
+    from molmanager.workers.signals import WorkerSignals
+    from molmanager.workers.som_worker import SomPredictorSignals, SomPredictorWorker
+
+    state = ToolProgressState()
+    state.begin("Predict SOM", 1)
+    snapshots: list[tuple[str, int, int]] = []
+
+    def fake_predict(smiles, progress=None, **_kwargs):
+        if progress is not None:
+            progress(0, max(len(smiles), 1))
+        msg, done, total, _active = state.snapshot()
+        snapshots.append((msg, done, total))
+        return [
+            SomMoleculePrediction(smi, smi, atoms=(SomAtomHit(0, 0.9, True),)) for smi in smiles
+        ]
+
+    monkeypatch.setattr("molmanager.workers.som_worker.predict_soms_batch", fake_predict)
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    sig = SomPredictorSignals()
+    SomPredictorWorker(
+        [(1, mol)],
+        WorkerSignals(),
+        sig,
+        progress_state=state,
+    ).run()
+    assert snapshots
+    assert snapshots[0][2] == -1
+    assert "waiting" in snapshots[0][0].lower() or "submitting" in snapshots[0][0].lower()
+    _msg, done, total, active = state.snapshot()
+    assert active
+    assert done >= 1
+    assert total == 1
+    state.end()

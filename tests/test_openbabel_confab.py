@@ -58,7 +58,7 @@ def test_confab_cli_command_includes_cutoffs_and_original():
 
 
 def test_ensure_openbabel_confab_ready_missing(monkeypatch):
-    monkeypatch.setattr("molmanager.openbabel_confab.python_confab_available", lambda: False)
+    monkeypatch.setattr("molmanager.openbabel_confab.python_confab_available", lambda _p="": False)
     monkeypatch.setattr("molmanager.openbabel_confab.resolve_obabel_executable", lambda _p="": None)
     err = ensure_openbabel_confab_ready()
     assert err is not None
@@ -108,6 +108,21 @@ def test_run_systematic_empty_mol():
     assert out is None
     assert meta.get("ok") is False
     assert "empty" in (meta.get("err") or "").lower()
+
+
+def test_run_systematic_python_confab_loads_forcefield(caplog):
+    if not python_confab_available():
+        pytest.skip("Open Babel Python Confab not available")
+    mol = Chem.MolFromSmiles("CCO")
+    with caplog.at_level("ERROR", logger="molmanager.openbabel_confab"):
+        out, meta = run_systematic_conformer_generation(
+            mol, SystematicConfParams(num_confs=8, energy_cutoff=50.0)
+        )
+    assert not any("Python Confab failed" in rec.message for rec in caplog.records)
+    assert meta.get("err") != "forcefield_setup"
+    assert out is not None
+    assert meta.get("ok") is True
+    assert out.GetNumConformers() >= 1
 
 
 def test_run_systematic_uses_confab_sdf(monkeypatch):

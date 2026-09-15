@@ -21,7 +21,11 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.workers import SuperposeStructuresParams, align_structure_onto_reference, run_superpose_structures
+from molmanager.workers import (
+    SuperposeStructuresParams,
+    align_structure_onto_reference,
+    run_superpose_structures,
+)
 
 
 def _embed(smi: str, seed: int) -> Chem.Mol:
@@ -87,6 +91,57 @@ def test_run_superpose_structures_batch():
     assert sum(1 for _o, m, meta in out if m is not None and meta.get("ok")) >= 2
 
 
+def test_align_no_map_no_o3a_fails():
+    ref = _embed("CCO", seed=1)
+    prb = _embed("c1ccccc1", seed=2)
+    aligned, meta = align_structure_onto_reference(
+        prb,
+        ref,
+        SuperposeStructuresParams(use_mcs=False, use_o3a=False, align_pattern=""),
+    )
+    assert aligned is None
+    assert meta.get("err") == "no_common_substructure"
+
+
+def test_align_2d_topological_mcs():
+    from rdkit.Chem import rdDepictor
+
+    ref = Chem.MolFromSmiles("c1ccccc1C")
+    prb = Chem.MolFromSmiles("c1ccccc1CC")
+    rdDepictor.Compute2DCoords(ref)
+    rdDepictor.Compute2DCoords(prb)
+    aligned, meta = align_structure_onto_reference(
+        prb,
+        ref,
+        SuperposeStructuresParams(geometry="2d", use_mcs=True, use_o3a=False),
+    )
+    assert aligned is not None
+    assert meta.get("ok") is True
+    assert meta.get("geometry") == "2d"
+    assert meta.get("method") in {"mcs", "pattern", "2d_match"}
+    assert float(meta.get("rms", 99)) < 0.5
+
+
+def test_run_superpose_structures_2d_batch():
+    from rdkit.Chem import rdDepictor
+
+    a = Chem.MolFromSmiles("c1ccccc1")
+    b = Chem.MolFromSmiles("c1ccccc1O")
+    c = Chem.MolFromSmiles("c1ccccc1N")
+    for m in (a, b, c):
+        rdDepictor.Compute2DCoords(m)
+    out = run_superpose_structures(
+        a,
+        [(1, a), (2, b), (3, c)],
+        SuperposeStructuresParams(geometry="2d", use_mcs=True, use_o3a=False),
+        ref_oid=1,
+    )
+    assert len(out) == 3
+    assert out[0][2].get("method") == "reference"
+    assert out[0][2].get("geometry") == "2d"
+    assert sum(1 for _o, m, meta in out if m is not None and meta.get("ok")) >= 2
+
+
 def test_pack_mols_as_confs_cell_same_and_mixed_atom_counts():
     from molmanager.confs_codec import (
         mol_from_packed_confs_cell,
@@ -106,3 +161,44 @@ def test_pack_mols_as_confs_cell_same_and_mixed_atom_counts():
     assert unpack_confs_blocks_json_b64(mixed) is not None
     # Heterogeneous atom counts: viewer blocks present, multi-conf rebuild may fail.
     assert mol_from_packed_confs_cell(mixed, min_conformers=2) is None
+
+
+def test_align_largest_ring_naphthalene():
+    ref = _embed("c1ccc2ccccc2c1", seed=11)
+    prb = _embed("Cc1ccc2ccccc2c1", seed=12)
+    conf = prb.GetConformer()
+    for i in range(prb.GetNumAtoms()):
+        p = conf.GetAtomPosition(i)
+        conf.SetAtomPosition(i, (p.x + 4.0, p.y - 2.0, p.z + 1.5))
+    aligned, meta = align_structure_onto_reference(
+        prb,
+        ref,
+        SuperposeStructuresParams(
+            align_mode="largest_ring",
+            use_mcs=False,
+            use_o3a=False,
+            heavy_atoms_only=True,
+        ),
+    )
+    assert aligned is not None
+    assert meta.get("ok") is True
+    assert meta.get("method") == "largest_ring"
+    assert meta.get("align_mode") == "largest_ring"
+    assert int(meta.get("n_align_atoms") or 0) == 10
+    assert float(meta.get("rms", 99)) < 1.5
+
+
+def test_align_no_ring_for_alignment():
+    ref = _embed("CCO", seed=13)
+    prb = _embed("CCO", seed=14)
+    aligned, meta = align_structure_onto_reference(
+        prb,
+        ref,
+        SuperposeStructuresParams(
+            align_mode="largest_ring",
+            use_mcs=False,
+            use_o3a=False,
+        ),
+    )
+    assert aligned is None
+    assert meta.get("err") == "no_ring_for_alignment"

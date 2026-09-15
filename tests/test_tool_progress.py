@@ -27,6 +27,21 @@ def test_format_tool_progress_text() -> None:
     )
     assert format_tool_progress_text("", 1, 1) == "1/1 (100%)"
     assert format_tool_progress_text("Building table…", -1, -1) == "Building table…"
+    assert format_tool_progress_text("Predict SOM: waiting on NERDD…", 0, -1) == (
+        "Predict SOM: waiting on NERDD…"
+    )
+
+
+def test_tool_progress_state_allows_indeterminate_total():
+    state = ToolProgressState()
+    state.begin("Predict SOM", 12)
+    state.update("Predict SOM: waiting on NERDD…", 0, -1)
+    msg, done, total, active = state.snapshot()
+    assert active
+    assert total == -1
+    assert msg == "Predict SOM: waiting on NERDD…"
+    assert done == 0
+    state.end()
 
 
 def test_tool_progress_state_threaded_updates():

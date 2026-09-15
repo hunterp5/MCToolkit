@@ -39,8 +39,12 @@ _MISSING_TOKENS = frozenset({"", "N/A", "NA", "NAN", "NONE", "NULL"})
 
 DEFAULT_PLOT_COLORSCALE = "Viridis"
 
-DEFAULT_MARKER_SIZE_MIN_PX = 4.0
-DEFAULT_MARKER_SIZE_MAX_PX = 16.0
+DEFAULT_MARKER_SIZE_PX = 8.0
+DEFAULT_MARKER_SIZE_3D_PX = 6.0
+DEFAULT_SELECTED_MARKER_SIZE_PX = 11.0
+DEFAULT_SELECTED_MARKER_SIZE_3D_PX = 9.0
+DEFAULT_MARKER_SIZE_MIN_PX = 6.0
+DEFAULT_MARKER_SIZE_MAX_PX = 18.0
 
 # Plotly built-in continuous colorscales (numeric Color by).
 PLOT_COLORSCALE_CHOICES: tuple[str, ...] = (
@@ -260,9 +264,7 @@ def attach_marker_size_legend(
     label = (size_label or "").strip()
     if not label or label == "(none)":
         return
-    levels = size_legend_levels(
-        size_values, size_min_px=size_min_px, size_max_px=size_max_px
-    )
+    levels = size_legend_levels(size_values, size_min_px=size_min_px, size_max_px=size_max_px)
     if not levels:
         return
 
@@ -338,7 +340,7 @@ def marker_sizes_from_column_values(
     *,
     size_min_px: float = DEFAULT_MARKER_SIZE_MIN_PX,
     size_max_px: float = DEFAULT_MARKER_SIZE_MAX_PX,
-    default_size: float = 6.0,
+    default_size: float = DEFAULT_MARKER_SIZE_PX,
 ) -> float | list[float]:
     """
     Map per-point column values to Plotly marker sizes (pixels).
@@ -390,9 +392,7 @@ def marker_sizes_from_column_values(
     uniq = sorted(set(categories), key=lambda x: (x == "(missing)", x.lower()))
     if len(uniq) == 1:
         return [lo_px if uniq[0] == "(missing)" else (lo_px + hi_px) * 0.5] * len(categories)
-    size_map = {
-        cat: lo_px + (i / (len(uniq) - 1)) * (hi_px - lo_px) for i, cat in enumerate(uniq)
-    }
+    size_map = {cat: lo_px + (i / (len(uniq) - 1)) * (hi_px - lo_px) for i, cat in enumerate(uniq)}
     return [float(size_map[c]) for c in categories]
 
 
@@ -428,7 +428,7 @@ def scatter_marker_from_column_values(
     size_min_px: float = DEFAULT_MARKER_SIZE_MIN_PX,
     size_max_px: float = DEFAULT_MARKER_SIZE_MAX_PX,
     default_color: str = "#2a74d6",
-    point_size: float = 6,
+    point_size: float = DEFAULT_MARKER_SIZE_PX,
     opacity: float = 0.85,
 ) -> dict:
     """
@@ -493,7 +493,9 @@ def scatter_marker_from_column_values(
             text = str(value).strip()
             categories.append(text if text else "(missing)")
     uniq = sorted(set(categories), key=lambda x: (x == "(missing)", x.lower()))
-    color_map = {cat: _CATEGORICAL_PALETTE[i % len(_CATEGORICAL_PALETTE)] for i, cat in enumerate(uniq)}
+    color_map = {
+        cat: _CATEGORICAL_PALETTE[i % len(_CATEGORICAL_PALETTE)] for i, cat in enumerate(uniq)
+    }
     point_colors = [color_map[c] for c in categories]
     return {
         "size": size,

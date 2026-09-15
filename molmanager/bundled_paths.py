@@ -203,6 +203,34 @@ def openbabel_launch_env(exe: str) -> dict[str, str]:
     return env
 
 
+def apply_openbabel_runtime_env(obabel_path: str = "") -> dict[str, str]:
+    """
+    Write ``BABEL_DATADIR`` / ``BABEL_LIBDIR`` into ``os.environ`` for this process.
+
+    The pip wheel's ``openbabel/__init__.py`` overwrites those variables on import
+    with ``share/openbabel/<ver>`` and ``lib/openbabel/<ver>``. On Windows wheels
+    the force-field files (``UFF.prm``, ``mmff94.ff``) and ``*.obf`` plugins live
+    under ``openbabel/bin/data`` and ``openbabel/bin`` instead, so Confab then
+    fails with ``Cannot open UFF.prm``. Call this after importing Open Babel.
+    """
+    exe = ""
+    text = (obabel_path or "").strip()
+    if text:
+        exe = resolve_user_executable(text) or ""
+    if not exe:
+        pip_exe = pip_openbabel_executable()
+        if pip_exe is not None:
+            exe = str(pip_exe)
+    if not exe:
+        exe = resolve_user_executable(default_external_executable("obabel")) or ""
+    if not exe:
+        return {}
+    env = openbabel_launch_env(exe)
+    if env:
+        os.environ.update(env)
+    return env
+
+
 def smina_launch_env(exe: str) -> dict[str, str]:
     """Environment so Smina's OpenBabel can load format plugins and data files."""
     return openbabel_launch_env(exe)

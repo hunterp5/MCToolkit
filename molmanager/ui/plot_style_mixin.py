@@ -41,6 +41,7 @@ from ..plot_axes import (
     PLOT_TYPE_VIOLIN,
 )
 from ..plot_color import (
+    DEFAULT_MARKER_SIZE_PX,
     attach_marker_size_legend,
     color_values_are_numeric,
     normalize_color_column,
@@ -200,7 +201,9 @@ class PlotStyleMixin:
             return None, None
         return self._column_values_for_oids(oids, size_col), size_col
 
-    def _scatter_marker_for_oids(self, oids: list[int], *, point_size: float = 6) -> dict:
+    def _scatter_marker_for_oids(
+        self, oids: list[int], *, point_size: float = DEFAULT_MARKER_SIZE_PX
+    ) -> dict:
         color_vals, color_label = self._color_values_for_oids(oids)
         color_vals, color_label = normalize_color_column(color_vals, color_label)
         size_vals, size_label = self._size_values_for_oids(oids)

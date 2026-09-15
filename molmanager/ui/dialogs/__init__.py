@@ -38,6 +38,7 @@ from .mol_tools import (
     FragmentRecompDialogParams,
     FragmentRecompositionDialog,
     GenerateConformationsDialog,
+    SuperposeDialog,
     SuperposeConformersDialog,
     SuperposeStructuresDialog,
 )
@@ -110,6 +111,7 @@ __all__ = [
     "Render2DStructureDialog",
     "SketchWidget",
     "SketcherDialog",
+    "SuperposeDialog",
     "SuperposeConformersDialog",
     "SuperposeStructuresDialog",
     "selection_scope_checked",

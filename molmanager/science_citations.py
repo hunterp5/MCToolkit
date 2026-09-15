@@ -221,7 +221,7 @@ def permeability_dialog_footer_html() -> str:
 
 
 def stochastic_conformations_dialog_footer_html() -> str:
-    """Rich text for Tools → Conformations → Generate Conformations → Stochastic…."""
+    """Rich text for Tools → Generate Conformations → Stochastic…."""
     return (
         "<small><b>Method</b>: RDKit <b>ETKDG</b> (experimental-torsion-knowledge distance geometry) — "
         '<a href="https://doi.org/10.1021/acs.jcim.5b00654">Riniker &amp; Landrum, J. Chem. Inf. Model. 2015</a>. '
@@ -232,7 +232,7 @@ def stochastic_conformations_dialog_footer_html() -> str:
 
 
 def systematic_conformations_dialog_footer_html() -> str:
-    """Rich text for Tools → Conformations → Generate Conformations → Systematic…."""
+    """Rich text for Tools → Generate Conformations → Systematic…."""
     return (
         "<small><b>Method</b>: Open Babel <b>Confab</b> — "
         '<a href="https://doi.org/10.1186/1758-2946-3-8">O\'Boyle et al., J. Cheminform. 2011</a>. '

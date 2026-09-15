@@ -24,7 +24,12 @@ from typing import Any
 from plotly import graph_objects as go
 
 from ..dimensionality_reduction import DimensionReductionResult
-from ..plot_color import DEFAULT_PLOT_COLORSCALE, attach_marker_size_legend, scatter_marker_from_column_values
+from ..plot_color import (
+    DEFAULT_PLOT_COLORSCALE,
+    DEFAULT_SELECTED_MARKER_SIZE_PX,
+    attach_marker_size_legend,
+    scatter_marker_from_column_values,
+)
 from ..ui.plotly_html import finalize_plot_legend
 from .dockable_plot import resolve_plot_title_text
 
@@ -101,7 +106,13 @@ def build_dimension_reduction_figure(
                 marker=marker,
                 showlegend=False,
                 unselected={"marker": {"opacity": 0.35}},
-                selected={"marker": {"size": 9, "color": "#d62828", "opacity": 1.0}},
+                selected={
+                    "marker": {
+                        "size": DEFAULT_SELECTED_MARKER_SIZE_PX,
+                        "color": "#d62828",
+                        "opacity": 1.0,
+                    }
+                },
             )
         ]
     )

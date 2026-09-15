@@ -1559,36 +1559,18 @@ class ToolsSqlPredictMixin:
     def _on_som_prediction_finished(self, results: list) -> None:
         if self._host_unavailable():
             return
-        from ...som_prediction import SOM_MAP_COLUMN
-        from ..structure_pixmap import pixmap_from_structure_render_png
-        from ...display_constants import structure_depiict_height, structure_depiict_width
         from ..som_browser import records_from_worker_rows
 
         table_rows = [row for row in results if row and row[0] is not None]
         if table_rows:
             calc_h = list(table_rows[0][4]) if table_rows[0][4] else list(table_rows[0][1].keys())
             res = [(int(oid), cols) for oid, cols, _png, _atoms, _headers in table_rows]
-            written = self.on_calc_finished(res, calc_h, progress_label=TOOL_PREDICT_SOM)
-            map_col = written[0] if written else SOM_MAP_COLUMN
-            if map_col in self.headers:
-                self._table_model.register_pixmap_column(map_col)
-            dw, dh = structure_depiict_width(), structure_depiict_height()
-            last_pm = None
-            for oid, _cols, png, _atoms, _headers in table_rows:
-                if not png:
-                    continue
-                pm = pixmap_from_structure_render_png(png, dw, dh)
-                if pm is not None and not pm.isNull():
-                    self._table_model.set_column_pixmap(int(oid), map_col, pm)
-                    last_pm = pm
-                    view_row = self._resolve_structure_row_for_oid(int(oid))
-                    if view_row != -1:
-                        need_h = max(dh, int(pm.height()))
-                        if int(self.table.rowHeight(view_row)) < need_h:
-                            self.table.setRowHeight(int(view_row), need_h)
-            sync_w = getattr(self, "_sync_data_pixmap_column_width", None)
-            if callable(sync_w) and last_pm is not None:
-                sync_w(map_col, last_pm, dw)
+            self.on_calc_finished(
+                res,
+                calc_h,
+                progress_label=TOOL_PREDICT_SOM,
+                on_complete=lambda cols, rows=table_rows: self._apply_som_map_pixmaps(cols, rows),
+            )
         else:
             self._finish_tool_progress(TOOL_PREDICT_SOM)
 
@@ -1602,9 +1584,36 @@ class ToolsSqlPredictMixin:
                 TOOL_PREDICT_SOM,
                 "No sites of metabolism were returned.",
             )
-        notice = self._consume_partial_results_notice()
-        if notice:
-            self.status_label.setText(notice)
+        if not table_rows:
+            notice = self._consume_partial_results_notice()
+            if notice:
+                self.status_label.setText(notice)
+
+    def _apply_som_map_pixmaps(self, written: list[str], table_rows: list) -> None:
+        from ...som_prediction import SOM_MAP_COLUMN
+        from ...display_constants import structure_depiict_height, structure_depiict_width
+        from ..structure_pixmap import pixmap_from_structure_render_png
+
+        map_col = written[0] if written else SOM_MAP_COLUMN
+        if map_col in self.headers:
+            self._table_model.register_pixmap_column(map_col)
+        dw, dh = structure_depiict_width(), structure_depiict_height()
+        last_pm = None
+        for oid, _cols, png, _atoms, _headers in table_rows:
+            if not png:
+                continue
+            pm = pixmap_from_structure_render_png(png, dw, dh)
+            if pm is not None and not pm.isNull():
+                self._table_model.set_column_pixmap(int(oid), map_col, pm)
+                last_pm = pm
+                view_row = self._resolve_structure_row_for_oid(int(oid))
+                if view_row != -1:
+                    need_h = max(dh, int(pm.height()))
+                    if int(self.table.rowHeight(view_row)) < need_h:
+                        self.table.setRowHeight(int(view_row), need_h)
+        sync_w = getattr(self, "_sync_data_pixmap_column_width", None)
+        if callable(sync_w) and last_pm is not None:
+            sync_w(map_col, last_pm, dw)
 
     def _on_som_browser_dialog_destroyed(self, *_args) -> None:
         from ..qt_widget_utils import qobject_is_deleted

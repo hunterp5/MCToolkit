@@ -71,8 +71,12 @@ def test_color_values_are_numeric():
 
 
 def test_all_none_uses_default_marker():
+    from molmanager.plot_color import DEFAULT_MARKER_SIZE_PX
+
     m = scatter_marker_from_column_values([None, None, None], color_label="MW")
     assert m["color"] == "#2a74d6"
+    assert m["size"] == DEFAULT_MARKER_SIZE_PX
+    assert DEFAULT_MARKER_SIZE_PX > 6.0
     assert "colorscale" not in m
 
 
@@ -143,7 +147,9 @@ def test_attach_marker_size_legend_with_colorbar():
     marker = scatter_marker_from_column_values(
         vals, color_label="Color", size_values=vals, size_min_px=4.0, size_max_px=16.0
     )
-    fig = go.Figure(data=[go.Scatter(x=vals, y=vals, mode="markers", marker=marker, showlegend=False)])
+    fig = go.Figure(
+        data=[go.Scatter(x=vals, y=vals, mode="markers", marker=marker, showlegend=False)]
+    )
     attach_marker_size_legend(
         fig,
         size_label="Size",

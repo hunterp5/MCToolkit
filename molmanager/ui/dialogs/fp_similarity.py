@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -27,6 +28,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...config import load_config
 from ...plot_radar import resolve_entry_row_oid
 from ...utils import parse_molecule_from_cell_text
 from ...workers import (
@@ -240,21 +242,86 @@ class FPSimilarityDialog(QDialog):
         nc = m.columnCount()
         self.parent_app.headers.append(name)
         m.insert_column_at(nc, name, None)
+        n_rows = m.rowCount()
+        n_scored = len(success)
+        n_na = len(self._compare_oids) - n_scored
+        chunk = max(250, int(load_config().ingest_gui_chunk_size))
+        async_min = max(500, int(load_config().table_selection_chunk_rows))
+        if n_rows < async_min:
+            try:
+                self.parent_app.table.setUpdatesEnabled(False)
+            except Exception:
+                pass
+            try:
+                m.fill_column_from_oid_map(name, oid_map, default="")
+                self.parent_app._sync_global_bounds_for_headers([name], refresh_filters=True)
+            finally:
+                try:
+                    self.parent_app.table.setUpdatesEnabled(True)
+                except Exception:
+                    pass
+            self.parent_app.status_label.setText(
+                f"Added '{name}' with {n_scored} score(s); {n_na} N/A in scope"
+            )
+            return
+        self._fp_write_gen = int(getattr(self, "_fp_write_gen", 0)) + 1
+        gen = self._fp_write_gen
+        self.parent_app._begin_tool_progress("Writing results", n_rows)
+        self._fp_write_ctx = {
+            "gen": gen,
+            "name": name,
+            "oid_map": oid_map,
+            "idx": 0,
+            "chunk": chunk,
+            "n_rows": n_rows,
+            "n_scored": n_scored,
+            "n_na": n_na,
+        }
+        QTimer.singleShot(0, self._fp_write_step)
+
+    def _fp_write_step(self) -> None:
+        ctx = getattr(self, "_fp_write_ctx", None)
+        app = self.parent_app
+        if not ctx or ctx.get("gen") != getattr(self, "_fp_write_gen", -1) or app is None:
+            return
+        name = ctx["name"]
+        oid_map = ctx["oid_map"]
+        idx = int(ctx["idx"])
+        chunk = int(ctx["chunk"])
+        n_rows = int(ctx["n_rows"])
+        end = min(idx + chunk, n_rows)
+        last = end >= n_rows
         try:
-            self.parent_app.table.setUpdatesEnabled(False)
+            app.table.setUpdatesEnabled(False)
         except Exception:
             pass
         try:
-            m.fill_column_from_oid_map(name, oid_map, default="")
-            self.parent_app._sync_global_bounds_for_headers([name], refresh_filters=True)
+            app._table_model.fill_column_from_oid_map(
+                name,
+                oid_map,
+                default="",
+                start_row=idx,
+                end_row=end,
+                emit=True,
+                rebuild_color=last,
+            )
         finally:
             try:
-                self.parent_app.table.setUpdatesEnabled(True)
+                app.table.setUpdatesEnabled(True)
             except Exception:
                 pass
-        n_scored = len(success)
-        self.parent_app.status_label.setText(
-            f"Added '{name}' with {n_scored} score(s); {len(self._compare_oids) - n_scored} N/A in scope"
+        ctx["idx"] = end
+        app._on_tool_progress("Writing results…", end, n_rows)
+        if not last:
+            QTimer.singleShot(0, self._fp_write_step)
+            return
+        self._fp_write_ctx = None
+        if name in app._table_model._bounds_data_headers():
+            app._table_model._mark_numeric_bounds_dirty({name})
+        app._sync_global_bounds_for_headers([name], refresh_filters=True)
+        app._finish_tool_progress("Writing results", status_message=None)
+        app.status_label.setText(
+            f"Added '{name}' with {ctx['n_scored']} score(s); {ctx['n_na']} N/A in scope"
         )
 
     def _on_fp_similarity_finished(self, rows) -> None:

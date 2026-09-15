@@ -309,7 +309,7 @@ def run_conformer_generation(
     (and optional post-minimize RMS / max-keep), then RemoveHs unless ``keep_hydrogens``.
 
     When ``params.align_pattern`` is set and at least two conformers remain, they are
-    rigidly aligned on that substructure (same matching rules as Superpose Conformers).
+    rigidly aligned on that substructure (same matching rules as Superpose).
 
     Returns ``(mol_or_None, meta)``. The UI writes a ``confs`` cell via :func:`~molmanager.confs_codec.pack_confs_cell`
     (metadata plus packed mol blocks when there are multiple conformers) and does **not** replace the row's
@@ -592,6 +592,331 @@ class SuperposeParams:
     # When non-empty, RMS alignment uses only atoms matching this pattern (SMILES or SMARTS).
     align_pattern: str = ""
     align_pattern_is_smarts: bool = False
+    # ``3d``: rigid AlignMol. ``2d``: topological 2D depiction matching.
+    geometry: str = "3d"
+    # ``largest_ring`` / ``central_ring`` when no custom pattern is set.
+    align_mode: str = ""
+
+
+def _normalize_superpose_geometry(value: str | None) -> str:
+    g = str(value or "3d").strip().lower().replace("-", "_").replace(" ", "_")
+    if g in {"2d", "2d_topological", "topological", "depict", "2d_topo"}:
+        return "2d"
+    return "3d"
+
+
+def _normalize_align_mode(value: str | None) -> str:
+    m = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if m in {"largest_ring", "largest", "largest_ring_system", "ring_system"}:
+        return "largest_ring"
+    if m in {"central_ring", "central", "most_central_ring", "most_central"}:
+        return "central_ring"
+    return ""
+
+
+def _sssr_rings(mol: Chem.Mol) -> list[tuple[int, ...]]:
+    try:
+        Chem.GetSymmSSSR(mol)
+    except Exception:
+        pass
+    try:
+        rings = mol.GetRingInfo().AtomRings()
+    except Exception:
+        return []
+    out: list[tuple[int, ...]] = []
+    for ring in rings or ():
+        idxs = tuple(int(i) for i in ring)
+        if len(idxs) >= 3:
+            out.append(idxs)
+    return out
+
+
+def _fused_ring_systems(rings: list[tuple[int, ...]]) -> list[set[int]]:
+    n = len(rings)
+    if n == 0:
+        return []
+    parent = list(range(n))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    atom_sets = [set(r) for r in rings]
+    for i in range(n):
+        for j in range(i + 1, n):
+            if atom_sets[i] & atom_sets[j]:
+                union(i, j)
+    groups: dict[int, set[int]] = {}
+    for i, atoms in enumerate(atom_sets):
+        groups.setdefault(find(i), set()).update(atoms)
+    return list(groups.values())
+
+
+def _filter_heavy(mol: Chem.Mol, idxs: list[int], *, heavy_only: bool) -> list[int]:
+    if not heavy_only:
+        return list(idxs)
+    return [i for i in idxs if mol.GetAtomWithIdx(i).GetAtomicNum() != 1]
+
+
+def _largest_ring_system_atoms(mol: Chem.Mol, *, heavy_only: bool) -> list[int] | None:
+    rings = _sssr_rings(mol)
+    if not rings:
+        return None
+    systems = _fused_ring_systems(rings)
+    if not systems:
+        return None
+
+    def score(atoms: set[int]) -> tuple[int, int]:
+        n_rings = sum(1 for r in rings if set(r) <= atoms)
+        return (len(atoms), n_rings)
+
+    chosen = max(systems, key=score)
+    idxs = _filter_heavy(mol, sorted(chosen), heavy_only=heavy_only)
+    return idxs if len(idxs) >= 2 else None
+
+
+def _atom_graph_distances(mol: Chem.Mol) -> list[list[int]]:
+    n = int(mol.GetNumAtoms())
+    adj: list[list[int]] = [[] for _ in range(n)]
+    for bond in mol.GetBonds():
+        a = int(bond.GetBeginAtomIdx())
+        b = int(bond.GetEndAtomIdx())
+        adj[a].append(b)
+        adj[b].append(a)
+    dist = [[-1] * n for _ in range(n)]
+    for src in range(n):
+        dist[src][src] = 0
+        queue = [src]
+        for u in queue:
+            du = dist[src][u]
+            for v in adj[u]:
+                if dist[src][v] < 0:
+                    dist[src][v] = du + 1
+                    queue.append(v)
+    return dist
+
+
+def _central_ring_atoms(mol: Chem.Mol, *, heavy_only: bool) -> list[int] | None:
+    rings = _sssr_rings(mol)
+    if not rings:
+        return None
+    n = int(mol.GetNumAtoms())
+    heavy = [i for i in range(n) if mol.GetAtomWithIdx(i).GetAtomicNum() != 1]
+    if mol.GetNumConformers() >= 1 and heavy:
+        conf = mol.GetConformer()
+        cx = cy = cz = 0.0
+        for i in heavy:
+            p = conf.GetAtomPosition(i)
+            cx += float(p.x)
+            cy += float(p.y)
+            cz += float(p.z)
+        inv = 1.0 / len(heavy)
+        cx, cy, cz = cx * inv, cy * inv, cz * inv
+        best = None
+        best_d = None
+        for ring in rings:
+            rx = ry = rz = 0.0
+            for i in ring:
+                p = conf.GetAtomPosition(int(i))
+                rx += float(p.x)
+                ry += float(p.y)
+                rz += float(p.z)
+            k = 1.0 / len(ring)
+            dx, dy, dz = rx * k - cx, ry * k - cy, rz * k - cz
+            d2 = dx * dx + dy * dy + dz * dz
+            key = (d2, -len(ring))
+            if best_d is None or key < best_d:
+                best_d = key
+                best = ring
+        if best is not None:
+            idxs = _filter_heavy(mol, sorted(best), heavy_only=heavy_only)
+            if len(idxs) >= 2:
+                return idxs
+    dist = _atom_graph_distances(mol)
+    targets = heavy or list(range(n))
+    best = None
+    best_key = None
+    for ring in rings:
+        vals: list[int] = []
+        for a in ring:
+            for t in targets:
+                d = dist[int(a)][int(t)]
+                if d >= 0:
+                    vals.append(d)
+        if not vals:
+            continue
+        mean = sum(vals) / len(vals)
+        key = (mean, -len(ring))
+        if best_key is None or key < best_key:
+            best_key = key
+            best = ring
+    if best is None:
+        return None
+    idxs = _filter_heavy(mol, sorted(best), heavy_only=heavy_only)
+    return idxs if len(idxs) >= 2 else None
+
+
+def _ring_atoms_for_mode(mol: Chem.Mol, mode: str, *, heavy_only: bool) -> list[int] | None:
+    if mode == "largest_ring":
+        return _largest_ring_system_atoms(mol, heavy_only=heavy_only)
+    if mode == "central_ring":
+        return _central_ring_atoms(mol, heavy_only=heavy_only)
+    return None
+
+
+def _query_from_atom_indices(mol: Chem.Mol, idxs: list[int]) -> Chem.Mol | None:
+    """Subgraph query from atom indices (atomic number + bond type; extra substitution still matches)."""
+    keep = sorted({int(i) for i in idxs})
+    if len(keep) < 2:
+        return None
+    amap = {old: i for i, old in enumerate(keep)}
+    em = Chem.RWMol()
+    for old in keep:
+        src = mol.GetAtomWithIdx(old)
+        atom = Chem.Atom(int(src.GetAtomicNum()))
+        atom.SetIsAromatic(bool(src.GetIsAromatic()))
+        em.AddAtom(atom)
+    for bond in mol.GetBonds():
+        a = int(bond.GetBeginAtomIdx())
+        b = int(bond.GetEndAtomIdx())
+        if a not in amap or b not in amap:
+            continue
+        em.AddBond(amap[a], amap[b], bond.GetBondType())
+        nb = em.GetBondBetweenAtoms(amap[a], amap[b])
+        if nb is not None:
+            try:
+                nb.SetIsAromatic(bool(bond.GetIsAromatic()))
+            except Exception:
+                pass
+    q = em.GetMol()
+    try:
+        Chem.SanitizeMol(q)
+    except Exception:
+        try:
+            q.UpdatePropertyCache(strict=False)
+        except Exception:
+            pass
+    return q if q.GetNumAtoms() >= 2 else None
+
+
+def _prefer_coordgen() -> None:
+    try:
+        from rdkit.Chem import rdDepictor
+
+        rdDepictor.SetPreferCoordGen(True)
+    except Exception:
+        pass
+
+
+def _coords_are_planar(mol: Chem.Mol, *, z_tol: float = 1e-2) -> bool:
+    if mol is None or mol.GetNumConformers() < 1:
+        return False
+    try:
+        conf = mol.GetConformer()
+        n = int(mol.GetNumAtoms())
+    except Exception:
+        return False
+    if n < 1:
+        return False
+    for i in range(n):
+        if abs(float(conf.GetAtomPosition(i).z)) > z_tol:
+            return False
+    return True
+
+
+def _to_2d_mol(mol: Chem.Mol) -> Chem.Mol | None:
+    """Copy *mol* and ensure a single 2D conformer (CoordGen when available)."""
+    if mol is None:
+        return None
+    try:
+        m = Chem.Mol(mol)
+    except Exception:
+        return None
+    if m.GetNumAtoms() < 1:
+        return None
+    _prefer_coordgen()
+    from rdkit.Chem import rdDepictor
+
+    if m.GetNumConformers() >= 1 and _coords_are_planar(m):
+        single = _single_conformer_mol(m)
+        return single if single is not None else m
+    try:
+        rdDepictor.Compute2DCoords(m)
+    except Exception:
+        logger.debug("Compute2DCoords failed", exc_info=True)
+        return None
+    if m.GetNumConformers() < 1:
+        return None
+    return m
+
+
+def _copy_atom_positions(
+    src: Chem.Mol,
+    dest: Chem.Mol,
+    *,
+    src_cid: int = -1,
+    dest_cid: int = -1,
+) -> None:
+    sc = src.GetConformer(src_cid)
+    dc = dest.GetConformer(dest_cid)
+    n = min(int(src.GetNumAtoms()), int(dest.GetNumAtoms()))
+    for i in range(n):
+        dc.SetAtomPosition(i, sc.GetAtomPosition(i))
+
+
+def _rms_from_atom_map(
+    probe: Chem.Mol,
+    ref: Chem.Mol,
+    atom_map: list[tuple[int, int]] | None,
+) -> float:
+    pairs = list(atom_map or [])
+    if len(pairs) < 1:
+        n = min(int(probe.GetNumAtoms()), int(ref.GetNumAtoms()))
+        pairs = [(i, i) for i in range(n)]
+    if not pairs:
+        return 0.0
+    pc = probe.GetConformer()
+    rc = ref.GetConformer()
+    acc = 0.0
+    for p_idx, r_idx in pairs:
+        a = pc.GetAtomPosition(int(p_idx))
+        b = rc.GetAtomPosition(int(r_idx))
+        dx = float(a.x) - float(b.x)
+        dy = float(a.y) - float(b.y)
+        dz = float(a.z) - float(b.z)
+        acc += dx * dx + dy * dy + dz * dz
+    return (acc / len(pairs)) ** 0.5
+
+
+def _align_2d_topological(
+    probe: Chem.Mol,
+    ref: Chem.Mol,
+    atom_map: list[tuple[int, int]] | None,
+) -> tuple[float, list[tuple[int, int]]]:
+    """
+    Constrain *probe* 2D coords to *ref* via :func:`rdDepictor.GenerateDepictionMatching2DStructure`.
+
+    *atom_map* is AlignMol-style ``(probe_idx, ref_idx)``. RDKit's atomMap argument is
+    ``(reference_idx, probe_idx)``. Returns ``(rms, used_map)`` in AlignMol order.
+    """
+    from rdkit.Chem import rdDepictor
+
+    _prefer_coordgen()
+    used: list[tuple[int, int]] = list(atom_map or [])
+    if used:
+        rdkit_map = [(int(r_idx), int(p_idx)) for p_idx, r_idx in used]
+        rdDepictor.GenerateDepictionMatching2DStructure(probe, ref, rdkit_map)
+    else:
+        pairs = rdDepictor.GenerateDepictionMatching2DStructure(probe, ref)
+        used = [(int(m_idx), int(r_idx)) for r_idx, m_idx in (pairs or [])]
+    return _rms_from_atom_map(probe, ref, used), used
 
 
 def _superpose_atom_map(
@@ -604,6 +929,12 @@ def _superpose_atom_map(
     """
     pat = (params.align_pattern or "").strip()
     if not pat:
+        mode = _normalize_align_mode(getattr(params, "align_mode", ""))
+        if mode:
+            atoms = _ring_atoms_for_mode(m, mode, heavy_only=bool(params.heavy_atoms_only))
+            if not atoms or len(atoms) < 2:
+                return None, "no_ring_for_alignment"
+            return [(i, i) for i in atoms], None
         if params.heavy_atoms_only:
             am = [(i, i) for i in range(m.GetNumAtoms()) if m.GetAtomWithIdx(i).GetAtomicNum() != 1]
         else:
@@ -635,17 +966,111 @@ def _superpose_atom_map(
     return [(i, i) for i in idxs], None
 
 
+def _superpose_conformers_meta(
+    *,
+    params: SuperposeParams,
+    ref_cid: int,
+    ref_clamped: bool,
+    n_conf: int,
+    rms_vals: list[float],
+    atom_map: list[tuple[int, int]],
+    max_it: int,
+    geometry: str,
+) -> dict:
+    meta: dict = {
+        "ok": True,
+        "op": "superpose",
+        "geometry": geometry,
+        "ref_cid": ref_cid,
+        "ref_clamped": ref_clamped,
+        "n_conf": n_conf,
+        "rms_mean": round(sum(rms_vals) / max(len(rms_vals), 1), 6),
+        "rms_max": round(max(rms_vals) if rms_vals else 0.0, 6),
+        "heavy": bool(params.heavy_atoms_only),
+        "reflect": bool(params.reflect),
+        "max_align_iters": max_it,
+        "n_align_atoms": len(atom_map),
+    }
+    ap = (params.align_pattern or "").strip()
+    if ap:
+        meta["align_smarts"] = bool(params.align_pattern_is_smarts)
+        meta["align_pattern"] = ap[:120]
+    mode = _normalize_align_mode(getattr(params, "align_mode", ""))
+    if mode:
+        meta["align_mode"] = mode
+    return meta
+
+
+def _run_superpose_conformers_2d(
+    m: Chem.Mol,
+    params: SuperposeParams,
+    atom_map: list[tuple[int, int]],
+    cids: list[int],
+    ref_cid: int,
+    ref_clamped: bool,
+    cancel_event: threading.Event | None,
+) -> tuple[Chem.Mol | None, dict]:
+    """Redraw each conformer in 2D constrained to the reference layout."""
+    meta: dict = {"ok": False, "op": "superpose", "geometry": "2d"}
+    ref_slice = _single_conformer_mol(m, ref_cid)
+    ref_2d = _to_2d_mol(ref_slice) if ref_slice is not None else None
+    if ref_2d is None:
+        meta["err"] = "need_2d_coords"
+        return None, meta
+    try:
+        _copy_atom_positions(ref_2d, m, dest_cid=int(ref_cid))
+    except Exception as e:
+        meta["err"] = str(e)[:200]
+        return None, meta
+    rms_vals: list[float] = []
+    max_it = max(10, int(params.max_align_iters))
+    try:
+        for cid in cids:
+            if cancel_event is not None and cancel_event.is_set():
+                meta["err"] = "cancelled"
+                return None, meta
+            ic = int(cid)
+            if ic == ref_cid:
+                rms_vals.append(0.0)
+                continue
+            prb = _single_conformer_mol(m, ic)
+            prb_2d = _to_2d_mol(prb) if prb is not None else None
+            if prb_2d is None:
+                meta["err"] = "need_2d_coords"
+                return None, meta
+            rms, _used = _align_2d_topological(prb_2d, ref_2d, atom_map)
+            _copy_atom_positions(prb_2d, m, dest_cid=ic)
+            rms_vals.append(float(rms))
+    except Exception as e:
+        logger.exception("run_superpose_conformers 2D failed")
+        meta["err"] = str(e)[:200]
+        return None, meta
+    return m, _superpose_conformers_meta(
+        params=params,
+        ref_cid=ref_cid,
+        ref_clamped=ref_clamped,
+        n_conf=len(cids),
+        rms_vals=rms_vals,
+        atom_map=atom_map,
+        max_it=max_it,
+        geometry="2d",
+    )
+
+
 def run_superpose_conformers(
     mol: Chem.Mol,
     params: SuperposeParams,
     cancel_event: threading.Event | None = None,
 ) -> tuple[Chem.Mol | None, dict]:
     """
-    Superpose all conformers of *mol* onto one reference conformer using :func:`rdMolAlign.AlignMol`.
+    Superpose all conformers of *mol* onto one reference conformer.
 
-    Conformer coordinates in *mol* are updated in place on a copy of the input molecule.
+    ``geometry="3d"`` uses :func:`rdMolAlign.AlignMol`. ``geometry="2d"`` regenerates
+    2D drawings constrained to the reference layout
+    (:func:`rdDepictor.GenerateDepictionMatching2DStructure`).
     """
-    meta: dict = {"ok": False, "op": "superpose"}
+    geom = _normalize_superpose_geometry(getattr(params, "geometry", "3d"))
+    meta: dict = {"ok": False, "op": "superpose", "geometry": geom}
     try:
         m = Chem.Mol(mol)
     except Exception:
@@ -677,6 +1102,10 @@ def run_superpose_conformers(
     if map_err or not atom_map:
         meta["err"] = map_err or "no_atoms_for_alignment"
         return None, meta
+    if geom == "2d":
+        return _run_superpose_conformers_2d(
+            m, params, atom_map, cids, ref_cid, ref_clamped, cancel_event
+        )
     rms_vals: list[float] = []
     max_it = max(10, int(params.max_align_iters))
     try:
@@ -704,21 +1133,16 @@ def run_superpose_conformers(
         logger.exception("run_superpose_conformers failed")
         meta["err"] = str(e)[:200]
         return None, meta
-    meta["ok"] = True
-    meta["ref_cid"] = ref_cid
-    meta["ref_clamped"] = ref_clamped
-    meta["n_conf"] = len(cids)
-    meta["rms_mean"] = round(sum(rms_vals) / max(len(rms_vals), 1), 6)
-    meta["rms_max"] = round(max(rms_vals), 6)
-    meta["heavy"] = bool(params.heavy_atoms_only)
-    meta["reflect"] = bool(params.reflect)
-    meta["max_align_iters"] = max_it
-    meta["n_align_atoms"] = len(atom_map)
-    ap = (params.align_pattern or "").strip()
-    if ap:
-        meta["align_smarts"] = bool(params.align_pattern_is_smarts)
-        meta["align_pattern"] = ap[:120]
-    return m, meta
+    return m, _superpose_conformers_meta(
+        params=params,
+        ref_cid=ref_cid,
+        ref_clamped=ref_clamped,
+        n_conf=len(cids),
+        rms_vals=rms_vals,
+        atom_map=atom_map,
+        max_it=max_it,
+        geometry="3d",
+    )
 
 
 def _align_generated_conformers(
@@ -779,6 +1203,12 @@ class SuperposeStructuresParams:
     align_pattern: str = ""
     align_pattern_is_smarts: bool = False
     use_mcs: bool = True
+    # ``3d``: AlignMol / O3A. ``2d``: topological 2D depiction matching.
+    geometry: str = "3d"
+    # 3D only: Crippen/MMFF O3A (then index-map) when pattern and MCS yield no atom map.
+    use_o3a: bool = True
+    # ``largest_ring`` / ``central_ring`` when no custom pattern is set.
+    align_mode: str = ""
 
 
 def _single_conformer_mol(mol: Chem.Mol, conf_id: int | None = None) -> Chem.Mol | None:
@@ -925,23 +1355,33 @@ def align_structure_onto_reference(
     cancel_event: threading.Event | None = None,
 ) -> tuple[Chem.Mol | None, dict]:
     """
-    Rigidly align a copy of *probe* onto *ref*.
+    Align a copy of *probe* onto *ref*.
 
-    Alignment preference: optional substructure pattern → MCS (when enabled) → O3A best overlay.
+    3D: optional substructure pattern → MCS (when enabled) → O3A (when enabled).
+    2D: same atom-map preference, then :func:`rdDepictor.GenerateDepictionMatching2DStructure`.
     """
-    meta: dict = {"ok": False, "op": "superpose_structures"}
+    geom = _normalize_superpose_geometry(getattr(params, "geometry", "3d"))
+    meta: dict = {"ok": False, "op": "superpose_structures", "geometry": geom}
     if cancel_event is not None and cancel_event.is_set():
         meta["err"] = "cancelled"
         return None, meta
-    prb = _single_conformer_mol(probe)
-    reference = _single_conformer_mol(ref)
-    if prb is None or reference is None:
-        meta["err"] = "need_3d_conformers"
-        return None, meta
+    if geom == "2d":
+        prb = _to_2d_mol(probe)
+        reference = _to_2d_mol(ref)
+        if prb is None or reference is None:
+            meta["err"] = "need_2d_coords"
+            return None, meta
+    else:
+        prb = _single_conformer_mol(probe)
+        reference = _single_conformer_mol(ref)
+        if prb is None or reference is None:
+            meta["err"] = "need_3d_conformers"
+            return None, meta
     max_it = max(10, int(params.max_align_iters))
     method = ""
     atom_map: list[tuple[int, int]] | None = None
     pat = (params.align_pattern or "").strip()
+    ring_mode = _normalize_align_mode(getattr(params, "align_mode", ""))
     if pat:
         q = _parse_align_query(pat, is_smarts=bool(params.align_pattern_is_smarts))
         if q is None:
@@ -954,6 +1394,20 @@ def align_structure_onto_reference(
             method = "pattern"
         else:
             meta["pattern_miss"] = True
+    elif ring_mode:
+        atoms = _ring_atoms_for_mode(reference, ring_mode, heavy_only=bool(params.heavy_atoms_only))
+        if not atoms or len(atoms) < 2:
+            meta["err"] = "no_ring_for_alignment"
+            return None, meta
+        q = _query_from_atom_indices(reference, atoms)
+        if q is not None:
+            atom_map = _atom_map_from_query(
+                prb, reference, q, heavy_atoms_only=bool(params.heavy_atoms_only)
+            )
+        if atom_map:
+            method = ring_mode
+        else:
+            meta["ring_miss"] = True
     if atom_map is None and params.use_mcs:
         atom_map = _atom_map_from_mcs(
             prb, reference, heavy_atoms_only=bool(params.heavy_atoms_only)
@@ -961,7 +1415,18 @@ def align_structure_onto_reference(
         if atom_map:
             method = "mcs"
     rms: float | None = None
-    if atom_map is not None:
+    if geom == "2d":
+        try:
+            rms, used = _align_2d_topological(prb, reference, atom_map)
+        except Exception as e:
+            logger.exception("structure 2D depiction match failed")
+            meta["err"] = str(e)[:200]
+            return None, meta
+        if not method:
+            method = "2d_match"
+        if used:
+            atom_map = used
+    elif atom_map is not None:
         try:
             rms = float(
                 rdMolAlign.AlignMol(
@@ -977,6 +1442,9 @@ def align_structure_onto_reference(
             meta["err"] = str(e)[:200]
             return None, meta
     else:
+        if not bool(getattr(params, "use_o3a", True)):
+            meta["err"] = "no_common_substructure"
+            return None, meta
         rms, o3a_method = _align_probe_to_ref_o3a(prb, reference, reflect=bool(params.reflect))
         if rms is None or o3a_method is None:
             meta["err"] = "no_common_substructure_and_o3a_failed"
@@ -993,6 +1461,8 @@ def align_structure_onto_reference(
     if pat:
         meta["align_smarts"] = bool(params.align_pattern_is_smarts)
         meta["align_pattern"] = pat[:120]
+    if ring_mode:
+        meta["align_mode"] = ring_mode
     return prb, meta
 
 
@@ -1003,24 +1473,33 @@ def run_superpose_structures(
     *,
     ref_oid: int | None = None,
     cancel_event: threading.Event | None = None,
+    progress=None,
 ) -> list[tuple[int, Chem.Mol | None, dict]]:
     """
     Align each probe onto *ref_mol*.
 
     Returns one ``(oid, aligned_mol_or_None, meta)`` per probe. The reference row
     (*ref_oid*, when set) is returned as a single-conformer copy without realigning.
+    *progress*, when set, is ``progress(done, total)`` after each probe.
     """
+    geom = _normalize_superpose_geometry(getattr(params, "geometry", "3d"))
     out: list[tuple[int, Chem.Mol | None, dict]] = []
-    ref_single = _single_conformer_mol(ref_mol)
+    if geom == "2d":
+        ref_single = _to_2d_mol(ref_mol)
+    else:
+        ref_single = _single_conformer_mol(ref_mol)
     ref_id = None if ref_oid is None else int(ref_oid)
-    for oid, probe in probes:
+    tot = max(len(probes), 1)
+    for i, (oid, probe) in enumerate(probes):
         if cancel_event is not None and cancel_event.is_set():
             out.append(
                 (int(oid), None, {"ok": False, "err": "cancelled", "op": "superpose_structures"})
             )
-            continue
-        if ref_id is not None and int(oid) == ref_id:
-            m = _single_conformer_mol(ref_single or ref_mol)
+        elif ref_id is not None and int(oid) == ref_id:
+            if geom == "2d":
+                m = ref_single if ref_single is not None else _to_2d_mol(ref_mol)
+            else:
+                m = _single_conformer_mol(ref_single or ref_mol)
             out.append(
                 (
                     int(oid),
@@ -1029,19 +1508,25 @@ def run_superpose_structures(
                         "ok": True,
                         "op": "superpose_structures",
                         "method": "reference",
+                        "geometry": geom,
                         "rms": 0.0,
                         "n_align_atoms": 0,
                     },
                 )
             )
-            continue
-        aligned, meta = align_structure_onto_reference(
-            probe,
-            ref_mol if ref_single is None else ref_single,
-            params,
-            cancel_event=cancel_event,
-        )
-        out.append((int(oid), aligned, meta))
+        else:
+            aligned, meta = align_structure_onto_reference(
+                probe,
+                ref_mol if ref_single is None else ref_single,
+                params,
+                cancel_event=cancel_event,
+            )
+            out.append((int(oid), aligned, meta))
+        if progress is not None:
+            try:
+                progress(i + 1, tot)
+            except Exception:
+                pass
     return out
 
 
@@ -1195,6 +1680,89 @@ class SuperposeConformersWorker(QRunnable):
                 self.signals.superpose_finished.emit(results)
             except Exception:
                 logger.warning("superpose_finished emit failed", exc_info=True)
+
+
+class SuperposeStructuresWorker(QRunnable):
+    """Align distinct table structures onto a reference off the GUI thread."""
+
+    def __init__(
+        self,
+        ref_oid: int,
+        ref_mol: Chem.Mol,
+        probes: list[tuple[int, Chem.Mol]],
+        params: SuperposeStructuresParams,
+        signals: WorkerSignals,
+        cancel_event: threading.Event | None = None,
+        progress_state=None,
+    ):
+        super().__init__()
+        self.ref_oid = int(ref_oid)
+        self.ref_mol = ref_mol
+        self.probes = probes
+        self.params = params
+        self.signals = signals
+        self.cancel_event = cancel_event
+        self.progress_state = progress_state
+
+    def run(self):
+        tot = max(len(self.probes), 1)
+        prog_state = [0, 0.0]
+        cancelled = False
+        results: list = []
+        try:
+            emit_tool_progress_throttled(
+                self.signals,
+                "Superpose…",
+                0,
+                tot,
+                prog_state,
+                progress_state=self.progress_state,
+            )
+
+            def _prog(done: int, total: int) -> None:
+                emit_tool_progress_throttled(
+                    self.signals,
+                    "Superpose…",
+                    done,
+                    total,
+                    prog_state,
+                    progress_state=self.progress_state,
+                )
+
+            results = run_superpose_structures(
+                self.ref_mol,
+                self.probes,
+                self.params,
+                ref_oid=self.ref_oid,
+                cancel_event=self.cancel_event,
+                progress=_prog,
+            )
+            if self.cancel_event is not None and self.cancel_event.is_set():
+                cancelled = True
+        except Exception:
+            logger.exception("SuperposeStructuresWorker failed")
+            results = [
+                (
+                    int(oid),
+                    None,
+                    {"ok": False, "err": "worker_failed", "op": "superpose_structures"},
+                )
+                for oid, _m in self.probes
+            ]
+        finally:
+            done_ok = sum(1 for _o, mol, meta in results if mol is not None and meta.get("ok"))
+            emit_partial_results_if_cancelled(self.signals, "Superpose", done_ok, tot, cancelled)
+            try:
+                geom = _normalize_superpose_geometry(getattr(self.params, "geometry", "3d"))
+                self.signals.superpose_structures_finished.emit(
+                    {
+                        "ref_oid": int(self.ref_oid),
+                        "geometry": geom,
+                        "results": results,
+                    }
+                )
+            except Exception:
+                logger.warning("superpose_structures_finished emit failed", exc_info=True)
 
 
 @dataclass(frozen=True)

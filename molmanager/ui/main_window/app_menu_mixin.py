@@ -25,7 +25,6 @@ from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
     QActionGroup,
-    QApplication,
     QHBoxLayout,
     QToolButton,
     QWidget,
@@ -205,10 +204,8 @@ class AppMenuMixin:
                 "Calculator disabled by MOLMANAGER_DISABLE_CUSTOM_CALC."
             )
 
-        conformations_menu = tools.addMenu("&Conformations")
+        conformations_menu = tools.addMenu("Generate &Conformations")
         conformations_menu.setToolTipsVisible(True)
-        gen_conf_menu = conformations_menu.addMenu("Generate Conformations")
-        gen_conf_menu.setToolTipsVisible(True)
         act_gen_conf = QAction(
             "Stochastic…",
             self,
@@ -217,7 +214,7 @@ class AppMenuMixin:
         act_gen_conf.setToolTip(
             "Build ensembles with RDKit ETKDG (stochastic distance geometry), then minimize and prune."
         )
-        gen_conf_menu.addAction(act_gen_conf)
+        conformations_menu.addAction(act_gen_conf)
         act_sys_conf = QAction(
             "Systematic…",
             self,
@@ -226,20 +223,13 @@ class AppMenuMixin:
         act_sys_conf.setToolTip(
             "Build ensembles with Open Babel Confab (systematic torsion search)."
         )
-        gen_conf_menu.addAction(act_sys_conf)
+        conformations_menu.addAction(act_sys_conf)
 
-        superpose_menu = conformations_menu.addMenu("&Superpose")
-        superpose_menu.setToolTipsVisible(True)
-        act_sp_conf = QAction("Conformers…", self, triggered=self.open_superpose_conformers)
-        act_sp_conf.setToolTip(
-            "Align conformer ensembles within each row and open a 3D results window with energies and RMSD."
+        act_superpose = QAction("&Superpose…", self, triggered=self.open_superpose)
+        act_superpose.setToolTip(
+            "Overlay conformers within a row or structures across rows, in 3D (spatial) or 2D (topological)."
         )
-        superpose_menu.addAction(act_sp_conf)
-        act_sp_struct = QAction("Structures…", self, triggered=self.open_superpose_structures)
-        act_sp_struct.setToolTip(
-            "Align selected table structures onto a reference and open a 3D results window with energies."
-        )
-        superpose_menu.addAction(act_sp_struct)
+        tools.addAction(act_superpose)
 
         fp_menu = tools.addMenu("&Fingerprints")
         fp_menu.setToolTipsVisible(True)

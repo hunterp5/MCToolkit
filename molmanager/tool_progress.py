@@ -49,7 +49,9 @@ class ToolProgressState:
             self._message = str(message or "")
             self._done = max(0, int(done))
             if total is not None:
-                self._total = max(1, int(total))
+                tot = int(total)
+                # Negative total is indeterminate (status text only, no 0%).
+                self._total = tot if tot < 0 else max(1, tot)
 
     def end(self) -> None:
         with self._lock:
@@ -89,9 +91,29 @@ def report_tool_progress(
     Workers should call this (or pass ``progress_state`` into helpers that do) so the
     bottom-left status bar stays current even when the GIL blocks Qt signal delivery.
     """
-    tot = max(1, int(total))
-    d = min(max(int(done), 0), tot)
     msg = str(message or "")
+    tot_in = int(total)
+    if tot_in < 0:
+        if progress_state is not None:
+            progress_state.update(msg, 0, -1)
+        if signals is None:
+            return
+        emit = True if force_signal or throttle is None else False
+        if not emit and throttle is not None:
+            now = time.monotonic()
+            last_d, last_t = int(throttle[0]), float(throttle[1])
+            if (now - last_t) >= 0.25:
+                throttle[0] = last_d
+                throttle[1] = now
+                emit = True
+        if emit:
+            try:
+                signals.tool_progress.emit(msg, 0, -1)
+            except Exception:
+                pass
+        return
+    tot = max(1, tot_in)
+    d = min(max(int(done), 0), tot)
     if progress_state is not None:
         progress_state.update(msg, d, tot)
     if signals is None:

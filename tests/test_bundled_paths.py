@@ -77,6 +77,25 @@ def test_smina_launch_env_sets_babel_libdir(tmp_path):
     assert bundled_paths.openbabel_launch_env(str(exe)) == env
 
 
+def test_apply_openbabel_runtime_env_points_at_uff_prm(monkeypatch):
+    import os
+
+    import pytest
+
+    pip_exe = bundled_paths.pip_openbabel_executable()
+    if pip_exe is None:
+        pytest.skip("openbabel wheel not installed")
+    monkeypatch.setenv(
+        "BABEL_DATADIR", str(pip_exe.parent.parent / "share" / "openbabel" / "3.2.1")
+    )
+    env = bundled_paths.apply_openbabel_runtime_env()
+    assert env
+    data = Path(env["BABEL_DATADIR"])
+    assert (data / "UFF.prm").is_file()
+    assert os.environ.get("BABEL_DATADIR") == str(data)
+    assert Path(env["BABEL_LIBDIR"]).is_dir()
+
+
 def test_smina_launch_env_empty_without_plugins(tmp_path):
     exe = tmp_path / "smina.exe"
     exe.write_bytes(b"")

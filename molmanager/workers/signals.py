@@ -63,6 +63,8 @@ class WorkerSignals(QObject):
     conformers_finished = pyqtSignal(list)
     # list of (oid, mol_or_None, superpose_cell_str) — same packed format as ``confs`` when successful
     superpose_finished = pyqtSignal(list)
+    # dict: ref_oid, geometry, results list of (oid, mol_or_None, meta)
+    superpose_structures_finished = pyqtSignal(object)
     custom_calc = pyqtSignal(list)
     export_finished = pyqtSignal(str)
     # Core-based decomposition: list of (oid, {header: value}), then ordered new column names
@@ -123,9 +125,7 @@ class BulkSimilaritySignals(QObject):
 class SubstructureFilterSignals(QObject):
     """Completion signals for :class:`SubstructureFilterWorker` (owned by the main window)."""
 
-    finished = pyqtSignal(
-        int, object
-    )  # job_gen, list[(smarts, structure_source, frozenset[oid])]
+    finished = pyqtSignal(int, object)  # job_gen, list[(smarts, structure_source, frozenset[oid])]
     failed = pyqtSignal(int, str)  # job_gen, message
 
 

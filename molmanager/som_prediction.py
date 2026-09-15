@@ -276,6 +276,64 @@ def _submit_fame3r_job(
     return job_id
 
 
+def _compressed_set_count(raw: Any) -> int | None:
+    """Count entries from a NERDD ``CompressedSet`` JSON payload (ranges or ints)."""
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return max(0, raw)
+    if isinstance(raw, dict):
+        counted = _as_int(raw.get("count"))
+        if counted is not None:
+            return max(0, counted)
+        raw = raw.get("ranges") or raw.get("intervals") or raw.get("entries")
+    if not isinstance(raw, list):
+        return None
+    total = 0
+    for item in raw:
+        if isinstance(item, bool):
+            continue
+        if isinstance(item, int):
+            total += 1
+            continue
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            try:
+                start, end = int(item[0]), int(item[1])
+            except (TypeError, ValueError):
+                continue
+            total += abs(end - start)
+    return total
+
+
+def _job_entry_progress(job: dict[str, Any], fallback_total: int) -> tuple[int, int]:
+    """Map a NERDD job payload to ``(processed, total)`` for UI progress.
+
+    ``num_entries_total`` is often null while the job is queued (``created``), which
+    previously skipped progress updates and left Predict SOM at 0%.
+    """
+    fallback = max(1, int(fallback_total))
+    total = _as_int(job.get("num_entries_total"))
+    processed = _as_int(job.get("num_entries_processed"))
+    if processed is None:
+        processed = _compressed_set_count(job.get("entries_processed"))
+    if processed is None:
+        processed = 0
+    pages_done = _as_int(job.get("num_pages_processed")) or 0
+    pages_tot = _as_int(job.get("num_pages_total"))
+    if (total is None or total <= 0) and pages_tot:
+        total = pages_tot
+        if processed <= 0 and pages_done:
+            processed = pages_done
+    if total is None or total <= 0:
+        total = fallback
+    status = str(job.get("status") or "")
+    if status == "completed":
+        processed = max(int(processed), int(total))
+    return max(0, int(processed)), max(1, int(total))
+
+
 def _poll_job(
     job_id: str,
     *,
@@ -284,17 +342,18 @@ def _poll_job(
     timeout_s: float,
     cancel: CancelCallback | None,
     progress: Callable[[int, int], None] | None,
+    fallback_total: int = 1,
 ) -> dict[str, Any]:
     deadline = time.monotonic() + max(5.0, float(timeout_s))
     last: dict[str, Any] = {}
+    fallback = max(1, int(fallback_total))
     while time.monotonic() < deadline:
         if _app_is_shutting_down() or (cancel is not None and cancel()):
             raise RuntimeError("Cancelled.")
         last = _json_request(f"{base}/jobs/{job_id}", timeout=15.0) or {}
         status = str(last.get("status") or "")
-        processed = int(last.get("num_entries_processed") or 0)
-        total = int(last.get("num_entries_total") or 0)
-        if progress is not None and total > 0:
+        processed, total = _job_entry_progress(last if isinstance(last, dict) else {}, fallback)
+        if progress is not None:
             progress(processed, total)
         if status == "completed":
             return last
@@ -377,6 +436,8 @@ def predict_soms_batch(
         job_id = ""
         cancelled = False
         chunk_rows: list[dict[str, Any]] | None = None
+        if progress is not None:
+            progress(done_mols, n_pending)
         try:
             job_id = _submit_fame3r_job(
                 chunk_smiles,
@@ -389,9 +450,14 @@ def predict_soms_batch(
             def _chunk_progress(processed: int, total: int, *, _done=done_mols) -> None:
                 if progress is None:
                     return
-                # NERDD counts atoms; approximate molecule progress from the chunk.
+                # NERDD counts atoms once totals exist; before that, processed stays 0.
                 frac = processed / max(total, 1)
-                progress(_done + max(1, int(round(frac * len(chunk)))), n_pending)
+                mols = int(round(frac * len(chunk)))
+                if processed > 0 and mols < 1:
+                    mols = 1
+                if processed >= total > 0:
+                    mols = len(chunk)
+                progress(_done + mols, n_pending)
 
             job = _poll_job(
                 job_id,
@@ -400,6 +466,7 @@ def predict_soms_batch(
                 timeout_s=timeout_s,
                 cancel=cancel,
                 progress=_chunk_progress,
+                fallback_total=len(chunk),
             )
             n_pages = int(job.get("num_pages_total") or 1)
             chunk_rows = _fetch_job_results(job_id, base=base, n_pages=n_pages)

@@ -306,9 +306,9 @@ See **Tools → Dock** in the app after the binary is in place.
 
 ### Systematic conformers (Open Babel)
 
-**Tools → Conformations → Generate Conformations → Systematic…** uses Open Babel Confab. Open Babel is a project dependency (`pip install openbabel`, also in `requirements-core.txt`). The dialog defaults to that wheel’s `obabel` (`site-packages/openbabel/bin/obabel`). You can still override the path, or place `obabel.exe` / `obabel` under `molmanager/resources/bin/<platform>/` to prefer a bundled copy.
+**Tools → Generate Conformations → Systematic…** uses Open Babel Confab. Open Babel is a project dependency (`pip install openbabel`, also in `requirements-core.txt`). The dialog defaults to that wheel’s `obabel` (`site-packages/openbabel/bin/obabel`). You can still override the path, or place `obabel.exe` / `obabel` under `molmanager/resources/bin/<platform>/` to prefer a bundled copy.
 
-Distance-geometry ensembles remain **Generate Conformations → Stochastic…** (RDKit ETKDG; no Open Babel).
+Distance-geometry ensembles remain **Tools → Generate Conformations → Stochastic…** (RDKit ETKDG; no Open Babel).
 
 ### Guided optional setup script
 

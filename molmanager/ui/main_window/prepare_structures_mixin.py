@@ -150,13 +150,26 @@ class PrepareStructuresMixin:
                     },
                 )
             )
-        written = self.on_calc_finished(res, [out_col, pct_col, "pKa"], progress_label="Protonate")
+        written = self.on_calc_finished(
+            res,
+            [out_col, pct_col, "pKa"],
+            progress_label="Protonate",
+            on_complete=lambda cols, a=allowed, r=render_2d: self._protonate_after_table_write(
+                cols, a, r
+            ),
+        )
         if written:
             out_col = written[0]
 
-        if not render_2d:
+    def _protonate_after_table_write(
+        self,
+        written: list[str],
+        allowed,
+        render_2d: bool,
+    ) -> None:
+        if not render_2d or not written:
             return
-
+        out_col = written[0]
         try:
             base_w, base_h = structure_depiict_width(), structure_depiict_height()
             renders, row_by_oid = self._build_render2d_tasks_in_table_order(

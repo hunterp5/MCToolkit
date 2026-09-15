@@ -35,7 +35,13 @@ from ..plot_axes import (
     oids_in_histogram_bin,
 )
 from ..plot_analysis import summarize_univariate, summarize_xy
-from ..plot_color import resolve_plot_colorscale
+from ..plot_color import (
+    DEFAULT_MARKER_SIZE_3D_PX,
+    DEFAULT_MARKER_SIZE_PX,
+    DEFAULT_SELECTED_MARKER_SIZE_3D_PX,
+    DEFAULT_SELECTED_MARKER_SIZE_PX,
+    resolve_plot_colorscale,
+)
 from ..plot_heatmap import build_heatmap_figure, oids_in_heatmap_cell, summarize_heatmap
 from ..plot_radar import (
     MAX_RADAR_TRACES,
@@ -171,7 +177,9 @@ class PlotRenderMixin:
         overlay_max = int(load_config().plot_selection_overlay_max_points)
         # Large selections are applied after react via molmanagerSetSelection (avoids fat payloads).
         bake_selection = bool(selected_points) and len(selected_points) <= overlay_max
-        marker = self._scatter_marker_for_oids(foids, point_size=4 if is3d else 6)
+        marker = self._scatter_marker_for_oids(
+            foids, point_size=DEFAULT_MARKER_SIZE_3D_PX if is3d else DEFAULT_MARKER_SIZE_PX
+        )
 
         fig = go.Figure()
         if is3d:
@@ -201,7 +209,11 @@ class PlotRenderMixin:
                         y=sy,
                         z=sz,
                         mode="markers",
-                        marker={"size": 7, "opacity": 1.0, "color": "#d62828"},
+                        marker={
+                            "size": DEFAULT_SELECTED_MARKER_SIZE_3D_PX,
+                            "opacity": 1.0,
+                            "color": "#d62828",
+                        },
                         name="Selected",
                         showlegend=False,
                         hoverinfo="skip",
@@ -232,7 +244,13 @@ class PlotRenderMixin:
                             "marker": marker,
                             "showlegend": False,
                             "selectedpoints": selected_points if bake_selection else None,
-                            "selected": {"marker": {"size": 9, "color": "#d62828", "opacity": 1.0}},
+                            "selected": {
+                                "marker": {
+                                    "size": DEFAULT_SELECTED_MARKER_SIZE_PX,
+                                    "color": "#d62828",
+                                    "opacity": 1.0,
+                                }
+                            },
                             "unselected": {"marker": {"opacity": 0.35}},
                         },
                         foids,
@@ -289,7 +307,7 @@ class PlotRenderMixin:
         selected_points = (
             sorted(self._selected_point_indices) if self._selected_point_indices else []
         )
-        marker = self._scatter_marker_for_oids(foids, point_size=5)
+        marker = self._scatter_marker_for_oids(foids, point_size=DEFAULT_MARKER_SIZE_PX)
         fig = go.Figure()
         fig.add_trace(
             go.Scatter(
@@ -302,7 +320,13 @@ class PlotRenderMixin:
                         "marker": marker,
                         "showlegend": False,
                         "selectedpoints": selected_points if selected_points else None,
-                        "selected": {"marker": {"size": 9, "color": "#d62828", "opacity": 1.0}},
+                        "selected": {
+                            "marker": {
+                                "size": DEFAULT_SELECTED_MARKER_SIZE_PX,
+                                "color": "#d62828",
+                                "opacity": 1.0,
+                            }
+                        },
                         "unselected": {"marker": {"opacity": 0.35}},
                     },
                     foids,
@@ -352,7 +376,11 @@ class PlotRenderMixin:
         trace_kwargs: dict = {
             "y": vals,
             "name": xname,
-            "marker": {"color": "#2a74d6", "line": {"color": "#1d3557", "width": 1}},
+            "marker": {
+                "color": "#2a74d6",
+                "size": DEFAULT_MARKER_SIZE_PX,
+                "line": {"color": "#1d3557", "width": 1},
+            },
         }
         if kind == PLOT_TYPE_BOX:
             trace_kwargs["boxmean"] = "sd"

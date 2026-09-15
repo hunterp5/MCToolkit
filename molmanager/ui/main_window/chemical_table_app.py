@@ -181,6 +181,9 @@ class ChemicalTableApp(
         self.signals.calculated.connect(self.on_calc_finished, _qc)
         self.signals.conformers_finished.connect(self.on_conformers_finished, _qc)
         self.signals.superpose_finished.connect(self.on_superpose_finished, _qc)
+        self.signals.superpose_structures_finished.connect(
+            self.on_superpose_structures_finished, _qc
+        )
         self.signals.custom_calc.connect(self.on_custom_calc_finished, _qc)
         self.signals.partial_results.connect(self._on_partial_results_notice, _qc)
         self.signals.rgroup_decomp_finished.connect(self.on_rgroup_decomp_finished, _qc)

@@ -215,11 +215,16 @@ class CompoundTableBulkMixin:
         *,
         default: str = "",
         emit: bool = True,
+        start_row: int = 0,
+        end_row: int | None = None,
+        rebuild_color: bool | None = None,
     ) -> None:
         """
         Set one column for every row in a single pass (for sparse maps + default fill).
 
         Used when most rows share a default (e.g. fingerprint similarity ``N/A``).
+        ``start_row``/``end_row`` limit the slice to ``[start_row, end_row)``. Color
+        cache rebuild defaults to the full-column case.
         """
         if column_name in ("ID_HIDDEN", "Structure") or column_name in self._pixmap_columns:
             return
@@ -227,16 +232,23 @@ class CompoundTableBulkMixin:
             col = self._headers.index(column_name)
         except ValueError:
             return
-        for row in self._rows:
+        n = len(self._rows)
+        lo = max(0, int(start_row))
+        hi = n if end_row is None else min(n, int(end_row))
+        if lo >= hi:
+            return
+        for row in self._rows[lo:hi]:
             row.values[column_name] = oid_to_text.get(row.oid, default)
-        if column_name in self._column_color_rules:
+        full = lo == 0 and hi == n
+        do_color = rebuild_color if rebuild_color is not None else full
+        if do_color and column_name in self._column_color_rules:
             self._rebuild_column_color_cache(column_name)
-        if column_name in self._bounds_data_headers():
+        if column_name in self._bounds_data_headers() and full:
             self._mark_numeric_bounds_dirty({column_name})
         if emit and self._rows:
             self.dataChanged.emit(
-                self.index(0, col),
-                self.index(len(self._rows) - 1, col),
+                self.index(lo, col),
+                self.index(hi - 1, col),
                 [Qt.DisplayRole, Qt.EditRole, Qt.BackgroundRole],
             )
 

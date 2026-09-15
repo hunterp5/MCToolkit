@@ -31,6 +31,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 
 from .bundled_paths import (
+    apply_openbabel_runtime_env,
     default_external_executable,
     openbabel_launch_env,
     resolve_user_executable,
@@ -61,9 +62,9 @@ class SystematicConfParams:
     obabel_path: str = ""
 
 
-def python_confab_available() -> bool:
+def python_confab_available(obabel_path: str = "") -> bool:
     """True when the Open Babel Python bindings expose Confab ``DiverseConfGen``."""
-    ob = _openbabel_module()
+    ob = _openbabel_module(obabel_path)
     if ob is None:
         return False
     try:
@@ -87,7 +88,7 @@ def resolve_obabel_executable(user_path: str = "") -> str | None:
 
 def ensure_openbabel_confab_ready(obabel_path: str = "") -> str | None:
     """Return an error string when neither Python Confab nor ``obabel`` is available."""
-    if python_confab_available():
+    if python_confab_available(obabel_path):
         return None
     if resolve_obabel_executable(obabel_path):
         return None
@@ -273,19 +274,20 @@ def _same_element_order(a: Chem.Mol, b: Chem.Mol) -> bool:
     return True
 
 
-def _openbabel_module():
+def _openbabel_module(obabel_path: str = ""):
+    ob = None
     try:
         from openbabel import openbabel as ob
-
-        return ob
     except ImportError:
-        pass
+        try:
+            import openbabel as ob
+        except ImportError:
+            return None
     try:
-        import openbabel as ob
-
-        return ob
-    except ImportError:
-        return None
+        apply_openbabel_runtime_env(obabel_path)
+    except Exception:
+        logger.debug("Open Babel runtime env not applied", exc_info=True)
+    return ob
 
 
 def _prepare_mol_for_confab(mol: Chem.Mol) -> Chem.Mol:
@@ -333,11 +335,12 @@ def _mol_to_sdf(mol: Chem.Mol) -> str:
 
 
 def _run_confab(sdf: str, params: SystematicConfParams) -> str:
-    if python_confab_available():
+    apply_openbabel_runtime_env(params.obabel_path)
+    if python_confab_available(params.obabel_path):
         try:
             return _run_confab_python(sdf, params)
         except Exception:
-            logger.exception("Python Confab failed; trying obabel CLI")
+            logger.debug("Python Confab failed; trying obabel CLI", exc_info=True)
     exe = resolve_obabel_executable(params.obabel_path)
     if not exe:
         raise RuntimeError("openbabel_unavailable")
@@ -345,7 +348,7 @@ def _run_confab(sdf: str, params: SystematicConfParams) -> str:
 
 
 def _run_confab_python(sdf: str, params: SystematicConfParams) -> str:
-    ob = _openbabel_module()
+    ob = _openbabel_module(params.obabel_path)
     if ob is None:
         raise RuntimeError("openbabel_unavailable")
     conv = ob.OBConversion()
@@ -372,6 +375,7 @@ def _run_confab_python(sdf: str, params: SystematicConfParams) -> str:
     start = 0
     end = n
     # DiverseConfGen typically appends the input geometry as the last conformer.
+    # Keep a lone conformer even when include_original is off.
     if not params.include_original and n > 1:
         end = n - 1
     conv.SetOutFormat("sdf")

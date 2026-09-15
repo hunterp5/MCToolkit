@@ -68,7 +68,7 @@ def build_sali_figure(
             size_values=size_values,
             size_min_px=size_min_px,
             size_max_px=size_max_px,
-            point_size=9,
+            point_size=11,
             opacity=0.85,
         )
         if color_label:
@@ -79,7 +79,7 @@ def build_sali_figure(
             size_values,
             size_min_px=size_min_px,
             size_max_px=size_max_px,
-            default_size=9.0,
+            default_size=11.0,
         )
         colors = [float(p.sali) for p in points]
         marker = {

@@ -129,7 +129,7 @@ def build_mmp_neighborhood_figure(
         node_y.append(float(y))
         node_color.append(float(graph.activities.get(oid, 0.0)))
         deg = int(graph.degrees.get(oid, 1))
-        degree_sizes.append(10.0 + min(18.0, 3.0 * deg))
+        degree_sizes.append(12.0 + min(18.0, 3.0 * deg))
         custom.append([int(oid)])
 
     if size_values is not None:
@@ -137,7 +137,7 @@ def build_mmp_neighborhood_figure(
             size_values,
             size_min_px=size_min_px,
             size_max_px=size_max_px,
-            default_size=12.0,
+            default_size=14.0,
         )
     else:
         sizes = degree_sizes
@@ -150,7 +150,7 @@ def build_mmp_neighborhood_figure(
             color_min=color_min,
             color_max=color_max,
             size_values=None,
-            point_size=12,
+            point_size=14,
             opacity=0.92,
         )
         marker["size"] = sizes

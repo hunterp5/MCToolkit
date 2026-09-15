@@ -103,3 +103,36 @@ def test_on_calc_finished_updates_pka_and_pi_in_place(qapp):  # noqa: ARG001
     assert w._table_model.value_for_header(0, "pKa") == "9.50"
     assert w._table_model.value_for_header(0, "pI") == "5.97"
     w.close()
+
+
+def test_on_calc_finished_chunks_large_write(qapp, monkeypatch):  # noqa: ARG001
+    from molmanager.ui.main_window import ChemicalTableApp
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_rows_batch([(i, {}) for i in range(4)])
+    w.mols = {}
+    w.next_oid = 4
+    monkeypatch.setattr(w, "_calc_writeback_async_min_rows", lambda: 2)
+    monkeypatch.setattr(w, "_calc_writeback_chunk_rows", lambda: 2)
+    completed: list[list[str]] = []
+    written = w.on_calc_finished(
+        [(i, {"LogP": str(i)}) for i in range(4)],
+        ["LogP"],
+        finish_progress=False,
+        on_complete=completed.append,
+    )
+    assert written == ["LogP"]
+    for _ in range(40):
+        qapp.processEvents()
+        if completed:
+            break
+    assert completed == [["LogP"]]
+    assert [w._table_model.value_for_header(i, "LogP") for i in range(4)] == [
+        "0",
+        "1",
+        "2",
+        "3",
+    ]
+    w.close()

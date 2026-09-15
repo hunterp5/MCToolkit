@@ -130,11 +130,11 @@ class SomPredictorWorker(QRunnable):
         throttle = [0, 0.0]
         done = n_empty
 
-        def _emit_progress(message: str, *, force: bool = False) -> None:
+        def _emit_progress(message: str, *, force: bool = False, waiting: bool = False) -> None:
             report_tool_progress(
                 message=message,
                 done=min(done, tot),
-                total=tot,
+                total=-1 if waiting else tot,
                 progress_state=self.progress_state,
                 signals=self.worker_signals,
                 throttle=throttle,
@@ -146,7 +146,7 @@ class SomPredictorWorker(QRunnable):
         def _cancelled() -> bool:
             return application_is_shutting_down() or (cancel_ev is not None and cancel_ev.is_set())
 
-        _emit_progress("Predict SOM…", force=True)
+        _emit_progress("Predict SOM: submitting…", force=True, waiting=True)
         if _cancelled():
             _safe_emit(self.som_signals, "failed", "Cancelled.")
             return
@@ -161,7 +161,13 @@ class SomPredictorWorker(QRunnable):
                 if _cancelled():
                     return
                 done = n_empty + int(round(max(0.0, min(frac, 1.0)) * n_unique_rows))
-                _emit_progress(message)
+                waiting = done <= n_empty
+                label = (
+                    "Predict SOM: waiting on NERDD…"
+                    if waiting
+                    else message
+                )
+                _emit_progress(label, waiting=waiting)
 
             def _cancelled_preds() -> list[SomMoleculePrediction]:
                 return [

@@ -182,7 +182,14 @@ class FragmentToolsMixin:
 
     def on_fragment_decomp_finished(self, res, col_headers: list, tool_title: str) -> None:
         self._finish_tool_progress(tool_title)
-        written = self.on_calc_finished(res, col_headers, finish_progress=False)
+        self.on_calc_finished(
+            res,
+            col_headers,
+            finish_progress=False,
+            on_complete=lambda cols, t=tool_title: self._fragment_decomp_maybe_render(cols, t),
+        )
+
+    def _fragment_decomp_maybe_render(self, written: list[str], tool_title: str) -> None:
         do_render = bool(getattr(self, "_fragment_decomp_render_2d_after", False))
         self._fragment_decomp_render_2d_after = False
         # Optionally render new fragment SMILES columns so the user can see the pieces immediately.

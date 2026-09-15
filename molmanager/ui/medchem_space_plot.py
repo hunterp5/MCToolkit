@@ -28,7 +28,12 @@ from ..medchem_space import (
     gia_polygon,
     golden_triangle_polygon,
 )
-from ..plot_color import DEFAULT_PLOT_COLORSCALE, attach_marker_size_legend
+from ..plot_color import (
+    DEFAULT_MARKER_SIZE_PX,
+    DEFAULT_PLOT_COLORSCALE,
+    DEFAULT_SELECTED_MARKER_SIZE_PX,
+    attach_marker_size_legend,
+)
 from ..ui.plotly_html import finalize_plot_legend
 from .dockable_plot import resolve_plot_title_text
 
@@ -72,7 +77,7 @@ def _scatter_marker(
         "color_min": color_min,
         "color_max": color_max,
         "size_values": size_values,
-        "point_size": 7,
+        "point_size": DEFAULT_MARKER_SIZE_PX,
         "opacity": 0.88,
     }
     if size_min_px is not None:
@@ -98,7 +103,9 @@ def _compound_scatter(
         name="Compounds",
         showlegend=False,
         unselected={"marker": {"opacity": 0.35}},
-        selected={"marker": {"size": 10, "color": "#d62828", "opacity": 1.0}},
+        selected={
+            "marker": {"size": DEFAULT_SELECTED_MARKER_SIZE_PX, "color": "#d62828", "opacity": 1.0}
+        },
     )
 
 

@@ -91,7 +91,7 @@ def build_activity_cliff_figure(
             size_values=size_values,
             size_min_px=size_min_px,
             size_max_px=size_max_px,
-            point_size=9,
+            point_size=11,
             opacity=0.85,
         )
         if color_label:
@@ -102,7 +102,7 @@ def build_activity_cliff_figure(
             size_values,
             size_min_px=size_min_px,
             size_max_px=size_max_px,
-            default_size=9.0,
+            default_size=11.0,
         )
         cmax = max((abs(c) for c in colors), default=1.0) or 1.0
         marker = {

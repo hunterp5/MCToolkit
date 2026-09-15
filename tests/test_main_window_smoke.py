@@ -649,3 +649,22 @@ def test_pka_prediction_writes_pi_only_when_requested(qapp):  # noqa: ARG001
     w._on_pka_prediction_finished([(0, "4.76", "5.97")], True)
     assert "pI" in w.headers
     assert w._table_model.value_for_header(0, "pI") == "5.97"
+
+
+def test_tools_menu_lists_conformations_and_superpose_directly(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    mb = w.menuBar()
+    tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    labels = [a.text().replace("&", "") for a in tools.actions()]
+    assert "Conformations" not in labels
+    assert "Generate Conformations" in labels
+    assert any(lbl.startswith("Superpose") for lbl in labels)
+    gen = next(
+        a.menu() for a in tools.actions() if a.text().replace("&", "") == "Generate Conformations"
+    )
+    gen_labels = [a.text().replace("&", "") for a in gen.actions()]
+    assert "Stochastic…" in gen_labels
+    assert "Systematic…" in gen_labels
+    sp = next(a for a in tools.actions() if a.text().replace("&", "").startswith("Superpose"))
+    assert sp.menu() is None
+    w.close()
