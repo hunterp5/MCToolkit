@@ -117,6 +117,19 @@ class ProteinViewerIoMixin:
             return ("", "", "pdb", None)
         return (slot.name, slot.text, slot.fmt, slot.path)
 
+    def prepare_source_id(self) -> str:
+        """Structure id of the file Prepare will read."""
+        slot = self._active_slot()
+        return slot.structure_id if slot is not None else ""
+
+    def prepare_slot_payload(self, structure_id: str) -> tuple[str, str]:
+        """Return ``(text, fmt)`` for a loaded structure id."""
+        sid = (structure_id or "").strip()
+        for slot in self._slots:
+            if slot.structure_id == sid:
+                return slot.text, slot.fmt
+        return "", "pdb"
+
     def prepare_water_keys(self) -> tuple[tuple[str, str, str], ...]:
         """Residue keys for Manager-selected water groups on the active structure."""
         slot = self._active_slot()
@@ -143,6 +156,57 @@ class ProteinViewerIoMixin:
                 seen.add(key)
                 keys.append(key)
         return tuple(keys)
+
+    def prepare_ligand_options(self) -> list[tuple[str, tuple[str, str, str], bool, str]]:
+        """Ligands on loaded structures: ``(label, residue key, selected, structure_id)``."""
+        slots = list(self._slots)
+        if not slots:
+            return []
+        multi = len(slots) > 1
+        active = self._active_slot()
+        rows_by_slot: list[tuple[_LoadedSlot, list[_ComponentView]]] = []
+        for slot in slots:
+            lig_rows = [row for row in slot.rows if row.spec.kind == "ligand"]
+            if lig_rows:
+                rows_by_slot.append((slot, lig_rows))
+        if not rows_by_slot:
+            return []
+        any_selected = any(row.selected for _slot, lig_rows in rows_by_slot for row in lig_rows)
+        out: list[tuple[str, tuple[str, str, str], bool, str]] = []
+        for slot, lig_rows in rows_by_slot:
+            for row in lig_rows:
+                spec = row.spec
+                key = (spec.chain or "", str(spec.resi or "").strip() or "0", spec.icode or "")
+                label = spec.label or f"{spec.resn} {spec.chain}{spec.resi}"
+                if multi:
+                    label = f"{slot.name}: {label}"
+                selected = bool(row.selected) if any_selected else False
+                out.append((label, key, selected, slot.structure_id))
+        if not any_selected and out:
+            ranked: list[tuple[int, bool, tuple[str, str, str], str]] = []
+            for slot, lig_rows in rows_by_slot:
+                for row in lig_rows:
+                    spec = row.spec
+                    key = (
+                        spec.chain or "",
+                        str(spec.resi or "").strip() or "0",
+                        spec.icode or "",
+                    )
+                    ranked.append(
+                        (
+                            int(spec.n_atoms or 0),
+                            slot is active,
+                            key,
+                            slot.structure_id,
+                        )
+                    )
+            ranked.sort(key=lambda item: (item[1], item[0]), reverse=True)
+            best_key, best_sid = ranked[0][2], ranked[0][3]
+            out = [
+                (label, key, key == best_key and sid == best_sid, sid)
+                for label, key, _selected, sid in out
+            ]
+        return out
 
     def open_structure_dialog(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(self, "Open structure", "", STRUCTURE_FILE_FILTER)
@@ -305,7 +369,13 @@ class ProteinViewerIoMixin:
         self._sequence_chains = []
         self._residue_highlight = []
         self._pocket_payload_data = None
+        self._docking_box_payload = None
         self._invalidate_hbonds()
+        act_box = getattr(self, "_act_docking_box", None)
+        if act_box is not None:
+            act_box.blockSignals(True)
+            act_box.setChecked(False)
+            act_box.blockSignals(False)
         self._act_all_atoms.blockSignals(True)
         self._act_all_atoms.setChecked(False)
         self._act_all_atoms.blockSignals(False)
@@ -324,6 +394,7 @@ class ProteinViewerIoMixin:
                 "components": [],
                 "residueHighlight": [],
                 "pocket": None,
+                "dockingBox": None,
                 "hbonds": {"active": False, "bonds": []},
                 "hydrogens": self._hydrogen_mode(),
                 "refit": True,
@@ -382,6 +453,7 @@ class ProteinViewerIoMixin:
             },
             "allAtoms": bool(self._act_all_atoms.isChecked()),
             "pocket": bool(self._pocket_payload_data),
+            "dockingBox": self._docking_box_payload,
         }
         try:
             geo = self.saveGeometry()
@@ -451,6 +523,19 @@ class ProteinViewerIoMixin:
             self._push_structure(refit=True)
             if state.get("pocket"):
                 self._activate_pocket(zoom=False)
+            box = state.get("dockingBox")
+            if isinstance(box, dict) and box.get("active"):
+                from ..docking_box import docking_box_from_dict
+
+                parsed = docking_box_from_dict(box)
+                payload = parsed.viewer_payload() if parsed is not None else box
+                self._docking_box_payload = payload
+                act = getattr(self, "_act_docking_box", None)
+                if act is not None:
+                    act.blockSignals(True)
+                    act.setChecked(True)
+                    act.blockSignals(False)
+                self.viewer.set_docking_box(payload)
 
     def open_prepare_dialog(self) -> None:
         """Open the Prepare pipeline dialog for the loaded structure."""
@@ -466,6 +551,7 @@ class ProteinViewerIoMixin:
 
             dlg = ProteinPrepareDialog(self)
             dlg.prepared.connect(self._on_structure_prepared)
+            dlg.smina_prepared.connect(self._on_smina_prepared)
             dlg.destroyed.connect(self._on_prepare_dialog_destroyed)
             self._prepare_dialog = dlg
         dlg.prefill_from_viewer()
@@ -482,3 +568,8 @@ class ProteinViewerIoMixin:
             QMessageBox.warning(self, "Prepare Structure", f"Prepared file was not found:\n{path}")
             return
         self.add_structure_path(path, refit=False)
+
+    def _on_smina_prepared(self, result) -> None:
+        setter = getattr(self, "set_docking_box_from_prepare", None)
+        if callable(setter):
+            setter(result)

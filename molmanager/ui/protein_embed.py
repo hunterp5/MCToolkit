@@ -58,6 +58,7 @@ class ProteinEmbedView(QWidget):
         self._pending_pocket: dict | None = None
         self._pending_hydrogens: str | None = None
         self._pending_hbonds: dict | None = None
+        self._pending_docking_box: dict | None = None
         self._web = None
         self._bootstrapped = False
         self._bridge = _ProteinViewerBridge(self)
@@ -171,6 +172,10 @@ class ProteinEmbedView(QWidget):
             hbonds = self._pending_hbonds
             self._pending_hbonds = None
             self._run_js("molmanagerSetHbonds", hbonds)
+        if self._web_ready and self._pending_docking_box is not None and self._pending_payload is None:
+            box = self._pending_docking_box
+            self._pending_docking_box = None
+            self._run_js("molmanagerSetDockingBox", box)
         if self._web_ready:
             self.schedule_resize_keep_view()
             QTimer.singleShot(200, self.resize_keep_view)
@@ -204,6 +209,10 @@ class ProteinEmbedView(QWidget):
                 self._pending_hbonds = payload
                 if self._pending_payload is not None:
                     self._pending_payload["hbonds"] = payload
+            elif fn_name == "molmanagerSetDockingBox":
+                self._pending_docking_box = payload
+                if self._pending_payload is not None:
+                    self._pending_payload["dockingBox"] = payload
             return
         js = f"if (window.{fn_name}) window.{fn_name}({json.dumps(payload)});"
         try:
@@ -243,3 +252,6 @@ class ProteinEmbedView(QWidget):
 
     def set_hbonds(self, spec: dict | None) -> None:
         self._run_js("molmanagerSetHbonds", spec or {"active": False, "bonds": []})
+
+    def set_docking_box(self, box: dict | None) -> None:
+        self._run_js("molmanagerSetDockingBox", box or {"active": False})

@@ -10,6 +10,8 @@ Dock prepared ligands into a receptor box and collect poses/scores from MolManag
 
 Use when PDB/PDBQT receptor prep is done and you want local Smina runs without leaving the app.
 
+Protein Viewer **Prepare…** can fill this dialog: apo receptor PDBQT, crystal ligand SDF, and a numeric search box (ligand AABB + padding). You can still browse files by hand.
+
 ## Inputs / scope
 
 Requires a **Smina executable**, receptor PDBQT, ligand file, and an output path. Box defined by center and size, or **Autobox**.

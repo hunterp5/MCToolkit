@@ -240,6 +240,7 @@ class DockToolsMixin:
         )
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
         self._prepare_tool_dialog(dlg)
+        return dlg
 
     def open_dock_prepare(self):
         from ..dialogs.pdbqt_generator import PdbqtGeneratorDialog

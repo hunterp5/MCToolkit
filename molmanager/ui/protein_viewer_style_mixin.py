@@ -393,6 +393,35 @@ class ProteinViewerStyleMixin:
         self._pocket_payload_data = None
         self.viewer.set_pocket({"active": False})
 
+    def _docking_box_overlay_payload(self) -> dict | None:
+        payload = self._docking_box_payload
+        if not payload:
+            return None
+        act = getattr(self, "_act_docking_box", None)
+        if act is not None and not act.isChecked():
+            return {"active": False}
+        return payload
+
+    def _on_docking_box_toggled(self, checked: bool) -> None:
+        if checked and not self._docking_box_payload:
+            return
+        self.viewer.set_docking_box(self._docking_box_overlay_payload())
+
+    def set_docking_box_from_prepare(self, result) -> None:
+        """Show the Smina box from a Prepare run and enable View → Docking Box."""
+        box = getattr(result, "box", None)
+        if box is None:
+            return
+        payload = box.viewer_payload()
+        self._docking_box_payload = payload
+        act = getattr(self, "_act_docking_box", None)
+        if act is not None:
+            act.blockSignals(True)
+            act.setChecked(True)
+            act.blockSignals(False)
+        self.viewer.set_docking_box(payload)
+        self._mark_host_session_dirty()
+
     def _compute_pocket_payload(self) -> dict | None:
         selected_ligands = [r for r in self._rows if r.selected and r.spec.kind == "ligand"]
         if selected_ligands:

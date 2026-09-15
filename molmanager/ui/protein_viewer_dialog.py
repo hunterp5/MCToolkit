@@ -69,6 +69,7 @@ class ProteinViewerDialog(
         self._residue_highlight: list[dict] = []
         self._syncing_from_atom = False
         self._pocket_payload_data: dict | None = None
+        self._docking_box_payload: dict | None = None
         self._protein_style_actions: dict[str, QAction] = {}
         self._ligand_style_actions: dict[str, QAction] = {}
         self._protein_color_actions: dict[str, QAction] = {}
@@ -78,6 +79,7 @@ class ProteinViewerDialog(
         self._act_hbond_protein: QAction | None = None
         self._act_hbond_ligand: QAction | None = None
         self._act_hbond_complex: QAction | None = None
+        self._act_docking_box: QAction | None = None
         self._hbond_cache: dict[str, tuple] = {}
 
         root = QVBoxLayout(self)
@@ -174,6 +176,13 @@ class ProteinViewerDialog(
         )
         self._act_pocket.triggered.connect(self._on_pocket)
         view_menu.addAction(self._act_pocket)
+        self._act_docking_box = QAction("&Docking Box", self)
+        self._act_docking_box.setCheckable(True)
+        self._act_docking_box.setToolTip(
+            "Show the Smina search box written by Prepare (ligand bounding box + padding)."
+        )
+        self._act_docking_box.toggled.connect(self._on_docking_box_toggled)
+        view_menu.addAction(self._act_docking_box)
         view_menu.addSeparator()
         self._act_all_atoms = QAction("All &Atoms", self)
         self._act_all_atoms.setCheckable(True)
@@ -269,6 +278,7 @@ class ProteinViewerDialog(
                 "components": self._component_payloads(),
                 "residueHighlight": self._residue_highlight,
                 "pocket": self._pocket_payload_data,
+                "dockingBox": self._docking_box_overlay_payload(),
                 "hbonds": self._hbond_overlay_payload(),
                 "hydrogens": self._hydrogen_mode(),
                 "refit": bool(refit),

@@ -169,7 +169,7 @@ def test_prepare_rebuilds_internal_loops_by_default(
     mock_min.side_effect = _min
 
     out = prepare_protein_structure(req)
-    assert out == req.output_pdb_path
+    assert out.output_path == req.output_pdb_path
     mock_drop_internal.assert_not_called()
     mock_prune.assert_called_once()
     assert mock_prune.call_args.kwargs["include_ligand"] is True
@@ -636,11 +636,12 @@ def test_prepare_strips_ligand_after_propka_unless_kept(
     )
     prepare_protein_structure(req_keep)
     mock_min.assert_called_once()
-    assert mock_min.call_args.kwargs["ligand_mols"]
+    assert "ligand_mols" not in mock_min.call_args.kwargs
+    assert mock_min.call_args.kwargs["ligand_keys"] == set()
     mock_ligands.assert_called_once()
     kept = out_keep.read_text(encoding="utf-8")
     assert "AXI" in kept
-    assert any("GAFF2" in line for line in mock_min.call_args.kwargs["remarks"])
+    assert not any("GAFF2" in line for line in mock_min.call_args.kwargs["remarks"])
 
     out_apo = tmp_path / "apo.cif"
     req_apo = replace(
@@ -696,8 +697,8 @@ def test_prepare_cif_input_keeps_cif_work_files(
 
     mock_min.side_effect = _min
     out = prepare_protein_structure(req)
-    text = Path(out).read_text(encoding="utf-8")
-    assert out.endswith(".cif")
+    text = Path(out.output_path).read_text(encoding="utf-8")
+    assert out.output_path.endswith(".cif")
     assert text.lstrip().startswith("data_")
     assert "_atom_site." in text
     assert "REMARK   4" not in text
@@ -772,6 +773,9 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     mb = dlg.findChild(QMenuBar)
     labels = [a.text().replace("&", "") for a in mb.actions()]
     assert any(label.startswith("Prepare") for label in labels)
+    view_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "View")
+    view_labels = [a.text().replace("&", "") for a in view_menu.actions()]
+    assert "Docking Box" in view_labels
 
     shown: list[str] = []
 
@@ -800,10 +804,17 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     assert not prep.combo_protein_ff.isEnabled()
     assert prep.combo_out_fmt.currentData() == "cif"
     assert prep.combo_protein_ff.currentData() == "amber14"
-    assert prep.combo_ligand_ff.currentData() == "gaff2"
     assert prep.combo_solvent.currentData() == "gbn2"
     assert prep.combo_restraint.currentData() == "backbone"
     assert prep.chk_skip_pocket_loops.isChecked()
+    assert prep.chk_write_smina.isChecked()
+    assert prep.radio_box_loaded.isChecked()
+    assert prep.spin_box_padding.value() == 4.0
+    prep.radio_box_file.setChecked(True)
+    assert prep.box_ligand_file_row.isEnabled()
+    assert not prep.combo_box_ligand.isEnabled()
+    prep.radio_box_loaded.setChecked(True)
+    assert not prep.btn_open_smina.isEnabled()
     assert not prep.chk_keep_bridging_waters.isChecked()
     assert prep.spin_salt.value() == 0.15
     assert prep.spin_ph.value() == 7.4
@@ -834,7 +845,7 @@ def test_prepare_protein_structure_ala_optional_extras(tmp_path):
     pytest.importorskip("pdb2pqr")
     req = _request(tmp_path, rebuild_missing_loops=False, minimize=False, ph=7.4)
     out = prepare_protein_structure(req)
-    text = Path(out).read_text(encoding="utf-8")
+    text = Path(out.output_path).read_text(encoding="utf-8")
     assert "data_" in text
     assert "ALA" in text
     from molmanager.structure_components import parse_structure_atoms

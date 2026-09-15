@@ -27,7 +27,6 @@ from .protein_prepare_constants import (
     _DEFAULT_CA_K_KCAL,
     _DEFAULT_MIN_ITERS,
     _GB_SALT_M,
-    _LIGAND_FF_GAFF2,
     _PDB2PQR_FF,
     _PROTEIN_FF_AMBER14,
     _RESTRAINT_BACKBONE,
@@ -54,8 +53,6 @@ from .protein_prepare_io import (
 )
 from .protein_prepare_minimize import (
     _ligand_chem_tables,
-    _ligand_ff_tag,
-    _normalize_ligand_ff,
     _normalize_protein_ff,
     _normalize_restraint_set,
     _normalize_solvent,
@@ -77,9 +74,7 @@ from .protein_prepare_io import (  # noqa: F401,E402
     residues_to_drop,
 )
 from .protein_prepare_minimize import (  # noqa: F401,E402
-    _assign_ligand_charges,
     _ff_attempts,
-    _gaff2_system,
     _gb_kappa_per_nm,
     _pocket_heavy_indices,
     _protein_ff_xmls,
@@ -109,12 +104,17 @@ class ProteinPrepareRequest:
     restraint_k_kcal_per_ang2: float = _DEFAULT_CA_K_KCAL
     max_minimize_iterations: int = _DEFAULT_MIN_ITERS
     protein_ff: str = _PROTEIN_FF_AMBER14
-    ligand_ff: str = _LIGAND_FF_GAFF2
     solvent: str = _SOLVENT_GBN2
     salt_m: float = _GB_SALT_M
     restraint_set: str = _RESTRAINT_BACKBONE
     skip_pocket_loops: bool = True
     output_format: str = "cif"
+    write_smina: bool = False
+    box_padding: float = 4.0
+    box_ligand_keys: tuple[ResidueKey, ...] = ()
+    box_ligand_path: str = ""
+    box_source_text: str = ""
+    box_source_fmt: str = ""
 
 
 def _repair_and_clean(
@@ -217,7 +217,7 @@ def _write_prepared_output(
     )
 
 
-def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
+def prepare_protein_structure(req: ProteinPrepareRequest):
     """
     Repair missing protein atoms/loops, protonate at pH with pdb2pqr/PROPKA
     (optionally holo, with selected waters), then optionally minimize.
@@ -254,7 +254,6 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
     orig_keep_water = set(keep_water)
     keep_ligand_out = bool(req.include_ligand) and bool(req.keep_ligand)
     run_min = bool(req.minimize)
-    ligand_during_min = bool(req.include_ligand) and bool(ligand_keys) and run_min
     keep_ligand_in_merged = bool(req.include_ligand) and (run_min or keep_ligand_out)
     protonate_lig = bool(req.include_ligand) and bool(req.protonate_ligand) and bool(ligand_keys)
     ligand_resns = _ligand_residue_names(input_text, fmt, ligand_keys)
@@ -306,7 +305,6 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
         source_fmt=fmt,
     )
     protein_ff = _normalize_protein_ff(req.protein_ff)
-    ligand_ff = _normalize_ligand_ff(req.ligand_ff)
     solvent = _normalize_solvent(req.solvent)
     restraint_set = _normalize_restraint_set(req.restraint_set)
     het_bits = []
@@ -324,13 +322,7 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
         het_bits.append(f"SKIP {skipped_pocket_gaps} POCKET LOOP GAP")
     if n_missing_modeled:
         het_bits.append(f"MODEL {n_missing_modeled} SEQRES GAP RESIDUES")
-    if run_min and ligand_during_min:
-        min_remark = (
-            f"4 OPENMM {restraint_set.upper()}-RESTRAINED MIN {protein_ff.upper()} "
-            f"{_ligand_ff_tag(ligand_ff)} {solvent.upper()} "
-            f"K={float(req.restraint_k_kcal_per_ang2):.1f} KCAL/MOL/A**2"
-        )
-    elif run_min:
+    if run_min:
         min_remark = (
             f"4 OPENMM {restraint_set.upper()}-RESTRAINED MIN {protein_ff.upper()} "
             f"{solvent.upper()} K={float(req.restraint_k_kcal_per_ang2):.1f} KCAL/MOL/A**2"
@@ -362,6 +354,7 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
         finalized = work / f"finalized{work_ext}"
         minimized = work / f"minimized{work_ext}"
         ligand_mol2: Path | None = work / "ligand.mol2"
+        ligand_mols: list = []
         _write_fixer_pdb(fixer, repaired)
         dest_names = residue_names_by_key(repaired.read_text(encoding="utf-8"), work_fmt)
         ligand_keys = remap_residue_keys(orig_ligand_keys, orig_names, dest_names)
@@ -419,7 +412,7 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
                 protomer_template = protomer_choice.mol
                 remarks.insert(-1, protomer_choice.remark_line())
                 try:
-                    _mols, repaired_text = prepare_ligands_for_gaff(
+                    ligand_mols, repaired_text = prepare_ligands_for_gaff(
                         repaired.read_text(encoding="utf-8"),
                         ligand_keys,
                         template=protomer_template,
@@ -429,10 +422,10 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
                     raise RuntimeError(str(exc)) from exc
                 _write_text(repaired, repaired_text)
                 residues = ligand_residue_blocks(repaired_text, ligand_keys, fmt=work_fmt)
-                if _mols and residues:
+                if ligand_mols and residues:
                     key, resn, _block = residues[0]
                     try:
-                        write_ligand_mol2(_mols[0], ligand_mol2, resn=resn, resi=key[1])
+                        write_ligand_mol2(ligand_mols[0], ligand_mol2, resn=resn, resi=key[1])
                     except Exception:
                         ligand_mol2 = None
                 else:
@@ -510,7 +503,7 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
                 protomer_choice = pocket_choice
                 protomer_template = pocket_choice.mol
                 try:
-                    _mols, repaired_text = prepare_ligands_for_gaff(
+                    ligand_mols, repaired_text = prepare_ligands_for_gaff(
                         repaired_text,
                         ligand_keys,
                         template=protomer_template,
@@ -521,10 +514,10 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
                 _write_text(repaired, repaired_text)
                 residues = ligand_residue_blocks(repaired_text, ligand_keys, fmt=work_fmt)
                 mol2_retry: Path | None = work / "ligand_pocket.mol2"
-                if _mols and residues:
+                if ligand_mols and residues:
                     key, resn, _block = residues[0]
                     try:
-                        write_ligand_mol2(_mols[0], mol2_retry, resn=resn, resi=key[1])
+                        write_ligand_mol2(ligand_mols[0], mol2_retry, resn=resn, resi=key[1])
                     except Exception:
                         mol2_retry = None
                 else:
@@ -548,12 +541,11 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
             keep_water_keys=keep_water,
             fmt=work_fmt,
         )
-        ligand_mols: list | None = None
         if keep_ligand_in_merged and ligand_keys:
             from .protein_prepare_ligand import prepare_ligands_for_gaff
 
             try:
-                ligand_mols, merged = prepare_ligands_for_gaff(
+                rewritten, merged = prepare_ligands_for_gaff(
                     merged,
                     ligand_keys,
                     smiles=req.ligand_smiles,
@@ -562,16 +554,23 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
                     templates_by_resn=cif_parents or None,
                     fmt=work_fmt,
                 )
-            except ValueError as exc:
-                raise RuntimeError(str(exc)) from exc
-            if ligand_during_min and not ligand_mols:
-                raise RuntimeError(
-                    "Include ligand in minimization could not build a ligand molecule "
-                    "from the repaired structure. Provide SMILES or an SDF/MOL2 if "
-                    "bond orders could not be assigned from mmCIF _chem_comp_bond."
-                )
+                if rewritten:
+                    ligand_mols = rewritten
+            except ValueError:
+                pass
         _write_text(finalized, merged)
         if run_min:
+            min_text = merged
+            if ligand_keys:
+                if work_cif:
+                    from ..structure_components import delete_cif_residues
+
+                    min_text = delete_cif_residues(merged, ligand_keys)
+                else:
+                    from ..structure_components import delete_pdb_residues
+
+                    min_text = delete_pdb_residues(merged, ligand_keys)
+            _write_text(finalized, min_text)
             _restrained_minimize_pdb(
                 finalized,
                 minimized,
@@ -580,29 +579,37 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
                 max_iterations=int(req.max_minimize_iterations),
                 keep_water=bool(keep_water),
                 remarks=remarks,
-                ligand_mols=ligand_mols,
                 chem_source=merged if work_cif else "",
                 protein_ff=protein_ff,
-                ligand_ff=ligand_ff,
                 solvent=solvent,
                 salt_m=float(req.salt_m),
                 restraint_set=restraint_set,
-                ligand_keys=ligand_keys if ligand_during_min else set(),
+                ligand_keys=set(),
             )
-            final_text = minimized.read_text(encoding="utf-8")
-            dest_names = residue_names_by_key(final_text, work_fmt)
-            ligand_keys = remap_residue_keys(orig_ligand_keys, orig_names, dest_names)
-            if ligand_keys and not keep_ligand_out:
-                if work_cif:
-                    from ..structure_components import delete_cif_residues
-
-                    final_text = delete_cif_residues(final_text, ligand_keys)
-                else:
-                    from ..structure_components import delete_pdb_residues
-
-                    final_text = delete_pdb_residues(final_text, ligand_keys)
+            protein_min = minimized.read_text(encoding="utf-8")
+            if keep_ligand_out and ligand_keys:
+                final_text = finalize_prepared_structure(
+                    protein_min,
+                    merged,
+                    ligand_keys=ligand_keys,
+                    keep_ligand=True,
+                    keep_water_keys=keep_water,
+                    fmt=work_fmt,
+                )
+            else:
+                final_text = protein_min
         else:
             final_text = merged
+        holo_text = merged if keep_ligand_in_merged else repaired_text
+        if ligand_keys and not keep_ligand_out and (run_min or keep_ligand_in_merged):
+            if work_cif:
+                from ..structure_components import delete_cif_residues
+
+                final_text = delete_cif_residues(final_text, ligand_keys)
+            else:
+                from ..structure_components import delete_pdb_residues
+
+                final_text = delete_pdb_residues(final_text, ligand_keys)
         chem_atoms, chem_bonds = _ligand_chem_tables(
             final_text,
             fmt=work_fmt,
@@ -622,10 +629,45 @@ def prepare_protein_structure(req: ProteinPrepareRequest) -> str:
             chem_bonds=chem_bonds,
             output_format=out_fmt,
         )
-    return str(out_file)
+        from .protein_prepare_smina import ProteinPrepareResult, write_smina_prepare_artifacts
+
+        result = ProteinPrepareResult(output_path=str(out_file))
+        if req.write_smina:
+            holo_names = residue_names_by_key(holo_text, work_fmt)
+            orig_box_keys = {_norm_key(*key) for key in req.box_ligand_keys}
+            remapped_box = (
+                remap_residue_keys(orig_box_keys, orig_names, holo_names)
+                if orig_box_keys
+                else set()
+            )
+            box_source = (req.box_source_text or "").strip() or input_text
+            box_source_fmt = (req.box_source_fmt or "").strip() or fmt
+            smina = write_smina_prepare_artifacts(
+                holo_text=holo_text,
+                fmt=work_fmt,
+                output_path=out_file,
+                ligand_keys=ligand_keys,
+                box_ligand_keys=remapped_box or None,
+                orig_box_ligand_keys=orig_box_keys or None,
+                ligand_mols=ligand_mols,
+                padding=float(req.box_padding),
+                box_ligand_path=(req.box_ligand_path or "").strip(),
+                source_text=box_source,
+                source_fmt=box_source_fmt,
+            )
+            result = ProteinPrepareResult(
+                output_path=str(out_file),
+                receptor_pdbqt=smina.receptor_pdbqt,
+                ligand_sdf=smina.ligand_sdf,
+                ligand_pdb=smina.ligand_pdb,
+                box_path=smina.box_path,
+                box=smina.box,
+                warning=smina.warning,
+            )
+    return result
 
 
-def mp_prepare_protein_structure(req: ProteinPrepareRequest) -> tuple[bool, str]:
+def mp_prepare_protein_structure(req: ProteinPrepareRequest) -> tuple[bool, object]:
     """Child-process entry: keep OpenMM/pdb2pqr out of the GUI process."""
     try:
         return True, prepare_protein_structure(req)

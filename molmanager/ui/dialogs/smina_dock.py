@@ -438,6 +438,33 @@ class SminaDockDialog(QDialog):
         ):
             sp.setEnabled(not auto)
 
+    def apply_prepare_result(self, result) -> None:
+        """Fill receptor, ligand, and numeric box from Protein Viewer Prepare."""
+        receptor = str(getattr(result, "receptor_pdbqt", "") or "").strip()
+        ligand = str(
+            getattr(result, "ligand_sdf", "") or getattr(result, "ligand_pdb", "") or ""
+        ).strip()
+        autobox = str(getattr(result, "ligand_pdb", "") or "").strip()
+        if receptor:
+            self.edit_receptor.setText(receptor)
+        if ligand:
+            self.edit_ligand.setText(ligand)
+            if not (self.edit_out.text() or "").strip():
+                lig_path = Path(ligand)
+                self.edit_out.setText(str(lig_path.with_name(f"{lig_path.stem}_docked.sdf")))
+        if autobox:
+            self.edit_autobox_ligand.setText(autobox)
+        box = getattr(result, "box", None)
+        if box is not None:
+            self.autobox_cb.setChecked(False)
+            self.spin_cx.setValue(float(box.center_x))
+            self.spin_cy.setValue(float(box.center_y))
+            self.spin_cz.setValue(float(box.center_z))
+            self.spin_sx.setValue(float(box.size_x))
+            self.spin_sy.setValue(float(box.size_y))
+            self.spin_sz.setValue(float(box.size_z))
+        self._sync_autobox()
+
     def _autobox_ligand_path(self, dock_ligand: str) -> str:
         text = (self.edit_autobox_ligand.text() or "").strip()
         return text or dock_ligand

@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Ligand bond orders, Uni-pKa protomers, and hydrogens for Prepare/GAFF2."""
+"""Ligand bond orders, Uni-pKa protomers, and hydrogens for Protein Prepare."""
 
 from __future__ import annotations
 

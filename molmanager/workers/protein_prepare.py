@@ -33,6 +33,7 @@ from .protein_prepare_runtime import (
     mp_prepare_protein_structure,
     prepare_protein_structure,
 )
+from .protein_prepare_smina import ProteinPrepareResult
 
 _OPENMM_VERSION_HINT = (
     "Prepare subprocess crashed. On Windows this is often caused by OpenMM 8.3+ "
@@ -42,7 +43,7 @@ _OPENMM_VERSION_HINT = (
 
 
 class ProteinPrepareSignals(QObject):
-    finished = pyqtSignal(str)
+    finished = pyqtSignal(object)
     failed = pyqtSignal(str)
 
 
@@ -106,6 +107,7 @@ class ProteinPrepareWorker(QRunnable):
 
 __all__ = [
     "ProteinPrepareRequest",
+    "ProteinPrepareResult",
     "ProteinPrepareSignals",
     "ProteinPrepareWorker",
     "prepare_protein_structure",

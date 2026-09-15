@@ -281,3 +281,37 @@ def test_smina_present_dock_results_opens_table(qapp, tmp_path):  # noqa: ARG001
     assert mols[0].GetProp("mode") == "1"
     assert mols[0].GetProp("rmsd_lb") == "0.000"
     dlg.close()
+
+
+def test_apply_prepare_result_fills_numeric_box(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.docking_box import DockingBox
+    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+
+    rec = tmp_path / "rec_receptor.pdbqt"
+    lig = tmp_path / "rec_ligand.sdf"
+    lig_pdb = tmp_path / "rec_ligand.pdb"
+    rec.write_text("ATOM\n", encoding="utf-8")
+    lig.write_text("lig\n", encoding="utf-8")
+    lig_pdb.write_text("HETATM\n", encoding="utf-8")
+    box = DockingBox(1.5, -2.0, 3.25, 22.0, 18.0, 20.0, padding=4.0)
+    result = ProteinPrepareResult(
+        output_path=str(tmp_path / "rec.cif"),
+        receptor_pdbqt=str(rec),
+        ligand_sdf=str(lig),
+        ligand_pdb=str(lig_pdb),
+        box_path=str(tmp_path / "rec_box.txt"),
+        box=box,
+    )
+    dlg = SminaDockDialog(None)
+    dlg.apply_prepare_result(result)
+    assert dlg.edit_receptor.text() == str(rec)
+    assert dlg.edit_ligand.text() == str(lig)
+    assert dlg.edit_autobox_ligand.text() == str(lig_pdb)
+    assert dlg.autobox_cb.isChecked() is False
+    assert dlg.spin_cx.value() == 1.5
+    assert dlg.spin_sx.value() == 22.0
+    assert dlg.edit_out.text().endswith("rec_ligand_docked.sdf")
+    argv = dlg._build_argv()
+    assert argv[argv.index("--center_x") + 1] == "1.500"
+    assert argv[argv.index("--size_x") + 1] == "22.00"
+    dlg.close()

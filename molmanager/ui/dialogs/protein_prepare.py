@@ -23,6 +23,7 @@ from pathlib import Path
 
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -36,6 +37,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QRadioButton,
     QScrollArea,
     QSpinBox,
     QTextEdit,
@@ -71,6 +73,7 @@ class ProteinPrepareDialog(QDialog):
     """Options and log for Protein Viewer → Prepare."""
 
     prepared = pyqtSignal(str)
+    smina_prepared = pyqtSignal(object)
 
     def __init__(self, viewer, parent=None) -> None:
         super().__init__(parent or viewer)
@@ -85,10 +88,12 @@ class ProteinPrepareDialog(QDialog):
 
         intro = QLabel(
             "Repair missing residues and side chains (PDBFixer), protonate at pH with "
-            "pdb2pqr/PROPKA, then restrained OpenMM minimization. Defaults: AMBER ff14SB, "
-            "GAFF2 ligand, GBn2 implicit solvent, backbone restraints. Highest-occupancy "
-            "altlocs are kept. Pocket HIS/ASP/GLU states and Cα/pocket RMSD are written "
-            "into the output remarks."
+            "pdb2pqr/PROPKA, then optional restrained OpenMM minimization of the protein "
+            "(AMBER; the ligand is restored after min). Writes a Smina-ready apo receptor "
+            "PDBQT, crystal ligand, and search box from a ligand in the loaded structure "
+            "or a separate ligand file (4 Å padding by default). Highest-occupancy altlocs "
+            "are kept. Pocket HIS/ASP/GLU states "
+            "and Cα RMSD are written into the output remarks."
         )
         intro.setWordWrap(True)
         root.addWidget(intro)
@@ -240,8 +245,9 @@ class ProteinPrepareDialog(QDialog):
         self.chk_minimize = QCheckBox("Restrained minimization")
         self.chk_minimize.setChecked(False)
         self.chk_minimize.setToolTip(
-            "Harmonic restraints on experimental atoms so rebuilt loops, hydrogens, "
-            "and the ligand can relieve clashes without the fold drifting."
+            "Harmonic restraints on experimental protein atoms so rebuilt loops and "
+            "hydrogens can relieve clashes without the fold drifting. The ligand is "
+            "held out of the OpenMM system and restored afterward."
         )
         min_form.addRow(self.chk_minimize)
 
@@ -250,14 +256,6 @@ class ProteinPrepareDialog(QDialog):
         self.combo_protein_ff.addItem("AMBER ff99SB-ILDN", "amber99sbildn")
         self.combo_protein_ff.setToolTip("Protein force field for OpenMM minimization.")
         min_form.addRow("Protein force field:", self.combo_protein_ff)
-
-        self.combo_ligand_ff = QComboBox()
-        self.combo_ligand_ff.addItem("GAFF2", "gaff2")
-        self.combo_ligand_ff.addItem("OpenFF Sage", "openff-2.2.0")
-        self.combo_ligand_ff.setToolTip(
-            "Small-molecule force field paired with AMBER. Sage needs OpenFF Toolkit."
-        )
-        min_form.addRow("Ligand force field:", self.combo_ligand_ff)
 
         self.combo_solvent = QComboBox()
         self.combo_solvent.addItem("GBn2 GBSA (recommended)", "gbn2")
@@ -281,10 +279,9 @@ class ProteinPrepareDialog(QDialog):
         self.combo_restraint = QComboBox()
         self.combo_restraint.addItem("Backbone heavy atoms", "backbone")
         self.combo_restraint.addItem("Cα only", "ca")
-        self.combo_restraint.addItem("Backbone + ligand heavy atoms", "backbone_ligand")
         self.combo_restraint.setToolTip(
             "Backbone restraints keep the fold and pocket orientation. Cα-only lets "
-            "side chains move more. Ligand heavy-atom restraints reduce ligand drift."
+            "side chains move more."
         )
         min_form.addRow("Restrain:", self.combo_restraint)
 
@@ -302,6 +299,68 @@ class ProteinPrepareDialog(QDialog):
         self.spin_iters.setValue(400)
         min_form.addRow("Max iterations:", self.spin_iters)
         host_l.addWidget(min_gb)
+
+        smina_gb = QGroupBox("Smina docking")
+        smina_form = QFormLayout(smina_gb)
+        smina_form.setContentsMargins(8, 6, 8, 6)
+        smina_form.setSpacing(4)
+        self.chk_write_smina = QCheckBox("Write Smina files (receptor PDBQT, ligand, box)")
+        self.chk_write_smina.setChecked(True)
+        self.chk_write_smina.setToolTip(
+            "After chemistry prep, write an apo receptor PDBQT (Meeko), a crystal "
+            "ligand PDB/SDF, and a Vina/Smina box file from the ligand bounding box."
+        )
+        smina_form.addRow(self.chk_write_smina)
+        self.radio_box_loaded = QRadioButton("Loaded structure")
+        self.radio_box_loaded.setToolTip(
+            "Build the search box from a ligand already in the Protein Viewer "
+            "(the structure being prepared, or another loaded file in the same frame)."
+        )
+        self.radio_box_file = QRadioButton("Ligand file…")
+        self.radio_box_file.setToolTip(
+            "Build the search box from a separate PDB, SDF, MOL2, or PDBQT. Use this "
+            "when the ligand is not in the structure being prepared."
+        )
+        self.radio_box_loaded.setChecked(True)
+        box_src_group = QButtonGroup(self)
+        box_src_group.addButton(self.radio_box_loaded)
+        box_src_group.addButton(self.radio_box_file)
+        box_src_row = QWidget()
+        box_src_l = QHBoxLayout(box_src_row)
+        box_src_l.setContentsMargins(0, 0, 0, 0)
+        box_src_l.setSpacing(12)
+        box_src_l.addWidget(self.radio_box_loaded)
+        box_src_l.addWidget(self.radio_box_file)
+        box_src_l.addStretch()
+        smina_form.addRow("Box from:", box_src_row)
+        self.combo_box_ligand = QComboBox()
+        self.combo_box_ligand.setToolTip(
+            "Ligand whose coordinates define the search box. Defaults to the Manager "
+            "selection, or the largest ligand among loaded structures."
+        )
+        smina_form.addRow("Ligand in structure:", self.combo_box_ligand)
+        self.edit_box_ligand = QLineEdit()
+        self.edit_box_ligand.setPlaceholderText("PDB, SDF, MOL2, or PDBQT")
+        self.edit_box_ligand.setToolTip(
+            "Coordinates must be in the same frame as the receptor. Crystal ligand "
+            "or a reference pose both work."
+        )
+        self.box_ligand_file_row = _browse_path_row(self.edit_box_ligand, self._browse_box_ligand)
+        smina_form.addRow("Ligand file:", self.box_ligand_file_row)
+        self.spin_box_padding = QDoubleSpinBox()
+        self.spin_box_padding.setRange(0.0, 20.0)
+        self.spin_box_padding.setDecimals(1)
+        self.spin_box_padding.setSingleStep(0.5)
+        self.spin_box_padding.setValue(4.0)
+        self.spin_box_padding.setSuffix(" Å")
+        self.spin_box_padding.setToolTip(
+            "Padding added on each side of the ligand bounding box (Smina --autobox_add)."
+        )
+        smina_form.addRow("Box padding:", self.spin_box_padding)
+        self.lbl_box_preview = QLabel("Box: —")
+        self.lbl_box_preview.setWordWrap(True)
+        smina_form.addRow(self.lbl_box_preview)
+        host_l.addWidget(smina_gb)
         host_l.addStretch()
         scroll.setWidget(host)
         root.addWidget(scroll, 1)
@@ -311,8 +370,12 @@ class ProteinPrepareDialog(QDialog):
         self.chk_minimize.toggled.connect(self._sync_min_options)
         self.combo_solvent.currentIndexChanged.connect(self._sync_min_options)
         self.chk_rebuild_loops.toggled.connect(self._sync_min_options)
+        self.chk_write_smina.toggled.connect(self._sync_smina_options)
+        self.radio_box_loaded.toggled.connect(self._sync_smina_options)
+        self.radio_box_file.toggled.connect(self._sync_smina_options)
         self._sync_ligand_options()
         self._sync_min_options()
+        self._sync_smina_options()
 
         self.log = QTextEdit()
         self.log.setReadOnly(True)
@@ -325,6 +388,13 @@ class ProteinPrepareDialog(QDialog):
         self.btn_run = QPushButton("Prepare")
         self.btn_run.clicked.connect(self._on_run)
         btn_row.addWidget(self.btn_run)
+        self.btn_open_smina = QPushButton("Open Smina…")
+        self.btn_open_smina.setEnabled(False)
+        self.btn_open_smina.setToolTip(
+            "Open Tools → Dock → Smina with the prepared receptor, ligand, and box filled in."
+        )
+        self.btn_open_smina.clicked.connect(self._on_open_smina)
+        btn_row.addWidget(self.btn_open_smina)
         btn_row.addStretch()
         self.btn_close = QPushButton("Close")
         self.btn_close.clicked.connect(self.close)
@@ -335,6 +405,7 @@ class ProteinPrepareDialog(QDialog):
         self._signals.finished.connect(self._on_finished)
         self._signals.failed.connect(self._on_failed)
         self._input_tmp: Path | None = None
+        self._smina_result = None
 
         make_window_minimizable(self)
 
@@ -346,6 +417,7 @@ class ProteinPrepareDialog(QDialog):
             suggested = path.with_name(f"{path.stem}_prepared.cif")
             self.edit_out.setText(str(suggested))
         self._refresh_water_label()
+        self._refresh_box_ligand_combo()
 
     def _refresh_water_label(self) -> None:
         keys = self._viewer.prepare_water_keys()
@@ -392,7 +464,6 @@ class ProteinPrepareDialog(QDialog):
             self.chk_pocket_ligand.blockSignals(True)
             self.chk_pocket_ligand.setChecked(False)
             self.chk_pocket_ligand.blockSignals(False)
-        self.combo_ligand_ff.setEnabled(include)
         self.chk_keep_bridging_waters.setEnabled(include)
         if not include:
             self.chk_keep_bridging_waters.setChecked(False)
@@ -401,7 +472,6 @@ class ProteinPrepareDialog(QDialog):
     def _sync_min_options(self) -> None:
         on = self.chk_minimize.isChecked()
         self.combo_protein_ff.setEnabled(on)
-        self.combo_ligand_ff.setEnabled(on and self.chk_include_ligand.isChecked())
         self.combo_solvent.setEnabled(on)
         gb = (self.combo_solvent.currentData() or "gbn2") != "vacuum"
         self.spin_salt.setEnabled(on and gb)
@@ -412,6 +482,72 @@ class ProteinPrepareDialog(QDialog):
         self.chk_skip_pocket_loops.setEnabled(loops)
         if not loops:
             self.chk_skip_pocket_loops.setChecked(False)
+
+    def _sync_smina_options(self) -> None:
+        on = self.chk_write_smina.isChecked()
+        loaded = self.radio_box_loaded.isChecked()
+        self.radio_box_loaded.setEnabled(on)
+        self.radio_box_file.setEnabled(on)
+        self.combo_box_ligand.setEnabled(on and loaded and self.combo_box_ligand.count() > 0)
+        self.box_ligand_file_row.setEnabled(on and not loaded)
+        self.spin_box_padding.setEnabled(on)
+
+    def _refresh_box_ligand_combo(self) -> None:
+        self.combo_box_ligand.clear()
+        options = []
+        getter = getattr(self._viewer, "prepare_ligand_options", None)
+        if callable(getter):
+            options = list(getter() or [])
+        selected_index = 0
+        for i, item in enumerate(options):
+            label, key, selected = item[0], item[1], item[2]
+            sid = item[3] if len(item) > 3 else ""
+            self.combo_box_ligand.addItem(label, {"key": key, "structure_id": sid})
+            if selected:
+                selected_index = i
+        if options:
+            self.combo_box_ligand.setCurrentIndex(selected_index)
+        self._sync_smina_options()
+
+    def _box_ligand_choice(self) -> tuple[tuple[str, str, str] | None, str]:
+        data = self.combo_box_ligand.currentData()
+        if isinstance(data, dict):
+            key = data.get("key")
+            sid = str(data.get("structure_id") or "")
+            if isinstance(key, (tuple, list)) and len(key) >= 3:
+                return (str(key[0]), str(key[1]), str(key[2])), sid
+            return None, sid
+        if isinstance(data, (tuple, list)) and len(data) >= 3:
+            return (str(data[0]), str(data[1]), str(data[2])), ""
+        return None, ""
+
+    def _box_ligand_keys(self) -> tuple[tuple[str, str, str], ...]:
+        if not self.chk_write_smina.isChecked() or not self.radio_box_loaded.isChecked():
+            return ()
+        key, _sid = self._box_ligand_choice()
+        if not key:
+            return ()
+        return (key,)
+
+    def _box_ligand_path(self) -> str:
+        if not self.chk_write_smina.isChecked() or not self.radio_box_file.isChecked():
+            return ""
+        return (self.edit_box_ligand.text() or "").strip()
+
+    def _box_source_payload(self) -> tuple[str, str]:
+        if not self.chk_write_smina.isChecked() or not self.radio_box_loaded.isChecked():
+            return "", ""
+        _key, sid = self._box_ligand_choice()
+        if not sid:
+            return "", ""
+        getter = getattr(self._viewer, "prepare_slot_payload", None)
+        source_id = getattr(self._viewer, "prepare_source_id", None)
+        if callable(source_id) and sid == source_id():
+            return "", ""
+        if callable(getter):
+            text, fmt = getter(sid)
+            return text or "", fmt or "pdb"
+        return "", ""
 
     def _sync_output_suffix(self) -> None:
         path = (self.edit_out.text() or "").strip()
@@ -434,6 +570,17 @@ class ProteinPrepareDialog(QDialog):
         )
         if path:
             self.edit_ligand_ref.setText(path)
+
+    def _browse_box_ligand(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Ligand for docking box",
+            self.edit_box_ligand.text().strip(),
+            "Ligand files (*.pdb *.pdbqt *.sdf *.sd *.mol *.mol2 *.cif);;All files (*.*)",
+        )
+        if path:
+            self.edit_box_ligand.setText(path)
+            self.radio_box_file.setChecked(True)
 
     def _browse_output(self) -> None:
         fmt = self.combo_out_fmt.currentData() or "cif"
@@ -533,12 +680,30 @@ class ProteinPrepareDialog(QDialog):
                 "Protonate ligand (Uni-pKa).",
             )
             return
+        if self.chk_write_smina.isChecked() and self.radio_box_file.isChecked():
+            lig_file = self._box_ligand_path()
+            if not lig_file:
+                QMessageBox.information(
+                    self,
+                    "Prepare Structure",
+                    "Choose a ligand file for the docking box, or switch Box from "
+                    "to Loaded structure.",
+                )
+                return
+            if not Path(lig_file).expanduser().is_file():
+                QMessageBox.warning(
+                    self,
+                    "Prepare Structure",
+                    f"Ligand file not found:\n{lig_file}",
+                )
+                return
         try:
             in_path = self._write_input_snapshot()
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "Prepare Structure", str(exc))
             return
 
+        box_source_text, box_source_fmt = self._box_source_payload()
         req = ProteinPrepareRequest(
             input_path=str(in_path),
             output_pdb_path=out_path,
@@ -557,14 +722,22 @@ class ProteinPrepareDialog(QDialog):
             restraint_k_kcal_per_ang2=float(self.spin_k.value()),
             max_minimize_iterations=int(self.spin_iters.value()),
             protein_ff=self.combo_protein_ff.currentData() or "amber14",
-            ligand_ff=self.combo_ligand_ff.currentData() or "gaff2",
             solvent=self.combo_solvent.currentData() or "gbn2",
             salt_m=float(self.spin_salt.value()),
             restraint_set=self.combo_restraint.currentData() or "backbone",
             skip_pocket_loops=self.chk_skip_pocket_loops.isChecked(),
             output_format=out_fmt,
+            write_smina=self.chk_write_smina.isChecked(),
+            box_padding=float(self.spin_box_padding.value()),
+            box_ligand_keys=self._box_ligand_keys(),
+            box_ligand_path=self._box_ligand_path(),
+            box_source_text=box_source_text,
+            box_source_fmt=box_source_fmt,
         )
         self.btn_run.setEnabled(False)
+        self.btn_open_smina.setEnabled(False)
+        self._smina_result = None
+        self.lbl_box_preview.setText("Box: —")
         self._append_log("Starting Prepare (PDBFixer → Uni-pKa/pdb2pqr → OpenMM)…")
         host = self._process_host()
         if host is not None:
@@ -579,10 +752,65 @@ class ProteinPrepareDialog(QDialog):
 
         QThreadPool.globalInstance().start(ProteinPrepareWorker(req, signals=self._signals))
 
-    def _on_finished(self, output_pdb: str) -> None:
+    def _on_finished(self, result) -> None:
+        from ...workers.protein_prepare_smina import ProteinPrepareResult
+
         self.btn_run.setEnabled(True)
-        self._append_log(f"Prepared file written: {output_pdb}")
-        self.prepared.emit(output_pdb)
+        if isinstance(result, str):
+            path = result
+            smina = None
+        elif isinstance(result, ProteinPrepareResult):
+            path = result.output_path
+            smina = result
+        else:
+            path = str(getattr(result, "output_path", "") or result)
+            smina = result if getattr(result, "output_path", None) else None
+        self._append_log(f"Prepared file written: {path}")
+        if smina is not None:
+            if smina.receptor_pdbqt:
+                self._append_log(f"Receptor PDBQT: {smina.receptor_pdbqt}")
+            if smina.ligand_sdf:
+                self._append_log(f"Ligand SDF: {smina.ligand_sdf}")
+            if smina.ligand_pdb:
+                self._append_log(f"Autobox ligand: {smina.ligand_pdb}")
+            if smina.box_path:
+                self._append_log(f"Search box: {smina.box_path}")
+            if smina.box is not None:
+                box = smina.box
+                self.lbl_box_preview.setText(
+                    f"Box: center ({box.center_x:.2f}, {box.center_y:.2f}, {box.center_z:.2f})  "
+                    f"size ({box.size_x:.1f}, {box.size_y:.1f}, {box.size_z:.1f}) Å"
+                )
+            if smina.warning:
+                self._append_log(smina.warning)
+            self._smina_result = smina
+            can_smina = bool(smina.receptor_pdbqt)
+            self.btn_open_smina.setEnabled(can_smina)
+            self.smina_prepared.emit(smina)
+        self.prepared.emit(path)
+
+    def _on_open_smina(self) -> None:
+        result = self._smina_result
+        if result is None or not getattr(result, "receptor_pdbqt", ""):
+            QMessageBox.information(
+                self,
+                "Prepare Structure",
+                "Prepare with Write Smina files checked first.",
+            )
+            return
+        host = self._process_host()
+        opener = getattr(host, "open_smina_dock", None) if host is not None else None
+        if not callable(opener):
+            QMessageBox.information(
+                self,
+                "Prepare Structure",
+                "Open Smina from Tools → Dock → Smina… and browse to the written files.",
+            )
+            return
+        dlg = opener()
+        apply = getattr(dlg, "apply_prepare_result", None)
+        if callable(apply):
+            apply(result)
 
     def _on_failed(self, msg: str) -> None:
         self.btn_run.setEnabled(True)

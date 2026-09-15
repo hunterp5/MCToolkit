@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""OpenMM restrained minimization and ligand force-field helpers."""
+"""OpenMM restrained protein minimization for Protein Prepare."""
 
 from __future__ import annotations
 
@@ -25,8 +25,6 @@ from .protein_prepare_constants import (
     _GB_SALT_M,
     _GB_SOLVENT_DIELECTRIC,
     _GB_TEMPERATURE_K,
-    _LIGAND_FF_GAFF2,
-    _LIGAND_FF_OPENFF,
     _PROTEIN_FF_AMBER14,
     _PROTEIN_FF_AMBER99,
     _RESTRAINT_BACKBONE,
@@ -64,13 +62,6 @@ def _normalize_protein_ff(name: str) -> str:
     if raw in {_PROTEIN_FF_AMBER99, "amber99", "ff99sbildn"}:
         return _PROTEIN_FF_AMBER99
     return _PROTEIN_FF_AMBER14
-
-
-def _normalize_ligand_ff(name: str) -> str:
-    raw = (name or _LIGAND_FF_GAFF2).strip().lower()
-    if raw in {_LIGAND_FF_OPENFF, "sage", "openff", "openff-2.1.0", "openff-2.0.0"}:
-        return _LIGAND_FF_OPENFF
-    return _LIGAND_FF_GAFF2
 
 
 def _normalize_solvent(name: str) -> str:
@@ -149,30 +140,6 @@ def _solvent_label(
     return model
 
 
-def _assign_ligand_charges(molecule) -> str:
-    last_exc: Exception | None = None
-    for method in ("am1bcc", "gasteiger", "mmff94"):
-        try:
-            molecule.assign_partial_charges(method)
-            return method
-        except Exception as exc:
-            last_exc = exc
-    raise RuntimeError(
-        "Could not assign partial charges for GAFF2. "
-        f"{last_exc} Install AmberTools for AM1-BCC, or provide a simpler ligand."
-    ) from last_exc
-
-
-def _ligand_ff_names(ligand_ff: str) -> tuple[str, ...]:
-    if _normalize_ligand_ff(ligand_ff) == _LIGAND_FF_OPENFF:
-        return ("openff-2.2.0", "openff-2.1.0", "openff-2.0.0")
-    return ("gaff-2.11", "gaff-2.2.1")
-
-
-def _ligand_ff_tag(ligand_ff: str) -> str:
-    return "OPENFF-SAGE" if _normalize_ligand_ff(ligand_ff) == _LIGAND_FF_OPENFF else "GAFF2"
-
-
 def _ff_attempts(
     *, keep_water: bool, solvent: str, protein_ff: str
 ) -> list[tuple[tuple[str, ...], bool, bool]]:
@@ -187,69 +154,6 @@ def _ff_attempts(
     ):
         attempts.append((xmls, False, False))
     return attempts
-
-
-def _gaff2_system(
-    pdb,
-    rdkit_ligands: list,
-    *,
-    keep_water: bool,
-    protein_ff: str = _PROTEIN_FF_AMBER14,
-    ligand_ff: str = _LIGAND_FF_GAFF2,
-    solvent: str = _SOLVENT_GBN2,
-    salt_m: float = _GB_SALT_M,
-) -> tuple[object, str]:
-    """Build an OpenMM System with protein FF, small-molecule FF, and optional GBSA."""
-    try:
-        from openmm.app import HBonds, NoCutoff
-        from openmmforcefields.generators import SystemGenerator
-        from openff.toolkit import Molecule
-    except Exception as exc:
-        raise RuntimeError(
-            "Ligand minimization requires openmmforcefields and OpenFF Toolkit. "
-            "OpenFF is not installable from PyPI (the only upload was yanked). "
-            "On Linux, macOS, or WSL: conda install -c conda-forge openff-toolkit. "
-            "Native Windows is not supported by OpenFF — uncheck Include ligand in "
-            "PROPKA protonation to minimize with AMBER only, or skip minimization."
-        ) from exc
-
-    molecules = []
-    for mol in rdkit_ligands:
-        off = Molecule.from_rdkit(mol, allow_undefined_stereo=True)
-        if mol.HasProp("_Name"):
-            off.name = mol.GetProp("_Name")
-        _assign_ligand_charges(off)
-        molecules.append(off)
-
-    last_exc: Exception | None = None
-    for xmls, gbsa, with_salt in _ff_attempts(
-        keep_water=keep_water, solvent=solvent, protein_ff=protein_ff
-    ):
-        for ff_name in _ligand_ff_names(ligand_ff):
-            try:
-                ff_kwargs = {"constraints": HBonds, "rigidWater": True}
-                if gbsa and with_salt:
-                    ff_kwargs["implicitSolventKappa"] = _gb_kappa_per_nm(salt_m=salt_m)
-                generator = SystemGenerator(
-                    forcefields=list(xmls),
-                    small_molecule_forcefield=ff_name,
-                    molecules=molecules,
-                    forcefield_kwargs=ff_kwargs,
-                    nonperiodic_forcefield_kwargs={"nonbondedMethod": NoCutoff},
-                )
-                system = generator.create_system(pdb.topology)
-                return system, _solvent_label(
-                    xmls, used_gb=gbsa, used_salt=with_salt, salt_m=salt_m
-                )
-            except TypeError as exc:
-                last_exc = exc
-                continue
-            except Exception as exc:
-                last_exc = exc
-    raise RuntimeError(
-        "OpenMM could not parameterize the ligand with the chosen small-molecule force field. "
-        f"{last_exc} Provide ligand SMILES or an SDF/MOL2 with correct bond orders."
-    ) from last_exc
 
 
 def _protein_only_system(
@@ -345,10 +249,8 @@ def _restrained_minimize_pdb(
     max_iterations: int,
     keep_water: bool,
     remarks: list[str],
-    ligand_mols: list | None = None,
     chem_source: str = "",
     protein_ff: str = _PROTEIN_FF_AMBER14,
-    ligand_ff: str = _LIGAND_FF_GAFF2,
     solvent: str = _SOLVENT_GBN2,
     salt_m: float = _GB_SALT_M,
     restraint_set: str = _RESTRAINT_BACKBONE,
@@ -362,29 +264,16 @@ def _restrained_minimize_pdb(
 
     pdb = _open_openmm_structure(input_pdb)
     protein_ff = _normalize_protein_ff(protein_ff)
-    ligand_ff = _normalize_ligand_ff(ligand_ff)
     restraint_set = _normalize_restraint_set(restraint_set)
     ligand_keys = ligand_keys or set()
-    if ligand_mols:
-        system, solvent_lbl = _gaff2_system(
-            pdb,
-            ligand_mols,
-            keep_water=keep_water,
-            protein_ff=protein_ff,
-            ligand_ff=ligand_ff,
-            solvent=solvent,
-            salt_m=salt_m,
-        )
-        min_tag = f"{protein_ff.upper()} {_ligand_ff_tag(ligand_ff)} {solvent_lbl}"
-    else:
-        system, solvent_lbl = _protein_only_system(
-            pdb,
-            keep_water=keep_water,
-            protein_ff=protein_ff,
-            solvent=solvent,
-            salt_m=salt_m,
-        )
-        min_tag = f"{protein_ff.upper()} {solvent_lbl}"
+    system, solvent_lbl = _protein_only_system(
+        pdb,
+        keep_water=keep_water,
+        protein_ff=protein_ff,
+        solvent=solvent,
+        salt_m=salt_m,
+    )
+    min_tag = f"{protein_ff.upper()} {solvent_lbl}"
     scheme_tag = {
         _RESTRAINT_CA: "CA-RESTRAINED",
         _RESTRAINT_BACKBONE_LIGAND: "BACKBONE+LIGAND-RESTRAINED",

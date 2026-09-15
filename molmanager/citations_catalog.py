@@ -478,33 +478,6 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 homepage="https://pdb2pqr.readthedocs.io/",
                 notes="PROPKA assigns protein titration states at the chosen pH. Ligand ionization is Uni-pKa, not PROPKA.",
             ),
-            _t(
-                "gaff2",
-                "GAFF2",
-                "Protein Viewer Prepare: organic ligand parameters for OpenMM restrained minimization.",
-                (
-                    (
-                        "Wang, J.; Wolf, R. M.; Caldwell, J. W.; Kollman, P. A.; Case, D. A. "
-                        "Development and testing of a general amber force field. "
-                        "J. Comput. Chem. 2004, 25, 1157–1174.",
-                        "https://doi.org/10.1002/jcc.20035",
-                    ),
-                    (
-                        "He, X.; Man, V. H.; Yang, W.; Lee, T.-S.; Wang, J. A fast and high-quality "
-                        "charge model for the next generation general AMBER force field. "
-                        "J. Chem. Phys. 2020, 153, 114502.",
-                        "https://doi.org/10.1063/5.0019056",
-                    ),
-                ),
-                LIC_GPL2,
-                homepage="https://ambermd.org/antechamber/gaff.html",
-                notes=(
-                    "Applied via OpenMM Force Fields (openmmforcefields) GAFF2 templates. "
-                    "Ligand bond orders come from optional SMILES/SDF/MOL2, mmCIF "
-                    "_chem_comp_bond, or RDKit geometry. "
-                    "OpenFF Toolkit is conda-forge only (not PyPI)."
-                ),
-            ),
         ),
     ),
     CitationSection(
@@ -625,7 +598,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "pubchem",
                 "PubChem / PubChemPy",
-                "External → Query PubChem.",
+                "External → Query PubChem; Calculate Descriptors → Name (Common Name, Synonyms).",
                 (
                     (
                         "Kim, S.; et al. PubChem 2023 update. Nucleic Acids Res. 2023, 51, D1373–D1380.",

@@ -247,12 +247,14 @@ def _viewer_protein_init_script() -> str:
           try { v.removeAllSurfaces(); } catch (eS) {}
           try { v.removeAllLabels(); } catch (eL) {}
           try { v.setStyle({}, {}); } catch (eH) {}
+          try { v.removeAllShapes(); } catch (eSh) {}
           var comps = window.molmanagerComponents || [];
           for (var i = 0; i < comps.length; i++) applyOneStyle(v, comps[i]);
           applyResidueHighlight(v);
           applyHydrogenVisibility(v);
           applyPocketOverlay(v);
           applyHydrogenBonds(v);
+          applyDockingBox(v);
         }
         function isHydrogenAtom(at) {
           var e = String((at && at.elem) || "").toUpperCase();
@@ -393,7 +395,6 @@ def _viewer_protein_init_script() -> str:
         function applyHydrogenBonds(v) {
           v = v || window.molmanagerViewer;
           if (!v) return;
-          try { v.removeAllShapes(); } catch (eSh) {}
           var spec = window.molmanagerHbonds;
           if (!spec || !spec.active || !spec.bonds || !spec.bonds.length) return;
           for (var i = 0; i < spec.bonds.length; i++) {
@@ -424,6 +425,42 @@ def _viewer_protein_init_script() -> str:
               } catch (eLn) {}
             }
           }
+        }
+        function applyDockingBox(v) {
+          v = v || window.molmanagerViewer;
+          if (!v) return;
+          var box = window.molmanagerDockingBox;
+          if (!box || !box.active) return;
+          var color = box.color || "#3D8BFF";
+          var edges = box.edges || [];
+          for (var i = 0; i < edges.length; i++) {
+            var e = edges[i] || {};
+            var start = e.start || {};
+            var end = e.end || {};
+            try {
+              v.addLine({
+                start: {x: start.x, y: start.y, z: start.z},
+                end: {x: end.x, y: end.y, z: end.z},
+                color: color,
+                linewidth: 2
+              });
+            } catch (eLn) {}
+          }
+          var c = box.center || {};
+          var s = box.size || {};
+          if (c.x == null || s.x == null) return;
+          try {
+            v.addBox({
+              corner: {
+                x: c.x - s.x * 0.5,
+                y: c.y - s.y * 0.5,
+                z: c.z - s.z * 0.5
+              },
+              dimensions: {w: s.x, h: s.y, d: s.z},
+              color: color,
+              opacity: 0.12
+            });
+          } catch (eBox) {}
         }
         function bindPicking(v) {
           try {
@@ -462,6 +499,7 @@ def _viewer_protein_init_script() -> str:
         window.molmanagerPocketHModel = null;
         window.molmanagerHydrogens = "polar";
         window.molmanagerHbonds = null;
+        window.molmanagerDockingBox = null;
         installResetStructureMenu();
         connectBridge();
         bindPicking(viewer);
@@ -476,6 +514,7 @@ def _viewer_protein_init_script() -> str:
           }
           window.molmanagerPocket = payload.pocket || null;
           window.molmanagerHbonds = payload.hbonds || null;
+          window.molmanagerDockingBox = payload.dockingBox || null;
           if (payload.hydrogens) {
             window.molmanagerHydrogens = payload.hydrogens === "all" ? "all" : "polar";
           }
@@ -563,6 +602,12 @@ def _viewer_protein_init_script() -> str:
         };
         window.molmanagerSetHbonds = function (spec) {
           window.molmanagerHbonds = spec || null;
+          if (!window.molmanagerViewer) return;
+          applyAll(window.molmanagerViewer);
+          keepViewResize(window.molmanagerViewer);
+        };
+        window.molmanagerSetDockingBox = function (box) {
+          window.molmanagerDockingBox = box || null;
           if (!window.molmanagerViewer) return;
           applyAll(window.molmanagerViewer);
           keepViewResize(window.molmanagerViewer);
