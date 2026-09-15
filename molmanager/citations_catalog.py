@@ -24,6 +24,7 @@ from dataclasses import dataclass
 LIC_GPL3 = ("GNU GPL v3", "https://www.gnu.org/licenses/gpl-3.0.html")
 LIC_GPL2 = ("GNU GPL v2", "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html")
 LIC_LGPL21 = ("GNU LGPL v2.1", "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html")
+LIC_LGPL3 = ("GNU LGPL v3", "https://www.gnu.org/licenses/lgpl-3.0.html")
 LIC_APACHE2 = ("Apache License 2.0", "https://www.apache.org/licenses/LICENSE-2.0")
 LIC_BSD3 = ("BSD 3-Clause", "https://opensource.org/license/bsd-3-clause")
 LIC_MIT = ("MIT License", "https://opensource.org/license/mit")
@@ -232,6 +233,27 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     "Pre-trained MetaQSAR models are free for non-commercial research. "
                     "Commercial use requires a license from the University of Milan. "
                     "Confirm current terms with the FAME3R authors before commercial deployment."
+                ),
+            ),
+            _t(
+                "biotransformer",
+                "BioTransformer",
+                "Predict Metabolites via a local BioTransformer 3 JAR (CYP450, Phase II, gut, allHuman).",
+                (
+                    (
+                        "Djoumbou Feunang, Y.; et al. BioTransformer: A Comprehensive Computational "
+                        "Tool for Small Molecule Metabolism Prediction and Metabolite Identification. "
+                        "J. Cheminform. 2019, 11, 2.",
+                        "https://doi.org/10.1186/s13321-018-0324-5",
+                    ),
+                ),
+                LIC_LGPL3,
+                homepage="https://biotransformer.ca",
+                notes=(
+                    "GNU LGPL v3. Place the JAR plus database/ and supportfiles/ next to it "
+                    "(or set MOLMANAGER_BIOTRANSFORMER_JAR). Commercial redistribution of "
+                    "BioTransformer resources requires permission from the authors. Java must "
+                    "be on PATH. Environmental microbial predictions are not offered in MolManager."
                 ),
             ),
             _t(

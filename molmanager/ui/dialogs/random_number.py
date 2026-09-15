@@ -118,7 +118,9 @@ class RandomNumberDialog(QDialog):
         self.decimals_sb = QSpinBox()
         self.decimals_sb.setRange(0, 12)
         self.decimals_sb.setValue(4)
-        self.decimals_sb.setToolTip("Decimal places for continuous distributions (ignored for integers).")
+        self.decimals_sb.setToolTip(
+            "Decimal places for continuous distributions (ignored for integers)."
+        )
         form.addRow("Decimals:", self.decimals_sb)
 
         self.use_seed_cb = QCheckBox("Use seed")
@@ -207,6 +209,8 @@ class RandomNumberDialog(QDialog):
         try:
             generate_random_values(1, self.params().params)
         except ValueError as exc:
-            QMessageBox.warning(self, TOOL_RANDOM_NUMBER, str(exc) or "Invalid random-number settings.")
+            QMessageBox.warning(
+                self, TOOL_RANDOM_NUMBER, str(exc) or "Invalid random-number settings."
+            )
             return
         super().accept()

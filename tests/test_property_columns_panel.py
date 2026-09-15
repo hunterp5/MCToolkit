@@ -113,7 +113,7 @@ def test_view_conformers_omits_property_column_pickers(qapp) -> None:  # noqa: A
 
     assert isinstance(viewer._conf_nav_host.layout(), QHBoxLayout)
     assert viewer._btn_conf_back.parent() is viewer._conf_nav_host
-    assert viewer._add_to_main_btn.parent() is viewer._conf_nav_host
+    assert viewer._add_to_main_btn.parent() is viewer._footer_bar
     assert viewer.embedded_minimum_width() >= 1200
     assert not hasattr(viewer, "_toggle_options_btn")
     viewer.deleteLater()

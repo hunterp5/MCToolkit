@@ -298,7 +298,9 @@ class MPOScoringDialog(QDialog):
         if not col:
             return
         if any(d.column == col for d in self._drafts):
-            QMessageBox.information(self, "MPO Scoring", f'"{col}" is already in the criteria list.')
+            QMessageBox.information(
+                self, "MPO Scoring", f'"{col}" is already in the criteria list.'
+            )
             return
         lo, hi = self._bounds.get(col, (0.0, 1.0))
         if not (hi > lo):
@@ -414,7 +416,9 @@ class MPOScoringDialog(QDialog):
         self.target_sb.setEnabled(is_linear and direction == "target")
 
         if is_gauss:
-            self.hint.setText("Gaussian: desirability = exp(−½ ((x − center) / σ)²), peak = 1 at center.")
+            self.hint.setText(
+                "Gaussian: desirability = exp(−½ ((x − center) / σ)²), peak = 1 at center."
+            )
         elif is_step and direction == "maximize":
             self.hint.setText("Step (maximize): score 1 if value ≥ High, else 0.")
         elif is_step and direction == "minimize":
@@ -422,9 +426,13 @@ class MPOScoringDialog(QDialog):
         elif is_step:
             self.hint.setText("Step (range): score 1 if Low ≤ value ≤ High, else 0.")
         elif direction == "maximize":
-            self.hint.setText("Linear (maximize): 0 at/below Low, 1 at/above High, linear in between.")
+            self.hint.setText(
+                "Linear (maximize): 0 at/below Low, 1 at/above High, linear in between."
+            )
         elif direction == "minimize":
-            self.hint.setText("Linear (minimize): 1 at/below Low, 0 at/above High, linear in between.")
+            self.hint.setText(
+                "Linear (minimize): 1 at/below Low, 0 at/above High, linear in between."
+            )
         else:
             self.hint.setText(
                 "Linear (target): 0 outside [Low, High], rises to 1 at Target between the bounds."
@@ -444,7 +452,9 @@ class MPOScoringDialog(QDialog):
             return
         for spec in p.specs:
             if spec.kind == "gaussian" and (spec.sigma is None or float(spec.sigma) <= 0):
-                QMessageBox.warning(self, "MPO Scoring", f'"{spec.column}": sigma must be positive.')
+                QMessageBox.warning(
+                    self, "MPO Scoring", f'"{spec.column}": sigma must be positive.'
+                )
                 return
             if spec.kind == "linear" and spec.direction != "target":
                 if spec.low is None or spec.high is None:

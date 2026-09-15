@@ -199,13 +199,13 @@ class SomPredictorDialog(QDialog):
         som_signals = self.parent_app._ensure_som_predictor_signals()
         n = len(rows)
         prog = self.parent_app._tool_progress_state
-        from ...display_constants import structure_depiict_height, structure_depiict_width
+        from ...display_constants import structure_depict_height, structure_depict_width
 
         enqueue_process_queue_job(
             self.parent_app,
             "Predict SOM",
             n,
-            lambda ev, r=rows, ws=self.parent_app.signals, ps=som_signals, sub=subset, fs=fame_score, thr=threshold, st=prog, mw=structure_depiict_width(), mh=structure_depiict_height(): (
+            lambda ev, r=rows, ws=self.parent_app.signals, ps=som_signals, sub=subset, fs=fame_score, thr=threshold, st=prog, mw=structure_depict_width(), mh=structure_depict_height(): (
                 SomPredictorWorker(
                     r,
                     ws,

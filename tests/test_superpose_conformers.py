@@ -172,7 +172,7 @@ def test_superpose_packed_cell_meta():
 
 
 def test_largest_vs_central_ring_atoms():
-    from molmanager.workers.chemistry_conformers import (
+    from molmanager.workers.superpose import (
         _central_ring_atoms,
         _largest_ring_system_atoms,
     )

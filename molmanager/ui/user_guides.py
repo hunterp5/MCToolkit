@@ -306,6 +306,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "FAME3R sites of metabolism for Phase 1, Phase 2, both, or CYP.",
             ),
             _e(
+                "tools_predict_metabolites",
+                "Predict Metabolites",
+                "Metabolites",
+                "BioTransformer metabolite structures from a local JAR.",
+            ),
+            _e(
                 "tools_pka",
                 "Predict pKa",
                 "pKa",

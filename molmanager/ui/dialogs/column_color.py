@@ -189,7 +189,13 @@ class ColumnColorDialog(QDialog):
         self.high_btn.setStyleSheet(f"background-color: {self.high_color.name()};")
 
     def _pick_color(self, which: str) -> None:
-        base = self.low_color if which == "low" else self.mid_color if which == "mid" else self.high_color
+        base = (
+            self.low_color
+            if which == "low"
+            else self.mid_color
+            if which == "mid"
+            else self.high_color
+        )
         chosen = QColorDialog.getColor(base, self, "Choose color")
         if not chosen.isValid():
             return

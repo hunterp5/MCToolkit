@@ -64,7 +64,7 @@ from ...dimensionality_reduction import (
 )
 from ...workers import SIMILARITY_FP_TYPE_LABELS
 from ...workers.dimensionality_reduction import DimensionReductionSignals, DimensionReductionWorker
-from ..data_analysis import numeric_subset, table_to_dataframe
+from .data_analysis import numeric_subset, table_to_dataframe
 from ...plot_color import (
     PLOT_COLORSCALE_CHOICES,
     color_values_are_numeric,

@@ -107,3 +107,19 @@ def test_static_asset_path_points_at_3dmol():
     assert p.name == "3Dmol-min.js"
     assert p.parent.name == "static"
     assert Path(bundled_paths.package_root(), "ui", "static", "3Dmol-min.js") == p
+
+
+def test_resolve_biotransformer_jar_env_override_and_missing_database(tmp_path, monkeypatch):
+    monkeypatch.delenv("MOLMANAGER_BIOTRANSFORMER_JAR", raising=False)
+    monkeypatch.setattr(bundled_paths, "biotransformer_models_dir", lambda: tmp_path / "absent")
+    assert bundled_paths.resolve_biotransformer_jar() is None
+    jar = tmp_path / "biotransformer-3.0.0.jar"
+    jar.write_bytes(b"")
+    monkeypatch.setenv("MOLMANAGER_BIOTRANSFORMER_JAR", str(jar))
+    assert bundled_paths.resolve_biotransformer_jar() == jar
+    errs = bundled_paths.biotransformer_layout_errors(jar)
+    assert any("database/" in e for e in errs)
+    (tmp_path / "database").mkdir()
+    (tmp_path / "supportfiles").mkdir()
+    layout = bundled_paths.biotransformer_layout_errors(jar)
+    assert not any("database/" in e or "supportfiles/" in e for e in layout)

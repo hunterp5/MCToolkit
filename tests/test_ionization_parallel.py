@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -38,6 +39,8 @@ def _force_sequential_ionization_cache(monkeypatch) -> None:
         "plan_ionization_process_workers",
         lambda _n, _c: (False, 1),
     )
+    yield
+    ionization_parallel.discard_ionization_process_pool()
 
 
 def test_plan_ionization_auto_uses_mp_from_two_unique(monkeypatch) -> None:
@@ -64,35 +67,34 @@ def test_chunk_structure_keys_spreads_across_workers() -> None:
     chunks = chunk_structure_keys(keys, 2)
     assert len(chunks) >= 2
     assert sum(len(c) for c in chunks) == 10
-    assert max(len(c) for c in chunks) <= 4
+    assert max(len(c) for c in chunks) <= 8
     assert chunk_structure_keys([], 4) == []
 
 
-def test_chunk_structure_keys_single_worker_splits_for_progress() -> None:
-    from molmanager.workers.ionization_parallel import chunk_structure_keys
+def test_chunk_structure_keys_single_worker_batches_and_splits() -> None:
+    from molmanager.workers.ionization_parallel import (
+        UNIPKA_STRUCTURE_CHUNK_SERIAL,
+        chunk_structure_keys,
+    )
 
-    keys = [f"k{i}" for i in range(8)]
+    keys = [f"k{i}" for i in range(32)]
     chunks = chunk_structure_keys(keys, 1)
-    assert len(chunks) == 8
-    assert sum(len(c) for c in chunks) == 8
-    assert max(len(c) for c in chunks) == 1
+    assert sum(len(c) for c in chunks) == 32
+    assert max(len(c) for c in chunks) == UNIPKA_STRUCTURE_CHUNK_SERIAL
+    assert len(chunks) == 2
+    small = [f"k{i}" for i in range(8)]
+    assert chunk_structure_keys(small, 1) == [small]
 
 
 def test_map_ionization_progress_protonate_moves_before_last_tick() -> None:
     from molmanager.workers.ionization_parallel import map_ionization_progress
 
-    done, total = map_ionization_progress(
-        1, 3, progress_total=3, reserve_final_tick=False
-    )
+    done, total = map_ionization_progress(1, 3, progress_total=3, reserve_final_tick=False)
     assert (done, total) == (1, 3)
-    done, total = map_ionization_progress(
-        3, 3, progress_total=3, reserve_final_tick=False
-    )
+    done, total = map_ionization_progress(3, 3, progress_total=3, reserve_final_tick=False)
     assert (done, total) == (3, 3)
     # Descriptor jobs still leave the last tick, but the first unique is not stuck at 0.
-    done, total = map_ionization_progress(
-        1, 3, progress_total=3, reserve_final_tick=True
-    )
+    done, total = map_ionization_progress(1, 3, progress_total=3, reserve_final_tick=True)
     assert total == 3
     assert done >= 1
     assert done < 3
@@ -167,3 +169,65 @@ def test_microstates_to_picklable_roundtrip() -> None:
     assert snap[0].pka == 15.9
     assert isinstance(snap[0], PicklableMicrostate)
     assert snap[0].protonated_mol is not None
+
+
+class _FakeIonizationPool:
+    def __init__(self, max_workers=1):
+        self.max_workers = max_workers
+        self._broken = False
+        self._shutdown_thread = False
+        self._processes = {}
+
+    def shutdown(self, **_kwargs) -> None:
+        self._shutdown_thread = True
+
+
+def _patch_fake_ionization_pool(monkeypatch, created: list[_FakeIonizationPool]) -> None:
+    def _fake_pool(*args, max_workers=1, **_kwargs):
+        if args:
+            max_workers = args[0]
+        pool = _FakeIonizationPool(max_workers=max_workers)
+        created.append(pool)
+        return pool
+
+    monkeypatch.setattr(ionization_parallel, "ProcessPoolExecutor", _fake_pool)
+    monkeypatch.setattr(ionization_parallel, "register_process_pool", lambda ex: ex)
+    ionization_parallel.discard_ionization_process_pool()
+
+
+def test_ionization_process_pool_reuses_one_worker(monkeypatch) -> None:
+    created: list[_FakeIonizationPool] = []
+    _patch_fake_ionization_pool(monkeypatch, created)
+    with ionization_parallel.ionization_process_pool(1) as first:
+        pass
+    with ionization_parallel.ionization_process_pool(1) as second:
+        assert second is first
+    assert len(created) == 1
+    assert created[0]._shutdown_thread is False
+    ionization_parallel.discard_ionization_process_pool()
+    assert created[0]._shutdown_thread is True
+
+
+def test_ionization_process_pool_kills_one_worker_on_cancel(monkeypatch) -> None:
+    created: list[_FakeIonizationPool] = []
+    _patch_fake_ionization_pool(monkeypatch, created)
+    cancel = threading.Event()
+    cancel.set()
+    with ionization_parallel.ionization_process_pool(1, cancel_event=cancel):
+        pass
+    assert len(created) == 1
+    assert created[0]._shutdown_thread is True
+    with ionization_parallel.ionization_process_pool(1) as nxt:
+        assert nxt is not created[0]
+    assert len(created) == 2
+
+
+def test_ionization_process_pool_multi_worker_is_ephemeral(monkeypatch) -> None:
+    created: list[_FakeIonizationPool] = []
+    _patch_fake_ionization_pool(monkeypatch, created)
+    with ionization_parallel.ionization_process_pool(2) as first:
+        assert first.max_workers == 2
+    with ionization_parallel.ionization_process_pool(2) as second:
+        assert second is not first
+    assert len(created) == 2
+    assert all(pool._shutdown_thread for pool in created)

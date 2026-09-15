@@ -12,7 +12,7 @@ Use when default microstates are wrong for your assay pH, or before comparisons 
 
 ## Inputs / scope
 
-Input structures from the selected source; optional **Selected Rows Only**. Requires Uni-pKa (`unipkainfer`). Duplicate structures are predicted once and reused; a session cache is shared with Predict pKa and LogD/LogS so a second run on the same molecules is cheap. Saved ``.cms`` sessions restore that cache on Open / Duplicate.
+Input structures from the selected source; optional **Selected Rows Only**. Requires Uni-pKa (`unipkainfer`). Duplicate structures are predicted once and reused; a session cache is shared with Predict pKa and LogD/LogS so a second run on the same molecules is cheap. Unique structures are scored in batches of up to 16, and the one-worker CUDA process stays loaded between jobs. Saved ``.cms`` sessions restore that cache on Open / Duplicate.
 
 ## Options
 

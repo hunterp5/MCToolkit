@@ -53,3 +53,19 @@ def test_should_terminate_on_cancel_or_shutdown() -> None:
     ppu.signal_application_shutdown()
     assert ppu.should_terminate_process_pool(None)
     ppu._SHUTDOWN.clear()
+
+
+def test_shutdown_callback_runs() -> None:
+    seen: list[object] = []
+
+    def _cb(ex) -> None:
+        seen.append(ex)
+
+    ppu.add_process_pool_shutdown_callback(_cb)
+    try:
+        ex = ppu.register_process_pool(ProcessPoolExecutor(max_workers=1))
+        ppu.shutdown_process_pool_executor(ex, kill_workers=True)
+        assert seen == [ex]
+    finally:
+        if _cb in ppu._SHUTDOWN_CALLBACKS:
+            ppu._SHUTDOWN_CALLBACKS.remove(_cb)

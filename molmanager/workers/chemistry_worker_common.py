@@ -21,6 +21,21 @@ from __future__ import annotations
 from .signals import WorkerSignals
 
 
+def normalize_force_field(force_field: str) -> str:
+    """Map dialog / param strings onto MMFF, MMFF94s, or UFF."""
+    key = (force_field or "MMFF").strip().upper().replace(" ", "")
+    if key in {"UFF"}:
+        return "UFF"
+    if key in {"MMFF94S"}:
+        return "MMFF94s"
+    return "MMFF"
+
+
+def mmff_variant(force_field: str) -> str:
+    """RDKit MMFF variant name for *force_field*."""
+    return "MMFF94s" if normalize_force_field(force_field) == "MMFF94s" else "MMFF94"
+
+
 def emit_tool_progress_throttled(
     signals: WorkerSignals,
     message: str,

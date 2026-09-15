@@ -209,6 +209,18 @@ def som_dialog_footer_html() -> str:
     )
 
 
+def biotransformer_dialog_footer_html() -> str:
+    """Rich text for the Predict Metabolites (BioTransformer) dialog."""
+    return (
+        "<small><b>Method</b>: BioTransformer 3 metabolite structures — "
+        '<a href="https://doi.org/10.1186/s13321-018-0324-5">Djoumbou Feunang et al., '
+        "J. Cheminform. 2019</a>. Local JAR only (Java on PATH). "
+        "This predicts <b>products</b>, not atom sites of metabolism. "
+        "LGPL-3; commercial redistribution of BioTransformer files needs author permission. "
+        "Environmental microbial mode is not included.</small>"
+    )
+
+
 def permeability_dialog_footer_html() -> str:
     """Rich text for the permeability predictor dialog."""
     return (

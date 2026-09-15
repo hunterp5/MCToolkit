@@ -157,14 +157,16 @@ class BulkSimilarityDialog(QDialog):
         app._begin_tool_progress("Bulk similarity", max(1, len(rows)))
         app.process_queue.enqueue(
             f"Bulk similarity ({len(rows)} rows)",
-            lambda ev, r=rows, fp=fp_choice, m=metric, k=top_k, sig=self._sig, st=prog: BulkSimilarityWorker(
-                r,
-                fp,
-                m,
-                top_k_pairs=k,
-                signals=sig,
-                cancel_event=ev,
-                progress_state=st,
+            lambda ev, r=rows, fp=fp_choice, m=metric, k=top_k, sig=self._sig, st=prog: (
+                BulkSimilarityWorker(
+                    r,
+                    fp,
+                    m,
+                    top_k_pairs=k,
+                    signals=sig,
+                    cancel_event=ev,
+                    progress_state=st,
+                )
             ),
         )
 
@@ -198,5 +200,6 @@ class BulkSimilarityDialog(QDialog):
         if app is not None:
             app._finish_tool_progress("Bulk similarity")
         self.run_btn.setEnabled(True)
-        self.summary_lbl.setText("Cancelled." if msg == "Cancelled." else (msg or "Bulk similarity failed."))
-
+        self.summary_lbl.setText(
+            "Cancelled." if msg == "Cancelled." else (msg or "Bulk similarity failed.")
+        )

@@ -334,6 +334,10 @@ The Chemprop Python packages are in `requirements.txt`, but the **GNN-MTL model 
 python scripts/bootstrap_gnn_mtl_model.py
 ```
 
+### BioTransformer (Predict Metabolites)
+
+The JAR is **not** in git. Install a JRE so `java` is on `PATH`, then download BioTransformer 3.0 (`biotransformer-3.0.0.jar`, `database/`, `supportfiles/`) from [GitHub](https://github.com/Wishartlab-openscience/Biotransformer) or [Bitbucket](https://bitbucket.org/wishartlab/biotransformer3.0jar). Put those files in `molmanager/resources/models/biotransformer/`, or set `MOLMANAGER_BIOTRANSFORMER_JAR` to the JAR (the two folders must sit next to it). Official docs target UNIX; on Windows try a current JRE, or run the JAR under WSL.
+
 ---
 
 ## Troubleshooting
@@ -471,6 +475,7 @@ Optional settings for power users and IT deployments:
 | `MOLMANAGER_LOG_DIR` | Directory for rotating `molmanager.log` (platform default under user app data / state) |
 | `MOLMANAGER_LOG_TO_FILE` | Set to `0` / `false` to disable file logging (console only) |
 | `MOLMANAGER_BUNDLE_DIR` | Folder containing optional `vina` / `smina` binaries |
+| `MOLMANAGER_BIOTRANSFORMER_JAR` | Path to `biotransformer-3.0.0.jar` (`database/` and `supportfiles/` must be siblings of the JAR) |
 
 **Custom calculator:** expressions always use a restricted AST interpreter (`safe_calc`). Treat them as trusted input only. `MOLMANAGER_CUSTOM_CALC_LEGACY_EVAL` is retired and ignored if set.
 
@@ -530,6 +535,7 @@ python scripts/check_gpl_headers.py
 
 ```bash
 python scripts/benchmark_large_table.py --runs 3 --scales 10000,50000,100000
+python scripts/benchmark_pka.py samples/fda_approved_physprops_v2.sdf --limit 32
 ```
 
 ---

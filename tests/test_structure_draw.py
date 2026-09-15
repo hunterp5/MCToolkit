@@ -67,11 +67,11 @@ def test_structure_column_minimum_width() -> None:
         DEFAULT_STRUCTURE_DEPICT_HEIGHT,
         DEFAULT_STRUCTURE_DEPICT_WIDTH,
         STRUCTURE_COLUMN_HORIZONTAL_PADDING,
-        set_structure_depiict_size,
+        set_structure_depict_size,
         structure_column_minimum_width,
     )
 
-    set_structure_depiict_size(
+    set_structure_depict_size(
         DEFAULT_STRUCTURE_DEPICT_WIDTH,
         DEFAULT_STRUCTURE_DEPICT_HEIGHT,
         persist=False,

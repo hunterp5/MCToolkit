@@ -37,6 +37,7 @@ TOOL_RANDOM_NUMBER = "Random Number"
 TOOL_RANDOM_MOLECULE = "Random Molecule"
 TOOL_SPLIT_COLUMN = "Split Column"
 TOOL_PREDICT_SOM = "Predict SOM"
+TOOL_PREDICT_METABOLITES = "Predict Metabolites"
 
 # Column header when importing similarity hits (PubChem, ChEMBL, SureChEMBL) or adding FP similarity scores.
 # Defined in services.column_labels; re-exported here for UI callers.
@@ -46,8 +47,7 @@ STRUCTURE_PENDING_HINT = f"No 2D structure yet.\nUse {TOOLS_ARROW_RENDER_2D} to 
 STATUS_READY_RENDER_2D = f"Ready — use {TOOLS_ARROW_RENDER_2D} to refresh or redraw 2D images."
 
 LOADING_DETAIL_AFTER_FILE_READ = (
-    "File read; building table…\n"
-    "2D structure images are drawn before the workspace is shown."
+    "File read; building table…\n2D structure images are drawn before the workspace is shown."
 )
 LOADING_DETAIL_READING_DISK = (
     "Reading file from disk…\n2D structure images are drawn before the workspace is shown."

@@ -54,7 +54,9 @@ class Render2DStructureDialog(QDialog):
         self.only_selected_cb = QCheckBox("Selected Rows Only")
         self._only_selected_scope_prefix = "Selected Rows Only"
         if self._have_selection:
-            self.only_selected_cb.setText(f"{self._only_selected_scope_prefix} ({selected_row_count})")
+            self.only_selected_cb.setText(
+                f"{self._only_selected_scope_prefix} ({selected_row_count})"
+            )
         else:
             self.only_selected_cb.setEnabled(False)
         ly.addWidget(self.only_selected_cb)

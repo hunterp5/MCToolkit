@@ -101,34 +101,34 @@ class GuiSettingsMixin:
             self.status_label.setText("Hotkeys updated.")
 
     def open_structure_settings_dialog(self) -> None:
-        from ..display_constants import structure_depiict_height, structure_depiict_width
+        from ..display_constants import structure_depict_height, structure_depict_width
         from .dialogs.structure_settings import StructureSettingsDialog
 
-        prev_w = structure_depiict_width()
-        prev_h = structure_depiict_height()
+        prev_w = structure_depict_width()
+        prev_h = structure_depict_height()
         dlg = StructureSettingsDialog(prev_w, prev_h, self)
         if hasattr(self, "apply_structure_table_layout"):
-            dlg.size_previewed.connect(self._preview_structure_depiict_size)
+            dlg.size_previewed.connect(self._preview_structure_depict_size)
         if dlg.exec_() == QDialog.Accepted:
-            self._apply_structure_depiict_size(
+            self._apply_structure_depict_size(
                 dlg.selected_width(), dlg.selected_height(), persist=True
             )
-        elif hasattr(self, "apply_structure_depiict_size"):
-            self._apply_structure_depiict_size(prev_w, prev_h, persist=False)
+        elif hasattr(self, "apply_structure_depict_size"):
+            self._apply_structure_depict_size(prev_w, prev_h, persist=False)
         if hasattr(self, "status_label"):
             self.status_label.setText(
-                f"Structure image size — {structure_depiict_width()}×{structure_depiict_height()} px"
+                f"Structure image size — {structure_depict_width()}×{structure_depict_height()} px"
             )
 
-    def _preview_structure_depiict_size(self, width: int, height: int) -> None:
-        if hasattr(self, "apply_structure_depiict_size"):
-            self.apply_structure_depiict_size(width, height, persist=False)
+    def _preview_structure_depict_size(self, width: int, height: int) -> None:
+        if hasattr(self, "apply_structure_depict_size"):
+            self.apply_structure_depict_size(width, height, persist=False)
 
-    def _apply_structure_depiict_size(
+    def _apply_structure_depict_size(
         self, width: int, height: int, *, persist: bool = True
     ) -> None:
-        if hasattr(self, "apply_structure_depiict_size"):
-            self.apply_structure_depiict_size(width, height, persist=persist)
+        if hasattr(self, "apply_structure_depict_size"):
+            self.apply_structure_depict_size(width, height, persist=persist)
 
     def open_font_dialog(self) -> None:
         from .dialogs.font_settings import FontSettingsDialog
@@ -354,3 +354,6 @@ class GuiSettingsMixin:
             delg.set_compound_model(self._table_model)
         delg.set_cell_background(self.palette().color(QPalette.Base))
         self.table.setItemDelegateForColumn(CompoundTableModel.STRUCTURE_COL, delg)
+
+    _preview_structure_depiict_size = _preview_structure_depict_size
+    _apply_structure_depiict_size = _apply_structure_depict_size

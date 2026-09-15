@@ -32,7 +32,7 @@ import logging
 import os
 import threading
 import time
-from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, wait
 
 from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
@@ -48,9 +48,7 @@ from molmanager.ionization import (
 )
 from .process_pool_utils import (
     application_is_shutting_down,
-    register_process_pool,
     should_terminate_process_pool,
-    shutdown_process_pool_executor,
 )
 from .structure_grouping import group_rows_by_structure
 
@@ -339,6 +337,7 @@ class PKaPredictorWorker(QRunnable):
                 from .ionization_parallel import (
                     _restore_unipka_mmff_thread_env,
                     _set_unipka_mmff_thread_env,
+                    ionization_process_pool,
                 )
 
                 key_chunks = chunk_structure_keys(order, proc_workers)
@@ -359,37 +358,34 @@ class PKaPredictorWorker(QRunnable):
                     proc_workers,
                     n_unique,
                 )
-                ex = register_process_pool(ProcessPoolExecutor(max_workers=proc_workers))
                 try:
-                    pending = {ex.submit(_mp_compute_pka_chunk, chunk) for chunk in task_chunks}
-                    while pending:
-                        if (
-                            should_terminate_process_pool(cancel_ev)
-                            or application_is_shutting_down()
-                        ):
-                            cancelled = True
-                            for f in pending:
-                                f.cancel()
-                            break
-                        completed, pending = wait(
-                            pending, timeout=0.25, return_when=FIRST_COMPLETED
-                        )
-                        for f in completed:
-                            if f.cancelled():
-                                continue
-                            try:
-                                for key, txt, pi_txt, ensemble, cacheable in f.result():
-                                    results_by_key[key] = (txt, pi_txt)
-                                    if cacheable:
-                                        cache_store(key, ensemble)
-                                    done_cum += len(oids_map.get(key, ()))
-                            except Exception:
-                                logger.exception("pKa process-pool task failed")
-                            _emit(done_cum)
+                    with ionization_process_pool(proc_workers, cancel_event=cancel_ev) as ex:
+                        pending = {ex.submit(_mp_compute_pka_chunk, chunk) for chunk in task_chunks}
+                        while pending:
+                            if (
+                                should_terminate_process_pool(cancel_ev)
+                                or application_is_shutting_down()
+                            ):
+                                cancelled = True
+                                for f in pending:
+                                    f.cancel()
+                                break
+                            completed, pending = wait(
+                                pending, timeout=0.25, return_when=FIRST_COMPLETED
+                            )
+                            for f in completed:
+                                if f.cancelled():
+                                    continue
+                                try:
+                                    for key, txt, pi_txt, ensemble, cacheable in f.result():
+                                        results_by_key[key] = (txt, pi_txt)
+                                        if cacheable:
+                                            cache_store(key, ensemble)
+                                        done_cum += len(oids_map.get(key, ()))
+                                except Exception:
+                                    logger.exception("pKa process-pool task failed")
+                                _emit(done_cum)
                 finally:
-                    shutdown_process_pool_executor(
-                        ex, kill_workers=should_terminate_process_pool(cancel_ev)
-                    )
                     _restore_unipka_mmff_thread_env(prev_mmff, wrote_mmff)
                 for key in order:
                     txt, pi_txt = results_by_key.get(key, ("Error (see log)", "N/A"))

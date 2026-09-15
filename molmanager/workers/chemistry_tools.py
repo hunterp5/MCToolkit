@@ -24,15 +24,16 @@ from __future__ import annotations
 
 from .chemistry_calc import CustomCalcWorker, describe_custom_calc_error
 from .chemistry_conformers import (
+    STRAIN_ENERGY_HEADERS,
     ConformerGenParams,
     ConformerGenerationWorker,
     RmsdParams,
     StrainEnergyParams,
     StrainEnergyWorker,
     SuperposeConformersWorker,
-    SuperposeStructuresWorker,
     SuperposeParams,
     SuperposeStructuresParams,
+    SuperposeStructuresWorker,
     align_structure_onto_reference,
     run_conformer_generation,
     run_conformer_rmsd,
@@ -45,12 +46,6 @@ from .chemistry_conformers import (
 )
 from .chemistry_descriptors import CalcWorker, descriptor_callable_for_int_fn
 from ..confs_codec import format_confs_table_cell, pack_confs_cell
-
-# Re-export strain header constants if present
-try:
-    from .chemistry_conformers import STRAIN_ENERGY_HEADERS
-except ImportError:  # pragma: no cover
-    STRAIN_ENERGY_HEADERS = ()  # type: ignore[misc, assignment]
 
 __all__ = [
     "CalcWorker",

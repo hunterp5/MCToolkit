@@ -40,8 +40,8 @@ from ..display_constants import (
     STRUCTURE_DEPICT_WIDTH,
     STRUCTURE_ROW_DEFAULT_HEIGHT,
     structure_column_minimum_width,
-    structure_depiict_height,
-    structure_depiict_width,
+    structure_depict_height,
+    structure_depict_width,
     structure_row_default_height,
 )
 from ..structure_render_store import StructureRenderStore
@@ -71,8 +71,8 @@ __all__ = [
     "STRUCTURE_DEPICT_WIDTH",
     "STRUCTURE_ROW_DEFAULT_HEIGHT",
     "structure_column_minimum_width",
-    "structure_depiict_height",
-    "structure_depiict_width",
+    "structure_depict_height",
+    "structure_depict_width",
     "structure_row_default_height",
 ]
 
@@ -510,7 +510,7 @@ class CompoundTableModel(
             if role == Qt.SizeHintRole:
                 if has_pix:
                     return QSize(pix.width(), pix.height())
-                return QSize(structure_depiict_width(), structure_depiict_height())
+                return QSize(structure_depict_width(), structure_depict_height())
             if role == Qt.ToolTipRole:
                 if has_pix:
                     return None

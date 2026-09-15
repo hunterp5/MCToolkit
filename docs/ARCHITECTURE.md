@@ -81,11 +81,11 @@ flowchart TB
 | `PlotToolsMixin` | Plot↔table sync, floating plot dialogs; docks via `PlotDockHost` |
 | `IngestRenderMixin` | File ingest chunks, SQLite rebuild, 2D render batch |
 | `PrepareStructuresMixin` | Fast prepare, disconnect/neutralize, render-2D tools |
-| `ConformersDescriptorsMixin` | Conformers, superposition, descriptor calc |
+| `ConformersDescriptorsMixin` | Composite: conformers/superpose, descriptors, column writeback |
 | `FragmentToolsMixin` | BRICS/RECAP/R-group fragment tools |
 | `MmpMixin` | Matched molecular pair (MMP / rdMMPA) analysis |
 | `ReactionToolsMixin` | Reaction-based enumeration |
-| `ToolsSqlPredictMixin` | Calculator, SQL load, external DB, pKa/permeability |
+| `ToolsSqlPredictMixin` | Composite: table calc, viewers, external records, dock, SQL load, predictors |
 
 **Filter bounds:** bulk load/ingest calls `schedule_calculate_global_bounds()` (debounced); undo and session JSON restore call `calculate_global_bounds()` immediately when filter cards need fresh min/max.
 
@@ -123,10 +123,13 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 - **Filters / edits:** `_schedule_active_plots_replot` after filter apply; `dataChanged` on model for open plots
 - **Substructure (large tables):** one or more SMARTS cards run via `SubstructureFilterWorker` off the GUI; sync/chunked apply consume override OID sets
 - **UI workflow benchmark:** `scripts/benchmark_ui_workflows.py` times CSV load, `.cms` restore, filters, plot collect/replot, search, export
+- **pKa / Uni-pKa benchmark:** `scripts/benchmark_pka.py` splits enumerate vs Uni-pKa MMFF/LMDB vs Uni-Mol infer and compares chunk sizes
 
 ## Adding a new Tool
 
 1. Dialog under `molmanager/ui/dialogs/` (use `scope.selection_scope_checked`, `parent_app` on docked panels).
+   Protein Prepare, Smina dock, and Data Analysis live there; shims remain at the old `ui/`
+   paths. Package `__init__` loads exports lazily so submodule imports do not pull Qt WebEngine.
 2. Worker under `molmanager/workers/` if work is heavy.
 3. Wire menu action in `chemical_table_app.py` / `chemistry_mixin.py`.
 4. Long jobs: `process_queue.enqueue` + `_begin_tool_progress` / `report_tool_progress`.
@@ -135,14 +138,16 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 
 ## Chemistry workers layout
 
-Heavy chemistry jobs are split by concern (compat re-exports remain in `workers/chemistry_tools.py`):
+Heavy chemistry jobs are split by concern (compat re-exports remain in `workers/chemistry_tools.py` and `workers/chemistry_conformers.py`):
 
 | Module | Responsibility |
 |--------|----------------|
 | `workers/chemistry_descriptors.py` | Descriptor `CalcWorker` |
-| `workers/chemistry_conformers.py` | Conformers, superpose, RMSD, strain |
+| `workers/conformer_generation.py` | Stochastic ETKDG conformer generation |
+| `workers/superpose.py` | Superpose conformers/structures, RMSD |
+| `workers/strain_energy.py` | Strain energy + overlay helpers |
 | `workers/chemistry_calc.py` | Custom calculator (AST `safe_calc`) |
-| `workers/chemistry_worker_common.py` | Shared progress throttling |
+| `workers/chemistry_worker_common.py` | Shared progress throttling and force-field names |
 
 Pure helpers live under `molmanager/services/` (e.g. `chemistry_columns.py`, `sql_load_policy.py`,
 `table_scope.py`, `activity_records.py`, `table_selection.py`, `sqlite_text_match.py`,
@@ -177,6 +182,17 @@ table↔plot selection in `ui/plot_shell_mixin.py`; color/size/hover/fit in
 in `ui/plot_session_mixin.py` (`PlotWidget` in `ui/plot.py` owns UI construction and orchestration).
 Fingerprint session cache is an LRU capped by `fingerprint_cache_max_entries`
 (`MOLMANAGER_FINGERPRINT_CACHE_MAX_ENTRIES`).
+
+Ligand 3D viewer: `ui/mol_viewer_3d.py` re-exports. HTML/JS assembly is
+`ui/mol_3d_html.py` (shared `assemble_3dmol_shell_page`), RDKit 2D/3D prep is
+`ui/mol_3d_prepare.py`, Qt widgets are `ui/mol_3d_widget.py`, and the floating
+dialog/openers are `ui/mol_3d_dialog.py`. Protein viewer: `ui/protein_viewer.py`
+re-exports; HTML is `ui/protein_viewer_html.py`, canvas is `ui/protein_embed.py`,
+chain list is `ui/protein_chain_manager.py`, window is `ui/protein_viewer_dialog.py`.
+Crystallographic inventory: `structure_components.py` re-exports types, CIF IO,
+chain inventory, and atoms/pocket helpers.
+`ConformersDescriptorsMixin` composes conformer tools, descriptor writeback, and
+shared column-name/bounds helpers.
 
 Auto Render 2D after ingest/session: the loading overlay stays until filter bounds
 are ready, auto Structure renders finish (when started), and restored plot views

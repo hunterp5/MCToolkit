@@ -101,7 +101,9 @@ class ClusterDialog(QDialog):
         self.explore_max_runs = QSpinBox()
         self.explore_max_runs.setRange(12, 250)
         self.explore_max_runs.setValue(80)
-        self.explore_max_runs.setToolTip("Upper bound on (method, parameter) combinations to evaluate.")
+        self.explore_max_runs.setToolTip(
+            "Upper bound on (method, parameter) combinations to evaluate."
+        )
         mr.addWidget(self.explore_max_runs)
         mr.addStretch()
         ex_outer.addLayout(mr)
@@ -172,7 +174,9 @@ class ClusterDialog(QDialog):
         ag_lyt.addRow("Clusters (k):", self.agglom_k)
         self.linkage_combo = QComboBox()
         self.linkage_combo.addItems(["average", "complete", "single"])
-        self.linkage_combo.setToolTip("Linkage for hierarchical clustering (Euclidean on bit vectors).")
+        self.linkage_combo.setToolTip(
+            "Linkage for hierarchical clustering (Euclidean on bit vectors)."
+        )
         ag_lyt.addRow("Linkage:", self.linkage_combo)
         self._opt_stack.addWidget(ag)
 
@@ -183,7 +187,9 @@ class ClusterDialog(QDialog):
         self.dbscan_eps.setDecimals(3)
         self.dbscan_eps.setSingleStep(0.05)
         self.dbscan_eps.setValue(0.35)
-        self.dbscan_eps.setToolTip("Neighborhood radius (cosine distance). Smaller â†’ more clusters / noise.")
+        self.dbscan_eps.setToolTip(
+            "Neighborhood radius (cosine distance). Smaller â†’ more clusters / noise."
+        )
         db_lyt.addRow("eps:", self.dbscan_eps)
         self.dbscan_min_samples = QSpinBox()
         self.dbscan_min_samples.setRange(2, 200)
@@ -226,7 +232,9 @@ class ClusterDialog(QDialog):
         self.jp_nn = QSpinBox()
         self.jp_nn.setRange(2, 128)
         self.jp_nn.setValue(16)
-        self.jp_nn.setToolTip("Number of nearest neighbors (by Tanimoto) considered for each compound.")
+        self.jp_nn.setToolTip(
+            "Number of nearest neighbors (by Tanimoto) considered for each compound."
+        )
         jp_lyt.addRow("Nearest neighbors (J):", self.jp_nn)
         self.jp_common = QSpinBox()
         self.jp_common.setRange(1, 127)
@@ -256,7 +264,9 @@ class ClusterDialog(QDialog):
         self.run_btn.clicked.connect(self._on_run)
         btn_row.addWidget(self.run_btn)
         self.apply_explore_btn = QPushButton("Apply selected trial")
-        self.apply_explore_btn.setToolTip("Add a column using the method/settings from the selected results row.")
+        self.apply_explore_btn.setToolTip(
+            "Add a column using the method/settings from the selected results row."
+        )
         self.apply_explore_btn.clicked.connect(self._on_apply_explore_trial)
         self.apply_explore_btn.setEnabled(False)
         self.apply_explore_btn.setVisible(False)
@@ -410,12 +420,14 @@ class ClusterDialog(QDialog):
             self.parent_app,
             "Clustering",
             len(rows),
-            lambda ev, r=rows, fc=fp_choice, m=method, p=params, c=col_name, ws=self.parent_app.signals, prog=ps: ClusterWorker(
-                r, fc, m, p, c, ws, cancel_event=ev, progress_state=prog
+            lambda ev, r=rows, fc=fp_choice, m=method, p=params, c=col_name, ws=self.parent_app.signals, prog=ps: (
+                ClusterWorker(r, fc, m, p, c, ws, cancel_event=ev, progress_state=prog)
             ),
             queue_label=f"Cluster ({len(rows)} rows, {method})",
         )
-        self.parent_app.process_queue.thread_finished.connect(self._on_process_queue_thread_finished)
+        self.parent_app.process_queue.thread_finished.connect(
+            self._on_process_queue_thread_finished
+        )
 
     def _unique_cluster_column(self) -> str:
         base = "Cluster"
@@ -454,7 +466,9 @@ class ClusterDialog(QDialog):
                 "jarvis_patrick": self._ex_jp.isChecked(),
             }
             if not any(include.values()):
-                QMessageBox.warning(self, "Cluster", "Select at least one method to sample in exploratory mode.")
+                QMessageBox.warning(
+                    self, "Cluster", "Select at least one method to sample in exploratory mode."
+                )
                 return
             self.explore_table.setRowCount(0)
             self.explore_table.setVisible(True)
@@ -466,12 +480,14 @@ class ClusterDialog(QDialog):
                 self.parent_app,
                 "Exploring clusters",
                 len(rows),
-                lambda ev, r=rows, fc=fp_choice, mr=max_runs, inc=include, ws=self.parent_app.signals, prog=ps: ClusterExploreWorker(
-                    r, fc, mr, inc, ws, cancel_event=ev, progress_state=prog
+                lambda ev, r=rows, fc=fp_choice, mr=max_runs, inc=include, ws=self.parent_app.signals, prog=ps: (
+                    ClusterExploreWorker(r, fc, mr, inc, ws, cancel_event=ev, progress_state=prog)
                 ),
                 queue_label=f"Cluster explore ({len(rows)} rows, ≤{max_runs} trials)",
             )
-            self.parent_app.process_queue.thread_finished.connect(self._on_process_queue_thread_finished)
+            self.parent_app.process_queue.thread_finished.connect(
+                self._on_process_queue_thread_finished
+            )
             return
 
         idx = self.method_combo.currentIndex()
@@ -486,7 +502,10 @@ class ClusterDialog(QDialog):
             }
         elif idx == 2:
             method = "dbscan"
-            params = {"eps": float(self.dbscan_eps.value()), "min_samples": int(self.dbscan_min_samples.value())}
+            params = {
+                "eps": float(self.dbscan_eps.value()),
+                "min_samples": int(self.dbscan_min_samples.value()),
+            }
         elif idx == 3:
             method = "butina"
             params = {
@@ -516,4 +535,3 @@ class ClusterDialog(QDialog):
         """Call when the process queue finishes so the dialog can run again."""
         self.run_btn.setEnabled(True)
         self._sync_apply_explore_enabled()
-

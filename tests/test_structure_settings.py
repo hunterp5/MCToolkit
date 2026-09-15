@@ -29,48 +29,48 @@ from molmanager.display_constants import (
     MAX_STRUCTURE_DEPICT_WIDTH,
     MIN_STRUCTURE_DEPICT_HEIGHT,
     MIN_STRUCTURE_DEPICT_WIDTH,
-    set_structure_depiict_size,
+    set_structure_depict_size,
     structure_column_minimum_width,
-    structure_depiict_height,
-    structure_depiict_width,
+    structure_depict_height,
+    structure_depict_width,
     structure_row_default_height,
 )
 
 
 @pytest.fixture(autouse=True)
 def _reset_structure_size():
-    set_structure_depiict_size(
+    set_structure_depict_size(
         DEFAULT_STRUCTURE_DEPICT_WIDTH,
         DEFAULT_STRUCTURE_DEPICT_HEIGHT,
         persist=False,
     )
     yield
-    set_structure_depiict_size(
+    set_structure_depict_size(
         DEFAULT_STRUCTURE_DEPICT_WIDTH,
         DEFAULT_STRUCTURE_DEPICT_HEIGHT,
         persist=False,
     )
 
 
-def test_set_structure_depiict_size_clamps_and_updates_runtime() -> None:
-    w, h = set_structure_depiict_size(9999, 10, persist=False)
+def test_set_structure_depict_size_clamps_and_updates_runtime() -> None:
+    w, h = set_structure_depict_size(9999, 10, persist=False)
     assert w == MAX_STRUCTURE_DEPICT_WIDTH
     assert h == MIN_STRUCTURE_DEPICT_HEIGHT
-    assert structure_depiict_width() == MAX_STRUCTURE_DEPICT_WIDTH
-    assert structure_depiict_height() == MIN_STRUCTURE_DEPICT_HEIGHT
+    assert structure_depict_width() == MAX_STRUCTURE_DEPICT_WIDTH
+    assert structure_depict_height() == MIN_STRUCTURE_DEPICT_HEIGHT
 
 
 def test_structure_row_default_height_tracks_depiction_height() -> None:
-    set_structure_depiict_size(180, 150, persist=False)
+    set_structure_depict_size(180, 150, persist=False)
     assert structure_row_default_height() == 150 + (212 - 202)
 
 
 def test_structure_column_minimum_width_uses_runtime_size() -> None:
-    set_structure_depiict_size(300, 250, persist=False)
+    set_structure_depict_size(300, 250, persist=False)
     assert structure_column_minimum_width() == 300 + 28
     assert structure_column_minimum_width(zoomed=True) == 600 + 28
 
 
 def test_structure_column_minimum_width_tracks_runtime_size() -> None:
-    set_structure_depiict_size(300, 250, persist=False)
+    set_structure_depict_size(300, 250, persist=False)
     assert structure_column_minimum_width() == 300 + 28

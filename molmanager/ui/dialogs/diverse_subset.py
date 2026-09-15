@@ -331,20 +331,22 @@ class DiverseSubsetDialog(QDialog):
         app._begin_tool_progress("Diverse subset", n_est)
         app.process_queue.enqueue(
             f"Diverse subset ({n_est} rows, pick {k}, {mode})",
-            lambda ev, o=list(oids), c=fp_choice, kk=k, s=sig, st=prog, ob=onbits_by_oid, uo=use_onbits_col, src_col=src, md=mode, mb=mols_by_oid, tx=structure_texts: DiverseSubsetWorker(
-                None,
-                c,
-                kk,
-                s,
-                oids=o,
-                structure_source=src_col,
-                mols_by_oid=mb,
-                structure_texts=tx,
-                onbits_by_oid=ob,
-                use_onbits_column=uo,
-                mode=md,
-                cancel_event=ev,
-                progress_state=st,
+            lambda ev, o=list(oids), c=fp_choice, kk=k, s=sig, st=prog, ob=onbits_by_oid, uo=use_onbits_col, src_col=src, md=mode, mb=mols_by_oid, tx=structure_texts: (
+                DiverseSubsetWorker(
+                    None,
+                    c,
+                    kk,
+                    s,
+                    oids=o,
+                    structure_source=src_col,
+                    mols_by_oid=mb,
+                    structure_texts=tx,
+                    onbits_by_oid=ob,
+                    use_onbits_column=uo,
+                    mode=md,
+                    cancel_event=ev,
+                    progress_state=st,
+                )
             ),
         )
         self.close()

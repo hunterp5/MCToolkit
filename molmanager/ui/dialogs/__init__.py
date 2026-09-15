@@ -8,111 +8,93 @@
 #
 # MolManager is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Modal and modeless tool dialogs (split into submodules for maintainability)."""
+"""Modal and modeless tool dialogs (split into submodules for maintainability).
+
+Exports are loaded lazily so importing a submodule (e.g. ``protein_prepare``)
+does not pull Qt WebEngine via ``PlotDialog``.
+"""
 
 from __future__ import annotations
 
-from ..plot import PlotDialog
-from ..sketcher import SketchWidget, SketcherDialog
-from .calculator import CalculatorDialog
-from .bulk_similarity import BulkSimilarityDialog
-from .cluster import ClusterDialog
-from .diverse_subset import DiverseSubsetDialog
-from .fp_similarity import FPSimilarityDialog
-from .mol_tools import (
-    CoreBasedDecompDialogParams,
-    CoreBasedDecompositionDialog,
-    DisconnectFragmentsDialog,
-    FastPrepareDialog,
-    AddExplicitHydrogensDialog,
-    RemoveExplicitHydrogensDialog,
-    NeutralizeDialog,
-    FragmentDecompDialogParams,
-    FragmentDecompositionDialog,
-    FragmentRecompDialogParams,
-    FragmentRecompositionDialog,
-    GenerateConformationsDialog,
-    SuperposeDialog,
-    SuperposeConformersDialog,
-    SuperposeStructuresDialog,
-)
-from .systematic_conformations import SystematicConformationsDialog
-from .mmp import MmpDialog, MmpDialogParams
-from .activity_cliff import ActivityCliffDialog, ActivityCliffDialogParams
-from .mmp_neighborhood import MmpNeighborhoodDialog, MmpNeighborhoodDialogParams
-from .sali import SaliDialog, SaliDialogParams
-from .random_molecule import RandomMoleculeDialog, RandomMoleculeDialogParams
-from .random_number import RandomNumberDialog, RandomNumberDialogParams
-from .split_column import SplitColumnDialog, SplitColumnDialogParams
-from .permeability import PermeabilityPredictorDialog
-from .pka import PKaPredictorDialog
-from .som import SomPredictorDialog
-from .properties import PropertyDialog
-from .protomer import ProtomerGeneratorDialog
-from .pdbqt_generator import PdbqtGeneratorDialog
-from .protonate import ProtonateDialog
-from .qsar import QSARDialog
-from .mpo_scoring import MPOScoringDialog, MPOScoringDialogParams
-from .reaction_enumeration import ReactionEnumerationDialog
-from .render_2d import Render2DStructureDialog
-from .scope import selection_scope_checked
+import importlib
+from typing import Any
 
-__all__ = [
-    "ActivityCliffDialog",
-    "ActivityCliffDialogParams",
-    "MmpNeighborhoodDialog",
-    "MmpNeighborhoodDialogParams",
-    "SaliDialog",
-    "SaliDialogParams",
-    "BulkSimilarityDialog",
-    "CalculatorDialog",
-    "ClusterDialog",
-    "CoreBasedDecompDialogParams",
-    "CoreBasedDecompositionDialog",
-    "DisconnectFragmentsDialog",
-    "FastPrepareDialog",
-    "AddExplicitHydrogensDialog",
-    "RemoveExplicitHydrogensDialog",
-    "NeutralizeDialog",
-    "FragmentDecompDialogParams",
-    "FragmentDecompositionDialog",
-    "FragmentRecompDialogParams",
-    "FragmentRecompositionDialog",
-    "DiverseSubsetDialog",
-    "FPSimilarityDialog",
-    "GenerateConformationsDialog",
-    "SystematicConformationsDialog",
-    "MmpDialog",
-    "MmpDialogParams",
-    "PermeabilityPredictorDialog",
-    "PKaPredictorDialog",
-    "SomPredictorDialog",
-    "PlotDialog",
-    "PropertyDialog",
-    "ProtomerGeneratorDialog",
-    "PdbqtGeneratorDialog",
-    "ProtonateDialog",
-    "QSARDialog",
-    "MPOScoringDialog",
-    "MPOScoringDialogParams",
-    "RandomMoleculeDialog",
-    "RandomMoleculeDialogParams",
-    "RandomNumberDialog",
-    "RandomNumberDialogParams",
-    "SplitColumnDialog",
-    "SplitColumnDialogParams",
-    "ReactionEnumerationDialog",
-    "Render2DStructureDialog",
-    "SketchWidget",
-    "SketcherDialog",
-    "SuperposeDialog",
-    "SuperposeConformersDialog",
-    "SuperposeStructuresDialog",
-    "selection_scope_checked",
-]
+# Relative to this package. ``..plot`` / ``..sketcher`` stay out of package init.
+_EXPORTS: dict[str, str] = {
+    "ActivityCliffDialog": ".activity_cliff",
+    "ActivityCliffDialogParams": ".activity_cliff",
+    "AddExplicitHydrogensDialog": ".explicit_hydrogens",
+    "BiotransformerDialog": ".biotransformer",
+    "BulkSimilarityDialog": ".bulk_similarity",
+    "CalculatorDialog": ".calculator",
+    "ClusterDialog": ".cluster",
+    "CoreBasedDecompDialogParams": ".fragment_decomposition",
+    "CoreBasedDecompositionDialog": ".fragment_decomposition",
+    "DataAnalysisDialog": ".data_analysis",
+    "DisconnectFragmentsDialog": ".disconnect_fragments",
+    "DiverseSubsetDialog": ".diverse_subset",
+    "FPSimilarityDialog": ".fp_similarity",
+    "FastPrepareDialog": ".fast_prepare",
+    "FragmentDecompDialogParams": ".fragment_decomposition",
+    "FragmentDecompositionDialog": ".fragment_decomposition",
+    "FragmentRecompDialogParams": ".fragment_decomposition",
+    "FragmentRecompositionDialog": ".fragment_decomposition",
+    "GenerateConformationsDialog": ".generate_conformations",
+    "MPOScoringDialog": ".mpo_scoring",
+    "MPOScoringDialogParams": ".mpo_scoring",
+    "MmpDialog": ".mmp",
+    "MmpDialogParams": ".mmp",
+    "MmpNeighborhoodDialog": ".mmp_neighborhood",
+    "MmpNeighborhoodDialogParams": ".mmp_neighborhood",
+    "NeutralizeDialog": ".neutralize",
+    "PKaPredictorDialog": ".pka",
+    "PdbqtGeneratorDialog": ".pdbqt_generator",
+    "PermeabilityPredictorDialog": ".permeability",
+    "PlotDialog": "..plot",
+    "PropertyDialog": ".properties",
+    "ProteinPrepareDialog": ".protein_prepare",
+    "ProtomerGeneratorDialog": ".protomer",
+    "ProtonateDialog": ".protonate",
+    "QSARDialog": ".qsar",
+    "RandomMoleculeDialog": ".random_molecule",
+    "RandomMoleculeDialogParams": ".random_molecule",
+    "RandomNumberDialog": ".random_number",
+    "RandomNumberDialogParams": ".random_number",
+    "ReactionEnumerationDialog": ".reaction_enumeration",
+    "RemoveExplicitHydrogensDialog": ".explicit_hydrogens",
+    "Render2DStructureDialog": ".render_2d",
+    "SaliDialog": ".sali",
+    "SaliDialogParams": ".sali",
+    "SketchWidget": "..sketcher",
+    "SketcherDialog": "..sketcher",
+    "SminaDockDialog": ".smina_dock",
+    "SomPredictorDialog": ".som",
+    "SplitColumnDialog": ".split_column",
+    "SplitColumnDialogParams": ".split_column",
+    "SuperposeConformersDialog": ".superpose",
+    "SuperposeDialog": ".superpose",
+    "SuperposeStructuresDialog": ".superpose",
+    "SystematicConformationsDialog": ".systematic_conformations",
+    "selection_scope_checked": ".scope",
+}
+
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str) -> Any:
+    mod_name = _EXPORTS.get(name)
+    if mod_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(importlib.import_module(mod_name, __package__), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_EXPORTS))

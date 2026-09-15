@@ -223,14 +223,16 @@ class FPSimilarityDialog(QDialog):
         self.parent_app._begin_tool_progress("Fingerprint similarity", max(1, n_targets + 1))
         self.parent_app.process_queue.enqueue_fast(
             "Fingerprint similarity",
-            lambda ev, q=qmol, t=targets, c=fp_choice, m=metric, sig=self._fp_sim_signals, st=prog: FPSimilarityWorker(
-                q,
-                t,
-                c,
-                sig,
-                metric=m,
-                cancel_event=ev,
-                progress_state=st,
+            lambda ev, q=qmol, t=targets, c=fp_choice, m=metric, sig=self._fp_sim_signals, st=prog: (
+                FPSimilarityWorker(
+                    q,
+                    t,
+                    c,
+                    sig,
+                    metric=m,
+                    cancel_event=ev,
+                    progress_state=st,
+                )
             ),
         )
 

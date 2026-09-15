@@ -32,8 +32,8 @@ from PyQt5.QtWidgets import (
 
 from ..display_constants import (
     structure_column_minimum_width,
-    structure_depiict_height,
-    structure_depiict_width,
+    structure_depict_height,
+    structure_depict_width,
     structure_row_default_height,
 )
 
@@ -123,7 +123,7 @@ class StructureDelegate(QStyledItemDelegate):
         pix = index.data(Qt.DecorationRole)
         if isinstance(pix, QPixmap) and not pix.isNull():
             return QSize(max(sh.width(), pix.width() + 8), max(sh.height(), pix.height() + 8))
-        return QSize(structure_depiict_width(), max(sh.height(), structure_depiict_height()))
+        return QSize(structure_depict_width(), max(sh.height(), structure_depict_height()))
 
 
 def _header_grip_px(header: QHeaderView) -> int:

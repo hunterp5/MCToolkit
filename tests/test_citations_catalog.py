@@ -52,12 +52,17 @@ def test_catalog_includes_key_dois() -> None:
         "10.1186/1758-2946-3-8",
         "10.1021/acs.jmedchem.7b00717",
         "10.1093/bioinformatics/btu829",
+        "10.1186/s13321-018-0324-5",
     ):
         assert doi in html_all
     fame = tool_citation("fame3r")
     assert fame is not None
     assert "non-commercial" in fame.notes.lower()
     assert "University of Milan" in fame.notes
+    bt = tool_citation("biotransformer")
+    assert bt is not None
+    assert "LGPL" in bt.license_name
+    assert "gnu.org/licenses/lgpl-3.0" in bt.license_url
     assert "gnu.org/licenses/gpl-3.0" in tool_citation("molmanager").license_url  # type: ignore[union-attr]
 
 

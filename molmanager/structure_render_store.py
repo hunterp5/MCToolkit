@@ -23,7 +23,7 @@ from collections import OrderedDict
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 
-from .display_constants import structure_depiict_height, structure_depiict_width
+from .display_constants import structure_depict_height, structure_depict_width
 
 
 class StructureRenderStore:
@@ -110,7 +110,7 @@ class StructureRenderStore:
         pm = QPixmap.fromImage(QImage.fromData(raw))
         if pm.isNull():
             return None
-        dw, dh = int(structure_depiict_width()), int(structure_depiict_height())
+        dw, dh = int(structure_depict_width()), int(structure_depict_height())
         if pm.width() > dw or pm.height() > dh:
             pm = pm.scaled(dw, dh, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self._lru[oid_i] = pm

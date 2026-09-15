@@ -415,7 +415,7 @@ def test_empty_som_map_cells_skip_pixmap_background(qapp) -> None:  # noqa: ARG0
     from PyQt5.QtGui import QPixmap
     from PyQt5.QtWidgets import QStyleOptionViewItem
 
-    from molmanager.display_constants import structure_depiict_height
+    from molmanager.display_constants import structure_depict_height
     from molmanager.ui.compound_table_model import CompoundTableModel
     from molmanager.ui.table_selection_delegate import RowHighlightDelegate
 
@@ -437,7 +437,7 @@ def test_empty_som_map_cells_skip_pixmap_background(qapp) -> None:  # noqa: ARG0
     populated_hint = delegate.sizeHint(QStyleOptionViewItem(), populated)
     assert populated_hint.height() >= 60
     assert empty_hint.height() < populated_hint.height()
-    assert empty_hint.height() < structure_depiict_height()
+    assert empty_hint.height() < structure_depict_height()
 
 
 def test_som_map_export_filename() -> None:

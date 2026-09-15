@@ -39,7 +39,7 @@ from ...bundled_paths import default_external_executable
 from ...openbabel_confab import SystematicConfParams, ensure_openbabel_confab_ready
 from ...science_citations import systematic_conformations_dialog_footer_html
 from ..qt_widget_utils import make_window_minimizable
-from .mol_tools import (
+from .conformer_output import (
     ConformerOutputOptions,
     ConformerOutputOptionsPanel,
     citation_footer_label,

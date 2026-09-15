@@ -84,7 +84,9 @@ class ReactionEnumerationOutputPanel(QWidget):
 
         self.add_to_table_cb = QCheckBox("Add products to table")
         self.add_to_table_cb.setChecked(True)
-        self.add_to_table_cb.setToolTip("Append enumerated product rows to the main compound table.")
+        self.add_to_table_cb.setToolTip(
+            "Append enumerated product rows to the main compound table."
+        )
         layout.addWidget(self.add_to_table_cb)
 
         self.save_to_file_cb = QCheckBox("Save products to file")
@@ -209,7 +211,9 @@ class ReactantInputPanel(QWidget):
     def validate(self, dialog: QDialog) -> bool:
         if self.mode() == "file":
             if not (self.file_edit.text() or "").strip():
-                QMessageBox.warning(dialog, dialog.windowTitle(), f"Choose a file for {self._label}.")
+                QMessageBox.warning(
+                    dialog, dialog.windowTitle(), f"Choose a file for {self._label}."
+                )
                 return False
             return True
         text = self.smiles_edit.toPlainText().strip()

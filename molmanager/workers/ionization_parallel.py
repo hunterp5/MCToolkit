@@ -22,11 +22,14 @@ import logging
 import os
 import threading
 from concurrent.futures import FIRST_COMPLETED, BrokenExecutor, ProcessPoolExecutor, wait
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from rdkit import Chem
 
 from ..config import load_config
 from .process_pool_utils import (
+    add_process_pool_shutdown_callback,
     register_process_pool,
     should_terminate_process_pool,
     shutdown_process_pool_executor,
@@ -34,6 +37,18 @@ from .process_pool_utils import (
 from .structure_grouping import group_rows_by_structure, structure_key
 
 logger = logging.getLogger(__name__)
+
+# Uni-pKa writes an LMDB and scores 11 conformers per microstate. One molecule per
+# call under-fills the GPU and repeats that I/O. A 1-worker (CUDA) pool can take a
+# larger batch; several CPU workers keep smaller chunks so progress still moves.
+UNIPKA_STRUCTURE_CHUNK = 8
+UNIPKA_STRUCTURE_CHUNK_SERIAL = 16
+
+_POOL_LOCK = threading.Lock()
+_PERSISTENT_POOL: ProcessPoolExecutor | None = None
+_PERSISTENT_POOL_WORKERS = 0
+_PERSISTENT_POOL_REFS = 0
+_SHUTDOWN_HOOK_REGISTERED = False
 
 
 def unipka_cuda_available() -> bool:
@@ -48,16 +63,128 @@ def unipka_cuda_available() -> bool:
 def chunk_structure_keys(keys: list[str], n_workers: int) -> list[list[str]]:
     """Split unique keys into process-pool tasks.
 
-    A 1-worker CUDA pool uses one structure per task so the status bar can
-    update as each Uni-pKa future completes. Multiple CPU workers still batch
-    a few structures per call.
+    Each task is one Uni-pKa free-energy call. Batching several structures
+    amortizes LMDB setup and GPU kernel launches; chunks stay small enough
+    that the status bar still advances on large jobs.
     """
     if not keys:
         return []
     n_w = max(1, int(n_workers))
-    max_chunk = 4 if n_w > 1 else 1
-    chunk_size = min(max_chunk, max(1, (len(keys) + n_w - 1) // n_w))
+    cap = UNIPKA_STRUCTURE_CHUNK_SERIAL if n_w == 1 else UNIPKA_STRUCTURE_CHUNK
+    chunk_size = min(cap, max(1, (len(keys) + n_w - 1) // n_w))
     return [keys[i : i + chunk_size] for i in range(0, len(keys), chunk_size)]
+
+
+def _clear_persistent_pool_if_matches(ex: ProcessPoolExecutor) -> None:
+    global _PERSISTENT_POOL, _PERSISTENT_POOL_REFS, _PERSISTENT_POOL_WORKERS
+    with _POOL_LOCK:
+        if _PERSISTENT_POOL is ex:
+            _PERSISTENT_POOL = None
+            _PERSISTENT_POOL_WORKERS = 0
+            _PERSISTENT_POOL_REFS = 0
+
+
+def _ensure_pool_shutdown_hook() -> None:
+    global _SHUTDOWN_HOOK_REGISTERED
+    if _SHUTDOWN_HOOK_REGISTERED:
+        return
+    add_process_pool_shutdown_callback(_clear_persistent_pool_if_matches)
+    _SHUTDOWN_HOOK_REGISTERED = True
+
+
+def _executor_is_usable(ex: ProcessPoolExecutor | None) -> bool:
+    if ex is None:
+        return False
+    if getattr(ex, "_broken", False):
+        return False
+    shutdown_flag = getattr(ex, "_shutdown_thread", False)
+    if shutdown_flag is True or isinstance(shutdown_flag, threading.Thread):
+        return False
+    if getattr(ex, "_shutdown", False) is True:
+        return False
+    return True
+
+
+def discard_ionization_process_pool() -> None:
+    """Kill the cached 1-worker Uni-pKa pool (timeout, tests, or a broken GPU worker)."""
+    global _PERSISTENT_POOL, _PERSISTENT_POOL_REFS, _PERSISTENT_POOL_WORKERS
+    with _POOL_LOCK:
+        ex = _PERSISTENT_POOL
+        _PERSISTENT_POOL = None
+        _PERSISTENT_POOL_WORKERS = 0
+        _PERSISTENT_POOL_REFS = 0
+    shutdown_process_pool_executor(ex, kill_workers=True)
+
+
+def _acquire_persistent_pool(n_workers: int) -> ProcessPoolExecutor:
+    global _PERSISTENT_POOL, _PERSISTENT_POOL_REFS, _PERSISTENT_POOL_WORKERS
+    _ensure_pool_shutdown_hook()
+    n = max(1, int(n_workers))
+    with _POOL_LOCK:
+        ex = _PERSISTENT_POOL
+        if _executor_is_usable(ex) and _PERSISTENT_POOL_WORKERS >= n:
+            _PERSISTENT_POOL_REFS += 1
+            return ex
+        stale = ex
+        _PERSISTENT_POOL = None
+        _PERSISTENT_POOL_WORKERS = 0
+        _PERSISTENT_POOL_REFS = 0
+    if stale is not None:
+        shutdown_process_pool_executor(stale, kill_workers=True)
+    created = register_process_pool(ProcessPoolExecutor(max_workers=n))
+    with _POOL_LOCK:
+        _PERSISTENT_POOL = created
+        _PERSISTENT_POOL_WORKERS = n
+        _PERSISTENT_POOL_REFS = 1
+    return created
+
+
+def _release_persistent_pool(*, kill: bool) -> None:
+    global _PERSISTENT_POOL, _PERSISTENT_POOL_REFS, _PERSISTENT_POOL_WORKERS
+    with _POOL_LOCK:
+        _PERSISTENT_POOL_REFS = max(0, _PERSISTENT_POOL_REFS - 1)
+        ex = _PERSISTENT_POOL
+        if not kill and _executor_is_usable(ex):
+            return
+        _PERSISTENT_POOL = None
+        _PERSISTENT_POOL_WORKERS = 0
+        _PERSISTENT_POOL_REFS = 0
+    shutdown_process_pool_executor(ex, kill_workers=True)
+
+
+@contextmanager
+def ionization_process_pool(
+    proc_workers: int,
+    *,
+    cancel_event: threading.Event | None = None,
+) -> Iterator[ProcessPoolExecutor]:
+    """Yield a Uni-pKa process pool.
+
+    A 1-worker pool (CUDA, or CPU with one process) is kept alive after a
+    successful job so the next Predict pKa / Protonate does not reload fold
+    weights. Cancel, a broken executor, or ``discard_ionization_process_pool``
+    still terminate the child. Multi-worker CPU pools are ephemeral.
+    """
+    n = max(1, int(proc_workers))
+    persist = n == 1
+    if persist:
+        ex = _acquire_persistent_pool(n)
+        kill = False
+        try:
+            yield ex
+        except Exception:
+            kill = True
+            raise
+        finally:
+            if should_terminate_process_pool(cancel_event) or getattr(ex, "_broken", False):
+                kill = True
+            _release_persistent_pool(kill=kill)
+        return
+    ex = register_process_pool(ProcessPoolExecutor(max_workers=n))
+    try:
+        yield ex
+    finally:
+        shutdown_process_pool_executor(ex, kill_workers=should_terminate_process_pool(cancel_event))
 
 
 def map_ionization_progress(
@@ -220,10 +347,9 @@ def predict_microstates_for_sketch(
     if configured is not None and int(configured) <= 0:
         return microstates_for_mol(mol)
 
-    ex = register_process_pool(ProcessPoolExecutor(max_workers=1))
     states = None
     timed_out = False
-    try:
+    with ionization_process_pool(1, cancel_event=cancel_event) as ex:
         fut = ex.submit(_mp_compute_microstates, (key, blob))
         deadline = time.monotonic() + max(5.0, float(timeout_s))
         while True:
@@ -253,11 +379,8 @@ def predict_microstates_for_sketch(
                 logger.debug("Uni-pKa sketch microstates failed", exc_info=True)
                 states = None
             break
-    finally:
-        shutdown_process_pool_executor(
-            ex,
-            kill_workers=should_terminate_process_pool(cancel_event) or timed_out,
-        )
+    if timed_out:
+        discard_ionization_process_pool()
 
     cache_store(key, states)
     return states
@@ -343,48 +466,47 @@ def build_microstates_cache_by_key(
         pool_failed = False
         wrote_mmff = os.environ.get("MOLMANAGER_UNIPKA_MMFF_THREADS") is None and proc_workers > 1
         prev_mmff = _set_unipka_mmff_thread_env(proc_workers)
-        ex = register_process_pool(ProcessPoolExecutor(max_workers=proc_workers))
         try:
-            pending = {ex.submit(_mp_compute_microstates_chunk, chunk) for chunk in task_chunks}
-            while pending:
-                if should_terminate_process_pool(cancel_event):
-                    completed, pending = wait(pending, timeout=0)
+            with ionization_process_pool(proc_workers, cancel_event=cancel_event) as ex:
+                pending = {ex.submit(_mp_compute_microstates_chunk, chunk) for chunk in task_chunks}
+                while pending:
+                    if should_terminate_process_pool(cancel_event):
+                        completed, pending = wait(pending, timeout=0)
+                        for f in completed:
+                            if f.cancelled():
+                                continue
+                            try:
+                                for key, states in f.result():
+                                    cache[key] = states
+                            except Exception:
+                                logger.debug("Uni-pKa process-pool task failed", exc_info=True)
+                        for f in pending:
+                            f.cancel()
+                        break
+                    completed, pending = wait(pending, timeout=0.25, return_when=FIRST_COMPLETED)
                     for f in completed:
                         if f.cancelled():
                             continue
                         try:
                             for key, states in f.result():
                                 cache[key] = states
+                            _report_ionization(len(cache), force=True)
+                        except BrokenExecutor:
+                            pool_failed = True
+                            logger.warning(
+                                "Uni-pKa process pool failed; finishing remaining structures sequentially"
+                            )
+                            break
                         except Exception:
                             logger.debug("Uni-pKa process-pool task failed", exc_info=True)
-                    for f in pending:
-                        f.cancel()
-                    break
-                completed, pending = wait(pending, timeout=0.25, return_when=FIRST_COMPLETED)
-                for f in completed:
-                    if f.cancelled():
-                        continue
-                    try:
-                        for key, states in f.result():
-                            cache[key] = states
-                        _report_ionization(len(cache), force=True)
-                    except BrokenExecutor:
-                        pool_failed = True
-                        logger.warning(
-                            "Uni-pKa process pool failed; finishing remaining structures sequentially"
-                        )
+                    if pool_failed:
+                        for f in pending:
+                            f.cancel()
                         break
-                    except Exception:
-                        logger.debug("Uni-pKa process-pool task failed", exc_info=True)
-                if pool_failed:
-                    for f in pending:
-                        f.cancel()
-                    break
         finally:
-            shutdown_process_pool_executor(
-                ex, kill_workers=should_terminate_process_pool(cancel_event)
-            )
             _restore_unipka_mmff_thread_env(prev_mmff, wrote_mmff)
+        if pool_failed:
+            discard_ionization_process_pool()
         if pool_failed or any(k not in cache for k in need):
             # Do not score leftover structures in this process when a CUDA wheel is
             # installed — that would initialize CUDA in the GUI and block shutdown.

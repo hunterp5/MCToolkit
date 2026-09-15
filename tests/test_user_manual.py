@@ -69,6 +69,8 @@ def test_guide_html_pubchem_and_smina():
     assert "FAME3R" in som and "Topic unavailable" not in som
     assert "Phase 1 and 2" in som
     assert "Compare Phase 1 vs Phase 2" not in som
+    mets = guide_html("tools_predict_metabolites")
+    assert "BioTransformer" in mets and "Topic unavailable" not in mets
 
 
 def test_markdown_renderer_basics():

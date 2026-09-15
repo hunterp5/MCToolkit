@@ -153,9 +153,11 @@ def load_templates(
     return _read_template_rows(template_path)
 
 
-def match_template(template: tuple[TemplateRow, ...], mol: Chem.Mol) -> list[int]:
+def match_template(
+    template: tuple[TemplateRow, ...], mol: Chem.Mol, *, add_hs: bool = True
+) -> list[int]:
     """Atom indices to (de)protonate on an explicit-H copy of ``mol``."""
-    mol_h = Chem.AddHs(mol)
+    mol_h = Chem.AddHs(mol) if add_hs else mol
     matches: set[int] = set()
     for row in template:
         for hit in mol_h.GetSubstructMatches(row.pattern):
@@ -209,7 +211,7 @@ def prot_template(template: tuple[TemplateRow, ...], smi: str, mode: str) -> lis
     if mol is None:
         return []
     mol_h = Chem.AddHs(mol)
-    sites = match_template(template, mol_h)
+    sites = match_template(template, mol_h, add_hs=False)
     out: set[str] = set()
     for site in sites:
         product = prot(mol_h, site, mode)
@@ -219,19 +221,30 @@ def prot_template(template: tuple[TemplateRow, ...], smi: str, mode: str) -> lis
     return list(out)
 
 
-def sanitize_checker(smi: str, filter_patterns: tuple[Chem.Mol, ...] = FILTER_PATTERNS) -> bool:
+def _sanitize_checker_impl(smi: str, filter_patterns: tuple[Chem.Mol, ...]) -> bool:
     mol = _mol_from_smi(smi)
     if mol is None:
         return False
     mol_h = Chem.AddHs(mol)
     for pattern in filter_patterns:
-        if mol_h.GetSubstructMatches(pattern):
+        if mol_h.HasSubstructMatch(pattern):
             return False
     try:
         Chem.SanitizeMol(mol_h)
     except Exception:
         return False
     return True
+
+
+@lru_cache(maxsize=8192)
+def _sanitize_checker_cached(smi: str) -> bool:
+    return _sanitize_checker_impl(smi, FILTER_PATTERNS)
+
+
+def sanitize_checker(smi: str, filter_patterns: tuple[Chem.Mol, ...] = FILTER_PATTERNS) -> bool:
+    if filter_patterns is FILTER_PATTERNS:
+        return _sanitize_checker_cached(smi)
+    return _sanitize_checker_impl(smi, filter_patterns)
 
 
 def sanitize_filter(
@@ -289,20 +302,22 @@ def enumerate_template(
     pool_length_a = -1
     pool_length_b = -1
     i = 0
+    expanded_a: set[str] = set()
+    expanded_b: set[str] = set()
     while (len(smis_a_pool) != pool_length_a or len(smis_b_pool) != pool_length_b) and i < maxiter:
         pool_length_a, pool_length_b = len(smis_a_pool), len(smis_b_pool)
         if (mode == "A" and (i + 1) % 2) or (mode == "B" and i % 2):
-            extra_a: list[str] = []
             for acid_smi in list(smis_a_pool):
+                if acid_smi in expanded_a:
+                    continue
+                expanded_a.add(acid_smi)
                 smis_b_pool.extend(_filters(prot_template(template_a2b, acid_smi, "a2b")))
-                extra_a.append(acid_smi)
-            smis_a_pool.extend(_filters(extra_a))
         elif (mode == "B" and (i + 1) % 2) or (mode == "A" and i % 2):
-            extra_b: list[str] = []
             for base_smi in list(smis_b_pool):
+                if base_smi in expanded_b:
+                    continue
+                expanded_b.add(base_smi)
                 smis_a_pool.extend(_filters(prot_template(template_b2a, base_smi, "b2a")))
-                extra_b.append(base_smi)
-            smis_b_pool.extend(_filters(extra_b))
         smis_a_pool = list(set(_filters(smis_a_pool)))
         smis_b_pool = list(set(_filters(smis_b_pool)))
         i += 1

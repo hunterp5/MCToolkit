@@ -155,7 +155,9 @@ class CalculatorDialog(QDialog):
         self.only_selected_cb = QCheckBox("Selected Rows Only")
         self._only_selected_scope_prefix = "Selected Rows Only"
         if self._have_selection:
-            self.only_selected_cb.setText(f"{self._only_selected_scope_prefix} ({selected_row_count} row(s))")
+            self.only_selected_cb.setText(
+                f"{self._only_selected_scope_prefix} ({selected_row_count} row(s))"
+            )
         else:
             self.only_selected_cb.setEnabled(False)
         scope_lyt.addWidget(self.only_selected_cb)

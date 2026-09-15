@@ -36,8 +36,8 @@ from ...ingest_text import is_ingest_cell_batch
 from ...display_constants import (
     STRUCTURE_COLUMN_HORIZONTAL_PADDING,
     structure_column_minimum_width,
-    structure_depiict_height,
-    structure_depiict_width,
+    structure_depict_height,
+    structure_depict_width,
     structure_row_default_height,
 )
 from ...structure_render_store import StructureRenderStore
@@ -57,6 +57,7 @@ from ..compound_table_model import CompoundTableModel
 from rdkit import Chem
 
 logger = logging.getLogger(__name__)
+
 
 class IngestRenderMixin:
     def _abort_if_only_selected_but_empty(
@@ -183,7 +184,9 @@ class IngestRenderMixin:
         if self._ingest_use_silent_model() and not self._table_model.silent_appending:
             self._table_model.begin_silent_appends()
 
-    def _ingest_append_batch_items(self, items: list, new_rows: list[tuple[int, dict[str, str]]]) -> None:
+    def _ingest_append_batch_items(
+        self, items: list, new_rows: list[tuple[int, dict[str, str]]]
+    ) -> None:
         """Convert one worker batch (mol blobs or cell dicts) into pending table rows."""
         if is_ingest_cell_batch(items):
             for cells in items:
@@ -246,7 +249,11 @@ class IngestRenderMixin:
         *precomputed_cells* are row cells built off the GUI thread by the load worker; when
         provided they are used verbatim (avoids re-reading every property on the GUI thread).
         """
-        cells = dict(precomputed_cells) if precomputed_cells is not None else self._row_cells_from_mol(mol)
+        cells = (
+            dict(precomputed_cells)
+            if precomputed_cells is not None
+            else self._row_cells_from_mol(mol)
+        )
         if mol is not None and mol_has_3d_coordinates(mol):
             from ..mol_viewer_3d import prepare_mol_2d
 
@@ -322,7 +329,9 @@ class IngestRenderMixin:
         sub_slice = max(32, min(int(chunk_size), int(cfg.ingest_gui_subslice_rows)))
         try:
             with scope("ingest.process_chunk"):
-                while self._pending_batches and processed < chunk_size and time.monotonic() < deadline:
+                while (
+                    self._pending_batches and processed < chunk_size and time.monotonic() < deadline
+                ):
                     mols_list, is_last = self._pending_batches[0]
                     step = min(len(mols_list), sub_slice, max(0, int(chunk_size - processed)))
                     if step:
@@ -344,7 +353,10 @@ class IngestRenderMixin:
                     self._loading_detail.setText(
                         f"Building table…\n{n} molecule(s); 2D structures draw before the workspace is shown"
                     )
-                if getattr(self, "_ingest_loading", False) and not self._import_building_progress_shown:
+                if (
+                    getattr(self, "_ingest_loading", False)
+                    and not self._import_building_progress_shown
+                ):
                     self._import_building_progress_shown = True
                     self._on_tool_progress("Building table…", -1, -1)
         finally:
@@ -466,7 +478,9 @@ class IngestRenderMixin:
         if store is None:
             return
         self._sqlite_rebuild_in_progress = True
-        data_headers = [h for h in self.headers[2:] if h and not self._table_model.is_pixmap_data_column(h)]
+        data_headers = [
+            h for h in self.headers[2:] if h and not self._table_model.is_pixmap_data_column(h)
+        ]
         entries = self._table_model.export_rows_for_sqlite(data_headers)
         perf = getattr(self, "_perf", None)
         scope = perf.track if perf is not None else (lambda *_args, **_kwargs: nullcontext())
@@ -490,7 +504,9 @@ class IngestRenderMixin:
         self._sqlite_rebuild_gen = int(getattr(self, "_sqlite_rebuild_gen", 0)) + 1
         gen = self._sqlite_rebuild_gen
         self._sqlite_rebuild_in_progress = True
-        data_headers = [h for h in self.headers[2:] if h and not self._table_model.is_pixmap_data_column(h)]
+        data_headers = [
+            h for h in self.headers[2:] if h and not self._table_model.is_pixmap_data_column(h)
+        ]
         import os
         import tempfile
         from pathlib import Path
@@ -659,11 +675,11 @@ class IngestRenderMixin:
             self._table_model.notify_structure_column_changed()
         self.table.viewport().update()
 
-    def apply_structure_depiict_size(self, width: int, height: int, *, persist: bool = True) -> None:
+    def apply_structure_depict_size(self, width: int, height: int, *, persist: bool = True) -> None:
         """Apply depiction size from Settings and optionally re-render the Structure column."""
-        from ...display_constants import set_structure_depiict_size
+        from ...display_constants import set_structure_depict_size
 
-        set_structure_depiict_size(width, height, persist=persist)
+        set_structure_depict_size(width, height, persist=persist)
         self.apply_structure_table_layout()
         if persist:
             self.rerender_structure_column_for_new_size()
@@ -681,7 +697,7 @@ class IngestRenderMixin:
                 )
             return
         self.zoomed_ids.clear()
-        w, h = structure_depiict_width(), structure_depiict_height()
+        w, h = structure_depict_width(), structure_depict_height()
         renders, row_by_oid = self._build_render2d_tasks_in_table_order("Structure", w, h, None)
         self._table_model.clear_structure_png_store()
         if not renders:
@@ -714,7 +730,7 @@ class IngestRenderMixin:
         current = self._table_model.structure_pixmap_for_oid(oid)
         if current is None or current.isNull():
             return None
-        w, h = structure_depiict_width(), structure_depiict_height()
+        w, h = structure_depict_width(), structure_depict_height()
         if current.width() <= w and current.height() <= h:
             return current
         return current.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -725,7 +741,7 @@ class IngestRenderMixin:
         if pm is None or pm.isNull():
             return False
         self._table_model.set_structure_pixmap(oid, pm)
-        self.table.setRowHeight(int(view_row), structure_depiict_height())
+        self.table.setRowHeight(int(view_row), structure_depict_height())
         self._sync_structure_column_width_for_zoom_state()
         return True
 
@@ -741,7 +757,9 @@ class IngestRenderMixin:
         if need > self.table.structure_column_minimum_width():
             self.table.set_structure_column_minimum_width(need)
 
-    def _sync_data_pixmap_column_width(self, header_name: str, pm: QPixmap | None, fallback_w: int) -> None:
+    def _sync_data_pixmap_column_width(
+        self, header_name: str, pm: QPixmap | None, fallback_w: int
+    ) -> None:
         try:
             col = self.headers.index(header_name)
         except ValueError:
@@ -831,7 +849,9 @@ class IngestRenderMixin:
                 else:
                     self._sync_structure_column_width_for_pixmap(pm, w)
                 if props:
-                    updates = {name: str(props.get(name, "")) for name in self.headers[2:] if name in props}
+                    updates = {
+                        name: str(props.get(name, "")) for name in self.headers[2:] if name in props
+                    }
                     if updates:
                         self._table_model.set_cell_text_batch(oid, updates)
                 if not pix_target and oid not in self.zoomed_ids:
@@ -848,14 +868,14 @@ class IngestRenderMixin:
         if getattr(self, "_pending_session_table_layout", None):
             return
         pad = STRUCTURE_COLUMN_HORIZONTAL_PADDING
-        need = max(1, int(structure_depiict_width()) + pad)
+        need = max(1, int(structure_depict_width()) + pad)
         try:
             if pix_target:
                 col = self.headers.index(pix_target)
                 if self.table.columnWidth(col) < need:
                     self.table.setColumnWidth(col, need)
             else:
-                self._sync_structure_column_width_for_pixmap(None, structure_depiict_width())
+                self._sync_structure_column_width_for_pixmap(None, structure_depict_width())
         except Exception:
             pass
 
@@ -1041,8 +1061,10 @@ class IngestRenderMixin:
             self.zoomed_ids.remove(oid)
             if self._try_restore_structure_zoom_out(oid, view_row):
                 return
-            w, h = structure_depiict_width(), structure_depiict_height()
+            w, h = structure_depict_width(), structure_depict_height()
         else:
             self.zoomed_ids.add(oid)
-            w, h = structure_depiict_width() * 2, structure_depiict_height() * 2
+            w, h = structure_depict_width() * 2, structure_depict_height() * 2
         self.start_render_worker(oid, mol, w, h)
+
+    apply_structure_depiict_size = apply_structure_depict_size

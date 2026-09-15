@@ -77,7 +77,7 @@ from ...medchem_space import (
     snapshot_scope_row_indices,
 )
 from ...workers.medchem_space_worker import MedChemSpaceSignals, MedChemSpaceWorker
-from ..data_analysis import numeric_subset, table_to_dataframe
+from .data_analysis import numeric_subset, table_to_dataframe
 from ..medchem_space_plot import build_boiled_egg_figure, build_golden_triangle_figure
 from ..plotly_interactive_view import PlotlyInteractiveView
 from ..plot_table_sync import visible_oids_for_plot

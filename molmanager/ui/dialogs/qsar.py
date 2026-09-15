@@ -52,7 +52,7 @@ from ...qsar import (
 )
 from ...workers import SIMILARITY_FP_TYPE_LABELS
 from ...workers.qsar_worker import QSARSignals, QSARPredictWorker, QSARTrainWorker
-from ..data_analysis import numeric_subset, table_to_dataframe
+from .data_analysis import numeric_subset, table_to_dataframe
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 from .mmp import select_preferred_activity_column
 from .scope import selection_scope_checked
@@ -481,7 +481,9 @@ class QSARDialog(QDialog):
                 p, sigs, cancel_event=ev, progress_state=st
             ),
         )
-        self.parent_app.process_queue.thread_finished.connect(self._on_process_queue_thread_finished)
+        self.parent_app.process_queue.thread_finished.connect(
+            self._on_process_queue_thread_finished
+        )
 
     def _on_predict(self) -> None:
         if self._job_running or self._fit_result is None or self.parent_app is None:
@@ -509,7 +511,9 @@ class QSARDialog(QDialog):
                 p, sigs, cancel_event=ev, progress_state=st
             ),
         )
-        self.parent_app.process_queue.thread_finished.connect(self._on_process_queue_thread_finished)
+        self.parent_app.process_queue.thread_finished.connect(
+            self._on_process_queue_thread_finished
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self._disconnect_process_queue_thread_finished()

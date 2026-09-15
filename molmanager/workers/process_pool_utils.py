@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 _SHUTDOWN = threading.Event()
 _ACTIVE_POOLS: list[ProcessPoolExecutor] = []
 _LOCK = threading.Lock()
+_SHUTDOWN_CALLBACKS: list[Callable[[ProcessPoolExecutor], None]] = []
 
 
 def signal_application_shutdown() -> None:
@@ -60,6 +62,13 @@ def unregister_process_pool(ex: ProcessPoolExecutor) -> None:
             pass
 
 
+def add_process_pool_shutdown_callback(callback: Callable[[ProcessPoolExecutor], None]) -> None:
+    """Run *callback* after each ``shutdown_process_pool_executor`` call."""
+    with _LOCK:
+        if callback not in _SHUTDOWN_CALLBACKS:
+            _SHUTDOWN_CALLBACKS.append(callback)
+
+
 def shutdown_process_pool_executor(
     ex: ProcessPoolExecutor | None,
     *,
@@ -80,6 +89,13 @@ def shutdown_process_pool_executor(
         logger.debug("process pool shutdown failed", exc_info=True)
     if kill_workers:
         _terminate_executor_children(ex)
+    with _LOCK:
+        callbacks = list(_SHUTDOWN_CALLBACKS)
+    for callback in callbacks:
+        try:
+            callback(ex)
+        except Exception:
+            logger.debug("process pool shutdown callback failed", exc_info=True)
 
 
 def _terminate_executor_children(ex: ProcessPoolExecutor) -> None:

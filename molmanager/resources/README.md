@@ -30,3 +30,7 @@ Python dependencies (RDKit, PyQt5, PyTorch, unipkainfer, Chemprop, Meeko, pytest
 ```bash
 python scripts/bootstrap_gnn_mtl_model.py
 ```
+
+## BioTransformer 3 (optional, not in git)
+
+`molmanager/resources/models/biotransformer/` — see `models/biotransformer/README.md`. Requires Java on PATH plus `biotransformer-3.0.0.jar`, `database/`, and `supportfiles/`. Override the JAR with `MOLMANAGER_BIOTRANSFORMER_JAR`.

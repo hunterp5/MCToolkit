@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from shutil import which
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 
@@ -134,8 +135,6 @@ def resolve_user_executable(user_path: str) -> str | None:
     candidate = Path(text).expanduser()
     if candidate.is_file():
         return str(candidate)
-    from shutil import which
-
     found = which(text)
     if found:
         return found
@@ -246,6 +245,73 @@ def gnn_mtl_model_path() -> Path:
     if override:
         return Path(override)
     return models_dir() / "gnn_mtl" / "model.pt"
+
+
+def biotransformer_models_dir() -> Path:
+    return models_dir() / "biotransformer"
+
+
+def java_executable() -> Path | None:
+    """``java`` on PATH (``java.exe`` on Windows)."""
+    found = which("java")
+    if found:
+        return Path(found)
+    if sys.platform.startswith("win"):
+        found = which("java.exe")
+        if found:
+            return Path(found)
+    return None
+
+
+def _first_biotransformer_jar(directory: Path) -> Path | None:
+    if not directory.is_dir():
+        return None
+    preferred = directory / "biotransformer-3.0.0.jar"
+    if preferred.is_file():
+        return preferred
+    matches = sorted(
+        p
+        for p in directory.glob("biotransformer*.jar")
+        if p.is_file() and p.suffix.lower() == ".jar"
+    )
+    return matches[0] if matches else None
+
+
+def resolve_biotransformer_jar() -> Path | None:
+    """Path to a BioTransformer JAR when installed (env override or models folder)."""
+    override = (os.environ.get("MOLMANAGER_BIOTRANSFORMER_JAR") or "").strip()
+    if override:
+        candidate = Path(override).expanduser()
+        return candidate if candidate.is_file() else None
+    return _first_biotransformer_jar(biotransformer_models_dir())
+
+
+def biotransformer_support_root(jar: Path | None = None) -> Path | None:
+    """Directory that must contain ``database/`` and ``supportfiles/`` (the JAR's parent)."""
+    path = jar if jar is not None else resolve_biotransformer_jar()
+    if path is None:
+        return None
+    return path.resolve().parent
+
+
+def biotransformer_layout_errors(jar: Path | None = None) -> list[str]:
+    """Human-readable problems with the local BioTransformer install (empty if ready)."""
+    errors: list[str] = []
+    if java_executable() is None:
+        errors.append("Java is not on PATH.")
+    jar_path = jar if jar is not None else resolve_biotransformer_jar()
+    if jar_path is None or not jar_path.is_file():
+        errors.append(
+            "BioTransformer JAR not found. Place biotransformer-3.0.0.jar under "
+            "molmanager/resources/models/biotransformer/ or set MOLMANAGER_BIOTRANSFORMER_JAR."
+        )
+        return errors
+    root = jar_path.resolve().parent
+    if not (root / "database").is_dir():
+        errors.append(f"Missing database/ next to the JAR ({root}).")
+    if not (root / "supportfiles").is_dir():
+        errors.append(f"Missing supportfiles/ next to the JAR ({root}).")
+    return errors
 
 
 def static_asset_path(name: str) -> Path:

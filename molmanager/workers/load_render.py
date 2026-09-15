@@ -31,7 +31,7 @@ from .process_pool_utils import (
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..display_constants import structure_depiict_height, structure_depiict_width
+from ..display_constants import structure_depict_height, structure_depict_width
 from ..config import load_config
 from ..import_structure import needs_structure_source_picker
 from ..ingest_text import csv_row_to_cells, smi_line_to_cells, sniff_table_delimiter
@@ -435,8 +435,8 @@ class RenderWorker(QRunnable):
         self.compound_oid = int(compound_oid)
         self.mol = mol
         self.signals = signals
-        self.w = int(width if width is not None else structure_depiict_width())
-        self.h = int(height if height is not None else structure_depiict_height())
+        self.w = int(width if width is not None else structure_depict_width())
+        self.h = int(height if height is not None else structure_depict_height())
         self.props = props
         self.cancel_event = cancel_event
         self.skip_mol_props = skip_mol_props

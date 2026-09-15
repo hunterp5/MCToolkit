@@ -91,7 +91,9 @@ class LayoutPreviewTile(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         pal = self.palette()
-        border = pal.color(pal.Highlight) if (self._selected or self._hovered) else pal.color(pal.Mid)
+        border = (
+            pal.color(pal.Highlight) if (self._selected or self._hovered) else pal.color(pal.Mid)
+        )
         width = 2.5 if (self._selected or self._hovered) else 1.0
         frame = QRectF(1.5, 1.5, self.width() - 3.0, self.height() - 3.0)
         painter.setPen(QPen(border, width))
@@ -138,7 +140,12 @@ class LayoutPreviewTile(QWidget):
             tw = rect.width() * 0.55
             fill_rect(QRectF(rect.left(), rect.top(), tw - gap / 2, rect.height()), table, "T")
             fill_rect(
-                QRectF(rect.left() + tw + gap / 2, rect.top(), rect.width() - tw - gap / 2, rect.height()),
+                QRectF(
+                    rect.left() + tw + gap / 2,
+                    rect.top(),
+                    rect.width() - tw - gap / 2,
+                    rect.height(),
+                ),
                 plot,
                 "Plot",
             )
@@ -146,7 +153,9 @@ class LayoutPreviewTile(QWidget):
         if lid == "table_stack":
             tw = rect.width() * 0.5
             fill_rect(QRectF(rect.left(), rect.top(), tw - gap / 2, rect.height()), table, "T")
-            pr = QRectF(rect.left() + tw + gap / 2, rect.top(), rect.width() - tw - gap / 2, rect.height())
+            pr = QRectF(
+                rect.left() + tw + gap / 2, rect.top(), rect.width() - tw - gap / 2, rect.height()
+            )
             hh = (pr.height() - gap) / 2
             fill_rect(QRectF(pr.left(), pr.top(), pr.width(), hh), plot, "P")
             fill_rect(QRectF(pr.left(), pr.top() + hh + gap, pr.width(), hh), plot, "P")
@@ -154,7 +163,9 @@ class LayoutPreviewTile(QWidget):
         if lid == "table_side":
             tw = rect.width() * 0.4
             fill_rect(QRectF(rect.left(), rect.top(), tw - gap / 2, rect.height()), table, "T")
-            pr = QRectF(rect.left() + tw + gap / 2, rect.top(), rect.width() - tw - gap / 2, rect.height())
+            pr = QRectF(
+                rect.left() + tw + gap / 2, rect.top(), rect.width() - tw - gap / 2, rect.height()
+            )
             ww = (pr.width() - gap) / 2
             fill_rect(QRectF(pr.left(), pr.top(), ww, pr.height()), plot, "P")
             fill_rect(QRectF(pr.left() + ww + gap, pr.top(), ww, pr.height()), plot, "P")

@@ -54,8 +54,8 @@ from ..compound_table_model import (
     StructureDelegate,
     STRUCTURE_COLUMN_HORIZONTAL_PADDING,
     structure_column_minimum_width,
-    structure_depiict_height,
-    structure_depiict_width,
+    structure_depict_height,
+    structure_depict_width,
     structure_row_default_height,
 )
 from ..filter_proxy_model import FilterProxyModel
@@ -273,6 +273,8 @@ class ChemicalTableApp(
         self._selection_browser_dialog = None
         self._som_browser_dialog = None
         self._som_browse_records = []
+        self._metabolite_browser_dialog = None
+        self._metabolite_browse_records = []
         self._mmp_browser_dialog = None
         self._mmp_ledger_dialog = None
         self._mmp_last_pairs = []
@@ -406,9 +408,9 @@ class ChemicalTableApp(
     ):
         """Queue 2D structure rendering on the render-only thread pool."""
         if w is None:
-            w = structure_depiict_width()
+            w = structure_depict_width()
         if h is None:
-            h = structure_depiict_height()
+            h = structure_depict_height()
         self._render_threadpool.start(
             RenderWorker(
                 oid,
@@ -472,7 +474,7 @@ class ChemicalTableApp(
         )
         self.table.setColumnWidth(
             CompoundTableModel.STRUCTURE_COL,
-            structure_depiict_width() + STRUCTURE_COLUMN_HORIZONTAL_PADDING,
+            structure_depict_width() + STRUCTURE_COLUMN_HORIZONTAL_PADDING,
         )
         self.table.set_structure_column_minimum_width(structure_column_minimum_width())
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)

@@ -357,12 +357,12 @@ def restore_som_maps_for_session(app: Any, sidecar: Any = None) -> int:
     model = getattr(app, "_table_model", None)
     if model is None:
         return 0
-    from ..display_constants import structure_depiict_height, structure_depiict_width
+    from ..display_constants import structure_depict_height, structure_depict_width
     from .structure_pixmap import pixmap_from_structure_render_png
 
     for header in map_headers:
         model.register_pixmap_column(header)
-    dw, dh = structure_depiict_width(), structure_depiict_height()
+    dw, dh = structure_depict_width(), structure_depict_height()
     rec_by_oid = {int(rec.oid): rec for rec in records if rec.oid is not None}
     mols = getattr(app, "mols", None) or {}
     last_pm = None

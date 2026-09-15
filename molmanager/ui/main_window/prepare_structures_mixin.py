@@ -38,7 +38,7 @@ from ...workers import (
     Render2DBatchHeldJob,
     DisconnectFragmentsWorker,
 )
-from ...display_constants import structure_depiict_height, structure_depiict_width
+from ...display_constants import structure_depict_height, structure_depict_width
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +171,7 @@ class PrepareStructuresMixin:
             return
         out_col = written[0]
         try:
-            base_w, base_h = structure_depiict_width(), structure_depiict_height()
+            base_w, base_h = structure_depict_width(), structure_depict_height()
             renders, row_by_oid = self._build_render2d_tasks_in_table_order(
                 out_col, base_w, base_h, allowed
             )
@@ -337,7 +337,7 @@ class PrepareStructuresMixin:
 
         if results and not getattr(self, "_render2d_batch_active", False):
             renders, row_by_oid = self._build_render2d_tasks_in_table_order(
-                prepare_col, structure_depiict_width(), structure_depiict_height(), allowed_oids
+                prepare_col, structure_depict_width(), structure_depict_height(), allowed_oids
             )
             if renders:
                 self.status_label.setText("Fast prepare: rendering 2D…")
@@ -715,7 +715,7 @@ class PrepareStructuresMixin:
             and not no_render_2d
             and not getattr(self, "_render2d_batch_active", False)
         ):
-            base_w, base_h = structure_depiict_width(), structure_depiict_height()
+            base_w, base_h = structure_depict_width(), structure_depict_height()
             renders = []
             row_by_oid: dict[int, int] = {}
             for oid, mol in results:
@@ -725,7 +725,7 @@ class PrepareStructuresMixin:
                 if row < 0:
                     continue
                 rw, rh = (
-                    (structure_depiict_width() * 2, structure_depiict_height() * 2)
+                    (structure_depict_width() * 2, structure_depict_height() * 2)
                     if oid in self.zoomed_ids
                     else (base_w, base_h)
                 )
@@ -779,7 +779,7 @@ class PrepareStructuresMixin:
             and not no_render_2d
             and not getattr(self, "_render2d_batch_active", False)
         ):
-            base_w, base_h = structure_depiict_width(), structure_depiict_height()
+            base_w, base_h = structure_depict_width(), structure_depict_height()
             renders = []
             row_by_oid: dict[int, int] = {}
             for oid, mol in results:
@@ -789,7 +789,7 @@ class PrepareStructuresMixin:
                 if row < 0:
                     continue
                 rw, rh = (
-                    (structure_depiict_width() * 2, structure_depiict_height() * 2)
+                    (structure_depict_width() * 2, structure_depict_height() * 2)
                     if oid in self.zoomed_ids
                     else (base_w, base_h)
                 )
@@ -843,7 +843,7 @@ class PrepareStructuresMixin:
             and not no_render_2d
             and not getattr(self, "_render2d_batch_active", False)
         ):
-            base_w, base_h = structure_depiict_width(), structure_depiict_height()
+            base_w, base_h = structure_depict_width(), structure_depict_height()
             renders = []
             row_by_oid: dict[int, int] = {}
             for oid, mol in results:
@@ -853,7 +853,7 @@ class PrepareStructuresMixin:
                 if row < 0:
                     continue
                 rw, rh = (
-                    (structure_depiict_width() * 2, structure_depiict_height() * 2)
+                    (structure_depict_width() * 2, structure_depict_height() * 2)
                     if oid in self.zoomed_ids
                     else (base_w, base_h)
                 )
@@ -885,7 +885,7 @@ class PrepareStructuresMixin:
             if row < 0:
                 continue
             rw, rh = (
-                (structure_depiict_width() * 2, structure_depiict_height() * 2)
+                (structure_depict_width() * 2, structure_depict_height() * 2)
                 if int(oid) in self.zoomed_ids
                 else (base_w, base_h)
             )
@@ -924,7 +924,7 @@ class PrepareStructuresMixin:
                 if mol is None:
                     continue
             rw, rh = (
-                (structure_depiict_width() * 2, structure_depiict_height() * 2)
+                (structure_depict_width() * 2, structure_depict_height() * 2)
                 if oid in self.zoomed_ids
                 else (base_w, base_h)
             )
@@ -952,7 +952,7 @@ class PrepareStructuresMixin:
                 continue
             self.mols[int(oid)] = mol
             rw, rh = (
-                (structure_depiict_width() * 2, structure_depiict_height() * 2)
+                (structure_depict_width() * 2, structure_depict_height() * 2)
                 if int(oid) in self.zoomed_ids
                 else (base_w, base_h)
             )
@@ -976,7 +976,7 @@ class PrepareStructuresMixin:
             )
             return False
         self.status_label.setText(f"{TOOL_RENDER_2D}: collecting structures…")
-        base_w, base_h = structure_depiict_width(), structure_depiict_height()
+        base_w, base_h = structure_depict_width(), structure_depict_height()
         renders, row_by_oid = self._build_render2d_tasks_from_mols(base_w, base_h, None)
         if not renders:
             # Session restore may have rows before mols are keyed; rebuild from table cells.
@@ -1130,7 +1130,7 @@ class PrepareStructuresMixin:
         if self._abort_if_only_selected_but_empty(only_selected, allowed_oids, TOOL_RENDER_2D):
             return
         self.status_label.setText(f"{TOOL_RENDER_2D}: collecting structures…")
-        base_w, base_h = structure_depiict_width(), structure_depiict_height()
+        base_w, base_h = structure_depict_width(), structure_depict_height()
         renders, row_by_oid = self._build_render2d_tasks_in_table_order(
             src, base_w, base_h, allowed_oids
         )
@@ -1311,7 +1311,7 @@ class PrepareStructuresMixin:
         if src == "Structure":
             self.mols[oid] = mol
         pixmap_mode = src != "Structure" and self._table_model.is_pixmap_data_column(src)
-        base_w, base_h = structure_depiict_width(), structure_depiict_height()
+        base_w, base_h = structure_depict_width(), structure_depict_height()
         renders, row_by_oid = self._build_render2d_tasks_in_table_order(src, base_w, base_h, {oid})
         if not renders:
             QMessageBox.information(
@@ -1436,7 +1436,7 @@ class PrepareStructuresMixin:
             and not no_render_2d
             and not getattr(self, "_render2d_batch_active", False)
         ):
-            base_w, base_h = structure_depiict_width(), structure_depiict_height()
+            base_w, base_h = structure_depict_width(), structure_depict_height()
             renders = []
             row_by_oid: dict[int, int] = {}
             for oid, mol, _frag in results:
@@ -1446,7 +1446,7 @@ class PrepareStructuresMixin:
                 if row < 0:
                     continue
                 rw, rh = (
-                    (structure_depiict_width() * 2, structure_depiict_height() * 2)
+                    (structure_depict_width() * 2, structure_depict_height() * 2)
                     if oid in self.zoomed_ids
                     else (base_w, base_h)
                 )

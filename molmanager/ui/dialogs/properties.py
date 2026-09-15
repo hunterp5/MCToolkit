@@ -82,7 +82,9 @@ class PropertyDialog(QDialog):
         self.only_selected_cb = QCheckBox("Selected Rows Only")
         self._only_selected_scope_prefix = "Selected Rows Only"
         if self._have_selection:
-            self.only_selected_cb.setText(f"{self._only_selected_scope_prefix} ({selected_row_count} row(s))")
+            self.only_selected_cb.setText(
+                f"{self._only_selected_scope_prefix} ({selected_row_count} row(s))"
+            )
         else:
             self.only_selected_cb.setEnabled(False)
         target_row.addWidget(self.only_selected_cb, 0, Qt.AlignVCenter)
@@ -182,9 +184,7 @@ class PropertyDialog(QDialog):
                 ]
             elif cat_name == "Name":
                 ordered_items = [
-                    (disp, props[disp])
-                    for disp in _NAME_DESCRIPTOR_ORDER
-                    if disp in props
+                    (disp, props[disp]) for disp in _NAME_DESCRIPTOR_ORDER if disp in props
                 ]
             else:
                 ordered_items = sorted(props.items(), key=lambda kv: kv[0].casefold())

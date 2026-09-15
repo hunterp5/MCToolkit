@@ -32,7 +32,7 @@ from ..strings import (
     TOOL_RECAP_DECOMP,
     TOOL_RECAP_RECOMP,
 )
-from ...display_constants import structure_depiict_height, structure_depiict_width
+from ...display_constants import structure_depict_height, structure_depict_width
 from ...workers import (
     FragmentDecompositionWorker,
     FragmentRecompositionWorker,
@@ -196,7 +196,7 @@ class FragmentToolsMixin:
         # Uses pixmap-only columns (hide SMILES text) and queues the renders so the GUI stays responsive.
         if do_render and tool_title in (TOOL_BRICS_DECOMP, TOOL_RECAP_DECOMP) and written:
             try:
-                base_w, base_h = structure_depiict_width(), structure_depiict_height()
+                base_w, base_h = structure_depict_width(), structure_depict_height()
                 for h in written:
                     if h not in self.headers:
                         continue

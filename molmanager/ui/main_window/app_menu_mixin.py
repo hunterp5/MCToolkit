@@ -274,6 +274,11 @@ class AppMenuMixin:
                 self.open_som_predictor,
                 "Predict sites of metabolism with FAME3R and draw a highlighted atom map.",
             ),
+            (
+                "Metabolites…",
+                self.open_biotransformer_predictor,
+                "Predict metabolite structures with a local BioTransformer JAR.",
+            ),
         ):
             act = QAction(title, self, triggered=slot)
             act.setToolTip(tip)

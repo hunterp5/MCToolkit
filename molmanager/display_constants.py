@@ -24,7 +24,9 @@ from PyQt5.QtCore import QSettings
 DEFAULT_STRUCTURE_DEPICT_WIDTH = 242
 DEFAULT_STRUCTURE_DEPICT_HEIGHT = 202
 DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT = 212
-STRUCTURE_ROW_HEIGHT_PADDING = DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT - DEFAULT_STRUCTURE_DEPICT_HEIGHT
+STRUCTURE_ROW_HEIGHT_PADDING = (
+    DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT - DEFAULT_STRUCTURE_DEPICT_HEIGHT
+)
 
 MIN_STRUCTURE_DEPICT_WIDTH = 80
 MAX_STRUCTURE_DEPICT_WIDTH = 640
@@ -58,28 +60,28 @@ def _clamp_structure_height(height: int) -> int:
     return max(MIN_STRUCTURE_DEPICT_HEIGHT, min(MAX_STRUCTURE_DEPICT_HEIGHT, int(height)))
 
 
-def structure_depiict_width() -> int:
+def structure_depict_width() -> int:
     """Current Structure column depiction width in pixels."""
     return _RUNTIME_WIDTH
 
 
-def structure_depiict_height() -> int:
+def structure_depict_height() -> int:
     """Current Structure column depiction height in pixels."""
     return _RUNTIME_HEIGHT
 
 
 def structure_row_default_height() -> int:
     """Default table row height for the Structure column."""
-    return structure_depiict_height() + STRUCTURE_ROW_HEIGHT_PADDING
+    return structure_depict_height() + STRUCTURE_ROW_HEIGHT_PADDING
 
 
 def structure_column_minimum_width(*, zoomed: bool = False) -> int:
     """Minimum Structure column width so the depiction is never clipped horizontally."""
-    depict_w = structure_depiict_width() * (2 if zoomed else 1)
+    depict_w = structure_depict_width() * (2 if zoomed else 1)
     return int(depict_w) + int(STRUCTURE_COLUMN_HORIZONTAL_PADDING)
 
 
-def load_saved_structure_depiict_size() -> tuple[int, int]:
+def load_saved_structure_depict_size() -> tuple[int, int]:
     """Return saved depiction size, or defaults when unset."""
     settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
     try:
@@ -95,7 +97,7 @@ def load_saved_structure_depiict_size() -> tuple[int, int]:
     return _clamp_structure_width(w), _clamp_structure_height(h)
 
 
-def set_structure_depiict_size(width: int, height: int, *, persist: bool = True) -> tuple[int, int]:
+def set_structure_depict_size(width: int, height: int, *, persist: bool = True) -> tuple[int, int]:
     """Apply depiction size for new renders and optionally persist to QSettings."""
     global _RUNTIME_WIDTH, _RUNTIME_HEIGHT
     w = _clamp_structure_width(width)
@@ -110,8 +112,8 @@ def set_structure_depiict_size(width: int, height: int, *, persist: bool = True)
 
 
 def _load_runtime_structure_size_from_settings() -> None:
-    w, h = load_saved_structure_depiict_size()
-    set_structure_depiict_size(w, h, persist=False)
+    w, h = load_saved_structure_depict_size()
+    set_structure_depict_size(w, h, persist=False)
 
 
 _load_runtime_structure_size_from_settings()
@@ -119,3 +121,9 @@ _load_runtime_structure_size_from_settings()
 # Tools → Browser structure preview (higher than the table column pixmap).
 BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH = 480
 BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT = 360
+
+# Back-compat aliases for the historical misspelling.
+structure_depiict_width = structure_depict_width
+structure_depiict_height = structure_depict_height
+load_saved_structure_depiict_size = load_saved_structure_depict_size
+set_structure_depiict_size = set_structure_depict_size

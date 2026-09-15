@@ -268,12 +268,13 @@ class RandomMoleculeDialog(QDialog):
                     f"skipped {skipped} (duplicates or errors)."
                 )
             elif added:
-                app.status_label.setText(f"{TOOL_RANDOM_MOLECULE}: added {added} row(s) to the table.")
+                app.status_label.setText(
+                    f"{TOOL_RANDOM_MOLECULE}: added {added} row(s) to the table."
+                )
             else:
                 app.status_label.setText(f"{TOOL_RANDOM_MOLECULE}: no rows were added.")
         self.status.setText(
-            f"Added {added} row(s) to the table"
-            + (f" ({skipped} skipped)." if skipped else ".")
+            f"Added {added} row(s) to the table" + (f" ({skipped} skipped)." if skipped else ".")
         )
 
     def closeEvent(self, event) -> None:

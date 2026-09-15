@@ -103,7 +103,9 @@ class HotkeysDialog(QDialog):
         dlg = QDialog(self)
         dlg.setWindowTitle("Press shortcut keys")
         lay = QVBoxLayout(dlg)
-        lay.addWidget(QLabel("Press the key combination, then click OK. Cancel or clear to remove."))
+        lay.addWidget(
+            QLabel("Press the key combination, then click OK. Cancel or clear to remove.")
+        )
         seq_edit = QKeySequenceEdit(dlg)
         current = self._table.item(row, 2)
         if current is not None and current.text().strip():

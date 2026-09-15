@@ -35,7 +35,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..data_analysis import numeric_subset, table_to_dataframe
+from .data_analysis import numeric_subset, table_to_dataframe
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
