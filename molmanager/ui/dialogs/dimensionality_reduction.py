@@ -846,9 +846,13 @@ class DimensionReductionPanel(QWidget):
             cancel=self._bg_cancel_event.set,
         )
         n = len(oids)
-        self.parent_app.status_label.setText(
-            f"{self._window_title}: computing in background ({n:,} row(s))…"
-        )
+        begin = getattr(self.parent_app, "_begin_tool_progress", None)
+        if callable(begin):
+            begin(self._window_title, n)
+        else:
+            self.parent_app.status_label.setText(
+                f"{self._window_title}: computing in background ({n:,} row(s))…"
+            )
         worker = DimensionReductionWorker(params, self._signals, cancel_event=self._bg_cancel_event)
         self.parent_app.threadpool.start(worker)
 
@@ -857,7 +861,11 @@ class DimensionReductionPanel(QWidget):
         self._job_running = False
         self.run_btn.setEnabled(True)
         if self.parent_app is not None:
-            self.parent_app.status_label.setText(f"{self._window_title}: ready.")
+            finish = getattr(self.parent_app, "_finish_tool_progress", None)
+            if callable(finish):
+                finish(self._window_title, status_message=f"{self._window_title}: ready.")
+            else:
+                self.parent_app.status_label.setText(f"{self._window_title}: ready.")
 
     def _clear_dimred_background_job(self) -> None:
         job_id = getattr(self, "_bg_job_id", None)
@@ -875,16 +883,27 @@ class DimensionReductionPanel(QWidget):
         self._last_result = result
         if self._plot_view is None:
             if self.parent_app is not None:
-                self.parent_app.status_label.setText(f"{self._window_title}: done.")
+                finish = getattr(self.parent_app, "_finish_tool_progress", None)
+                msg = f"{self._window_title}: done."
+                if callable(finish):
+                    finish(self._window_title, status_message=msg)
+                else:
+                    self.parent_app.status_label.setText(msg)
             return
         self._refresh_plot_colors()
         self._update_spectrum_controls()
         if self.parent_app is not None:
             shown = self._displayed_dimred_result()
             n = len(shown.oids) if shown is not None else 0
-            self.parent_app.status_label.setText(
-                f"{self._window_title}: rendered {n:,} point(s). Lasso or click to select table rows."
+            msg = (
+                f"{self._window_title}: rendered {n:,} point(s). "
+                "Lasso or click to select table rows."
             )
+            finish = getattr(self.parent_app, "_finish_tool_progress", None)
+            if callable(finish):
+                finish(self._window_title, status_message=msg)
+            else:
+                self.parent_app.status_label.setText(msg)
 
     def _on_failed(self, message: str) -> None:
         self._clear_dimred_background_job()
@@ -893,11 +912,21 @@ class DimensionReductionPanel(QWidget):
         if message == "Cancelled.":
             self.summary_text.setPlainText("Cancelled.")
             if self.parent_app is not None:
-                self.parent_app.status_label.setText(f"{self._window_title}: cancelled.")
+                msg = f"{self._window_title}: cancelled."
+                finish = getattr(self.parent_app, "_finish_tool_progress", None)
+                if callable(finish):
+                    finish(self._window_title, status_message=msg)
+                else:
+                    self.parent_app.status_label.setText(msg)
             return
         self.summary_text.setPlainText("")
         if self.parent_app is not None:
-            self.parent_app.status_label.setText(f"{self._window_title}: failed.")
+            msg = f"{self._window_title}: failed."
+            finish = getattr(self.parent_app, "_finish_tool_progress", None)
+            if callable(finish):
+                finish(self._window_title, status_message=msg)
+            else:
+                self.parent_app.status_label.setText(msg)
         QMessageBox.warning(self, self._window_title, message or "Computation failed.")
 
 

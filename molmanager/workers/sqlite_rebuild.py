@@ -23,16 +23,20 @@ import logging
 from PyQt5.QtCore import QRunnable
 
 from ..storage.sqlite_table_store import SqliteTableStore
+from ..tool_progress import ToolProgressState, report_tool_progress
 from .signals import SqliteRebuildSignals
 
 logger = logging.getLogger(__name__)
+
+_WRITE_CHUNK = 2000
 
 
 class SqliteRebuildWorker(QRunnable):
     """Build a fresh SQLite mirror off the UI thread.
 
-    Prefer *db_path* already filled via streamed inserts; then only the oid index
-    is created here. Legacy callers may still pass *entries* for a full rebuild.
+    Prefer *entries* collected on the GUI (chunked export only); this worker
+    streams inserts and creates the oid index. Legacy *stream_finalize* callers
+    may pass an already-filled *db_path* with ``entries=None``.
     """
 
     def __init__(
@@ -44,6 +48,7 @@ class SqliteRebuildWorker(QRunnable):
         signals: SqliteRebuildSignals,
         *,
         stream_finalize: bool = False,
+        progress_state: ToolProgressState | None = None,
     ) -> None:
         super().__init__()
         self.job_gen = job_gen
@@ -52,14 +57,38 @@ class SqliteRebuildWorker(QRunnable):
         self.db_path = db_path
         self.signals = signals
         self.stream_finalize = bool(stream_finalize)
+        self.progress_state = progress_state
+        self._progress_throttle = [0, 0.0]
+
+    def _emit_progress(self, message: str, done: int, total: int) -> None:
+        report_tool_progress(
+            message=message,
+            done=int(done),
+            total=max(1, int(total)),
+            progress_state=self.progress_state,
+            throttle=self._progress_throttle,
+        )
 
     def run(self) -> None:
         try:
             store = SqliteTableStore(self.db_path)
             if self.stream_finalize:
+                self._emit_progress("Indexing table…", 1, 1)
                 store.finish_stream_rebuild()
             else:
-                store.rebuild(self.headers, list(self.entries or []))
+                entries = list(self.entries or [])
+                n = len(entries)
+                store.start_stream_rebuild(self.headers)
+                if n == 0:
+                    self._emit_progress("Indexing table…", 1, 1)
+                else:
+                    for i in range(0, n, _WRITE_CHUNK):
+                        chunk = entries[i : i + _WRITE_CHUNK]
+                        store.append_stream_rows(chunk)
+                        done = min(i + len(chunk), n)
+                        self._emit_progress("Indexing table…", done, n)
+                store.finish_stream_rebuild()
+                self._emit_progress("Indexing table…", max(n, 1), max(n, 1))
             store.close()
             self.signals.finished.emit(self.job_gen, self.db_path)
         except Exception as e:

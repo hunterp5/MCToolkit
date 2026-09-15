@@ -45,13 +45,22 @@ class MedChemSpaceSignals(QObject):
 
 
 class MedChemSpaceWorker(QRunnable):
-    def __init__(self, params: dict, signals: MedChemSpaceSignals):
+    def __init__(
+        self,
+        params: dict,
+        signals: MedChemSpaceSignals,
+        *,
+        cancel_event=None,
+    ):
         super().__init__()
         self.params = dict(params)
         self.signals = signals
+        self.cancel_event = cancel_event
 
     def run(self) -> None:
         try:
+            if self.cancel_event is not None and self.cancel_event.is_set():
+                return
             snapshots = list(self.params.get("snapshots") or [])
             result = build_medchem_space_result(
                 snapshots,
@@ -65,7 +74,14 @@ class MedChemSpaceWorker(QRunnable):
                 oid_smiles=dict(self.params.get("oid_smiles") or {}),
                 progress_state=self.params.get("progress_state"),
                 progress_label=str(self.params.get("progress_label") or "Medchem plot"),
+                cancel_event=self.cancel_event,
             )
+            if self.cancel_event is not None and self.cancel_event.is_set():
+                return
             _safe_emit(self.signals, "finished", result)
         except Exception as exc:
+            from ..medchem_space import MedChemSpaceCancelled
+
+            if isinstance(exc, MedChemSpaceCancelled):
+                return
             _safe_emit(self.signals, "failed", str(exc) or exc.__class__.__name__)

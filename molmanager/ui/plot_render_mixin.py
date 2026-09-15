@@ -73,27 +73,50 @@ class PlotRenderMixin:
         return "Choose axes for the current plot type."
 
     def plot(self):
-        ptype = self._current_plot_type()
-        if ptype in (PLOT_TYPE_BOX, PLOT_TYPE_VIOLIN):
-            self._plot_distribution(ptype)
-        elif ptype == PLOT_TYPE_LINE_2D:
-            self._plot_line_2d()
-        elif ptype == PLOT_TYPE_HEATMAP:
-            self._plot_heatmap()
-        elif ptype == PLOT_TYPE_RADAR:
-            self._plot_radar()
-        elif ptype == PLOT_TYPE_HISTOGRAM:
-            if self._effective_plot_mode() == "Histogram":
-                self._plot_histogram()
+        app = self.parent_app
+        if app is not None and getattr(app, "status_label", None) is not None:
+            try:
+                app.status_label.setText("Plot: collecting…")
+            except RuntimeError:
+                pass
+        job_id = f"plot-{id(self)}"
+        if app is not None:
+            try:
+                from .background_jobs import register_background_job, unregister_background_job
+
+                register_background_job(app, job_id, "Updating plot")
+            except Exception:
+                job_id = ""
+        try:
+            ptype = self._current_plot_type()
+            if ptype in (PLOT_TYPE_BOX, PLOT_TYPE_VIOLIN):
+                self._plot_distribution(ptype)
+            elif ptype == PLOT_TYPE_LINE_2D:
+                self._plot_line_2d()
+            elif ptype == PLOT_TYPE_HEATMAP:
+                self._plot_heatmap()
+            elif ptype == PLOT_TYPE_RADAR:
+                self._plot_radar()
+            elif ptype == PLOT_TYPE_HISTOGRAM:
+                if self._effective_plot_mode() == "Histogram":
+                    self._plot_histogram()
+                else:
+                    self._render_empty_plot(self._empty_plot_hint())
             else:
-                self._render_empty_plot(self._empty_plot_hint())
-        else:
-            mode = self._effective_plot_mode()
-            if mode is None:
-                self._render_empty_plot(self._empty_plot_hint())
-            else:
-                self._plot_scatter(mode)
-        self._update_color_controls()
+                mode = self._effective_plot_mode()
+                if mode is None:
+                    self._render_empty_plot(self._empty_plot_hint())
+                else:
+                    self._plot_scatter(mode)
+            self._update_color_controls()
+        finally:
+            if app is not None and job_id:
+                try:
+                    from .background_jobs import unregister_background_job
+
+                    unregister_background_job(app, job_id)
+                except Exception:
+                    pass
 
     def _plot_scatter(self, mode: str) -> None:
         self._hist_edges = []

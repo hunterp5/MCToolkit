@@ -888,11 +888,23 @@ class MedChemPlotPanel(QWidget):
             "progress_state": self.parent_app._tool_progress_state,
             "progress_label": self._window_title,
         }
+        import threading
+
         from ..background_jobs import register_background_job
 
+        self._bg_cancel_event = threading.Event()
         self._bg_job_id = f"medchem-{id(self)}"
-        register_background_job(self.parent_app, self._bg_job_id, self._window_title)
-        worker = MedChemSpaceWorker(params, self._medchem_signals)
+        register_background_job(
+            self.parent_app,
+            self._bg_job_id,
+            self._window_title,
+            cancel=self._bg_cancel_event.set,
+        )
+        worker = MedChemSpaceWorker(
+            params,
+            self._medchem_signals,
+            cancel_event=self._bg_cancel_event,
+        )
         self.parent_app.threadpool.start(worker)
 
     def _clear_medchem_background_job(self) -> None:

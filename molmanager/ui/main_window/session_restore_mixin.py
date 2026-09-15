@@ -262,10 +262,12 @@ class SessionRestoreMixin:
         step = int(ctx["step"])
         try:
             if step == 0:
-                self._loading_detail.setText("Restoring filters…")
-                self._finalize_session_filters(doc, max_id)
-                ctx["step"] = 1
-                QTimer.singleShot(0, self._session_finalize_step)
+                self._loading_detail.setText("Preparing filters…")
+                want_next = int(doc.get("next_oid", max_id + 1))
+                self.next_oid = want_next if want_next > max_id else max_id + 1
+                self.calculate_global_bounds(
+                    on_complete=lambda: self._session_finalize_after_bounds()
+                )
                 return
             if step == 1:
                 self._loading_detail.setText("Restoring workspace and plots…")
@@ -299,10 +301,23 @@ class SessionRestoreMixin:
             self._set_workspace_stack_index(1)
             raise
 
+    def _session_finalize_after_bounds(self) -> None:
+        """Continue finalize after filter bounds are ready (keeps overlay until table is usable)."""
+        ctx = getattr(self, "_session_finalize_ctx", None)
+        if not ctx or ctx.get("gen") != getattr(self, "_session_load_generation", 0):
+            return
+        if int(ctx.get("step", -1)) != 0:
+            return
+        doc = ctx["doc"]
+        max_id = int(ctx["max_id"])
+        self._loading_detail.setText("Restoring filters…")
+        self._finalize_session_filters(doc, max_id)
+        ctx["step"] = 1
+        QTimer.singleShot(0, self._session_finalize_step)
+
     def _finalize_session_filters(self, doc: dict, max_id: int) -> None:
-        want_next = int(doc.get("next_oid", max_id + 1))
-        self.next_oid = want_next if want_next > max_id else max_id + 1
-        self.calculate_global_bounds()
+        # next_oid is set before bounds complete in ``_session_finalize_step``.
+        _ = max_id
         for spec in doc.get("filters") or []:
             kind = spec.get("kind")
             if kind == "substructure":
@@ -600,18 +615,10 @@ class SessionRestoreMixin:
             except RuntimeError:
                 pass
         if callable(render) and render():
-            if self._auto_render2d_blocks_workspace_reveal():
-                self._session_waiting_for_render = True
-                self._restore_session_table_chrome(pending)
-                self._restore_pending_workspace_layout()
-                QTimer.singleShot(0, self._restore_pending_workspace_layout)
-                return
-            n = self._table_model.rowCount()
-            self.status_label.setText(
-                f"Loaded {n:,} rows — rendering 2D structures in the background…"
-            )
+            self._session_waiting_for_render = True
             self._restore_session_table_chrome(pending)
-            self._session_try_reveal_when_ready()
+            self._restore_pending_workspace_layout()
+            QTimer.singleShot(0, self._restore_pending_workspace_layout)
             return
         self._restore_session_table_chrome(pending)
         self._session_try_reveal_when_ready()

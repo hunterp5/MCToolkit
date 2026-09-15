@@ -172,7 +172,6 @@ class SessionCsvMixin:
         self._finalize_session_csv_load()
 
     def _finalize_session_csv_load(self) -> None:
-        self.schedule_calculate_global_bounds()
         self.table.setSortingEnabled(False)
         rows_n = self._table_model.rowCount()
         if getattr(self, "_sqlite_store", None) is not None:
@@ -184,4 +183,10 @@ class SessionCsvMixin:
         self._session_awaiting_ready = True
         self._session_waiting_for_render = False
         self._session_plot_wait_deadline = None
-        self._deferred_session_post_load_follow_up()
+        detail = getattr(self, "_loading_detail", None)
+        if detail is not None:
+            try:
+                detail.setText("Preparing filters…")
+            except RuntimeError:
+                pass
+        self.calculate_global_bounds(on_complete=self._deferred_session_post_load_follow_up)

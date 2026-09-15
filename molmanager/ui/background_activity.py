@@ -132,8 +132,16 @@ class BackgroundActivityHub(QObject):
             metas.insert(0, {"kind": "smina"})
 
         for job_id, title in sorted((getattr(self._app, "_background_jobs", None) or {}).items()):
+            from .background_jobs import background_job_is_cancellable
+
             rows.append(("Running", job_id, title))
-            metas.append({"kind": "background", "job_id": job_id})
+            metas.append(
+                {
+                    "kind": "background",
+                    "job_id": job_id,
+                    "cancellable": background_job_is_cancellable(self._app, job_id),
+                }
+            )
 
         progress = self.current_tool_progress_text()
         if progress:
@@ -211,6 +219,18 @@ class BackgroundActivityHub(QObject):
                 return (None, "Cancelling interactive job…")
             return (("Cancel", "That interactive job is no longer running."), None)
 
+        if kind == "background":
+            from .background_jobs import background_job_is_cancellable, cancel_background_job
+
+            jid = str(meta.get("job_id") or "")
+            if not jid:
+                return (("Cancel", "Select a process in the table first."), None)
+            if not background_job_is_cancellable(app, jid):
+                return (("Cancel", "This background job cannot be cancelled."), None)
+            if cancel_background_job(app, jid):
+                return (None, "Cancelling…")
+            return (("Cancel", "This background job cannot be cancelled."), None)
+
         return (("Cancel", "Unknown row type."), None)
 
     def clear_queued_jobs(self) -> int:
@@ -226,6 +246,10 @@ class BackgroundActivityHub(QObject):
             app.cancel_render_2d_batch()
         if hasattr(app, "cancel_smina_dock"):
             app.cancel_smina_dock()
+        from .background_jobs import cancel_background_job
+
+        for job_id in list((getattr(app, "_background_job_cancels", None) or {}).keys()):
+            cancel_background_job(app, job_id)
         pq = getattr(app, "process_queue", None)
         if pq is not None:
             shutdown = getattr(pq, "shutdown_for_exit", None)

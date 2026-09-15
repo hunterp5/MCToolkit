@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
+import threading
 import time
 from contextlib import nullcontext
 
-from PyQt5.QtCore import QEventLoop, Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
@@ -32,12 +34,16 @@ from rdkit import Chem
 from ...config import load_config
 from ...services.sql_load_policy import engine_kwargs_for_sql_load, sql_looks_destructive
 from ...display_constants import structure_depiict_height, structure_depiict_width
+from ...utils import redact_sqlalchemy_url, safe_float
+from ...workers.sql_load_worker import SqlLoadParseResult, SqlLoadSignals, SqlLoadWorker
 from ..analysis_job_support import (
     enqueue_process_queue_job,
     ensure_table_ready_for_tool,
     report_cancellable_job_failure,
 )
-from ...utils import redact_sqlalchemy_url, safe_float
+from ..background_jobs import register_background_job, unregister_background_job
+from ..threadpool_access import start_runnable_on_app_pool
+
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 from ..strings import (
     TOOL_CALCULATOR,
@@ -930,8 +936,10 @@ class ToolsSqlPredictMixin:
     ) -> None:
         """Load a SQL query/table into the main table.
 
-        If a 'SMILES' column exists (case-insensitive), molecules will be created and
-        2D structure images are drawn automatically (same as after opening a structure file).
+        Fetch + SMILES parse run off the GUI thread; table appends are chunked on the
+        GUI thread (same pattern as session restore). If a SMILES column exists
+        (case-insensitive), molecules are created and 2D structures are drawn
+        automatically after apply.
 
         ``read_only`` (default True) opens SQLite with ``mode=ro`` and refuses queries that
         look destructive. Uncheck read-only in the External SQL dialog only when you
@@ -995,18 +1003,14 @@ class ToolsSqlPredictMixin:
             sqlite_timeout_s=sql_cfg.sqlite_timeout_s,
             pg_connect_timeout=sql_cfg.pg_connect_timeout,
         )
-        eng = create_engine(out_url, **eng_kw)
         page_size = max(128, int(sql_cfg.sqlite_backend_page_size))
-        sql = ""
-        cols: list[str] = []
-        nrows = 0
-        rows_hit_limit = False
-        limit_eff = 0
-        try:
-            with eng.connect() as conn:
-                limit_eff = int(li) if apply_limit and li else 0
+        limit_eff = int(li) if apply_limit and li else 0
 
-                if apply_limit and limit_eff > 0 and precowarn > 0:
+        # Precount warning stays on the GUI (needs a modal confirm).
+        if apply_limit and limit_eff > 0 and precowarn > 0:
+            eng = create_engine(out_url, **eng_kw)
+            try:
+                with eng.connect() as conn:
                     est = None
                     try:
                         if table:
@@ -1040,102 +1044,244 @@ class ToolsSqlPredictMixin:
                         )
                         if r != QMessageBox.Yes:
                             return
+            finally:
+                eng.dispose()
 
-                if table:
-                    sql = f"SELECT * FROM {table}"
-                    if apply_limit and limit_eff:
-                        sql += f" LIMIT {int(limit_eff)}"
-                else:
-                    sql = query or ""
-                    if apply_limit and limit_eff:
-                        # If the query already includes a LIMIT, leave it alone.
-                        if re.search(r"\blimit\b", sql, flags=re.IGNORECASE) is None:
-                            sql = f"SELECT * FROM ({sql}) AS subq LIMIT {int(limit_eff)}"
-                perf = getattr(self, "_perf", None)
-                scope = (
-                    perf.track if perf is not None else (lambda *_args, **_kwargs: nullcontext())
-                )
-                with scope("sql.load_rows"):
-                    try:
-                        self.table.setUpdatesEnabled(False)
-                    except Exception:
-                        pass
-                    rs = conn.execution_options(stream_results=True).execute(text(sql))
-                    cols = [str(c) for c in rs.keys()]
-                    if not cols:
-                        rs.close()
-                        raise RuntimeError("Query returned 0 rows.")
+        if table:
+            sql = f"SELECT * FROM {table}"
+            if apply_limit and limit_eff:
+                sql += f" LIMIT {int(limit_eff)}"
+        else:
+            sql = query or ""
+            if apply_limit and limit_eff:
+                if re.search(r"\blimit\b", sql, flags=re.IGNORECASE) is None:
+                    sql = f"SELECT * FROM ({sql}) AS subq LIMIT {int(limit_eff)}"
 
-                    if clear_first:
-                        self.clear_all()
+        self._sql_load_generation = int(getattr(self, "_sql_load_generation", 0)) + 1
+        gen = self._sql_load_generation
+        self._sql_load_busy = True
+        self._sql_load_error = None
+        self._sql_load_ctx = None
+        self._sql_load_clear_first = bool(clear_first)
 
-                    # Build headers: keep the app's first two columns.
-                    self.headers = ["ID_HIDDEN", "Structure"] + cols
-                    self.table.setSortingEnabled(False)
-                    self._table_model.clear_rows()
-                    self._table_model.set_headers(list(self.headers))
-                    self.table.setColumnHidden(0, True)
+        progress_total = limit_eff if limit_eff > 0 else 1
+        begin = getattr(self, "_begin_tool_progress", None)
+        if callable(begin):
+            begin("SQL load", progress_total)
+        else:
+            try:
+                self.status_label.setText("SQL load: fetching…")
+            except Exception:
+                pass
 
-                    smiles_col = next((c for c in cols if c.lower() == "smiles"), None)
+        cancel_event = threading.Event()
+        self._sql_load_cancel_event = cancel_event
+        job_id = f"sql-load-{gen}"
+        self._sql_load_job_id = job_id
+        register_background_job(
+            self,
+            job_id,
+            "SQL load…",
+            cancel=cancel_event.set,
+        )
 
-                    # Reset molecule store.
-                    self.mols = {}
-                    self._clear_filter_target_smiles_cache()
-                    self.global_bounds = {}
-                    self.next_oid = 0
+        prog = getattr(self, "_tool_progress_state", None)
+        signals = SqlLoadSignals(self)
 
-                    while True:
-                        chunk = rs.fetchmany(page_size)
-                        if not chunk:
-                            break
-                        batch: list[tuple[int, dict[str, str]]] = []
-                        for rec in chunk:
-                            oid = self.next_oid
-                            self.next_oid += 1
-                            row_cells: dict[str, str] = {}
-                            for c in cols:
-                                v = rec._mapping.get(c)
-                                row_cells[c] = "" if v is None else str(v)
-                            batch.append((oid, row_cells))
-                            if smiles_col is not None:
-                                smi = (row_cells.get(smiles_col, "") or "").strip()
-                                mol = Chem.MolFromSmiles(smi) if smi else None
-                                if mol is not None:
-                                    self.mols[oid] = mol
-                        if batch:
-                            self._table_model.append_rows_batch(batch, defer_color_cache=True)
-                            nrows += len(batch)
-                            if apply_limit and limit_eff and nrows >= limit_eff:
-                                rows_hit_limit = True
-                        app = QApplication.instance()
-                        if app is not None:
-                            app.processEvents(QEventLoop.ExcludeUserInputEvents)
-                    rs.close()
-                    try:
-                        self.table.setUpdatesEnabled(True)
-                    except Exception:
-                        pass
-        finally:
-            eng.dispose()
+        def _on_parsed(result, g=gen) -> None:
+            self._on_sql_load_parsed(result, g)
 
-        if nrows <= 0:
-            raise RuntimeError("Query returned 0 rows.")
+        def _on_failed(message, g=gen) -> None:
+            self._on_sql_load_failed(message, g)
+
+        worker = SqlLoadWorker(
+            url=out_url,
+            engine_kwargs=eng_kw,
+            sql=sql,
+            page_size=page_size,
+            limit_eff=limit_eff,
+            apply_limit=bool(apply_limit),
+            signals=signals,
+            generation=gen,
+            cancel_event=cancel_event,
+            progress_state=prog,
+        )
+        if "pytest" in sys.modules:
+            signals.finished.connect(_on_parsed, type=Qt.DirectConnection)
+            signals.failed.connect(_on_failed, type=Qt.DirectConnection)
+            worker.run()
+            self._drain_sql_load()
+            err = getattr(self, "_sql_load_error", None)
+            if err:
+                raise RuntimeError(err)
+        else:
+            signals.finished.connect(_on_parsed, type=Qt.QueuedConnection)
+            signals.failed.connect(_on_failed, type=Qt.QueuedConnection)
+            start_runnable_on_app_pool(self, worker)
+
+    def _clear_sql_load_job(self) -> None:
+        job_id = getattr(self, "_sql_load_job_id", None)
+        if job_id:
+            unregister_background_job(self, job_id)
+        self._sql_load_job_id = None
+        self._sql_load_cancel_event = None
+
+    def _drain_sql_load(self, *, timeout_s: float = 60.0) -> None:
+        """Process Qt events until SQL fetch/apply completes (tests / sync path)."""
+        deadline = time.monotonic() + float(timeout_s)
+        while time.monotonic() < deadline:
+            busy = bool(getattr(self, "_sql_load_busy", False))
+            busy = busy or getattr(self, "_sql_load_ctx", None) is not None
+            if not busy:
+                return
+            QApplication.processEvents()
+            time.sleep(0.001)
+        raise TimeoutError("Timed out waiting for SQL load to finish.")
+
+    def _on_sql_load_failed(self, message: str, generation: int) -> None:
+        if generation != getattr(self, "_sql_load_generation", 0):
+            return
+        self._sql_load_busy = False
+        self._sql_load_ctx = None
+        self._clear_sql_load_job()
+        finish = getattr(self, "_finish_tool_progress", None)
+        if callable(finish):
+            finish("SQL load", status_message=None)
+        try:
+            self.table.setUpdatesEnabled(True)
+        except Exception:
+            pass
+        msg = message or "SQL load failed."
+        self._sql_load_error = msg
+        if "pytest" not in sys.modules:
+            if msg == "Cancelled.":
+                try:
+                    self.status_label.setText("SQL load: cancelled.")
+                except Exception:
+                    pass
+            else:
+                QMessageBox.critical(self, "SQL load", msg)
+
+    def _on_sql_load_parsed(self, result: object, generation: int) -> None:
+        if generation != getattr(self, "_sql_load_generation", 0):
+            return
+        if not isinstance(result, SqlLoadParseResult):
+            self._on_sql_load_failed("Invalid SQL load result.", generation)
+            return
+        prepared = list(result.prepared_rows or [])
+        if not prepared:
+            self._on_sql_load_failed("Query returned 0 rows.", generation)
+            return
+
+        perf = getattr(self, "_perf", None)
+        scope = perf.track if perf is not None else (lambda *_args, **_kwargs: nullcontext())
+        with scope("sql.apply_rows"):
+            if getattr(self, "_sql_load_clear_first", True):
+                self.clear_all()
+
+            cols = list(result.columns or [])
+            self.headers = ["ID_HIDDEN", "Structure"] + cols
+            self.table.setSortingEnabled(False)
+            try:
+                self.table.setUpdatesEnabled(False)
+            except Exception:
+                pass
+            self._table_model.clear_rows()
+            self._table_model.set_headers(list(self.headers))
+            self.table.setColumnHidden(0, True)
+            try:
+                self.mols = dict(result.mols or {})
+            except Exception:
+                self.mols = {}
+            self._clear_filter_target_smiles_cache()
+            self.global_bounds = {}
+            self.next_oid = int(result.next_oid)
+
+            chunk = max(64, int(load_config().ingest_gui_chunk_size))
+            self._sql_load_ctx = {
+                "gen": generation,
+                "prepared_rows": prepared,
+                "idx": 0,
+                "chunk": chunk,
+                "rows_hit_limit": bool(result.rows_hit_limit),
+                "limit_eff": int(result.limit_eff),
+            }
+            n = len(prepared)
+            on_prog = getattr(self, "_on_tool_progress", None)
+            if callable(on_prog):
+                on_prog("SQL load: applying…", 0, n)
+            else:
+                try:
+                    self.status_label.setText(f"SQL load: applying… (0/{n:,})")
+                except Exception:
+                    pass
+            # Keep busy until apply finishes.
+            self._sql_load_busy = True
+            QTimer.singleShot(0, self._sql_load_apply_step)
+
+    def _sql_load_apply_step(self) -> None:
+        ctx = getattr(self, "_sql_load_ctx", None)
+        if not ctx or ctx.get("gen") != getattr(self, "_sql_load_generation", 0):
+            try:
+                self.table.setUpdatesEnabled(True)
+            except Exception:
+                pass
+            self._sql_load_busy = False
+            return
+        cancel = getattr(self, "_sql_load_cancel_event", None)
+        if cancel is not None and cancel.is_set():
+            self._sql_load_ctx = None
+            self._on_sql_load_failed("Cancelled.", int(ctx["gen"]))
+            return
+
+        prepared = ctx["prepared_rows"]
+        i = int(ctx["idx"])
+        chunk = int(ctx["chunk"])
+        n = len(prepared)
+        end = min(i + chunk, n)
+        batch = prepared[i:end]
+        if batch:
+            self._table_model.append_rows_batch(batch, defer_color_cache=True)
+        ctx["idx"] = end
+        on_prog = getattr(self, "_on_tool_progress", None)
+        if callable(on_prog):
+            on_prog("SQL load: applying…", end, n)
+        else:
+            try:
+                self.status_label.setText(f"SQL load: applying… ({end:,}/{n:,})")
+            except Exception:
+                pass
+        if end < n:
+            QTimer.singleShot(0, self._sql_load_apply_step)
+            return
+
+        rows_hit_limit = bool(ctx.get("rows_hit_limit"))
+        limit_eff = int(ctx.get("limit_eff") or 0)
+        self._sql_load_ctx = None
+        self._sql_load_busy = False
+        self._clear_sql_load_job()
+        try:
+            self.table.setUpdatesEnabled(True)
+        except Exception:
+            pass
+        finish = getattr(self, "_finish_tool_progress", None)
+        if callable(finish):
+            finish("SQL load", status_message=None)
 
         if rows_hit_limit:
             QMessageBox.information(
                 self,
                 "SQL load",
-                f"The result has {nrows:,} row(s), reaching the row limit ({limit_eff:,}). "
+                f"The result has {n:,} row(s), reaching the row limit ({limit_eff:,}). "
                 "If you expected more rows, raise “Max rows” in the SQL dialog or adjust your query.",
             )
 
         if self._sqlite_store is not None:
-            # Rebuild lazily on demand (filter/search) to keep ingest fast and memory flatter.
             self._sqlite_store_dirty = True
 
         self.table.setSortingEnabled(False)
-        smiles_loaded = "SMILES" in self.headers
-        QTimer.singleShot(0, lambda: self._deferred_sql_post_load_follow_up(nrows, smiles_loaded))
+        smiles_loaded = any(str(h).lower() == "smiles" for h in (self.headers or []))
+        QTimer.singleShot(0, lambda: self._deferred_sql_post_load_follow_up(n, smiles_loaded))
 
     def _deferred_sql_post_load_follow_up(self, nrows: int, smiles_loaded: bool) -> None:
         """Defer bounds scan and 2D batch so the SQL load dialog can close and the table can paint."""

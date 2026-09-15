@@ -64,6 +64,14 @@ flowchart TB
 
 `QMainWindow` precedes mixins in the MRO, so Qt virtuals such as `closeEvent` must be declared on `ChemicalTableApp` (delegating into the mixin). Mixin implementations that need the C++ base should call `QMainWindow.closeEvent` explicitly rather than `super()`.
 
+**Processes Cancel:** `BackgroundActivityHub.try_cancel_row` handles `background` jobs via `cancel_background_job()` when a cancel callable was registered with `register_background_job(..., cancel=…)`. Filter apply, substructure filter, dimred, and MedChem Space register cancel callables.
+
+**Progress chrome (UX Phase 1):** Prepare-structure tools, QSAR train/predict, PDBFixer/PDBQT, dimred, and SQL load pages call `_begin_tool_progress` / `report_tool_progress` / `_finish_tool_progress`. Plot rebuilds register a short-lived Processes row (`Updating plot`) and set status to `Plot: collecting…` before series collect. Render 2D and auto-ingest 2D set status before task collection.
+
+**SQL load:** `SqlLoadWorker` fetches rows and runs `MolFromSmiles` off the GUI thread; `ToolsSqlPredictMixin` applies prepared rows in budgeted `append_rows_batch` chunks. Cancellable via Processes (`register_background_job`).
+
+**SQLite mirror rebuild:** GUI only chunk-exports cell text into memory; `SqliteRebuildWorker` streams inserts + oid index off the GUI (`Indexing table…` progress). Sync `_rebuild_sqlite_store_from_model` remains for tiny/test paths.
+
 `ChemistryMixin` composes (same MRO order):
 
 | Sub-mixin | Responsibility |
@@ -168,9 +176,12 @@ in `ui/plot_session_mixin.py` (`PlotWidget` in `ui/plot.py` owns UI construction
 Fingerprint session cache is an LRU capped by `fingerprint_cache_max_entries`
 (`MOLMANAGER_FINGERPRINT_CACHE_MAX_ENTRIES`).
 
-Auto Render 2D after ingest/session: small tables wait for depictions before reveal;
-at/above `structure_render_lazy_after_ingest_min_rows` the workspace opens immediately
-while Structure images continue in the background (`_auto_render2d_blocks_workspace_reveal`).
+Auto Render 2D after ingest/session: the loading overlay stays until filter bounds
+are ready, auto Structure renders finish (when started), and restored plot views
+have settled. Above `auto_render_2d_max_rows` auto 2D is skipped and the overlay
+lifts after bounds (and plots for sessions). Lazy PNG store thresholds
+(`structure_render_lazy_*`) still control how images are stored, not when the
+workspace appears.
 
 ## Related docs
 

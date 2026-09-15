@@ -240,6 +240,9 @@ class PdbqtGeneratorDialog(QDialog):
             return
         self._begin_job()
         self._append_log(f"Starting {title}…")
+        begin = getattr(app, "_begin_tool_progress", None)
+        if callable(begin):
+            begin(title, 1)
         app.process_queue.enqueue(
             title,
             lambda ev, r=req, sig=self._signals: PdbqtGeneratorWorker(
@@ -344,8 +347,17 @@ class PdbqtGeneratorDialog(QDialog):
             except RuntimeError:
                 pass
 
+    def _finish_progress(self) -> None:
+        app = self.parent_app
+        if app is None:
+            return
+        finish = getattr(app, "_finish_tool_progress", None)
+        if callable(finish):
+            finish(status_message=None)
+
     def _on_finished(self, receptor_pdbqt: str, ligand_pdbqt: str) -> None:
         self._end_job()
+        self._finish_progress()
         if receptor_pdbqt:
             self._append_log(f"Receptor PDBQT written: {receptor_pdbqt}")
         if ligand_pdbqt:
@@ -354,4 +366,5 @@ class PdbqtGeneratorDialog(QDialog):
 
     def _on_failed(self, msg: str) -> None:
         self._end_job()
+        self._finish_progress()
         self._append_log(msg or "PDBQT generation failed.")

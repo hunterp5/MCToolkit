@@ -40,9 +40,29 @@ from ..structure_draw import render_molecule_png
 from ..structure_neutralize import neutralize_mol
 from ..structure_hydrogens import add_explicit_hydrogens, remove_explicit_hydrogens
 from ..utils import parse_molecule_from_cell_text, row_cells_from_mol, safe_mol_prop_string
+from ..tool_progress import ToolProgressState, report_tool_progress
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
 
 logger = logging.getLogger(__name__)
+
+
+def _emit_structure_tool_progress(
+    *,
+    message: str,
+    done: int,
+    total: int,
+    signals,
+    progress_state: ToolProgressState | None,
+    throttle: list,
+) -> None:
+    report_tool_progress(
+        message=message,
+        done=done,
+        total=total,
+        progress_state=progress_state,
+        signals=signals,
+        throttle=throttle,
+    )
 
 
 def mol_to_ingest_blob(mol: "Chem.Mol") -> bytes:
@@ -447,10 +467,20 @@ class RenderWorker(QRunnable):
 class DisconnectFragmentsWorker(QRunnable):
     """Keep the largest fragment and record smaller fragments for each row."""
 
-    def __init__(self, mols_data, signals, is_smiles: bool = False, cancel_event: threading.Event | None = None):
+    def __init__(
+        self,
+        mols_data,
+        signals,
+        is_smiles: bool = False,
+        cancel_event: threading.Event | None = None,
+        *,
+        progress_state: ToolProgressState | None = None,
+    ):
         super().__init__()
         self.mols_data, self.signals, self.is_smiles = mols_data, signals, is_smiles
         self.cancel_event = cancel_event
+        self.progress_state = progress_state
+        self._progress_throttle = [0, 0.0]
 
     def run(self):
         items = list(self.mols_data)
@@ -477,23 +507,35 @@ class DisconnectFragmentsWorker(QRunnable):
             if mol is None and source_text:
                 mol = parse_molecule_from_cell_text(source_text)
             if mol is None:
-                try:
-                    self.signals.tool_progress.emit("Disconnect fragments…", done, total)
-                except Exception:
-                    pass
+                _emit_structure_tool_progress(
+                    message="Disconnect fragments…",
+                    done=done,
+                    total=total,
+                    signals=self.signals,
+                    progress_state=self.progress_state,
+                    throttle=self._progress_throttle,
+                )
                 continue
             parent, fragments = largest_fragment_and_rest(mol, source_text)
             if parent is None:
-                try:
-                    self.signals.tool_progress.emit("Disconnect fragments…", done, total)
-                except Exception:
-                    pass
+                _emit_structure_tool_progress(
+                    message="Disconnect fragments…",
+                    done=done,
+                    total=total,
+                    signals=self.signals,
+                    progress_state=self.progress_state,
+                    throttle=self._progress_throttle,
+                )
                 continue
             res.append((oid, parent, fragments))
-            try:
-                self.signals.tool_progress.emit("Disconnect fragments…", done, total)
-            except Exception:
-                pass
+            _emit_structure_tool_progress(
+                message="Disconnect fragments…",
+                done=done,
+                total=total,
+                signals=self.signals,
+                progress_state=self.progress_state,
+                throttle=self._progress_throttle,
+            )
         emit_partial_results_if_cancelled(
             self.signals, "Disconnect fragments", done_count, total, cancelled
         )
@@ -503,10 +545,20 @@ class DisconnectFragmentsWorker(QRunnable):
 class NeutralizeWorker(QRunnable):
     """Neutralize each structure in ``mols_data`` (``(oid, mol)`` or ``(oid, cell_text)`` when *is_smiles*)."""
 
-    def __init__(self, mols_data, signals, is_smiles: bool = False, cancel_event: threading.Event | None = None):
+    def __init__(
+        self,
+        mols_data,
+        signals,
+        is_smiles: bool = False,
+        cancel_event: threading.Event | None = None,
+        *,
+        progress_state: ToolProgressState | None = None,
+    ):
         super().__init__()
         self.mols_data, self.signals, self.is_smiles = mols_data, signals, is_smiles
         self.cancel_event = cancel_event
+        self.progress_state = progress_state
+        self._progress_throttle = [0, 0.0]
 
     def run(self):
         items = list(self.mols_data)
@@ -526,18 +578,26 @@ class NeutralizeWorker(QRunnable):
             else:
                 mol = row[1]
             if mol is None:
-                try:
-                    self.signals.tool_progress.emit("Neutralize…", done, total)
-                except Exception:
-                    pass
+                _emit_structure_tool_progress(
+                    message="Neutralize…",
+                    done=done,
+                    total=total,
+                    signals=self.signals,
+                    progress_state=self.progress_state,
+                    throttle=self._progress_throttle,
+                )
                 continue
             neutral = neutralize_mol(mol)
             if neutral is not None:
                 res.append((oid, neutral))
-            try:
-                self.signals.tool_progress.emit("Neutralize…", done, total)
-            except Exception:
-                pass
+            _emit_structure_tool_progress(
+                message="Neutralize…",
+                done=done,
+                total=total,
+                signals=self.signals,
+                progress_state=self.progress_state,
+                throttle=self._progress_throttle,
+            )
         emit_partial_results_if_cancelled(
             self.signals, "Neutralize", done_count, total, cancelled
         )
@@ -547,10 +607,20 @@ class NeutralizeWorker(QRunnable):
 class AddExplicitHydrogensWorker(QRunnable):
     """Expand implicit hydrogens to explicit atoms for each structure in ``mols_data``."""
 
-    def __init__(self, mols_data, signals, is_smiles: bool = False, cancel_event: threading.Event | None = None):
+    def __init__(
+        self,
+        mols_data,
+        signals,
+        is_smiles: bool = False,
+        cancel_event: threading.Event | None = None,
+        *,
+        progress_state: ToolProgressState | None = None,
+    ):
         super().__init__()
         self.mols_data, self.signals, self.is_smiles = mols_data, signals, is_smiles
         self.cancel_event = cancel_event
+        self.progress_state = progress_state
+        self._progress_throttle = [0, 0.0]
 
     def run(self):
         items = list(self.mols_data)
@@ -570,18 +640,26 @@ class AddExplicitHydrogensWorker(QRunnable):
             else:
                 mol = row[1]
             if mol is None:
-                try:
-                    self.signals.tool_progress.emit("Add explicit hydrogens…", done, total)
-                except Exception:
-                    pass
+                _emit_structure_tool_progress(
+                    message="Add explicit hydrogens…",
+                    done=done,
+                    total=total,
+                    signals=self.signals,
+                    progress_state=self.progress_state,
+                    throttle=self._progress_throttle,
+                )
                 continue
             with_h = add_explicit_hydrogens(mol)
             if with_h is not None:
                 res.append((oid, with_h))
-            try:
-                self.signals.tool_progress.emit("Add explicit hydrogens…", done, total)
-            except Exception:
-                pass
+            _emit_structure_tool_progress(
+                message="Add explicit hydrogens…",
+                done=done,
+                total=total,
+                signals=self.signals,
+                progress_state=self.progress_state,
+                throttle=self._progress_throttle,
+            )
         emit_partial_results_if_cancelled(
             self.signals, "Add explicit hydrogens", done_count, total, cancelled
         )
@@ -591,10 +669,20 @@ class AddExplicitHydrogensWorker(QRunnable):
 class RemoveExplicitHydrogensWorker(QRunnable):
     """Remove explicit hydrogen atoms from each structure in ``mols_data``."""
 
-    def __init__(self, mols_data, signals, is_smiles: bool = False, cancel_event: threading.Event | None = None):
+    def __init__(
+        self,
+        mols_data,
+        signals,
+        is_smiles: bool = False,
+        cancel_event: threading.Event | None = None,
+        *,
+        progress_state: ToolProgressState | None = None,
+    ):
         super().__init__()
         self.mols_data, self.signals, self.is_smiles = mols_data, signals, is_smiles
         self.cancel_event = cancel_event
+        self.progress_state = progress_state
+        self._progress_throttle = [0, 0.0]
 
     def run(self):
         items = list(self.mols_data)
@@ -614,18 +702,26 @@ class RemoveExplicitHydrogensWorker(QRunnable):
             else:
                 mol = row[1]
             if mol is None:
-                try:
-                    self.signals.tool_progress.emit("Remove explicit hydrogens…", done, total)
-                except Exception:
-                    pass
+                _emit_structure_tool_progress(
+                    message="Remove explicit hydrogens…",
+                    done=done,
+                    total=total,
+                    signals=self.signals,
+                    progress_state=self.progress_state,
+                    throttle=self._progress_throttle,
+                )
                 continue
             stripped = remove_explicit_hydrogens(mol)
             if stripped is not None:
                 res.append((oid, stripped))
-            try:
-                self.signals.tool_progress.emit("Remove explicit hydrogens…", done, total)
-            except Exception:
-                pass
+            _emit_structure_tool_progress(
+                message="Remove explicit hydrogens…",
+                done=done,
+                total=total,
+                signals=self.signals,
+                progress_state=self.progress_state,
+                throttle=self._progress_throttle,
+            )
         emit_partial_results_if_cancelled(
             self.signals, "Remove explicit hydrogens", done_count, total, cancelled
         )

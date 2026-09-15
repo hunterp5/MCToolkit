@@ -116,3 +116,46 @@ def test_try_cancel_pq_running_render2d_uses_batch_cancel(qapp) -> None:  # noqa
     assert dialog_info is None
     assert status == "Render 2D cancelled."
     assert cancelled["ok"]
+
+
+def test_try_cancel_background_job(qapp) -> None:  # noqa: ARG001
+    from molmanager.ui.background_jobs import register_background_job
+
+    cancelled = {"n": 0}
+
+    def _cancel() -> None:
+        cancelled["n"] += 1
+
+    app = SimpleNamespace(
+        process_queue=_FakeProcessQueue({"running": None, "queued": [], "fast_running": []}),
+        render2d_batch_active=lambda: False,
+        _background_jobs={},
+        background_activity=None,
+    )
+    hub = BackgroundActivityHub(app, qapp)
+    app.background_activity = hub
+    register_background_job(app, "filter-1", "Applying filters", cancel=_cancel)
+    rows, metas = hub.processes_view_rows()
+    assert any(m.get("kind") == "background" and m.get("cancellable") for m in metas)
+    dialog_info, status = hub.try_cancel_row({"kind": "background", "job_id": "filter-1"})
+    assert dialog_info is None
+    assert status == "Cancelling…"
+    assert cancelled["n"] == 1
+
+
+def test_try_cancel_background_job_without_cancel_callable(qapp) -> None:  # noqa: ARG001
+    from molmanager.ui.background_jobs import register_background_job
+
+    app = SimpleNamespace(
+        process_queue=_FakeProcessQueue({"running": None, "queued": [], "fast_running": []}),
+        render2d_batch_active=lambda: False,
+        _background_jobs={},
+        background_activity=None,
+    )
+    hub = BackgroundActivityHub(app, qapp)
+    app.background_activity = hub
+    register_background_job(app, "sqlite-1", "Indexing table")
+    dialog_info, status = hub.try_cancel_row({"kind": "background", "job_id": "sqlite-1"})
+    assert dialog_info is not None
+    assert status is None
+    assert "cannot be cancelled" in dialog_info[1].lower()

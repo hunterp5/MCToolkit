@@ -415,20 +415,21 @@ class IngestRenderMixin:
         self._post_ingest_after_color_caches()
 
     def _post_ingest_after_color_caches(self) -> None:
-        # Set Render 2D copy before enqueue so the overlay cannot lag behind the batch start.
+        """Finish filter bounds, then auto Render 2D; reveal only when both are done."""
+        self._ingest_waiting_for_render = False
+        if getattr(self, "_ingest_prep_before_reveal", False):
+            self._loading_detail.setText("Preparing filters…")
+        self.calculate_global_bounds(on_complete=self._post_ingest_after_bounds)
+
+    def _post_ingest_after_bounds(self) -> None:
+        """Start auto Render 2D after bounds are ready; hold the overlay until it finishes."""
         n = self._table_model.rowCount()
         self._loading_detail.setText(f"{TOOL_RENDER_2D}…\n{n:,} row(s)")
         started_render = self._try_auto_render_all_structures_after_ingest()
-        self.calculate_global_bounds()
         if started_render and self._auto_render2d_blocks_workspace_reveal(n):
             self._ingest_waiting_for_render = True
             return
         keep_status = "auto 2D render skipped" in (self.status_label.text() or "")
-        if started_render:
-            self.status_label.setText(
-                f"Loaded {n:,} rows — rendering 2D structures in the background…"
-            )
-            keep_status = True
         self._reveal_table_after_ingest_prep(keep_status=keep_status)
 
     def _ingest_on_render2d_batch_finished(self) -> None:
@@ -477,7 +478,7 @@ class IngestRenderMixin:
             self._sqlite_rebuild_in_progress = False
 
     def _schedule_sqlite_rebuild(self) -> None:
-        """Export in UI chunks directly into a temp SQLite DB, then index in a worker."""
+        """Chunk-export row text on the GUI, then write/index SQLite in a worker."""
         store = getattr(self, "_sqlite_store", None)
         if store is None or self._sqlite_rebuild_in_progress:
             return
@@ -506,9 +507,10 @@ class IngestRenderMixin:
         job_id = f"sqlite-rebuild-{gen}"
         self._sqlite_rebuild_bg_job_id = job_id
         register_background_job(self, job_id, f"Indexing table ({n_rows:,} rows)")
+        begin = getattr(self, "_begin_tool_progress", None)
+        if callable(begin):
+            begin("Indexing table", max(1, n_rows))
         chunk = max(500, load_config().ingest_gui_chunk_size)
-        stream_store = SqliteTableStore(db_path)
-        stream_store.start_stream_rebuild(list(self.headers))
         self._sqlite_export_ctx = {
             "gen": gen,
             "data_headers": data_headers,
@@ -517,7 +519,8 @@ class IngestRenderMixin:
             "chunk": chunk,
             "db_path": str(db_path),
             "signals": sigs,
-            "stream_store": stream_store,
+            "entries": [],
+            "headers": list(self.headers),
         }
         self.status_label.setText(f"Indexing table… (0/{n_rows:,} rows)")
         QTimer.singleShot(0, self._sqlite_export_chunk_step)
@@ -525,22 +528,9 @@ class IngestRenderMixin:
     def _sqlite_export_chunk_step(self) -> None:
         ctx = getattr(self, "_sqlite_export_ctx", None)
         if not ctx or ctx.get("gen") != getattr(self, "_sqlite_rebuild_gen", -1):
-            if ctx is not None:
-                stream = ctx.get("stream_store")
-                if stream is not None:
-                    try:
-                        stream.close()
-                    except Exception:
-                        pass
-                self._sqlite_export_ctx = None
+            self._sqlite_export_ctx = None
             return
         if not self._sqlite_rebuild_in_progress:
-            stream = ctx.get("stream_store")
-            if stream is not None:
-                try:
-                    stream.close()
-                except Exception:
-                    pass
             self._sqlite_export_ctx = None
             return
         data_headers = ctx["data_headers"]
@@ -548,34 +538,42 @@ class IngestRenderMixin:
         n_rows = int(ctx["n_rows"])
         chunk = int(ctx["chunk"])
         end = min(row_idx + chunk, n_rows)
-        stream_store: SqliteTableStore = ctx["stream_store"]
         slice_rows = self._table_model.export_rows_for_sqlite_slice(data_headers, row_idx, end)
-        stream_store.append_stream_rows(slice_rows)
+        entries: list = ctx["entries"]
+        entries.extend(slice_rows)
         ctx["row_idx"] = end
-        self.status_label.setText(f"Indexing table… ({end:,}/{n_rows:,} rows)")
+        on_prog = getattr(self, "_on_tool_progress", None)
+        if callable(on_prog):
+            on_prog("Indexing table…", end, max(1, n_rows))
+        else:
+            self.status_label.setText(f"Indexing table… ({end:,}/{n_rows:,} rows)")
         if end < n_rows:
             QTimer.singleShot(0, self._sqlite_export_chunk_step)
             return
         gen = int(ctx["gen"])
         db_path = ctx["db_path"]
         sigs = ctx["signals"]
-        try:
-            stream_store.close()
-        except Exception:
-            pass
+        headers = list(ctx.get("headers") or self.headers)
+        exported = list(entries)
         self._sqlite_export_ctx = None
         pool = getattr(self, "threadpool", None)
         if pool is None:
             self._sqlite_rebuild_in_progress = False
+            finish = getattr(self, "_finish_tool_progress", None)
+            if callable(finish):
+                finish("Indexing table", status_message=None)
             return
+        self.status_label.setText(f"Indexing table… (writing {len(exported):,} rows)")
+        prog = getattr(self, "_tool_progress_state", None)
         pool.start(
             SqliteRebuildWorker(
                 gen,
-                list(self.headers),
-                None,
+                headers,
+                exported,
                 db_path,
                 sigs,
-                stream_finalize=True,
+                stream_finalize=False,
+                progress_state=prog,
             )
         )
 
@@ -591,6 +589,9 @@ class IngestRenderMixin:
         self._unregister_sqlite_rebuild_background_job(job_gen)
         if job_gen != getattr(self, "_sqlite_rebuild_gen", -1):
             return
+        finish = getattr(self, "_finish_tool_progress", None)
+        if callable(finish):
+            finish("Indexing table", status_message=None)
         try:
             new_store = SqliteTableStore(db_path)
             old = getattr(self, "_sqlite_store", None)
@@ -622,6 +623,9 @@ class IngestRenderMixin:
         self._unregister_sqlite_rebuild_background_job(job_gen)
         if job_gen != getattr(self, "_sqlite_rebuild_gen", -1):
             return
+        finish = getattr(self, "_finish_tool_progress", None)
+        if callable(finish):
+            finish("Indexing table", status_message=None)
         logger.warning("SQLite rebuild failed: %s", msg)
         self._sqlite_rebuild_in_progress = False
         self._sqlite_rebuild_pending_path = None

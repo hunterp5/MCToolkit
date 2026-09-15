@@ -478,7 +478,7 @@ class QSARDialog(QDialog):
         self._active_qsar_job_id = self.parent_app.process_queue.enqueue(
             f"QSAR train ({n} rows)",
             lambda ev, p=params, sigs=self._signals, st=prog: QSARTrainWorker(
-                p, sigs, cancel_event=ev
+                p, sigs, cancel_event=ev, progress_state=st
             ),
         )
         self.parent_app.process_queue.thread_finished.connect(self._on_process_queue_thread_finished)
@@ -506,7 +506,7 @@ class QSARDialog(QDialog):
         self._active_qsar_job_id = self.parent_app.process_queue.enqueue(
             f"QSAR predict ({n} rows)",
             lambda ev, p=params, sigs=self._signals, st=prog: QSARPredictWorker(
-                p, sigs, cancel_event=ev
+                p, sigs, cancel_event=ev, progress_state=st
             ),
         )
         self.parent_app.process_queue.thread_finished.connect(self._on_process_queue_thread_finished)

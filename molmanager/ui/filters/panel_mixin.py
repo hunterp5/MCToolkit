@@ -317,6 +317,13 @@ class FilterPanelMixin:
         unregister_background_job(self, job_id)
         self._filter_bg_job_id = None
 
+    def _cancel_async_filter_apply(self) -> None:
+        """Processes Cancel: discard the in-flight SQLite/chunked filter job."""
+        self._invalidate_filter_jobs()
+        finish = getattr(self, "_finish_tool_progress", None)
+        if callable(finish):
+            finish("Applying filters", status_message="Filter cancelled.")
+
     def _on_filter_apply_finished(self, job_gen: int, matched) -> None:
         self._unregister_filter_background_job(job_gen)
         if job_gen != getattr(self, "_filter_job_gen", 0):
@@ -362,7 +369,12 @@ class FilterPanelMixin:
             return
         job_id = f"filter-{gen}"
         self._filter_bg_job_id = job_id
-        register_background_job(self, job_id, f"Applying filters ({n_rows:,} rows)")
+        register_background_job(
+            self,
+            job_id,
+            f"Applying filters ({n_rows:,} rows)",
+            cancel=self._cancel_async_filter_apply,
+        )
         begin = getattr(self, "_begin_tool_progress", None)
         if callable(begin):
             begin("Applying filters", n_rows)
@@ -688,6 +700,20 @@ class FilterPanelMixin:
         if job_id == f"substructure-{job_gen}":
             unregister_background_job(self, job_id)
             self._substructure_bg_job_id = None
+
+    def _cancel_substructure_filter_job(self) -> None:
+        """Processes Cancel: discard the in-flight substructure filter job."""
+        job_id = getattr(self, "_substructure_bg_job_id", None)
+        gen = int(getattr(self, "_substructure_job_gen", 0))
+        self._invalidate_substructure_async_jobs()
+        if job_id is not None:
+            unregister_background_job(self, job_id)
+            self._substructure_bg_job_id = None
+        elif gen:
+            self._unregister_substructure_background_job(gen)
+        finish = getattr(self, "_finish_tool_progress", None)
+        if callable(finish):
+            finish("Filtering substructure", status_message="Substructure filter cancelled.")
 
     def _on_substructure_filter_finished(self, job_gen: int, matched) -> None:
         self._unregister_substructure_background_job(job_gen)
@@ -1025,7 +1051,12 @@ class FilterPanelMixin:
                 return
             job_id = f"substructure-{gen}"
             self._substructure_bg_job_id = job_id
-            register_background_job(self, job_id, f"Substructure filter ({n_rows:,} rows)")
+            register_background_job(
+                self,
+                job_id,
+                f"Substructure filter ({n_rows:,} rows)",
+                cancel=self._cancel_substructure_filter_job,
+            )
             begin = getattr(self, "_begin_tool_progress", None)
             if callable(begin):
                 begin("Filtering substructure", n_rows)

@@ -131,6 +131,8 @@ class ProcessesDialog(QDialog):
             self._btn_cancel.setEnabled(bool(m.get("cancellable", True)))
         elif m.get("kind") == "pq_queued":
             self._btn_cancel.setEnabled(True)
+        elif m.get("kind") == "background":
+            self._btn_cancel.setEnabled(bool(m.get("cancellable")))
         else:
             self._btn_cancel.setEnabled(False)
 
@@ -195,50 +197,14 @@ class ProcessesDialog(QDialog):
 
     def _on_cancel(self) -> None:
         m = self._selection_meta()
-        app = self._app
-        pq = getattr(app, "process_queue", None)
-        if not m:
-            QMessageBox.information(self, "Cancel", "Select a process in the table first.")
+        hub = getattr(self._app, "background_activity", None)
+        if hub is None:
             return
-        kind = m.get("kind")
-        if kind == "render2d":
-            if hasattr(app, "cancel_render_2d_batch") and app.cancel_render_2d_batch():
-                app.status_label.setText("Render 2D cancelled.")
-            else:
-                QMessageBox.information(self, "Cancel", "Render 2D is not active.")
-        elif kind == "smina":
-            if hasattr(app, "cancel_smina_dock") and app.cancel_smina_dock():
-                app.status_label.setText("Smina stopped.")
-            else:
-                QMessageBox.information(self, "Cancel", "Smina is not running.")
-        elif kind == "pq_running":
-            run = pq.snapshot().get("running") if pq else None
-            if not run or run.get("job_id") != m.get("job_id"):
-                QMessageBox.information(self, "Cancel", "That job is no longer running.")
-            elif pq.cancel_running():
-                app.status_label.setText("Cancelling…")
-            else:
-                QMessageBox.information(
-                    self,
-                    "Cancel",
-                    "This job cannot be cancelled cooperatively, or a cancel was already requested.",
-                )
-        elif kind == "pq_queued":
-            jid = m.get("job_id") or ""
-            if pq and pq.remove_queued_job(jid):
-                app.status_label.setText(f"Removed queued job ({jid}).")
-            else:
-                QMessageBox.information(self, "Cancel", "That job is no longer in the queue.")
-        elif kind == "pq_fast_running":
-            jid = m.get("job_id") or ""
-            if pq and pq.cancel_fast_job(jid):
-                app.status_label.setText("Cancelling interactive job…")
-            else:
-                QMessageBox.information(
-                    self, "Cancel", "That interactive job is no longer running."
-                )
-        else:
-            QMessageBox.information(self, "Cancel", "Unknown row type.")
+        dialog_info, status = hub.try_cancel_row(m)
+        if dialog_info is not None:
+            QMessageBox.information(self, dialog_info[0], dialog_info[1])
+        elif status:
+            self._app.status_label.setText(status)
         self._reload()
 
     def _on_clear_queue(self) -> None:

@@ -314,7 +314,13 @@ class PlotToolsMixin:
         """Refresh plot data after filters or table edits change visible rows."""
         # Warm sticky visible-row cache once for every open host (incl. debounced Plotter).
         self._visible_source_row_indices()
-        for host in self._iter_active_plot_hosts():
+        hosts = list(self._iter_active_plot_hosts())
+        if hosts and getattr(self, "status_label", None) is not None:
+            try:
+                self.status_label.setText(f"Updating plots… ({len(hosts)})")
+            except RuntimeError:
+                pass
+        for host in hosts:
             fn = getattr(host, "_schedule_plot", None) or getattr(host, "_rebuild_figure", None)
             if not callable(fn):
                 continue

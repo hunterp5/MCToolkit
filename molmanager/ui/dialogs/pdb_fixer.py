@@ -210,6 +210,9 @@ class PdbFixerDialog(QDialog):
 
         self.btn_run.setEnabled(False)
         self._append_log("Starting PDB preparation with PDBFixer…")
+        begin = getattr(app, "_begin_tool_progress", None)
+        if callable(begin):
+            begin("Prepare PDB", 1)
         app.process_queue.enqueue(
             "Prepare PDB",
             lambda ev, r=req, sig=self._signals: PdbFixerWorker(r, signals=sig, cancel_event=ev),
@@ -217,9 +220,19 @@ class PdbFixerDialog(QDialog):
 
     def _on_finished(self, output_pdb: str) -> None:
         self.btn_run.setEnabled(True)
+        app = self.parent_app
+        if app is not None:
+            finish = getattr(app, "_finish_tool_progress", None)
+            if callable(finish):
+                finish("Prepare PDB", status_message=None)
         self._append_log(f"Prepared PDB written: {output_pdb}")
         self._populate_open_prepare_paths(output_pdb)
 
     def _on_failed(self, msg: str) -> None:
         self.btn_run.setEnabled(True)
+        app = self.parent_app
+        if app is not None:
+            finish = getattr(app, "_finish_tool_progress", None)
+            if callable(finish):
+                finish("Prepare PDB", status_message=None)
         self._append_log(msg or "PDB preparation failed.")

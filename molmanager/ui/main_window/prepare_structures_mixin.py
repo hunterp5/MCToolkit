@@ -261,10 +261,10 @@ class PrepareStructuresMixin:
         # child processes keeps MolToSmiles off the GUI thread.
         need_smiles = self._fast_prepare_target_is_text(prepare_col)
         cfg = load_config()
-        self.status_label.setText("Fast prepare: preparing structures…")
+        self._begin_tool_progress("Fast prepare", len(data))
         self.process_queue.enqueue(
             "Fast prepare: prepare structures",
-            lambda ev, d=data, n=bool(neutralize), s=self.signals: FastPrepareWorker(
+            lambda ev, d=data, n=bool(neutralize), s=self.signals, ps=self._tool_progress_state: FastPrepareWorker(
                 d,
                 s,
                 is_smiles=is_smiles,
@@ -273,6 +273,7 @@ class PrepareStructuresMixin:
                 cancel_event=ev,
                 batch_size=int(cfg.fast_prepare_batch_size),
                 process_pool_min_rows=int(cfg.fast_prepare_process_pool_min_rows),
+                progress_state=ps,
             ),
         )
 
@@ -409,10 +410,11 @@ class PrepareStructuresMixin:
                 self.status_label.setText("Ready.")
                 return
             title = f"{queue_title_prefix}disconnect largest fragments"
+            self._begin_tool_progress("Disconnect fragments", len(data))
             self.process_queue.enqueue(
                 title,
-                lambda ev, d=data, s=self.signals: DisconnectFragmentsWorker(
-                    d, s, is_smiles=False, cancel_event=ev
+                lambda ev, d=data, s=self.signals, ps=self._tool_progress_state: DisconnectFragmentsWorker(
+                    d, s, is_smiles=False, cancel_event=ev, progress_state=ps
                 ),
             )
         else:
@@ -435,10 +437,11 @@ class PrepareStructuresMixin:
                 self.status_label.setText("Ready.")
                 return
             title = f"{queue_title_prefix}disconnect largest fragments (column)"
+            self._begin_tool_progress("Disconnect fragments", len(data))
             self.process_queue.enqueue(
                 title,
-                lambda ev, d=data, s=self.signals: DisconnectFragmentsWorker(
-                    d, s, is_smiles=True, cancel_event=ev
+                lambda ev, d=data, s=self.signals, ps=self._tool_progress_state: DisconnectFragmentsWorker(
+                    d, s, is_smiles=True, cancel_event=ev, progress_state=ps
                 ),
             )
 
@@ -519,10 +522,11 @@ class PrepareStructuresMixin:
             )
             self.status_label.setText("Ready.")
             return
+        self._begin_tool_progress("Add explicit hydrogens", len(data))
         self.process_queue.enqueue(
             "Add explicit hydrogens",
-            lambda ev, d=data, s=self.signals: AddExplicitHydrogensWorker(
-                d, s, is_smiles=False, cancel_event=ev
+            lambda ev, d=data, s=self.signals, ps=self._tool_progress_state: AddExplicitHydrogensWorker(
+                d, s, is_smiles=False, cancel_event=ev, progress_state=ps
             ),
         )
 
@@ -583,10 +587,11 @@ class PrepareStructuresMixin:
             )
             self.status_label.setText("Ready.")
             return
+        self._begin_tool_progress("Remove explicit hydrogens", len(data))
         self.process_queue.enqueue(
             "Remove explicit hydrogens",
-            lambda ev, d=data, s=self.signals: RemoveExplicitHydrogensWorker(
-                d, s, is_smiles=False, cancel_event=ev
+            lambda ev, d=data, s=self.signals, ps=self._tool_progress_state: RemoveExplicitHydrogensWorker(
+                d, s, is_smiles=False, cancel_event=ev, progress_state=ps
             ),
         )
 
@@ -649,10 +654,11 @@ class PrepareStructuresMixin:
             self.status_label.setText("Ready.")
             return
         title = f"{queue_title_prefix}neutralize".strip() or "Neutralize"
+        self._begin_tool_progress("Neutralize", len(data))
         self.process_queue.enqueue(
             title,
-            lambda ev, d=data, s=self.signals: NeutralizeWorker(
-                d, s, is_smiles=False, cancel_event=ev
+            lambda ev, d=data, s=self.signals, ps=self._tool_progress_state: NeutralizeWorker(
+                d, s, is_smiles=False, cancel_event=ev, progress_state=ps
             ),
         )
 
@@ -956,6 +962,7 @@ class PrepareStructuresMixin:
                 "Use Tools → Render 2D for visible or selected rows."
             )
             return False
+        self.status_label.setText(f"{TOOL_RENDER_2D}: collecting structures…")
         base_w, base_h = structure_depiict_width(), structure_depiict_height()
         renders, row_by_oid = self._build_render2d_tasks_from_mols(base_w, base_h, None)
         if not renders:
@@ -972,13 +979,11 @@ class PrepareStructuresMixin:
     def _auto_render2d_blocks_workspace_reveal(self, n_rows: int | None = None) -> bool:
         """True when ingest/session should wait for auto Render 2D before showing the table.
 
-        Larger loads use progressive reveal: show the workspace immediately while
-        Structure images continue in the background (see
-        ``structure_render_lazy_after_ingest_min_rows``).
+        Always wait when auto-render is started so the loading overlay stays up until
+        Structure images are ready. ``n_rows`` is accepted for call-site compatibility.
         """
-        cfg = load_config()
-        n = int(n_rows if n_rows is not None else self._table_model.rowCount())
-        return n < int(cfg.structure_render_lazy_after_ingest_min_rows)
+        _ = n_rows
+        return True
 
     def _restore_render2d_batch_environment(self) -> None:
         """Re-enable sorting and thread pool after a Render 2D run (or if cleared mid-batch)."""
@@ -1111,6 +1116,7 @@ class PrepareStructuresMixin:
         allowed_oids = self._selected_oids_set() if only_selected else None
         if self._abort_if_only_selected_but_empty(only_selected, allowed_oids, TOOL_RENDER_2D):
             return
+        self.status_label.setText(f"{TOOL_RENDER_2D}: collecting structures…")
         base_w, base_h = structure_depiict_width(), structure_depiict_height()
         renders, row_by_oid = self._build_render2d_tasks_in_table_order(
             src, base_w, base_h, allowed_oids

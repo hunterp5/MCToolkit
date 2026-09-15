@@ -205,6 +205,8 @@ def test_file_ingest_holds_table_until_render_finishes(qapp, monkeypatch):  # no
     w._ingest_prep_before_reveal = True
     w._set_workspace_stack_index(0)
     w._post_ingest_after_color_caches()
+    # Bounds complete via QTimer before auto-render starts.
+    qapp.processEvents()
     assert held["loading"] is True
     assert w._table_stack.currentIndex() == 0
     assert w._ingest_waiting_for_render is True
@@ -238,14 +240,15 @@ def test_file_ingest_reveals_immediately_when_auto_render_skipped(qapp, monkeypa
     w._ingest_prep_before_reveal = True
     w._set_workspace_stack_index(0)
     w._post_ingest_after_color_caches()
+    qapp.processEvents()
     assert w._table_stack.currentIndex() == 1
     assert not w._ingest_waiting_for_render
     assert not w._ingest_loading
     assert "auto 2D render skipped" in w.status_label.text()
 
 
-def test_file_ingest_progressive_reveal_for_large_auto_render(qapp, monkeypatch):  # noqa: ARG001
-    """At/above lazy-after-ingest threshold, show the table while Render 2D continues."""
+def test_file_ingest_holds_overlay_for_large_auto_render(qapp, monkeypatch):  # noqa: ARG001
+    """Auto Render 2D always blocks reveal (no progressive background reveal)."""
     monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
     monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
 
@@ -257,21 +260,21 @@ def test_file_ingest_progressive_reveal_for_large_auto_render(qapp, monkeypatch)
         "_try_auto_render_all_structures_after_ingest",
         fake_render,
     )
-    monkeypatch.setattr(
-        ChemicalTableApp,
-        "_auto_render2d_blocks_workspace_reveal",
-        lambda self, n_rows=None: False,
-    )
     w = ChemicalTableApp()
     _seed_two_rows(w)
     w._set_ingest_loading(True)
     w._ingest_prep_before_reveal = True
     w._set_workspace_stack_index(0)
     w._post_ingest_after_color_caches()
+    qapp.processEvents()
+    assert w._table_stack.currentIndex() == 0
+    assert w._ingest_waiting_for_render is True
+    assert w._ingest_loading
+    assert w._status_host.isHidden()
+    w._ingest_on_render2d_batch_finished()
     assert w._table_stack.currentIndex() == 1
     assert not w._ingest_waiting_for_render
-    assert "background" in (w.status_label.text() or "").lower()
-    assert not w._status_host.isHidden()
+    assert not w._ingest_loading
 
 
 def test_file_ingest_progress_updates_loading_overlay(qapp, monkeypatch):  # noqa: ARG001

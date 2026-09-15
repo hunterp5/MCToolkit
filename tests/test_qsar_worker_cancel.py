@@ -54,3 +54,37 @@ def test_qsar_predict_worker_emits_failed_when_cancelled_before_run() -> None:
     worker = QSARPredictWorker({"bundle": None, "oids": [], "dataframe": None}, signals, cancel_event=cancel)
     worker.run()
     assert collector.messages == ["Cancelled."]
+
+
+def test_qsar_train_worker_reports_fitting_progress(monkeypatch) -> None:
+    from molmanager.tool_progress import ToolProgressState
+
+    state = ToolProgressState()
+    state.begin("QSAR", 3)
+    snapshots: list[tuple[str, int, int]] = []
+
+    def fake_fit(**_kwargs):
+        msg, done, total, _active = state.snapshot()
+        snapshots.append((msg, done, total))
+        raise RuntimeError("stop-after-progress")
+
+    monkeypatch.setattr("molmanager.workers.qsar_worker.fit_qsar_model", fake_fit)
+    signals = QSARSignals()
+    collector = _Collector()
+    signals.failed.connect(collector.on_failed)
+    worker = QSARTrainWorker(
+        {
+            "oids": [1, 2, 3],
+            "activity_column": "y",
+            "dataframe": None,
+            "model_key": "ridge",
+        },
+        signals,
+        progress_state=state,
+    )
+    worker.run()
+    assert snapshots
+    assert snapshots[0][0].startswith("QSAR: fitting")
+    assert snapshots[0][2] == 3
+    assert collector.messages
+    assert "stop-after-progress" in collector.messages[0]

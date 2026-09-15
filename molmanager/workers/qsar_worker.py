@@ -25,6 +25,7 @@ from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 
 from ..exception_policy import log_swallowed_exception
 from ..qsar import fit_qsar_model, predict_qsar_rows
+from ..tool_progress import ToolProgressState, report_tool_progress
 
 logger = logging.getLogger(__name__)
 
@@ -45,21 +46,36 @@ class QSARSignals(QObject):
 class QSARTrainWorker(QRunnable):
     """Fit a QSAR model off the GUI thread."""
 
-    def __init__(self, params: dict, signals: QSARSignals, cancel_event: threading.Event | None = None):
+    def __init__(
+        self,
+        params: dict,
+        signals: QSARSignals,
+        cancel_event: threading.Event | None = None,
+        progress_state: ToolProgressState | None = None,
+    ):
         super().__init__()
         self.params = dict(params)
         self.signals = signals
         self.cancel_event = cancel_event
+        self.progress_state = progress_state
 
     def run(self) -> None:
         if self.cancel_event is not None and self.cancel_event.is_set():
             _emit_qsar_cancelled(self.signals)
             return
         try:
+            oids = list(self.params["oids"])
+            n = max(1, len(oids))
+            report_tool_progress(
+                message="QSAR: fitting…",
+                done=0,
+                total=n,
+                progress_state=self.progress_state,
+            )
             use_fp = bool(self.params.get("use_fingerprints"))
             result = fit_qsar_model(
                 df=self.params["dataframe"],
-                oids=list(self.params["oids"]),
+                oids=oids,
                 activity_column=str(self.params["activity_column"]),
                 feature_columns=self.params.get("feature_columns"),
                 fp_choice=self.params.get("fp_choice") if use_fp else None,
@@ -74,6 +90,12 @@ class QSARTrainWorker(QRunnable):
             if self.cancel_event is not None and self.cancel_event.is_set():
                 _emit_qsar_cancelled(self.signals)
                 return
+            report_tool_progress(
+                message="QSAR: done",
+                done=n,
+                total=n,
+                progress_state=self.progress_state,
+            )
             self.signals.train_finished.emit(result)
         except Exception as exc:
             logger.exception("QSAR training failed")
@@ -86,28 +108,49 @@ class QSARTrainWorker(QRunnable):
 class QSARPredictWorker(QRunnable):
     """Apply a fitted QSAR model to in-scope rows."""
 
-    def __init__(self, params: dict, signals: QSARSignals, cancel_event: threading.Event | None = None):
+    def __init__(
+        self,
+        params: dict,
+        signals: QSARSignals,
+        cancel_event: threading.Event | None = None,
+        progress_state: ToolProgressState | None = None,
+    ):
         super().__init__()
         self.params = dict(params)
         self.signals = signals
         self.cancel_event = cancel_event
+        self.progress_state = progress_state
 
     def run(self) -> None:
         if self.cancel_event is not None and self.cancel_event.is_set():
             _emit_qsar_cancelled(self.signals)
             return
         try:
+            oids = list(self.params["oids"])
+            n = max(1, len(oids))
+            report_tool_progress(
+                message="QSAR predictions: scoring…",
+                done=0,
+                total=n,
+                progress_state=self.progress_state,
+            )
             bundle = self.params["bundle"]
             rows = predict_qsar_rows(
                 bundle,
                 df=self.params["dataframe"],
-                oids=list(self.params["oids"]),
+                oids=oids,
                 mol_rows=self.params.get("mol_rows"),
                 output_column=self.params.get("output_column"),
             )
             if self.cancel_event is not None and self.cancel_event.is_set():
                 _emit_qsar_cancelled(self.signals)
                 return
+            report_tool_progress(
+                message="QSAR predictions: done",
+                done=n,
+                total=n,
+                progress_state=self.progress_state,
+            )
             self.signals.predict_finished.emit(rows)
         except Exception as exc:
             logger.exception("QSAR prediction failed")

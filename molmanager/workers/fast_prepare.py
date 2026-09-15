@@ -47,6 +47,7 @@ from .process_pool_utils import (
     shutdown_process_pool_executor,
 )
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
+from ..tool_progress import ToolProgressState, report_tool_progress
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,7 @@ class FastPrepareWorker(QRunnable):
         cancel_event: threading.Event | None = None,
         batch_size: int = 64,
         process_pool_min_rows: int = 250,
+        progress_state: ToolProgressState | None = None,
     ):
         super().__init__()
         self.items = list(items)
@@ -137,12 +139,18 @@ class FastPrepareWorker(QRunnable):
         self.cancel_event = cancel_event
         self.batch_size = max(1, int(batch_size))
         self.process_pool_min_rows = max(2, int(process_pool_min_rows))
+        self.progress_state = progress_state
+        self._progress_throttle = [0, 0.0]
 
     def _emit_progress(self, done: int, total: int) -> None:
-        try:
-            self.signals.tool_progress.emit(PROGRESS_LABEL, int(done), int(total))
-        except Exception:
-            pass
+        report_tool_progress(
+            message=PROGRESS_LABEL,
+            done=int(done),
+            total=int(total),
+            progress_state=self.progress_state,
+            signals=self.signals,
+            throttle=self._progress_throttle,
+        )
 
     def _tasks(self) -> list[tuple[int, object, str | None]]:
         """Serialize input rows into picklable ``(oid, payload, source_text)`` tuples."""

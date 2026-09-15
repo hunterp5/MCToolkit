@@ -51,6 +51,8 @@ def test_load_from_sql_streaming_sqlite(tmp_path, qapp):
     assert "SMILES" in w.headers
     assert w._table_model.value_for_header(0, "Note") == "alpha"
     assert w._table_model.value_for_header(1, "Note") == "beta"
+    assert 0 in w.mols and w.mols[0] is not None
+    assert 1 in w.mols and w.mols[1] is not None
     # Deferred post-load may start Render 2D; cancel so session-scoped qapp can exit.
     qapp.processEvents()
     if hasattr(w, "cancel_render_2d_batch"):
