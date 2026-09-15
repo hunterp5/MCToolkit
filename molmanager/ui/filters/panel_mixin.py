@@ -605,17 +605,20 @@ class FilterPanelMixin:
         columns work without overwriting the Structure cache.
         """
         src = (structure_source or "Structure").strip() or "Structure"
-        targets: list[tuple[int, object]] = []
         resolve = getattr(self, "_mol_for_structure_tool_oid", None)
         mols = getattr(self, "mols", None) or {}
-        for r in range(self._table_model.rowCount()):
-            oid = int(self._table_model.row_oid(r))
+        oids = self._table_model.all_oids_in_order()
+        if src == "Structure" and not callable(resolve):
+            return [(int(oid), mols.get(int(oid))) for oid in oids]
+        targets: list[tuple[int, object]] = []
+        for oid in oids:
+            oid_i = int(oid)
             mol = None
             if callable(resolve):
-                mol = resolve(oid, src)
+                mol = resolve(oid_i, src)
             elif src == "Structure":
-                mol = mols.get(oid)
-            targets.append((oid, mol))
+                mol = mols.get(oid_i)
+            targets.append((oid_i, mol))
         return targets
 
     def _mol_for_substructure_filter_row(self, row: int, structure_source: str):

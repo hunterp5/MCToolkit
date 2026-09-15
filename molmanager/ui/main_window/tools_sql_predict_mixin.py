@@ -31,12 +31,12 @@ from rdkit import Chem
 
 from ...config import load_config
 from ...services.sql_load_policy import engine_kwargs_for_sql_load, sql_looks_destructive
+from ...display_constants import structure_depiict_height, structure_depiict_width
 from ..analysis_job_support import (
     enqueue_process_queue_job,
     ensure_table_ready_for_tool,
     report_cancellable_job_failure,
 )
-from ..compound_table_model import structure_depiict_height, structure_depiict_width
 from ...utils import redact_sqlalchemy_url, safe_float
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 from ..strings import (

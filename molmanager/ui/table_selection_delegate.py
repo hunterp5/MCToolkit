@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QModelIndex, Qt, QSortFilterProxyModel
+from PyQt5.QtCore import QAbstractProxyModel, QModelIndex, Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QStyle, QStyleOptionViewItem, QStyledItemDelegate
 
@@ -30,7 +30,7 @@ def source_row_for_view_index(index: QModelIndex, compound_model: CompoundTableM
     if not index.isValid():
         return -1
     model = index.model()
-    if isinstance(model, QSortFilterProxyModel):
+    if isinstance(model, QAbstractProxyModel):
         src = model.mapToSource(index)
         if not src.isValid():
             return -1
@@ -57,7 +57,7 @@ class RowHighlightDelegate(QStyledItemDelegate):
 
     def _source_index(self, index: QModelIndex) -> QModelIndex:
         model = index.model()
-        if isinstance(model, QSortFilterProxyModel):
+        if isinstance(model, QAbstractProxyModel):
             return model.mapToSource(index)
         return index
 

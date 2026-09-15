@@ -231,14 +231,10 @@ class TableSelectionMixin:
             return None
         if self._use_filter_proxy_for_table():
             proxy = self._filter_proxy_model
-            out: list[int] = []
-            for pr in range(proxy.rowCount()):
-                pidx = proxy.index(pr, 0)
-                sidx = proxy.mapToSource(pidx)
-                if sidx.isValid():
-                    out.append(int(sidx.row()))
-            self._visible_source_rows_cache = out
-            return out
+            rows = proxy.visible_source_rows()
+            if rows is not None:
+                self._visible_source_rows_cache = rows
+                return rows
         n = self._table_model.rowCount()
         out = [r for r in range(n) if int(self._table_model.row_oid(r)) in oids]
         self._visible_source_rows_cache = out

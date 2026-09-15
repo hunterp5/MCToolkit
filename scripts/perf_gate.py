@@ -96,11 +96,13 @@ def main() -> int:
     )
 
     # Generous CI thresholds to catch major regressions while avoiding runner flakiness.
+    # filter_ms is an explicit row-map rebuild (not invalidateFilter); keep headroom for
+    # slow CI hosts but far below the historical multi-second SortFilter walk budget.
     limits = {
         "ingest_ms": 8000.0,
         "bounds_ms": 8000.0,
         "sort_ms": 4000.0,
-        "filter_ms": 15000.0,
+        "filter_ms": 2000.0,
     }
     failed = [k for k, lim in limits.items() if p95[k] > lim]
     if failed:

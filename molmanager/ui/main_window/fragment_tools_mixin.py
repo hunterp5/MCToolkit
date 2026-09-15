@@ -32,12 +32,12 @@ from ..strings import (
     TOOL_RECAP_DECOMP,
     TOOL_RECAP_RECOMP,
 )
+from ...display_constants import structure_depiict_height, structure_depiict_width
 from ...workers import (
     FragmentDecompositionWorker,
     FragmentRecompositionWorker,
     RGroupDecompositionWorker,
 )
-from ..compound_table_model import structure_depiict_height, structure_depiict_width
 
 logger = logging.getLogger(__name__)
 

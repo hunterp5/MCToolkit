@@ -40,7 +40,15 @@ flowchart TB
 
 | Mixin | Responsibility |
 |--------|----------------|
-| `SessionMixin` | Open/save `.cms` sessions; legacy CSV import (SMILES parse off GUI) |
+| `SessionMixin` | Open/save `.cms` sessions; legacy CSV import (composes session_* mixins) |
+| `SessionSaveMixin` | Document build, File open/save/new/duplicate |
+| `SessionTableLayoutMixin` | Header/layout chrome collect/restore |
+| `SessionPlotsMixin` | Docked/floating plot + protein viewer session state |
+| `SessionRestoreMixin` | CMS async restore, finalize steps, workspace reveal |
+| `SessionCsvMixin` | Legacy CSV session load |
+| `AppLifecycleMixin` | Session dirty / SQLite mirror / close-shutdown |
+| `AppProgressMixin` | Status chrome and tool-progress UI |
+| `AppMenuMixin` | Menubar, dock-results chrome, workspace dialog openers |
 | `TableUIMixin` | Column color/sort, `clear_all`, confs sidecar, selection browser (composes table mixins) |
 | `TableSelectionMixin` | Row/column selection, visibility cache, OID override / chunked select |
 | `TableChemistryAccessMixin` | Molecule lookup, chemistry-tool source columns, OID→row |
@@ -53,6 +61,8 @@ flowchart TB
 | `MedChemSpaceMixin` | MedChem space plot |
 | `QsarMixin` | QSAR entry points |
 | `GuiSettingsMixin` | Persisted UI settings |
+
+`QMainWindow` precedes mixins in the MRO, so Qt virtuals such as `closeEvent` must be declared on `ChemicalTableApp` (delegating into the mixin). Mixin implementations that need the C++ base should call `QMainWindow.closeEvent` explicitly rather than `super()`.
 
 `ChemistryMixin` composes (same MRO order):
 
@@ -71,7 +81,12 @@ flowchart TB
 
 ## Table and visibility
 
-- **Source of truth:** `CompoundTableModel` (`_rows`, OIDs, batched `dataChanged`).
+- **Source of truth:** `CompoundTableModel` (`_rows`, OIDs, batched `dataChanged`) in
+  `ui/compound_table_model.py`, composed from structure / bounds / bulk / color mixins.
+- **View stack:** `ui/compound_table_view.py` (`CompoundTableView`, `StructureDelegate`,
+  `CompoundTableHeaderView`); re-exported from `compound_table_model` for stable imports.
+- **Helpers:** `services/numeric_bounds.py` (filter slider min/max scans);
+  `column_color_compute.py` (gradient / categorical RGB).
 - **Filtered view:** `FilterProxyModel` hides rows by OID set (`set_visible_oids`), not per-row `setRowHidden`.
 - **Selection:** Qt selection + `_selected_oids_override` for large selections (tools/plots use `_selected_oids_set()`); logic lives in `TableSelectionMixin`.
 - **SQLite mirror:** `SqliteTableStore` powers text/numeric filter pushdown and column search at 100k+ rows. Rebuilt in chunks on the GUI thread, then `SqliteRebuildWorker` builds the DB file.
@@ -134,10 +149,13 @@ reporting (`report_cancellable_job_failure`). Mixins and dialogs stay thin adapt
 
 Filter visibility changes invalidate a sticky `_visible_source_rows_cache` used by
 plot replot (so debounced Plotter rebuilds do not rematerialize proxy maps per host).
-`FilterProxyModel.set_visible_oids` returns whether the set changed; unchanged applies
-skip `invalidateFilter` fan-out and forced replots. When visibility does change, the
-proxy builds a per-source-row accept bitmap so `filterAcceptsRow` is O(1) during the
-Qt invalidate walk (OID membership is resolved once via `logical_row_for_oid`).
+`FilterProxyModel` is an explicit OID→row map (`QAbstractProxyModel`): `set_visible_oids`
+rebuilds the accepted source-row list once instead of
+`QSortFilterProxyModel.invalidateFilter` walking every row. `visible_source_rows()` seeds
+the sticky cache without a `mapToSource` loop. Column insert/remove is forwarded 1:1
+(`beginInsertColumns` / `beginRemoveColumns`) so the table view updates section count;
+without that, deletes leave blank columns and new descriptor columns never appear.
+When visibility does not change, finalize skips reset/replot.
 
 Plotter axis/mode/histogram helpers live in `molmanager/plot_axes.py` (re-exported from
 `ui/plot.py`). Series collection for scatter/histogram lives in `molmanager/plot_collect.py`.
