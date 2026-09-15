@@ -157,11 +157,11 @@ class Render2DMixin:
     def _auto_render2d_blocks_workspace_reveal(self, n_rows: int | None = None) -> bool:
         """True when ingest/session should wait for auto Render 2D before showing the table.
 
-        Always wait when auto-render is started so the loading overlay stays up until
-        Structure images are ready. ``n_rows`` is accepted for call-site compatibility.
+        Auto 2D continues in the background after the workspace appears. ``n_rows`` is
+        accepted for call-site compatibility.
         """
         _ = n_rows
-        return True
+        return False
 
     def _restore_render2d_batch_environment(self) -> None:
         """Re-enable sorting and thread pool after a Render 2D run (or if cleared mid-batch)."""

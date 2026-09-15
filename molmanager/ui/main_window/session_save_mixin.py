@@ -32,17 +32,17 @@ from ...confs_codec import serialize_confs_sidecar
 from ...microstate_cache import serialize_ionization_sidecar
 from ...services.filter_config import cfg_column
 from ...session_codec import (
-    SESSION_VERSION_CURRENT,
+    compact_global_bounds,
     compact_session_document,
     dumps_session_document,
+    encode_mol_blob_b64,
     expand_session_document,
     loads_session_bytes,
     session_format_ok,
     session_version_ok,
 )
-from ...utils import mol_to_canonical_smiles
+from ...utils import mol_graph_binary, mol_to_canonical_smiles
 from ..qt_widget_utils import qobject_is_deleted
-from ..strings import loaded_session_status
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
 
 logger = logging.getLogger(__name__)
@@ -147,13 +147,11 @@ class SessionSaveMixin:
                 sort_mode = str(ss.get("mode") or "auto")
         rows_out: list[dict] = []
         structure_smiles: list[str] = []
-        for r in range(self._table_model.rowCount()):
-            t0 = self._table_model.cell_text(r, 0)
-            oid = int(t0) if t0.isdigit() else r
-            mol = self.mols.get(oid)
-            if mol is None:
-                mol = self._mol_for_structure_row(r)
-            structure_smiles.append(mol_to_canonical_smiles(mol) if mol is not None else "")
+        structure_mols: list[str] = []
+        n_rows = self._table_model.rowCount()
+        smiles_col = "SMILES" in self.headers
+        for r in range(n_rows):
+            oid = int(self._table_model.row_oid(r))
             cells: dict[str, str] = {}
             for ci, h in enumerate(self.headers):
                 if h in ("ID_HIDDEN", "Structure"):
@@ -162,8 +160,17 @@ class SessionSaveMixin:
                     cells[h] = self._table_model.backing_value_for_row_header(r, h)
                 else:
                     cells[h] = self._table_cell_text(r, ci)
-            if "SMILES" in cells and not (cells.get("SMILES") or "").strip() and mol is not None:
-                cells["SMILES"] = mol_to_canonical_smiles(mol)
+            mol = self.mols.get(oid)
+            if mol is None:
+                mol = self._mol_for_structure_row(r)
+            structure_mols.append(encode_mol_blob_b64(mol_graph_binary(mol)))
+            smi = str(cells.get("SMILES") or "").strip() if smiles_col else ""
+            if smi:
+                structure_smiles.append(smi)
+            else:
+                structure_smiles.append(mol_to_canonical_smiles(mol) if mol is not None else "")
+                if smiles_col and mol is not None and not (cells.get("SMILES") or "").strip():
+                    cells["SMILES"] = structure_smiles[-1]
             rows_out.append({"id": oid, "cells": cells})
         filters_out: list[dict] = []
         for f in self.filters:
@@ -224,6 +231,8 @@ class SessionSaveMixin:
             "headers": list(self.headers),
             "rows": rows_out,
             "structure_smiles": structure_smiles,
+            "structure_mols": structure_mols,
+            "global_bounds": compact_global_bounds(getattr(self, "global_bounds", None)),
             "next_oid": int(self.next_oid),
             "zoomed_ids": sorted(int(x) for x in self.zoomed_ids),
             "structure_field_override": getattr(self, "_structure_field_override", None),

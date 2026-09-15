@@ -25,7 +25,9 @@ from molmanager.workers.substructure_filter import SubstructureFilterWorker
 def test_substructure_worker_uses_prebuilt_mol_targets():
     signals = SubstructureFilterSignals()
     out: dict[str, object] = {}
-    signals.finished.connect(lambda job_gen, matched: out.update({"gen": job_gen, "matched": matched}))
+    signals.finished.connect(
+        lambda job_gen, matched: out.update({"gen": job_gen, "matched": matched})
+    )
     worker = SubstructureFilterWorker(
         job_gen=7,
         smarts="CO",
@@ -36,3 +38,34 @@ def test_substructure_worker_uses_prebuilt_mol_targets():
     assert out["gen"] == 7
     assert out["matched"] == [("CO", "Structure", frozenset({1}))]
 
+
+def test_substructure_worker_group_queries_support_negation():
+    from molmanager.workers.substructure_filter import mol_matches_pattern_groups
+
+    q = Chem.MolFromSmarts("O")
+    ethanol = Chem.MolFromSmiles("CCO")
+    ethane = Chem.MolFromSmiles("CC")
+    assert mol_matches_pattern_groups(ethanol, [[(q, False)]])
+    assert not mol_matches_pattern_groups(ethane, [[(q, False)]])
+    assert mol_matches_pattern_groups(ethane, [[(q, True)]])
+
+    signals = SubstructureFilterSignals()
+    out: dict[str, object] = {}
+    signals.finished.connect(
+        lambda job_gen, matched: out.update({"gen": job_gen, "matched": matched})
+    )
+    worker = SubstructureFilterWorker(
+        job_gen=2,
+        signals=signals,
+        group_queries=[
+            (
+                "0",
+                "Structure",
+                [(1, ethanol), (2, ethane)],
+                [[(q, True)]],
+            )
+        ],
+    )
+    worker.run()
+    assert out["gen"] == 2
+    assert out["matched"] == [("0", "Structure", frozenset({2}))]

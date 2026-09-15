@@ -26,7 +26,7 @@ from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
-from ..session_codec import row_structure_smiles
+from ..session_codec import decode_mol_blob_b64, row_structure_smiles
 
 
 def _safe_emit(obj: QObject | None, emitter_name: str, *args) -> None:
@@ -70,7 +70,7 @@ class SessionRowsParseSignals(QObject):
 
 
 class SessionRowsParseWorker(QRunnable):
-    """Parse session row SMILES off the GUI thread."""
+    """Load session structures off the GUI thread (mol binary first, SMILES fallback)."""
 
     def __init__(
         self,
@@ -80,12 +80,14 @@ class SessionRowsParseWorker(QRunnable):
         signals: SessionRowsParseSignals,
         generation: int,
         structure_smiles: list[str] | None = None,
+        structure_mols: list[str] | None = None,
     ):
         super().__init__()
         self.setAutoDelete(True)
         self.rows = rows
         self.data_headers = list(data_headers)
         self.structure_smiles = list(structure_smiles or [])
+        self.structure_mols = list(structure_mols or [])
         self.signals = signals
         self.generation = int(generation)
 
@@ -112,10 +114,19 @@ class SessionRowsParseWorker(QRunnable):
                 smi = row_structure_smiles(cells, saved_smi)
                 row_cells = {cname: str(cells.get(cname, "") or "") for cname in headers}
                 prepared.append((oid, row_cells))
-                if smi:
+                mol = None
+                blob = None
+                if i < len(self.structure_mols):
+                    blob = decode_mol_blob_b64(self.structure_mols[i])
+                if blob:
+                    try:
+                        mol = Chem.Mol(blob)
+                    except Exception:
+                        mol = None
+                if mol is None and smi:
                     mol = Chem.MolFromSmiles(smi)
-                    if mol is not None:
-                        mols[oid] = mol
+                if mol is not None:
+                    mols[oid] = mol
             _safe_emit(
                 self.signals,
                 "finished",

@@ -28,9 +28,7 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 from ...config import load_config
 from ...confs_codec import deserialize_confs_sidecar
 from ...microstate_cache import restore_ionization_sidecar
-from ...session_codec import expand_session_document
-from ...utils import mol_to_canonical_smiles
-from ..qt_widget_utils import qobject_is_deleted
+from ...session_codec import expand_session_document, parse_session_global_bounds
 from ..strings import LOADING_DETAIL_SESSION, TOOL_RENDER_2D, loaded_session_status
 from ..threadpool_access import start_runnable_on_app_pool
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
@@ -134,6 +132,7 @@ class SessionRestoreMixin:
                 signals=signals,
                 generation=gen,
                 structure_smiles=list(doc.get("structure_smiles") or []),
+                structure_mols=list(doc.get("structure_mols") or []),
             )
             # Pytest has no lasting event-loop turn for threadpool completions; parse inline.
             if "pytest" in sys.modules:
@@ -265,6 +264,24 @@ class SessionRestoreMixin:
                 self._loading_detail.setText("Preparing filters…")
                 want_next = int(doc.get("next_oid", max_id + 1))
                 self.next_oid = want_next if want_next > max_id else max_id + 1
+                saved_bounds = parse_session_global_bounds(doc.get("global_bounds"))
+                if saved_bounds:
+                    list_fn = getattr(self._table_model, "list_bounds_data_headers", None)
+                    if callable(list_fn):
+                        allowed = set(list_fn())
+                        saved_bounds = {
+                            key: meta for key, meta in saved_bounds.items() if key in allowed
+                        }
+                if saved_bounds:
+                    install = getattr(self._table_model, "install_numeric_bounds_cache", None)
+                    if callable(install):
+                        install(saved_bounds)
+                    self.global_bounds = dict(saved_bounds)
+                    refresh = getattr(self, "_refresh_bounds_on_filter_cards", None)
+                    if callable(refresh):
+                        refresh()
+                    self._session_finalize_after_bounds()
+                    return
                 self.calculate_global_bounds(
                     on_complete=lambda: self._session_finalize_after_bounds()
                 )
@@ -476,7 +493,7 @@ class SessionRestoreMixin:
         self._deferred_session_post_load_follow_up()
 
     def _reveal_table_after_session_prep(self) -> None:
-        """Leave the loading overlay once session rows, 2D renders, and plots are ready."""
+        """Leave the loading overlay once session rows, filters, and plots are ready."""
         self._set_ingest_loading(False)
         self._set_workspace_stack_index(1)
         finish_clean = getattr(self, "_finish_session_clean_if_pending", None)
@@ -572,7 +589,7 @@ class SessionRestoreMixin:
         QTimer.singleShot(0, self._session_try_reveal_when_ready)
 
     def _session_try_reveal_when_ready(self) -> None:
-        """Show the workspace once 2D drawing and plot views have settled."""
+        """Show the workspace once plot views have settled (2D may still be drawing)."""
         if not getattr(self, "_session_awaiting_ready", False):
             return
         if getattr(self, "_session_waiting_for_render", False):
@@ -598,6 +615,9 @@ class SessionRestoreMixin:
         if callable(finish):
             QTimer.singleShot(0, finish)
         n = self._table_model.rowCount()
+        cur = self.status_label.text() or ""
+        if TOOL_RENDER_2D in cur or "auto 2D render skipped" in cur:
+            return
         self.status_label.setText(loaded_session_status(n) if n else "Ready.")
 
     def _deferred_session_post_load_follow_up(self) -> None:
@@ -608,13 +628,18 @@ class SessionRestoreMixin:
         render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
         pending = getattr(self, "_pending_session_table_layout", None)
         self._restore_pending_workspace_layout()
-        detail = getattr(self, "_loading_detail", None)
-        if detail is not None:
-            try:
-                detail.setText(f"{TOOL_RENDER_2D}…")
-            except RuntimeError:
-                pass
-        if callable(render) and render():
+        started = callable(render) and render()
+        blocks = False
+        if started:
+            blocks_fn = getattr(self, "_auto_render2d_blocks_workspace_reveal", None)
+            blocks = bool(callable(blocks_fn) and blocks_fn(self._table_model.rowCount()))
+        if started and blocks:
+            detail = getattr(self, "_loading_detail", None)
+            if detail is not None:
+                try:
+                    detail.setText(f"{TOOL_RENDER_2D}…")
+                except RuntimeError:
+                    pass
             self._session_waiting_for_render = True
             self._restore_session_table_chrome(pending)
             self._restore_pending_workspace_layout()

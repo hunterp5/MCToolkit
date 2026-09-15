@@ -103,6 +103,82 @@ def test_apply_session_document_restores_row(qapp):  # noqa: ARG001
     assert 0 in w2.mols
 
 
+def test_session_roundtrip_restores_mol_from_binary_not_smiles(qapp):  # noqa: ARG001
+    """Saved RDKit binaries win over unparseable SMILES on Open."""
+    from molmanager.utils import mol_to_canonical_smiles
+
+    parent = Chem.MolFromSmiles("CCN")
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CCN"})
+    w.mols[0] = parent
+    w.next_oid = 1
+    doc = w._build_session_document()
+    assert doc.get("structure_mols") and doc["structure_mols"][0]
+    doc["structure_smiles"] = ["not-a-smiles"]
+    values = doc.get("values")
+    if isinstance(values, list) and values and isinstance(values[0], list):
+        values[0][0] = "not-a-smiles"
+
+    w2 = ChemicalTableApp()
+    w2._apply_session_document(doc)
+    assert 0 in w2.mols
+    assert mol_to_canonical_smiles(w2.mols[0]) == mol_to_canonical_smiles(parent)
+
+
+def test_session_roundtrip_restores_saved_filter_bounds(qapp, monkeypatch):  # noqa: ARG001
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CCO", "MW": "46.1"})
+    w._table_model.append_row(1, {"SMILES": "CCN", "MW": "45.1"})
+    w.mols[0] = Chem.MolFromSmiles("CCO")
+    w.mols[1] = Chem.MolFromSmiles("CCN")
+    w.next_oid = 2
+    w.calculate_global_bounds()
+    assert "MW" in w.global_bounds
+    doc = w._build_session_document()
+    assert doc["global_bounds"]["MW"]["min"] == pytest.approx(float(w.global_bounds["MW"]["min"]))
+
+    def boom(self, *args, **kwargs):
+        raise AssertionError("session restore should use saved global_bounds")
+
+    monkeypatch.setattr(ChemicalTableApp, "calculate_global_bounds", boom)
+    w2 = ChemicalTableApp()
+    w2._apply_session_document(doc)
+    assert "MW" in w2.global_bounds
+    assert w2.global_bounds["MW"]["max"] == pytest.approx(float(w.global_bounds["MW"]["max"]))
+
+
+def test_session_rows_parse_prefers_mol_binary_over_smiles(qapp):  # noqa: ARG001
+    from molmanager.session_codec import encode_mol_blob_b64
+    from molmanager.utils import mol_graph_binary, mol_to_canonical_smiles
+    from molmanager.workers.session_rows_parse import (
+        SessionRowsParseResult,
+        SessionRowsParseSignals,
+        SessionRowsParseWorker,
+    )
+
+    parent = Chem.MolFromSmiles("CCN")
+    signals = SessionRowsParseSignals()
+    worker = SessionRowsParseWorker(
+        [{"id": 1, "cells": {"SMILES": "not-a-smiles", "Note": "x"}}],
+        data_headers=["SMILES", "Note"],
+        signals=signals,
+        generation=1,
+        structure_smiles=["not-a-smiles"],
+        structure_mols=[encode_mol_blob_b64(mol_graph_binary(parent))],
+    )
+    captured: list[object] = []
+    signals.finished.connect(captured.append)
+    worker.run()
+    assert captured
+    result = captured[0]
+    assert isinstance(result, SessionRowsParseResult)
+    assert mol_to_canonical_smiles(result.mols[1]) == mol_to_canonical_smiles(parent)
+
+
 def test_session_roundtrip_keeps_structure_independent_of_protonated(qapp):  # noqa: ARG001
     """Structure mols stay parent even when a Protonated column holds the ionized form."""
     from molmanager.utils import mol_to_canonical_smiles

@@ -34,9 +34,9 @@ _WRITE_CHUNK = 2000
 class SqliteRebuildWorker(QRunnable):
     """Build a fresh SQLite mirror off the UI thread.
 
-    Prefer *entries* collected on the GUI (chunked export only); this worker
-    streams inserts and creates the oid index. Legacy *stream_finalize* callers
-    may pass an already-filled *db_path* with ``entries=None``.
+    Prefer GUI chunk-writes into *db_path* followed by ``stream_finalize=True``
+    (no full in-RAM *entries* list). Passing *entries* still streams inserts
+    here for tests and small rebuilds.
     """
 
     def __init__(

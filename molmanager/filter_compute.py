@@ -117,28 +117,32 @@ def fetch_matching_oids(
     uri = f"file:{Path(db_path).resolve()}?mode=ro"
     conn = sqlite3.connect(uri, uri=True)
     try:
-        total = int(
-            conn.execute(
-                f"SELECT COUNT(*) FROM table_rows WHERE {where_sql}",
-                args,
-            ).fetchone()[0]
-        )
-        page = max(1000, int(page_size))
+        page = max(1, int(page_size))
         out: set[int] = set()
-        offset = 0
-        while offset < total:
+        last_oid: int | None = None
+        where = f"({where_sql})" if where_sql else "1"
+        while True:
+            bind: list[object] = list(args)
+            extra = ""
+            if last_oid is not None:
+                extra = " AND oid > ?"
+                bind.append(int(last_oid))
+            bind.append(page)
             rows = conn.execute(
-                "SELECT oid FROM table_rows WHERE "
-                f"{where_sql} ORDER BY oid ASC LIMIT ? OFFSET ?",
-                args + (page, offset),
+                f"SELECT oid FROM table_rows WHERE {where}{extra} ORDER BY oid ASC LIMIT ?",
+                tuple(bind),
             ).fetchall()
             if not rows:
                 break
-            out.update(int(r[0]) for r in rows)
-            offset += len(rows)
+            for rec in rows:
+                out.add(int(rec[0]))
+            last_oid = int(rows[-1][0])
             if progress_cb is not None:
-                progress_cb(min(offset, total), max(1, total))
-        if progress_cb is not None and total == 0:
+                n = len(out)
+                progress_cb(n, max(n, 1))
+            if len(rows) < page:
+                break
+        if progress_cb is not None and not out:
             progress_cb(0, 1)
         return frozenset(out)
     finally:

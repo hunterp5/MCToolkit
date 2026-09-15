@@ -327,7 +327,7 @@ class IngestLoadMixin:
                 self.status_label.setText(f"Loaded {n:,} molecules — preparing table…")
                 if self._table_stack.currentIndex() == 0:
                     self._loading_detail.setText(
-                        f"Building table…\n{n} molecule(s); 2D structures draw before the workspace is shown"
+                        f"Building table…\n{n} molecule(s); 2D structures draw after the table is shown"
                     )
                 if (
                     getattr(self, "_ingest_loading", False)
@@ -378,7 +378,7 @@ class IngestLoadMixin:
         QTimer.singleShot(0, self._deferred_post_ingest_follow_up)
 
     def _deferred_post_ingest_follow_up(self) -> None:
-        """Runs on the loading page: color caches, bounds, auto 2D, then reveal the table."""
+        """Runs on the loading page: color caches and bounds, then reveal; auto 2D follows."""
         headers = self._table_model.pending_color_cache_headers()
         if headers:
             self._post_ingest_color_headers = headers
@@ -403,32 +403,32 @@ class IngestLoadMixin:
         self._post_ingest_after_color_caches()
 
     def _post_ingest_after_color_caches(self) -> None:
-        """Finish filter bounds, then auto Render 2D; reveal only when both are done."""
+        """Finish filter bounds, then auto Render 2D; reveal after bounds are ready."""
         self._ingest_waiting_for_render = False
         if getattr(self, "_ingest_prep_before_reveal", False):
             self._loading_detail.setText("Preparing filters…")
         self.calculate_global_bounds(on_complete=self._post_ingest_after_bounds)
 
     def _post_ingest_after_bounds(self) -> None:
-        """Start auto Render 2D after bounds are ready; hold the overlay until it finishes."""
+        """Start auto Render 2D after bounds; show the table without waiting on images."""
         n = self._table_model.rowCount()
-        self._loading_detail.setText(f"{TOOL_RENDER_2D}…\n{n:,} row(s)")
         started_render = self._try_auto_render_all_structures_after_ingest()
         if started_render and self._auto_render2d_blocks_workspace_reveal(n):
+            self._loading_detail.setText(f"{TOOL_RENDER_2D}…\n{n:,} row(s)")
             self._ingest_waiting_for_render = True
             return
-        keep_status = "auto 2D render skipped" in (self.status_label.text() or "")
+        keep_status = started_render or "auto 2D render skipped" in (self.status_label.text() or "")
         self._reveal_table_after_ingest_prep(keep_status=keep_status)
 
     def _ingest_on_render2d_batch_finished(self) -> None:
-        """Reveal the workspace after auto Render 2D (or cancel) completes for a file load."""
+        """Reveal the workspace after auto Render 2D if ingest was waiting on it."""
         if not getattr(self, "_ingest_waiting_for_render", False):
             return
         self._ingest_waiting_for_render = False
         self._reveal_table_after_ingest_prep()
 
     def _reveal_table_after_ingest_prep(self, *, keep_status: bool = False) -> None:
-        """Switch from the loading page to the table once prep and auto 2D are finished."""
+        """Switch from the loading page to the table once rows and filter bounds are ready."""
         self._ingest_prep_before_reveal = False
         self._ingest_waiting_for_render = False
         self._set_ingest_loading(False)

@@ -51,8 +51,17 @@ class SqliteRebuildMixin:
         finally:
             self._sqlite_rebuild_in_progress = False
 
+    def _close_sqlite_rebuild_writer(self, ctx: dict | None) -> None:
+        writer = None if ctx is None else ctx.pop("writer", None)
+        if writer is None:
+            return
+        try:
+            writer.close()
+        except Exception:
+            logger.exception("Failed to close SQLite rebuild writer")
+
     def _schedule_sqlite_rebuild(self) -> None:
-        """Chunk-export row text on the GUI, then write/index SQLite in a worker."""
+        """Chunk-export and stream-write row text, then index SQLite in a worker."""
         store = getattr(self, "_sqlite_store", None)
         if store is None or self._sqlite_rebuild_in_progress:
             return
@@ -87,6 +96,8 @@ class SqliteRebuildMixin:
         if callable(begin):
             begin("Indexing table", max(1, n_rows))
         chunk = max(500, load_config().ingest_gui_chunk_size)
+        writer = SqliteTableStore(db_path)
+        writer.start_stream_rebuild(list(self.headers))
         self._sqlite_export_ctx = {
             "gen": gen,
             "data_headers": data_headers,
@@ -95,7 +106,7 @@ class SqliteRebuildMixin:
             "chunk": chunk,
             "db_path": str(db_path),
             "signals": sigs,
-            "entries": [],
+            "writer": writer,
             "headers": list(self.headers),
         }
         self.status_label.setText(f"Indexing table… (0/{n_rows:,} rows)")
@@ -104,9 +115,11 @@ class SqliteRebuildMixin:
     def _sqlite_export_chunk_step(self) -> None:
         ctx = getattr(self, "_sqlite_export_ctx", None)
         if not ctx or ctx.get("gen") != getattr(self, "_sqlite_rebuild_gen", -1):
+            self._close_sqlite_rebuild_writer(ctx)
             self._sqlite_export_ctx = None
             return
         if not self._sqlite_rebuild_in_progress:
+            self._close_sqlite_rebuild_writer(ctx)
             self._sqlite_export_ctx = None
             return
         data_headers = ctx["data_headers"]
@@ -115,8 +128,9 @@ class SqliteRebuildMixin:
         chunk = int(ctx["chunk"])
         end = min(row_idx + chunk, n_rows)
         slice_rows = self._table_model.export_rows_for_sqlite_slice(data_headers, row_idx, end)
-        entries: list = ctx["entries"]
-        entries.extend(slice_rows)
+        writer = ctx.get("writer")
+        if writer is not None and slice_rows:
+            writer.append_stream_rows(slice_rows)
         ctx["row_idx"] = end
         on_prog = getattr(self, "_on_tool_progress", None)
         if callable(on_prog):
@@ -130,7 +144,7 @@ class SqliteRebuildMixin:
         db_path = ctx["db_path"]
         sigs = ctx["signals"]
         headers = list(ctx.get("headers") or self.headers)
-        exported = list(entries)
+        self._close_sqlite_rebuild_writer(ctx)
         self._sqlite_export_ctx = None
         pool = getattr(self, "threadpool", None)
         if pool is None:
@@ -139,16 +153,16 @@ class SqliteRebuildMixin:
             if callable(finish):
                 finish("Indexing table", status_message=None)
             return
-        self.status_label.setText(f"Indexing table… (writing {len(exported):,} rows)")
+        self.status_label.setText(f"Indexing table… (writing {n_rows:,} rows)")
         prog = getattr(self, "_tool_progress_state", None)
         pool.start(
             SqliteRebuildWorker(
                 gen,
                 headers,
-                exported,
+                None,
                 db_path,
                 sigs,
-                stream_finalize=False,
+                stream_finalize=True,
                 progress_state=prog,
             )
         )

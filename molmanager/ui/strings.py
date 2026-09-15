@@ -47,18 +47,17 @@ STRUCTURE_PENDING_HINT = f"No 2D structure yet.\nUse {TOOLS_ARROW_RENDER_2D} to 
 STATUS_READY_RENDER_2D = f"Ready — use {TOOLS_ARROW_RENDER_2D} to refresh or redraw 2D images."
 
 LOADING_DETAIL_AFTER_FILE_READ = (
-    "File read; building table…\n2D structure images are drawn before the workspace is shown."
+    "File read; building table…\n2D structure images continue after the table is shown."
 )
 LOADING_DETAIL_READING_DISK = (
-    "Reading file from disk…\n2D structure images are drawn before the workspace is shown."
+    "Reading file from disk…\n2D structure images continue after the table is shown."
 )
 LOADING_DETAIL_APPEND = (
-    "Reading file from disk…\n"
-    "New rows are appended; 2D images are drawn before the workspace is shown."
+    "Reading file from disk…\nNew rows are appended; 2D images continue after the table is shown."
 )
 LOADING_DETAIL_SESSION = (
     "Loading session…\n"
-    "Restoring table, filters, plots, and 2D structures before the workspace is shown."
+    "Restoring table, filters, and plots. 2D images continue after the workspace is shown."
 )
 
 DISCONNECT_FRAGMENTS_HELP = (

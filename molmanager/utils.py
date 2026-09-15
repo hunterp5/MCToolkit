@@ -139,6 +139,25 @@ def mol_to_canonical_smiles(mol, *, isomeric: bool = True) -> str:
     return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=isomeric)
 
 
+def mol_graph_binary(mol) -> bytes | None:
+    """RDKit binary for the connection table only (no conformers).
+
+    Used in ``.cms`` sessions so Open can skip ``MolFromSmiles``. Conformers stay in
+    ``confs_sidecar``; dropping them keeps the structure blob small.
+    """
+    if mol is None:
+        return None
+    from rdkit import Chem
+
+    try:
+        copy = Chem.Mol(mol)
+        copy.RemoveAllConformers()
+        blob = copy.ToBinary()
+    except Exception:
+        return None
+    return blob or None
+
+
 def morgan_tanimoto_to_query(
     query_smiles: str,
     hit_smiles: str,

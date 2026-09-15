@@ -39,7 +39,16 @@ def _store_with_rows(tmp_path: Path) -> SqliteTableStore:
 def test_build_sqlite_where_numeric_range(tmp_path):
     store = _store_with_rows(tmp_path)
     where = build_sqlite_where(
-        [{"kind": "numeric", "enabled": True, "column": "MW", "min": 20.0, "max": 40.0, "inverted": False}],
+        [
+            {
+                "kind": "numeric",
+                "enabled": True,
+                "column": "MW",
+                "min": 20.0,
+                "max": 40.0,
+                "inverted": False,
+            }
+        ],
         headers=store.headers,
     )
     assert where is not None
@@ -53,7 +62,14 @@ def test_disabled_substructure_card_does_not_block_sqlite(tmp_path):
     where = build_sqlite_where(
         [
             {"kind": "substructure", "enabled": False},
-            {"kind": "numeric", "enabled": True, "column": "MW", "min": 0.0, "max": 20.0, "inverted": False},
+            {
+                "kind": "numeric",
+                "enabled": True,
+                "column": "MW",
+                "min": 0.0,
+                "max": 20.0,
+                "inverted": False,
+            },
         ],
         headers=store.headers,
     )
@@ -68,7 +84,14 @@ def test_enabled_substructure_blocks_sqlite_pushdown(tmp_path):
     where = build_sqlite_where(
         [
             {"kind": "substructure", "enabled": True},
-            {"kind": "numeric", "enabled": True, "column": "MW", "min": 0.0, "max": 100.0, "inverted": False},
+            {
+                "kind": "numeric",
+                "enabled": True,
+                "column": "MW",
+                "min": 0.0,
+                "max": 100.0,
+                "inverted": False,
+            },
         ],
         headers=store.headers,
     )
@@ -92,3 +115,24 @@ def test_category_filter_in_clause(tmp_path):
     where_sql, args = where
     oids = fetch_matching_oids(store.db_path, where_sql, args)
     assert oids == frozenset({0, 2})
+
+
+def test_fetch_matching_oids_keyset_pages(tmp_path):
+    store = _store_with_rows(tmp_path)
+    where = build_sqlite_where(
+        [
+            {
+                "kind": "numeric",
+                "enabled": True,
+                "column": "MW",
+                "min": 0.0,
+                "max": 100.0,
+                "inverted": False,
+            }
+        ],
+        headers=store.headers,
+    )
+    assert where is not None
+    where_sql, args = where
+    oids = fetch_matching_oids(store.db_path, where_sql, args, page_size=1)
+    assert oids == frozenset({0, 1, 2})

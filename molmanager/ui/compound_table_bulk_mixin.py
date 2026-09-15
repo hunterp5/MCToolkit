@@ -83,11 +83,11 @@ class CompoundTableBulkMixin:
             if pixmap_by_oid:
                 for oid, pm in pixmap_by_oid.items():
                     if pm is not None and not pm.isNull():
-                        self._extra_pixmaps[(int(oid), header_name)] = QPixmap(pm)
+                        self._extra_pixmaps.set_pixmap(int(oid), header_name, pm)
             elif src_is_pixmap:
-                for (oid, h), pm in list(self._extra_pixmaps.items()):
-                    if h == src_key and pm is not None and not pm.isNull():
-                        self._extra_pixmaps[(oid, header_name)] = QPixmap(pm)
+                for oid, h in self._extra_pixmaps.keys():
+                    if h == src_key:
+                        self._extra_pixmaps.copy_png((oid, src_key), (oid, header_name))
         self._mark_headers_added_for_bounds([header_name])
         self.endInsertColumns()
         if self._rows:
@@ -306,8 +306,7 @@ class CompoundTableBulkMixin:
         h = self._headers[col]
         if h in self._pixmap_columns:
             self._pixmap_columns.discard(h)
-            for k in [x for x in self._extra_pixmaps if x[1] == h]:
-                del self._extra_pixmaps[k]
+            self._extra_pixmaps.remove_header(h)
         self._column_color_rules.pop(h, None)
         self._column_color_cache.pop(h, None)
         self.beginRemoveColumns(QModelIndex(), col, col)
@@ -330,11 +329,7 @@ class CompoundTableBulkMixin:
         if col >= 2 and old in self._pixmap_columns:
             self._pixmap_columns.discard(old)
             self._pixmap_columns.add(new_name)
-            for row in self._rows:
-                oid = row.oid
-                kk = (oid, old)
-                if kk in self._extra_pixmaps:
-                    self._extra_pixmaps[(oid, new_name)] = self._extra_pixmaps.pop(kk)
+            self._extra_pixmaps.rename_header(old, new_name)
         if col >= 2:
             for row in self._rows:
                 if old in row.values:
@@ -344,4 +339,3 @@ class CompoundTableBulkMixin:
         c1 = self.index(max(len(self._rows) - 1, 0), col)
         self.dataChanged.emit(c0, c1, [Qt.DisplayRole, Qt.EditRole, Qt.BackgroundRole])
         self._invalidate_numeric_bounds_all()
-

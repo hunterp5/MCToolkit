@@ -167,28 +167,47 @@ class Render2DResultsMixin:
 
     def _refresh_visible_structure_cells(self) -> None:
         """Repaint only viewport-visible Structure cells (lazy PNG cache)."""
-        m = self._table_model
-        if m.rowCount() <= 0:
+        src = self._table_model
+        if src.rowCount() <= 0:
             return
         view = self.table
+        proxy = view.model()
+        src = self._table_model
         try:
-            r0 = view.rowAt(0)
-            r1 = view.rowAt(max(0, view.viewport().height() - 1))
+            vr0 = view.rowAt(0)
+            vr1 = view.rowAt(max(0, view.viewport().height() - 1))
         except Exception:
-            r0, r1 = 0, m.rowCount() - 1
-        if r0 < 0:
-            r0 = 0
-        if r1 < 0:
-            r1 = m.rowCount() - 1
-        store = getattr(m, "_structure_png_store", None)
+            vr0, vr1 = 0, src.rowCount() - 1
+        if vr0 < 0:
+            vr0 = 0
+        if vr1 < 0:
+            vr1 = max(0, (proxy.rowCount() if proxy is not None else src.rowCount()) - 1)
+
+        def _source_row(view_row: int) -> int:
+            if proxy is None or proxy is src:
+                return int(view_row)
+            mapper = getattr(proxy, "mapToSource", None)
+            if not callable(mapper):
+                return int(view_row)
+            idx = proxy.index(int(view_row), 0)
+            mapped = mapper(idx)
+            return int(mapped.row()) if mapped.isValid() else -1
+
+        source_rows: list[int] = []
+        keep: set[int] = set()
+        store = getattr(src, "_structure_png_store", None)
+        for vr in range(vr0, vr1 + 1):
+            sr = _source_row(vr)
+            if sr < 0:
+                continue
+            source_rows.append(sr)
+            oid = src.row_oid(sr)
+            if store is not None and store.has_png(oid):
+                keep.add(int(oid))
         if store is not None:
-            keep: set[int] = set()
-            for r in range(r0, r1 + 1):
-                oid = m.row_oid(r)
-                if store.has_png(oid):
-                    keep.add(int(oid))
             store.trim_decoded_cache(keep_oids=keep)
-        m.notify_structure_column_changed(r0, r1)
+        if source_rows:
+            src.notify_structure_column_changed(min(source_rows), max(source_rows))
 
     def _flush_render2d_batch_results(self) -> None:
         """Apply buffered PNGs in slices so the GUI thread stays responsive."""

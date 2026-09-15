@@ -58,8 +58,10 @@ class IngestExportMixin:
         batch_size = load_config().ingest_worker_batch_size
         self.process_queue.enqueue(
             f"Open file: {path}",
-            lambda ev, p=path, s=self.signals, sce=self._structure_choice_event, bs=batch_size: UniversalLoadWorker(
-                p, s, batch_size=bs, cancel_event=ev, structure_choice_event=sce
+            lambda ev, p=path, s=self.signals, sce=self._structure_choice_event, bs=batch_size: (
+                UniversalLoadWorker(
+                    p, s, batch_size=bs, cancel_event=ev, structure_choice_event=sce
+                )
             ),
         )
 
@@ -89,16 +91,16 @@ class IngestExportMixin:
         self._structures_queued = 0
         self._import_building_progress_shown = False
         self._set_workspace_stack_index(0)
-        self._loading_detail.setText(
-            LOADING_DETAIL_APPEND
-        )
+        self._loading_detail.setText(LOADING_DETAIL_APPEND)
         self.status_label.setText("Importing…")
         self._ensure_structure_choice_event().set()
         batch_size = load_config().ingest_worker_batch_size
         self.process_queue.enqueue(
             f"Import data: {path}",
-            lambda ev, p=path, s=self.signals, sce=self._structure_choice_event, bs=batch_size: UniversalLoadWorker(
-                p, s, batch_size=bs, cancel_event=ev, structure_choice_event=sce
+            lambda ev, p=path, s=self.signals, sce=self._structure_choice_event, bs=batch_size: (
+                UniversalLoadWorker(
+                    p, s, batch_size=bs, cancel_event=ev, structure_choice_event=sce
+                )
             ),
         )
 
@@ -152,11 +154,12 @@ class IngestExportMixin:
                     "No rows are selected. Select one or more rows in the table first.",
                 )
                 return
-            mols_by_oid = {oid: self.mols.get(oid) for oid in oids}
+            oids_list = oids
         else:
-            oids_all = self._table_model.all_oids_in_order()
-            mols_by_oid = {oid: self.mols.get(oid) for oid in oids_all}
-        f_filter = "SDF (*.sdf);;Molfile (*.mol);;SMILES (*.smi);;CSV (*.csv);;TDT (*.tdt);;PDB (*.pdb)"
+            oids_list = list(self._table_model.all_oids_in_order())
+        f_filter = (
+            "SDF (*.sdf);;Molfile (*.mol);;SMILES (*.smi);;CSV (*.csv);;TDT (*.tdt);;PDB (*.pdb)"
+        )
         path, sel_f = QFileDialog.getSaveFileName(self, "Export Data", "", f_filter)
         if path:
             # Robustly infer the extension even if the Qt filter string is empty/unexpected.
@@ -168,27 +171,24 @@ class IngestExportMixin:
                 ext = tok.replace("*", "").strip()
             if not ext:
                 # Fall back to what user typed.
-                ext = (("." + path.split(".")[-1]) if "." in path else "")
+                ext = ("." + path.split(".")[-1]) if "." in path else ""
             if not ext:
                 # Last resort: default to .sdf
                 ext = ".sdf"
             if not path.lower().endswith(ext.lower()):
                 path += ext
             h_map = {h: i for i, h in enumerate(self.headers)}
-            oids_list = list(mols_by_oid.keys())
-            row_cache = {oid: self.logical_row_for_oid(oid) for oid in oids_list}
+            chunk = max(256, int(load_config().ingest_gui_chunk_size))
             self._export_busy = True
             self._export_prep = {
                 "path": path,
                 "ext": ext,
-                "mols_by_oid": mols_by_oid,
                 "headers": headers,
                 "h_map": h_map,
                 "oids": oids_list,
-                "rows": row_cache,
                 "cells": {},
                 "idx": 0,
-                "chunk": 48,
+                "chunk": chunk,
                 "cols": [h for h in headers if h in self.headers],
             }
             self._on_tool_progress("Preparing export…", 0, max(len(oids_list), 1))
@@ -211,7 +211,7 @@ class IngestExportMixin:
             with scope("export.snapshot_chunk"):
                 for j in range(start, end):
                     oid = oids[j]
-                    r = prep["rows"].get(oid, -1)
+                    r = self.logical_row_for_oid(oid)
                     if r != -1:
                         prep["cells"][oid] = {h: self._export_cell_text(r, h_map[h]) for h in cols}
                     else:
@@ -224,13 +224,14 @@ class IngestExportMixin:
             path = prep["path"]
             ext = prep["ext"]
             cells = prep["cells"]
-            mols_by_oid = prep["mols_by_oid"]
             headers = prep["headers"]
+            oids_out = list(prep["oids"])
+            mols = self.mols
             self._export_prep = None
             self.process_queue.enqueue(
                 f"Export to {path}",
-                lambda ev, p=path, e=ext, m=mols_by_oid, h=headers, d=cells, s=self.signals: ExportWorker(
-                    p, e, m, h, d, s, cancel_event=ev
+                lambda ev, p=path, e=ext, m=mols, h=headers, d=cells, o=oids_out, s=self.signals: (
+                    ExportWorker(p, e, m, h, d, s, cancel_event=ev, oids=o)
                 ),
             )
         except Exception as e:

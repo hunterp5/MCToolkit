@@ -92,6 +92,33 @@ def test_filter_proxy_forwards_data_changed(qapp):  # noqa: ARG001
     assert seen[0] == (1, 1)
 
 
+def test_filter_proxy_full_column_data_changed_is_o1(qapp):  # noqa: ARG001
+    model = CompoundTableModel(["ID_HIDDEN", "Structure", "SMILES", "Note"])
+    model.append_rows_batch(
+        [
+            (10, {"SMILES": "C", "Note": "a"}),
+            (20, {"SMILES": "CC", "Note": "b"}),
+            (30, {"SMILES": "CCC", "Note": "c"}),
+        ]
+    )
+    proxy = FilterProxyModel()
+    proxy.setSourceModel(model)
+    proxy.set_visible_oids(frozenset({10, 30}))
+    seen: list[tuple[int, int]] = []
+
+    def _on_changed(tl, br, _roles=None):
+        seen.append((tl.row(), br.row()))
+
+    proxy.dataChanged.connect(_on_changed)
+    col = model._headers.index("Note")
+    model.dataChanged.emit(
+        model.index(0, col),
+        model.index(model.rowCount() - 1, col),
+        [Qt.BackgroundRole],
+    )
+    assert seen == [(0, 1)]
+
+
 def test_filter_proxy_forwards_column_insert_and_remove(qapp):  # noqa: ARG001
     model = CompoundTableModel(["ID_HIDDEN", "Structure", "SMILES"])
     model.append_rows_batch([(10, {"SMILES": "C"}), (20, {"SMILES": "CC"})])

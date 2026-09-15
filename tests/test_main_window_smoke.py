@@ -151,14 +151,11 @@ def test_session_load_uses_loading_page_then_reveals(qapp, monkeypatch):  # noqa
     assert not w._ingest_loading
 
 
-def test_session_load_holds_table_until_render_finishes(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtCore import QTimer
-
+def test_session_load_reveals_before_auto_render_finishes(qapp, monkeypatch):  # noqa: ARG001
     held = {"loading": False}
 
     def fake_render(self):
         held["loading"] = self._table_stack.currentIndex() == 0
-        QTimer.singleShot(0, self._session_on_render2d_batch_finished)
         return True
 
     monkeypatch.setattr(
@@ -178,12 +175,11 @@ def test_session_load_holds_table_until_render_finishes(qapp, monkeypatch):  # n
     assert held["loading"] is True
     assert w._table_stack.currentIndex() == 1
     assert not w._session_awaiting_ready
+    assert not w._session_waiting_for_render
     assert not w._ingest_loading
 
 
-def test_file_ingest_holds_table_until_render_finishes(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtCore import QTimer
-
+def test_file_ingest_reveals_before_auto_render_finishes(qapp, monkeypatch):  # noqa: ARG001
     monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
     monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
 
@@ -191,7 +187,6 @@ def test_file_ingest_holds_table_until_render_finishes(qapp, monkeypatch):  # no
 
     def fake_render(self):
         held["loading"] = self._table_stack.currentIndex() == 0
-        QTimer.singleShot(0, self._ingest_on_render2d_batch_finished)
         return True
 
     monkeypatch.setattr(
@@ -205,15 +200,8 @@ def test_file_ingest_holds_table_until_render_finishes(qapp, monkeypatch):  # no
     w._ingest_prep_before_reveal = True
     w._set_workspace_stack_index(0)
     w._post_ingest_after_color_caches()
-    # Bounds complete via QTimer before auto-render starts.
     qapp.processEvents()
     assert held["loading"] is True
-    assert w._table_stack.currentIndex() == 0
-    assert w._ingest_waiting_for_render is True
-    assert "Render 2D" in (w._loading_detail.text() or "")
-    assert w._status_host.isHidden()
-    assert not w._memory_status_timer.isActive()
-    qapp.processEvents()
     assert w._table_stack.currentIndex() == 1
     assert not w._ingest_waiting_for_render
     assert not w._ingest_loading
@@ -247,8 +235,8 @@ def test_file_ingest_reveals_immediately_when_auto_render_skipped(qapp, monkeypa
     assert "auto 2D render skipped" in w.status_label.text()
 
 
-def test_file_ingest_holds_overlay_for_large_auto_render(qapp, monkeypatch):  # noqa: ARG001
-    """Auto Render 2D always blocks reveal (no progressive background reveal)."""
+def test_file_ingest_reveals_during_large_auto_render(qapp, monkeypatch):  # noqa: ARG001
+    """Auto Render 2D does not block reveal; images fill in after the table is shown."""
     monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
     monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
 
@@ -267,14 +255,10 @@ def test_file_ingest_holds_overlay_for_large_auto_render(qapp, monkeypatch):  # 
     w._set_workspace_stack_index(0)
     w._post_ingest_after_color_caches()
     qapp.processEvents()
-    assert w._table_stack.currentIndex() == 0
-    assert w._ingest_waiting_for_render is True
-    assert w._ingest_loading
-    assert w._status_host.isHidden()
-    w._ingest_on_render2d_batch_finished()
     assert w._table_stack.currentIndex() == 1
     assert not w._ingest_waiting_for_render
     assert not w._ingest_loading
+    assert not w._status_host.isHidden()
 
 
 def test_file_ingest_progress_updates_loading_overlay(qapp, monkeypatch):  # noqa: ARG001

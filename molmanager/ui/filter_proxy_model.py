@@ -62,9 +62,7 @@ class FilterProxyModel(QAbstractProxyModel):
                     self._on_source_columns_about_to_be_inserted
                 )
                 old.columnsInserted.disconnect(self._on_source_columns_inserted)
-                old.columnsAboutToBeRemoved.disconnect(
-                    self._on_source_columns_about_to_be_removed
-                )
+                old.columnsAboutToBeRemoved.disconnect(self._on_source_columns_about_to_be_removed)
                 old.columnsRemoved.disconnect(self._on_source_columns_removed)
             except TypeError:
                 pass
@@ -79,13 +77,9 @@ class FilterProxyModel(QAbstractProxyModel):
             source.headerDataChanged.connect(self._on_source_header_data_changed)
             # Columns map 1:1 (only rows are filtered). Forward insert/remove so the
             # view drops/adds sections; a bare columnCount() change leaves blanks.
-            source.columnsAboutToBeInserted.connect(
-                self._on_source_columns_about_to_be_inserted
-            )
+            source.columnsAboutToBeInserted.connect(self._on_source_columns_about_to_be_inserted)
             source.columnsInserted.connect(self._on_source_columns_inserted)
-            source.columnsAboutToBeRemoved.connect(
-                self._on_source_columns_about_to_be_removed
-            )
+            source.columnsAboutToBeRemoved.connect(self._on_source_columns_about_to_be_removed)
             source.columnsRemoved.connect(self._on_source_columns_removed)
             self._source_connected = True
         self._rebuild_maps(emit_reset=True)
@@ -270,6 +264,15 @@ class FilterProxyModel(QAbstractProxyModel):
         c0 = int(top_left.column())
         c1 = int(bottom_right.column())
         role_list = list(roles) if roles else []
+
+        src_n = int(src.rowCount())
+        full_span = lo <= 0 and hi >= max(0, src_n - 1)
+        if full_span and self._source_rows is not None:
+            nproxy = self.rowCount()
+            if nproxy <= 0:
+                return
+            self.dataChanged.emit(self.index(0, c0), self.index(nproxy - 1, c1), role_list)
+            return
 
         if self._source_rows is None:
             self.dataChanged.emit(self.index(lo, c0), self.index(hi, c1), role_list)

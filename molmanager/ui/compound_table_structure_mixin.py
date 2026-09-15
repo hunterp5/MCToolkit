@@ -129,11 +129,7 @@ class CompoundTableStructureMixin:
     def _set_extra_pixmap(self, oid: int, header_name: str, pixmap: QPixmap | None) -> None:
         if header_name not in self._headers or header_name in ("ID_HIDDEN", "Structure"):
             return
-        key = (oid, header_name)
-        if pixmap is not None and not pixmap.isNull():
-            self._extra_pixmaps[key] = pixmap
-        else:
-            self._extra_pixmaps.pop(key, None)
+        self._extra_pixmaps.set_pixmap(oid, header_name, pixmap)
         r = self.logical_row_for_oid(oid)
         if r < 0:
             return
@@ -237,4 +233,3 @@ class CompoundTableStructureMixin:
             if h == header_name and pm is not None and not pm.isNull():
                 out[oid] = QPixmap(pm)
         return out
-

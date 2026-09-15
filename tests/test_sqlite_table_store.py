@@ -82,3 +82,31 @@ def test_sqlite_table_store_rebuild_and_filter_page():
     finally:
         store.close()
 
+
+def test_sqlite_table_store_fetch_oids_keyset_and_reopen_headers(tmp_path):
+    path = tmp_path / "oids.sqlite3"
+    store = SqliteTableStore(path)
+    try:
+        headers = ["ID_HIDDEN", "Structure", "SMILES", "Name"]
+        store.rebuild(
+            headers,
+            [
+                (1, {"SMILES": "C", "Name": "a"}),
+                (2, {"SMILES": "CC", "Name": "b"}),
+                (3, {"SMILES": "CCC", "Name": "c"}),
+            ],
+        )
+        first = store.fetch_oids(limit=2)
+        assert first == [1, 2]
+        rest = store.fetch_oids(after_oid=first[-1], limit=2)
+        assert rest == [3]
+        named = store.fetch_oids(where_sql='"Name" = ?', args=("b",), limit=10)
+        assert named == [2]
+    finally:
+        store.close()
+    reopened = SqliteTableStore(path)
+    try:
+        assert "SMILES" in reopened.headers
+        assert reopened.count() == 3
+    finally:
+        reopened.close()

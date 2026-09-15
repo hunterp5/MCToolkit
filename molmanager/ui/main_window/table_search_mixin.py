@@ -34,6 +34,7 @@ from PyQt5.QtWidgets import (
 from rdkit import Chem
 
 from ...config import load_config
+from ...workers import SubstructureFilterWorker
 from ..search_panel import SearchCriterionRow
 from ..search_query import (
     evaluate_search_expression,
@@ -367,7 +368,10 @@ class TableSearchMixin:
             )
         return specs
 
-    def _find_rows_substructure(self, term_groups: list[list[str]]) -> list[int] | None:
+    def _compile_search_substructure_groups(
+        self, term_groups: list[list[str]]
+    ) -> list[list[tuple[Chem.Mol, bool]]] | None:
+        """Compile search SMARTS groups; ``None`` if a term cannot be parsed."""
         or_patterns: list[list[tuple[Chem.Mol, bool]]] = []
         for and_terms in term_groups:
             and_patterns: list[tuple[Chem.Mol, bool]] = []
@@ -386,32 +390,22 @@ class TableSearchMixin:
                 and_patterns.append((q, negated))
             if and_patterns:
                 or_patterns.append(and_patterns)
+        return or_patterns
+
+    def _find_rows_substructure(self, term_groups: list[list[str]]) -> list[int] | None:
+        or_patterns = self._compile_search_substructure_groups(term_groups)
+        if or_patterns is None:
+            return None
         if not or_patterns:
             return []
-
-        def _substruct_ok(mol: Chem.Mol) -> bool:
-            for and_patterns in or_patterns:
-                group_ok = True
-                for q, negated in and_patterns:
-                    try:
-                        hit = bool(mol.HasSubstructMatch(q))
-                    except Exception:
-                        hit = False
-                    if negated:
-                        hit = not hit
-                    if not hit:
-                        group_ok = False
-                        break
-                if group_ok:
-                    return True
-            return False
+        from ...workers.substructure_filter import mol_matches_pattern_groups
 
         rows: list[int] = []
         for r in range(self._table_model.rowCount()):
             mol = self._mol_for_structure_row(r)
             if mol is None:
                 continue
-            if _substruct_ok(mol):
+            if mol_matches_pattern_groups(mol, or_patterns):
                 rows.append(r)
         return rows
 
@@ -449,23 +443,35 @@ class TableSearchMixin:
                 rows: list[int] = []
                 with scope("search.sqlite_pushdown"):
                     page = max(1000, int(getattr(load_config(), "sqlite_backend_page_size", 5000)))
-                    offset = 0
+                    after_oid: int | None = None
+                    fetch_oids = getattr(store, "fetch_oids", None)
                     while True:
-                        recs = store.fetch_page(
-                            limit=page,
-                            offset=offset,
-                            where_sql=where_sql,
-                            args=tuple(sql_args),
-                            sort_by="oid",
-                            ascending=True,
-                        )
-                        if not recs:
+                        if callable(fetch_oids):
+                            oids = fetch_oids(
+                                where_sql=where_sql,
+                                args=tuple(sql_args),
+                                after_oid=after_oid,
+                                limit=page,
+                            )
+                        else:
+                            recs = store.fetch_page(
+                                limit=page,
+                                after_oid=after_oid,
+                                where_sql=where_sql,
+                                args=tuple(sql_args),
+                                sort_by="oid",
+                                ascending=True,
+                            )
+                            oids = [int(oid) for oid, _ in recs]
+                        if not oids:
                             break
-                        for oid, _ in recs:
+                        for oid in oids:
                             rr = self._table_model.logical_row_for_oid(int(oid))
                             if rr >= 0:
                                 rows.append(rr)
-                        offset += len(recs)
+                        after_oid = int(oids[-1])
+                        if len(oids) < page:
+                            break
                 return rows
 
         rows = []
@@ -523,34 +529,9 @@ class TableSearchMixin:
         )
         return True
 
-    def _run_table_search(self) -> None:
-        specs = self._collect_search_criteria()
-        if specs is None:
-            return
-        if not specs:
-            self.clear_table_selection()
-            self.status_label.setText("Search: empty query; selection cleared.")
-            return
-
-        row_sets: list[set[int]] = []
-        for spec in specs:
-            if spec.substructure:
-                found = self._find_rows_substructure(spec.term_groups)
-                if found is None:
-                    return
-                row_sets.append(set(found))
-            else:
-                row_sets.append(
-                    set(
-                        self._find_rows_text(
-                            spec.col,
-                            spec.query,
-                            partial=spec.partial,
-                            case_sensitive=spec.case_sensitive,
-                        )
-                    )
-                )
-
+    def _apply_table_search_results(
+        self, specs: list[_SearchCriterionSpec], row_sets: list[set[int]]
+    ) -> None:
         combined = sorted(self._combine_search_row_sets(specs, row_sets))
         visible_combined = [r for r in combined if self._is_source_row_visible(r)]
         if not combined:
@@ -577,6 +558,127 @@ class TableSearchMixin:
         self.status_label.setText(
             f"Search: {len(visible_combined)} matching row(s) selected{glue_note}."
         )
+
+    def _run_table_search(self) -> None:
+        specs = self._collect_search_criteria()
+        if specs is None:
+            return
+        self._search_job_gen = int(getattr(self, "_search_job_gen", 0)) + 1
+        if not specs:
+            self.clear_table_selection()
+            self.status_label.setText("Search: empty query; selection cleared.")
+            return
+
+        n_rows = self._table_model.rowCount()
+        thresh = int(load_config().substructure_async_rows)
+        async_needed = n_rows >= thresh and any(s.substructure for s in specs)
+        row_sets: list[set[int] | None] = [None] * len(specs)
+        group_queries: list = []
+        for i, spec in enumerate(specs):
+            if spec.substructure:
+                or_patterns = self._compile_search_substructure_groups(spec.term_groups)
+                if or_patterns is None:
+                    return
+                if not or_patterns:
+                    row_sets[i] = set()
+                    continue
+                if not async_needed:
+                    found = self._find_rows_substructure(spec.term_groups)
+                    if found is None:
+                        return
+                    row_sets[i] = set(found)
+                    continue
+                targets = self._substructure_filter_targets("Structure")
+                group_queries.append((str(i), "Structure", targets, or_patterns))
+            else:
+                row_sets[i] = set(
+                    self._find_rows_text(
+                        spec.col,
+                        spec.query,
+                        partial=spec.partial,
+                        case_sensitive=spec.case_sensitive,
+                    )
+                )
+
+        if not group_queries:
+            self._apply_table_search_results(specs, [s or set() for s in row_sets])
+            return
+
+        sigs = getattr(self, "_search_substructure_signals", None)
+        pool = getattr(self, "threadpool", None)
+        if sigs is None or pool is None:
+            for i, spec in enumerate(specs):
+                if row_sets[i] is None and spec.substructure:
+                    found = self._find_rows_substructure(spec.term_groups)
+                    if found is None:
+                        return
+                    row_sets[i] = set(found)
+            self._apply_table_search_results(specs, [s or set() for s in row_sets])
+            return
+
+        gen = int(self._search_job_gen)
+        self._search_pending = {
+            "gen": gen,
+            "specs": specs,
+            "row_sets": row_sets,
+            "labels": [int(q[0]) for q in group_queries],
+        }
+        self.status_label.setText(f"Search: scanning substructure ({n_rows:,} rows)…")
+        begin = getattr(self, "_begin_tool_progress", None)
+        if callable(begin):
+            begin("Searching substructure", n_rows)
+        pool.start(
+            SubstructureFilterWorker(
+                gen,
+                signals=sigs,
+                group_queries=group_queries,
+                progress_state=getattr(self, "_tool_progress_state", None),
+                worker_signals=getattr(self, "signals", None),
+            )
+        )
+
+    def _on_search_substructure_finished(self, job_gen: int, matched) -> None:
+        pending = getattr(self, "_search_pending", None)
+        if not pending or int(job_gen) != int(pending.get("gen", -1)):
+            return
+        if int(job_gen) != int(getattr(self, "_search_job_gen", -1)):
+            return
+        self._search_pending = None
+        finish = getattr(self, "_finish_tool_progress", None)
+        if callable(finish):
+            finish("Searching substructure", status_message=None)
+        specs: list[_SearchCriterionSpec] = list(pending["specs"])
+        row_sets: list[set[int] | None] = list(pending["row_sets"])
+        labels: list[int] = list(pending.get("labels") or [])
+        oid_sets: dict[int, frozenset[int]] = {}
+        if isinstance(matched, list):
+            for item in matched:
+                if not item or len(item) < 3:
+                    continue
+                try:
+                    oid_sets[int(item[0])] = frozenset(item[2] or ())
+                except (TypeError, ValueError):
+                    continue
+        for idx in labels:
+            if 0 <= idx < len(row_sets) and row_sets[idx] is None:
+                oids = oid_sets.get(idx, frozenset())
+                rows: set[int] = set()
+                for oid in oids:
+                    rr = self._table_model.logical_row_for_oid(int(oid))
+                    if rr >= 0:
+                        rows.add(rr)
+                row_sets[idx] = rows
+        self._apply_table_search_results(specs, [s or set() for s in row_sets])
+
+    def _on_search_substructure_failed(self, job_gen: int, msg: str) -> None:
+        pending = getattr(self, "_search_pending", None)
+        if not pending or int(job_gen) != int(pending.get("gen", -1)):
+            return
+        self._search_pending = None
+        finish = getattr(self, "_finish_tool_progress", None)
+        if callable(finish):
+            finish("Searching substructure", status_message=None)
+        self.status_label.setText(f"Search failed: {msg}")
 
     def collect_table_search_session(self) -> dict | None:
         """Serialize the Search panel when it is open or any criterion has a query."""

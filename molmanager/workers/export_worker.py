@@ -27,6 +27,7 @@ from ..utils import mol_to_canonical_smiles
 
 logger = logging.getLogger(__name__)
 
+
 class ExportWorker(QRunnable):
     def __init__(
         self,
@@ -37,6 +38,7 @@ class ExportWorker(QRunnable):
         table_data,
         signals,
         cancel_event: threading.Event | None = None,
+        oids: list[int] | None = None,
     ):
         super().__init__()
         self.path, self.ext, self.mols, self.headers, self.table_data, self.signals = (
@@ -48,14 +50,19 @@ class ExportWorker(QRunnable):
             signals,
         )
         self.cancel_event = cancel_event
+        if oids is not None:
+            self.oids = [int(x) for x in oids]
+        else:
+            self.oids = [int(k) for k in (table_data or {}).keys()]
 
     def run(self):
         user_cancelled = False
         try:
             skip = ["ID_HIDDEN", "Structure"]
             clean_headers = [h for h in self.headers if h not in skip]
-            mols_items = list(self.mols.items())
-            tot = max(len(mols_items), 1)
+            mols = self.mols or {}
+            oid_list = self.oids or [int(k) for k in (self.table_data or {}).keys()]
+            tot = max(len(oid_list), 1)
             if self.ext == ".csv":
                 csv_heads = clean_headers.copy()
                 if "SMILES" not in csv_heads:
@@ -63,10 +70,11 @@ class ExportWorker(QRunnable):
                 with open(self.path, "w", newline="", encoding="utf-8") as f:
                     writer = csv.DictWriter(f, fieldnames=csv_heads)
                     writer.writeheader()
-                    for done, (oid, mol) in enumerate(mols_items, start=1):
+                    for done, oid in enumerate(oid_list, start=1):
                         if self.cancel_event is not None and self.cancel_event.is_set():
                             user_cancelled = True
                             break
+                        mol = mols.get(oid)
                         row = self.table_data.get(oid, {}).copy()
                         if "SMILES" not in row or not row["SMILES"]:
                             if mol is not None:
@@ -87,10 +95,11 @@ class ExportWorker(QRunnable):
                     writer = Chem.TDTWriter(self.path)
                 elif self.ext == ".pdb":
                     writer = Chem.PDBWriter(self.path)
-                for done, (oid, mol) in enumerate(mols_items, start=1):
+                for done, oid in enumerate(oid_list, start=1):
                     if self.cancel_event is not None and self.cancel_event.is_set():
                         user_cancelled = True
                         break
+                    mol = mols.get(oid)
                     row = self.table_data.get(oid, {})
                     out_mol = mol
                     if out_mol is None:
@@ -115,4 +124,3 @@ class ExportWorker(QRunnable):
         except Exception as e:
             logger.exception("ExportWorker failed for %s", self.path)
             self.signals.export_finished.emit(f"Export Error: {str(e)}")
-

@@ -34,6 +34,7 @@ from PyQt5.QtCore import QAbstractItemModel, QAbstractTableModel, QModelIndex, Q
 from PyQt5.QtGui import QColor, QPixmap
 
 from ..column_color_compute import ColumnColorRule
+from ..extra_pixmap_store import ExtraPixmapStore
 from ..display_constants import (
     STRUCTURE_COLUMN_HORIZONTAL_PADDING,
     STRUCTURE_DEPICT_HEIGHT,
@@ -134,7 +135,11 @@ class CompoundTableModel(
         self._oid_to_row: dict[int, int] = {}
         # Optional extra columns that show a 2D pixmap (e.g. disconnected fragment) keyed by (oid, header).
         self._pixmap_columns: set[str] = set()
-        self._extra_pixmaps: dict[tuple[int, str], QPixmap] = {}
+        from ..config import load_config
+
+        self._extra_pixmaps = ExtraPixmapStore(
+            max_decoded_pixmaps=load_config().structure_render_pixmap_lru
+        )
         # Incremental numeric min/max cache for filter sliders (see numeric_bounds_by_column).
         self._numeric_bounds_cache: dict[str, dict] | None = None
         self._numeric_bounds_key: tuple[str, ...] | None = (
@@ -177,9 +182,7 @@ class CompoundTableModel(
         self.beginResetModel()
         self._headers = list(headers)
         self._pixmap_columns &= set(self._headers)
-        self._extra_pixmaps = {
-            k: v for k, v in self._extra_pixmaps.items() if k[1] in self._headers
-        }
+        self._extra_pixmaps.keep_headers(set(self._headers))
         keep = set(self._headers)
         self._column_color_rules = {h: r for h, r in self._column_color_rules.items() if h in keep}
         self._column_color_cache = {h: c for h, c in self._column_color_cache.items() if h in keep}
@@ -316,8 +319,7 @@ class CompoundTableModel(
     def _drop_row_assets(self, oid: int) -> None:
         oid_i = int(oid)
         self._pixmaps.pop(oid_i, None)
-        for k in [x for x in self._extra_pixmaps if x[0] == oid_i]:
-            del self._extra_pixmaps[k]
+        self._extra_pixmaps.remove_oid(oid_i)
         for cache in self._column_color_cache.values():
             cache.pop(oid_i, None)
         store = self._structure_png_store
@@ -705,8 +707,6 @@ class CompoundTableModel(
         self.endMoveRows()
         self._rebuild_oid_index()
         return True
-
-
 
 
 def run_table_model_demo() -> int:

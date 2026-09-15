@@ -190,10 +190,11 @@ def _bench_one(scale: int) -> dict[str, float]:
     worker = ExportWorker(
         path=str(out_csv),
         ext=".csv",
-        mols_dict=dict(app.mols),
+        mols_dict=app.mols,
         headers_to_export=list(app.headers),
         table_data=snap,
         signals=_NoopSignals(),
+        oids=list(app._table_model.all_oids_in_order()),
     )
     worker.run()
     export_write_ms = (time.perf_counter() - t0) * 1000.0

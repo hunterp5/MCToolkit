@@ -18,9 +18,11 @@
 
 from __future__ import annotations
 
+import base64
 import gzip
 import json
 import logging
+import math
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,8 @@ _OMIT_IF_EMPTY = frozenset(
         "ionization_sidecar",
         "mmp_ledger",
         "structure_smiles",
+        "structure_mols",
+        "global_bounds",
         "table_search",
         "protein_viewer",
     }
@@ -135,6 +139,47 @@ def row_structure_smiles(cells: dict[str, Any] | None, saved_smiles: str = "") -
     return str(cells.get("SMILES") or "").strip()
 
 
+def encode_mol_blob_b64(blob: bytes | None) -> str:
+    """Base64 for one structure mol blob (empty string when missing)."""
+    if not blob:
+        return ""
+    return base64.b64encode(blob).decode("ascii")
+
+
+def decode_mol_blob_b64(raw: object) -> bytes | None:
+    """Decode one ``structure_mols`` entry; ``None`` when missing or invalid."""
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        blob = base64.b64decode(raw.encode("ascii"), validate=False)
+    except Exception:
+        return None
+    return blob or None
+
+
+def compact_global_bounds(raw: object) -> dict[str, dict[str, float | bool]] | None:
+    """JSON-safe numeric bounds dict, or ``None`` when empty/invalid."""
+    if not isinstance(raw, dict) or not raw:
+        return None
+    out: dict[str, dict[str, float | bool]] = {}
+    for key, meta in raw.items():
+        name = str(key or "").strip()
+        if not name or not isinstance(meta, dict):
+            continue
+        try:
+            lo = float(meta["min"])
+            hi = float(meta["max"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not math.isfinite(lo) or not math.isfinite(hi):
+            continue
+        out[name] = {"min": lo, "max": hi, "is_int": bool(meta.get("is_int", False))}
+    return out or None
+
+
+parse_session_global_bounds = compact_global_bounds
+
+
 def _structure_smiles_from_v1_rows(rows: Any, saved: Any) -> list[str]:
     out: list[str] = []
     saved_list = saved if isinstance(saved, list) else None
@@ -157,9 +202,13 @@ def compact_session_document(doc: dict[str, Any]) -> dict[str, Any]:
     ids: list[int] = []
     values: list[list[str]] = []
     structure_smiles: list[str] = []
+    structure_mols: list[str] = []
     saved_structure = doc.get("structure_smiles")
     if not isinstance(saved_structure, list):
         saved_structure = None
+    saved_mols = doc.get("structure_mols")
+    if not isinstance(saved_mols, list):
+        saved_mols = None
     if isinstance(rows, list):
         for row_i, entry in enumerate(rows):
             if not isinstance(entry, dict):
@@ -177,6 +226,10 @@ def compact_session_document(doc: dict[str, Any]) -> dict[str, Any]:
             if saved_structure is not None and row_i < len(saved_structure):
                 saved_smi = str(saved_structure[row_i] or "")
             structure_smiles.append(row_structure_smiles(cells, saved_smi))
+            if saved_mols is not None and row_i < len(saved_mols):
+                structure_mols.append(str(saved_mols[row_i] or ""))
+            else:
+                structure_mols.append("")
 
     out: dict[str, Any] = {
         "format": doc.get("format") or SESSION_FORMAT,
@@ -200,11 +253,19 @@ def compact_session_document(doc: dict[str, Any]) -> dict[str, Any]:
             "ids",
             "values",
             "structure_smiles",
+            "structure_mols",
         ):
+            continue
+        if key == "global_bounds":
+            bounds = compact_global_bounds(value)
+            if bounds:
+                out[key] = bounds
             continue
         if key in _OMIT_IF_EMPTY and _is_empty_optional(value):
             continue
         out[key] = value
+    if any(structure_mols):
+        out["structure_mols"] = structure_mols
     # Drop empties that we always copy above when unused.
     for key in list(out.keys()):
         if key in _OMIT_IF_EMPTY and _is_empty_optional(out[key]):
@@ -238,8 +299,13 @@ def expand_session_document(doc: dict[str, Any]) -> dict[str, Any]:
     saved_structure = doc.get("structure_smiles")
     if not isinstance(saved_structure, list):
         saved_structure = []
+    saved_mols = doc.get("structure_mols")
+    keep_mols = isinstance(saved_mols, list)
+    if not keep_mols:
+        saved_mols = []
     rows: list[dict[str, Any]] = []
     structure_smiles: list[str] = []
+    structure_mols: list[str] = []
     n = min(len(ids), len(values))
     for i in range(n):
         try:
@@ -258,11 +324,15 @@ def expand_session_document(doc: dict[str, Any]) -> dict[str, Any]:
         rows.append({"id": oid, "cells": cells})
         saved_smi = str(saved_structure[i] or "") if i < len(saved_structure) else ""
         structure_smiles.append(row_structure_smiles(cells, saved_smi))
+        if keep_mols:
+            structure_mols.append(str(saved_mols[i] or "") if i < len(saved_mols) else "")
 
     out = dict(doc)
     out["version"] = 2
     out["rows"] = rows
     out["structure_smiles"] = structure_smiles
+    if keep_mols:
+        out["structure_mols"] = structure_mols
     # Keep columnar keys out of restore workers that only need rows.
     out.pop("ids", None)
     out.pop("values", None)

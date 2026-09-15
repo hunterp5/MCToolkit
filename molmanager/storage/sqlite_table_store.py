@@ -39,6 +39,7 @@ class SqliteTableStore:
         self._conn.row_factory = sqlite3.Row
         self._headers: list[str] = []
         self._bulk_loading = False
+        self._load_headers_from_schema()
 
     @property
     def bulk_loading(self) -> bool:
@@ -58,6 +59,20 @@ class SqliteTableStore:
     def _data_columns(self, headers: list[str]) -> list[str]:
         return [h for h in headers if h not in ("ID_HIDDEN", "Structure")]
 
+    def _load_headers_from_schema(self) -> None:
+        """Populate ``_headers`` from an existing ``table_rows`` schema, if any."""
+        try:
+            rows = self._conn.execute("PRAGMA table_info(table_rows)").fetchall()
+        except sqlite3.Error:
+            return
+        cols: list[str] = []
+        for rec in rows:
+            name = str(rec["name"] if "name" in rec.keys() else rec[1] or "")
+            if name and name != "oid":
+                cols.append(name)
+        if cols:
+            self._headers = cols
+
     def _create_table_rows_schema(self, cols: list[str]) -> None:
         cur = self._conn.cursor()
         cur.execute("DROP TABLE IF EXISTS table_rows")
@@ -76,9 +91,7 @@ class SqliteTableStore:
             return
         names = ["oid"] + cols
         placeholders = ", ".join(["?"] * len(names))
-        insert_sql = (
-            f"INSERT INTO table_rows ({', '.join(_quoted_ident(n) for n in names)}) VALUES ({placeholders})"
-        )
+        insert_sql = f"INSERT INTO table_rows ({', '.join(_quoted_ident(n) for n in names)}) VALUES ({placeholders})"
         payload = []
         for oid, cells in rows:
             vals = [int(oid)] + [str(cells.get(h, "") or "") for h in cols]
@@ -104,7 +117,9 @@ class SqliteTableStore:
         if not self._bulk_loading:
             return
         try:
-            self._conn.cursor().execute("CREATE INDEX IF NOT EXISTS idx_table_rows_oid ON table_rows(oid)")
+            self._conn.cursor().execute(
+                "CREATE INDEX IF NOT EXISTS idx_table_rows_oid ON table_rows(oid)"
+            )
             self._conn.commit()
         except Exception:
             self._conn.rollback()
@@ -127,7 +142,9 @@ class SqliteTableStore:
         self._headers = list(cols)
         self._create_table_rows_schema(cols)
         self._insert_rows_payload(cols, rows)
-        self._conn.cursor().execute("CREATE INDEX IF NOT EXISTS idx_table_rows_oid ON table_rows(oid)")
+        self._conn.cursor().execute(
+            "CREATE INDEX IF NOT EXISTS idx_table_rows_oid ON table_rows(oid)"
+        )
         self._conn.commit()
 
     def start_stream_rebuild(self, headers: list[str]) -> None:
@@ -152,7 +169,9 @@ class SqliteTableStore:
 
     def finish_stream_rebuild(self) -> None:
         """Create the oid index after streaming row inserts."""
-        self._conn.cursor().execute("CREATE INDEX IF NOT EXISTS idx_table_rows_oid ON table_rows(oid)")
+        self._conn.cursor().execute(
+            "CREATE INDEX IF NOT EXISTS idx_table_rows_oid ON table_rows(oid)"
+        )
         self._conn.commit()
 
     def count(self, where_sql: str = "", args: tuple | list | None = None) -> int:
@@ -170,9 +189,36 @@ class SqliteTableStore:
             return []
         lim = max(1, int(limit))
         qp = _quoted_ident(column)
-        sql = f"SELECT DISTINCT {qp} AS v FROM table_rows ORDER BY LOWER({qp}) ASC, {qp} ASC LIMIT ?"
+        sql = (
+            f"SELECT DISTINCT {qp} AS v FROM table_rows ORDER BY LOWER({qp}) ASC, {qp} ASC LIMIT ?"
+        )
         rows = self._conn.execute(sql, (lim,)).fetchall()
         return [str(rec["v"] or "") for rec in rows]
+
+    def fetch_oids(
+        self,
+        *,
+        where_sql: str = "",
+        args: tuple | list | None = None,
+        after_oid: int | None = None,
+        limit: int = 5000,
+    ) -> list[int]:
+        """Keyset page of OIDs (``oid > after_oid``) so search/filter skip OFFSET scans."""
+        lim = max(1, int(limit))
+        bind: list[object] = list(tuple(args or ()))
+        clauses: list[str] = []
+        if where_sql:
+            clauses.append(f"({where_sql})")
+        if after_oid is not None:
+            clauses.append("oid > ?")
+            bind.append(int(after_oid))
+        sql = "SELECT oid FROM table_rows"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY oid ASC LIMIT ?"
+        bind.append(lim)
+        rows = self._conn.execute(sql, tuple(bind)).fetchall()
+        return [int(rec["oid"]) for rec in rows]
 
     def fetch_page(
         self,
@@ -183,20 +229,31 @@ class SqliteTableStore:
         args: tuple | list | None = None,
         sort_by: str = "oid",
         ascending: bool = True,
+        after_oid: int | None = None,
     ) -> list[tuple[int, dict[str, str]]]:
         lim = max(1, int(limit))
-        off = max(0, int(offset))
         args = tuple(args or ())
         col = sort_by if sort_by in self._headers else "oid"
         order = "ASC" if ascending else "DESC"
         sql = "SELECT * FROM table_rows"
+        bind: list[object] = list(args)
+        clauses: list[str] = []
         if where_sql:
-            sql += f" WHERE {where_sql}"
-        sql += f" ORDER BY {_quoted_ident(col)} {order}, oid {order} LIMIT ? OFFSET ?"
-        rows = self._conn.execute(sql, args + (lim, off)).fetchall()
+            clauses.append(f"({where_sql})")
+        use_keyset = after_oid is not None and col == "oid"
+        if use_keyset:
+            clauses.append("oid > ?" if order == "ASC" else "oid < ?")
+            bind.append(int(after_oid))
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += f" ORDER BY {_quoted_ident(col)} {order}, oid {order} LIMIT ?"
+        bind.append(lim)
+        if not use_keyset:
+            sql += " OFFSET ?"
+            bind.append(max(0, int(offset)))
+        rows = self._conn.execute(sql, tuple(bind)).fetchall()
         out: list[tuple[int, dict[str, str]]] = []
         for rec in rows:
             oid = int(rec["oid"])
             out.append((oid, {h: str(rec[h] or "") for h in self._headers}))
         return out
-

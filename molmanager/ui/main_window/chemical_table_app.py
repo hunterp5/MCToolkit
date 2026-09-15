@@ -209,6 +209,11 @@ class ChemicalTableApp(
         self._substructure_filter_signals = SubstructureFilterSignals()
         self._substructure_filter_signals.finished.connect(self._on_substructure_filter_finished)
         self._substructure_filter_signals.failed.connect(self._on_substructure_filter_failed)
+        self._search_substructure_signals = SubstructureFilterSignals()
+        self._search_substructure_signals.finished.connect(self._on_search_substructure_finished)
+        self._search_substructure_signals.failed.connect(self._on_search_substructure_failed)
+        self._search_job_gen = 0
+        self._search_pending = None
         self._filter_apply_signals = FilterApplySignals()
         self._filter_apply_signals.finished.connect(self._on_filter_apply_finished)
         self._filter_apply_signals.failed.connect(self._on_filter_apply_failed)

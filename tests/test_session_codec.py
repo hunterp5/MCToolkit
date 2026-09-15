@@ -109,3 +109,48 @@ def test_gzip_dumps_loads_roundtrip():
     assert raw.startswith(b"\x1f\x8b")
     back = expand_session_document(loads_session_bytes(raw))
     assert back["rows"][0]["cells"]["SMILES"] == "O"
+
+
+def test_compact_expand_preserves_structure_mols_and_bounds():
+    from molmanager.session_codec import encode_mol_blob_b64
+    from molmanager.utils import mol_graph_binary
+    from rdkit import Chem
+
+    blob_b64 = encode_mol_blob_b64(mol_graph_binary(Chem.MolFromSmiles("CCO")))
+    compact = compact_session_document(
+        {
+            "format": "molmanager_session",
+            "version": 1,
+            "headers": ["ID_HIDDEN", "Structure", "SMILES", "MW"],
+            "rows": [{"id": 4, "cells": {"SMILES": "CCO", "MW": "46.1"}}],
+            "structure_smiles": ["CCO"],
+            "structure_mols": [blob_b64],
+            "global_bounds": {"MW": {"min": 10.0, "max": 99.5, "is_int": False}},
+            "next_oid": 5,
+        }
+    )
+    assert compact["version"] == 2
+    assert compact["structure_mols"] == [blob_b64]
+    assert compact["global_bounds"]["MW"]["max"] == 99.5
+    expanded = expand_session_document(compact)
+    assert expanded["structure_mols"] == [blob_b64]
+    assert expanded["global_bounds"]["MW"]["min"] == 10.0
+    raw = dumps_session_document(compact)
+    roundtrip = expand_session_document(loads_session_bytes(raw))
+    assert roundtrip["structure_mols"] == [blob_b64]
+
+
+def test_compact_omits_empty_structure_mols_and_bounds():
+    compact = compact_session_document(
+        {
+            "format": "molmanager_session",
+            "version": 1,
+            "headers": ["ID_HIDDEN", "Structure", "SMILES"],
+            "rows": [{"id": 0, "cells": {"SMILES": "O"}}],
+            "structure_mols": [""],
+            "global_bounds": {},
+            "next_oid": 1,
+        }
+    )
+    assert "structure_mols" not in compact
+    assert "global_bounds" not in compact
