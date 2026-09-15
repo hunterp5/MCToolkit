@@ -62,6 +62,7 @@ include = ["molmanager*"]
 [tool.setuptools.package-data]
 molmanager = [
     "ui/static/*",
+    "ui/plotly_shell.html",
     "resources/README.md",
     "resources/help/**/*.md",
     "resources/unipka/**",

@@ -40,4 +40,4 @@ Structures from **Molecules from**; **Activity column** for Δactivity. Scope vi
 
 ## Tips and limits
 
-Pairwise cost is O(n²) in molecule count—raise minimum similarity, lower max pairs, or use Selected Rows Only on large sets. Near-identical structures (similarity ≈ 1) use a small denominator floor so SALI stays finite. Not a substitute for MMP transform mining or full QSAR.
+Pairwise cost is O(n²) in molecule count—raise minimum similarity, lower max pairs, or use Selected Rows Only on large sets. **Max pairs** keeps a bounded top-SALI set during the scan so the plot does not materialize every qualifying pair. Near-identical structures (similarity ≈ 1) use a small denominator floor so SALI stays finite. Not a substitute for MMP transform mining or full QSAR.

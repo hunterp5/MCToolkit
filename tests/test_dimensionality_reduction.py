@@ -69,9 +69,7 @@ def test_run_umap_seeded_run_does_not_warn_about_n_jobs():
         warnings.simplefilter("always")
         run_umap(X, max_points=None, random_state=0)
     n_jobs_warns = [
-        w
-        for w in caught
-        if issubclass(w.category, UserWarning) and "n_jobs" in str(w.message)
+        w for w in caught if issubclass(w.category, UserWarning) and "n_jobs" in str(w.message)
     ]
     assert not n_jobs_warns
 
@@ -132,9 +130,7 @@ def test_build_reduction_result_tsne_subsample():
     rng = np.random.default_rng(1)
     X = rng.normal(size=(n, 4))
     coords, used_idx, _ = run_tsne(X, max_points=30, max_iter=300, random_state=0)
-    result = build_reduction_result(
-        "tsne", coords, df, oids, used_idx, title="t-SNE", summary="ok"
-    )
+    result = build_reduction_result("tsne", coords, df, oids, used_idx, title="t-SNE", summary="ok")
     assert len(result.oids) == 30
 
 
@@ -156,6 +152,40 @@ def test_dimred_figure_numeric_string_color_by():
     assert all(isinstance(c, float) for c in fig.data[0].marker.color)
     assert fig.data[0].hoverinfo == "none"
     assert fig.data[0].customdata[0][0] == 1
+
+
+def test_high_dim_tsne_pca_preprocess_note():
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(80, 80))
+    coords, used, summary = run_tsne(X, max_iter=250, max_points=None, random_state=0)
+    assert coords.shape == (80, 2)
+    assert len(used) == 80
+    assert "PCA-preprocessed to 50 components (from 80 features)." in summary
+    assert "Features: 50" in summary
+
+
+def test_low_dim_tsne_skips_pca_preprocess():
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(30, 4))
+    _coords, _used, summary = run_tsne(X, max_iter=250, max_points=None, random_state=0)
+    assert "PCA-preprocessed" not in summary
+    assert "Features: 4" in summary
+
+
+def test_high_dim_som_pca_preprocess_note():
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(80, 80))
+    coords, _used, summary = run_som(
+        X,
+        grid_width=5,
+        grid_height=4,
+        n_epochs=3,
+        max_points=None,
+        random_state=0,
+    )
+    assert coords.shape == (80, 2)
+    assert "PCA-preprocessed to 50 components (from 80 features)." in summary
+    assert "Features: 50" in summary
 
 
 def test_build_reduction_result_hover():

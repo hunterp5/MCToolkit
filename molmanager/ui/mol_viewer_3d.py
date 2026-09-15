@@ -16,7 +16,8 @@
 
 """Compatibility re-exports for the ligand 3D viewer.
 
-Prefer ``mol_3d_html``, ``mol_3d_prepare``, ``mol_3d_widget``, and ``mol_3d_dialog``.
+Prefer ``mol_3d_html``, ``mol_3d_prepare``, ``mol_3d_embed``, ``mol_3d_strain``,
+``mol_3d_conf_mixin``, ``mol_3d_chrome_mixin``, ``mol_3d_widget``, and ``mol_3d_dialog``.
 """
 
 from __future__ import annotations

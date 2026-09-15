@@ -79,8 +79,8 @@ flowchart TB
 | Sub-mixin | Responsibility |
 |-----------|----------------|
 | `PlotToolsMixin` | Plot↔table sync, floating plot dialogs; docks via `PlotDockHost` |
-| `IngestRenderMixin` | File ingest chunks, SQLite rebuild, 2D render batch |
-| `PrepareStructuresMixin` | Fast prepare, disconnect/neutralize, render-2D tools |
+| `IngestRenderMixin` | Composite: file ingest, SQLite rebuild, structure layout, Render 2D results |
+| `PrepareStructuresMixin` | Composite: protonate, Fast Prepare, disconnect/neutralize/Hs, Render 2D |
 | `ConformersDescriptorsMixin` | Composite: conformers/superpose, descriptors, column writeback |
 | `FragmentToolsMixin` | BRICS/RECAP/R-group fragment tools |
 | `MmpMixin` | Matched molecular pair (MMP / rdMMPA) analysis |
@@ -116,8 +116,10 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 
 - **Plotter:** `ui/plot.py` (`PlotWidget`)
 - **Dock host:** `ui/plot_dock_host.py` (`PlotDockHost`) owns dock/undock, panel width, and pane close; `PlotToolsMixin` delegates the public API
-- **PCA / radar / dimred:** `ui/plotly_interactive_view.py`
-- **Shared helpers:** `ui/plot_table_sync.py` (selection mapping, clear override); `ui/plotly_shell.py` (interactive Plotly HTML/JS for Plotter + Plotly views)
+- **PCA / radar / dimred:** `ui/plotly_interactive_view.py`; dimred panel is `ui/dialogs/dimred_panel.py`, method dialogs stay in `ui/dialogs/dimensionality_reduction.py`
+- **Shared helpers:** `ui/plot_table_sync.py` (selection mapping, clear override); `ui/plotly_shell.py` + `ui/plotly_shell.html` (interactive Plotly HTML/JS for Plotter + Plotly views)
+- **Docked-plot chrome:** `ui/dockable_plot.py` re-exports glyphs, floating titles, footer buttons, and pane embed (`dockable_plot_glyphs.py`, `_title.py`, `_chrome.py`, `_embed.py`)
+- **Filters:** `FilterPanelMixin` composes cards, apply, substructure, and bounds mixins under `ui/filters/`
 - **Table → plot:** debounced `_schedule_sync_active_plots_from_table_selection`
 - **Plot → table:** `apply_table_selection_for_source_rows`
 - **Filters / edits:** `_schedule_active_plots_replot` after filter apply; `dataChanged` on model for open plots
@@ -144,7 +146,11 @@ Heavy chemistry jobs are split by concern (compat re-exports remain in `workers/
 |--------|----------------|
 | `workers/chemistry_descriptors.py` | Descriptor `CalcWorker` |
 | `workers/conformer_generation.py` | Stochastic ETKDG conformer generation |
-| `workers/superpose.py` | Superpose conformers/structures, RMSD |
+| `workers/superpose.py` | QRunnable adapters; re-exports geom/conformers/structures/RMSD |
+| `workers/superpose_geom.py` | Ring maps, 2D depiction match, atom maps |
+| `workers/superpose_conformers.py` | Align conformers of one molecule |
+| `workers/superpose_structures.py` | Align distinct molecules onto a reference |
+| `workers/superpose_rmsd.py` | Per-conformer RMSD |
 | `workers/strain_energy.py` | Strain energy + overlay helpers |
 | `workers/chemistry_calc.py` | Custom calculator (AST `safe_calc`) |
 | `workers/chemistry_worker_common.py` | Shared progress throttling and force-field names |
@@ -185,14 +191,23 @@ Fingerprint session cache is an LRU capped by `fingerprint_cache_max_entries`
 
 Ligand 3D viewer: `ui/mol_viewer_3d.py` re-exports. HTML/JS assembly is
 `ui/mol_3d_html.py` (shared `assemble_3dmol_shell_page`), RDKit 2D/3D prep is
-`ui/mol_3d_prepare.py`, Qt widgets are `ui/mol_3d_widget.py`, and the floating
-dialog/openers are `ui/mol_3d_dialog.py`. Protein viewer: `ui/protein_viewer.py`
+`ui/mol_3d_prepare.py`, Qt widgets are `ui/mol_3d_widget.py` (conformer nav + dock chrome mixins), and the floating
+dialog/openers are `ui/mol_3d_dialog.py`. The sketcher embed is `ui/mol_3d_embed.py`;
+strain-energy table fill is `ui/mol_3d_strain.py`. Protein viewer: `ui/protein_viewer.py`
 re-exports; HTML is `ui/protein_viewer_html.py`, canvas is `ui/protein_embed.py`,
-chain list is `ui/protein_chain_manager.py`, window is `ui/protein_viewer_dialog.py`.
+chain list is `ui/protein_chain_manager.py`. The window (`ui/protein_viewer_dialog.py`)
+composes IO/session, render-style/H-bond, and sequence mixins.
 Crystallographic inventory: `structure_components.py` re-exports types, CIF IO,
 chain inventory, and atoms/pocket helpers.
 `ConformersDescriptorsMixin` composes conformer tools, descriptor writeback, and
 shared column-name/bounds helpers.
+`PrepareStructuresMixin` composes protonate, Fast Prepare, structure-edit
+(disconnect/neutralize/explicit H), Render 2D, and shared mol writeback.
+`IngestRenderMixin` composes file ingest, SQLite rebuild, structure layout, and
+Render 2D result flush.
+Protein Prepare runtime: `workers/protein_prepare_runtime.py` orchestrates;
+IO/residue maps are `protein_prepare_io.py`, pdb2pqr is `protein_prepare_pdb2pqr.py`,
+OpenMM min is `protein_prepare_minimize.py`. Tests patch names on the runtime module.
 
 Auto Render 2D after ingest/session: the loading overlay stays until filter bounds
 are ready, auto Structure renders finish (when started), and restored plot views

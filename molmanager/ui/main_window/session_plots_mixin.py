@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QByteArray, Qt
 from PyQt5.QtWidgets import QApplication
 
 from ..qt_widget_utils import qobject_is_deleted
@@ -166,6 +166,15 @@ class SessionPlotsMixin:
         for dlg in self._iter_floating_plot_hosts():
             panel = self._floating_plot_panel(dlg)
             if panel is None:
+                continue
+            try:
+                if (
+                    not dlg.isVisible()
+                    and getattr(panel, "DIMRED_SESSION_KIND", None) == "dimension_reduction"
+                    and getattr(panel, "_last_result", None) is None
+                ):
+                    continue
+            except RuntimeError:
                 continue
             collect = getattr(panel, "collect_session_state", None)
             if not callable(collect):

@@ -14,23 +14,28 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Composite: filter cards, bounds, apply, and substructure matching."""
+
+"""Shared constants for the Protein Prepare pipeline."""
 
 from __future__ import annotations
 
-from .filter_apply_mixin import FilterApplyMixin
-from .filter_bounds_mixin import FilterBoundsMixin
-from .filter_cards_mixin import FilterCardsMixin
-from .filter_substructure_mixin import FilterSubstructureMixin
+# 10 kcal mol⁻¹ Å⁻² is a typical heavy-atom restraint for clash relief.
+_DEFAULT_CA_K_KCAL = 10.0
+_DEFAULT_MIN_ITERS = 400
+_PDB2PQR_FF = "AMBER"
+# Physiological salt for GB screening (Onufriev/Simmerling GB; OpenMM kappa conversion).
+_GB_SALT_M = 0.15
+_GB_TEMPERATURE_K = 298.15
+_GB_SOLVENT_DIELECTRIC = 78.5
+_PROTEIN_FF_AMBER14 = "amber14"
+_PROTEIN_FF_AMBER99 = "amber99sbildn"
+_LIGAND_FF_GAFF2 = "gaff2"
+_LIGAND_FF_OPENFF = "openff-2.2.0"
+_SOLVENT_GBN2 = "gbn2"
+_SOLVENT_OBC2 = "obc2"
+_SOLVENT_VACUUM = "vacuum"
+_RESTRAINT_CA = "ca"
+_RESTRAINT_BACKBONE = "backbone"
+_RESTRAINT_BACKBONE_LIGAND = "backbone_ligand"
 
-
-class FilterPanelMixin(
-    FilterCardsMixin,
-    FilterApplyMixin,
-    FilterSubstructureMixin,
-    FilterBoundsMixin,
-):
-    """Expects ``headers``, ``_table_model``, ``table``, ``mols``, ``filters``, ``f_panel``,
-    ``f_container``, ``global_bounds``, ``status_label``, ``threadpool``, ``_apply_filters_timer``,
-    and optional ``_substructure_filter_signals`` on ``self`` (provided by ``ChemicalTableApp``).
-    """
+ResidueKey = tuple[str, str, str]

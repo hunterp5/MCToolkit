@@ -29,10 +29,11 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 
 ## Workflow
 
-1. Select feature columns and optional fingerprint.
-2. Set standardization, color-by, and method parameters.
-3. Run the embedding and inspect clusters/outliers.
-4. Select points to highlight rows back in the table when linked.
+1. Data menu opens **Plot Options** (the empty plot window stays closed).
+2. Select feature columns and optional fingerprint.
+3. Set standardization, color-by, and method parameters.
+4. Run the embedding; the plot window opens when results are ready.
+5. Select points to highlight rows back in the table when linked.
 
 ## Use cases
 

@@ -76,9 +76,7 @@ class DimensionReductionMixin:
             try:
                 getattr(dlg, "_panel", dlg)._reload_columns()
                 self._sync_dialog_only_selected_scope(dlg)
-                dlg.show()
-                dlg.raise_()
-                dlg.activateWindow()
+                self._present_dimension_reduction_dialog(dlg)
                 return
             except (RuntimeError, AttributeError):
                 setattr(self, attr, None)
@@ -87,9 +85,18 @@ class DimensionReductionMixin:
         self._prepare_tool_dialog(d)
         d.setAttribute(Qt.WA_DeleteOnClose, True)
         d.destroyed.connect(destroyed)
-        d.show()
-        d.raise_()
-        d.activateWindow()
+        self._present_dimension_reduction_dialog(d)
+
+    def _present_dimension_reduction_dialog(self, dlg) -> None:
+        """Show Plot Options until a figure exists; then raise the plot window."""
+        panel = getattr(dlg, "_panel", None)
+        present = getattr(panel, "present_initial_ui", None)
+        if callable(present):
+            present()
+            return
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
 
     def _on_pca_dialog_destroyed(self) -> None:
         self._pca_dialog = None

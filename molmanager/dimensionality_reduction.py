@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import asdict, dataclass, replace
 from typing import Any
 
@@ -126,6 +127,37 @@ def _standardize(X: np.ndarray, standardize: bool) -> np.ndarray:
     return StandardScaler().fit_transform(X)
 
 
+EMBEDDING_PCA_DIM = 50
+
+
+def _maybe_pca_preprocess(
+    X: np.ndarray,
+    *,
+    max_dim: int = EMBEDDING_PCA_DIM,
+    random_state: int = 42,
+) -> tuple[np.ndarray, str]:
+    """Project high-D features (e.g. 2048-bit fingerprints) before t-SNE / UMAP / SOM.
+
+    sklearn's t-SNE docs recommend PCA to ~50 dimensions; it also shrinks UMAP and
+    Kohonen maps that would otherwise loop over the full bit vector.
+    """
+    cap = int(max_dim)
+    if cap <= 0:
+        return X, ""
+    n_samples, n_features = X.shape
+    cap = max(2, cap)
+    if n_features <= cap:
+        return X, ""
+    k = min(cap, n_samples, n_features)
+    if k < 2:
+        return X, ""
+    from sklearn.decomposition import PCA
+
+    reduced = PCA(n_components=k, random_state=int(random_state)).fit_transform(X)
+    note = f"PCA-preprocessed to {k} components (from {n_features} features).\n"
+    return np.asarray(reduced, dtype=float), note
+
+
 def _tsne_init_method(n_features: int) -> str:
     """PCA init requires at least two features for a 2D embedding."""
     return "pca" if int(n_features) >= 2 else "random"
@@ -218,6 +250,7 @@ def run_tsne(
     max_iter: int = 1000,
     random_state: int = 42,
     max_points: int | None = 2500,
+    pca_dim: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, str]:
     from sklearn.manifold import TSNE
 
@@ -230,21 +263,26 @@ def run_tsne(
         note = f"Subsampled {int(max_points)} of {n_samples} rows (fixed seed {random_state}).\n\n"
 
     Xs = _standardize(X[used_idx], standardize)
+    cap = EMBEDDING_PCA_DIM if pca_dim is None else int(pca_dim)
+    Xs, pca_note = _maybe_pca_preprocess(Xs, max_dim=cap, random_state=int(random_state))
     n_used = Xs.shape[0]
     perp = float(perplexity)
     perp = max(5.0, min(perp, float(n_used - 1)))
     init = _tsne_init_method(Xs.shape[1])
-    tsne = TSNE(
-        n_components=2,
-        perplexity=perp,
-        learning_rate=float(learning_rate),
-        max_iter=int(max_iter),
-        init=init,
-        random_state=int(random_state),
-    )
+    tsne_kwargs: dict[str, Any] = {
+        "n_components": 2,
+        "perplexity": perp,
+        "learning_rate": float(learning_rate),
+        "max_iter": int(max_iter),
+        "init": init,
+        "random_state": int(random_state),
+    }
+    if "n_jobs" in inspect.signature(TSNE).parameters:
+        tsne_kwargs["n_jobs"] = -1
+    tsne = TSNE(**tsne_kwargs)
     coords = tsne.fit_transform(Xs)
     summary = (
-        f"{note}"
+        f"{note}{pca_note}"
         f"Samples used: {n_used}\n"
         f"Features: {Xs.shape[1]}\n"
         f"t-SNE init: {init}\n"
@@ -264,6 +302,7 @@ def run_umap(
     min_dist: float = 0.1,
     random_state: int = 42,
     max_points: int | None = 2500,
+    pca_dim: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, str]:
     try:
         import umap
@@ -281,6 +320,8 @@ def run_umap(
         note = f"Subsampled {int(max_points)} of {n_samples} rows (fixed seed {random_state}).\n\n"
 
     Xs = _standardize(X[used_idx], standardize)
+    cap = EMBEDDING_PCA_DIM if pca_dim is None else int(pca_dim)
+    Xs, pca_note = _maybe_pca_preprocess(Xs, max_dim=cap, random_state=int(random_state))
     n_used = Xs.shape[0]
     n_neigh = max(2, min(int(n_neighbors), n_used - 1))
     reducer = umap.UMAP(
@@ -292,7 +333,7 @@ def run_umap(
     )
     coords = reducer.fit_transform(Xs)
     summary = (
-        f"{note}"
+        f"{note}{pca_note}"
         f"Samples used: {n_used}\n"
         f"Features: {Xs.shape[1]}\n"
         f"n_neighbors: {n_neigh}\n"
@@ -314,6 +355,7 @@ def run_som(
     random_state: int = 42,
     max_points: int | None = 2500,
     jitter: float = 0.35,
+    pca_dim: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, str]:
     """
     Train a rectangular Kohonen self-organizing map and return BMU grid coordinates.
@@ -330,6 +372,9 @@ def run_som(
         note = f"Subsampled {int(max_points)} of {n_samples} rows (fixed seed {random_state}).\n\n"
 
     Xs = _standardize(X[used_idx], standardize).astype(np.float64, copy=False)
+    cap = EMBEDDING_PCA_DIM if pca_dim is None else int(pca_dim)
+    Xs, pca_note = _maybe_pca_preprocess(Xs, max_dim=cap, random_state=int(random_state))
+    Xs = np.asarray(Xs, dtype=np.float64)
     n_used, n_features = Xs.shape
     gw = max(2, int(grid_width))
     gh = max(2, int(grid_height))
@@ -391,7 +436,7 @@ def run_som(
     occupied = int(np.unique(bmu_flat).size)
     counts = np.bincount(bmu_flat, minlength=n_nodes)
     summary = (
-        f"{note}"
+        f"{note}{pca_note}"
         f"Samples used: {n_used}\n"
         f"Features: {n_features}\n"
         f"Grid: {gw} × {gh} ({n_nodes} nodes)\n"

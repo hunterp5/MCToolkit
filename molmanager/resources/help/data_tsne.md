@@ -30,10 +30,11 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 
 ## Workflow
 
-1. Select feature columns and optional fingerprint.
-2. Set standardization, color-by, and method parameters.
-3. Run the embedding and inspect clusters/outliers.
-4. Select points to highlight rows back in the table when linked.
+1. Data menu opens **Plot Options** (the empty plot window stays closed).
+2. Select feature columns and optional fingerprint.
+3. Set standardization, color-by, and method parameters.
+4. Run the embedding; the plot window opens when results are ready.
+5. Select points to highlight rows back in the table when linked.
 
 ## Use cases
 
@@ -43,4 +44,4 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 
 ## Tips and limits
 
-t-SNE distances are not global metrics - do not over-read far-point spacing. Perplexity and seed change layouts; fix seed for comparisons. **Max points** subsamples large sets. Table filters hide points after Run; the embedding is fit on all rows (or **Selected Rows Only**).
+t-SNE distances are not global metrics - do not over-read far-point spacing. Perplexity and seed change layouts; fix seed for comparisons. **Max points** subsamples large sets. Inputs wider than 50 features (typical fingerprints) are PCA-compressed to 50 dimensions before embedding. Table filters hide points after Run; the embedding is fit on all rows (or **Selected Rows Only**).

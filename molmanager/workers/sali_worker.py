@@ -26,7 +26,7 @@ from PyQt5.QtCore import QRunnable
 from rdkit import Chem, DataStructs
 
 from ..rdkit_fingerprints import fingerprint_bitvect_for_row, fingerprint_bitvect_for_ui_choice
-from ..sali_analysis import SaliPoint, build_sali_points
+from ..sali_analysis import accumulate_sali_candidate, finalize_sali_points
 from ..tool_progress import report_tool_progress
 from .fingerprint_similarity import SIMILARITY_METRIC_LABELS, pairwise_fingerprint_similarity
 from .signals import WorkerSignals
@@ -114,7 +114,8 @@ class SaliAnalysisWorker(QRunnable):
 
             n = len(fps)
             min_sim = max(0.0, float(self.min_similarity))
-            similarities: list[tuple[int, int, float]] = []
+            min_dact = max(0.0, float(self.min_activity_difference))
+            heap: list = []
             last_pulse = 0.0
             report_tool_progress(
                 message=label,
@@ -135,11 +136,20 @@ class SaliAnalysisWorker(QRunnable):
                         pairwise_fingerprint_similarity(fps[i], fps[j], self.metric)
                         for j in range(i)
                     ]
+                act_i = activities[i]
+                oid_i = oids[i]
                 for j in range(i):
-                    s = float(sims[j])
-                    if s < min_sim:
-                        continue
-                    similarities.append((oids[i], oids[j], s))
+                    accumulate_sali_candidate(
+                        heap,
+                        oid_i,
+                        oids[j],
+                        float(sims[j]),
+                        act_i,
+                        activities[j],
+                        min_similarity=min_sim,
+                        min_activity_difference=min_dact,
+                        max_pairs=self.max_pairs,
+                    )
                 now = time.monotonic()
                 if i <= 2 or i + 1 == n or (now - last_pulse) >= 0.12:
                     last_pulse = now
@@ -152,14 +162,7 @@ class SaliAnalysisWorker(QRunnable):
                         throttle=throttle,
                     )
 
-            act_records = list(zip(oids, activities, strict=True))
-            points: list[SaliPoint] = build_sali_points(
-                act_records,
-                similarities,
-                min_similarity=min_sim,
-                min_activity_difference=self.min_activity_difference,
-                max_pairs=self.max_pairs,
-            )
+            points = finalize_sali_points(heap)
             report_tool_progress(
                 message=label,
                 done=n,

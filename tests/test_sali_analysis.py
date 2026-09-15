@@ -63,6 +63,24 @@ def test_build_sali_points_max_pairs_keeps_highest_sali():
     assert points[0].sali == 20.0
 
 
+def test_build_sali_points_canonical_oid_order():
+    records = [(2, 3.0), (1, 1.0)]
+    points = build_sali_points(records, [(2, 1, 0.8)])
+    assert points[0].oid_a == 1
+    assert points[0].oid_b == 2
+    assert abs(points[0].signed_delta - 2.0) < 1e-12
+
+
+def test_build_sali_points_heap_matches_full_sort():
+    records = [(i, float(i)) for i in range(1, 12)]
+    sims = [(a, b, 0.4 + 0.05 * ((a + b) % 7)) for a in range(1, 12) for b in range(a + 1, 12)]
+    capped = build_sali_points(records, sims, max_pairs=5)
+    full = build_sali_points(records, sims, max_pairs=0)
+    assert [(p.oid_a, p.oid_b, round(p.sali, 12)) for p in capped] == [
+        (p.oid_a, p.oid_b, round(p.sali, 12)) for p in full[:5]
+    ]
+
+
 def test_build_sali_figure():
     records = [(1, 1.0), (2, 3.0)]
     points = build_sali_points(records, [(1, 2, 0.7)])

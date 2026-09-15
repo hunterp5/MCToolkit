@@ -254,7 +254,6 @@ class FilterCardsHost(QWidget):
         return None
 
 
-
 class _FilterCardTitleLabel(QLabel):
     """Shows the filter title; double-click starts in-place rename."""
 
@@ -1061,6 +1060,7 @@ class CategoryFilterCard(_FilterCardDragMixin, _FilterCardEnableInvertMixin, QFr
         self.cb.blockSignals(False)
         self._populate_list(frozenset(str(x) for x in (values or [])))
 
+
 def next_default_filter_title(existing_filters: list, card_cls: type) -> str:
     """Return "Type" or "Type N" for the next card of ``card_cls``."""
     if card_cls is FilterCard:
@@ -1075,4 +1075,3 @@ def next_default_filter_title(existing_filters: list, card_cls: type) -> str:
         base = "Filter"
     n = sum(1 for f in existing_filters if isinstance(f, card_cls))
     return base if n == 0 else f"{base} {n + 1}"
-
