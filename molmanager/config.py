@@ -131,6 +131,7 @@ class MolManagerConfig:
     auto_render_2d_max_rows: int
     structure_render_lazy_min_rows: int
     structure_render_pixmap_lru: int
+    fingerprint_cache_max_entries: int
     tool_progress_poll_ms: int
     status_memory_enabled: bool
     status_memory_poll_ms: int
@@ -275,6 +276,9 @@ def load_config() -> MolManagerConfig:
         ),
         structure_render_pixmap_lru=_env_int(
             "MOLMANAGER_STRUCTURE_RENDER_PIXMAP_LRU", 384, lo=32, hi=4096
+        ),
+        fingerprint_cache_max_entries=_env_int(
+            "MOLMANAGER_FINGERPRINT_CACHE_MAX_ENTRIES", 50_000, lo=0, hi=5_000_000
         ),
         tool_progress_poll_ms=_env_int("MOLMANAGER_TOOL_PROGRESS_POLL_MS", 200, lo=50, hi=2000),
         status_memory_enabled=_env_bool("MOLMANAGER_STATUS_MEMORY", True),

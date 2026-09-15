@@ -40,6 +40,7 @@ from ...som_prediction import (
 )
 from ...utils import parse_molecule_from_cell_text
 from ...workers import SomPredictorWorker
+from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_PREDICT_SOM
 from .scope import selection_scope_checked
@@ -165,9 +166,6 @@ class SomPredictorDialog(QDialog):
         self._table_cfg.setVisible(not is_smiles)
         self._smiles_cfg.setVisible(is_smiles)
 
-    def _collect_table_mols(self, src: str, only_selected: bool) -> list[tuple[int, Chem.Mol]]:
-        return self.parent_app.collect_scoped_table_mols(src, only_selected=only_selected)
-
     def _on_predict(self) -> None:
         if self.parent_app is None:
             return
@@ -183,22 +181,15 @@ class SomPredictorDialog(QDialog):
             rows: list[tuple[int | None, Chem.Mol | None]] = [(None, mol)]
         else:
             only_selected = selection_scope_checked(self)
-            allowed = self.parent_app._selected_oids_set() if only_selected else None
-            if only_selected and not allowed:
-                QMessageBox.warning(
-                    self,
-                    TOOL_PREDICT_SOM,
-                    "\u201cSelected Rows Only\u201d is checked but nothing is selected.",
-                )
-                return
             src = self.src_combo.currentText()
-            rows_m = self._collect_table_mols(src, only_selected)
+            rows_m = prepare_scoped_structure_mols(
+                self.parent_app,
+                tool_label=TOOL_PREDICT_SOM,
+                structure_source=src,
+                only_selected=only_selected,
+                empty_message="No valid structures were found for this scope and source.",
+            )
             if not rows_m:
-                QMessageBox.information(
-                    self,
-                    TOOL_PREDICT_SOM,
-                    "No valid structures were found for this scope and source.",
-                )
                 return
             rows = list(rows_m)
 
@@ -210,9 +201,10 @@ class SomPredictorDialog(QDialog):
         prog = self.parent_app._tool_progress_state
         from ...display_constants import structure_depiict_height, structure_depiict_width
 
-        self.parent_app._begin_tool_progress("Predict SOM", n)
-        self.parent_app.process_queue.enqueue(
-            f"Predict SOM ({n} molecules)",
+        enqueue_process_queue_job(
+            self.parent_app,
+            "Predict SOM",
+            n,
             lambda ev, r=rows, ws=self.parent_app.signals, ps=som_signals, sub=subset, fs=fame_score, thr=threshold, st=prog, mw=structure_depiict_width(), mh=structure_depiict_height(): (
                 SomPredictorWorker(
                     r,
@@ -227,5 +219,6 @@ class SomPredictorDialog(QDialog):
                     progress_state=st,
                 )
             ),
+            queue_label=f"Predict SOM ({n} molecules)",
         )
         self.close()

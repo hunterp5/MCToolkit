@@ -39,9 +39,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from rdkit import Chem
-
 from ...workers import ClusterExploreWorker, ClusterWorker, SIMILARITY_FP_TYPE_LABELS
+from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -274,19 +273,19 @@ class ClusterDialog(QDialog):
         make_window_minimizable(self)
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        self._disconnect_pq_thread_finished()
+        self._disconnect_process_queue_thread_finished()
         super().closeEvent(event)
 
-    def _disconnect_pq_thread_finished(self) -> None:
+    def _disconnect_process_queue_thread_finished(self) -> None:
         pa = self.parent_app
         if pa is None:
             return
         try:
-            pa.process_queue.thread_finished.disconnect(self._on_pq_thread_finished)
+            pa.process_queue.thread_finished.disconnect(self._on_process_queue_thread_finished)
         except TypeError:
             pass
 
-    def _on_pq_thread_finished(self, job_id: str) -> None:
+    def _on_process_queue_thread_finished(self, job_id: str) -> None:
         if job_id != self._active_cluster_job_id:
             return
         self._active_cluster_job_id = None
@@ -377,30 +376,13 @@ class ClusterDialog(QDialog):
 
         only_selected = selection_scope_checked(self)
         src = self.src_combo.currentText()
-        rows_m = self._collect_table_mols(src, only_selected)
-        if len(rows_m) < 2:
-            QMessageBox.information(
-                self,
-                "Cluster",
-                "Need at least two rows with valid structures in this scope.",
-            )
+        rows = self._prepare_cluster_mols(src, only_selected)
+        if not rows:
             return
 
         col_name = self._unique_cluster_column()
         fp_choice = self.fp_combo.currentText()
-        rows = list(rows_m)
-
-        self.run_btn.setEnabled(False)
-        ps = self.parent_app._tool_progress_state
-        self.parent_app._begin_tool_progress("Clustering", len(rows))
-        self._disconnect_pq_thread_finished()
-        self._active_cluster_job_id = self.parent_app.process_queue.enqueue(
-            f"Cluster ({len(rows)} rows, {method})",
-            lambda ev, r=rows, fc=fp_choice, m=method, p=dict(params), c=col_name, ws=self.parent_app.signals, prog=ps: ClusterWorker(
-                r, fc, m, p, c, ws, cancel_event=ev, progress_state=prog
-            ),
-        )
-        self.parent_app.process_queue.thread_finished.connect(self._on_pq_thread_finished)
+        self._enqueue_cluster_worker(rows, fp_choice, method, dict(params), col_name)
 
     def _refresh_structure_sources(self) -> None:
         self.src_combo.clear()
@@ -408,8 +390,32 @@ class ClusterDialog(QDialog):
             return
         self.src_combo.addItems(self.parent_app.chemistry_tool_structure_sources())
 
-    def _collect_table_mols(self, src: str, only_selected: bool) -> list[tuple[int, Chem.Mol]]:
-        return self.parent_app.collect_scoped_table_mols(src, only_selected=only_selected)
+    def _prepare_cluster_mols(self, src: str, only_selected: bool):
+        need = "Need at least two rows with valid structures in this scope."
+        return prepare_scoped_structure_mols(
+            self.parent_app,
+            tool_label="Cluster",
+            structure_source=src,
+            only_selected=only_selected,
+            min_mols=2,
+            empty_message=need,
+            too_few_message=need,
+        )
+
+    def _enqueue_cluster_worker(self, rows, fp_choice, method, params, col_name) -> None:
+        self.run_btn.setEnabled(False)
+        ps = self.parent_app._tool_progress_state
+        self._disconnect_process_queue_thread_finished()
+        self._active_cluster_job_id = enqueue_process_queue_job(
+            self.parent_app,
+            "Clustering",
+            len(rows),
+            lambda ev, r=rows, fc=fp_choice, m=method, p=params, c=col_name, ws=self.parent_app.signals, prog=ps: ClusterWorker(
+                r, fc, m, p, c, ws, cancel_event=ev, progress_state=prog
+            ),
+            queue_label=f"Cluster ({len(rows)} rows, {method})",
+        )
+        self.parent_app.process_queue.thread_finished.connect(self._on_process_queue_thread_finished)
 
     def _unique_cluster_column(self) -> str:
         base = "Cluster"
@@ -424,26 +430,12 @@ class ClusterDialog(QDialog):
         if self.parent_app is None:
             return
         only_selected = selection_scope_checked(self)
-        allowed = self.parent_app._selected_oids_set() if only_selected else None
-        if only_selected and not allowed:
-            QMessageBox.warning(
-                self,
-                "Cluster",
-                "\u201cSelected Rows Only\u201d is checked but nothing is selected.",
-            )
-            return
         src = self.src_combo.currentText()
-        rows_m = self._collect_table_mols(src, only_selected)
-        if len(rows_m) < 2:
-            QMessageBox.information(
-                self,
-                "Cluster",
-                "Need at least two rows with valid structures in this scope.",
-            )
+        rows = self._prepare_cluster_mols(src, only_selected)
+        if not rows:
             return
 
         fp_choice = self.fp_combo.currentText()
-        rows = list(rows_m)
 
         from ...memory_guards import check_cluster_workload
 
@@ -468,16 +460,18 @@ class ClusterDialog(QDialog):
             self.explore_table.setVisible(True)
             self.run_btn.setEnabled(False)
             ps = self.parent_app._tool_progress_state
-            self.parent_app._begin_tool_progress("Exploring clusters", len(rows))
-            self._disconnect_pq_thread_finished()
+            self._disconnect_process_queue_thread_finished()
             max_runs = int(self.explore_max_runs.value())
-            self._active_cluster_job_id = self.parent_app.process_queue.enqueue(
-                f"Cluster explore ({len(rows)} rows, ≤{max_runs} trials)",
+            self._active_cluster_job_id = enqueue_process_queue_job(
+                self.parent_app,
+                "Exploring clusters",
+                len(rows),
                 lambda ev, r=rows, fc=fp_choice, mr=max_runs, inc=include, ws=self.parent_app.signals, prog=ps: ClusterExploreWorker(
                     r, fc, mr, inc, ws, cancel_event=ev, progress_state=prog
                 ),
+                queue_label=f"Cluster explore ({len(rows)} rows, ≤{max_runs} trials)",
             )
-            self.parent_app.process_queue.thread_finished.connect(self._on_pq_thread_finished)
+            self.parent_app.process_queue.thread_finished.connect(self._on_process_queue_thread_finished)
             return
 
         idx = self.method_combo.currentIndex()
@@ -516,18 +510,7 @@ class ClusterDialog(QDialog):
             params = {"nn_count": j_nn, "common_neighbors": p_c}
 
         col_name = self._unique_cluster_column()
-
-        self.run_btn.setEnabled(False)
-        ps = self.parent_app._tool_progress_state
-        self.parent_app._begin_tool_progress("Clustering", len(rows))
-        self._disconnect_pq_thread_finished()
-        self._active_cluster_job_id = self.parent_app.process_queue.enqueue(
-            f"Cluster ({len(rows)} rows, {method})",
-            lambda ev, r=rows, fc=fp_choice, m=method, p=params, c=col_name, ws=self.parent_app.signals, prog=ps: ClusterWorker(
-                r, fc, m, p, c, ws, cancel_event=ev, progress_state=prog
-            ),
-        )
-        self.parent_app.process_queue.thread_finished.connect(self._on_pq_thread_finished)
+        self._enqueue_cluster_worker(rows, fp_choice, method, params, col_name)
 
     def enable_run_after_job(self) -> None:
         """Call when the process queue finishes so the dialog can run again."""

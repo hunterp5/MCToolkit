@@ -557,16 +557,27 @@ class FilterPanelMixin:
         if timer is not None:
             timer.start(0)
 
-    def _finalize_filter_apply(self, visible_oids: set[int], n_rows: int) -> None:
+    def _finalize_filter_apply(
+        self, visible_oids: set[int] | frozenset[int], n_rows: int
+    ) -> None:
         proxy = self._filter_proxy_model
         table = getattr(self, "table", None)
+        oids_fs = (
+            visible_oids
+            if isinstance(visible_oids, frozenset)
+            else frozenset(visible_oids)
+        )
         if table is not None:
             table.setUpdatesEnabled(False)
         try:
-            proxy.set_visible_oids(frozenset(visible_oids))
+            visibility_changed = proxy.set_visible_oids(oids_fs)
         finally:
             if table is not None:
                 table.setUpdatesEnabled(True)
+        if visibility_changed:
+            invalidate = getattr(self, "_invalidate_visible_source_rows_cache", None)
+            if callable(invalidate):
+                invalidate()
         invalid_smarts_msg = None
         for f in self.filters:
             if isinstance(f, SubstructureFilterCard):
@@ -574,14 +585,15 @@ class FilterPanelMixin:
                 if sm and f._compiled_query() is None:
                     invalid_smarts_msg = "Substructure filter: invalid SMARTS."
                     break
-        vis = len(visible_oids)
+        vis = len(oids_fs)
         if invalid_smarts_msg:
             self.status_label.setText(invalid_smarts_msg)
         else:
             self.status_label.setText(f"Showing {vis} / {len(self.mols)} molecules")
-        schedule_replot = getattr(self, "_schedule_active_plots_replot", None)
-        if callable(schedule_replot):
-            schedule_replot(force=True)
+        if visibility_changed:
+            schedule_replot = getattr(self, "_schedule_active_plots_replot", None)
+            if callable(schedule_replot):
+                schedule_replot(force=True)
 
     def _substructure_filter_targets(
         self, structure_source: str = "Structure"
@@ -808,11 +820,16 @@ class FilterPanelMixin:
         scope = perf.track if perf is not None else (lambda *_args, **_kwargs: nullcontext())
         if not self.filters:
             with scope("filters.apply_sync"):
-                proxy.set_visible_oids(None)
+                visibility_changed = proxy.set_visible_oids(None)
+            if visibility_changed:
+                invalidate = getattr(self, "_invalidate_visible_source_rows_cache", None)
+                if callable(invalidate):
+                    invalidate()
             self.status_label.setText(f"Showing {n_rows} / {len(self.mols)} molecules")
-            schedule_replot = getattr(self, "_schedule_active_plots_replot", None)
-            if callable(schedule_replot):
-                schedule_replot(force=True)
+            if visibility_changed:
+                schedule_replot = getattr(self, "_schedule_active_plots_replot", None)
+                if callable(schedule_replot):
+                    schedule_replot(force=True)
             return
 
         overrides = self._normalize_substructure_overrides(substructure_matches)
@@ -831,7 +848,7 @@ class FilterPanelMixin:
         try:
             with scope("filters.apply_sync"):
                 if sqlite_oids is not None and not overrides:
-                    visible_oids = set(sqlite_oids)
+                    visible_oids = sqlite_oids
                     vis = len(visible_oids)
                 elif sqlite_oids is not None and overrides:
                     visible_oids = self._apply_substructure_overrides_to_visible(

@@ -319,6 +319,9 @@ class ChemicalTableApp(
         self._background_jobs: dict[str, str] = {}
         self.background_activity = BackgroundActivityHub(self)
         self.background_activity.attach()
+        from ..plot_dock_host import PlotDockHost
+
+        self._plot_dock_host = PlotDockHost(self)
         self._plot_replot_timer = QTimer(self)
         self._plot_replot_timer.setSingleShot(True)
         self._plot_replot_timer.timeout.connect(self._replot_active_plots)

@@ -41,7 +41,11 @@ flowchart TB
 | Mixin | Responsibility |
 |--------|----------------|
 | `SessionMixin` | Open/save `.cms` sessions; legacy CSV import (SMILES parse off GUI) |
-| `TableUIMixin` | Selection, search, column UI, `clear_all` |
+| `TableUIMixin` | Column color/sort, `clear_all`, confs sidecar, selection browser (composes table mixins) |
+| `TableSelectionMixin` | Row/column selection, visibility cache, OID override / chunked select |
+| `TableChemistryAccessMixin` | Molecule lookup, chemistry-tool source columns, OID→row |
+| `TableEditMixin` | Copy/paste, chunked delete/clear cells |
+| `TableMenuMixin` | Column/row/cell context menus, log/precision column transforms |
 | `IngestExportMixin` | File/SQL ingest, export |
 | `ChemistryMixin` | Composite tools mixin (see sub-mixins below) |
 | `ClusterMixin` | Clustering dialogs |
@@ -54,7 +58,7 @@ flowchart TB
 
 | Sub-mixin | Responsibility |
 |-----------|----------------|
-| `PlotToolsMixin` | Plot panel dock/undock, plot↔table sync hooks |
+| `PlotToolsMixin` | Plot↔table sync, floating plot dialogs; docks via `PlotDockHost` |
 | `IngestRenderMixin` | File ingest chunks, SQLite rebuild, 2D render batch |
 | `PrepareStructuresMixin` | Fast prepare, disconnect/neutralize, render-2D tools |
 | `ConformersDescriptorsMixin` | Conformers, superposition, descriptor calc |
@@ -69,7 +73,7 @@ flowchart TB
 
 - **Source of truth:** `CompoundTableModel` (`_rows`, OIDs, batched `dataChanged`).
 - **Filtered view:** `FilterProxyModel` hides rows by OID set (`set_visible_oids`), not per-row `setRowHidden`.
-- **Selection:** Qt selection + `_selected_oids_override` for large selections (tools/plots use `_selected_oids_set()`).
+- **Selection:** Qt selection + `_selected_oids_override` for large selections (tools/plots use `_selected_oids_set()`); logic lives in `TableSelectionMixin`.
 - **SQLite mirror:** `SqliteTableStore` powers text/numeric filter pushdown and column search at 100k+ rows. Rebuilt in chunks on the GUI thread, then `SqliteRebuildWorker` builds the DB file.
 
 ## Background work
@@ -86,6 +90,7 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 ## Plots and table sync
 
 - **Plotter:** `ui/plot.py` (`PlotWidget`)
+- **Dock host:** `ui/plot_dock_host.py` (`PlotDockHost`) owns dock/undock, panel width, and pane close; `PlotToolsMixin` delegates the public API
 - **PCA / radar / dimred:** `ui/plotly_interactive_view.py`
 - **Shared helpers:** `ui/plot_table_sync.py` (selection mapping, clear override); `ui/plotly_shell.py` (interactive Plotly HTML/JS for Plotter + Plotly views)
 - **Table → plot:** debounced `_schedule_sync_active_plots_from_table_selection`
@@ -122,7 +127,32 @@ Pure helpers live under `molmanager/services/` (e.g. `chemistry_columns.py`, `sq
 MMP / Activity Cliff / Pair Network / SALI share `ui/analysis_job_support.py` for scoped
 activity-record prep, process-queue enqueue (`start_scoped_activity_job`), dialog open/finish
 helpers (`ensure_activity_analysis_ready`, `finish_analysis_pairs`, `report_analysis_failure`).
-Mixins stay thin adapters over those helpers.
+Cluster / pKa / SOM / protomer / permeability reuse the same module for table readiness
+(`ensure_table_ready_for_tool`), structure-scoped mol collect (`prepare_scoped_structure_mols`),
+enqueue (`enqueue_process_queue_job` / `start_scoped_structure_job`), and cancellable failure
+reporting (`report_cancellable_job_failure`). Mixins and dialogs stay thin adapters over those helpers.
+
+Filter visibility changes invalidate a sticky `_visible_source_rows_cache` used by
+plot replot (so debounced Plotter rebuilds do not rematerialize proxy maps per host).
+`FilterProxyModel.set_visible_oids` returns whether the set changed; unchanged applies
+skip `invalidateFilter` fan-out and forced replots. When visibility does change, the
+proxy builds a per-source-row accept bitmap so `filterAcceptsRow` is O(1) during the
+Qt invalidate walk (OID membership is resolved once via `logical_row_for_oid`).
+
+Plotter axis/mode/histogram helpers live in `molmanager/plot_axes.py` (re-exported from
+`ui/plot.py`). Series collection for scatter/histogram lives in `molmanager/plot_collect.py`.
+Floating plot chrome is split into `ui/plot_bridge.py`, `ui/plot_statistics_panel.py`, and
+`ui/plot_dialog.py`. Figure builders live in `ui/plot_render_mixin.py`; shell load/push and
+table↔plot selection in `ui/plot_shell_mixin.py`; color/size/hover/fit in
+`ui/plot_style_mixin.py`; axis/plot-type controls in `ui/plot_axis_mixin.py`; radar options in
+`ui/plot_radar_mixin.py`; series collection in `ui/plot_collect_mixin.py`; session save/restore
+in `ui/plot_session_mixin.py` (`PlotWidget` in `ui/plot.py` owns UI construction and orchestration).
+Fingerprint session cache is an LRU capped by `fingerprint_cache_max_entries`
+(`MOLMANAGER_FINGERPRINT_CACHE_MAX_ENTRIES`).
+
+Auto Render 2D after ingest/session: small tables wait for depictions before reveal;
+at/above `structure_render_lazy_after_ingest_min_rows` the workspace opens immediately
+while Structure images continue in the background (`_auto_render2d_blocks_workspace_reveal`).
 
 ## Related docs
 

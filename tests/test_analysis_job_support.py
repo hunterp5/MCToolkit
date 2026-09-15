@@ -22,8 +22,12 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from molmanager.ui.analysis_job_support import (
+    enqueue_process_queue_job,
+    ensure_table_ready_for_tool,
     finish_analysis_pairs,
+    prepare_scoped_structure_mols,
     report_analysis_failure,
+    report_cancellable_job_failure,
 )
 
 
@@ -68,3 +72,123 @@ def test_report_analysis_failure(monkeypatch):
     report_analysis_failure(app, "Tool", "", fallback="failed")
     app._clear_tool_progress.assert_called_once()
     assert warns and warns[0][2] == "failed"
+
+
+def test_ensure_table_ready_for_tool_no_headers(monkeypatch):
+    infos: list[tuple] = []
+    monkeypatch.setattr(
+        "molmanager.ui.analysis_job_support.QMessageBox.information",
+        lambda *a, **k: infos.append(a),
+    )
+    app = SimpleNamespace(headers=[], _table_model=SimpleNamespace(rowCount=lambda: 0))
+    assert ensure_table_ready_for_tool(app, "Cluster") is False
+    assert infos
+
+
+def test_ensure_table_ready_for_tool_ok():
+    app = SimpleNamespace(headers=["SMILES"], _table_model=SimpleNamespace(rowCount=lambda: 1))
+    assert ensure_table_ready_for_tool(app, "Cluster") is True
+
+
+def test_prepare_scoped_structure_mols_empty_selection(monkeypatch):
+    infos: list[tuple] = []
+    monkeypatch.setattr(
+        "molmanager.ui.analysis_job_support.QMessageBox.information",
+        lambda *a, **k: infos.append(a),
+    )
+    app = SimpleNamespace(
+        _abort_if_only_selected_but_empty=MagicMock(return_value=True),
+        _selected_oids_set=MagicMock(return_value=set()),
+        collect_scoped_table_mols=MagicMock(),
+    )
+    assert (
+        prepare_scoped_structure_mols(
+            app,
+            tool_label="Cluster",
+            structure_source="SMILES",
+            only_selected=True,
+        )
+        is None
+    )
+    app.collect_scoped_table_mols.assert_not_called()
+
+
+def test_prepare_scoped_structure_mols_too_few(monkeypatch):
+    infos: list[tuple] = []
+    monkeypatch.setattr(
+        "molmanager.ui.analysis_job_support.QMessageBox.information",
+        lambda *a, **k: infos.append(a),
+    )
+    app = SimpleNamespace(
+        _abort_if_only_selected_but_empty=MagicMock(return_value=False),
+        _selected_oids_set=MagicMock(return_value=set()),
+        collect_scoped_table_mols=MagicMock(return_value=[(1, object())]),
+    )
+    assert (
+        prepare_scoped_structure_mols(
+            app,
+            tool_label="Cluster",
+            structure_source="SMILES",
+            only_selected=False,
+            min_mols=2,
+            too_few_message="need two",
+        )
+        is None
+    )
+    assert infos and infos[0][2] == "need two"
+
+
+def test_enqueue_process_queue_job_returns_id():
+    app = SimpleNamespace(
+        _begin_tool_progress=MagicMock(),
+        process_queue=SimpleNamespace(enqueue=MagicMock(return_value="job-1")),
+    )
+    factory = MagicMock()
+    assert enqueue_process_queue_job(app, "Clustering", 3, factory, queue_label="Cluster (3)") == "job-1"
+    app._begin_tool_progress.assert_called_once_with("Clustering", 3)
+    app.process_queue.enqueue.assert_called_once_with("Cluster (3)", factory)
+
+
+def test_report_cancellable_job_failure_cancelled(monkeypatch):
+    warns: list[tuple] = []
+    monkeypatch.setattr(
+        "molmanager.ui.analysis_job_support.QMessageBox.warning",
+        lambda *a, **k: warns.append(a),
+    )
+    after = MagicMock()
+    app = SimpleNamespace(
+        _finish_tool_progress=MagicMock(),
+        status_label=SimpleNamespace(setText=MagicMock()),
+        _consume_partial_results_notice=MagicMock(return_value="Partial kept."),
+    )
+    report_cancellable_job_failure(
+        app,
+        "Cluster",
+        "Cancelled.",
+        progress_label="Clustering",
+        failure_fallback="failed",
+        after_finish=after,
+    )
+    after.assert_called_once()
+    app.status_label.setText.assert_called_once_with("Partial kept.")
+    assert not warns
+
+
+def test_report_cancellable_job_failure_error(monkeypatch):
+    warns: list[tuple] = []
+    monkeypatch.setattr(
+        "molmanager.ui.analysis_job_support.QMessageBox.warning",
+        lambda *a, **k: warns.append(a),
+    )
+    app = SimpleNamespace(
+        _finish_tool_progress=MagicMock(),
+        status_label=SimpleNamespace(setText=MagicMock()),
+    )
+    report_cancellable_job_failure(
+        app,
+        "Cluster",
+        "boom",
+        progress_label="Clustering",
+        failure_fallback="failed",
+    )
+    assert warns and warns[0][2] == "boom"

@@ -1699,10 +1699,18 @@ class SessionMixin:
             except RuntimeError:
                 pass
         if callable(render) and render():
-            self._session_waiting_for_render = True
+            if self._auto_render2d_blocks_workspace_reveal():
+                self._session_waiting_for_render = True
+                self._restore_session_table_chrome(pending)
+                self._restore_pending_workspace_layout()
+                QTimer.singleShot(0, self._restore_pending_workspace_layout)
+                return
+            n = self._table_model.rowCount()
+            self.status_label.setText(
+                f"Loaded {n:,} rows — rendering 2D structures in the background…"
+            )
             self._restore_session_table_chrome(pending)
-            self._restore_pending_workspace_layout()
-            QTimer.singleShot(0, self._restore_pending_workspace_layout)
+            self._session_try_reveal_when_ready()
             return
         self._restore_session_table_chrome(pending)
         self._session_try_reveal_when_ready()

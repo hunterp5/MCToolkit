@@ -39,6 +39,7 @@ from ...science_citations import protomer_dialog_footer_html
 from ...services.column_labels import COLUMN_PARENT_OID, COLUMN_PROTOMER_SOURCE_OID_LEGACY
 from ...utils import parse_molecule_from_cell_text
 from ...workers import ProtomerGeneratorSignals, ProtomerGeneratorWorker
+from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -160,9 +161,6 @@ class ProtomerGeneratorDialog(QDialog):
         self._table_cfg.setVisible(not is_smiles)
         self._smiles_cfg.setVisible(is_smiles)
 
-    def _collect_table_mols(self, src: str, only_selected: bool) -> list[tuple[int, Chem.Mol]]:
-        return self.parent_app.collect_scoped_table_mols(src, only_selected=only_selected)
-
     def _on_generate(self) -> None:
         if self.parent_app is None:
             return
@@ -178,22 +176,15 @@ class ProtomerGeneratorDialog(QDialog):
             rows: list[tuple[int | None, Chem.Mol | None]] = [(None, mol)]
         else:
             only_selected = selection_scope_checked(self)
-            allowed = self.parent_app._selected_oids_set() if only_selected else None
-            if only_selected and not allowed:
-                QMessageBox.warning(
-                    self,
-                    "Generate Protomers",
-                    "\u201cSelected Rows Only\u201d is checked but nothing is selected.",
-                )
-                return
             src = self.src_combo.currentText()
-            rows_m = self._collect_table_mols(src, only_selected)
+            rows_m = prepare_scoped_structure_mols(
+                self.parent_app,
+                tool_label="Generate Protomers",
+                structure_source=src,
+                only_selected=only_selected,
+                empty_message="No valid structures were found for this scope and source.",
+            )
             if not rows_m:
-                QMessageBox.information(
-                    self,
-                    "Generate Protomers",
-                    "No valid structures were found for this scope and source.",
-                )
                 return
             rows = list(rows_m)
 
@@ -201,12 +192,14 @@ class ProtomerGeneratorDialog(QDialog):
         pH = float(self.ph_spin.value())
         n = len(rows)
         prog = self.parent_app._tool_progress_state
-        self.parent_app._begin_tool_progress("Generate protomers", n)
-        self.parent_app.process_queue.enqueue(
-            f"Generate protomers ({n} molecules)",
+        enqueue_process_queue_job(
+            self.parent_app,
+            "Generate protomers",
+            n,
             lambda ev, r=rows, ph=pH, ws=self.parent_app.signals, ps=self._prot_signals, st=prog: (
                 ProtomerGeneratorWorker(r, ph, ws, ps, cancel_event=ev, progress_state=st)
             ),
+            queue_label=f"Generate protomers ({n} molecules)",
         )
 
     def _on_finished(self, rows: list) -> None:

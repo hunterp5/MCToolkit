@@ -420,10 +420,15 @@ class IngestRenderMixin:
         self._loading_detail.setText(f"{TOOL_RENDER_2D}…\n{n:,} row(s)")
         started_render = self._try_auto_render_all_structures_after_ingest()
         self.calculate_global_bounds()
-        if started_render:
+        if started_render and self._auto_render2d_blocks_workspace_reveal(n):
             self._ingest_waiting_for_render = True
             return
         keep_status = "auto 2D render skipped" in (self.status_label.text() or "")
+        if started_render:
+            self.status_label.setText(
+                f"Loaded {n:,} rows — rendering 2D structures in the background…"
+            )
+            keep_status = True
         self._reveal_table_after_ingest_prep(keep_status=keep_status)
 
     def _ingest_on_render2d_batch_finished(self) -> None:

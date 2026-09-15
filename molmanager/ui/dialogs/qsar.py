@@ -474,14 +474,14 @@ class QSARDialog(QDialog):
         self._set_job_running(True)
         self._fit_result = None
         prog = self.parent_app._tool_progress_state
-        self._disconnect_pq_thread_finished()
+        self._disconnect_process_queue_thread_finished()
         self._active_qsar_job_id = self.parent_app.process_queue.enqueue(
             f"QSAR train ({n} rows)",
             lambda ev, p=params, sigs=self._signals, st=prog: QSARTrainWorker(
                 p, sigs, cancel_event=ev
             ),
         )
-        self.parent_app.process_queue.thread_finished.connect(self._on_pq_thread_finished)
+        self.parent_app.process_queue.thread_finished.connect(self._on_process_queue_thread_finished)
 
     def _on_predict(self) -> None:
         if self._job_running or self._fit_result is None or self.parent_app is None:
@@ -502,29 +502,29 @@ class QSARDialog(QDialog):
         self.parent_app._begin_tool_progress("QSAR predictions", n)
         self._set_job_running(True)
         prog = self.parent_app._tool_progress_state
-        self._disconnect_pq_thread_finished()
+        self._disconnect_process_queue_thread_finished()
         self._active_qsar_job_id = self.parent_app.process_queue.enqueue(
             f"QSAR predict ({n} rows)",
             lambda ev, p=params, sigs=self._signals, st=prog: QSARPredictWorker(
                 p, sigs, cancel_event=ev
             ),
         )
-        self.parent_app.process_queue.thread_finished.connect(self._on_pq_thread_finished)
+        self.parent_app.process_queue.thread_finished.connect(self._on_process_queue_thread_finished)
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        self._disconnect_pq_thread_finished()
+        self._disconnect_process_queue_thread_finished()
         super().closeEvent(event)
 
-    def _disconnect_pq_thread_finished(self) -> None:
+    def _disconnect_process_queue_thread_finished(self) -> None:
         pa = self.parent_app
         if pa is None:
             return
         try:
-            pa.process_queue.thread_finished.disconnect(self._on_pq_thread_finished)
+            pa.process_queue.thread_finished.disconnect(self._on_process_queue_thread_finished)
         except TypeError:
             pass
 
-    def _on_pq_thread_finished(self, job_id: str) -> None:
+    def _on_process_queue_thread_finished(self, job_id: str) -> None:
         if job_id != self._active_qsar_job_id or not self._job_running:
             return
         self._active_qsar_job_id = None
@@ -534,7 +534,7 @@ class QSARDialog(QDialog):
         if self.parent_app is not None:
             self.parent_app._finish_tool_progress(self._active_progress_label)
         self._set_job_running(False)
-        self._disconnect_pq_thread_finished()
+        self._disconnect_process_queue_thread_finished()
         if msg and msg != "Cancelled.":
             self.results_text.append(f"\n\nError: {msg}")
         if msg:
@@ -542,7 +542,7 @@ class QSARDialog(QDialog):
 
     def _on_train_finished(self, result: object) -> None:
         self._active_qsar_job_id = None
-        self._disconnect_pq_thread_finished()
+        self._disconnect_process_queue_thread_finished()
         self.parent_app._finish_tool_progress("QSAR", status_message=None)
         self._set_job_running(False)
         if not isinstance(result, QSARFitResult):
@@ -560,7 +560,7 @@ class QSARDialog(QDialog):
 
     def _on_predict_finished(self, rows: list) -> None:
         self._active_qsar_job_id = None
-        self._disconnect_pq_thread_finished()
+        self._disconnect_process_queue_thread_finished()
         self.parent_app._finish_tool_progress("QSAR predictions", status_message=None)
         self._set_job_running(False)
         if not rows or self.parent_app is None or self._fit_result is None:

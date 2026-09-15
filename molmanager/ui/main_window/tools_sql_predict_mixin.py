@@ -31,6 +31,11 @@ from rdkit import Chem
 
 from ...config import load_config
 from ...services.sql_load_policy import engine_kwargs_for_sql_load, sql_looks_destructive
+from ..analysis_job_support import (
+    enqueue_process_queue_job,
+    ensure_table_ready_for_tool,
+    report_cancellable_job_failure,
+)
 from ..compound_table_model import structure_depiict_height, structure_depiict_width
 from ...utils import redact_sqlalchemy_url, safe_float
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
@@ -1284,12 +1289,7 @@ class ToolsSqlPredictMixin:
         QMessageBox.warning(self, "Predict pKa", msg or "Prediction failed.")
 
     def open_pka_predictor(self) -> None:
-        if not self.headers:
-            QMessageBox.information(
-                self,
-                "Predict pKa",
-                "Open a file or start a session first.",
-            )
+        if not ensure_table_ready_for_tool(self, "Predict pKa"):
             return
         from ..dialogs import PKaPredictorDialog
 
@@ -1334,12 +1334,7 @@ class ToolsSqlPredictMixin:
         from ...workers import PermeabilityPredictorWorker
 
         allowed = self._selected_oids_set() if only_selected else None
-        if only_selected and not allowed:
-            QMessageBox.warning(
-                self,
-                "Predict Permeability",
-                "\u201cSelected Rows Only\u201d is checked but nothing is selected.",
-            )
+        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Predict Permeability"):
             return
         rows_smi = self.collect_scoped_table_smiles(src, only_selected=only_selected)
         if not rows_smi:
@@ -1352,14 +1347,16 @@ class ToolsSqlPredictMixin:
         perm_signals = self._ensure_permeability_predictor_signals()
         n = len(rows_smi)
         prog = self._tool_progress_state
-        self._begin_tool_progress("Predict Permeability", n)
-        self.process_queue.enqueue(
-            f"Predict Permeability ({n} rows)",
+        enqueue_process_queue_job(
+            self,
+            "Predict Permeability",
+            n,
             lambda ev, r=rows_smi, ws=self.signals, ps=perm_signals, c=output_columns, st=prog: (
                 PermeabilityPredictorWorker(
                     r, ws, ps, cancel_event=ev, output_columns=c, progress_state=st
                 )
             ),
+            queue_label=f"Predict Permeability ({n} rows)",
         )
 
     def _on_permeability_prediction_finished(self, results: list) -> None:
@@ -1375,12 +1372,7 @@ class ToolsSqlPredictMixin:
         QMessageBox.warning(self, "Predict Permeability", msg or "Prediction failed.")
 
     def open_permeability_predictor(self) -> None:
-        if not self.headers:
-            QMessageBox.information(
-                self,
-                "Predict Permeability",
-                "Open a file or start a session first.",
-            )
+        if not ensure_table_ready_for_tool(self, "Predict Permeability"):
             return
         from ..dialogs import PermeabilityPredictorDialog
 
@@ -1596,19 +1588,16 @@ class ToolsSqlPredictMixin:
     def _on_som_prediction_failed(self, msg: str) -> None:
         if self._host_unavailable():
             return
-        self._finish_tool_progress(TOOL_PREDICT_SOM)
-        if msg == "Cancelled.":
-            self.status_label.setText(self._consume_partial_results_notice() or "Cancelled.")
-            return
-        QMessageBox.warning(self, TOOL_PREDICT_SOM, msg or "Prediction failed.")
+        report_cancellable_job_failure(
+            self,
+            TOOL_PREDICT_SOM,
+            msg,
+            progress_label=TOOL_PREDICT_SOM,
+            failure_fallback="Prediction failed.",
+        )
 
     def open_som_predictor(self) -> None:
-        if not self.headers:
-            QMessageBox.information(
-                self,
-                TOOL_PREDICT_SOM,
-                "Open a file or start a session first.",
-            )
+        if not ensure_table_ready_for_tool(self, TOOL_PREDICT_SOM):
             return
         from ..dialogs import SomPredictorDialog
 
@@ -1620,12 +1609,7 @@ class ToolsSqlPredictMixin:
         dlg.activateWindow()
 
     def open_protomer_generator(self) -> None:
-        if not self.headers:
-            QMessageBox.information(
-                self,
-                "Generate Protomers",
-                "Open a file or start a session first.",
-            )
+        if not ensure_table_ready_for_tool(self, "Generate Protomers"):
             return
         from ..dialogs import ProtomerGeneratorDialog
 

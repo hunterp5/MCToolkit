@@ -14,156 +14,109 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Plot docking, plot↔table sync, and multi-pane workspace helpers."""
+"""Plot↔table sync, floating plot dialogs, and thin dock API over PlotDockHost."""
 
 from __future__ import annotations
 
 import logging
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QDialog, QMessageBox
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QDialog
 
 logger = logging.getLogger(__name__)
 
 
 class PlotToolsMixin:
+    @property
+    def plot_dock(self):
+        """Workspace docking owner (:class:`~molmanager.ui.plot_dock_host.PlotDockHost`)."""
+        host = getattr(self, "_plot_dock_host", None)
+        if host is None:
+            from ..plot_dock_host import PlotDockHost
+
+            host = PlotDockHost(self)
+            self._plot_dock_host = host
+        return host
+
     def _workspace(self):
-        return getattr(self, "_workspace_layout", None)
+        return self.plot_dock.workspace()
 
     @staticmethod
     def _docked_widget_kind(plot_widget) -> str:
-        title = getattr(plot_widget, "_window_title", None)
-        if title:
-            return str(title)
-        if getattr(plot_widget, "dockable_in_workspace", False) and not getattr(
-            plot_widget, "only_selected_cb", None
-        ):
-            return "Viewer"
-        return "Plot"
+        from ..plot_dock_host import PlotDockHost
+
+        return PlotDockHost._docked_widget_kind(plot_widget)
 
     def iter_docked_plot_widgets(self):
-        mgr = self._workspace()
-        if mgr is None:
-            return
-        yield from mgr.iter_docked_widgets()
+        yield from self.plot_dock.iter_docked_plot_widgets()
 
     def pane_for_plot_widget(self, plot_widget):
-        mgr = self._workspace()
-        if mgr is None:
-            return None
-        return mgr.pane_for_widget(plot_widget)
+        return self.plot_dock.pane_for_plot_widget(plot_widget)
 
     def is_plot_docked(self, plot_widget) -> bool:
-        return self.pane_for_plot_widget(plot_widget) is not None
+        return self.plot_dock.is_plot_docked(plot_widget)
 
     def find_docked_plot_widget(self, predicate):
-        for w in self.iter_docked_plot_widgets():
-            try:
-                if predicate(w):
-                    return w
-            except RuntimeError:
-                continue
-        return None
+        return self.plot_dock.find_docked_plot_widget(predicate)
 
     @property
     def _docked_plot_widget(self):
-        """Compatibility: preferred pane's plot, else first docked plot."""
-        mgr = self._workspace()
-        if mgr is None:
-            return None
-        pref = mgr.preferred_pane()
-        if pref is not None and pref.plot_widget() is not None:
-            return pref.plot_widget()
-        for w in mgr.iter_docked_widgets():
-            return w
-        return None
+        return self.plot_dock._docked_plot_widget
 
     @_docked_plot_widget.setter
     def _docked_plot_widget(self, value) -> None:
-        # Legacy assignments clear nothing useful; ignore None writes from old paths.
-        if value is None:
-            return
-        mgr = self._workspace()
-        if mgr is None:
-            return
-        pane = mgr.preferred_pane() or (mgr.plot_panes()[0] if mgr.plot_panes() else None)
-        if pane is not None:
-            mgr.dock_into_pane(pane, value)
+        self.plot_dock._docked_plot_widget = value
 
     def _plot_panel_splitter_sizes(self) -> list[int] | None:
-        """Outer table|plots sizes when the workspace uses a horizontal outer splitter."""
-        mgr = self._workspace()
-        if mgr is None or not mgr._splitters:
-            return None
-        splitter = mgr._splitters[0]
-        try:
-            sizes = [int(s) for s in splitter.sizes()]
-        except RuntimeError:
-            return None
-        if len(sizes) < 2:
-            return None
-        return sizes
+        return self.plot_dock._plot_panel_splitter_sizes()
 
     def _docked_plot_content_widths(self) -> tuple[int, int]:
-        """Return ``(minimum_width, preferred_width)`` for docked plot content."""
-        from ..dockable_plot import (
-            PLOT_PANEL_BASE_MINIMUM_WIDTH,
-            PLOT_PANEL_DEFAULT_WIDTH,
-            plot_embedded_minimum_width,
-            plot_embedded_preferred_width,
-        )
-
-        widgets = list(self.iter_docked_plot_widgets())
-        if not widgets:
-            return PLOT_PANEL_BASE_MINIMUM_WIDTH, PLOT_PANEL_DEFAULT_WIDTH
-        min_w = max(plot_embedded_minimum_width(w) for w in widgets)
-        pref_w = max(plot_embedded_preferred_width(w) for w in widgets)
-        return min_w, pref_w
+        return self.plot_dock._docked_plot_content_widths()
 
     def _apply_plot_panel_minimum_width(self) -> int:
-        from ..dockable_plot import PLOT_PANEL_BASE_MINIMUM_WIDTH
-
-        mgr = self._workspace()
-        if mgr is None:
-            return PLOT_PANEL_BASE_MINIMUM_WIDTH
-        min_w, _pref = self._docked_plot_content_widths()
-        if not list(self.iter_docked_plot_widgets()):
-            min_w = PLOT_PANEL_BASE_MINIMUM_WIDTH
-        return min_w
+        return self.plot_dock._apply_plot_panel_minimum_width()
 
     def _ensure_plot_panel_width(self, preferred: int | None = None) -> None:
-        """Give the plot region a usable width when the outer splitter is horizontal."""
-        from ..dockable_plot import PLOT_PANEL_COLLAPSED_WIDTH
+        self.plot_dock._ensure_plot_panel_width(preferred)
 
-        mgr = self._workspace()
-        if mgr is None or not mgr._splitters:
-            return
-        if mgr.layout_id in {"quadrants", "table_grid"}:
-            return
-        splitter = mgr._splitters[0]
-        try:
-            sizes = [int(s) for s in splitter.sizes()]
-        except RuntimeError:
-            return
-        if len(sizes) < 2:
-            return
-        table_w, plot_w = sizes[0], sizes[1]
-        # Existing panes already have a share of the window; do not grow them to
-        # the docked widget's floating sizeHint / preferred width.
-        if preferred is None and plot_w >= PLOT_PANEL_COLLAPSED_WIDTH:
-            return
-        min_w = self._apply_plot_panel_minimum_width()
-        _content_min, content_pref = self._docked_plot_content_widths()
-        if preferred is not None:
-            want = max(min_w, int(preferred))
-        else:
-            want = max(min_w, content_pref)
-        if plot_w >= want:
-            return
-        total = max(table_w + plot_w, want + 200)
-        new_plot = min(want, max(min_w, total - 200))
-        new_table = max(200, total - new_plot)
-        splitter.setSizes([new_table, new_plot])
+    def _target_plot_pane(self):
+        return self.plot_dock._target_plot_pane()
+
+    def dock_plot_widget(self, plot_widget, pane=None) -> bool:
+        return self.plot_dock.dock_plot_widget(plot_widget, pane)
+
+    def _wire_docked_plot_widget(self, plot_widget) -> None:
+        self.plot_dock._wire_docked_plot_widget(plot_widget)
+
+    def _float_released_plot_widget(self, plot_widget) -> None:
+        self.plot_dock._float_released_plot_widget(plot_widget)
+
+    def _sync_plot_panel_bottom_visibility(self) -> None:
+        self.plot_dock._sync_plot_panel_bottom_visibility()
+
+    def show_docked_plot_panel(self) -> None:
+        self.plot_dock.show_docked_plot_panel()
+
+    def hide_docked_plot_panel(self) -> None:
+        self.plot_dock.hide_docked_plot_panel()
+
+    def _on_docked_plot_destroyed(self, *_args) -> None:
+        self.plot_dock._on_docked_plot_destroyed(*_args)
+
+    def close_plot_panel_keep_plot(self) -> None:
+        self.plot_dock.close_plot_panel_keep_plot()
+
+    def close_docked_plot(self, plot_widget=None, *, confirm: bool = True) -> None:
+        self.plot_dock.close_docked_plot(plot_widget, confirm=confirm)
+
+    def close_plot_pane(self, pane=None) -> None:
+        self.plot_dock.close_plot_pane(pane)
+
+    def _release_plot_widget_from_panel_host(self, plot_widget) -> None:
+        self.plot_dock._release_plot_widget_from_panel_host(plot_widget)
+
+    def undock_plot_to_window(self, plot_widget=None) -> bool:
+        return self.plot_dock.undock_plot_to_window(plot_widget)
 
     def _sync_dialog_only_selected_scope(
         self, dialog: QDialog, *, selected_count: int | None = None
@@ -359,6 +312,8 @@ class PlotToolsMixin:
 
     def _replot_active_plots(self) -> None:
         """Refresh plot data after filters or table edits change visible rows."""
+        # Warm sticky visible-row cache once for every open host (incl. debounced Plotter).
+        self._visible_source_row_indices()
         for host in self._iter_active_plot_hosts():
             fn = getattr(host, "_schedule_plot", None) or getattr(host, "_rebuild_figure", None)
             if not callable(fn):
@@ -462,104 +417,6 @@ class PlotToolsMixin:
         on_finished_signal.connect(teardown)
         target._scope_sync_disconnect = teardown
 
-    def _target_plot_pane(self):
-        """Return the active plot pane, expanding Table Only to a table|plot split."""
-        from .workspace_layout import LAYOUT_TABLE_SINGLE
-
-        mgr = self._workspace()
-        if mgr is None:
-            return None
-        if mgr.plot_panes():
-            return mgr.preferred_pane()
-        # No panes (Table Only): split the table with a single plot pane.
-        self.apply_workspace_layout(LAYOUT_TABLE_SINGLE)
-        panes = mgr.plot_panes()
-        if not panes:
-            return None
-        pane = panes[0]
-        mgr.set_preferred_pane(pane)
-        return pane
-
-    def dock_plot_widget(self, plot_widget, pane=None) -> bool:
-        """Move a plot or viewer widget into the active workspace plot pane."""
-        from ..dockable_plot import is_dockable_workspace_widget
-        from ..plot import PlotWidget
-
-        if not is_dockable_workspace_widget(plot_widget) and not isinstance(
-            plot_widget, PlotWidget
-        ):
-            return False
-        mgr = self._workspace()
-        if mgr is None:
-            return False
-
-        target = pane if pane is not None else self._target_plot_pane()
-        if target is None:
-            return False
-
-        prior_teardown = getattr(plot_widget, "_scope_sync_disconnect", None)
-        if callable(prior_teardown):
-            prior_teardown()
-        mgr.dock_into_pane(target, plot_widget)
-        self.show_docked_plot_panel()
-        self._wire_docked_plot_widget(plot_widget)
-        kind = self._docked_widget_kind(plot_widget)
-        pane_n = mgr.plot_panes().index(target) + 1
-        n_pages = target.page_count()
-        if n_pages > 1:
-            self.status_label.setText(
-                f"{kind}: docked in pane {pane_n} ({target.page_index() + 1}/{n_pages})."
-            )
-        else:
-            self.status_label.setText(f"{kind}: docked in pane {pane_n}.")
-        mark = getattr(self, "_mark_session_dirty", None)
-        if callable(mark):
-            mark()
-        return True
-
-    def _wire_docked_plot_widget(self, plot_widget) -> None:
-        """Attach session/scope hooks used for any docked plot or viewer."""
-        self._prepare_tool_plot(plot_widget)
-        try:
-            plot_widget.destroyed.disconnect(self._on_docked_plot_destroyed)
-        except (TypeError, RuntimeError):
-            pass
-        plot_widget.destroyed.connect(self._on_docked_plot_destroyed)
-        self._sync_active_plots_from_table_selection()
-        sync_footer = getattr(plot_widget, "_sync_footer_chrome", None)
-        if callable(sync_footer):
-            sync_footer()
-
-    def _float_released_plot_widget(self, plot_widget) -> None:
-        """Open a released docked plot in a floating dialog when possible."""
-        if plot_widget is None:
-            return
-        factory = getattr(plot_widget, "create_floating_dialog", None)
-        try:
-            if callable(factory):
-                dlg = factory(self)
-                self._prepare_tool_dialog(dlg)
-                if hasattr(dlg, "_plot_widget") or hasattr(dlg, "_panel"):
-                    pass
-                from ..plot import PlotDialog
-
-                if isinstance(dlg, PlotDialog):
-                    self._register_plot_dialog(dlg)
-                elif not self._bind_undocked_browser_dialog(dlg):
-                    self._register_floating_result_dialog(dlg)
-                plot_widget.show()
-                dlg.show()
-                dlg.raise_()
-                dlg.activateWindow()
-                return
-        except Exception:
-            logger.exception("Failed to float released plot widget")
-        try:
-            plot_widget.setParent(None)
-            plot_widget.deleteLater()
-        except RuntimeError:
-            pass
-
     def _bind_undocked_browser_dialog(self, dlg) -> bool:
         """Track Data → Browser / Predict SOM windows after undock. Return True if handled."""
         from ..selection_browser import SelectionBrowserDialog
@@ -609,201 +466,3 @@ class PlotToolsMixin:
         except (ValueError, AttributeError):
             pass
 
-    def _sync_plot_panel_bottom_visibility(self) -> None:
-        """No shared host bottom bar in multi-pane layout."""
-        return
-
-    def show_docked_plot_panel(self) -> None:
-        """Ensure the workspace plot region has usable width."""
-        mgr = self._workspace()
-        if mgr is not None:
-            mgr.show()
-        # Session restore owns splitter sizes; do not fight them with auto-grow.
-        if getattr(self, "_pending_session_workspace_layout", None):
-            return
-        QTimer.singleShot(0, self._ensure_plot_panel_width)
-
-    def hide_docked_plot_panel(self) -> None:
-        """Collapse plot region width on horizontal layouts (table keeps space)."""
-        mgr = self._workspace()
-        if mgr is None or not mgr._splitters:
-            return
-        if mgr.layout_id == "quadrants":
-            return
-        splitter = mgr._splitters[0]
-        try:
-            sizes = [int(s) for s in splitter.sizes()]
-        except RuntimeError:
-            return
-        total = sum(sizes) if sizes else 0
-        if total <= 0:
-            total = max(splitter.width(), 1)
-        splitter.setSizes([total, 0])
-
-    def _on_docked_plot_destroyed(self, *_args) -> None:
-        mgr = self._workspace()
-        if mgr is None:
-            return
-        for pane in mgr.plot_panes():
-            for w in list(pane.plot_widgets()):
-                try:
-                    from PyQt5 import sip
-
-                    if sip.isdeleted(w):
-                        pane.remove_plot_widget(w)
-                except Exception:
-                    pass
-
-    def close_plot_panel_keep_plot(self) -> None:
-        """Hide/collapse the plot region; docked widgets are preserved."""
-        self.hide_docked_plot_panel()
-        self.status_label.setText("Plot panel hidden.")
-
-    def close_docked_plot(self, plot_widget=None, *, confirm: bool = True) -> None:
-        """Close a docked plot (``plot_widget`` or the preferred/occupied pane)."""
-        mgr = self._workspace()
-        if mgr is None:
-            return
-        if plot_widget is None:
-            pane = mgr.preferred_pane()
-            plot_widget = pane.plot_widget() if pane is not None else None
-            if plot_widget is None:
-                for p in mgr.plot_panes():
-                    if p.plot_widget() is not None:
-                        pane = p
-                        plot_widget = p.plot_widget()
-                        break
-        else:
-            pane = mgr.pane_for_widget(plot_widget)
-        if plot_widget is None:
-            self.status_label.setText("No docked plot to close.")
-            return
-        self._release_plot_widget_from_panel_host(plot_widget)
-        try:
-            plot_widget.setParent(None)
-            plot_widget.deleteLater()
-        except RuntimeError:
-            pass
-        self.status_label.setText("Plot closed.")
-
-    def close_plot_pane(self, pane=None) -> None:
-        """Close a workspace plot pane and delete every plot it contains."""
-        mgr = self._workspace()
-        if mgr is None:
-            return
-        if pane is None:
-            pane = mgr.preferred_pane()
-        if pane is None:
-            self.status_label.setText("No plot pane to close.")
-            return
-
-        widgets = list(pane.plot_widgets())
-        if widgets:
-            n = len(widgets)
-            noun = "plot" if n == 1 else "plots"
-            reply = QMessageBox.question(
-                self,
-                "Close Plot Pane",
-                f"This pane has {n} {noun}. Close the pane and discard "
-                f"{'it' if n == 1 else 'them'}?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            if reply != QMessageBox.Yes:
-                return
-
-        for plot_widget in widgets:
-            self._release_plot_widget_from_panel_host(plot_widget)
-            try:
-                plot_widget.setParent(None)
-                plot_widget.deleteLater()
-            except RuntimeError:
-                pass
-
-        if not mgr.remove_pane(pane):
-            self.status_label.setText("Could not close plot pane.")
-            return
-
-        self._apply_plot_panel_minimum_width()
-        remaining = len(mgr.plot_panes())
-        if remaining:
-            self.status_label.setText(
-                f"Plot pane closed ({len(widgets)} plot(s) removed). {remaining} pane(s) remain."
-            )
-        else:
-            self.status_label.setText(
-                f"Plot pane closed ({len(widgets)} plot(s) removed). Table-only layout."
-            )
-
-    def _release_plot_widget_from_panel_host(self, plot_widget) -> None:
-        mgr = self._workspace()
-        if mgr is not None:
-            mgr.release_widget(plot_widget)
-        teardown = getattr(plot_widget, "_scope_sync_disconnect", None)
-        if callable(teardown):
-            teardown()
-        sync_footer = getattr(plot_widget, "_sync_footer_chrome", None)
-        if callable(sync_footer):
-            try:
-                sync_footer()
-            except RuntimeError:
-                pass
-        self._apply_plot_panel_minimum_width()
-
-    def undock_plot_to_window(self, plot_widget=None) -> bool:
-        """Move a docked plot into a floating window."""
-        from ..plot import PlotDialog, PlotWidget
-
-        mgr = self._workspace()
-        if mgr is None:
-            return False
-        if plot_widget is None:
-            pane = mgr.preferred_pane()
-            plot_widget = pane.plot_widget() if pane is not None else None
-            if plot_widget is None:
-                for p in mgr.plot_panes():
-                    if p.plot_widget() is not None:
-                        plot_widget = p.plot_widget()
-                        break
-        if plot_widget is None:
-            return False
-
-        factory = getattr(plot_widget, "create_floating_dialog", None)
-        if callable(factory):
-            self._release_plot_widget_from_panel_host(plot_widget)
-            dlg = factory(self)
-            self._prepare_tool_dialog(dlg)
-            if isinstance(dlg, PlotDialog):
-                self._register_plot_dialog(dlg)
-            elif not self._bind_undocked_browser_dialog(dlg):
-                self._register_floating_result_dialog(dlg)
-            plot_widget.show()
-            dlg.show()
-            dlg.raise_()
-            dlg.activateWindow()
-            sync_footer = getattr(plot_widget, "_sync_footer_chrome", None)
-            if callable(sync_footer):
-                sync_footer()
-            kind = self._docked_widget_kind(plot_widget)
-            self.status_label.setText(f"{kind}: moved to separate window.")
-            mark = getattr(self, "_mark_session_dirty", None)
-            if callable(mark):
-                mark()
-            return True
-
-        if not isinstance(plot_widget, PlotWidget):
-            self._release_plot_widget_from_panel_host(plot_widget)
-            return False
-
-        self._release_plot_widget_from_panel_host(plot_widget)
-        dlg = PlotDialog(self, plot_widget=plot_widget)
-        self._register_plot_dialog(dlg)
-        self._prepare_tool_dialog(dlg)
-        dlg.show()
-        dlg.raise_()
-        dlg.activateWindow()
-        self.status_label.setText("Plot: moved to separate window.")
-        mark = getattr(self, "_mark_session_dirty", None)
-        if callable(mark):
-            mark()
-        return True

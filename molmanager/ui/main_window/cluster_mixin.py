@@ -19,17 +19,13 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMessageBox
+
+from ..analysis_job_support import ensure_table_ready_for_tool, report_cancellable_job_failure
 
 
 class ClusterMixin:
     def open_cluster_dialog(self) -> None:
-        if not self.headers:
-            QMessageBox.information(
-                self,
-                "Cluster",
-                "Open a file or start a session first.",
-            )
+        if not ensure_table_ready_for_tool(self, "Cluster"):
             return
         from ..dialogs import ClusterDialog
 
@@ -57,19 +53,22 @@ class ClusterMixin:
         self._cluster_dialog = None
 
     def on_cluster_failed(self, message: str) -> None:
-        self._finish_tool_progress("Clustering")
-        if message == "Cancelled.":
-            self.status_label.setText(self._consume_partial_results_notice() or "Cancelled.")
-        else:
-            self.status_label.setText("Ready.")
-        dlg = getattr(self, "_cluster_dialog", None)
-        if dlg is not None:
-            try:
-                dlg.enable_run_after_job()
-            except RuntimeError:
-                pass
-        if message and message != "Cancelled.":
-            QMessageBox.warning(self, "Cluster", message or "Clustering failed.")
+        def _reenable_run() -> None:
+            dlg = getattr(self, "_cluster_dialog", None)
+            if dlg is not None:
+                try:
+                    dlg.enable_run_after_job()
+                except RuntimeError:
+                    pass
+
+        report_cancellable_job_failure(
+            self,
+            "Cluster",
+            message,
+            progress_label="Clustering",
+            failure_fallback="Clustering failed.",
+            after_finish=_reenable_run,
+        )
 
     def on_cluster_explore_finished(self, results: list) -> None:
         self._finish_tool_progress("Exploring clusters")

@@ -969,6 +969,17 @@ class PrepareStructuresMixin:
         self._start_render_2d_batch(renders, row_by_oid, "Structure")
         return True
 
+    def _auto_render2d_blocks_workspace_reveal(self, n_rows: int | None = None) -> bool:
+        """True when ingest/session should wait for auto Render 2D before showing the table.
+
+        Larger loads use progressive reveal: show the workspace immediately while
+        Structure images continue in the background (see
+        ``structure_render_lazy_after_ingest_min_rows``).
+        """
+        cfg = load_config()
+        n = int(n_rows if n_rows is not None else self._table_model.rowCount())
+        return n < int(cfg.structure_render_lazy_after_ingest_min_rows)
+
     def _restore_render2d_batch_environment(self) -> None:
         """Re-enable sorting and thread pool after a Render 2D run (or if cleared mid-batch)."""
         self._render2d_accept_session = None

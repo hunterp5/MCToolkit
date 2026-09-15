@@ -8,14 +8,16 @@
 #
 # MolManager is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
+from molmanager.ui.compound_table_model import CompoundTableModel
+from molmanager.ui.filter_proxy_model import FilterProxyModel
 from molmanager.ui.filters.cards import TextFilterCard
 from molmanager.ui.main_window import ChemicalTableApp
 
@@ -41,3 +43,24 @@ def test_proxy_filter_mode_reduces_visible_rows(qapp):  # noqa: ARG001
     assert proxy.rowCount() == 2
     w.close()
 
+
+def test_filter_proxy_row_accept_bitmap(qapp):  # noqa: ARG001
+    model = CompoundTableModel(["ID_HIDDEN", "Structure", "SMILES"])
+    model.append_rows_batch(
+        [
+            (10, {"SMILES": "C"}),
+            (20, {"SMILES": "CC"}),
+            (30, {"SMILES": "CCC"}),
+        ]
+    )
+    proxy = FilterProxyModel()
+    proxy.setSourceModel(model)
+    assert proxy.set_visible_oids(frozenset({20})) is True
+    assert proxy._row_accept is not None
+    assert list(proxy._row_accept) == [0, 1, 0]
+    assert proxy.rowCount() == 1
+    assert proxy.mapToSource(proxy.index(0, 0)).row() == 1
+    assert proxy.set_visible_oids(frozenset({20})) is False
+    assert proxy.set_visible_oids(None) is True
+    assert proxy._row_accept is None
+    assert proxy.rowCount() == 3

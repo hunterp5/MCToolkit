@@ -88,6 +88,31 @@ def test_replot_walks_plot_hosts_not_just_selection_views(qapp):  # noqa: ARG001
     w.close()
 
 
+def test_visible_source_rows_cache_reused_until_invalidated(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    _setup_two_row_mw_table(w)
+    w._apply_filters_impl_sync(None)
+    first = w._visible_source_row_indices()
+    second = w._visible_source_row_indices()
+    assert first == [0]
+    assert first is second
+    w._invalidate_visible_source_rows_cache()
+    third = w._visible_source_row_indices()
+    assert third == [0]
+    assert third is not first
+    w.close()
+
+
+def test_unchanged_filter_visibility_skips_forced_replot(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    _setup_two_row_mw_table(w)
+    w._apply_filters_impl_sync(None)
+    w._plot_replot_timer.stop()
+    w._apply_filters_impl_sync(None)
+    assert not w._plot_replot_timer.isActive()
+    w.close()
+
+
 def test_structure_paint_data_change_does_not_schedule_replot(qapp):  # noqa: ARG001
     w = ChemicalTableApp()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
