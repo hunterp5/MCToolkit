@@ -26,6 +26,7 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -34,6 +35,7 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -42,6 +44,8 @@ from rdkit import Chem
 
 from ..dockable_plot import hide_plot_options_dialog
 from ...dimensionality_reduction import (
+    EMBEDDING_PCA_DIM,
+    EMBEDDING_PCA_DIM_MAX,
     DimensionReductionResult,
     is_fingerprint_bitcount_column,
     subset_dimension_reduction_result,
@@ -162,6 +166,49 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         self.standardize_cb = QCheckBox("Standardize features (zero mean, unit variance)")
         self.standardize_cb.setChecked(True)
         self._opts_form.addRow(self.standardize_cb)
+        self._pca_preprocess_cb: QCheckBox | None = None
+        self._pca_dim_spin: QSpinBox | None = None
+        self._pca_var_spin: QDoubleSpinBox | None = None
+        self._pca_whiten_cb: QCheckBox | None = None
+        if self._method != "pca":
+            self._pca_preprocess_cb = QCheckBox("PCA-compress before embedding")
+            self._pca_preprocess_cb.setChecked(True)
+            self._pca_preprocess_cb.setToolTip(
+                "Project wide inputs (typical fingerprints) to principal components "
+                "before t-SNE / UMAP / SOM. On by default: faster, and local neighborhoods "
+                "are usually preserved. Turn off to embed the raw features."
+            )
+            self._pca_preprocess_cb.toggled.connect(self._sync_pca_preprocess_controls)
+            self._opts_form.addRow(self._pca_preprocess_cb)
+
+            self._pca_dim_spin = QSpinBox()
+            self._pca_dim_spin.setRange(2, EMBEDDING_PCA_DIM_MAX)
+            self._pca_dim_spin.setValue(EMBEDDING_PCA_DIM)
+            self._pca_dim_spin.setToolTip(
+                "Maximum principal components to keep. Compression runs when the matrix "
+                "is wider than this, or when a variance target is set."
+            )
+            self._opts_form.addRow("PCA components:", self._pca_dim_spin)
+
+            self._pca_var_spin = QDoubleSpinBox()
+            self._pca_var_spin.setRange(0.0, 99.0)
+            self._pca_var_spin.setDecimals(0)
+            self._pca_var_spin.setSuffix(" %")
+            self._pca_var_spin.setSpecialValueText("off")
+            self._pca_var_spin.setValue(0)
+            self._pca_var_spin.setToolTip(
+                "Keep the fewest PCs that reach this explained variance, up to PCA components. "
+                "Off uses the component count only."
+            )
+            self._opts_form.addRow("PCA min. variance:", self._pca_var_spin)
+
+            self._pca_whiten_cb = QCheckBox("Whiten PCA components")
+            self._pca_whiten_cb.setChecked(False)
+            self._pca_whiten_cb.setToolTip(
+                "Scale each kept component to unit variance (sklearn whiten)."
+            )
+            self._opts_form.addRow(self._pca_whiten_cb)
+            self._sync_pca_preprocess_controls()
 
         trail = self._trailing_opts_layout
         run_row = QHBoxLayout()
@@ -270,8 +317,67 @@ class DimensionReductionPanel(DockableResultPlotPanel):
     def _method_params(self) -> dict:
         raise NotImplementedError
 
+    def _embedding_pca_params(self) -> dict:
+        """PCA preprocess kwargs for t-SNE / UMAP / SOM (``pca_dim`` 0 disables)."""
+        if self._pca_preprocess_cb is None:
+            return {}
+        dim = (
+            int(self._pca_dim_spin.value()) if self._pca_dim_spin is not None else EMBEDDING_PCA_DIM
+        )
+        on = bool(self._pca_preprocess_cb.isChecked())
+        var_pct = float(self._pca_var_spin.value()) if self._pca_var_spin is not None else 0.0
+        whiten = bool(self._pca_whiten_cb.isChecked()) if self._pca_whiten_cb is not None else False
+        return {
+            "pca_dim": dim if on else 0,
+            "pca_components": dim,
+            "pca_min_variance": (var_pct / 100.0) if on else 0.0,
+            "pca_whiten": whiten if on else False,
+        }
+
+    def _sync_pca_preprocess_controls(self) -> None:
+        on = self._pca_preprocess_cb is not None and self._pca_preprocess_cb.isChecked()
+        for widget in (self._pca_dim_spin, self._pca_var_spin, self._pca_whiten_cb):
+            if widget is not None:
+                widget.setEnabled(on)
+
+    def _job_method_params(self) -> dict:
+        params = dict(self._method_params())
+        params.update(self._embedding_pca_params())
+        return params
+
     def _apply_method_params(self, params: dict | None) -> None:
         return None
+
+    def _apply_pca_preprocess_param(self, params: dict) -> None:
+        cb = self._pca_preprocess_cb
+        if cb is None:
+            return
+        if "pca_dim" in params:
+            try:
+                dim = int(params.get("pca_dim"))
+            except (TypeError, ValueError):
+                dim = None
+            else:
+                cb.setChecked(dim > 0)
+        spin_val = params.get("pca_components", params.get("pca_dim"))
+        if self._pca_dim_spin is not None and spin_val is not None:
+            try:
+                n = int(spin_val)
+            except (TypeError, ValueError):
+                n = 0
+            if n > 0:
+                self._pca_dim_spin.setValue(max(2, min(EMBEDDING_PCA_DIM_MAX, n)))
+        if self._pca_var_spin is not None and "pca_min_variance" in params:
+            try:
+                frac = float(params.get("pca_min_variance") or 0)
+            except (TypeError, ValueError):
+                frac = 0.0
+            if frac > 1.0:
+                frac = frac / 100.0
+            self._pca_var_spin.setValue(max(0.0, min(99.0, frac * 100.0)))
+        if self._pca_whiten_cb is not None and "pca_whiten" in params:
+            self._pca_whiten_cb.setChecked(bool(params.get("pca_whiten")))
+        self._sync_pca_preprocess_controls()
 
     def collect_session_state(self) -> dict:
         from ...dimensionality_reduction import result_to_dict
@@ -285,7 +391,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
             "struct_src": self.struct_src_combo.currentText(),
             "standardize": bool(self.standardize_cb.isChecked()),
             "only_selected": bool(self.only_selected_cb.isChecked()),
-            "method_params": dict(self._method_params()),
+            "method_params": dict(self._job_method_params()),
             **self._collect_encoding_chrome_state(),
         }
         if self._last_result is not None:
@@ -317,6 +423,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         params = state.get("method_params")
         if isinstance(params, dict):
             self._apply_method_params(params)
+            self._apply_pca_preprocess_param(params)
         self._on_fp_selection_changed()
         raw_result = state.get("result")
         if isinstance(raw_result, dict):
@@ -554,7 +661,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
             "only_sel": only_sel,
             "color_col": color_col,
             "struct_src": self.struct_src_combo.currentText() if use_fp else None,
-            "method_params": dict(self._method_params()),
+            "method_params": dict(self._job_method_params()),
             "standardize": self.standardize_cb.isChecked(),
             "fingerprint": self.fp_combo.currentText() if use_fp else None,
         }

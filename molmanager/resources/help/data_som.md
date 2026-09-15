@@ -26,6 +26,7 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 - **Map width**, **Map height**, **Epochs**.
 - **Learning rate**, **Sigma**, **Point jitter**.
 - **Max points**, **Random seed**.
+- **PCA-compress before embedding** - on by default. **PCA components** (default 50), optional **PCA min. variance**, and **Whiten**. Turn the checkbox off to train on raw columns/fingerprints.
 - **Run SOM**.
 - Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
 
@@ -45,4 +46,4 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 
 ## Tips and limits
 
-Grid size vs library size matters - too small collapses distinctions. Training epochs increase cost. Inputs wider than 50 features (typical fingerprints) are PCA-compressed to 50 dimensions before training. Jitter helps separate overlapping points visually but is not chemical distance. Table filters hide points after Run; the embedding is fit on all rows (or **Selected Rows Only**).
+Grid size vs library size matters - too small collapses distinctions. Training epochs increase cost. Wide inputs (typical fingerprints) are PCA-compressed before training unless you uncheck that option; raise **PCA components** or set a variance target if 50 PCs drop too much structure. Jitter helps separate overlapping points visually but is not chemical distance. Table filters hide points after Run; the embedding is fit on all rows (or **Selected Rows Only**).

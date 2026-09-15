@@ -16,7 +16,13 @@
 
 """Dimred Plot Options open before the empty plot window."""
 
-from molmanager.ui.dialogs.dimensionality_reduction import PCADialog
+from molmanager.dimensionality_reduction import EMBEDDING_PCA_DIM
+from molmanager.ui.dialogs.dimensionality_reduction import (
+    PCADialog,
+    SOMPlotPanel,
+    TSNEPlotPanel,
+    UMAPPlotPanel,
+)
 
 
 def test_present_initial_ui_opens_options_not_plot(qapp):
@@ -62,6 +68,64 @@ def test_reveal_plot_window_hides_options(qapp):
         assert dlg.isVisible()
         assert not panel._opts_dialog.isVisible()
     finally:
+        dlg.close()
+        dlg.deleteLater()
+        qapp.processEvents()
+
+
+def _close_dimred_panel(panel, qapp) -> None:
+    opts = getattr(panel, "_opts_dialog", None)
+    if opts is not None:
+        opts.hide()
+        opts.close()
+        opts.deleteLater()
+    panel.close()
+    panel.deleteLater()
+    qapp.processEvents()
+
+
+def test_embedding_pca_compress_option_defaults_on(qapp):
+    for panel_cls in (TSNEPlotPanel, UMAPPlotPanel, SOMPlotPanel):
+        panel = panel_cls(None)
+        try:
+            cb = panel._pca_preprocess_cb
+            assert cb is not None
+            assert cb.isChecked()
+            assert panel._job_method_params()["pca_dim"] == EMBEDDING_PCA_DIM
+            assert panel._pca_dim_spin is not None
+            assert panel._pca_dim_spin.value() == EMBEDDING_PCA_DIM
+            assert panel._pca_var_spin is not None
+            assert panel._pca_var_spin.value() == 0
+            assert panel._pca_whiten_cb is not None
+            assert not panel._pca_whiten_cb.isChecked()
+            panel._pca_dim_spin.setValue(25)
+            panel._pca_var_spin.setValue(90)
+            panel._pca_whiten_cb.setChecked(True)
+            params = panel._job_method_params()
+            assert params["pca_dim"] == 25
+            assert params["pca_min_variance"] == 0.9
+            assert params["pca_whiten"] is True
+            cb.setChecked(False)
+            assert not panel._pca_dim_spin.isEnabled()
+            assert panel._job_method_params()["pca_dim"] == 0
+            panel._apply_pca_preprocess_param(
+                {"pca_dim": 40, "pca_components": 40, "pca_min_variance": 0.8, "pca_whiten": False}
+            )
+            assert cb.isChecked()
+            assert panel._pca_dim_spin.value() == 40
+            assert panel._pca_var_spin.value() == 80
+            assert not panel._pca_whiten_cb.isChecked()
+        finally:
+            _close_dimred_panel(panel, qapp)
+
+
+def test_pca_plot_has_no_preprocess_checkbox(qapp):
+    dlg = PCADialog(None)
+    try:
+        assert dlg._panel._pca_preprocess_cb is None
+        assert "pca_dim" not in dlg._panel._job_method_params()
+    finally:
+        dlg._panel._opts_dialog.hide()
         dlg.close()
         dlg.deleteLater()
         qapp.processEvents()

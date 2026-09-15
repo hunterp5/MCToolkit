@@ -25,6 +25,7 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 - **Size by**, marker **Min size** / **Max size** (pixels).
 - **n_neighbors**, **min_dist**.
 - **Max points**, **Random seed**.
+- **PCA-compress before embedding** - on by default. **PCA components** (default 50), optional **PCA min. variance**, and **Whiten**. Turn the checkbox off to embed raw columns/fingerprints.
 - **Run UMAP**.
 - Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
 
@@ -44,4 +45,4 @@ Feature columns and/or fingerprints from a structure source; optional **Selected
 
 ## Tips and limits
 
-Parameter changes alter tightness of clusters - tune deliberately. Requires the UMAP dependency where applicable. Subsampling via **Max points** affects rare chemotypes. Inputs wider than 50 features (typical fingerprints) are PCA-compressed to 50 dimensions before embedding. Table filters hide points after Run; the embedding is fit on all rows (or **Selected Rows Only**).
+Parameter changes alter tightness of clusters - tune deliberately. Requires the UMAP dependency where applicable. Subsampling via **Max points** affects rare chemotypes. Wide inputs (typical fingerprints) are PCA-compressed before embedding unless you uncheck that option; raise **PCA components** or set a variance target if 50 PCs drop too much structure. Table filters hide points after Run; the embedding is fit on all rows (or **Selected Rows Only**).

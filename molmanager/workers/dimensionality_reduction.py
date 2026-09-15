@@ -112,6 +112,17 @@ def _compute(params: dict) -> DimensionReductionResult:
     oids_sub = built.oids
     df_sub = df.iloc[built.df_positions].reset_index(drop=True)
     fp_note = built.summary + "\n\n"
+    pca_dim = params.get("pca_dim")
+    if pca_dim is not None:
+        try:
+            pca_dim = int(pca_dim)
+        except (TypeError, ValueError):
+            pca_dim = None
+    try:
+        pca_min_variance = float(params.get("pca_min_variance") or 0.0)
+    except (TypeError, ValueError):
+        pca_min_variance = 0.0
+    pca_whiten = bool(params.get("pca_whiten", False))
 
     if method == "pca":
         n_components = int(params.get("n_components", 2))
@@ -137,6 +148,9 @@ def _compute(params: dict) -> DimensionReductionResult:
             max_iter=int(params.get("max_iter", 1000)),
             random_state=int(params.get("random_state", 42)),
             max_points=params.get("max_points"),
+            pca_dim=pca_dim,
+            pca_min_variance=pca_min_variance,
+            pca_whiten=pca_whiten,
         )
         title = "t-SNE Visualization"
         return build_reduction_result(
@@ -157,6 +171,9 @@ def _compute(params: dict) -> DimensionReductionResult:
             min_dist=float(params.get("min_dist", 0.1)),
             random_state=int(params.get("random_state", 42)),
             max_points=params.get("max_points"),
+            pca_dim=pca_dim,
+            pca_min_variance=pca_min_variance,
+            pca_whiten=pca_whiten,
         )
         title = "UMAP Visualization"
         return build_reduction_result(
@@ -183,6 +200,9 @@ def _compute(params: dict) -> DimensionReductionResult:
             random_state=int(params.get("random_state", 42)),
             max_points=params.get("max_points"),
             jitter=float(params.get("jitter", 0.35)),
+            pca_dim=pca_dim,
+            pca_min_variance=pca_min_variance,
+            pca_whiten=pca_whiten,
         )
         title = "Self-Organizing Map"
         return build_reduction_result(

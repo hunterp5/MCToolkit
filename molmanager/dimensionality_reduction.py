@@ -128,12 +128,15 @@ def _standardize(X: np.ndarray, standardize: bool) -> np.ndarray:
 
 
 EMBEDDING_PCA_DIM = 50
+EMBEDDING_PCA_DIM_MAX = 500
 
 
 def _maybe_pca_preprocess(
     X: np.ndarray,
     *,
     max_dim: int = EMBEDDING_PCA_DIM,
+    min_variance: float = 0.0,
+    whiten: bool = False,
     random_state: int = 42,
 ) -> tuple[np.ndarray, str]:
     """Project high-D features (e.g. 2048-bit fingerprints) before t-SNE / UMAP / SOM.
@@ -146,16 +149,46 @@ def _maybe_pca_preprocess(
         return X, ""
     n_samples, n_features = X.shape
     cap = max(2, cap)
-    if n_features <= cap:
+    var_target = float(min_variance or 0.0)
+    if var_target > 1.0:
+        var_target = var_target / 100.0
+    var_target = min(max(var_target, 0.0), 0.99)
+    if n_features <= cap and var_target <= 0.0 and not whiten:
         return X, ""
-    k = min(cap, n_samples, n_features)
-    if k < 2:
+    k_fit = min(n_samples, n_features)
+    if n_features > cap:
+        k_fit = min(k_fit, cap)
+    if k_fit < 2:
         return X, ""
     from sklearn.decomposition import PCA
 
-    reduced = PCA(n_components=k, random_state=int(random_state)).fit_transform(X)
-    note = f"PCA-preprocessed to {k} components (from {n_features} features).\n"
-    return np.asarray(reduced, dtype=float), note
+    pca = PCA(n_components=k_fit, whiten=bool(whiten), random_state=int(random_state))
+    transformed = pca.fit_transform(X)
+    ratios = np.asarray(pca.explained_variance_ratio_, dtype=float)
+    cum = np.cumsum(ratios)
+    if var_target > 0.0:
+        k = int(np.searchsorted(cum, var_target) + 1)
+        k = max(2, min(k, k_fit))
+    else:
+        k = k_fit
+    if k >= n_features and not whiten:
+        return X, ""
+    reduced = np.asarray(transformed[:, :k], dtype=float)
+    if var_target <= 0.0 and not whiten:
+        note = f"PCA-preprocessed to {k} components (from {n_features} features).\n"
+        return reduced, note
+    kept = 100.0 * float(cum[k - 1])
+    parts = [
+        f"PCA-preprocessed to {k} components ({kept:.1f}% variance, from {n_features} features"
+    ]
+    if var_target > 0.0:
+        parts.append(f", target {100.0 * var_target:.0f}%")
+    if n_features > cap:
+        parts.append(f", cap {cap}")
+    if whiten:
+        parts.append(", whitened")
+    note = "".join(parts) + ").\n"
+    return reduced, note
 
 
 def _tsne_init_method(n_features: int) -> str:
@@ -251,6 +284,8 @@ def run_tsne(
     random_state: int = 42,
     max_points: int | None = 2500,
     pca_dim: int | None = None,
+    pca_min_variance: float = 0.0,
+    pca_whiten: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, str]:
     from sklearn.manifold import TSNE
 
@@ -264,7 +299,13 @@ def run_tsne(
 
     Xs = _standardize(X[used_idx], standardize)
     cap = EMBEDDING_PCA_DIM if pca_dim is None else int(pca_dim)
-    Xs, pca_note = _maybe_pca_preprocess(Xs, max_dim=cap, random_state=int(random_state))
+    Xs, pca_note = _maybe_pca_preprocess(
+        Xs,
+        max_dim=cap,
+        min_variance=float(pca_min_variance or 0.0),
+        whiten=bool(pca_whiten),
+        random_state=int(random_state),
+    )
     n_used = Xs.shape[0]
     perp = float(perplexity)
     perp = max(5.0, min(perp, float(n_used - 1)))
@@ -303,6 +344,8 @@ def run_umap(
     random_state: int = 42,
     max_points: int | None = 2500,
     pca_dim: int | None = None,
+    pca_min_variance: float = 0.0,
+    pca_whiten: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, str]:
     try:
         import umap
@@ -321,7 +364,13 @@ def run_umap(
 
     Xs = _standardize(X[used_idx], standardize)
     cap = EMBEDDING_PCA_DIM if pca_dim is None else int(pca_dim)
-    Xs, pca_note = _maybe_pca_preprocess(Xs, max_dim=cap, random_state=int(random_state))
+    Xs, pca_note = _maybe_pca_preprocess(
+        Xs,
+        max_dim=cap,
+        min_variance=float(pca_min_variance or 0.0),
+        whiten=bool(pca_whiten),
+        random_state=int(random_state),
+    )
     n_used = Xs.shape[0]
     n_neigh = max(2, min(int(n_neighbors), n_used - 1))
     reducer = umap.UMAP(
@@ -356,6 +405,8 @@ def run_som(
     max_points: int | None = 2500,
     jitter: float = 0.35,
     pca_dim: int | None = None,
+    pca_min_variance: float = 0.0,
+    pca_whiten: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, str]:
     """
     Train a rectangular Kohonen self-organizing map and return BMU grid coordinates.
@@ -373,7 +424,13 @@ def run_som(
 
     Xs = _standardize(X[used_idx], standardize).astype(np.float64, copy=False)
     cap = EMBEDDING_PCA_DIM if pca_dim is None else int(pca_dim)
-    Xs, pca_note = _maybe_pca_preprocess(Xs, max_dim=cap, random_state=int(random_state))
+    Xs, pca_note = _maybe_pca_preprocess(
+        Xs,
+        max_dim=cap,
+        min_variance=float(pca_min_variance or 0.0),
+        whiten=bool(pca_whiten),
+        random_state=int(random_state),
+    )
     Xs = np.asarray(Xs, dtype=np.float64)
     n_used, n_features = Xs.shape
     gw = max(2, int(grid_width))

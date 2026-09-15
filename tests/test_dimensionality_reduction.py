@@ -21,6 +21,7 @@ import pandas as pd
 import pytest
 
 from molmanager.dimensionality_reduction import (
+    _maybe_pca_preprocess,
     build_reduction_result,
     is_fingerprint_bitcount_column,
     prepare_numeric_matrix,
@@ -170,6 +171,38 @@ def test_low_dim_tsne_skips_pca_preprocess():
     _coords, _used, summary = run_tsne(X, max_iter=250, max_points=None, random_state=0)
     assert "PCA-preprocessed" not in summary
     assert "Features: 4" in summary
+
+
+def test_wide_tsne_can_disable_pca_preprocess():
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(40, 80))
+    _coords, _used, summary = run_tsne(X, max_iter=250, max_points=None, random_state=0, pca_dim=0)
+    assert "PCA-preprocessed" not in summary
+    assert "Features: 80" in summary
+
+
+def test_tsne_custom_pca_component_count():
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(40, 80))
+    _coords, _used, summary = run_tsne(X, max_iter=250, max_points=None, random_state=0, pca_dim=20)
+    assert "PCA-preprocessed to 20 components (from 80 features)." in summary
+    assert "Features: 20" in summary
+
+
+def test_pca_preprocess_variance_target_keeps_few_components():
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(80, 3)) @ rng.normal(size=(3, 100))
+    reduced, note = _maybe_pca_preprocess(X, max_dim=50, min_variance=0.95, random_state=0)
+    assert reduced.shape[1] <= 8
+    assert "target 95%" in note
+
+
+def test_pca_preprocess_whiten_note():
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(60, 80))
+    reduced, note = _maybe_pca_preprocess(X, max_dim=50, whiten=True, random_state=0)
+    assert reduced.shape == (60, 50)
+    assert "whitened" in note
 
 
 def test_high_dim_som_pca_preprocess_note():
