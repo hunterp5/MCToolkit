@@ -45,6 +45,8 @@ class DescriptorsToolsMixin:
         d.show()
 
     def _on_calc_descriptors_dialog_accepted(self, d) -> None:
+        from ...descriptors_3d import int_fns_need_3d
+
         disp, fns = d.get_selected()
         calc_headers = self._unique_table_column_names(disp)
         src = d.src_combo.currentText()
@@ -57,6 +59,11 @@ class DescriptorsToolsMixin:
         oids_list = self._all_oids_in_table_order()
         if allowed is not None:
             oids_list = [o for o in oids_list if o in allowed]
+        confs_by_idx = (
+            self._packed_confs_cells_for_descriptor_job(oids_list, src)
+            if int_fns_need_3d(fns)
+            else {}
+        )
         if not is_s:
             data = []
             for o in oids_list:
@@ -81,12 +88,50 @@ class DescriptorsToolsMixin:
 
         ps = self._tool_progress_state
         self._begin_tool_progress("Calculate descriptors", len(data))
+
+        def _make_calc_worker(ev, d=data, dh=calc_headers, fn=fns, sm=is_s, c=confs_by_idx):
+            return CalcWorker(
+                d,
+                dh,
+                fn,
+                sm,
+                self.signals,
+                cancel_event=ev,
+                progress_state=ps,
+                confs_by_idx=c,
+            )
+
         self.process_queue.enqueue(
             f"Calculate descriptors ({len(data)} rows)",
-            lambda ev, d=data, dh=calc_headers, fn=fns, sm=is_s, sigs=self.signals, p=ps: (
-                CalcWorker(d, dh, fn, sm, sigs, cancel_event=ev, progress_state=p)
-            ),
+            _make_calc_worker,
         )
+
+    def _packed_confs_cells_for_descriptor_job(self, oids, src: str) -> dict[int, str]:
+        """Rehydrated packed ``confs`` / ``superpose`` cells for 3D descriptor rows."""
+        from ...confs_codec import rehydrate_v1_confs_cell, unpack_confs_blocks_json_b64
+
+        preferred: list[str] = []
+        src_h = (src or "").strip()
+        if src_h in ("confs", "superpose") and src_h in self.headers:
+            preferred.append(src_h)
+        for col in ("confs", "superpose"):
+            if col not in preferred and col in self.headers:
+                preferred.append(col)
+        if not preferred:
+            return {}
+        sc = getattr(self, "_confs_blocks_sidecar", {}) or {}
+        out: dict[int, str] = {}
+        for oid in oids:
+            r = self.logical_row_for_oid(int(oid))
+            if r < 0:
+                continue
+            for col in preferred:
+                raw = self._table_model.backing_value_for_row_header(r, col)
+                full = rehydrate_v1_confs_cell(raw, col, int(oid), sc)
+                if unpack_confs_blocks_json_b64(full):
+                    out[int(oid)] = full
+                    break
+        return out
 
     def _calc_writeback_async_min_rows(self) -> int:
         from ...config import load_config

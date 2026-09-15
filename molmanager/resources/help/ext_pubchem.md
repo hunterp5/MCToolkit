@@ -17,6 +17,7 @@ Needs network access to PubChem. Queries start from identifiers/SMILES/structure
 ## Options
 
 - **Lookup / similarity search** - PubChem query modes in the dialog.
+- **Retrieve fields** - CID, IUPAC name, Common Name, Synonyms, InChIKey, structures, physchem, and counts. Common Name is PubChem's preferred name (Title); Synonyms are the ranked synonym list.
 - **Query** - molecule or identifier fields.
 - **Results** - preview list with **Add to table** actions.
 - **Limits** - respect service rate/result caps shown in the UI.

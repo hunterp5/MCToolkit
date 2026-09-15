@@ -61,12 +61,12 @@ def mol_has_3d_coordinates(mol: Chem.Mol | None, *, z_eps: float = 1e-3) -> bool
     if mol is None:
         return False
     try:
-        nconf = int(mol.GetNumConformers())
+        confs = list(mol.GetConformers())
     except Exception:
         return False
-    for cid in range(nconf):
+    for conf in confs:
         try:
-            if conformer_is_3d(mol.GetConformer(cid), z_eps=z_eps):
+            if conformer_is_3d(conf, z_eps=z_eps):
                 return True
         except Exception:
             continue

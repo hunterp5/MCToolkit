@@ -19,6 +19,7 @@ Fingerprint columns use RDKit implementations. The **2D pharmacophore (Gobbi)** 
 ``rdkit.Chem.Pharm2D`` with ``Gobbi_Pharm2D`` (Gobbi & Poppinger, *Perspect. Drug Discov. Des.* 1998).
 Drug-likeness columns that invoke ``medchem_descriptors`` / Uni-pKa cite
 ``molmanager.science_citations`` and the worker module docstrings there.
+**Common Name** and **Synonyms** query PubChem (Title / compound synonyms) via ``name_lookup``.
 """
 
 import logging
@@ -52,6 +53,7 @@ else:
 
 
 from ..config import load_config
+from ..descriptors_3d import DESCRIPTOR_3D_FNS, int_fns_need_3d, mol_for_3d_descriptors
 from ..medchem_descriptors import (
     ab_mps_score,
     cns_mpo_score,
@@ -63,6 +65,11 @@ from ..medchem_descriptors import (
     mol_inchi_key,
     mol_net_formal_charge,
     ro5_pass,
+)
+from ..name_lookup import (
+    lookup_names_for_mols,
+    names_cell_value,
+    split_name_lookup_descriptors,
 )
 from ..ionization import int_fns_need_ionization, microstates_for_mol
 from .ionization_parallel import build_microstates_cache_for_rows
@@ -99,6 +106,24 @@ def _descriptor_output_headers(disp_headers: list, pka_cache_used: bool) -> list
     return headers
 
 
+def _mol_from_binary(blob) -> Chem.Mol | None:
+    if not blob:
+        return None
+    try:
+        return Chem.Mol(blob)
+    except Exception:
+        return None
+
+
+def _unpack_mp_row_item(item) -> tuple[int, object, object, object]:
+    """``(idx, mol_bytes, pka_states[, mol3_bytes])`` from a process-pool batch row."""
+    idx = item[0]
+    mol_bytes = item[1]
+    pka_states = item[2]
+    mol3_bytes = item[3] if len(item) > 3 else b""
+    return int(idx), mol_bytes, pka_states, mol3_bytes
+
+
 def _calc_descriptor_row_values(
     idx: int,
     mol: Chem.Mol | None,
@@ -108,8 +133,13 @@ def _calc_descriptor_row_values(
     *,
     pka_states,
     pka_cache_used: bool,
+    mol_3d: Chem.Mol | None = None,
+    packed_confs: str | None = None,
 ) -> tuple[int, dict[str, str]]:
     row_ctx: dict = {"oid": int(idx)}
+    if mol_3d is None and int_fns_need_3d(int_fns):
+        mol_3d = mol_for_3d_descriptors(mol, packed_cell=packed_confs)
+    row_ctx["mol_3d"] = mol_3d
     if mol is not None and int_fns_need_ionization(int_fns):
         if pka_cache_used:
             row_ctx["ionization_states"] = pka_states
@@ -117,21 +147,72 @@ def _calc_descriptor_row_values(
             row_ctx["ionization_states"] = microstates_for_mol(mol)
     callables = [descriptor_callable_for_int_fn(i_f, smarts_cache, row_ctx) for i_f in int_fns]
     row_data: dict[str, str] = {}
-    if mol:
+    if mol is None and mol_3d is None:
+        for d_n in disp_headers:
+            row_data[d_n] = "N/A"
+    else:
         for d_n, fn in zip(disp_headers, callables):
             try:
                 v = fn(mol)
                 row_data[d_n] = f"{v:.3f}" if isinstance(v, float) else str(v)
             except Exception:
                 row_data[d_n] = "N/A"
-    else:
-        for d_n in disp_headers:
-            row_data[d_n] = "N/A"
     if pka_cache_used:
         from molmanager.ionization import format_pka_values, pka_values_from_states
 
         row_data["pKa"] = format_pka_values(pka_values_from_states(pka_states))
     return int(idx), row_data
+
+
+def _attach_name_lookup_columns(
+    results: list,
+    *,
+    prepared: list,
+    name_disp: list[str],
+    name_fns: list[str],
+    cancelled: bool,
+    cancel_event,
+    progress_state,
+    signals,
+) -> tuple[list, bool]:
+    """Fill PubChem Common Name / Synonyms on descriptor rows (rate-limited, unique structures)."""
+    if not name_fns:
+        return results, cancelled
+    row_map: dict[int, dict[str, str]] = {int(oid): dict(row or {}) for oid, row in results}
+    if not row_map:
+        return results, cancelled
+    ordered = [(int(oid), mol) for oid, mol in prepared if int(oid) in row_map]
+    records: list = [None] * len(ordered)
+    lookup_cancelled = bool(cancelled)
+    if not lookup_cancelled:
+
+        def _on_prog(done: int, total: int) -> None:
+            from ..tool_progress import report_tool_progress
+
+            report_tool_progress(
+                message="Looking up names…",
+                done=done,
+                total=max(1, int(total)),
+                progress_state=progress_state,
+                signals=signals,
+                force_signal=True,
+            )
+
+        records = lookup_names_for_mols(
+            [mol for _oid, mol in ordered],
+            want_common="COMMON_NAME" in name_fns,
+            want_synonyms="SYNONYMS" in name_fns,
+            cancel_event=cancel_event,
+            on_progress=_on_prog,
+        )
+        if cancel_event is not None and cancel_event.is_set():
+            lookup_cancelled = True
+    for (oid, _mol), rec in zip(ordered, records):
+        row = row_map.setdefault(oid, {})
+        for disp, fn in zip(name_disp, name_fns):
+            row[disp] = names_cell_value(rec, fn)
+    out = [(oid, row_map[oid]) for oid, _mol in prepared if int(oid) in row_map]
+    return out, lookup_cancelled
 
 
 def descriptor_callable_for_int_fn(i_f, smarts_cache, row_ctx=None):
@@ -144,6 +225,10 @@ def descriptor_callable_for_int_fn(i_f, smarts_cache, row_ctx=None):
         return lambda m: mol_inchi_key(m) if m is not None else ""
     if i_f == "MOLFORMULA":
         return lambda m: mol_formula(m) if m is not None else ""
+    if i_f == "COMMON_NAME":
+        return lambda m, c=ctx: str((c.get("name_lookup") or {}).get("common_name") or "N/A")
+    if i_f == "SYNONYMS":
+        return lambda m, c=ctx: str((c.get("name_lookup") or {}).get("synonyms") or "N/A")
     if i_f == "RO5_VIOLATIONS":
         return lambda m: lipinski_violations(m) if m is not None else 0
     if i_f == "RO5_PASS":
@@ -160,6 +245,16 @@ def descriptor_callable_for_int_fn(i_f, smarts_cache, row_ctx=None):
         return lambda m: cns_mpo_score(m, ctx.get("ionization_states")) if m is not None else 0.0
     if i_f == "QED":
         return lambda m: QED.qed(m)
+    if i_f in DESCRIPTOR_3D_FNS:
+        fn3 = DESCRIPTOR_3D_FNS[i_f]
+
+        def _calc_3d(_m, f=fn3, c=ctx):
+            work = c.get("mol_3d")
+            if work is None:
+                raise ValueError("no 3d coordinates")
+            return f(work)
+
+        return _calc_3d
     if i_f == "NET_FORMAL_CHARGE":
         return lambda m: mol_net_formal_charge(m) if m is not None else 0
     if i_f.startswith("Count_"):
@@ -186,21 +281,17 @@ def descriptor_callable_for_int_fn(i_f, smarts_cache, row_ctx=None):
 
 def _mp_calc_descriptor_row(args: tuple):
     """One row in a child process — avoids GIL contention with the Qt GUI thread."""
-    idx, mol_bytes, disp_headers, int_fns, pka_states, pka_cache_used = args
-    mol = None
-    if mol_bytes:
-        try:
-            mol = Chem.Mol(mol_bytes)
-        except Exception:
-            mol = None
+    idx, mol_bytes, disp_headers, int_fns, pka_states, pka_cache_used = args[:6]
+    mol3_bytes = args[6] if len(args) > 6 else b""
     return _calc_descriptor_row_values(
         idx,
-        mol,
+        _mol_from_binary(mol_bytes),
         list(disp_headers),
         tuple(int_fns),
         {},
         pka_states=pka_states,
         pka_cache_used=bool(pka_cache_used),
+        mol_3d=_mol_from_binary(mol3_bytes),
     )
 
 
@@ -211,22 +302,18 @@ def _mp_calc_descriptor_batch(args: tuple) -> list[tuple[int, dict[str, str]]]:
     out: list[tuple[int, dict[str, str]]] = []
     headers = list(disp_headers)
     fns = tuple(int_fns)
-    for idx, mol_bytes, pka_states in items:
-        mol = None
-        if mol_bytes:
-            try:
-                mol = Chem.Mol(mol_bytes)
-            except Exception:
-                mol = None
+    for item in items:
+        idx, mol_bytes, pka_states, mol3_bytes = _unpack_mp_row_item(item)
         out.append(
             _calc_descriptor_row_values(
                 idx,
-                mol,
+                _mol_from_binary(mol_bytes),
                 headers,
                 fns,
                 smarts_cache,
                 pka_states=pka_states,
                 pka_cache_used=bool(pka_cache_used),
+                mol_3d=_mol_from_binary(mol3_bytes),
             )
         )
     return out
@@ -253,17 +340,21 @@ def _run_descriptor_process_pool(
     batch_size: int,
     cancel_event: threading.Event | None,
     emit_progress,
+    mol3_by_idx: dict | None = None,
 ) -> tuple[list, bool]:
     """
     Run descriptor rows in child processes (keeps the Qt GUI thread off the GIL).
 
     Returns ``(results, cancelled)``.
     """
-    row_items: list[tuple[int, bytes, object]] = []
+    mol3_map = mol3_by_idx or {}
+    row_items: list[tuple] = []
     for i, mol in prepared:
         blob = mol.ToBinary() if mol is not None else b""
         pka = pka_by_idx.get(i) if pka_cache_used else None
-        row_items.append((i, blob, pka))
+        mol3 = mol3_map.get(int(i))
+        blob3 = mol3.ToBinary() if mol3 is not None else b""
+        row_items.append((i, blob, pka, blob3))
     batch_size = max(1, int(batch_size))
     batch_args: list[tuple] = []
     for start in range(0, len(row_items), batch_size):
@@ -317,12 +408,18 @@ def _run_descriptor_process_pool(
 
 def _calc_descriptor_row_task(args):
     """One row for :class:`CalcWorker` parallel path (thread worker)."""
-    idx, mol, disp_headers, int_fns, smarts_cache, pka_states, pka_cache_used = args
+    idx, mol, disp_headers, int_fns, smarts_cache, pka_states, pka_cache_used = args[:7]
+    mol_3d = args[7] if len(args) > 7 else None
     if mol is not None:
         try:
             mol = Chem.Mol(mol)
         except Exception:
             mol = None
+    if mol_3d is not None:
+        try:
+            mol_3d = Chem.Mol(mol_3d)
+        except Exception:
+            mol_3d = None
     return _calc_descriptor_row_values(
         idx,
         mol,
@@ -331,6 +428,7 @@ def _calc_descriptor_row_task(args):
         smarts_cache,
         pka_states=pka_states,
         pka_cache_used=bool(pka_cache_used),
+        mol_3d=mol_3d,
     )
 
 
@@ -344,6 +442,7 @@ class CalcWorker(QRunnable):
         signals,
         cancel_event: threading.Event | None = None,
         progress_state=None,
+        confs_by_idx: dict | None = None,
     ):
         super().__init__()
         self.data, self.disp_headers, self.int_fns, self.is_smiles, self.signals = (
@@ -355,6 +454,7 @@ class CalcWorker(QRunnable):
         )
         self.cancel_event = cancel_event
         self.progress_state = progress_state
+        self.confs_by_idx = confs_by_idx or {}
 
     def run(self):
         smarts_cache = {}
@@ -380,16 +480,27 @@ class CalcWorker(QRunnable):
                     force_signal=force,
                 )
 
+        need_3d = int_fns_need_3d(self.int_fns)
+        mol3_by_idx: dict[int, Chem.Mol | None] = {}
         for idx, (i, item) in enumerate(self.data):
+            packed = self.confs_by_idx.get(int(i))
             if self.is_smiles:
                 smi = item.strip() if isinstance(item, str) else ""
                 mol = parse_molecule_from_cell_text(smi) if smi else None
+                if packed is None and smi:
+                    packed = smi
             else:
                 mol = item
             prepared.append((i, mol))
+            if need_3d:
+                mol3_by_idx[int(i)] = mol_for_3d_descriptors(mol, packed_cell=packed)
             if idx == 0 or idx + 1 >= nrows or (idx + 1) % prep_emit_step == 0:
                 _emit_prep_progress(idx + 1)
         _emit_prep_progress(len(prepared), force=True)
+
+        local_disp, local_fns, name_disp, name_fns = split_name_lookup_descriptors(
+            self.disp_headers, self.int_fns
+        )
 
         cfg = load_config()
         if cfg.descriptor_threads is not None:
@@ -470,11 +581,12 @@ class CalcWorker(QRunnable):
                                 (
                                     i,
                                     mol,
-                                    self.disp_headers,
-                                    tuple(self.int_fns),
+                                    local_disp,
+                                    tuple(local_fns),
                                     smarts_cache,
                                     pka_by_idx.get(i),
                                     True,
+                                    mol3_by_idx.get(int(i)),
                                 )
                             )
                         )
@@ -483,31 +595,35 @@ class CalcWorker(QRunnable):
                         logger.exception("Descriptor row task failed (partial-cancel path)")
                     _emit_progress(min(done_count, tot))
                 _emit_progress(min(done_count, tot), force=True)
-                emit_partial_results_if_cancelled(
-                    self.signals, "Calculate descriptors", len(results), tot, cancelled
-                )
-                self.signals.calculated.emit(
-                    results, _descriptor_output_headers(self.disp_headers, pka_cache_used)
+                self._emit_descriptor_results(
+                    results,
+                    prepared=prepared,
+                    name_disp=name_disp,
+                    name_fns=name_fns,
+                    cancelled=cancelled,
+                    pka_cache_used=pka_cache_used,
+                    tot=tot,
                 )
                 return
         # ThreadPoolExecutor row tasks so RDKit never runs on the Qt GUI thread and small jobs
         # still use a worker thread instead of the process-queue thread doing every row inline.
         # RDKit descriptor / fingerprint work holds the GIL; child processes keep Qt responsive.
-        mp_min = _descriptor_process_pool_min_rows(cfg, self.int_fns)
-        use_process_pool = nrows >= mp_min and nrows >= 2 and max_workers > 1
+        mp_min = _descriptor_process_pool_min_rows(cfg, local_fns)
+        use_process_pool = bool(local_fns) and nrows >= mp_min and nrows >= 2 and max_workers > 1
         mp_used = False
         if use_process_pool:
             try:
                 results, pool_cancelled = _run_descriptor_process_pool(
                     prepared,
-                    disp_headers=self.disp_headers,
-                    int_fns=tuple(self.int_fns),
+                    disp_headers=local_disp,
+                    int_fns=tuple(local_fns),
                     pka_by_idx=pka_by_idx,
                     pka_cache_used=pka_cache_used,
                     max_workers=max_workers,
                     batch_size=int(cfg.descriptor_process_pool_batch_size),
                     cancel_event=cancel_ev,
                     emit_progress=_emit_progress,
+                    mol3_by_idx=mol3_by_idx,
                 )
                 cancelled = cancelled or pool_cancelled
                 mp_used = True
@@ -519,17 +635,20 @@ class CalcWorker(QRunnable):
             pass
         elif nrows == 0:
             results = []
+        elif not local_fns:
+            results = [(i, {}) for i, _mol in prepared]
         else:
             _emit_progress(0, force=True)
             tasks = [
                 (
                     i,
                     mol,
-                    self.disp_headers,
-                    tuple(self.int_fns),
+                    local_disp,
+                    tuple(local_fns),
                     smarts_cache,
                     pka_by_idx.get(i) if pka_cache_used else None,
                     pka_cache_used,
+                    mol3_by_idx.get(int(i)),
                 )
                 for i, mol in prepared
             ]
@@ -569,6 +688,37 @@ class CalcWorker(QRunnable):
                         _emit_progress(done_count)
             _emit_progress(min(done_count, tot), force=True)
 
+        self._emit_descriptor_results(
+            results,
+            prepared=prepared,
+            name_disp=name_disp,
+            name_fns=name_fns,
+            cancelled=cancelled,
+            pka_cache_used=pka_cache_used,
+            tot=tot,
+        )
+
+    def _emit_descriptor_results(
+        self,
+        results,
+        *,
+        prepared,
+        name_disp,
+        name_fns,
+        cancelled,
+        pka_cache_used,
+        tot,
+    ) -> None:
+        results, cancelled = _attach_name_lookup_columns(
+            results,
+            prepared=prepared,
+            name_disp=name_disp,
+            name_fns=name_fns,
+            cancelled=cancelled,
+            cancel_event=self.cancel_event,
+            progress_state=self.progress_state,
+            signals=self.signals,
+        )
         emit_partial_results_if_cancelled(
             self.signals, "Calculate descriptors", len(results), tot, cancelled
         )

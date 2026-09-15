@@ -32,6 +32,7 @@ from PyQt5.QtWidgets import (
 
 _DESCRIPTOR_TAB_ORDER = (
     "Physiochemical",
+    "3D",
     "Fingerprints",
     "Name",
     "Drug-likeness",
@@ -46,6 +47,8 @@ _NAME_DESCRIPTOR_ORDER = (
     "SMILES String",
     "InChI Key",
     "Molecular formula",
+    "Common Name",
+    "Synonyms",
 )
 
 _PHYSICOCHEMICAL_DESCRIPTOR_ORDER = (
@@ -60,6 +63,7 @@ _PHYSICOCHEMICAL_DESCRIPTOR_ORDER = (
     "TPSA",
 )
 
+from ...descriptors_3d import DESCRIPTOR_3D_ITEMS
 from ...science_citations import descriptor_checkbox_citation_html
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
@@ -110,6 +114,8 @@ class PropertyDialog(QDialog):
                 "SMILES String": "SMILES",
                 "InChI Key": "INCHIKEY",
                 "Molecular formula": "MOLFORMULA",
+                "Common Name": "COMMON_NAME",
+                "Synonyms": "SYNONYMS",
             },
             "Drug-likeness": {
                 "QED Score": "QED",
@@ -161,6 +167,7 @@ class PropertyDialog(QDialog):
                 "Max Abs Partial Charge": "MaxAbsPartialCharge",
                 "Min Abs Partial Charge": "MinAbsPartialCharge",
             },
+            "3D": dict(DESCRIPTOR_3D_ITEMS),
         }
 
         from ...rdkit_fingerprints import descriptor_fingerprint_categories
@@ -176,6 +183,16 @@ class PropertyDialog(QDialog):
             scroll.setWidgetResizable(True)
             tab = QWidget()
             tab_lyt = QVBoxLayout(tab)
+            if cat_name == "3D":
+                note = QLabel(
+                    "Uses 3D coordinates from the confs column (or superpose), or from the "
+                    "target molecule when it already has a 3D conformer. Rows without 3D "
+                    "write N/A. Values are for the lowest-energy conformer (MMFF94, UFF "
+                    "fallback). Generate Conformers first if the table has only 2D structures."
+                )
+                note.setWordWrap(True)
+                note.setStyleSheet("color: palette(mid);")
+                tab_lyt.addWidget(note)
             if cat_name == "Physiochemical":
                 ordered_items = [
                     (disp, props[disp])
@@ -186,6 +203,8 @@ class PropertyDialog(QDialog):
                 ordered_items = [
                     (disp, props[disp]) for disp in _NAME_DESCRIPTOR_ORDER if disp in props
                 ]
+            elif cat_name == "3D":
+                ordered_items = list(DESCRIPTOR_3D_ITEMS)
             else:
                 ordered_items = sorted(props.items(), key=lambda kv: kv[0].casefold())
             for disp, internal in ordered_items:

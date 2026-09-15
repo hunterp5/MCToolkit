@@ -42,10 +42,14 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...name_lookup import names_from_title_and_synonyms
 from ...utils import morgan_tanimoto_to_query
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 from ..strings import COLUMN_TANIMOTO_SIMILARITY
 from ..threadpool_access import start_runnable_on_app_pool
+
+FIELD_COMMON_NAME = "Common Name"
+FIELD_SYNONYMS = "Synonyms"
 
 
 @dataclass(frozen=True)
@@ -161,14 +165,17 @@ class _PubChemBatchWorker(QRunnable):
                 tc = morgan_tanimoto_to_query(q, row_smi)
                 if not pubchem_hit_passes_tanimoto_threshold(tc, min_t):
                     logs.append(
-                        f"{row_smi} | skip (Tanimoto "
-                        f"{tc:.4f} < {min_t:.4f})" if tc is not None else f"{row_smi} | skip (no Tanimoto score)"
+                        f"{row_smi} | skip (Tanimoto {tc:.4f} < {min_t:.4f})"
+                        if tc is not None
+                        else f"{row_smi} | skip (no Tanimoto score)"
                     )
                     continue
                 fields[COLUMN_TANIMOTO_SIMILARITY] = f"{tc:.4f}"
                 cid = getattr(comp, "cid", None)
                 results.append(
-                    PubChemResult(cid=int(cid) if cid is not None else None, smiles=row_smi, fields=fields)
+                    PubChemResult(
+                        cid=int(cid) if cid is not None else None, smiles=row_smi, fields=fields
+                    )
                 )
                 logs.append(f"{row_smi} | OK | CID={cid} | Tanimoto={tc:.4f}")
             results.sort(key=_pubchem_similarity_sort_key, reverse=True)
@@ -194,7 +201,11 @@ class _PubChemBatchWorker(QRunnable):
             fields = _extract_medchem_fields(comp, selected=self.selected_fields)
             cid = getattr(comp, "cid", None)
             row_smi = _compound_table_smiles(comp, smi)
-            results.append(PubChemResult(cid=int(cid) if cid is not None else None, smiles=row_smi, fields=fields))
+            results.append(
+                PubChemResult(
+                    cid=int(cid) if cid is not None else None, smiles=row_smi, fields=fields
+                )
+            )
             logs.append(f"{row_smi} | OK | CID={cid}")
         self.signals.finished.emit(results, logs)
 
@@ -203,18 +214,17 @@ _PUBCHEM_FIELD_DEFS: list[tuple[str, str, str, str]] = [
     # (field_key, label, pubchempy attribute, group)
     ("CID", "CID", "cid", "Identifiers / names"),
     ("IUPAC", "IUPAC name", "iupac_name", "Identifiers / names"),
+    (FIELD_COMMON_NAME, "Common Name", "", "Identifiers / names"),
+    (FIELD_SYNONYMS, "Synonyms", "synonyms", "Identifiers / names"),
     ("InChIKey", "InChIKey", "inchikey", "Identifiers / names"),
-
     # PubChemPy: canonical_smiles / isomeric_smiles deprecated → connectivity_smiles / smiles
     ("CanonicalSMILES", "Connectivity SMILES (canonical)", "connectivity_smiles", "Structures"),
     ("IsomericSMILES", "Isomeric SMILES", "smiles", "Structures"),
     ("MolecularFormula", "Molecular formula", "molecular_formula", "Structures"),
-
     ("MolecularWeight", "Molecular weight", "molecular_weight", "PhysChem"),
     ("XlogP", "XlogP", "xlogp", "PhysChem"),
     ("TPSA", "tPSA", "tpsa", "PhysChem"),
     ("Charge", "Formal charge", "charge", "PhysChem"),
-
     ("HBD", "H-bond donors (HBD)", "hbond_donor_count", "Counts / topology"),
     ("HBA", "H-bond acceptors (HBA)", "hbond_acceptor_count", "Counts / topology"),
     ("RotBonds", "Rotatable bonds", "rotatable_bond_count", "Counts / topology"),
@@ -222,6 +232,43 @@ _PUBCHEM_FIELD_DEFS: list[tuple[str, str, str, str]] = [
     ("RingCount", "Ring count", "ring_count", "Counts / topology"),
     ("Complexity", "Complexity", "complexity", "Counts / topology"),
 ]
+
+
+def _compound_title(comp) -> str:
+    """PubChem preferred name (Title) for a PubChemPy ``Compound``."""
+    cid = getattr(comp, "cid", None)
+    if cid is None:
+        return ""
+    try:
+        import pubchempy as pcp
+
+        rows = pcp.get_properties(["Title"], int(cid), "cid") or []
+    except Exception:
+        return ""
+    if not rows or not isinstance(rows[0], dict):
+        return ""
+    return str(rows[0].get("Title") or "").strip()
+
+
+def _compound_synonyms(comp) -> list[str]:
+    """Ranked PubChem synonyms; extra PUG request, cached on the Compound."""
+    try:
+        raw = getattr(comp, "synonyms", None)
+    except Exception:
+        return []
+    if not raw:
+        return []
+    if isinstance(raw, (list, tuple)):
+        return [str(x) for x in raw]
+    return [str(raw)]
+
+
+def _names_from_compound(comp, *, want_common: bool, want_synonyms: bool):
+    title = _compound_title(comp) if want_common else ""
+    syns: list[str] = []
+    if want_synonyms or (want_common and not title):
+        syns = _compound_synonyms(comp)
+    return names_from_title_and_synonyms(title, syns)
 
 
 def _extract_medchem_fields(comp, *, selected: list[str] | None = None) -> dict[str, str]:
@@ -236,15 +283,25 @@ def _extract_medchem_fields(comp, *, selected: list[str] | None = None) -> dict[
 
     out: dict[str, str] = {}
     selected_set = set(selected) if selected else {k for (k, _, _, _) in _PUBCHEM_FIELD_DEFS}
+    want_common = FIELD_COMMON_NAME in selected_set
+    want_synonyms = FIELD_SYNONYMS in selected_set
     for key, _label, attr, _group in _PUBCHEM_FIELD_DEFS:
-        if key not in selected_set:
+        if key not in selected_set or key in {FIELD_COMMON_NAME, FIELD_SYNONYMS}:
             continue
         out[key] = g(attr)
+    if want_common or want_synonyms:
+        names = _names_from_compound(comp, want_common=want_common, want_synonyms=want_synonyms)
+        if want_common:
+            out[FIELD_COMMON_NAME] = names.common_name
+        if want_synonyms:
+            out[FIELD_SYNONYMS] = names.synonyms
     return {k: v for k, v in out.items() if v != ""}
 
 
 class PubChemDialog(QDialog):
-    def __init__(self, parent=None, *, initial_smiles: list[str] | None = None, auto_query: bool = False):
+    def __init__(
+        self, parent=None, *, initial_smiles: list[str] | None = None, auto_query: bool = False
+    ):
         super().__init__(parent)
         self.parent_app = parent
         self.setWindowTitle("External — PubChem query")
@@ -293,7 +350,9 @@ class PubChemDialog(QDialog):
         self.smiles.setPlaceholderText("Paste SMILES here, or use the Sketcher button…")
         row.addWidget(self.smiles, 1)
         self.btn_query = QPushButton("Query")
-        self.btn_query.setToolTip("Run PubChem lookup for the SMILES above, or for selected rows if “Only Query Selected” is checked.")
+        self.btn_query.setToolTip(
+            "Run PubChem lookup for the SMILES above, or for selected rows if “Only Query Selected” is checked."
+        )
         self.btn_query.clicked.connect(self._run_query)
         row.addWidget(self.btn_query)
         self.chk_only_selected = QCheckBox("Only Query Selected")
@@ -334,7 +393,7 @@ class PubChemDialog(QDialog):
             gb = QGroupBox(group_name)
             g = QGridLayout(gb)
             for i, (key, label, _attr, _grp) in enumerate(items):
-                cb = QCheckBox(f"{label} ({key})")
+                cb = QCheckBox(label if label == key else f"{label} ({key})")
                 cb.setChecked(False)
                 self.field_checks[key] = cb
                 g.addWidget(cb, i // 2, i % 2)
@@ -445,7 +504,9 @@ class PubChemDialog(QDialog):
         except Exception:
             parts = []
         if not parts:
-            QMessageBox.information(self, "PubChem", "No valid SMILES could be exported from the sketch.")
+            QMessageBox.information(
+                self, "PubChem", "No valid SMILES could be exported from the sketch."
+            )
             return
         # Load fragments into the SMILES field; user runs Query when ready.
         self.chk_only_selected.setChecked(False)
@@ -485,7 +546,9 @@ class PubChemDialog(QDialog):
             else:
                 smiles_list = self._parse_smiles_inputs()
                 if not smiles_list:
-                    QMessageBox.information(self, "PubChem", "Enter at least one SMILES string first.")
+                    QMessageBox.information(
+                        self, "PubChem", "Enter at least one SMILES string first."
+                    )
                     return
 
         self._last = []
@@ -504,7 +567,9 @@ class PubChemDialog(QDialog):
         )
         self.out.setPlainText("")
 
-        self._worker = _PubChemBatchWorker(smiles_list, selected_fields=selected_fields, similarity=similarity)
+        self._worker = _PubChemBatchWorker(
+            smiles_list, selected_fields=selected_fields, similarity=similarity
+        )
         self._worker.signals.progress.connect(self._on_progress)
         self._worker.signals.finished.connect(self._on_finished)
         start_runnable_on_app_pool(self.parent_app, self._worker)
@@ -575,5 +640,6 @@ class PubChemDialog(QDialog):
             elif added:
                 app.status_label.setText(f"PubChem: added {added} row(s) to the table.")
             else:
-                app.status_label.setText("PubChem: no rows were added (see log in this window for errors).")
-
+                app.status_label.setText(
+                    "PubChem: no rows were added (see log in this window for errors)."
+                )
