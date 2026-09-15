@@ -138,7 +138,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "tools_calc_descriptors",
                 "Calculate Descriptors",
                 "Calculate Descriptors",
-                "RDKit descriptors and related property columns.",
+                "RDKit descriptors, PubChem names, 3D shape/SASA when confs exist, and related property columns.",
             ),
             _e(
                 "tools_fast_prepare",
@@ -303,13 +303,13 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "tools_predict_som",
                 "Predict SOM",
                 "SOM",
-                "FAME3R sites of metabolism for Phase 1, Phase 2, both, or CYP.",
+                "FAME3R sites of metabolism; reopen maps from Predict → SOM → Viewer.",
             ),
             _e(
                 "tools_predict_metabolites",
                 "Predict Metabolites",
                 "Metabolites",
-                "BioTransformer metabolite structures from a local JAR.",
+                "BioTransformer metabolite structures; reopen from Predict → Metabolites → Viewer.",
             ),
             _e(
                 "tools_pka",

@@ -114,7 +114,8 @@ class AppMenuMixin:
             QAction("Calculate Descriptors…", self, triggered=self.open_calc),
         )
         act_calc_desc.setToolTip(
-            "Compute RDKit molecular descriptors and append them as columns (selected or visible rows)."
+            "Compute RDKit molecular descriptors (including 3D shape/SASA from confs) "
+            "and append them as columns (selected or visible rows)."
         )
         tools.addAction(act_calc_desc)
         tools.addSeparator()
@@ -269,20 +270,39 @@ class AppMenuMixin:
                 self.open_permeability_predictor,
                 "Predict Caco-2 and MDCK permeability / efflux endpoints (optional Chemprop install).",
             ),
-            (
-                "SOM…",
-                self.open_som_predictor,
-                "Predict sites of metabolism with FAME3R and draw a highlighted atom map.",
-            ),
-            (
-                "Metabolites…",
-                self.open_biotransformer_predictor,
-                "Predict metabolite structures with a local BioTransformer JAR.",
-            ),
         ):
             act = QAction(title, self, triggered=slot)
             act.setToolTip(tip)
             predict_menu.addAction(act)
+
+        som_menu = predict_menu.addMenu("SOM")
+        som_menu.setToolTipsVisible(True)
+        act_som_predict = QAction("Predict…", self, triggered=self.open_som_predictor)
+        act_som_predict.setToolTip(
+            "Predict sites of metabolism with FAME3R and draw a highlighted atom map."
+        )
+        som_menu.addAction(act_som_predict)
+        act_som_viewer = QAction("Viewer", self, triggered=self.open_som_viewer)
+        act_som_viewer.setToolTip(
+            "Open the SOM map browser when Predict SOM results are in the table."
+        )
+        act_som_viewer.setEnabled(False)
+        self._act_som_viewer = act_som_viewer
+        som_menu.addAction(act_som_viewer)
+
+        met_menu = predict_menu.addMenu("Metabolites")
+        met_menu.setToolTipsVisible(True)
+        act_met_predict = QAction("Predict…", self, triggered=self.open_biotransformer_predictor)
+        act_met_predict.setToolTip("Predict metabolite structures with a local BioTransformer JAR.")
+        met_menu.addAction(act_met_predict)
+        act_met_viewer = QAction("Viewer", self, triggered=self.open_metabolite_viewer)
+        act_met_viewer.setToolTip(
+            "Open the metabolite browser when Predict Metabolites results are in the table."
+        )
+        act_met_viewer.setEnabled(False)
+        self._act_metabolite_viewer = act_met_viewer
+        met_menu.addAction(act_met_viewer)
+        predict_menu.aboutToShow.connect(self._sync_predict_viewer_actions)
 
         dock_menu = tools.addMenu("&Dock")
         dock_menu.setToolTipsVisible(True)

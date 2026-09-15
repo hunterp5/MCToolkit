@@ -425,6 +425,7 @@ class PlotToolsMixin:
 
     def _bind_undocked_browser_dialog(self, dlg) -> bool:
         """Track Data → Browser / Predict SOM windows after undock. Return True if handled."""
+        from ..metabolite_browser import MetaboliteBrowserDialog
         from ..selection_browser import SelectionBrowserDialog
         from ..som_browser import SomBrowserDialog
 
@@ -439,6 +440,13 @@ class PlotToolsMixin:
             self._som_browser_dialog = dlg
             try:
                 dlg.destroyed.connect(self._on_som_browser_dialog_destroyed)
+            except Exception:
+                pass
+            return True
+        if isinstance(dlg, MetaboliteBrowserDialog):
+            self._metabolite_browser_dialog = dlg
+            try:
+                dlg.destroyed.connect(self._on_metabolite_browser_dialog_destroyed)
             except Exception:
                 pass
             return True
@@ -471,4 +479,3 @@ class PlotToolsMixin:
             self._floating_result_dialogs.remove(dlg)
         except (ValueError, AttributeError):
             pass
-

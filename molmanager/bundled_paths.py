@@ -263,35 +263,99 @@ def java_executable() -> Path | None:
     return None
 
 
-def _first_biotransformer_jar(directory: Path) -> Path | None:
+# Official Bitbucket runnable package uses BioTransformer3.0_*.jar + btkb/, not
+# biotransformer-3.0.0.jar + database/ (those names appear in older docs).
+_PREFERRED_BIOTRANSFORMER_JARS = (
+    "biotransformer-3.0.0.jar",
+    "BioTransformer3.0_20230525.jar",
+    "BioTransformer3.0.jar",
+)
+_KB_DIR_NAMES = ("database", "bkdb", "btkb")
+_SETTINGS_ORG = "MolManager"
+_SETTINGS_APP = "MolManager"
+_SETTINGS_KEY_BIOTRANSFORMER_JAR = "tools/biotransformer_jar"
+
+
+def _is_biotransformer_jar(path: Path) -> bool:
+    return (
+        path.is_file() and path.suffix.lower() == ".jar" and "biotransformer" in path.name.lower()
+    )
+
+
+def find_biotransformer_jar_in(directory: Path) -> Path | None:
+    """First BioTransformer JAR in ``directory``, or ``None``."""
     if not directory.is_dir():
         return None
-    preferred = directory / "biotransformer-3.0.0.jar"
-    if preferred.is_file():
-        return preferred
-    matches = sorted(
-        p
-        for p in directory.glob("biotransformer*.jar")
-        if p.is_file() and p.suffix.lower() == ".jar"
-    )
+    by_lower = {p.name.lower(): p for p in directory.iterdir() if _is_biotransformer_jar(p)}
+    for name in _PREFERRED_BIOTRANSFORMER_JARS:
+        match = by_lower.get(name.lower())
+        if match is not None:
+            return match
+    matches = sorted(by_lower.values(), key=lambda p: p.name.lower())
     return matches[0] if matches else None
 
 
+def _first_biotransformer_jar(directory: Path) -> Path | None:
+    return find_biotransformer_jar_in(directory)
+
+
+def configured_biotransformer_jar_text() -> str:
+    """User-picked JAR path from QSettings (empty when unset)."""
+    try:
+        from PyQt5.QtCore import QSettings
+    except ImportError:
+        return ""
+    raw = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SETTINGS_KEY_BIOTRANSFORMER_JAR, "")
+    return str(raw or "").strip()
+
+
+def set_configured_biotransformer_jar(path: str | Path | None) -> None:
+    """Persist a user-picked BioTransformer JAR, or clear the setting when ``path`` is empty."""
+    from PyQt5.QtCore import QSettings
+
+    settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    text = str(path or "").strip()
+    if not text:
+        settings.remove(_SETTINGS_KEY_BIOTRANSFORMER_JAR)
+        return
+    settings.setValue(_SETTINGS_KEY_BIOTRANSFORMER_JAR, str(Path(text).expanduser()))
+
+
+def _configured_biotransformer_jar() -> Path | None:
+    text = configured_biotransformer_jar_text()
+    if not text:
+        return None
+    candidate = Path(text).expanduser()
+    return candidate if candidate.is_file() else None
+
+
 def resolve_biotransformer_jar() -> Path | None:
-    """Path to a BioTransformer JAR when installed (env override or models folder)."""
+    """Path to a BioTransformer JAR (env, saved path, or models folder)."""
     override = (os.environ.get("MOLMANAGER_BIOTRANSFORMER_JAR") or "").strip()
     if override:
         candidate = Path(override).expanduser()
         return candidate if candidate.is_file() else None
+    configured = _configured_biotransformer_jar()
+    if configured is not None:
+        return configured
     return _first_biotransformer_jar(biotransformer_models_dir())
 
 
 def biotransformer_support_root(jar: Path | None = None) -> Path | None:
-    """Directory that must contain ``database/`` and ``supportfiles/`` (the JAR's parent)."""
+    """Directory that must contain the knowledge base and ``supportfiles/`` (the JAR's parent)."""
     path = jar if jar is not None else resolve_biotransformer_jar()
     if path is None:
         return None
     return path.resolve().parent
+
+
+def biotransformer_knowledge_base_dir(root: Path) -> Path | None:
+    """``database/``, ``bkdb/``, or ``btkb/`` next to the JAR (Bitbucket uses ``btkb``)."""
+    for name in _KB_DIR_NAMES:
+        candidate = root / name
+        if candidate.is_dir():
+            return candidate
+    return None
 
 
 def biotransformer_layout_errors(jar: Path | None = None) -> list[str]:
@@ -302,13 +366,15 @@ def biotransformer_layout_errors(jar: Path | None = None) -> list[str]:
     jar_path = jar if jar is not None else resolve_biotransformer_jar()
     if jar_path is None or not jar_path.is_file():
         errors.append(
-            "BioTransformer JAR not found. Place biotransformer-3.0.0.jar under "
-            "molmanager/resources/models/biotransformer/ or set MOLMANAGER_BIOTRANSFORMER_JAR."
+            "BioTransformer JAR not found. Run python scripts/bootstrap_biotransformer.py, "
+            "browse to a JAR in Predict Metabolites, or set MOLMANAGER_BIOTRANSFORMER_JAR."
         )
         return errors
     root = jar_path.resolve().parent
-    if not (root / "database").is_dir():
-        errors.append(f"Missing database/ next to the JAR ({root}).")
+    if biotransformer_knowledge_base_dir(root) is None:
+        errors.append(
+            f"Missing knowledge-base folder (database/, bkdb/, or btkb/) next to the JAR ({root})."
+        )
     if not (root / "supportfiles").is_dir():
         errors.append(f"Missing supportfiles/ next to the JAR ({root}).")
     return errors

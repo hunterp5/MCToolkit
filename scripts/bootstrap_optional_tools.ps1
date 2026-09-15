@@ -38,6 +38,11 @@ if ($perm -match '^[yY]') {
     python scripts/bootstrap_gnn_mtl_model.py
 }
 
+$bt = Read-Host "Download BioTransformer 3 (~120 MB JAR + knowledge base)? [y/N]"
+if ($bt -match '^[yY]') {
+    python scripts/bootstrap_biotransformer.py
+}
+
 $binDir = Join-Path $Root "molmanager\resources\bin\win"
 Write-Host ""
 Write-Host "Optional executables (copy into):"

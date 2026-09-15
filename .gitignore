@@ -59,6 +59,11 @@ molmanager/resources/models/**/*.pt
 !molmanager/resources/models/**/README.md
 !molmanager/resources/models/**/.gitkeep
 
+# BioTransformer JAR + knowledge base (download via scripts/bootstrap_biotransformer.py)
+molmanager/resources/models/biotransformer/**
+!molmanager/resources/models/biotransformer/README.md
+!molmanager/resources/models/biotransformer/.gitkeep
+
 # Local large or throwaway inputs at repo root (remove lines if you want these tracked)
 fda_approved_full.SDF
 export_test.sdf

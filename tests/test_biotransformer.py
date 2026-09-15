@@ -37,6 +37,7 @@ from molmanager.biotransformer import (
     parse_biotransformer_sdf,
     predict_metabolites_batch,
     predict_one_smiles,
+    resolve_java_heap,
     uses_cyp_mode,
 )
 from molmanager.bundled_paths import (
@@ -88,7 +89,8 @@ def test_uses_cyp_mode() -> None:
     assert not uses_cyp_mode("phaseII")
 
 
-def test_biotransformer_command_includes_cyp_mode(tmp_path) -> None:
+def test_biotransformer_command_includes_cyp_mode(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("molmanager.biotransformer._java_reports_64bit", lambda _java: True)
     java = tmp_path / "java.exe"
     jar = tmp_path / "biotransformer-3.0.0.jar"
     out = tmp_path / "out.sdf"
@@ -116,8 +118,16 @@ def test_biotransformer_command_includes_cyp_mode(tmp_path) -> None:
     assert "-cm" not in phase
 
 
+def test_resolve_java_heap_32bit(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("molmanager.biotransformer._java_reports_64bit", lambda _java: False)
+    java = tmp_path / "java.exe"
+    java.write_bytes(b"")
+    assert resolve_java_heap(java) == "1024m"
+
+
 def test_resolve_biotransformer_jar_env_and_layout(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("MOLMANAGER_BIOTRANSFORMER_JAR", raising=False)
+    monkeypatch.setattr("molmanager.bundled_paths.configured_biotransformer_jar_text", lambda: "")
     monkeypatch.setattr(
         "molmanager.bundled_paths.biotransformer_models_dir",
         lambda: tmp_path / "missing",
@@ -260,6 +270,7 @@ def test_biotransformer_dialog_disables_predict_when_missing(qapp, monkeypatch) 
     )
     dlg = BiotransformerDialog(None)
     assert not dlg.predict_btn.isEnabled()
+    assert dlg.browse_btn.isEnabled()
     dlg.subset_combo.setCurrentIndex(
         next(
             i for i in range(dlg.subset_combo.count()) if dlg.subset_combo.itemData(i) == "phaseII"
@@ -267,3 +278,57 @@ def test_biotransformer_dialog_disables_predict_when_missing(qapp, monkeypatch) 
     )
     assert not dlg.cyp_combo.isEnabled()
     dlg.close()
+
+
+def test_is_metabolite_column_header_and_parse_smiles() -> None:
+    from molmanager.biotransformer import (
+        is_metabolite_column_header,
+        parse_metabolite_smiles_cell,
+    )
+
+    assert is_metabolite_column_header("Metabolite SMILES", METABOLITE_SMILES_COLUMN)
+    assert is_metabolite_column_header("Metabolite SMILES (1)", METABOLITE_SMILES_COLUMN)
+    assert not is_metabolite_column_header("SMILES", METABOLITE_SMILES_COLUMN)
+    assert parse_metabolite_smiles_cell("CCO; CC=O") == ["CCO", "CC=O"]
+    assert parse_metabolite_smiles_cell("CCO; CC=O (+3 more)") == ["CCO", "CC=O"]
+    assert parse_metabolite_smiles_cell("N/A") == []
+
+
+def test_metabolite_records_from_table(qapp) -> None:  # noqa: ARG001
+    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.metabolite_browser import records_from_table
+
+    w = ChemicalTableApp()
+    w.headers = [
+        "ID_HIDDEN",
+        "Structure",
+        "SMILES",
+        METABOLITE_COUNT_COLUMN,
+        METABOLITE_REACTIONS_COLUMN,
+        METABOLITE_SMILES_COLUMN,
+    ]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(
+        0,
+        {
+            "SMILES": "CCO",
+            METABOLITE_COUNT_COLUMN: "2",
+            METABOLITE_REACTIONS_COLUMN: "ox",
+            METABOLITE_SMILES_COLUMN: "CC=O; CCO",
+        },
+    )
+    w._table_model.append_row(
+        1,
+        {
+            "SMILES": "c1ccccc1",
+            METABOLITE_COUNT_COLUMN: "N/A",
+            METABOLITE_REACTIONS_COLUMN: "N/A",
+            METABOLITE_SMILES_COLUMN: "N/A",
+        },
+    )
+    recs = records_from_table(w)
+    assert len(recs) == 1
+    assert recs[0].oid == 0
+    assert recs[0].smiles == "CCO"
+    assert [h.smiles for h in recs[0].metabolites] == ["CC=O", "CCO"]
+    w.close()

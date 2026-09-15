@@ -111,6 +111,7 @@ def test_static_asset_path_points_at_3dmol():
 
 def test_resolve_biotransformer_jar_env_override_and_missing_database(tmp_path, monkeypatch):
     monkeypatch.delenv("MOLMANAGER_BIOTRANSFORMER_JAR", raising=False)
+    monkeypatch.setattr(bundled_paths, "configured_biotransformer_jar_text", lambda: "")
     monkeypatch.setattr(bundled_paths, "biotransformer_models_dir", lambda: tmp_path / "absent")
     assert bundled_paths.resolve_biotransformer_jar() is None
     jar = tmp_path / "biotransformer-3.0.0.jar"
@@ -123,3 +124,27 @@ def test_resolve_biotransformer_jar_env_override_and_missing_database(tmp_path, 
     (tmp_path / "supportfiles").mkdir()
     layout = bundled_paths.biotransformer_layout_errors(jar)
     assert not any("database/" in e or "supportfiles/" in e for e in layout)
+
+
+def test_resolve_biotransformer_jar_official_name_and_btkb(tmp_path, monkeypatch):
+    monkeypatch.delenv("MOLMANAGER_BIOTRANSFORMER_JAR", raising=False)
+    monkeypatch.setattr(bundled_paths, "configured_biotransformer_jar_text", lambda: "")
+    monkeypatch.setattr(bundled_paths, "biotransformer_models_dir", lambda: tmp_path)
+    jar = tmp_path / "BioTransformer3.0_20230525.jar"
+    jar.write_bytes(b"")
+    assert bundled_paths.resolve_biotransformer_jar() == jar
+    errs = bundled_paths.biotransformer_layout_errors(jar)
+    assert any("database/" in e for e in errs)
+    (tmp_path / "btkb").mkdir()
+    (tmp_path / "supportfiles").mkdir()
+    layout = bundled_paths.biotransformer_layout_errors(jar)
+    assert not any("database/" in e or "supportfiles/" in e for e in layout)
+
+
+def test_resolve_biotransformer_jar_uses_saved_path(tmp_path, monkeypatch):
+    monkeypatch.delenv("MOLMANAGER_BIOTRANSFORMER_JAR", raising=False)
+    monkeypatch.setattr(bundled_paths, "biotransformer_models_dir", lambda: tmp_path / "absent")
+    jar = tmp_path / "BioTransformer3.0.jar"
+    jar.write_bytes(b"")
+    monkeypatch.setattr(bundled_paths, "configured_biotransformer_jar_text", lambda: str(jar))
+    assert bundled_paths.resolve_biotransformer_jar() == jar

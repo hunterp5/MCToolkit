@@ -147,6 +147,7 @@ class SessionPlotsMixin:
             "_mmp_neighborhood_map_dialog",
             "_selection_browser_dialog",
             "_som_browser_dialog",
+            "_metabolite_browser_dialog",
             "_molecule_3d_viewer_dialog",
         ):
             add(getattr(self, attr, None))
@@ -241,6 +242,7 @@ class SessionPlotsMixin:
             "_mmp_neighborhood_map_dialog",
             "_selection_browser_dialog",
             "_som_browser_dialog",
+            "_metabolite_browser_dialog",
             "_molecule_3d_viewer_dialog",
         ):
             if getattr(self, attr, None) is not None:

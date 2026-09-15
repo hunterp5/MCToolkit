@@ -33,4 +33,10 @@ python scripts/bootstrap_gnn_mtl_model.py
 
 ## BioTransformer 3 (optional, not in git)
 
-`molmanager/resources/models/biotransformer/` — see `models/biotransformer/README.md`. Requires Java on PATH plus `biotransformer-3.0.0.jar`, `database/`, and `supportfiles/`. Override the JAR with `MOLMANAGER_BIOTRANSFORMER_JAR`.
+`molmanager/resources/models/biotransformer/` — see `models/biotransformer/README.md`. Download:
+
+```bash
+python scripts/bootstrap_biotransformer.py
+```
+
+Requires Java on PATH plus the official JAR (`BioTransformer3.0_20230525.jar` or `biotransformer-3.0.0.jar`) with sibling `btkb/` or `database/` and `supportfiles/`. Override the JAR with `MOLMANAGER_BIOTRANSFORMER_JAR`, or use **Browse JAR…** in Predict Metabolites.

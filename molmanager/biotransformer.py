@@ -20,11 +20,13 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
@@ -57,6 +59,7 @@ DEFAULT_CYP_MODE = 1
 DEFAULT_MAX_METABOLITES = 200
 DEFAULT_TIMEOUT_S = 600.0
 DEFAULT_JAVA_HEAP = "2g"
+_JAVA_HEAP_32BIT = "1024m"
 SMILES_COLUMN_MAX_CHARS = 2000
 BIOTRANSFORMER_CANCELLED = "Cancelled."
 
@@ -99,8 +102,52 @@ def uses_cyp_mode(metabolism: str) -> bool:
     return str(metabolism) in CYP_MODE_METABOLISM
 
 
+@lru_cache(maxsize=8)
+def _java_reports_64bit(java: str) -> bool:
+    """True when ``java -version`` looks 64-bit, or when the binary cannot be probed."""
+    try:
+        proc = subprocess.run(
+            [java, "-version"],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return True
+    text = f"{proc.stdout} {proc.stderr}"
+    if not text.strip():
+        return True
+    return "64-Bit" in text or "64-bit" in text
+
+
+def resolve_java_heap(java: Path) -> str:
+    """``2g`` on 64-bit JREs; ``1024m`` on 32-bit (``-Xmx2g`` fails to start)."""
+    if _java_reports_64bit(str(java)):
+        return DEFAULT_JAVA_HEAP
+    return _JAVA_HEAP_32BIT
+
+
 def metabolite_output_columns() -> list[str]:
     return [METABOLITE_COUNT_COLUMN, METABOLITE_REACTIONS_COLUMN, METABOLITE_SMILES_COLUMN]
+
+
+def is_metabolite_column_header(header: str, base: str) -> bool:
+    """True for *base* or a numbered duplicate such as ``Metabolite SMILES (1)``."""
+    h = (header or "").strip().lower()
+    b = (base or "").strip().lower()
+    if not h or not b:
+        return False
+    return h == b or h.startswith(f"{b} (")
+
+
+def parse_metabolite_smiles_cell(text: str) -> list[str]:
+    """Split a parent-row Metabolite SMILES cell into product SMILES strings."""
+    raw = (text or "").strip()
+    if not raw or raw.upper() == "N/A":
+        return []
+    raw = re.sub(r"\s*\(\+\d+ more\)\s*$", "", raw)
+    return [part.strip() for part in raw.split(";") if part.strip()]
 
 
 def format_metabolite_columns(pred: MetabolitePrediction | None) -> dict[str, str]:
@@ -239,12 +286,13 @@ def biotransformer_command(
     metabolism: str,
     nsteps: int,
     cyp_mode: int,
-    heap: str = DEFAULT_JAVA_HEAP,
+    heap: str | None = None,
 ) -> list[str]:
     """Build the ``java -jar`` argv for one parent SMILES."""
+    heap_size = (heap or "").strip() or resolve_java_heap(java)
     cmd = [
         str(java),
-        f"-Xmx{heap}",
+        f"-Xmx{heap_size}",
         "-jar",
         str(jar),
         "-k",

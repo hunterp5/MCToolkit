@@ -5,18 +5,26 @@ https://doi.org/10.1186/s13321-018-0324-5
 
 **License:** GNU LGPL v3. Commercial redistribution of BioTransformer resources needs explicit permission from the authors.
 
-Place these files in **this directory** (or point `MOLMANAGER_BIOTRANSFORMER_JAR` at the JAR; `database/` and `supportfiles/` must sit next to that JAR):
+Install once:
+
+```bash
+python scripts/bootstrap_biotransformer.py
+```
+
+That downloads the official Bitbucket package into **this directory**. The current runnable layout is:
 
 ```
-biotransformer-3.0.0.jar
-database/
+BioTransformer3.0_20230525.jar
+btkb/
 supportfiles/
+config.json
 ```
 
-Download the runnable JAR and support folders from:
+Older docs used `biotransformer-3.0.0.jar` and `database/` (`bkdb/` in some snapshots). MolManager accepts any of those knowledge-base folder names next to the JAR.
 
-- https://github.com/Wishartlab-openscience/Biotransformer
-- https://bitbucket.org/wishartlab/biotransformer3.0jar
+You can also **Browse JAR…** in Predict Metabolites, or set `MOLMANAGER_BIOTRANSFORMER_JAR` (the knowledge-base folder and `supportfiles/` must sit next to that JAR).
+
+Manual download: https://bitbucket.org/wishartlab/biotransformer3.0jar (source: https://github.com/Wishartlab-openscience/Biotransformer).
 
 **Java** must be on `PATH` (`java -version`). Official docs target UNIX; on native Windows, try a current JRE first. If the JAR fails, run BioTransformer under WSL and point `MOLMANAGER_BIOTRANSFORMER_JAR` at that install.
 

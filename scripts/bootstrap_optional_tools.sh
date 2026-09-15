@@ -35,6 +35,11 @@ if [[ "$perm" =~ ^[yY] ]]; then
   python scripts/bootstrap_gnn_mtl_model.py
 fi
 
+read -r -p "Download BioTransformer 3 (~120 MB JAR + knowledge base)? [y/N] " bt
+if [[ "$bt" =~ ^[yY] ]]; then
+  python scripts/bootstrap_biotransformer.py
+fi
+
 PLAT=linux
 [[ "$(uname -s)" == "Darwin" ]] && PLAT=mac
 BINDIR="$ROOT/molmanager/resources/bin/$PLAT"

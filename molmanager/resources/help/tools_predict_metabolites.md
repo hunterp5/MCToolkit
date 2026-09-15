@@ -14,9 +14,9 @@ Use when you need candidate metabolite SMILES for design, MS annotation, or soft
 
 ## Inputs / scope
 
-Rows with valid molecules in the chosen structure **Source**, or a single **SMILES string**. Optional **Selected Rows Only**. Requires **Java on PATH** and a BioTransformer 3 install (`biotransformer-3.0.0.jar` plus sibling `database/` and `supportfiles/`).
+Rows with valid molecules in the chosen structure **Source**, or a single **SMILES string**. Optional **Selected Rows Only**. Requires **Java on PATH** and a BioTransformer 3 install (JAR plus sibling `btkb/` or `database/` and `supportfiles/`).
 
-Place the JAR under `molmanager/resources/models/biotransformer/` or set `MOLMANAGER_BIOTRANSFORMER_JAR`. Official docs target UNIX; on Windows try a current JRE, or run the JAR under WSL.
+Run `python scripts/bootstrap_biotransformer.py`, use **Browse JAR…** / **Install…** in the dialog, or set `MOLMANAGER_BIOTRANSFORMER_JAR`. Official docs target UNIX; on Windows try a current JRE, or run the JAR under WSL.
 
 ## Options
 
@@ -36,7 +36,7 @@ Place the JAR under `molmanager/resources/models/biotransformer/` or set `MOLMAN
 2. Choose table rows or paste SMILES.
 3. Pick metabolism, steps, and the product cap.
 4. Run **Predict** and wait on **Processes**.
-5. Review parent columns (**Metabolite Count**, **Metabolite Reactions**, **Metabolite SMILES**) and the **Predict Metabolites Browser** (parent drawing plus a product table).
+5. Review parent columns (**Metabolite Count**, **Metabolite Reactions**, **Metabolite SMILES**) and the **Predict Metabolites Browser**. The table lists the parent first, then metabolites; click a row to show that structure on the canvas. Reopen it from **Tools → Predict → Metabolites → Viewer** when those columns are already in the table.
 
 ## Use cases
 

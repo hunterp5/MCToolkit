@@ -1,0 +1,141 @@
+# This file is part of MolManager.
+# Copyright (C) 2026 Hunter Picard
+#
+# MolManager is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# MolManager is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+
+"""Tests for the Predict Metabolites results browser."""
+
+from __future__ import annotations
+
+from molmanager.display_constants import (
+    BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
+    BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
+)
+from molmanager.ui.dockable_plot import is_dockable_workspace_widget
+from molmanager.ui.metabolite_browser import (
+    ROLE_METABOLITE,
+    ROLE_PARENT,
+    MetaboliteBrowseHit,
+    MetaboliteBrowseRecord,
+    MetaboliteBrowserDialog,
+    MetaboliteBrowserWidget,
+)
+
+
+def test_metabolite_browser_widget_is_workspace_dockable():
+    assert getattr(MetaboliteBrowserWidget, "dockable_in_workspace", False) is True
+    assert is_dockable_workspace_widget(MetaboliteBrowserWidget)
+    assert hasattr(MetaboliteBrowserWidget, "create_floating_dialog")
+
+
+def test_metabolite_browser_includes_parent_row(qapp) -> None:  # noqa: ARG001
+    recs = [
+        MetaboliteBrowseRecord(
+            oid=1,
+            smiles="CCO",
+            metabolites=(
+                MetaboliteBrowseHit(
+                    smiles="CC=O",
+                    reaction="oxidation",
+                    enzyme="CYP2E1",
+                    generation=1,
+                ),
+            ),
+        ),
+    ]
+    w = MetaboliteBrowserWidget(None)
+    w.set_records(recs)
+    assert w._table.rowCount() == 2
+    assert w._table.item(0, 0).text() == ROLE_PARENT
+    assert w._table.item(1, 0).text() == ROLE_METABOLITE
+    assert w._table.item(0, 2).text() == "CCO"
+    assert w._table.item(1, 2).text() == "CC=O"
+    assert w._table.item(1, 3).text() == "oxidation"
+    assert w._canvas_smiles == "CCO"
+    assert w._canvas_kind == ROLE_PARENT
+    assert w._canvas_caption.text().startswith(ROLE_PARENT)
+    w.close()
+
+
+def test_metabolite_browser_click_shows_metabolite_on_canvas(qapp) -> None:  # noqa: ARG001
+    recs = [
+        MetaboliteBrowseRecord(
+            oid=1,
+            smiles="CCO",
+            metabolites=(
+                MetaboliteBrowseHit(smiles="CC=O", reaction="ox", enzyme="CYP", generation=1),
+                MetaboliteBrowseHit(smiles="CC(=O)O", reaction="ox", enzyme="CYP", generation=1),
+            ),
+        ),
+    ]
+    w = MetaboliteBrowserWidget(None)
+    w.set_records(recs)
+    assert w._canvas_smiles == "CCO"
+    w._table.selectRow(1)
+    assert w._canvas_smiles == "CC=O"
+    assert w._canvas_kind == ROLE_METABOLITE
+    assert "CC=O" in w._canvas_caption.text()
+    w._table.selectRow(2)
+    assert w._canvas_smiles == "CC(=O)O"
+    w._table.selectRow(0)
+    assert w._canvas_smiles == "CCO"
+    assert w._canvas_kind == ROLE_PARENT
+    w.close()
+
+
+def test_metabolite_browser_nav_buttons_in_footer(qapp) -> None:  # noqa: ARG001
+    recs = [
+        MetaboliteBrowseRecord(
+            oid=1,
+            smiles="CCO",
+            metabolites=(MetaboliteBrowseHit(smiles="CC=O"),),
+        ),
+        MetaboliteBrowseRecord(
+            oid=2,
+            smiles="c1ccccc1",
+            metabolites=(MetaboliteBrowseHit(smiles="Oc1ccccc1"),),
+        ),
+    ]
+    w = MetaboliteBrowserWidget(None)
+    w.set_records(recs)
+    assert w._nav_bar is not None
+    assert w._footer_bar is not None
+    assert w._btn_first.text() == "<<"
+    assert w._btn_back.text() == "←"
+    assert w._btn_fwd.text() == "→"
+    assert w._btn_last.text() == ">>"
+    root = w.layout()
+    nav_index = root.indexOf(w._nav_bar)
+    table_index = root.indexOf(w._table)
+    preview_index = root.indexOf(w._preview_host)
+    footer_index = root.indexOf(w._footer_bar)
+    assert footer_index == 0
+    assert preview_index < table_index < nav_index
+    assert "1 / 2" in w._meta.text()
+    w._step(1)
+    assert "2 / 2" in w._meta.text()
+    assert w._canvas_smiles == "c1ccccc1"
+    w._go_first()
+    assert "1 / 2" in w._meta.text()
+    w.close()
+
+
+def test_metabolite_browser_opens_large_enough_for_2d(qapp) -> None:  # noqa: ARG001
+    dlg = MetaboliteBrowserDialog(None)
+    assert dlg.minimumWidth() >= 640
+    assert dlg.minimumHeight() >= 780
+    host = dlg._panel._preview_host
+    assert host.minimumWidth() >= BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH
+    assert host.minimumHeight() >= BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT
+    dlg.close()

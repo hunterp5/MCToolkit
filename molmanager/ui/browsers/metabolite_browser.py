@@ -14,23 +14,25 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Modeless BioTransformer results browser: parent structure plus metabolite table."""
+"""Modeless BioTransformer results browser: parent plus metabolites, like Data → Browser."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QImage, QKeySequence, QPixmap
+from PyQt5.QtCore import QEvent, Qt, QTimer
+from PyQt5.QtGui import QColor, QFont, QImage, QKeySequence, QPainter, QPixmap
 from PyQt5.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPushButton,
     QShortcut,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -38,18 +40,45 @@ from PyQt5.QtWidgets import (
 )
 from rdkit import Chem
 
-from ...biotransformer import BIOTRANSFORMER_CANCELLED
+from ...biotransformer import (
+    BIOTRANSFORMER_CANCELLED,
+    METABOLITE_COUNT_COLUMN,
+    METABOLITE_REACTIONS_COLUMN,
+    METABOLITE_SMILES_COLUMN,
+    is_metabolite_column_header,
+    parse_metabolite_smiles_cell,
+)
 from ...display_constants import (
     BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
     BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
 )
 from ...structure_draw import render_molecule_png
+from ..dockable_plot import (
+    discard_host_dialog_after_dock,
+    make_add_to_main_button,
+    make_send_window_button,
+    request_close_plot_widget,
+    style_plot_footer_text_button,
+)
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_PREDICT_METABOLITES
 from ..widgets import NumericTableWidgetItem
 
 _THUMB_W = 120
 _THUMB_H = 100
+_TABLE_MAX_HEIGHT = _THUMB_H * 3 + 56
+
+_COL_ROLE = 0
+_COL_STRUCT = 1
+_COL_SMILES = 2
+_COL_REACTION = 3
+_COL_ENZYME = 4
+_COL_STEP = 5
+_SMILES_ROLE = Qt.UserRole
+_KIND_ROLE = Qt.UserRole + 1
+
+ROLE_PARENT = "Parent"
+ROLE_METABOLITE = "Metabolite"
 
 
 @dataclass(frozen=True)
@@ -125,6 +154,71 @@ def records_from_worker_rows(rows: Sequence) -> list[MetaboliteBrowseRecord]:
     return out
 
 
+def _first_matching_header(headers: Sequence[str], base: str) -> str | None:
+    named = [h for h in headers if is_metabolite_column_header(h, base)]
+    return named[0] if named else None
+
+
+def records_from_table(app: Any) -> list[MetaboliteBrowseRecord]:
+    """Rebuild browser records from Predict Metabolites parent-row columns."""
+    model = getattr(app, "_table_model", None)
+    headers = list(getattr(app, "headers", None) or [])
+    if model is None or not headers:
+        return []
+    smiles_h = _first_matching_header(headers, METABOLITE_SMILES_COLUMN)
+    count_h = _first_matching_header(headers, METABOLITE_COUNT_COLUMN)
+    rxn_h = _first_matching_header(headers, METABOLITE_REACTIONS_COLUMN)
+    if smiles_h is None and count_h is None:
+        return []
+    out: list[MetaboliteBrowseRecord] = []
+    n = int(model.rowCount())
+    for row in range(n):
+        try:
+            oid = int(model.row_oid(row))
+        except (TypeError, ValueError):
+            continue
+        smiles_cell = (
+            str(model.backing_value_for_row_header(row, smiles_h) or "") if smiles_h else ""
+        )
+        count_cell = str(model.backing_value_for_row_header(row, count_h) or "") if count_h else ""
+        rxn_cell = str(model.backing_value_for_row_header(row, rxn_h) or "") if rxn_h else ""
+        products = parse_metabolite_smiles_cell(smiles_cell)
+        count_ok = count_cell.strip() not in {"", "N/A", "n/a"}
+        if not products and not count_ok:
+            continue
+        parent_smi = str(model.backing_value_for_row_header(row, "SMILES") or "").strip()
+        if not parent_smi:
+            mols = getattr(app, "mols", None) or {}
+            mol = mols.get(oid)
+            if mol is not None:
+                from ...utils import mol_to_canonical_smiles
+
+                parent_smi = mol_to_canonical_smiles(mol) or ""
+        hits = tuple(MetaboliteBrowseHit(smiles=smi) for smi in products)
+        err = None
+        if not hits:
+            err = rxn_cell.strip() if rxn_cell.strip() not in {"", "N/A"} else None
+            if not err:
+                err = "No metabolites were returned."
+        if err == BIOTRANSFORMER_CANCELLED and not hits:
+            continue
+        cols = {
+            h: str(model.backing_value_for_row_header(row, h) or "")
+            for h in (smiles_h, count_h, rxn_h)
+            if h
+        }
+        out.append(
+            MetaboliteBrowseRecord(
+                oid=oid,
+                smiles=parent_smi,
+                metabolites=hits,
+                error=err if not hits else None,
+                columns=cols,
+            )
+        )
+    return out
+
+
 def _pixmap_from_smiles(smiles: str, width: int, height: int) -> QPixmap | None:
     mol = Chem.MolFromSmiles(smiles or "")
     if mol is None:
@@ -137,77 +231,203 @@ def _pixmap_from_smiles(smiles: str, width: int, height: int) -> QPixmap | None:
     return None if pm.isNull() else pm
 
 
-class MetaboliteBrowserDialog(QDialog):
+class MetaboliteBrowserWidget(QWidget):
     """Step through parent molecules and inspect BioTransformer products."""
 
-    def __init__(self, parent_app=None, parent: QWidget | None = None):
-        super().__init__(parent if parent is not None else parent_app)
+    dockable_in_workspace = True
+    supports_floating_title = False
+
+    def __init__(self, parent_app: Any = None, parent: QWidget | None = None):
+        super().__init__(parent)
         self.parent_app = parent_app
-        self.setWindowTitle(f"{TOOL_PREDICT_METABOLITES} Browser")
-        self.setMinimumWidth(max(480, BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH))
-        self.setMinimumHeight(max(420, BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT + 180))
+        self._app = parent_app
+        self._window_title = f"{TOOL_PREDICT_METABOLITES} Browser"
         self._records: list[MetaboliteBrowseRecord] = []
+        self._all_records: list[MetaboliteBrowseRecord] = []
         self._idx = 0
+        self._preview_cache: dict[tuple, QPixmap] = {}
+        self._canvas_smiles = ""
+        self._canvas_kind = ROLE_PARENT
+        self._filling_table = False
+        self._selection_model = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(8, 6, 8, 6)
-        root.setSpacing(6)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(8)
 
-        nav = QHBoxLayout()
-        nav.setSpacing(6)
-        self._meta = QLabel("")
-        self._prev = QPushButton("←")
-        self._next = QPushButton("→")
-        self._prev.clicked.connect(lambda: self._step(-1))
-        self._next.clicked.connect(lambda: self._step(1))
-        nav.addWidget(self._prev)
-        nav.addWidget(self._next)
-        nav.addWidget(self._meta, 1)
-        root.addLayout(nav)
+        self._meta = QLabel()
+        self._meta.setAlignment(Qt.AlignCenter)
+        root.addWidget(self._meta)
 
-        self._parent_img = QLabel()
-        self._parent_img.setAlignment(Qt.AlignCenter)
-        self._parent_img.setMinimumSize(
-            BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH // 2,
-            BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT // 2,
+        self._preview_host = QWidget(self)
+        self._preview_host.setMinimumSize(
+            BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
+            BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
         )
-        self._parent_img.setStyleSheet("background: palette(base);")
-        root.addWidget(self._parent_img, 1)
+        self._preview_host.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._preview_host.setAttribute(Qt.WA_StyledBackground, True)
+        self._preview_host.setStyleSheet(
+            "background-color: #ffffff; border: 1px solid palette(mid); border-radius: 4px;"
+        )
+        preview_ly = QVBoxLayout(self._preview_host)
+        preview_ly.setContentsMargins(0, 0, 0, 0)
+        preview_ly.setSpacing(0)
+        self._struct_label = QLabel(self._preview_host)
+        self._struct_label.setAlignment(Qt.AlignCenter)
+        self._struct_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._struct_label.setScaledContents(False)
+        self._struct_label.setMargin(0)
+        self._struct_label.setIndent(0)
+        self._struct_label.setStyleSheet("background-color: #ffffff; border: none; padding: 0px;")
+        preview_ly.addWidget(self._struct_label, 1)
+        root.addWidget(self._preview_host, 1)
 
-        self._parent_smiles = QLabel("")
-        self._parent_smiles.setWordWrap(True)
-        self._parent_smiles.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        root.addWidget(self._parent_smiles)
+        self._canvas_caption = QLabel("")
+        self._canvas_caption.setAlignment(Qt.AlignCenter)
+        self._canvas_caption.setWordWrap(True)
+        self._canvas_caption.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._canvas_caption.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        root.addWidget(self._canvas_caption)
 
         self._table = QTableWidget(0, 6)
         self._table.setHorizontalHeaderLabels(
-            ["#", "Structure", "SMILES", "Reaction", "Enzyme", "Step"]
+            ["Role", "Structure", "SMILES", "Reaction", "Enzyme", "Step"]
         )
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.SingleSelection)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.verticalHeader().setVisible(False)
+        self._table.setMaximumHeight(_TABLE_MAX_HEIGHT)
+        self._table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         hdr = self._table.horizontalHeader()
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        hdr.setSectionResizeMode(2, QHeaderView.Stretch)
-        hdr.setSectionResizeMode(3, QHeaderView.Stretch)
-        hdr.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        hdr.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        root.addWidget(self._table, 2)
+        hdr.setSectionResizeMode(_COL_ROLE, QHeaderView.ResizeToContents)
+        hdr.setSectionResizeMode(_COL_STRUCT, QHeaderView.ResizeToContents)
+        hdr.setSectionResizeMode(_COL_SMILES, QHeaderView.Stretch)
+        hdr.setSectionResizeMode(_COL_REACTION, QHeaderView.Stretch)
+        hdr.setSectionResizeMode(_COL_ENZYME, QHeaderView.ResizeToContents)
+        hdr.setSectionResizeMode(_COL_STEP, QHeaderView.ResizeToContents)
+        self._table.itemSelectionChanged.connect(self._on_table_selection_changed)
+        root.addWidget(self._table)
 
-        QShortcut(QKeySequence(Qt.Key_Left), self, activated=lambda: self._step(-1))
-        QShortcut(QKeySequence(Qt.Key_Right), self, activated=lambda: self._step(1))
-        make_window_minimizable(self)
+        self._nav_bar = QWidget(self)
+        self._nav_bar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        row_btns = QHBoxLayout(self._nav_bar)
+        row_btns.setContentsMargins(0, 0, 0, 0)
+        row_btns.setSpacing(4)
+        self._btn_first = QPushButton("<<")
+        self._btn_first.setToolTip("First parent (Home)")
+        self._btn_back = QPushButton("←")
+        self._btn_back.setToolTip("Previous parent (←)")
+        self._btn_fwd = QPushButton("→")
+        self._btn_fwd.setToolTip("Next parent (→)")
+        self._btn_last = QPushButton(">>")
+        self._btn_last.setToolTip("Last parent (End)")
+        self._btn_select = QPushButton("Select")
+        self._btn_select.setToolTip("Select this parent row in the compound table")
+        row_btns.addWidget(self._btn_first)
+        row_btns.addWidget(self._btn_back)
+        row_btns.addWidget(self._btn_fwd)
+        row_btns.addWidget(self._btn_last)
+        row_btns.addWidget(self._btn_select)
+        row_btns.addStretch(1)
+        root.addWidget(self._nav_bar)
 
-    def set_records(self, records: list[MetaboliteBrowseRecord]) -> None:
-        self._records = list(records or [])
-        self._idx = 0
+        self._footer_bar = QWidget(self)
+        self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        foot = QHBoxLayout(self._footer_bar)
+        foot.setContentsMargins(0, 0, 0, 0)
+        foot.setSpacing(4)
+        self._add_to_main_btn = make_add_to_main_button(
+            self,
+            tooltip="Dock this browser beside the compound table.",
+        )
+        self._add_to_main_btn.clicked.connect(self._add_to_main_window)
+        foot.addWidget(self._add_to_main_btn)
+        self._send_window_btn = make_send_window_button(
+            self,
+            tooltip="Open this docked browser in a separate floating window.",
+        )
+        self._send_window_btn.clicked.connect(self._send_to_new_window)
+        foot.addWidget(self._send_window_btn)
+        self._close_btn = QPushButton("Close")
+        self._close_btn.setToolTip("Close this browser.")
+        self._close_btn.clicked.connect(self._close_docked_browser)
+        style_plot_footer_text_button(self._close_btn)
+        foot.addWidget(self._close_btn)
+        self._cb_only_selected = QCheckBox("Browse Only Selected")
+        self._cb_only_selected.setToolTip(
+            "When checked, this browser walks only table rows that are currently selected."
+        )
+        self._cb_only_selected.toggled.connect(self._on_only_selected_toggled)
+        foot.addWidget(self._cb_only_selected)
+        foot.addStretch()
+        root.insertWidget(0, self._footer_bar)
+
+        self._btn_first.clicked.connect(self._go_first)
+        self._btn_back.clicked.connect(lambda: self._step(-1))
+        self._btn_fwd.clicked.connect(lambda: self._step(1))
+        self._btn_last.clicked.connect(self._go_last)
+        self._btn_select.clicked.connect(self._select_current_row)
+
+        for key, slot in (
+            (Qt.Key_Home, self._go_first),
+            (Qt.Key_Left, lambda: self._step(-1)),
+            (Qt.Key_Right, lambda: self._step(1)),
+            (Qt.Key_End, self._go_last),
+        ):
+            sc = QShortcut(QKeySequence(key), self)
+            sc.setContext(Qt.WidgetWithChildrenShortcut)
+            sc.activated.connect(slot)
+
+        self._resize_timer = QTimer(self)
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.setInterval(60)
+        self._resize_timer.timeout.connect(self._refresh_preview)
+        self._selection_timer = QTimer(self)
+        self._selection_timer.setSingleShot(True)
+        self._selection_timer.setInterval(80)
+        self._selection_timer.timeout.connect(self._refresh_selected_scope)
+
+        self._sync_footer_chrome()
+        self.setMinimumWidth(self.embedded_minimum_width())
+        self._connect_table_selection()
         self._update_ui()
 
+    def rebind_parent_app(self, parent_app: Any | None) -> None:
+        self._disconnect_table_selection()
+        self.parent_app = parent_app
+        self._app = parent_app
+        self._connect_table_selection()
+
+    def embedded_minimum_width(self) -> int:
+        return max(360, BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH // 2)
+
+    def embedded_preferred_width(self) -> int:
+        return max(self.embedded_minimum_width(), BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH)
+
+    def create_floating_dialog(self, parent_app) -> "MetaboliteBrowserDialog":
+        self.show()
+        return MetaboliteBrowserDialog(parent_app, panel=self)
+
+    def set_records(self, records: list[MetaboliteBrowseRecord]) -> None:
+        self._all_records = list(records or [])
+        self._preview_cache.clear()
+        has_oid = any(r.oid is not None for r in self._all_records)
+        self._cb_only_selected.setEnabled(has_oid)
+        self._apply_record_scope(preserve_oid=False)
+
     def jump_to_oid(self, oid: int | None) -> bool:
+        """Show the record for ``oid``, turning off selected-only if needed."""
         if oid is None:
             return False
         want = int(oid)
+        if not any(r.oid == want for r in self._all_records):
+            return False
+        if self._cb_only_selected.isChecked():
+            self._cb_only_selected.blockSignals(True)
+            self._cb_only_selected.setChecked(False)
+            self._cb_only_selected.blockSignals(False)
+        self._records = list(self._all_records)
         for i, rec in enumerate(self._records):
             if rec.oid == want:
                 self._idx = i
@@ -215,63 +435,400 @@ class MetaboliteBrowserDialog(QDialog):
                 return True
         return False
 
-    def _step(self, delta: int) -> None:
-        if not self._records:
+    def _add_to_main_window(self) -> None:
+        if self.parent_app is None:
             return
-        self._idx = (self._idx + int(delta)) % len(self._records)
-        self._update_ui()
+        dock = getattr(self.parent_app, "dock_plot_widget", None)
+        if not callable(dock):
+            return
+        dlg = self.window()
+        if not dock(self):
+            return
+        if isinstance(dlg, MetaboliteBrowserDialog):
+            discard_host_dialog_after_dock(dlg, self.parent_app, "_metabolite_browser_dialog")
+
+    def _send_to_new_window(self) -> None:
+        if self.parent_app is not None:
+            undock = getattr(self.parent_app, "undock_plot_to_window", None)
+            if callable(undock):
+                undock(self)
+
+    def _close_docked_browser(self) -> None:
+        request_close_plot_widget(
+            self,
+            title="Close Browser",
+            message="Close this browser?",
+        )
+
+    def _is_docked_in_main_window(self) -> bool:
+        app = self.parent_app
+        if app is None:
+            return False
+        check = getattr(app, "is_plot_docked", None)
+        if callable(check):
+            return bool(check(self))
+        return False
+
+    def _sync_footer_chrome(self) -> None:
+        from ..dockable_plot import apply_plot_chrome_glyphs, sync_docked_footer_bar
+
+        apply_plot_chrome_glyphs(self)
+        floating = isinstance(self.window(), MetaboliteBrowserDialog)
+        docked = self._is_docked_in_main_window()
+        self._add_to_main_btn.setVisible(floating)
+        self._send_window_btn.setVisible(docked)
+        self._close_btn.setVisible(True)
+        sync_docked_footer_bar(self, docked=docked)
+
+    def event(self, event) -> bool:  # noqa: N802 — Qt API
+        if event.type() == QEvent.ParentChange:
+            try:
+                self._sync_footer_chrome()
+            except RuntimeError:
+                pass
+        return super().event(event)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 — Qt API
+        super().resizeEvent(event)
+        timer = getattr(self, "_resize_timer", None)
+        if timer is not None:
+            timer.start()
 
     def _current(self) -> MetaboliteBrowseRecord | None:
         if not self._records or not (0 <= self._idx < len(self._records)):
             return None
         return self._records[self._idx]
 
+    def _go_first(self) -> None:
+        self._idx = 0
+        self._update_ui()
+
+    def _go_last(self) -> None:
+        self._idx = max(0, len(self._records) - 1)
+        self._update_ui()
+
+    def _step(self, delta: int) -> None:
+        if not self._records:
+            return
+        self._idx = (self._idx + int(delta)) % len(self._records)
+        self._update_ui()
+
+    def _on_only_selected_toggled(self, _checked: bool = False) -> None:
+        self._apply_record_scope(preserve_oid=True)
+
+    def _selected_oids(self) -> set[int]:
+        app = self._app
+        if app is None:
+            return set()
+        getter = getattr(app, "_selected_oids_set", None)
+        if not callable(getter):
+            return set()
+        try:
+            return {int(x) for x in getter()}
+        except Exception:
+            return set()
+
+    def _apply_record_scope(self, *, preserve_oid: bool) -> None:
+        cur_oid = None
+        if preserve_oid:
+            rec = self._current()
+            if rec is not None and rec.oid is not None:
+                cur_oid = int(rec.oid)
+        recs = list(self._all_records)
+        if self._cb_only_selected.isChecked():
+            selected = self._selected_oids()
+            recs = [r for r in recs if r.oid is not None and int(r.oid) in selected]
+        self._records = recs
+        self._idx = 0
+        if cur_oid is not None:
+            for i, rec in enumerate(self._records):
+                if rec.oid == cur_oid:
+                    self._idx = i
+                    break
+        self._update_ui()
+
+    def _connect_table_selection(self) -> None:
+        self._disconnect_table_selection()
+        app = self._app
+        table = getattr(app, "table", None) if app is not None else None
+        sm = table.selectionModel() if table is not None else None
+        if sm is None:
+            return
+        sm.selectionChanged.connect(self._on_host_table_selection_changed)
+        self._selection_model = sm
+
+    def _disconnect_table_selection(self) -> None:
+        sm = getattr(self, "_selection_model", None)
+        if sm is None:
+            return
+        try:
+            sm.selectionChanged.disconnect(self._on_host_table_selection_changed)
+        except TypeError:
+            pass
+        self._selection_model = None
+
+    def _on_host_table_selection_changed(self, *_args) -> None:
+        if not self._cb_only_selected.isChecked():
+            return
+        timer = getattr(self, "_selection_timer", None)
+        if timer is not None:
+            timer.start()
+
+    def _refresh_selected_scope(self) -> None:
+        if self._cb_only_selected.isChecked():
+            self._apply_record_scope(preserve_oid=True)
+
+    def _select_current_row(self) -> None:
+        rec = self._current()
+        app = self._app
+        if rec is None or rec.oid is None or app is None:
+            return
+        select = getattr(app, "select_table_oids", None)
+        if callable(select):
+            select([int(rec.oid)], extra_status=TOOL_PREDICT_METABOLITES)
+
+    def _preview_pixel_size(self) -> tuple[int, int, float]:
+        dpr = max(1.0, float(self.devicePixelRatioF()))
+        lw = int(self._struct_label.width())
+        lh = int(self._struct_label.height())
+        if lw < 32 or lh < 32:
+            lw = BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH
+            lh = BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT
+        return max(1, int(lw * dpr)), max(1, int(lh * dpr)), dpr
+
+    def _fit_preview_pixmap(self, pm: QPixmap, dpr: float) -> QPixmap:
+        """Place the depiction on a white canvas that matches the preview label."""
+        lw = int(self._struct_label.width())
+        lh = int(self._struct_label.height())
+        if lw < 32 or lh < 32:
+            pm.setDevicePixelRatio(dpr)
+            return pm
+        canvas_w = max(1, int(lw * dpr))
+        canvas_h = max(1, int(lh * dpr))
+        canvas = QPixmap(canvas_w, canvas_h)
+        canvas.fill(QColor(255, 255, 255))
+        fitted = pm
+        if fitted.width() != canvas_w or fitted.height() != canvas_h:
+            fitted = pm.scaled(canvas_w, canvas_h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        painter = QPainter(canvas)
+        x = (canvas_w - fitted.width()) // 2
+        y = (canvas_h - fitted.height()) // 2
+        painter.drawPixmap(x, y, fitted)
+        painter.end()
+        canvas.setDevicePixelRatio(dpr)
+        return canvas
+
+    def _refresh_preview(self) -> None:
+        rec = self._current()
+        smiles = self._canvas_smiles
+        if rec is None:
+            self._struct_label.clear()
+            self._struct_label.setPixmap(QPixmap())
+            self._struct_label.setText("No metabolite results.")
+            return
+        if not smiles:
+            self._struct_label.clear()
+            self._struct_label.setPixmap(QPixmap())
+            self._struct_label.setText(rec.error or "Could not draw structure.")
+            return
+        pw, ph, dpr = self._preview_pixel_size()
+        cache_key = (smiles, pw, ph)
+        pm = self._preview_cache.get(cache_key)
+        if pm is None or pm.isNull():
+            pm = _pixmap_from_smiles(smiles, pw, ph)
+            if pm is not None and not pm.isNull():
+                self._preview_cache[cache_key] = pm
+        if pm is None or pm.isNull():
+            self._struct_label.clear()
+            self._struct_label.setPixmap(QPixmap())
+            self._struct_label.setText(rec.error or "Could not draw structure.")
+            return
+        pm = self._fit_preview_pixmap(pm, dpr)
+        self._struct_label.setPixmap(pm)
+        self._struct_label.setText("")
+
+    def _refresh_caption(self) -> None:
+        smiles = self._canvas_smiles
+        kind = self._canvas_kind or ROLE_PARENT
+        rec = self._current()
+        if rec is None:
+            self._canvas_caption.setText("No metabolite results.")
+            return
+        if not smiles:
+            self._canvas_caption.setText(rec.error or "")
+            return
+        self._canvas_caption.setText(f"{kind}: {smiles}")
+
+    def _on_table_selection_changed(self) -> None:
+        if self._filling_table:
+            return
+        row = self._table.currentRow()
+        if row < 0:
+            return
+        item = self._table.item(row, _COL_ROLE)
+        if item is None:
+            return
+        smiles = str(item.data(_SMILES_ROLE) or "")
+        kind = str(item.data(_KIND_ROLE) or ROLE_METABOLITE)
+        if smiles == self._canvas_smiles and kind == self._canvas_kind:
+            return
+        self._canvas_smiles = smiles
+        self._canvas_kind = kind
+        self._refresh_caption()
+        self._refresh_preview()
+
+    def _set_table_row(
+        self,
+        row: int,
+        *,
+        kind: str,
+        smiles: str,
+        reaction: str = "",
+        enzyme: str = "",
+        generation: int | None = None,
+    ) -> None:
+        role_item = QTableWidgetItem(kind)
+        role_item.setData(_SMILES_ROLE, smiles)
+        role_item.setData(_KIND_ROLE, kind)
+        if kind == ROLE_PARENT:
+            font = QFont(role_item.font())
+            font.setBold(True)
+            role_item.setFont(font)
+        self._table.setItem(row, _COL_ROLE, role_item)
+        struct_item = QTableWidgetItem()
+        thumb = _pixmap_from_smiles(smiles, _THUMB_W, _THUMB_H)
+        if thumb is not None:
+            struct_item.setData(Qt.DecorationRole, thumb)
+        self._table.setItem(row, _COL_STRUCT, struct_item)
+        self._table.setItem(row, _COL_SMILES, QTableWidgetItem(smiles))
+        self._table.setItem(row, _COL_REACTION, QTableWidgetItem(reaction))
+        self._table.setItem(row, _COL_ENZYME, QTableWidgetItem(enzyme))
+        step = "" if generation is None else str(generation)
+        step_item = NumericTableWidgetItem(step)
+        if generation is not None:
+            step_item.setData(Qt.EditRole, int(generation))
+        self._table.setItem(row, _COL_STEP, step_item)
+        self._table.setRowHeight(row, _THUMB_H + 8)
+
+    def _fill_table(self, rec: MetaboliteBrowseRecord | None) -> None:
+        self._filling_table = True
+        self._table.blockSignals(True)
+        try:
+            if rec is None:
+                self._table.setRowCount(0)
+                self._canvas_smiles = ""
+                self._canvas_kind = ROLE_PARENT
+                return
+            hits = rec.metabolites
+            self._table.setRowCount(1 + len(hits))
+            self._set_table_row(0, kind=ROLE_PARENT, smiles=rec.smiles)
+            for i, hit in enumerate(hits):
+                self._set_table_row(
+                    i + 1,
+                    kind=ROLE_METABOLITE,
+                    smiles=hit.smiles,
+                    reaction=hit.reaction,
+                    enzyme=hit.enzyme,
+                    generation=hit.generation,
+                )
+            self._canvas_smiles = rec.smiles
+            self._canvas_kind = ROLE_PARENT
+            self._table.selectRow(0)
+        finally:
+            self._table.blockSignals(False)
+            self._filling_table = False
+
     def _update_ui(self) -> None:
         rec = self._current()
         n = len(self._records)
         row_txt = ""
-        if rec is not None and rec.oid is not None:
+        if rec is not None and rec.oid is not None and self._app is not None:
+            try:
+                logical = int(self._app._table_model.logical_row_for_oid(int(rec.oid)))
+                if logical >= 0:
+                    row_txt = f"  ·  Row {logical + 1}"
+            except Exception:
+                row_txt = f"  (row {rec.oid})"
+        elif rec is not None and rec.oid is not None:
             row_txt = f"  (row {rec.oid})"
         self._meta.setText(f"{TOOL_PREDICT_METABOLITES}: {self._idx + 1} / {max(n, 1)}{row_txt}")
-        self._prev.setEnabled(n > 1)
-        self._next.setEnabled(n > 1)
-        if rec is None:
-            self._parent_img.setPixmap(QPixmap())
-            self._parent_smiles.setText("No metabolite results.")
-            self._table.setRowCount(0)
-            return
-        pm = _pixmap_from_smiles(
-            rec.smiles,
-            BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
-            BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
-        )
-        if pm is None:
-            self._parent_img.setPixmap(QPixmap())
-            self._parent_img.setText(rec.error or "Could not draw parent.")
+        enabled = n > 1
+        self._btn_first.setEnabled(enabled)
+        self._btn_back.setEnabled(enabled)
+        self._btn_fwd.setEnabled(enabled)
+        self._btn_last.setEnabled(enabled)
+        self._btn_select.setEnabled(rec is not None and rec.oid is not None)
+        self._fill_table(rec)
+        self._refresh_caption()
+        self._refresh_preview()
+
+
+class MetaboliteBrowserDialog(QDialog):
+    """Floating window hosting a :class:`MetaboliteBrowserWidget`."""
+
+    def __init__(self, parent: Any = None, *, panel: MetaboliteBrowserWidget | None = None):
+        super().__init__(parent)
+        self.parent_app = parent
+        self.setWindowTitle(f"{TOOL_PREDICT_METABOLITES} Browser")
+        self.setModal(False)
+        self.setWindowModality(Qt.NonModal)
+        self.setMinimumSize(640, 780)
+        self.resize(720, 900)
+        self._force_close = False
+
+        if panel is not None:
+            self._panel = panel
+            self._panel.setParent(self)
+            self._panel.rebind_parent_app(parent)
+            self._panel.show()
         else:
-            self._parent_img.setText("")
-            self._parent_img.setPixmap(pm)
-        self._parent_smiles.setText(rec.smiles or rec.error or "")
-        hits = rec.metabolites
-        self._table.setRowCount(len(hits))
-        for i, hit in enumerate(hits):
-            num = NumericTableWidgetItem(str(i + 1))
-            num.setData(Qt.EditRole, i + 1)
-            self._table.setItem(i, 0, num)
-            thumb = QLabel()
-            thumb.setAlignment(Qt.AlignCenter)
-            tpm = _pixmap_from_smiles(hit.smiles, _THUMB_W, _THUMB_H)
-            if tpm is not None:
-                thumb.setPixmap(tpm)
-            self._table.setCellWidget(i, 1, thumb)
-            self._table.setItem(i, 2, QTableWidgetItem(hit.smiles))
-            self._table.setItem(i, 3, QTableWidgetItem(hit.reaction))
-            self._table.setItem(i, 4, QTableWidgetItem(hit.enzyme))
-            step = "" if hit.generation is None else str(hit.generation)
-            step_item = NumericTableWidgetItem(step)
-            if hit.generation is not None:
-                step_item.setData(Qt.EditRole, int(hit.generation))
-            self._table.setItem(i, 5, step_item)
-            self._table.setRowHeight(i, _THUMB_H + 8)
-        if rec.error and not hits:
-            self._parent_smiles.setText(rec.error)
+            self._panel = MetaboliteBrowserWidget(parent, self)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(self._panel, 1)
+        self._panel._sync_footer_chrome()
+        make_window_minimizable(self)
+        self.setModal(False)
+        self.setWindowModality(Qt.NonModal)
+
+    def showEvent(self, event) -> None:  # noqa: N802 — Qt API
+        super().showEvent(event)
+        panel = getattr(self, "_panel", None)
+        if panel is not None:
+            QTimer.singleShot(0, self._refresh_panel_preview)
+
+    def _refresh_panel_preview(self) -> None:
+        from ..qt_widget_utils import qobject_is_deleted
+
+        if qobject_is_deleted(self):
+            return
+        panel = getattr(self, "_panel", None)
+        if panel is None or qobject_is_deleted(panel):
+            return
+        panel._refresh_preview()
+
+    def set_records(self, records: list[MetaboliteBrowseRecord]) -> None:
+        panel = getattr(self, "_panel", None)
+        if panel is None:
+            return
+        panel.set_records(records)
+
+    def jump_to_oid(self, oid: int | None) -> bool:
+        panel = getattr(self, "_panel", None)
+        if panel is None:
+            return False
+        return bool(panel.jump_to_oid(oid))
+
+    def closeEvent(self, event) -> None:  # noqa: N802 — Qt API
+        from ..dockable_plot import handle_floating_plot_close_event
+
+        if getattr(self, "_panel", None) is not None and self._panel.parent() is not self:
+            self._force_close = True
+            self._panel = None
+        handle_floating_plot_close_event(
+            self,
+            event,
+            title="Close Browser",
+            message="Close this browser?",
+        )

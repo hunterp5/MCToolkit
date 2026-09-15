@@ -235,6 +235,7 @@ class PredictToolsMixin:
         records = records_from_worker_rows(results)
         if records:
             self._som_browse_records = list(records)
+            self._sync_predict_viewer_actions()
             self._open_som_browser(records)
         elif not table_rows:
             QMessageBox.information(
@@ -371,6 +372,47 @@ class PredictToolsMixin:
             return
         self._open_som_browser(records, focus_oid=oid)
 
+    def open_som_viewer(self) -> None:
+        """Open the SOM map browser from the Predict → SOM → Viewer menu."""
+        self.open_som_browser_for_oid(None)
+
+    def _has_som_viewer_data(self) -> bool:
+        if getattr(self, "_som_browse_records", None):
+            return True
+        from ...som_prediction import is_som_map_header
+
+        return any(is_som_map_header(h) for h in (self.headers or []))
+
+    def _has_metabolite_viewer_data(self) -> bool:
+        if getattr(self, "_metabolite_browse_records", None):
+            return True
+        from ...biotransformer import (
+            METABOLITE_COUNT_COLUMN,
+            METABOLITE_SMILES_COLUMN,
+            is_metabolite_column_header,
+        )
+
+        headers = list(self.headers or [])
+        return any(
+            is_metabolite_column_header(h, METABOLITE_SMILES_COLUMN)
+            or is_metabolite_column_header(h, METABOLITE_COUNT_COLUMN)
+            for h in headers
+        )
+
+    def _sync_predict_viewer_actions(self) -> None:
+        som_act = getattr(self, "_act_som_viewer", None)
+        if som_act is not None:
+            try:
+                som_act.setEnabled(self._has_som_viewer_data())
+            except RuntimeError:
+                pass
+        met_act = getattr(self, "_act_metabolite_viewer", None)
+        if met_act is not None:
+            try:
+                met_act.setEnabled(self._has_metabolite_viewer_data())
+            except RuntimeError:
+                pass
+
     def export_som_map_for_oid(self, oid: int, header: str) -> None:
         """Save the SOM Map cell image for one table row."""
         from PyQt5.QtWidgets import QFileDialog
@@ -478,6 +520,7 @@ class PredictToolsMixin:
         records = records_from_worker_rows(results)
         if records:
             self._metabolite_browse_records = list(records)
+            self._sync_predict_viewer_actions()
             self._open_metabolite_browser(records)
         elif not table_rows:
             QMessageBox.information(
@@ -491,6 +534,17 @@ class PredictToolsMixin:
                 self.status_label.setText(notice)
 
     def _on_metabolite_browser_dialog_destroyed(self, *_args) -> None:
+        from ..qt_widget_utils import qobject_is_deleted
+
+        if qobject_is_deleted(self):
+            return
+        try:
+            sender = self.sender()
+        except RuntimeError:
+            return
+        current = getattr(self, "_metabolite_browser_dialog", None)
+        if sender is not None and current is not None and current is not sender:
+            return
         self._metabolite_browser_dialog = None
 
     def _discard_stale_metabolite_browser_dialog(self) -> None:
@@ -500,33 +554,83 @@ class PredictToolsMixin:
         try:
             from PyQt5 import sip
 
-            if sip.isdeleted(dlg):
+            if sip.isdeleted(dlg) or getattr(dlg, "_panel", None) is None:
                 self._metabolite_browser_dialog = None
-                return
+                try:
+                    dlg.close()
+                    dlg.deleteLater()
+                except RuntimeError:
+                    pass
         except Exception:
             self._metabolite_browser_dialog = None
-            return
-        try:
-            dlg.close()
-        except RuntimeError:
-            pass
-        self._metabolite_browser_dialog = None
 
     def _open_metabolite_browser(self, records, *, focus_oid: int | None = None) -> None:
-        from ..metabolite_browser import MetaboliteBrowserDialog
+        from ..metabolite_browser import MetaboliteBrowserDialog, MetaboliteBrowserWidget
 
+        if self._host_unavailable():
+            return
         if not records:
             return
+        self._metabolite_browse_records = list(records)
         self._discard_stale_metabolite_browser_dialog()
-        dlg = MetaboliteBrowserDialog(self)
-        dlg.set_records(list(records))
-        if focus_oid is not None:
-            dlg.jump_to_oid(focus_oid)
-        dlg.destroyed.connect(self._on_metabolite_browser_dialog_destroyed)
-        self._metabolite_browser_dialog = dlg
-        dlg.show()
-        dlg.raise_()
-        dlg.activateWindow()
+
+        def _focus(widget) -> None:
+            if widget is None or focus_oid is None:
+                return
+            jump = getattr(widget, "jump_to_oid", None)
+            if callable(jump):
+                jump(int(focus_oid))
+
+        for w in self.iter_docked_plot_widgets():
+            if isinstance(w, MetaboliteBrowserWidget):
+                mgr = self._workspace()
+                if mgr is not None:
+                    pane = mgr.pane_for_widget(w)
+                    if pane is not None:
+                        mgr.set_preferred_pane(pane)
+                self.show_docked_plot_panel()
+                w.set_records(records)
+                _focus(w)
+                w.raise_()
+                self.status_label.setText(f"{TOOL_PREDICT_METABOLITES}: focused in workspace pane.")
+                return
+
+        def _factory():
+            dlg = MetaboliteBrowserDialog(self)
+            dlg.set_records(records)
+            _focus(getattr(dlg, "_panel", None))
+            return dlg
+
+        def _on_reused(dlg):
+            dlg.set_records(records)
+            _focus(getattr(dlg, "_panel", None))
+
+        reuse_or_show_modeless_singleton(
+            self,
+            "_metabolite_browser_dialog",
+            _factory,
+            self._on_metabolite_browser_dialog_destroyed,
+            on_reused_visible=_on_reused,
+        )
+
+    def open_metabolite_viewer(self) -> None:
+        """Open the metabolite browser from the Predict → Metabolites → Viewer menu."""
+        from ..metabolite_browser import records_from_table
+
+        records = list(getattr(self, "_metabolite_browse_records", None) or ())
+        if not records:
+            table_recs = records_from_table(self)
+            if table_recs:
+                records = table_recs
+                self._metabolite_browse_records = list(records)
+        if not records:
+            QMessageBox.information(
+                self,
+                TOOL_PREDICT_METABOLITES,
+                "No metabolite predictions to browse. Run Predict Metabolites first.",
+            )
+            return
+        self._open_metabolite_browser(records)
 
     def _on_biotransformer_failed(self, msg: str) -> None:
         if self._host_unavailable():
