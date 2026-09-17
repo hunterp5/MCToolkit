@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QApplication, QInputDialog, QMenu, QMessageBox
+from PyQt5.QtWidgets import QApplication, QInputDialog, QMenu
 
 from ...column_log_transform import (
     column_can_apply_log10,
@@ -28,7 +28,6 @@ from ...column_log_transform import (
 )
 from ...confs_codec import resolve_blocks_b64_for_viewer
 from ...utils import mol_to_canonical_smiles
-from ..compound_table_model import CompoundTableModel
 from ..strings import TOOL_RENDER_2D
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
 from .table_undo_commands import (
@@ -37,7 +36,6 @@ from .table_undo_commands import (
     UndoDuplicateColumnCommand,
     UndoInsertRowCommand,
     UndoLogarithmicColumnCommand,
-    UndoPasteCellCommand,
     UndoPrecisionColumnCommand,
 )
 
@@ -307,12 +305,12 @@ class TableMenuMixin:
             if t0.isdigit():
                 self._confirm_and_push_delete_rows([row])
 
-
     def show_table_menu(self, pos):
         idx = self.table.indexAt(pos)
-        if not idx.isValid():
+        mapped = self._source_cell_from_view_index(idx)
+        if mapped is None:
             return
-        row, col = idx.row(), idx.column()
+        row, col = mapped
         t0 = self._table_model.cell_text(row, 0)
         oid = int(t0) if t0.isdigit() else None
         som_map_col = False
@@ -446,33 +444,7 @@ class TableMenuMixin:
         elif action == copy_act and can_copy:
             QApplication.clipboard().setText(copy_text)
         elif action == paste_act and can_paste:
-            clip = (QApplication.clipboard().text() or "").strip()
-            if not clip:
-                QMessageBox.information(self, "Paste", "Clipboard is empty.")
-            elif col == CompoundTableModel.STRUCTURE_COL:
-                if self._mol_from_structure_text(clip) is None:
-                    QMessageBox.warning(
-                        self,
-                        "Paste",
-                        "Could not interpret the clipboard as a structure (try SMILES, InChI, or a MolBlock).",
-                    )
-                else:
-                    self._undo_stack.push(UndoPasteCellCommand(self, row, col, int(oid), clip))
-            elif (
-                0 <= col < len(self.headers)
-                and self._table_model.is_pixmap_data_column(self.headers[col])
-                and chem_col
-            ):
-                if self._mol_from_structure_text(clip) is None:
-                    QMessageBox.warning(
-                        self,
-                        "Paste",
-                        "Could not interpret the clipboard as a structure (try SMILES, InChI, or a MolBlock).",
-                    )
-                else:
-                    self._undo_stack.push(UndoPasteCellCommand(self, row, col, int(oid), clip))
-            elif self._table_model.column_accepts_text_edit(col):
-                self._undo_stack.push(UndoPasteCellCommand(self, row, col, int(oid), clip))
+            self.edit_paste(origin=(row, col))
         elif edit_act is not None and action == edit_act:
             old_t = self._table_model.cell_text(row, col) or ""
             txt, ok = QInputDialog.getText(self, "Edit value", "New value:", text=old_t)

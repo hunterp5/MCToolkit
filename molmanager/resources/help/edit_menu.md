@@ -18,7 +18,7 @@ Operates on the current table and selection. Undo depth depends on recent editab
 
 - **Undo** / **Redo** - reverse or reapply recent table edits.
 - **Delete Selection** - delete selected rows, delete selected columns (when no rows are selected), or clear values from selected cells. When both rows and columns are selected, choose which to delete. Structure cannot be removed as a column.
-- Clipboard commands (copy/paste as available).
+- **Copy** / **Paste** - copy a rectangular cell block as tab-separated text (Excel-compatible). Paste at the top-left of the current selection. Multi-cell clipboards ask whether to fill this cell only or multiple cells; overwriting populated cells requires confirmation. Extra rows/columns that do not fit the table are skipped. Structure cells still need SMILES, InChI, or a MolBlock.
 - Selection commands (select all, clear, invert - per menu entries).
 - Related edit actions exposed in the menu for the active table focus.
 
@@ -26,15 +26,15 @@ Operates on the current table and selection. Undo depth depends on recent editab
 
 1. Make an edit or selection change.
 2. Use **Undo** if the result is wrong.
-3. Copy values as needed for external notes.
+3. Copy values as needed for Excel or another app; paste a copied block from the top-left cell.
 4. Shape selection before running **Selected Rows Only** tools.
 
 ## Use cases
 
 - Undo a bulk column clear.
 - Select all visible hits then invert to exclude them.
-- Copy SMILES from selected cells into another app.
+- Copy a 2×2 of descriptors and paste it into empty cells.
 
 ## Tips and limits
 
-Not every background tool result is undoable the same way as cell edits - prefer session duplicates before destructive bulk jobs. Paste validity still depends on column types. Keep focus on the table for edit shortcuts to apply.
+Not every background tool result is undoable the same way as cell edits - prefer session duplicates before destructive bulk jobs. Paste validity still depends on column types (structure cells need a parseable molecule). Numeric columns store pasted text as-is, matching Edit Value. Keep focus on the table for edit shortcuts to apply.
