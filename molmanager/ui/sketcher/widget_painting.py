@@ -184,7 +184,9 @@ class SketchWidgetPaintMixin:
                 i1 = i2 = 0.0
         return x1 + ux * i1, y1 + uy * i1, x2 - ux * i2, y2 - uy * i2
 
-    def _fill_text_path(self, p: QPainter, path: QPainterPath, fill: QColor, *, halo_w: float = 0.0) -> None:
+    def _fill_text_path(
+        self, p: QPainter, path: QPainterPath, fill: QColor, *, halo_w: float = 0.0
+    ) -> None:
         if halo_w > 0.5:
             halo = QPen(QColor(255, 255, 255))
             halo.setWidthF(halo_w)
@@ -202,7 +204,9 @@ class SketchWidgetPaintMixin:
         pen.setJoinStyle(Qt.RoundJoin)
         return pen
 
-    def _bond_parallel_offset(self, x1: float, y1: float, x2: float, y2: float, dist: float) -> tuple[float, float]:
+    def _bond_parallel_offset(
+        self, x1: float, y1: float, x2: float, y2: float, dist: float
+    ) -> tuple[float, float]:
         dx, dy = x2 - x1, y2 - y1
         length = max(math.hypot(dx, dy), 1.0)
         return (-dy / length * dist, dx / length * dist)
@@ -257,7 +261,11 @@ class SketchWidgetPaintMixin:
 
     def _ring_atom_ids(self) -> set[int]:
         """Atom ids on cycles via leaf-trimming (GR-1.10 double-bond sidedness)."""
-        key = (len(self.nodes), len(self.bonds), tuple(tuple(_bond_unpack(b)) for b in self.bonds[:64]))
+        key = (
+            len(self.nodes),
+            len(self.bonds),
+            tuple(tuple(_bond_unpack(b)) for b in self.bonds[:64]),
+        )
         cached = getattr(self, "_iupac_ring_atom_ids", None)
         if cached is not None and getattr(self, "_iupac_ring_cache_key", None) == key:
             return cached
@@ -449,9 +457,7 @@ class SketchWidgetPaintMixin:
                 return 1.0
         return self._ring_interior_offset_sign(ni, nj, ox, oy)
 
-    def _double_bond_side_substituent_counts(
-        self, ni: dict, nj: dict
-    ) -> tuple[int, int, int, int]:
+    def _double_bond_side_substituent_counts(self, ni: dict, nj: dict) -> tuple[int, int, int, int]:
         """
         Count substituents on each side of bond ni–nj (cross-product sign).
 
@@ -555,14 +561,18 @@ class SketchWidgetPaintMixin:
         ey = y2 - uy * (length * t_end) + oy * side
         p.drawLine(QPointF(sx, sy), QPointF(ex, ey))
 
-    def _draw_bond(self, p: QPainter, ni: dict, nj: dict, order: int, stereo: int, pen: QPen) -> None:
+    def _draw_bond(
+        self, p: QPainter, ni: dict, nj: dict, order: int, stereo: int, pen: QPen
+    ) -> None:
         if order != 1:
             stereo = 0
         style = self._acs_style()
         p.setPen(pen)
         if order == 1 and stereo == BOND_STEREO_WEDGE:
             x1, y1, x2, y2 = self._trimmed_bond_segment(ni, nj, style, stereo=True)
-            apex, left, right = self._wedge_triangle_points(x1, y1, x2, y2, style.wedge_half_width_px)
+            apex, left, right = self._wedge_triangle_points(
+                x1, y1, x2, y2, style.wedge_half_width_px
+            )
             p.setBrush(QBrush(QColor(*style.ink)))
             p.setPen(Qt.NoPen)
             p.drawPolygon(QPolygonF([apex, left, right]))
@@ -606,7 +616,9 @@ class SketchWidgetPaintMixin:
                 QPointF(x2 + ox2, y2 + oy2),
             )
 
-    def _draw_wavy_bond(self, p: QPainter, x1: float, y1: float, x2: float, y2: float, pen: QPen) -> None:
+    def _draw_wavy_bond(
+        self, p: QPainter, x1: float, y1: float, x2: float, y2: float, pen: QPen
+    ) -> None:
         dx, dy = x2 - x1, y2 - y1
         length = max(math.hypot(dx, dy), 1.0)
         ux, uy = dx / length, dy / length
@@ -685,17 +697,27 @@ class SketchWidgetPaintMixin:
         if node is not None and len(text) > 1:
             display, attach_at_end = self._atom_label_orientation(node, text)
         if len(display) <= 1:
-            tw = fm.horizontalAdvance(display) if hasattr(fm, "horizontalAdvance") else fm.width(display)
+            tw = (
+                fm.horizontalAdvance(display)
+                if hasattr(fm, "horizontalAdvance")
+                else fm.width(display)
+            )
             x = float(pos.x() - tw / 2)
         elif attach_at_end:
             prefix = display[:-1]
-            pw = fm.horizontalAdvance(prefix) if hasattr(fm, "horizontalAdvance") else fm.width(prefix)
+            pw = (
+                fm.horizontalAdvance(prefix)
+                if hasattr(fm, "horizontalAdvance")
+                else fm.width(prefix)
+            )
             last = display[-1]
             lw = fm.horizontalAdvance(last) if hasattr(fm, "horizontalAdvance") else fm.width(last)
             x = float(pos.x()) - pw - lw / 2
         else:
             first = display[0]
-            fw = fm.horizontalAdvance(first) if hasattr(fm, "horizontalAdvance") else fm.width(first)
+            fw = (
+                fm.horizontalAdvance(first) if hasattr(fm, "horizontalAdvance") else fm.width(first)
+            )
             x = float(pos.x()) - fw / 2
         y = float(pos.y() + fm.ascent() * 0.35)
         path = QPainterPath()
@@ -703,7 +725,14 @@ class SketchWidgetPaintMixin:
         self._fill_text_path(p, path, fill, halo_w=max(3.0, font_pt * 0.32))
 
     def _draw_formal_charge(
-        self, p: QPainter, pos: QPoint, ch: int, *, symbol: str | None, font_pt: int, node: dict | None = None
+        self,
+        p: QPainter,
+        pos: QPoint,
+        ch: int,
+        *,
+        symbol: str | None,
+        font_pt: int,
+        node: dict | None = None,
     ) -> None:
         if not ch:
             return
@@ -756,7 +785,9 @@ class SketchWidgetPaintMixin:
                 left = float(pos.x()) - fw / 2
                 right = left + tw
             # Charge sits past the free end of the label (GR-5 near the atom symbol).
-            chw = fm.horizontalAdvance(label) if hasattr(fm, "horizontalAdvance") else fm.width(label)
+            chw = (
+                fm.horizontalAdvance(label) if hasattr(fm, "horizontalAdvance") else fm.width(label)
+            )
             bx = right + 1.0 if not attach_at_end else left - chw - 1.0
             by = float(pos.y()) - sym_fm.ascent() * 0.45 + fm.ascent() * 0.5
         else:
@@ -952,11 +983,11 @@ class SketchWidgetPaintMixin:
         by = pos.y() + off.y() + fm.ascent() // 3
         path = QPainterPath()
         path.addText(float(bx), float(by), font, label)
-        self._fill_text_path(
-            p, path, QColor(*style.ink), halo_w=max(2.5, pt * 0.28)
-        )
+        self._fill_text_path(p, path, QColor(*style.ink), halo_w=max(2.5, pt * 0.28))
 
-    def _draw_alkene_ez_label(self, p: QPainter, ni: dict, nj: dict, code: str, *, font_pt: int) -> None:
+    def _draw_alkene_ez_label(
+        self, p: QPainter, ni: dict, nj: dict, code: str, *, font_pt: int
+    ) -> None:
         """Draw bond-based (E)/(Z) near the midpoint (GR-11.2), clear of bond ink."""
         style = self._acs_style()
         x1, y1 = float(ni["pos"].x()), float(ni["pos"].y())
@@ -1028,9 +1059,7 @@ class SketchWidgetPaintMixin:
                 dist = clear_bond + text_clear + 3.0 + extra
                 ox, oy = self._bond_parallel_offset(x1, y1, x2, y2, dist * s)
                 cx, cy = mx + ox, my + oy
-                sc = self._stereo_label_collision_score(
-                    -1, cx, cy, half_w=half_w, half_h=half_h
-                )
+                sc = self._stereo_label_collision_score(-1, cx, cy, half_w=half_w, half_h=half_h)
                 if s != side:
                     sc += 2.0
                 if sc < best_score:
@@ -1039,11 +1068,11 @@ class SketchWidgetPaintMixin:
                     best_ty = cy + fm.ascent() / 3
         path = QPainterPath()
         path.addText(float(best_tx), float(best_ty), font, label)
-        self._fill_text_path(
-            p, path, QColor(*style.ink), halo_w=max(2.5, pt * 0.28)
-        )
+        self._fill_text_path(p, path, QColor(*style.ink), halo_w=max(2.5, pt * 0.28))
 
-    def _draw_atom_selection_ring(self, p: QPainter, pos: QPoint, *, selected: bool, hover: bool) -> None:
+    def _draw_atom_selection_ring(
+        self, p: QPainter, pos: QPoint, *, selected: bool, hover: bool
+    ) -> None:
         style = self._acs_style()
         r = float(self.radius) + style.atom_selection_radius_extra
         if selected:
@@ -1059,7 +1088,9 @@ class SketchWidgetPaintMixin:
         p.setBrush(Qt.NoBrush)
         p.drawEllipse(pos, int(r), int(r))
 
-    def _draw_atom_issue_ring(self, p: QPainter, pos: QPoint, *, valence: bool, stereo: bool, iupac: bool = False) -> None:
+    def _draw_atom_issue_ring(
+        self, p: QPainter, pos: QPoint, *, valence: bool, stereo: bool, iupac: bool = False
+    ) -> None:
         if not valence and not stereo and not iupac:
             return
         if valence:
@@ -1177,7 +1208,9 @@ class SketchWidgetPaintMixin:
         return max(0, target - bond_sum)
 
     def _node_condensed_label(self, n: dict) -> str | None:
-        return condensed_heteroatom_label(str(n.get("element") or ""), self._node_implicit_h_count(n))
+        return condensed_heteroatom_label(
+            str(n.get("element") or ""), self._node_implicit_h_count(n)
+        )
 
     def _explicit_carbon_display_label(self, n: dict) -> str:
         """CHₙ label for Explicit Carbon, including implicit hydrogens (GR-2)."""
@@ -1199,7 +1232,9 @@ class SketchWidgetPaintMixin:
         self._invalidate_rdkit_sketch_paint_cache()
         self._after_sketch_edit()
 
-    def _set_node_flag_visible(self, node_id: int, flag: str, visible: bool, *, undo_op: str) -> None:
+    def _set_node_flag_visible(
+        self, node_id: int, flag: str, visible: bool, *, undo_op: str
+    ) -> None:
         n = next((x for x in self.nodes if x["id"] == node_id), None)
         if n is None:
             return
@@ -1216,13 +1251,14 @@ class SketchWidgetPaintMixin:
         self._after_sketch_edit()
 
     def _set_atom_lone_pairs_visible(self, node_id: int, visible: bool) -> None:
-        self._set_node_flag_visible(node_id, "show_lone_pairs", visible, undo_op="chg_show_lone_pairs")
+        self._set_node_flag_visible(
+            node_id, "show_lone_pairs", visible, undo_op="chg_show_lone_pairs"
+        )
 
     def _set_atom_oxidation_visible(self, node_id: int, visible: bool) -> None:
         self._set_node_flag_visible(
             node_id, "show_oxidation_state", visible, undo_op="chg_show_oxidation_state"
         )
-
 
     def _invalidate_rdkit_sketch_paint_cache(self) -> None:
         self._rdkit_sketch_paint_cache_key = None
@@ -1265,7 +1301,9 @@ class SketchWidgetPaintMixin:
             self._rdkit_sketch_paint_cache_key = cache_key
             pm, transform = rendered
         p.save()
-        p.setRenderHint(QPainter.SmoothPixmapTransform, float(getattr(self, "_view_scale", 1.0)) != 1.0)
+        p.setRenderHint(
+            QPainter.SmoothPixmapTransform, float(getattr(self, "_view_scale", 1.0)) != 1.0
+        )
         p.setTransform(transform, combine=True)
         p.drawPixmap(0, 0, pm)
         p.restore()
@@ -1328,7 +1366,11 @@ class SketchWidgetPaintMixin:
                     style=style,
                 )
 
-        if hover_bond is not None and 0 <= hover_bond < len(self.bonds) and hover_bond not in selected_bonds:
+        if (
+            hover_bond is not None
+            and 0 <= hover_bond < len(self.bonds)
+            and hover_bond not in selected_bonds
+        ):
             a, b, order, _stereo = _bond_unpack(self.bonds[hover_bond])
             ni = next((n for n in self.nodes if n["id"] == a), None)
             nj = next((n for n in self.nodes if n["id"] == b), None)
@@ -1588,16 +1630,17 @@ class SketchWidgetPaintMixin:
                 continue
 
             if el == "C":
-                has_conn = any((_bond_unpack(b)[0] == n["id"] or _bond_unpack(b)[1] == n["id"]) for b in self.bonds)
+                has_conn = any(
+                    (_bond_unpack(b)[0] == n["id"] or _bond_unpack(b)[1] == n["id"])
+                    for b in self.bonds
+                )
                 show_c = bool(n.get("explicit_carbon")) or not has_conn
                 ch = int(n.get("charge", 0) or 0)
                 if show_c:
                     c = rdkit_default_element_rgb(el)
                     # Explicit Carbon: include implicit H (CH3, CH2, …); charge drawn after H (GR-5.1).
                     label = (
-                        self._explicit_carbon_display_label(n)
-                        if n.get("explicit_carbon")
-                        else "C"
+                        self._explicit_carbon_display_label(n) if n.get("explicit_carbon") else "C"
                     )
                     self._draw_element_label(
                         p, pos, label, font_pt=style.label_font_pt, fill=QColor(*c), node=n
@@ -1636,6 +1679,55 @@ class SketchWidgetPaintMixin:
             return
         self._paint_sketch_structure_acs(p, style)
 
+    def _paint_reaction_arrow(
+        self, p: QPainter, start: QPoint, end: QPoint, style, *, preview: bool = False
+    ) -> None:
+        x1, y1 = float(start.x()), float(start.y())
+        x2, y2 = float(end.x()), float(end.y())
+        dx, dy = x2 - x1, y2 - y1
+        length = max(math.hypot(dx, dy), 1.0)
+        ux, uy = dx / length, dy / length
+        px, py = -uy, ux
+        head = max(10.0, min(16.0, length * 0.18))
+        half = max(5.0, style.wedge_half_width_px * 0.85)
+        color = QColor(60, 120, 200) if preview else QColor(20, 20, 20)
+        if getattr(self, "selected_reaction_arrow", False) and not preview:
+            color = QColor(40, 90, 180)
+        pen = QPen(color)
+        pen.setWidthF(max(1.8, style.bond_width_px * 1.35))
+        pen.setCapStyle(Qt.RoundCap)
+        if preview:
+            pen.setStyle(Qt.DashLine)
+        sx2 = x2 - ux * head
+        sy2 = y2 - uy * head
+        p.setPen(pen)
+        p.drawLine(QPointF(x1, y1), QPointF(sx2, sy2))
+        p.setBrush(QBrush(color))
+        p.setPen(Qt.NoPen)
+        p.drawPolygon(
+            QPolygonF(
+                [
+                    QPointF(x2, y2),
+                    QPointF(sx2 + px * half, sy2 + py * half),
+                    QPointF(sx2 - px * half, sy2 - py * half),
+                ]
+            )
+        )
+        p.setBrush(Qt.NoBrush)
+
+    def _paint_reaction_pluses(self, p: QPainter, style) -> None:
+        pts = self._reaction_plus_positions()
+        if not pts:
+            return
+        arm = max(6.0, style.label_font_pt * 0.55)
+        pen = QPen(QColor(20, 20, 20))
+        pen.setWidthF(max(1.6, style.bond_width_px * 1.1))
+        pen.setCapStyle(Qt.RoundCap)
+        p.setPen(pen)
+        for x, y in pts:
+            p.drawLine(QPointF(x - arm, y), QPointF(x + arm, y))
+            p.drawLine(QPointF(x, y - arm), QPointF(x, y + arm))
+
     def paintEvent(self, ev) -> None:
         self._ensure_bonds_sanitized()
         style = self._acs_style()
@@ -1646,6 +1738,13 @@ class SketchWidgetPaintMixin:
         p.save()
         self._apply_view_transform(p)
         self._paint_sketch_structure(p, style)
+        arr = getattr(self, "reaction_arrow", None)
+        if arr is not None:
+            self._paint_reaction_arrow(p, arr[0], arr[1], style)
+            self._paint_reaction_pluses(p, style)
+        if getattr(self, "_arrow_dragging", False) and self._arrow_drag_start is not None:
+            end = self._arrow_drag_pos or self._arrow_drag_start
+            self._paint_reaction_arrow(p, self._arrow_drag_start, end, style, preview=True)
         if self._is_dragging and self._drag_start is not None and self._drag_pos is not None:
             start = next((n for n in self.nodes if n["id"] == self._drag_start), None)
             if start:
@@ -1665,7 +1764,11 @@ class SketchWidgetPaintMixin:
             p.setBrush(Qt.NoBrush)
             p.drawRect(r.left(), r.top(), r.width(), r.height())
         lasso_pts = getattr(self, "_lasso_points", None) or []
-        if self._selecting and getattr(self, "select_tool", "box") == "lasso" and len(lasso_pts) >= 2:
+        if (
+            self._selecting
+            and getattr(self, "select_tool", "box") == "lasso"
+            and len(lasso_pts) >= 2
+        ):
             path = QPainterPath()
             path.moveTo(QPointF(float(lasso_pts[0].x()), float(lasso_pts[0].y())))
             for wp in lasso_pts[1:]:

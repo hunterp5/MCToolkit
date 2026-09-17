@@ -21,7 +21,17 @@ from __future__ import annotations
 import math
 
 from PyQt5.QtCore import QPointF, QRectF, Qt
-from PyQt5.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
+from PyQt5.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QIcon,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QPolygonF,
+)
 
 
 _INK = QColor(40, 40, 40)
@@ -201,9 +211,45 @@ def bond_dative_icon(size: int = _ICON_SIZE) -> QIcon:
     return _paint_icon(paint, size)
 
 
-def _regular_polygon(cx: float, cy: float, r: float, n: int, rot: float = -math.pi / 2) -> list[QPointF]:
+def reaction_arrow_icon(size: int = _ICON_SIZE) -> QIcon:
+    """Horizontal reaction arrow (plus on the left, arrow to the right)."""
+
+    def paint(p: QPainter, s: float) -> None:
+        ink = _INK
+        p.setPen(_ink_pen(2.0))
+        plus_x = s * 0.22
+        plus_y = s * 0.50
+        arm = s * 0.10
+        p.drawLine(QPointF(plus_x - arm, plus_y), QPointF(plus_x + arm, plus_y))
+        p.drawLine(QPointF(plus_x, plus_y - arm), QPointF(plus_x, plus_y + arm))
+        y = s * 0.50
+        x0 = s * 0.38
+        x1 = s * 0.86
+        head = s * 0.16
+        p.drawLine(QPointF(x0, y), QPointF(x1 - head, y))
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(ink))
+        p.drawPolygon(
+            QPolygonF(
+                [
+                    QPointF(x1, y),
+                    QPointF(x1 - head, y - s * 0.12),
+                    QPointF(x1 - head, y + s * 0.12),
+                ]
+            )
+        )
+
+    return _paint_icon(paint, size)
+
+
+def _regular_polygon(
+    cx: float, cy: float, r: float, n: int, rot: float = -math.pi / 2
+) -> list[QPointF]:
     return [
-        QPointF(cx + r * math.cos(rot + 2 * math.pi * i / n), cy + r * math.sin(rot + 2 * math.pi * i / n))
+        QPointF(
+            cx + r * math.cos(rot + 2 * math.pi * i / n),
+            cy + r * math.sin(rot + 2 * math.pi * i / n),
+        )
         for i in range(n)
     ]
 

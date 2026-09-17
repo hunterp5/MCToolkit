@@ -26,6 +26,7 @@ from PyQt5.QtWidgets import QAction, QMenu, QMessageBox, QWidget
 
 from .bonds import _bond_make, _bond_unpack
 from .constants import DEFAULT_WILDCARD_ELEMENTS, SKETCH_MEDIAN_BOND_PX, WILDCARD_ELEMENT
+from .sketch_reactions import snap_arrow_end
 from .wildcards import _is_wildcard_node
 
 
@@ -47,6 +48,15 @@ class SketchWidgetEventsMixin:
                 self._drag_candidate = hit["id"] if hit is not None else None
                 self._drag_start = None
                 self._is_dragging = False
+                self.update()
+                return
+
+            if self.reaction_arrow_mode:
+                self._arrow_dragging = True
+                self._arrow_drag_start = QPoint(pt)
+                self._arrow_drag_pos = QPoint(pt)
+                self.selected_reaction_arrow = False
+                self.setCursor(Qt.CrossCursor)
                 self.update()
                 return
 
@@ -109,12 +119,24 @@ class SketchWidgetEventsMixin:
                         self._select_start = None
                         self.update()
                         return
+                    if self._hit_reaction_arrow(pt) and not shift:
+                        self.selected_nodes = []
+                        self.selected_bond_indices = set()
+                        self.selected_reaction_arrow = True
+                        self._maybe_move = True
+                        self._move_start_pos = QPoint(pt)
+                        self._arrow_move_orig = self._arrow_copy(self.reaction_arrow)
+                        self._selecting = False
+                        self._select_start = None
+                        self.update()
+                        return
                     if shift:
                         self._select_additive_base_nodes = list(self.selected_nodes)
                         self._select_additive_base_bonds = set(self.selected_bond_indices)
                     else:
                         self.selected_nodes = []
                         self.selected_bond_indices = set()
+                        self.selected_reaction_arrow = False
                         self._select_additive_base_nodes = None
                         self._select_additive_base_bonds = None
                     self._maybe_move = False
@@ -152,11 +174,14 @@ class SketchWidgetEventsMixin:
                     self._after_sketch_edit()
                 return
 
-            # erase mode
             if self.erase_mode:
                 if hit is not None:
                     node = next((n for n in self.nodes if n["id"] == hit["id"]), None)
-                    conn = [b for b in self.bonds if _bond_unpack(b)[0] == hit["id"] or _bond_unpack(b)[1] == hit["id"]]
+                    conn = [
+                        b
+                        for b in self.bonds
+                        if _bond_unpack(b)[0] == hit["id"] or _bond_unpack(b)[1] == hit["id"]
+                    ]
                     self._push_undo("del_node", (node, conn))
                     self._delete_node(hit["id"])
                     self._suppress_click = True
@@ -165,6 +190,12 @@ class SketchWidgetEventsMixin:
                 if bi is not None:
                     b = self.bonds.pop(bi)
                     self._push_undo("del_bond", b)
+                    self._after_sketch_edit()
+                    return
+                if self._hit_reaction_arrow(pt):
+                    self._set_reaction_arrow(None)
+                    self._suppress_click = True
+                    return
                 self._after_sketch_edit()
                 return
 
@@ -172,11 +203,14 @@ class SketchWidgetEventsMixin:
             hit = self._hit_node(pt)
             if hit:
                 menu = QMenu(self)
+                self._add_copy_paste_menu_actions(menu, paste_anchor=pt)
                 act_edit = QAction("Edit Atom...", self)
                 act_edit.triggered.connect(lambda ch, h=hit: self._open_edit_atom_dialog(h))
                 menu.addAction(act_edit)
                 act_fc = QAction("Edit Formal Charge…", self)
-                act_fc.setToolTip("Set the atom’s integer formal charge (e.g. +2 on sulfur, −1 on oxygen).")
+                act_fc.setToolTip(
+                    "Set the atom’s integer formal charge (e.g. +2 on sulfur, −1 on oxygen)."
+                )
                 act_fc.triggered.connect(lambda ch, h=hit: self._open_edit_formal_charge_dialog(h))
                 menu.addAction(act_fc)
                 act_h_atom = QAction("Implicit Hydrogens", self)
@@ -251,6 +285,7 @@ class SketchWidgetEventsMixin:
                 if bi is not None:
                     a_idx, b_idx, order, st = _bond_unpack(self.bonds[bi])
                     menu = QMenu(self)
+                    self._add_copy_paste_menu_actions(menu, paste_anchor=pt)
 
                     set_menu = menu.addMenu("Set order")
                     for o in [1, 2, 3]:
@@ -303,7 +338,7 @@ class SketchWidgetEventsMixin:
                 else:
                     dlg = self._sketcher_dialog_if()
                     if dlg is not None:
-                        dlg.show_sketch_canvas_menu(self.mapToGlobal(pt))
+                        dlg.show_sketch_canvas_menu(self.mapToGlobal(wpt))
         self.update()
 
     def mouseDoubleClickEvent(self, ev):
@@ -349,6 +384,20 @@ class SketchWidgetEventsMixin:
         wpt = ev.pos()
         pt = self._widget_point_to_model(wpt)
 
+        if self._arrow_dragging and self._arrow_drag_start is not None:
+            snap = bool(ev.modifiers() & Qt.ShiftModifier)
+            x1, y1 = snap_arrow_end(
+                float(self._arrow_drag_start.x()),
+                float(self._arrow_drag_start.y()),
+                float(pt.x()),
+                float(pt.y()),
+                snap=snap,
+            )
+            self._arrow_drag_pos = QPoint(int(round(x1)), int(round(y1)))
+            self.setCursor(Qt.CrossCursor)
+            self.update()
+            return
+
         if self.select_mode:
             if self._moving and self._move_start_pos is not None:
                 dx = pt.x() - self._move_start_pos.x()
@@ -358,6 +407,12 @@ class SketchWidgetEventsMixin:
                     n = next((x for x in self.nodes if x["id"] == nid), None)
                     if n:
                         n["pos"] = QPoint(int(orig.x() + dx), int(orig.y() + dy))
+                if self.selected_reaction_arrow and self._arrow_move_orig is not None:
+                    oa, ob = self._arrow_move_orig
+                    self.reaction_arrow = (
+                        QPoint(int(oa.x() + dx), int(oa.y() + dy)),
+                        QPoint(int(ob.x() + dx), int(ob.y() + dy)),
+                    )
                 self.setCursor(Qt.ClosedHandCursor)
                 self.update()
                 return
@@ -393,7 +448,9 @@ class SketchWidgetEventsMixin:
                 base_bonds = self._select_additive_base_bonds
                 if base_nodes is not None and base_bonds is not None:
                     seen = set(base_nodes)
-                    self.selected_nodes = list(base_nodes) + [nid for nid in rect_nodes if nid not in seen]
+                    self.selected_nodes = list(base_nodes) + [
+                        nid for nid in rect_nodes if nid not in seen
+                    ]
                     self._sync_selected_bonds_from_marquee_rect(model_rect)
                     self.selected_bond_indices = set(base_bonds) | set(self.selected_bond_indices)
                 else:
@@ -408,12 +465,22 @@ class SketchWidgetEventsMixin:
                     self._moving = True
                     self._maybe_move = False
                     move_ids = self._atoms_for_selection_move()
-                    self._move_orig = {n["id"]: QPoint(n["pos"].x(), n["pos"].y()) for n in self.nodes if n["id"] in move_ids}
+                    self._move_orig = {
+                        n["id"]: QPoint(n["pos"].x(), n["pos"].y())
+                        for n in self.nodes
+                        if n["id"] in move_ids
+                    }
+                    if self.selected_reaction_arrow and self.reaction_arrow is not None:
+                        self._arrow_move_orig = self._arrow_copy(self.reaction_arrow)
                     self.setCursor(Qt.ClosedHandCursor)
                     self.update()
                     return
 
-        if self._drag_candidate is not None and not self._is_dragging and self._mouse_down_pos is not None:
+        if (
+            self._drag_candidate is not None
+            and not self._is_dragging
+            and self._mouse_down_pos is not None
+        ):
             if not self.text_mode:
                 dx = wpt.x() - self._mouse_down_pos.x()
                 dy = wpt.y() - self._mouse_down_pos.y()
@@ -464,9 +531,16 @@ class SketchWidgetEventsMixin:
             if bi is not None:
                 self.hover = ("bond", bi)
                 self.setCursor(Qt.PointingHandCursor)
+            elif self._hit_reaction_arrow(pt):
+                self.hover = ("arrow", 0)
+                self.setCursor(Qt.PointingHandCursor)
             else:
                 self.hover = None
-                if self.erase_mode or self._carbon_chain_cursor_active():
+                if (
+                    self.erase_mode
+                    or self.reaction_arrow_mode
+                    or self._carbon_chain_cursor_active()
+                ):
                     self.setCursor(Qt.CrossCursor)
                 else:
                     self.setCursor(Qt.ArrowCursor)
@@ -491,6 +565,16 @@ class SketchWidgetEventsMixin:
             self.update()
             return
 
+        if self._arrow_dragging:
+            end_pt = self._widget_point_to_model(ev.pos())
+            self._commit_arrow_drag(end_pt, snap=bool(ev.modifiers() & Qt.ShiftModifier))
+            self._mouse_down_pos = None
+            try:
+                self._refresh_hover_from_cursor()
+            except Exception:
+                self.setCursor(Qt.CrossCursor)
+            return
+
         if self.select_mode:
             if self._moving:
                 moves = []
@@ -502,6 +586,12 @@ class SketchWidgetEventsMixin:
                             moves.append((nid, old_pos, new_pos))
                 if moves:
                     self._push_undo("move_nodes", moves)
+                if self._arrow_move_orig is not None and self.reaction_arrow is not None:
+                    old = self._arrow_move_orig
+                    new = self._arrow_copy(self.reaction_arrow)
+                    if new is not None and (old[0] != new[0] or old[1] != new[1]):
+                        self._push_undo("set_arrow", (old, new))
+                self._arrow_move_orig = None
                 self._moving = False
                 self._move_start_pos = None
                 self._move_orig = {}
@@ -586,7 +676,9 @@ class SketchWidgetEventsMixin:
                     do_snap = bool(getattr(self, "snap_geometry", True)) and not (
                         ev.modifiers() & Qt.ShiftModifier
                     )
-                    med = float(getattr(self, "_median_bond_length_px", None) or SKETCH_MEDIAN_BOND_PX)
+                    med = float(
+                        getattr(self, "_median_bond_length_px", None) or SKETCH_MEDIAN_BOND_PX
+                    )
                     order, pst = self._bond_tool_order_stereo()
                     # Place the new atom at the drop point so bond length and angle match the drag.
                     if dist < 1e-6:
@@ -613,7 +705,9 @@ class SketchWidgetEventsMixin:
                         from .iupac_style import snap_extension_angle
 
                         max_exist = max(neigh_orders) if neigh_orders else 1
-                        prefer_linear = max_exist >= 3 or order >= 3 or (max_exist == 2 and order == 2)
+                        prefer_linear = (
+                            max_exist >= 3 or order >= 3 or (max_exist == 2 and order == 2)
+                        )
                         prefer_trigonal = (not prefer_linear) and (max_exist == 2 or order == 2)
                         ang = (
                             snap_extension_angle(
@@ -703,7 +797,8 @@ class SketchWidgetEventsMixin:
                         (
                             b
                             for b in self.bonds
-                            if (b[0] == base_id and b[1] == node["id"]) or (b[1] == base_id and b[0] == node["id"])
+                            if (b[0] == base_id and b[1] == node["id"])
+                            or (b[1] == base_id and b[0] == node["id"])
                         ),
                         None,
                     )
@@ -715,7 +810,11 @@ class SketchWidgetEventsMixin:
                 else:
                     self._mutate_atom_element(tgt, "C", None)
             elif tgt is not None and self.place_element is not None:
-                wels = list(DEFAULT_WILDCARD_ELEMENTS) if self.place_element == WILDCARD_ELEMENT else None
+                wels = (
+                    list(DEFAULT_WILDCARD_ELEMENTS)
+                    if self.place_element == WILDCARD_ELEMENT
+                    else None
+                )
                 self._mutate_atom_element(tgt, self.place_element, wels)
         else:
             ex, ey = end_pt.x(), end_pt.y()
@@ -748,10 +847,14 @@ class SketchWidgetEventsMixin:
                 mods = ev.modifiers()
                 if mods & Qt.ShiftModifier:
                     if k == Qt.Key_C:
-                        self._set_atom("Cl", next((n for n in self.nodes if n["id"] == self.hover), None))
+                        self._set_atom(
+                            "Cl", next((n for n in self.nodes if n["id"] == self.hover), None)
+                        )
                         return
                     if k == Qt.Key_B:
-                        self._set_atom("Br", next((n for n in self.nodes if n["id"] == self.hover), None))
+                        self._set_atom(
+                            "Br", next((n for n in self.nodes if n["id"] == self.hover), None)
+                        )
                         return
                 key_char = None
                 if Qt.Key_A <= k <= Qt.Key_Z:
@@ -759,10 +862,11 @@ class SketchWidgetEventsMixin:
                 if key_char:
                     el = key_char.upper()
                     if el in ["C", "N", "O", "S", "P", "F", "I", "H"]:
-                        self._set_atom(el, next((n for n in self.nodes if n["id"] == self.hover), None))
+                        self._set_atom(
+                            el, next((n for n in self.nodes if n["id"] == self.hover), None)
+                        )
                         return
         except Exception:
             pass
 
         super().keyPressEvent(ev)
-

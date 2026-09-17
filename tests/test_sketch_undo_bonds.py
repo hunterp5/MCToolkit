@@ -67,6 +67,49 @@ def test_undo_removes_newly_placed_atom_and_bond(qapp) -> None:  # noqa: ARG001
     assert len(w.bonds) == 1
 
 
+def test_undo_template_placement_is_atomic(qapp) -> None:  # noqa: ARG001
+    w = SketchWidget()
+    w.place_template("Benzene", center=QPoint(200, 200))
+    assert len(w.nodes) == 6
+    assert len(w.bonds) == 6
+    assert len(w._undo) == 1
+    w.undo()
+    assert w.nodes == []
+    assert w.bonds == []
+    w.redo()
+    assert len(w.nodes) == 6
+    assert len(w.bonds) == 6
+
+
+def test_undo_fused_template_is_atomic(qapp) -> None:  # noqa: ARG001
+    w = SketchWidget()
+    w.place_template("Cyclohexyl", center=QPoint(200, 200))
+    n0, b0 = len(w.nodes), len(w.bonds)
+    w.place_template("Benzene", fuse_bond=0)
+    assert len(w.nodes) > n0
+    assert len(w._undo) == 2
+    w.undo()
+    assert len(w.nodes) == n0
+    assert len(w.bonds) == b0
+    w.undo()
+    assert w.nodes == []
+    w.redo()
+    assert len(w.nodes) == n0
+
+
+def test_undo_attached_template_is_atomic(qapp) -> None:  # noqa: ARG001
+    w = SketchWidget()
+    w.nodes = [{"id": 1, "pos": QPoint(40, 40), "element": "C"}]
+    w.next_id = 2
+    w.place_template("Cyclopropane", attach_to=1)
+    assert len(w.nodes) == 4
+    assert len(w._undo) == 1
+    w.undo()
+    assert len(w.nodes) == 1
+    assert w.nodes[0]["id"] == 1
+    assert w.bonds == []
+
+
 def test_file_menu_undo_redo_actions(qapp) -> None:  # noqa: ARG001
     from PyQt5.QtWidgets import QMenuBar
 

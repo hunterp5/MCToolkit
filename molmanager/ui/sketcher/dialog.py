@@ -44,6 +44,9 @@ from PyQt5.QtWidgets import (
 
 from rdkit import Chem
 
+from ...display_constants import reaction_depict_size
+from ...rxn_io import RXN_SMARTS_HEADER
+from ...structure_draw import ReactionDrawSpec
 from ...workers import ExportWorker
 
 from ..mol_viewer_3d import Molecule3DEmbedView
@@ -78,6 +81,7 @@ from .toolbar_glyphs import (
     status_error_icon,
     status_ok_icon,
     view_3d_icon,
+    reaction_arrow_icon,
 )
 from .bonds import (
     BOND_STEREO_DATIVE,
@@ -193,8 +197,34 @@ class SketcherDialog(QDialog):
         redo_act.setToolTip("Redo the last undone sketch change (Ctrl+Y / Ctrl+Shift+Z).")
         redo_act.triggered.connect(self._redo_sketch)
         edit_menu.addAction(redo_act)
+        edit_menu.addSeparator()
+        copy_act = QAction("&Copy", self)
+        copy_act.setShortcut(QKeySequence.Copy)
+        copy_act.setShortcutContext(Qt.WindowShortcut)
+        copy_act.setToolTip(
+            "Copy the selected atoms and bonds so they can be pasted on the canvas (Ctrl+C)."
+        )
+        copy_act.triggered.connect(self._shortcut_copy_selection)
+        edit_menu.addAction(copy_act)
+        paste_act = QAction("&Paste", self)
+        paste_act.setShortcut(QKeySequence.Paste)
+        paste_act.setShortcutContext(Qt.WindowShortcut)
+        paste_act.setToolTip("Paste a copied sketch fragment at the cursor (Ctrl+V).")
+        paste_act.triggered.connect(self._shortcut_paste_selection)
+        edit_menu.addAction(paste_act)
+        delete_act = QAction("Delete &Selection", self)
+        delete_act.setShortcut(QKeySequence.Delete)
+        delete_act.setShortcutContext(Qt.WindowShortcut)
+        delete_act.setToolTip(
+            "Delete the atom or bond under the cursor, or the current selection (Del)."
+        )
+        delete_act.triggered.connect(self._on_edit_delete)
+        edit_menu.addAction(delete_act)
+        self._act_edit_copy = copy_act
+        self._act_edit_paste = paste_act
+        self._act_edit_delete = delete_act
 
-        # Mode tools: Draw / Erase / Select / Text (toolbar + right-click empty canvas; mutually exclusive).
+        # Mode tools: Draw / Erase / Select / Text (toolbar; empty-canvas menu omits Text).
         self.tb_draw = _glyph_tool_button(
             mode_draw_icon(),
             "Draw with the carbon tool (Ctrl+D). "
@@ -304,13 +334,17 @@ class SketcherDialog(QDialog):
 
         view_menu = menubar.addMenu("View")
         zoom_in_act = QAction("Zoom in", self)
-        zoom_in_act.setToolTip("Zoom in (bonds and labels scale together; does not change the sketch coordinates).")
+        zoom_in_act.setToolTip(
+            "Zoom in (bonds and labels scale together; does not change the sketch coordinates)."
+        )
         zoom_in_act.triggered.connect(self._on_view_zoom_in)
         zoom_in_act.setShortcut(QKeySequence.ZoomIn)
         zoom_in_act.setShortcutContext(Qt.WindowShortcut)
         view_menu.addAction(zoom_in_act)
         zoom_out_act = QAction("Zoom out", self)
-        zoom_out_act.setToolTip("Zoom out (bonds and labels scale together; does not change the sketch coordinates).")
+        zoom_out_act.setToolTip(
+            "Zoom out (bonds and labels scale together; does not change the sketch coordinates)."
+        )
         zoom_out_act.triggered.connect(self._on_view_zoom_out)
         zoom_out_act.setShortcut(QKeySequence.ZoomOut)
         zoom_out_act.setShortcutContext(Qt.WindowShortcut)
@@ -321,7 +355,9 @@ class SketcherDialog(QDialog):
         fit_v_act.triggered.connect(self._on_view_fit_structure)
         view_menu.addAction(fit_v_act)
         center_draw_act = QAction("Center Drawing", self)
-        center_draw_act.setToolTip("Move the whole sketch so it is centered in the canvas (undo: Ctrl+Z).")
+        center_draw_act.setToolTip(
+            "Move the whole sketch so it is centered in the canvas (undo: Ctrl+Z)."
+        )
         center_draw_act.triggered.connect(self._on_center_molecule)
         view_menu.addAction(center_draw_act)
         view_menu.addSeparator()
@@ -367,7 +403,7 @@ class SketcherDialog(QDialog):
 
         l.setMenuBar(menubar)
 
-        # --- Top glyph toolbar: modes, bonds, rings, charge, 3D ---
+        # --- Top glyph toolbar: modes, bonds, rings, charge, 3D, reaction arrow ---
         top_bar = QHBoxLayout()
         top_bar.setSpacing(4)
         top_bar.setContentsMargins(6, 4, 6, 4)
@@ -391,7 +427,9 @@ class SketcherDialog(QDialog):
         self._bond_tool_group.setExclusive(True)
         self._bond_tool_buttons: list[tuple[QPushButton, int, int]] = []
 
-        def _add_bond_tool(icon, tip: str, order: int, stereo: int, *, checked: bool = False) -> QPushButton:
+        def _add_bond_tool(
+            icon, tip: str, order: int, stereo: int, *, checked: bool = False
+        ) -> QPushButton:
             btn = _glyph_tool_button(icon, tip)
             btn.setChecked(checked)
             btn.clicked.connect(lambda _=False, o=order, s=stereo: self._on_bond_tool(o, s))
@@ -405,13 +443,23 @@ class SketcherDialog(QDialog):
         )
         self.bond_double = _add_bond_tool(bond_double_icon(), "Double bond.", 2, BOND_STEREO_PLAIN)
         self.bond_triple = _add_bond_tool(bond_triple_icon(), "Triple bond.", 3, BOND_STEREO_PLAIN)
-        self.bond_wedge = _add_bond_tool(bond_wedge_icon(), "Wedge bond (solid stereo).", 1, BOND_STEREO_WEDGE)
-        self.bond_hash = _add_bond_tool(bond_hash_icon(), "Hash bond (dashed stereo).", 1, BOND_STEREO_HASH)
+        self.bond_wedge = _add_bond_tool(
+            bond_wedge_icon(), "Wedge bond (solid stereo).", 1, BOND_STEREO_WEDGE
+        )
+        self.bond_hash = _add_bond_tool(
+            bond_hash_icon(), "Hash bond (dashed stereo).", 1, BOND_STEREO_HASH
+        )
         self.bond_wavy = _add_bond_tool(
-            bond_wavy_icon(), "Wavy bond (unspecified / undetermined stereochemistry).", 1, BOND_STEREO_WAVY
+            bond_wavy_icon(),
+            "Wavy bond (unspecified / undetermined stereochemistry).",
+            1,
+            BOND_STEREO_WAVY,
         )
         self.bond_dative = _add_bond_tool(
-            bond_dative_icon(), "Dative / coordinate bond (arrow from donor to acceptor).", 1, BOND_STEREO_DATIVE
+            bond_dative_icon(),
+            "Dative / coordinate bond (arrow from donor to acceptor).",
+            1,
+            BOND_STEREO_DATIVE,
         )
         top_bar.addWidget(_toolbar_vsep())
 
@@ -426,10 +474,18 @@ class SketcherDialog(QDialog):
             top_bar.addWidget(rb)
         top_bar.addWidget(_toolbar_vsep())
 
-        self.charge_plus = _glyph_tool_button(charge_plus_icon(), "Set formal charge +1 on the next atom click.")
-        self.charge_plus.clicked.connect(lambda checked: self._toggle_charge(1 if checked else None))
-        self.charge_minus = _glyph_tool_button(charge_minus_icon(), "Set formal charge −1 on the next atom click.")
-        self.charge_minus.clicked.connect(lambda checked: self._toggle_charge(-1 if checked else None))
+        self.charge_plus = _glyph_tool_button(
+            charge_plus_icon(), "Set formal charge +1 on the next atom click."
+        )
+        self.charge_plus.clicked.connect(
+            lambda checked: self._toggle_charge(1 if checked else None)
+        )
+        self.charge_minus = _glyph_tool_button(
+            charge_minus_icon(), "Set formal charge −1 on the next atom click."
+        )
+        self.charge_minus.clicked.connect(
+            lambda checked: self._toggle_charge(-1 if checked else None)
+        )
         top_bar.addWidget(self.charge_plus)
         top_bar.addWidget(self.charge_minus)
 
@@ -440,6 +496,15 @@ class SketcherDialog(QDialog):
         self.tb_3d.setChecked(False)
         self.tb_3d.toggled.connect(self._toggle_3d_view)
         top_bar.addWidget(self.tb_3d)
+        top_bar.addWidget(_toolbar_vsep())
+        self.tb_rxn_arrow = _glyph_tool_button(
+            reaction_arrow_icon(),
+            "Reaction arrow: drag to draw. Fragments on the tail are reactants; "
+            "fragments on the head are products. Export to Table adds Reaction SMARTS "
+            "and renders the 2D scheme. Hold Shift to snap.",
+        )
+        self.tb_rxn_arrow.toggled.connect(self._toggle_reaction_arrow)
+        top_bar.addWidget(self.tb_rxn_arrow)
         top_bar.addStretch(1)
 
         self.tb_structure_status = _glyph_tool_button(
@@ -452,7 +517,9 @@ class SketcherDialog(QDialog):
 
         top_toolbar = QWidget()
         top_toolbar.setObjectName("SketcherTopToolbar")
-        top_toolbar.setStyleSheet("#SketcherTopToolbar { background-color: palette(window); border: none; }")
+        top_toolbar.setStyleSheet(
+            "#SketcherTopToolbar { background-color: palette(window); border: none; }"
+        )
         top_toolbar.setLayout(top_bar)
         top_toolbar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self._top_toolbar = top_toolbar
@@ -504,7 +571,9 @@ class SketcherDialog(QDialog):
 
         self.canvas = SketchWidget(self)
         self.canvas.select_mode = False
-        self.canvas.setToolTip("Right-click empty canvas for templates, modes, cleanup, and zoom-related commands in the menu bar.")
+        self.canvas.setToolTip(
+            "Right-click empty canvas for templates, modes, cleanup, and zoom-related commands in the menu bar."
+        )
         self.canvas.setFocus()
 
         self.view_3d = Molecule3DEmbedView(self)
@@ -545,12 +614,6 @@ class SketcherDialog(QDialog):
         esc.setContext(Qt.WidgetWithChildrenShortcut)
         esc.activated.connect(self._escape_asks_close)
 
-        sc_copy_sel = QShortcut(QKeySequence.Copy, self)
-        sc_copy_sel.setContext(Qt.WindowShortcut)
-        sc_copy_sel.activated.connect(self._shortcut_copy_selection)
-        sc_paste_sel = QShortcut(QKeySequence.Paste, self)
-        sc_paste_sel.setContext(Qt.WindowShortcut)
-        sc_paste_sel.activated.connect(self._shortcut_paste_selection)
         self._parent_delete_action = None
         self._parent_delete_was_enabled = False
         self._sketch_key_filters_installed = False
@@ -604,7 +667,7 @@ class SketcherDialog(QDialog):
             event.accept()
             return False
         if event.type() == QEvent.KeyPress and self._is_sketch_delete_key(event):
-            self.canvas._handle_delete_key()
+            self._on_edit_delete()
             return True
         return False
 
@@ -621,11 +684,15 @@ class SketcherDialog(QDialog):
     def _sync_mode_menu_checks(self) -> None:
         if not getattr(self, "_act_mode_erase", None):
             return
+        rxn_on = bool(
+            getattr(self, "tb_rxn_arrow", None) is not None and self.tb_rxn_arrow.isChecked()
+        )
         draw_on = (
             not self.tb_erase.isChecked()
             and not self.select_btn.isChecked()
             and not self.lasso_btn.isChecked()
             and not self.tb_text.isChecked()
+            and not rxn_on
         )
         self._act_mode_draw.blockSignals(True)
         self._act_mode_draw.setChecked(draw_on)
@@ -653,6 +720,10 @@ class SketcherDialog(QDialog):
         """Templates, modes, and cleanup (formerly the Draw menu). Right-click empty canvas."""
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
+        wpt = self.canvas.mapFromGlobal(global_pos)
+        self.canvas._add_copy_paste_menu_actions(
+            menu, paste_anchor=self.canvas._widget_point_to_model(wpt)
+        )
 
         def _sync_menu() -> None:
             self._sync_mode_menu_checks()
@@ -704,6 +775,9 @@ class SketcherDialog(QDialog):
             and not self.select_btn.isChecked()
             and not self.lasso_btn.isChecked()
             and not self.tb_text.isChecked()
+            and not (
+                getattr(self, "tb_rxn_arrow", None) is not None and self.tb_rxn_arrow.isChecked()
+            )
         ):
             self._act_mode_draw.blockSignals(True)
             self._act_mode_draw.setChecked(True)
@@ -777,6 +851,16 @@ class SketcherDialog(QDialog):
         self.canvas.setFocus()
         self._update_sketch_status()
         self._sync_mode_menu_checks()
+
+    def _on_edit_delete(self) -> None:
+        """Edit → Delete Selection / Del: hover target first, else the current selection."""
+        if getattr(self, "_edit_delete_busy", False):
+            return
+        self._edit_delete_busy = True
+        try:
+            self.canvas._handle_delete_key()
+        finally:
+            self._edit_delete_busy = False
 
     def _shortcut_copy_selection(self) -> None:
         if not self.canvas.copy_selection_to_clipboard():
@@ -863,7 +947,7 @@ class SketcherDialog(QDialog):
         )
 
     def _leave_special_modes_for_drawing(self, *, reset_bond: bool = True) -> None:
-        """Exit Select, Erase, and Text so drawing tools (element/template) apply."""
+        """Exit Select, Erase, Text, and Reaction arrow so drawing tools (element/template) apply."""
         if self.tb_erase.isChecked():
             self.tb_erase.blockSignals(True)
             self.tb_erase.setChecked(False)
@@ -873,10 +957,12 @@ class SketcherDialog(QDialog):
             self.tb_text.blockSignals(True)
             self.tb_text.setChecked(False)
             self.tb_text.blockSignals(False)
+        self._uncheck_reaction_arrow_tool()
         self.canvas.erase_mode = False
         self.canvas.select_mode = False
         self.canvas.select_tool = "box"
         self.canvas.text_mode = False
+        self.canvas.reaction_arrow_mode = False
         self.canvas.setCursor(Qt.ArrowCursor)
         self._clear_canvas_selection_ui()
         if reset_bond:
@@ -894,12 +980,69 @@ class SketcherDialog(QDialog):
     def _clear_canvas_selection_ui(self) -> None:
         self.canvas.selected_nodes = []
         self.canvas.selected_bond_indices = set()
+        self.canvas.selected_reaction_arrow = False
         self.canvas._selection_rect = None
         self.canvas._selecting = False
         self.canvas._lasso_points = []
         self.canvas._release_marquee_mouse_grab_if_any()
         self.canvas._maybe_move = False
         self.canvas._moving = False
+
+    def _uncheck_reaction_arrow_tool(self) -> None:
+        btn = getattr(self, "tb_rxn_arrow", None)
+        if btn is None or not btn.isChecked():
+            return
+        btn.blockSignals(True)
+        btn.setChecked(False)
+        btn.blockSignals(False)
+        self.canvas.reaction_arrow_mode = False
+
+    def _uncheck_bond_tools(self) -> None:
+        group = getattr(self, "_bond_tool_group", None)
+        if group is not None:
+            group.setExclusive(False)
+        for btn, _o, _s in getattr(self, "_bond_tool_buttons", []):
+            btn.blockSignals(True)
+            btn.setChecked(False)
+            btn.blockSignals(False)
+        if group is not None:
+            group.setExclusive(True)
+
+    def _toggle_reaction_arrow(self, checked: bool) -> None:
+        if checked:
+            if self.tb_erase.isChecked():
+                self.tb_erase.blockSignals(True)
+                self.tb_erase.setChecked(False)
+                self.tb_erase.blockSignals(False)
+                self.canvas.erase_mode = False
+            if self._any_select_tool_on():
+                self._uncheck_select_tool_buttons()
+                self._clear_canvas_selection_ui()
+                self.canvas.select_mode = False
+            if self.tb_text.isChecked():
+                self.tb_text.blockSignals(True)
+                self.tb_text.setChecked(False)
+                self.tb_text.blockSignals(False)
+                self.canvas.text_mode = False
+            self.canvas.reaction_arrow_mode = True
+            self.canvas.place_element = None
+            self.canvas.active_template = None
+            self._uncheck_element_buttons_clear_place()
+            self._uncheck_ring_buttons()
+            self._uncheck_bond_tools()
+            self.canvas.setCursor(Qt.CrossCursor)
+            self.canvas.setFocus()
+        else:
+            self.canvas.reaction_arrow_mode = False
+            self.canvas.setCursor(Qt.ArrowCursor)
+            if (
+                not self.tb_erase.isChecked()
+                and not self._any_select_tool_on()
+                and not self.tb_text.isChecked()
+            ):
+                self._select_default_element_tool()
+                self._reset_bond_stereo_toolbar()
+        self._sync_mode_menu_checks()
 
     def _any_select_tool_on(self) -> bool:
         return self.select_btn.isChecked() or self.lasso_btn.isChecked()
@@ -1114,11 +1257,17 @@ class SketcherDialog(QDialog):
             return
         mol = Chem.MolFromSmiles(smi) or Chem.MolFromSmarts(smi)
         if mol is None:
-            QMessageBox.warning(self, "Save Sketch", "RDKit could not build a molecule from the sketch (SMILES/SMARTS).")
+            QMessageBox.warning(
+                self,
+                "Save Sketch",
+                "RDKit could not build a molecule from the sketch (SMILES/SMARTS).",
+            )
             return
         app = self.parent_app
         if app is None or not hasattr(app, "threadpool") or not hasattr(app, "signals"):
-            QMessageBox.warning(self, "Save Sketch", "Main application is not available for export.")
+            QMessageBox.warning(
+                self, "Save Sketch", "Main application is not available for export."
+            )
             return
         f_filter = "SDF (*.sdf);;Molfile (*.mol);;SMILES (*.smi)"
         path, sel_f = QFileDialog.getSaveFileName(self, "Save Sketch", "", f_filter)
@@ -1249,17 +1398,60 @@ class SketcherDialog(QDialog):
         if bc is not None:
             bc.setChecked(True)
 
-    def _ensure_main_table_for_sketch_import(self, app) -> None:
+    def _ensure_main_table_for_sketch_import(
+        self, app, extra: tuple[str, ...] = ("SMILES",)
+    ) -> None:
         """Allow sketcher add before any file load: minimal columns + visible table."""
         if app.headers and app._table_model.columnCount() >= 2:
             return
-        app.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+        app.headers = ["ID_HIDDEN", "Structure", *extra]
         app.table.setSortingEnabled(False)
         app._table_model.clear_rows()
         app._table_model.set_headers(list(app.headers))
         app.table.setColumnHidden(0, True)
         if hasattr(app, "_table_stack"):
             app._table_stack.setCurrentIndex(1)
+
+    def _ensure_table_columns(self, app, headers: tuple[str, ...] | list[str]) -> None:
+        """Add missing data columns so sketched reactions can be stored."""
+        self._ensure_main_table_for_sketch_import(app, extra=tuple(headers))
+        for h in headers:
+            if h in app.headers:
+                continue
+            nc = app._table_model.columnCount()
+            app._table_model.insert_column_at(nc, h, None)
+            app.headers.append(h)
+
+    def _queue_reaction_structure_render(self, app, oid: int, smarts: str) -> None:
+        """Render the reaction scheme into Structure (same PNG path as Tools → Render 2D)."""
+        spec = ReactionDrawSpec(smarts)
+        rw, rh = reaction_depict_size()
+        if hasattr(app, "start_render_worker"):
+            app.start_render_worker(oid, spec, rw, rh, skip_mol_props=True)
+            return
+        start_batch = getattr(app, "_start_render_2d_batch", None)
+        if not callable(start_batch):
+            return
+        row = app._table_model.logical_row_for_oid(oid)
+        start_batch([(oid, spec, rw, rh)], {oid: row}, "Structure")
+
+    def _append_reaction_from_sketch(self) -> int:
+        """Insert one reaction table row. Returns 1 on success, 0 otherwise."""
+        app = self.parent_app
+        smarts = (self.canvas.to_reaction_smarts() or "").strip()
+        if not smarts:
+            return 0
+        self._ensure_table_columns(app, (RXN_SMARTS_HEADER,))
+        oid = app.next_oid
+        app.next_oid += 1
+        app._table_model.append_row(oid, {RXN_SMARTS_HEADER: smarts})
+        self._queue_reaction_structure_render(app, oid, smarts)
+        app.status_label.setText("Added 1 reaction from sketcher")
+        if hasattr(app, "calculate_global_bounds"):
+            app.calculate_global_bounds()
+        if hasattr(app, "apply_filters"):
+            app.apply_filters()
+        return 1
 
     def _append_molecules_from_smiles_parts(self, parts: list[str]) -> int:
         """Insert one table row per SMILES string. Returns number added."""
@@ -1478,6 +1670,7 @@ class SketcherDialog(QDialog):
                 self.tb_text.setChecked(False)
                 self.tb_text.blockSignals(False)
                 self.canvas.text_mode = False
+            self._uncheck_reaction_arrow_tool()
         self.canvas.erase_mode = checked
         if checked:
             self.canvas.setCursor(Qt.CrossCursor)
@@ -1509,6 +1702,7 @@ class SketcherDialog(QDialog):
                 self.tb_text.setChecked(False)
                 self.tb_text.blockSignals(False)
                 self.canvas.text_mode = False
+            self._uncheck_reaction_arrow_tool()
             self.canvas.select_tool = tool
             self.canvas.select_mode = True
             self.canvas.place_element = None
@@ -1527,7 +1721,8 @@ class SketcherDialog(QDialog):
             self._clear_canvas_selection_ui()
             self.canvas.setCursor(Qt.ArrowCursor)
             if not self.tb_erase.isChecked() and not self.tb_text.isChecked():
-                self._select_default_element_tool()
+                if getattr(self, "tb_rxn_arrow", None) is None or not self.tb_rxn_arrow.isChecked():
+                    self._select_default_element_tool()
 
     def _toggle_select(self, checked: bool):
         self._enter_select_tool("box", checked)
@@ -1546,6 +1741,7 @@ class SketcherDialog(QDialog):
                 self._uncheck_select_tool_buttons()
                 self._clear_canvas_selection_ui()
                 self.canvas.select_mode = False
+            self._uncheck_reaction_arrow_tool()
         self.canvas.text_mode = checked
         if checked:
             self.canvas.setCursor(Qt.IBeamCursor)
@@ -1598,7 +1794,9 @@ class SketcherDialog(QDialog):
             return
         self.load_structure_from_mol(mol, confirm_if_nonempty=False)
 
-    def load_structure_from_mol(self, mol: Chem.Mol | None, confirm_if_nonempty: bool = True) -> None:
+    def load_structure_from_mol(
+        self, mol: Chem.Mol | None, confirm_if_nonempty: bool = True
+    ) -> None:
         """Load an RDKit molecule into the canvas (optionally confirm if the sketch is non-empty)."""
         if mol is None or not isinstance(mol, Chem.Mol):
             return
@@ -1686,7 +1884,8 @@ class SketcherDialog(QDialog):
         self._update_sketch_status()
 
     def _copy_smiles(self):
-        smi = self.canvas.to_smiles()
+        rxn = (self.canvas.to_reaction_smarts() or "").strip()
+        smi = rxn or self.canvas.to_smiles()
         if smi:
             QApplication.clipboard().setText(smi)
         else:
@@ -1713,7 +1912,7 @@ class SketcherDialog(QDialog):
         )
 
     def _copy_smarts(self) -> None:
-        smt = self.canvas.to_smarts().strip()
+        smt = (self.canvas.to_reaction_smarts() or self.canvas.to_smarts() or "").strip()
         if smt:
             QApplication.clipboard().setText(smt)
         else:
@@ -1724,13 +1923,24 @@ class SketcherDialog(QDialog):
             )
 
     def _add_to_table(self):
-        parts = self.canvas.fragment_smiles_parts()
         app = self.parent_app
 
         def _main_status(msg: str) -> None:
             if app is not None and hasattr(app, "status_label"):
                 app.status_label.setText(msg)
 
+        if self.canvas.reaction_arrow is not None:
+            n = self._append_reaction_from_sketch()
+            if n == 0:
+                msg = (
+                    "Sketcher: could not export a reaction. Draw reactants on the "
+                    "arrow tail and products on the head."
+                )
+                _main_status(msg)
+                QMessageBox.warning(self, "Add to Table", msg)
+            return
+
+        parts = self.canvas.fragment_smiles_parts()
         if not parts:
             msg = "Sketcher: could not build a valid structure to add to the table (check bonding/valence)."
             _main_status(msg)
@@ -1747,4 +1957,3 @@ class SketcherDialog(QDialog):
         self._set_parent_delete_action_blocked(False)
         self._remove_sketch_key_filters()
         event.accept()
-

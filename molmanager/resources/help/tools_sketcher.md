@@ -16,21 +16,24 @@ Starts from a blank canvas or an existing molecule when launched in an edit cont
 
 ## Options
 
-- **Canvas** - interactive drawing surface with bond/atom tools.
+- **Canvas** - interactive drawing surface with bond/atom tools and a reaction arrow.
 - **Element** and **bond order** controls.
-- **Edit tools** - select, delete, and ring templates as provided.
-- **Apply / accept** - push the drawn molecule back to the caller or table.
+- **Reaction arrow** - drag to split the sketch into reactants (tail) and products (head). **Export to Table** then adds **Reaction SMARTS** and renders the 2D scheme in Structure.
+- **Edit** - Undo/Redo, **Copy** / **Paste** of a selected fragment (Ctrl+C / Ctrl+V), and **Delete Selection** (Del, same as the table Edit menu). Right-click the canvas for the same Copy / Paste at the top of the menu.
+- **Edit tools** - select, erase, and ring templates as provided.
+- **Apply / accept** - push the drawn molecule or reaction back to the caller or table.
 
 ## Workflow
 
 1. Open **Sketcher** from the tools entry point.
-2. Draw or edit the molecule.
+2. Draw or edit the molecule. For a reaction, draw reactants, click the reaction-arrow tool, drag from reactants toward products, then draw products on the head side.
 3. Validate valence/stereo visually.
-4. Apply/insert the structure into the table or query field.
+4. Apply/insert the structure (or reaction) into the table or query field.
 
 ## Use cases
 
 - Sketch a core SMARTS precursor for R-group decomposition.
+- Draw a reaction scheme and add it to the table for Reaction Enumeration.
 - Correct a mis-imported structure.
 - Design a quick analog and add it as a new row.
 

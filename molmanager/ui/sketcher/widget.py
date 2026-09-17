@@ -77,6 +77,13 @@ from .constants import (
     WILDCARD_ELEMENT,
     WILDCARD_ELEMENT_CHOICES,
 )
+from .sketch_reactions import (
+    MIN_REACTION_ARROW_LENGTH,
+    fragment_side,
+    join_reaction_string,
+    plus_sign_positions,
+    snap_arrow_end,
+)
 from .wildcards import (
     WildcardElementsDialog,
     _is_wildcard_node,
@@ -86,7 +93,9 @@ from .widget_painting import SketchWidgetPaintMixin
 from .widget_events import SketchWidgetEventsMixin
 
 
-class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidgetRdkitMixin, QWidget):
+class SketchWidget(
+    SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidgetRdkitMixin, QWidget
+):
     """
     Chemical sketch widget: place atoms, draw bonds by dragging, adjust bond order,
     erase, select/move, templates, undo/redo, and export SMILES via RDKit.
@@ -116,7 +125,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         super().__init__(parent)
         self.setMinimumSize(500, 400)
 
-        self.nodes: list[dict[str, Any]] = []  # {'id': int, 'pos': QPoint, 'element': str, 'charge'?: int}
+        self.nodes: list[
+            dict[str, Any]
+        ] = []  # {'id': int, 'pos': QPoint, 'element': str, 'charge'?: int}
         self.bonds: list[tuple[int, int, int, int]] = []  # (a_id, b_id, order, stereo)
         # stereo: 0 plain, 1 wedge, 2 hash, 3 wavy, 4 dative (order 1 only for 1–4)
         self.next_id = 0
@@ -128,6 +139,13 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         self.select_mode = False
         self.select_tool = "box"  # "box" | "lasso" while select_mode is on
         self.text_mode = False
+        self.reaction_arrow_mode = False
+        self.reaction_arrow: tuple[QPoint, QPoint] | None = None
+        self.selected_reaction_arrow = False
+        self._arrow_dragging = False
+        self._arrow_drag_start: QPoint | None = None
+        self._arrow_drag_pos: QPoint | None = None
+        self._arrow_move_orig: tuple[QPoint, QPoint] | None = None
         self.active_template: str | None = None
         self.active_charge: int | None = None  # +1, -1, or None
         self.active_bond_order: int = 1  # 1/2/3 for newly drawn or applied bonds
@@ -172,7 +190,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         # User "Group": fixed union of fragments → one SMILES entry (dot-separated) until sketch changes or Ungroup.
         # True salt (cation + anion fragments) uses ion ordering; otherwise fragments are only co-grouped, not as a salt.
         self._salt_bundle_smiles: str | None = None
-        self._salt_bundle_nodes: frozenset[int] | None = None  # node ids in the grouped fragments only
+        self._salt_bundle_nodes: frozenset[int] | None = (
+            None  # node ids in the grouped fragments only
+        )
         self._salt_bundle_fragment_count: int | None = None
         self._group_bundle_is_salt: bool = False
 
@@ -199,6 +219,7 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             and not self.select_mode
             and not self.erase_mode
             and not self.text_mode
+            and not self.reaction_arrow_mode
             and self.active_template is None
         )
 
@@ -220,7 +241,10 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             self._clear_salt_bundle()
             return
         comps_u = [c for c in self.connected_components() if c & U]
-        if self._salt_bundle_fragment_count is not None and len(comps_u) != self._salt_bundle_fragment_count:
+        if (
+            self._salt_bundle_fragment_count is not None
+            and len(comps_u) != self._salt_bundle_fragment_count
+        ):
             self._clear_salt_bundle()
 
     def _selected_node_set(self) -> set[int]:
@@ -229,7 +253,11 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
     def _sync_selected_bonds_from_nodes(self) -> None:
         """Bonds whose both endpoints are in the current node selection (click / replace selection)."""
         s = self._selected_node_set()
-        self.selected_bond_indices = {bi for bi, bond in enumerate(self.bonds) if _bond_unpack(bond)[0] in s and _bond_unpack(bond)[1] in s}
+        self.selected_bond_indices = {
+            bi
+            for bi, bond in enumerate(self.bonds)
+            if _bond_unpack(bond)[0] in s and _bond_unpack(bond)[1] in s
+        }
 
     def _union_bonds_for_selected_nodes(self) -> None:
         """Add bonds with both endpoints selected; keep any already-selected bonds."""
@@ -285,7 +313,12 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         if r.contains(p1.toPoint()) or r.contains(p2.toPoint()):
             return True
         seg = QLineF(p1, p2)
-        left, top, right, bottom = float(r.left()), float(r.top()), float(r.right()), float(r.bottom())
+        left, top, right, bottom = (
+            float(r.left()),
+            float(r.top()),
+            float(r.right()),
+            float(r.bottom()),
+        )
         edges = (
             QLineF(left, top, right, top),
             QLineF(right, top, right, bottom),
@@ -375,7 +408,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             self.selected_bond_indices = set()
         else:
             rect_nodes = [
-                n["id"] for n in self.nodes if path.contains(QPointF(float(n["pos"].x()), float(n["pos"].y())))
+                n["id"]
+                for n in self.nodes
+                if path.contains(QPointF(float(n["pos"].x()), float(n["pos"].y())))
             ]
             self._sync_selected_bonds_from_lasso_path(path)
         base_nodes = self._select_additive_base_nodes
@@ -419,7 +454,11 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
 
     def _delete_selected_atoms_and_bonds(self) -> None:
         """Remove selected bonds (only those still present), then selected atoms; clears selection."""
-        if not self.select_mode or (not self.selected_nodes and not self.selected_bond_indices):
+        if not self.select_mode or (
+            not self.selected_nodes
+            and not self.selected_bond_indices
+            and not self.selected_reaction_arrow
+        ):
             return
         for bi in sorted(self.selected_bond_indices, reverse=True):
             if 0 <= bi < len(self.bonds):
@@ -434,6 +473,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             self._delete_node(nid)
         self.selected_nodes = []
         self.selected_bond_indices = set()
+        if self.selected_reaction_arrow:
+            self._set_reaction_arrow(None)
+            self.selected_reaction_arrow = False
         self.hover = None
         self._after_sketch_edit(notify=True, notify_if_valence_failed=True)
 
@@ -467,13 +509,20 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
                 self.hover = None
                 self._after_sketch_edit(notify=True, notify_if_valence_failed=True)
                 return True
+        if isinstance(self.hover, tuple) and self.hover[0] == "arrow":
+            if self.reaction_arrow is not None:
+                self._set_reaction_arrow(None)
+                self.hover = None
+                return True
         return False
 
     def _handle_delete_key(self) -> bool:
         """Delete hover target first, else selection fallback. Returns True when handled."""
         if self._try_delete_hover_target():
             return True
-        if self.select_mode and (self.selected_nodes or self.selected_bond_indices):
+        if self.select_mode and (
+            self.selected_nodes or self.selected_bond_indices or self.selected_reaction_arrow
+        ):
             self._delete_selected_atoms_and_bonds()
             return True
         if self.sel is not None:
@@ -563,7 +612,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         p2 = self._widget_point_to_model(rect.bottomRight())
         left, right = min(p1.x(), p2.x()), max(p1.x(), p2.x())
         top, bottom = min(p1.y(), p2.y()), max(p1.y(), p2.y())
-        return QRect(QPoint(left, top), QPoint(max(right, left + 1), max(bottom, top + 1))).normalized()
+        return QRect(
+            QPoint(left, top), QPoint(max(right, left + 1), max(bottom, top + 1))
+        ).normalized()
 
     def _model_viewport_bounds(self) -> tuple[int, int, int, int]:
         """Model-space axis-aligned bounds visible in the widget."""
@@ -630,7 +681,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             nj = next((n for n in self.nodes if n["id"] == b), None)
             if not ni or not nj:
                 continue
-            d2 = self._point_to_segment_distance_sq(px, py, ni["pos"].x(), ni["pos"].y(), nj["pos"].x(), nj["pos"].y())
+            d2 = self._point_to_segment_distance_sq(
+                px, py, ni["pos"].x(), ni["pos"].y(), nj["pos"].x(), nj["pos"].y()
+            )
             if best_d is None or d2 < best_d:
                 best_d, best_i = d2, bi
         hit_slop = max(8.0, self._median_bond_length_px * 0.2)
@@ -638,12 +691,142 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             return best_i, best_d
         return None, None
 
+    def _arrow_copy(self, arrow: tuple[QPoint, QPoint] | None) -> tuple[QPoint, QPoint] | None:
+        if arrow is None:
+            return None
+        a, b = arrow
+        return (QPoint(a), QPoint(b))
+
+    def _hit_reaction_arrow(self, pt: QPoint) -> bool:
+        arr = self.reaction_arrow
+        if arr is None:
+            return False
+        a, b = arr
+        d2 = self._point_to_segment_distance_sq(pt.x(), pt.y(), a.x(), a.y(), b.x(), b.y())
+        hit_slop = max(10.0, self._median_bond_length_px * 0.22)
+        return d2 <= hit_slop * hit_slop
+
+    def _set_reaction_arrow(
+        self, arrow: tuple[QPoint, QPoint] | None, *, undo: bool = True
+    ) -> None:
+        old = self._arrow_copy(self.reaction_arrow)
+        new = self._arrow_copy(arrow)
+        if old is None and new is None:
+            return
+        if old is not None and new is not None and old[0] == new[0] and old[1] == new[1]:
+            return
+        if undo:
+            self._push_undo("set_arrow", (old, new))
+        self.reaction_arrow = new
+        if new is None:
+            self.selected_reaction_arrow = False
+        self._after_sketch_edit(notify=True, notify_if_valence_failed=True)
+
+    def _commit_arrow_drag(self, end: QPoint, *, snap: bool) -> None:
+        start = self._arrow_drag_start
+        self._arrow_dragging = False
+        self._arrow_drag_start = None
+        self._arrow_drag_pos = None
+        if start is None:
+            return
+        x1, y1 = snap_arrow_end(
+            float(start.x()),
+            float(start.y()),
+            float(end.x()),
+            float(end.y()),
+            snap=snap,
+        )
+        head = QPoint(int(round(x1)), int(round(y1)))
+        length = math.hypot(head.x() - start.x(), head.y() - start.y())
+        if length < MIN_REACTION_ARROW_LENGTH:
+            self.update()
+            return
+        self._set_reaction_arrow((QPoint(start), head))
+
+    def _fragment_centroid(self, comp: set[int]) -> tuple[float, float] | None:
+        xs: list[float] = []
+        ys: list[float] = []
+        for n in self.nodes:
+            if n["id"] in comp:
+                xs.append(float(n["pos"].x()))
+                ys.append(float(n["pos"].y()))
+        if not xs:
+            return None
+        return (sum(xs) / len(xs), sum(ys) / len(ys))
+
+    def reaction_fragment_groups(self) -> tuple[list[set[int]], list[set[int]]] | None:
+        """Connected components on the tail (reactants) and head (products) of the arrow."""
+        arr = self.reaction_arrow
+        if arr is None:
+            return None
+        a, b = arr
+        reactants: list[set[int]] = []
+        products: list[set[int]] = []
+        for comp in self.connected_components():
+            cxy = self._fragment_centroid(comp)
+            if cxy is None:
+                continue
+            side = fragment_side(
+                cxy[0], cxy[1], float(a.x()), float(a.y()), float(b.x()), float(b.y())
+            )
+            if side == "product":
+                products.append(comp)
+            else:
+                reactants.append(comp)
+        return reactants, products
+
+    def to_reaction_smarts(self) -> str:
+        """Reaction SMILES/SMARTS from the sketch, or ``\"\"`` when no complete reaction."""
+        groups = self.reaction_fragment_groups()
+        if groups is None:
+            return ""
+        reactants, products = groups
+        if not reactants or not products:
+            return ""
+        use_smarts = self.sketch_has_wildcards()
+        left: list[str] = []
+        right: list[str] = []
+        for comp in reactants:
+            part = (
+                self._component_to_smarts(comp) if use_smarts else self._component_to_smiles(comp)
+            )
+            if part:
+                left.append(part)
+        for comp in products:
+            part = (
+                self._component_to_smarts(comp) if use_smarts else self._component_to_smiles(comp)
+            )
+            if part:
+                right.append(part)
+        if not left or not right:
+            return ""
+        return join_reaction_string(left, right)
+
+    def _reaction_plus_positions(self) -> list[tuple[float, float]]:
+        groups = self.reaction_fragment_groups()
+        arr = self.reaction_arrow
+        if groups is None or arr is None:
+            return []
+        a, b = arr
+        out: list[tuple[float, float]] = []
+        for comps in groups:
+            cents: list[tuple[float, float]] = []
+            for comp in comps:
+                cxy = self._fragment_centroid(comp)
+                if cxy is not None:
+                    cents.append(cxy)
+            out.extend(
+                plus_sign_positions(cents, float(a.x()), float(a.y()), float(b.x()), float(b.y()))
+            )
+        return out
+
     def _refresh_hover_from_cursor(self):
         try:
             gpos = QCursor.pos()
             lpos = self._widget_point_to_model(self.mapFromGlobal(gpos))
             hit = self._hit_node(lpos)
             bi, _ = self._hit_bond(lpos)
+            arrow_hit = self._hit_reaction_arrow(lpos)
             sel = self._selected_node_set()
             if self.select_mode:
                 if hit and hit["id"] in sel:
@@ -652,11 +835,17 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
                 elif bi is not None and bi in self.selected_bond_indices:
                     self.hover = ("bond", bi)
                     self.setCursor(Qt.OpenHandCursor)
+                elif self.selected_reaction_arrow and arrow_hit:
+                    self.hover = ("arrow", 0)
+                    self.setCursor(Qt.OpenHandCursor)
                 elif hit:
                     self.hover = hit["id"]
                     self.setCursor(Qt.PointingHandCursor)
                 elif bi is not None:
                     self.hover = ("bond", bi)
+                    self.setCursor(Qt.PointingHandCursor)
+                elif arrow_hit:
+                    self.hover = ("arrow", 0)
                     self.setCursor(Qt.PointingHandCursor)
                 else:
                     self.hover = None
@@ -668,9 +857,16 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
                 if bi is not None:
                     self.hover = ("bond", bi)
                     self.setCursor(Qt.PointingHandCursor)
+                elif arrow_hit:
+                    self.hover = ("arrow", 0)
+                    self.setCursor(Qt.PointingHandCursor)
                 else:
                     self.hover = None
-                    if self.erase_mode or self._carbon_chain_cursor_active():
+                    if (
+                        self.erase_mode
+                        or self.reaction_arrow_mode
+                        or self._carbon_chain_cursor_active()
+                    ):
                         self.setCursor(Qt.CrossCursor)
                     else:
                         self.setCursor(Qt.ArrowCursor)
@@ -997,9 +1193,17 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             "next_id": int(self.next_id),
             "stereo_labels": sorted(int(x) for x in self._stereo_label_node_ids),
             "salt_smiles": self._salt_bundle_smiles,
-            "salt_nodes": frozenset(self._salt_bundle_nodes) if self._salt_bundle_nodes is not None else None,
+            "salt_nodes": frozenset(self._salt_bundle_nodes)
+            if self._salt_bundle_nodes is not None
+            else None,
             "salt_frag_count": self._salt_bundle_fragment_count,
             "group_is_salt": bool(self._group_bundle_is_salt),
+            "reaction_arrow": None
+            if self.reaction_arrow is None
+            else (
+                (int(self.reaction_arrow[0].x()), int(self.reaction_arrow[0].y())),
+                (int(self.reaction_arrow[1].x()), int(self.reaction_arrow[1].y())),
+            ),
         }
 
     def _restore_sketch_state(self, payload: dict[str, Any]) -> None:
@@ -1013,7 +1217,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
                 d["pos"] = QPoint(int(pos[0]), int(pos[1]))
             self.nodes.append(d)
         self.bonds = [_bond_make(*_bond_unpack(b)) for b in (payload.get("bonds") or [])]
-        self.next_id = int(payload.get("next_id") or (max((n["id"] for n in self.nodes), default=-1) + 1))
+        self.next_id = int(
+            payload.get("next_id") or (max((n["id"] for n in self.nodes), default=-1) + 1)
+        )
         self.sel = None
         self.selected_nodes = []
         self.selected_bond_indices = set()
@@ -1028,6 +1234,23 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         self._salt_bundle_nodes = frozenset(salt_nodes) if salt_nodes is not None else None
         self._salt_bundle_fragment_count = payload.get("salt_frag_count")
         self._group_bundle_is_salt = bool(payload.get("group_is_salt"))
+        raw_arrow = payload.get("reaction_arrow")
+        self.reaction_arrow = None
+        if isinstance(raw_arrow, (tuple, list)) and len(raw_arrow) == 2:
+            a, b = raw_arrow
+            if isinstance(a, QPoint) and isinstance(b, QPoint):
+                self.reaction_arrow = (QPoint(a), QPoint(b))
+            elif (
+                isinstance(a, (tuple, list))
+                and isinstance(b, (tuple, list))
+                and len(a) >= 2
+                and len(b) >= 2
+            ):
+                self.reaction_arrow = (
+                    QPoint(int(a[0]), int(a[1])),
+                    QPoint(int(b[0]), int(b[1])),
+                )
+        self.selected_reaction_arrow = False
         self._ensure_bonds_sanitized()
 
     def _swap_clear_sketch_undo(self, other: dict[str, Any], *, to_redo: bool) -> None:
@@ -1042,6 +1265,12 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
     def _push_undo(self, op: str, data: Any):
         self._undo.append((op, data))
         self._redo.clear()
+
+    def _commit_template_placement(self, before: dict[str, Any]) -> None:
+        """Record one undo step for a full ring-template drop (nodes, bonds, and fit)."""
+        self._push_undo("clear_sketch", before)
+        self.ensure_sketch_fits_viewport(refresh=False)
+        self._after_sketch_edit()
 
     def _ensure_bonds_sanitized(self) -> None:
         """Drop malformed bond tuples and normalize stereo for multi-order bonds."""
@@ -1110,6 +1339,15 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             else:
                 cautions.append(iss.message)
 
+        groups = self.reaction_fragment_groups()
+        if self.reaction_arrow is not None:
+            if groups is None or not groups[0] or not groups[1]:
+                cautions.append(
+                    "Reaction arrow: place reactants on the tail side and products on the head side."
+                )
+            elif not self.to_reaction_smarts():
+                cautions.append("Reaction arrow: could not export reaction SMILES/SMARTS.")
+
         def _uniq(msgs: list[str]) -> list[str]:
             seen: set[str] = set()
             out: list[str] = []
@@ -1137,6 +1375,14 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         op, data = self._undo.pop()
         if op == "clear_sketch":
             self._swap_clear_sketch_undo(data, to_redo=True)
+            self._after_sketch_edit()
+            return
+        if op == "set_arrow":
+            old, _new = data
+            self.reaction_arrow = self._arrow_copy(old)
+            if self.reaction_arrow is None:
+                self.selected_reaction_arrow = False
+            self._redo.append(("set_arrow", data))
             self._after_sketch_edit()
             return
         if op == "add_node":
@@ -1289,7 +1535,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             payload = data
             for nid in payload["new_ids"]:
                 self.nodes = [n for n in self.nodes if n["id"] != nid]
-                self.bonds = [b for b in self.bonds if _bond_unpack(b)[0] != nid and _bond_unpack(b)[1] != nid]
+                self.bonds = [
+                    b for b in self.bonds if _bond_unpack(b)[0] != nid and _bond_unpack(b)[1] != nid
+                ]
             if self.sel in payload["new_ids"]:
                 self.sel = None
             self.selected_nodes = [x for x in self.selected_nodes if x not in payload["new_ids"]]
@@ -1304,6 +1552,14 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         op, data = self._redo.pop()
         if op == "clear_sketch":
             self._swap_clear_sketch_undo(data, to_redo=False)
+            self._after_sketch_edit()
+            return
+        if op == "set_arrow":
+            _old, new = data
+            self.reaction_arrow = self._arrow_copy(new)
+            if self.reaction_arrow is None:
+                self.selected_reaction_arrow = False
+            self._undo.append(("set_arrow", data))
             self._after_sketch_edit()
             return
         if op == "del_node":
@@ -1378,7 +1634,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             self._after_sketch_edit()
             return
         if op == "paste_redo":
-            self._paste_fragment_payload(data["fragment"], QPoint(int(data["anchor"][0]), int(data["anchor"][1])))
+            self._paste_fragment_payload(
+                data["fragment"], QPoint(int(data["anchor"][0]), int(data["anchor"][1]))
+            )
             return
         if op == "chg_bond":
             if len(data) == 4 and isinstance(data[2], int):
@@ -1680,6 +1938,22 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         QApplication.clipboard().setText(blob)
         return True
 
+    def _clipboard_sketch_fragment(self) -> dict[str, Any] | None:
+        text = QApplication.clipboard().text()
+        if not text.startswith(CLIPBOARD_PREFIX):
+            return None
+        try:
+            frag = json.loads(text[len(CLIPBOARD_PREFIX) :])
+        except Exception:
+            return None
+        if not isinstance(frag, dict) or "nodes" not in frag:
+            return None
+        return frag
+
+    def clipboard_has_sketch_fragment(self) -> bool:
+        frag = self._clipboard_sketch_fragment()
+        return bool(frag and frag.get("nodes"))
+
     def copy_selected_as_smiles_to_clipboard(self) -> bool:
         """Copy SMILES/SMARTS of the current selection to the system clipboard."""
         smi = self.to_smiles_selected()
@@ -1741,21 +2015,32 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         self._after_sketch_edit(notify=True, notify_if_valence_failed=True)
 
     def paste_from_clipboard(self, anchor: QPoint | None = None) -> bool:
-        text = QApplication.clipboard().text()
-        if not text.startswith(CLIPBOARD_PREFIX):
-            return False
-        try:
-            frag = json.loads(text[len(CLIPBOARD_PREFIX) :])
-        except Exception:
-            return False
-        if not isinstance(frag, dict) or "nodes" not in frag:
+        frag = self._clipboard_sketch_fragment()
+        if not frag:
             return False
         pt = anchor if anchor is not None else self.rect().center()
         self._paste_fragment_payload(frag, pt)
         return True
 
+    def _add_copy_paste_menu_actions(self, menu: QMenu, *, paste_anchor: QPoint) -> None:
+        """Copy / Paste for the current selection, then a divider (context menus)."""
+        act_copy = QAction("Copy", self)
+        act_copy.setToolTip(
+            "Copy the selected atoms and bonds so they can be pasted on the canvas."
+        )
+        act_copy.setEnabled(bool(self.select_mode and self._selection_fragment_ids()))
+        act_copy.triggered.connect(self.copy_selection_to_clipboard)
+        menu.addAction(act_copy)
+        act_paste = QAction("Paste", self)
+        act_paste.setToolTip("Paste a copied sketch fragment at the click location.")
+        act_paste.setEnabled(self.clipboard_has_sketch_fragment())
+        anchor = QPoint(paste_anchor)
+        act_paste.triggered.connect(lambda _=False, pt=anchor: self.paste_from_clipboard(pt))
+        menu.addAction(act_paste)
+        menu.addSeparator()
+
     def clear(self, *, push_undo: bool = True):
-        if push_undo and (self.nodes or self.bonds):
+        if push_undo and (self.nodes or self.bonds or self.reaction_arrow is not None):
             self._push_undo("clear_sketch", self._snapshot_sketch_state())
         self.nodes = []
         self.bonds = []
@@ -1763,6 +2048,11 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         self.sel = None
         self.selected_nodes = []
         self.selected_bond_indices = set()
+        self.reaction_arrow = None
+        self.selected_reaction_arrow = False
+        self._arrow_dragging = False
+        self._arrow_drag_start = None
+        self._arrow_drag_pos = None
         self._selection_rect = None
         self._selecting = False
         self._select_start = None
@@ -1807,7 +2097,7 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
 
         Returns True if positions were scaled/translated; False if unchanged.
         """
-        if not self.nodes:
+        if not self.nodes and self.reaction_arrow is None:
             return False
         r = self.rect()
         rw, rh = r.width(), r.height()
@@ -1816,6 +2106,12 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         pad = int(self.radius * 1.5)
         xs = [n["pos"].x() for n in self.nodes]
         ys = [n["pos"].y() for n in self.nodes]
+        if self.reaction_arrow is not None:
+            a, b = self.reaction_arrow
+            xs.extend([a.x(), b.x()])
+            ys.extend([a.y(), b.y()])
+        if not xs:
+            return False
         minx = float(min(xs)) - pad
         maxx = float(max(xs)) + pad
         miny = float(min(ys)) - pad
@@ -1840,6 +2136,19 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             if n["pos"].x() != nx or n["pos"].y() != ny:
                 changed = True
             n["pos"] = QPoint(nx, ny)
+        if self.reaction_arrow is not None:
+            a, b = self.reaction_arrow
+            na = QPoint(
+                int(round((float(a.x()) - mx) * scale + tcx)),
+                int(round((float(a.y()) - my) * scale + tcy)),
+            )
+            nb = QPoint(
+                int(round((float(b.x()) - mx) * scale + tcx)),
+                int(round((float(b.y()) - my) * scale + tcy)),
+            )
+            if a != na or b != nb:
+                changed = True
+            self.reaction_arrow = (na, nb)
         if not changed and abs(scale - 1.0) < 1e-9:
             return False
         self._view_scale = 1.0
@@ -1850,7 +2159,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             self.update()
         return True
 
-    def ensure_sketch_fits_viewport(self, *, margin: int | None = None, refresh: bool = True) -> bool:
+    def ensure_sketch_fits_viewport(
+        self, *, margin: int | None = None, refresh: bool = True
+    ) -> bool:
         """
         If any atom lies outside the canvas (with margin), scale/center so the whole sketch fits.
 
@@ -1884,6 +2195,7 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         super().resizeEvent(event)
         if self.nodes:
             self.ensure_sketch_fits_viewport(refresh=False)
+
     def center_sketch_in_viewport(self, push_undo: bool = True) -> None:
         """Translate all atoms so the sketch bounding box is centered in the widget (undoable)."""
         if not self.nodes:
@@ -1943,9 +2255,7 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             act.triggered.connect(self._run_group_selection_menu)
             menu.addAction(act)
 
-    def _add_cleanup_selected_action(
-        self, menu: QMenu, *, hit_ids: set[int] | None = None
-    ) -> None:
+    def _add_cleanup_selected_action(self, menu: QMenu, *, hit_ids: set[int] | None = None) -> None:
         """Add Clean Up Selected when the selection includes *hit_ids* (if given)."""
         ids = self._atoms_for_selection_move()
         if len(ids) < 2:
@@ -1954,7 +2264,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             return
         menu.addSeparator()
         act = QAction("Clean Up Selected", self)
-        act.setToolTip("Re-layout only the selected atoms (same IUPAC Clean Up as the full sketch).")
+        act.setToolTip(
+            "Re-layout only the selected atoms (same IUPAC Clean Up as the full sketch)."
+        )
         act.triggered.connect(self._menu_cleanup_selected)
         menu.addAction(act)
 
@@ -2142,7 +2454,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             return
         self.rotate_selection(degrees)
 
-    def _add_selection_transform_actions(self, menu: QMenu, *, hit_ids: set[int] | None = None) -> None:
+    def _add_selection_transform_actions(
+        self, menu: QMenu, *, hit_ids: set[int] | None = None
+    ) -> None:
         """Add Rotate / Flip actions when a multi-atom selection includes *hit_ids*."""
         ids = self._selection_transform_atom_ids()
         if len(ids) < 2:
@@ -2209,7 +2523,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             y = int(round(c.y() - dy))  # Y-up offsets → screen Y-down
             nid = self.next_id
             self.next_id += 1
-            self.nodes.append({"id": nid, "pos": QPoint(x, y), "element": elems[i] if i < len(elems) else "C"})
+            self.nodes.append(
+                {"id": nid, "pos": QPoint(x, y), "element": elems[i] if i < len(elems) else "C"}
+            )
             ids.append(nid)
         for i in range(n):
             a = ids[i]
@@ -2226,7 +2542,9 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         if base is None:
             return (1.0, 0.0)
         bx, by = base["pos"].x(), base["pos"].y()
-        neigh = [b for b in self.bonds if _bond_unpack(b)[0] == atom_id or _bond_unpack(b)[1] == atom_id]
+        neigh = [
+            b for b in self.bonds if _bond_unpack(b)[0] == atom_id or _bond_unpack(b)[1] == atom_id
+        ]
         angles: list[float] = []
         neigh_orders: list[int] = []
         for bond in neigh:
@@ -2287,7 +2605,11 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         best_mid = 0.0
         for i in range(len(angles_s)):
             a1 = angles_s[i]
-            a2 = angles_s[(i + 1) % len(angles_s)] if i + 1 < len(angles_s) else angles_s[0] + 2 * math.pi
+            a2 = (
+                angles_s[(i + 1) % len(angles_s)]
+                if i + 1 < len(angles_s)
+                else angles_s[0] + 2 * math.pi
+            )
             gap = a2 - a1 if a2 >= a1 else (a2 + 2 * math.pi - a1)
             if gap > max_gap:
                 max_gap = gap
@@ -2348,12 +2670,12 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             else getattr(self, "_median_bond_length_px", None) or SKETCH_MEDIAN_BOND_PX
         )
         ring_r = (
-            int(round(ring_circumradius_for_bond_length(n, bl)))
-            if radius is None
-            else int(radius)
+            int(round(ring_circumradius_for_bond_length(n, bl))) if radius is None else int(radius)
         )
 
         # --- Ortho-fusion onto an existing bond (GR-3.3.3) ---
+        before = self._snapshot_sketch_state()
+
         if fuse_bond is not None and 0 <= int(fuse_bond) < len(self.bonds):
             a_id, b_id, _o, _s = _bond_unpack(self.bonds[int(fuse_bond)])
             na = next((x for x in self.nodes if x["id"] == a_id), None)
@@ -2405,13 +2727,7 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
                 o = orders[i] if i < len(orders) else 1
                 bond = _bond_make(ia, ib, o, 0)
                 self.bonds.append(bond)
-                self._push_undo("add_bond", bond)
-            for nid in new_ids:
-                nobj = next((no for no in self.nodes if no["id"] == nid), None)
-                if nobj:
-                    self._push_undo("add_node", nobj)
-            self.ensure_sketch_fits_viewport(refresh=False)
-            self._after_sketch_edit()
+            self._commit_template_placement(before)
             return
 
         if attach_to is not None:
@@ -2459,13 +2775,7 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
                     o = orders[i] if i < len(orders) else 1
                     bond = _bond_make(ia, ib, o, 0)
                     self.bonds.append(bond)
-                    self._push_undo("add_bond", bond)
-                for nid in new_ids:
-                    nobj = next((no for no in self.nodes if no["id"] == nid), None)
-                    if nobj:
-                        self._push_undo("add_node", nobj)
-                self.ensure_sketch_fits_viewport(refresh=False)
-                self._after_sketch_edit()
+                self._commit_template_placement(before)
                 return
 
             ux, uy = self._compute_extension_vector(attach_to)
@@ -2475,6 +2785,7 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             self.add_ring(n, center=cpt, elements=elems, bond_orders=orders, bond_length=bl)
             new_ids = [nid["id"] for nid in self.nodes if nid["id"] not in pre_nodes]
             if not new_ids:
+                self._commit_template_placement(before)
                 return
             best = None
             best_d = None
@@ -2486,24 +2797,14 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
                         best_d = d
                         best = nn
             if best is None:
+                self._commit_template_placement(before)
                 return
             bond = _bond_make(attach_to, best["id"], 1, 0)
             self.bonds.append(bond)
-            for nid in new_ids:
-                nobj = next((no for no in self.nodes if no["id"] == nid), None)
-                if nobj:
-                    self._push_undo("add_node", nobj)
-            for b in list(self.bonds):
-                ba, bb, _, __ = _bond_unpack(b)
-                if ba in new_ids and bb in new_ids:
-                    self._push_undo("add_bond", b)
-            self._push_undo("add_bond", bond)
-            self.ensure_sketch_fits_viewport(refresh=False)
-            self._after_sketch_edit()
+            self._commit_template_placement(before)
             return
 
         cpt = center if center is not None else self.rect().center()
-        pre_nodes = [nid["id"] for nid in self.nodes]
         self.add_ring(
             n,
             center=cpt,
@@ -2512,17 +2813,7 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
             bond_orders=orders,
             bond_length=bl,
         )
-        new_ids = [nid["id"] for nid in self.nodes if nid["id"] not in pre_nodes]
-        for nid in new_ids:
-            nobj = next((node for node in self.nodes if node["id"] == nid), None)
-            if nobj:
-                self._push_undo("add_node", nobj)
-        for b in list(self.bonds):
-            ba, bb, _, __ = _bond_unpack(b)
-            if ba in new_ids and bb in new_ids:
-                self._push_undo("add_bond", b)
-        self.ensure_sketch_fits_viewport(refresh=False)
-        self._after_sketch_edit()
+        self._commit_template_placement(before)
 
     def add_carbon_to(self, atom_id: int, bond_length: int = SKETCH_MEDIAN_BOND_PX):
         base = next((n for n in self.nodes if n["id"] == atom_id), None)
@@ -2548,4 +2839,3 @@ class SketchWidget(SketchWidgetEventsMixin, SketchWidgetPaintMixin, SketchWidget
         self.nodes.append(node)
         self.bonds.append(_bond_make(atom_id, nid, order, pst))
         self.update()
-

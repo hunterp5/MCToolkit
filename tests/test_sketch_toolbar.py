@@ -41,6 +41,7 @@ from molmanager.ui.sketcher.toolbar_glyphs import (
     mode_lasso_icon,
     mode_select_icon,
     mode_text_icon,
+    reaction_arrow_icon,
     ring_icon,
     view_3d_icon,
 )
@@ -64,6 +65,7 @@ def test_toolbar_glyphs_are_non_null(qapp) -> None:  # noqa: ARG001
         charge_plus_icon(),
         charge_minus_icon(),
         view_3d_icon(),
+        reaction_arrow_icon(),
     ]
     for key, n_atoms, aromatic, _tip in TOOLBAR_RING_TEMPLATES:
         assert key in SKETCH_RING_TEMPLATES
@@ -81,6 +83,7 @@ def test_sketcher_top_toolbar_controls(qapp) -> None:  # noqa: ARG001
     assert dlg.select_btn.isCheckable()
     assert dlg.lasso_btn.isCheckable()
     assert dlg.tb_text.isCheckable()
+    assert dlg.tb_rxn_arrow.isCheckable()
     assert not dlg.tb_clear.isCheckable()
     assert dlg.bond_plain.isCheckable()
     assert dlg.charge_plus.isCheckable()
@@ -89,6 +92,15 @@ def test_sketcher_top_toolbar_controls(qapp) -> None:  # noqa: ARG001
     assert not dlg.view_3d.isHidden()
     dlg.tb_3d.setChecked(False)
     assert dlg.view_3d.isHidden()
+    bar = dlg._top_toolbar.layout()
+    tools = [bar.itemAt(i).widget() for i in range(bar.count()) if bar.itemAt(i).widget() is not None]
+    idx_3d = next(i for i in range(bar.count()) if bar.itemAt(i).widget() is dlg.tb_3d)
+    assert bar.itemAt(idx_3d + 1).widget() is not None
+    assert bar.itemAt(idx_3d + 1).widget() is not dlg.tb_rxn_arrow
+    assert bar.itemAt(idx_3d + 2).widget() is dlg.tb_rxn_arrow
+    assert tools.index(dlg.tb_rxn_arrow) > tools.index(dlg.tb_3d)
+    assert tools.index(dlg.tb_rxn_arrow) < tools.index(dlg.tb_structure_status)
+    assert tools[-1] is dlg.tb_structure_status
     # Canvas sits under a splitter; dialog lookup must walk ancestors (right-click menu).
     assert dlg.canvas.parent() is dlg._canvas_splitter
     assert dlg.canvas._sketcher_dialog_if() is dlg
@@ -117,7 +129,6 @@ def test_sketcher_top_toolbar_controls(qapp) -> None:  # noqa: ARG001
     assert dlg.tb_any_element is not None
     assert dlg.tb_wildcard is not None
     assert set(dlg._ring_btn_by_key) == {k for k, *_ in TOOLBAR_RING_TEMPLATES}
-
 
     dlg._on_ring_tool_clicked("Benzene", True)
     assert dlg.canvas.active_template == "Benzene"
@@ -153,9 +164,18 @@ def test_sketcher_top_toolbar_controls(qapp) -> None:  # noqa: ARG001
     assert not dlg.canvas.select_mode
     assert not dlg.tb_draw.isChecked()
     assert not dlg.lasso_btn.isChecked()
+    assert not dlg.tb_rxn_arrow.isChecked()
+
+    dlg.tb_rxn_arrow.setChecked(True)
+    assert dlg.canvas.reaction_arrow_mode
+    assert not dlg.canvas.text_mode
+    assert not dlg.tb_draw.isChecked()
+    assert dlg.canvas.place_element is None
 
     dlg._on_bond_tool(2, BOND_STEREO_PLAIN)
     assert dlg.tb_draw.isChecked()
+    assert not dlg.tb_rxn_arrow.isChecked()
+    assert not dlg.canvas.reaction_arrow_mode
     assert not dlg.select_btn.isChecked()
     assert not dlg.lasso_btn.isChecked()
     assert not dlg.tb_text.isChecked()

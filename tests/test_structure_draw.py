@@ -149,3 +149,23 @@ def test_render_depict_payload_png_dispatches_reaction() -> None:
     png = render_depict_payload_png(spec, 400, 120)
     assert png.startswith(b"\x89PNG")
     assert int.from_bytes(png[16:20], "big") == 400
+
+
+def test_render_worker_emits_reaction_scheme_png(qapp) -> None:  # noqa: ARG001
+    from molmanager.display_constants import reaction_depict_size
+    from molmanager.workers.load_render import RenderWorker
+    from molmanager.workers.signals import WorkerSignals
+
+    captured: list[tuple] = []
+    signals = WorkerSignals()
+    signals.rendered.connect(lambda *args: captured.append(args))
+    width, height = reaction_depict_size()
+    worker = RenderWorker(3, ReactionDrawSpec("[C:1]>>[C:1]"), signals, width=width, height=height)
+    worker.run()
+    assert len(captured) == 1
+    oid, props, png, ok, rw, rh, _sid = captured[0]
+    assert oid == 3
+    assert ok is True
+    assert props == {}
+    assert png.startswith(b"\x89PNG")
+    assert (rw, rh) == (width, height)

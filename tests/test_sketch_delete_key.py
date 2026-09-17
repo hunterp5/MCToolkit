@@ -19,8 +19,8 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import QPoint, Qt
-from PyQt5.QtGui import QKeyEvent
-from PyQt5.QtWidgets import QAction, QWidget
+from PyQt5.QtGui import QKeyEvent, QKeySequence
+from PyQt5.QtWidgets import QAction, QMenuBar, QWidget
 
 from molmanager.ui.sketcher.bonds import _bond_make
 from molmanager.ui.sketcher.dialog import SketcherDialog
@@ -121,3 +121,33 @@ def test_sketcher_dialog_event_filter_deletes_hovered_atom(qapp) -> None:  # noq
     assert w.nodes[0]["id"] == 2
     dlg.close()
     qapp.processEvents()
+
+
+def test_sketcher_edit_menu_has_copy_paste_delete(qapp) -> None:  # noqa: ARG001
+    dlg = SketcherDialog(QWidget())
+    assert dlg._act_edit_copy.text() == "&Copy"
+    assert dlg._act_edit_paste.text() == "&Paste"
+    assert dlg._act_edit_delete.text() == "Delete &Selection"
+    assert dlg._act_edit_copy.shortcut() == QKeySequence.Copy
+    assert dlg._act_edit_paste.shortcut() == QKeySequence.Paste
+    assert dlg._act_edit_delete.shortcut() == QKeySequence.Delete
+    mb = dlg.findChild(QMenuBar)
+    assert mb is not None
+    edit = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Edit")
+    labels = [a.text().replace("&", "") for a in edit.actions() if not a.isSeparator()]
+    assert labels[:5] == ["Undo", "Redo", "Copy", "Paste", "Delete Selection"]
+    dlg.close()
+
+
+def test_sketcher_edit_delete_action_removes_selection(qapp) -> None:  # noqa: ARG001
+    dlg = SketcherDialog(QWidget())
+    w = dlg.canvas
+    _add_two_atom_sketch(w)
+    w.select_mode = True
+    w.selected_nodes = [1]
+    w.hover = None
+    w._refresh_hover_from_cursor = lambda: None
+    dlg._act_edit_delete.trigger()
+    assert len(w.nodes) == 1
+    assert w.nodes[0]["id"] == 2
+    dlg.close()
