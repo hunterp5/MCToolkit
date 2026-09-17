@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Settings dialog for Structure column depiction size."""
+"""Settings dialog for 2D structure depiction size."""
 
 from __future__ import annotations
 
@@ -42,20 +42,21 @@ from ..qt_widget_utils import make_window_minimizable
 
 
 class StructureSettingsDialog(QDialog):
-    """Pick Structure column depiction width and height (px)."""
+    """Pick 2D structure depiction width and height (px)."""
 
     size_previewed = pyqtSignal(int, int)
 
     def __init__(self, current_width: int, current_height: int, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Structure")
+        self.setWindowTitle("2D Render")
         self.setMinimumWidth(360)
 
         root = QVBoxLayout(self)
         root.addWidget(
             QLabel(
-                "Control the pixel size of 2D structure images in the Structure column. "
-                "Accepting re-draws existing structures at the new size."
+                "Control the pixel size of 2D structure drawings in the table, "
+                "Render 2D, browsers, and other structure images. "
+                "Accepting re-draws table structures at the new size."
             )
         )
         root.addWidget(QLabel(""))

@@ -135,7 +135,7 @@ class GuiSettingsMixin:
             self._apply_structure_depict_size(prev_w, prev_h, persist=False)
         if hasattr(self, "status_label"):
             self.status_label.setText(
-                f"Structure image size — {structure_depict_width()}×{structure_depict_height()} px"
+                f"2D render — {structure_depict_width()}×{structure_depict_height()} px"
             )
 
     def _preview_structure_depict_size(self, width: int, height: int) -> None:
@@ -181,23 +181,22 @@ class GuiSettingsMixin:
 
     def _init_settings_menu(self, menubar) -> None:
         settings_menu = menubar.addMenu("&Settings")
-        self._gui_menu = settings_menu.addMenu("&GUI")
-        self._rebuild_gui_theme_menu()
-        settings_menu.addSeparator()
-        settings_menu.addAction(
-            QAction("&Structure…", self, triggered=self.open_structure_settings_dialog)
-        )
-        settings_menu.addAction(QAction("&Font…", self, triggered=self.open_font_dialog))
-        settings_menu.addAction(QAction("&Hotkeys…", self, triggered=self.open_hotkeys_dialog))
-        settings_menu.addAction(QAction("&WSL…", self, triggered=self.open_wsl_settings_dialog))
-        settings_menu.addSeparator()
         self._act_status_bar = QAction("Status Bar", self, checkable=True)
         self._act_status_bar.setToolTip(
             "Show or hide the status bar at the bottom of the window (messages and memory use)."
         )
         self._act_status_bar.setChecked(load_status_bar_visible())
         self._act_status_bar.toggled.connect(self._on_status_bar_toggled)
-        settings_menu.addAction(self._act_status_bar)
+        self._gui_menu = settings_menu.addMenu("&GUI")
+        self._rebuild_gui_theme_menu()
+        settings_menu.addSeparator()
+        settings_menu.addAction(
+            QAction("2D &Render…", self, triggered=self.open_structure_settings_dialog)
+        )
+        settings_menu.addAction(QAction("&Font…", self, triggered=self.open_font_dialog))
+        settings_menu.addAction(QAction("&Hotkeys…", self, triggered=self.open_hotkeys_dialog))
+        settings_menu.addSeparator()
+        settings_menu.addAction(QAction("&WSL…", self, triggered=self.open_wsl_settings_dialog))
         self._apply_status_bar_visible(self._act_status_bar.isChecked(), persist=False)
 
     def _on_status_bar_toggled(self, checked: bool) -> None:
@@ -258,6 +257,9 @@ class GuiSettingsMixin:
 
         menu.addSeparator()
         menu.addAction(self._act_customize_colors)
+        status = getattr(self, "_act_status_bar", None)
+        if status is not None:
+            menu.addAction(status)
         self._sync_theme_menu_checks()
 
     def _sync_theme_menu_checks(self) -> None:

@@ -77,7 +77,7 @@ class StructureLayoutMixin:
         if getattr(self, "_render2d_batch_active", False) or self.process_queue.has_running_job():
             if hasattr(self, "status_label"):
                 self.status_label.setText(
-                    "Structure size saved. Re-draw structures when the current job finishes."
+                    "2D render size saved. Re-draw structures when the current job finishes."
                 )
             return
         self.zoomed_ids.clear()

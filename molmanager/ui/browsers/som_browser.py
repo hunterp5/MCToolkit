@@ -48,8 +48,8 @@ from PyQt5.QtWidgets import (
 )
 
 from ...display_constants import (
-    BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
-    BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
+    browser_structure_preview_height,
+    browser_structure_preview_width,
 )
 from ...som_prediction import (
     SOM_CANCELLED_ERROR,
@@ -490,7 +490,7 @@ class SomBrowserWidget(QWidget):
         self._struct_label = QLabel()
         self._struct_label.setAlignment(Qt.AlignCenter)
         self._struct_label.setMinimumSize(
-            BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH // 2,
+            browser_structure_preview_width() // 2,
             BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT // 2,
         )
         self._struct_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -626,7 +626,7 @@ class SomBrowserWidget(QWidget):
         self._connect_table_selection()
 
     def embedded_minimum_width(self) -> int:
-        return max(360, BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH // 2)
+        return max(360, browser_structure_preview_width() // 2)
 
     def embedded_preferred_width(self) -> int:
         return max(self.embedded_minimum_width(), 480)
@@ -810,7 +810,7 @@ class SomBrowserWidget(QWidget):
         lw = int(self._struct_label.width())
         lh = int(self._struct_label.height())
         if lw < 32 or lh < 32:
-            lw = BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH
+            lw = browser_structure_preview_width()
             lh = BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT
         return max(1, int(lw * dpr)), max(1, int(lh * dpr)), dpr
 

@@ -14,13 +14,13 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""2D structure column layout defaults (shared by UI and background render workers)."""
+"""2D structure depiction layout defaults (shared by UI and background render workers)."""
 
 from __future__ import annotations
 
 from PyQt5.QtCore import QSettings
 
-# Default RDKit draw → QPixmap size for the Structure column.
+# Default RDKit draw → QPixmap size for 2D structure images.
 DEFAULT_STRUCTURE_DEPICT_WIDTH = 210
 DEFAULT_STRUCTURE_DEPICT_HEIGHT = 170
 DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT = 180
@@ -67,12 +67,12 @@ def _clamp_structure_height(height: int) -> int:
 
 
 def structure_depict_width() -> int:
-    """Current Structure column depiction width in pixels."""
+    """Current 2D structure depiction width in pixels."""
     return _RUNTIME_WIDTH
 
 
 def structure_depict_height() -> int:
-    """Current Structure column depiction height in pixels."""
+    """Current 2D structure depiction height in pixels."""
     return _RUNTIME_HEIGHT
 
 
@@ -132,9 +132,23 @@ def _load_runtime_structure_size_from_settings() -> None:
 
 _load_runtime_structure_size_from_settings()
 
-# Tools → Browser structure preview (higher than the table column pixmap).
-BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH = 480
-BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT = 360
+def browser_structure_preview_width() -> int:
+    """Browser / preview pane width: 2× the current 2D render size."""
+    return max(1, int(structure_depict_width()) * 2)
+
+
+def browser_structure_preview_height() -> int:
+    """Browser / preview pane height: 2× the current 2D render size."""
+    return max(1, int(structure_depict_height()) * 2)
+
+
+def browser_structure_preview_size() -> tuple[int, int]:
+    return browser_structure_preview_width(), browser_structure_preview_height()
+
+
+# Tools → Browser structure preview (tracks Settings → 2D Render; 2× table size).
+BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH = DEFAULT_STRUCTURE_DEPICT_WIDTH * 2
+BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT = DEFAULT_STRUCTURE_DEPICT_HEIGHT * 2
 
 # Back-compat aliases for the historical misspelling.
 structure_depiict_width = structure_depict_width
