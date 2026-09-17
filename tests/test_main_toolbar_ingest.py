@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QToolButton
 
 from molmanager.ui.main_window import ChemicalTableApp
 
@@ -39,6 +40,7 @@ def test_main_toolbar_disabled_while_ingest_loading(qapp):  # noqa: ARG001
     assert w._btn_processes.isEnabled()
     assert w._btn_help.isEnabled()
     assert w._act_user_guide.isEnabled()
+    assert w._act_citations.isEnabled()
 
     w._set_ingest_loading(False)
     assert file_menu.isEnabled()
@@ -56,13 +58,19 @@ def test_help_is_corner_glyph_right_of_processes(qapp):  # noqa: ARG001
     btn = w._btn_help
     assert btn.toolButtonStyle() == Qt.ToolButtonIconOnly
     assert not btn.icon().isNull()
-    assert btn.iconSize().width() >= 16
+    assert 12 <= btn.iconSize().width() <= mb.fontMetrics().height()
     corner = mb.cornerWidget(Qt.TopRightCorner)
     ly = corner.layout()
     widgets = [ly.itemAt(i).widget() for i in range(ly.count())]
     assert widgets[-2] is w._btn_processes
     assert widgets[-1] is btn
-    assert btn.menu() is None
+    assert btn.popupMode() == QToolButton.InstantPopup
+    menu = btn.menu()
+    assert menu is not None
+    labels = [a.text().replace("&", "") for a in menu.actions()]
+    assert labels == ["User Guide", "Citations"]
+    assert w._act_user_guide in menu.actions()
+    assert w._act_citations in menu.actions()
     w.close()
 
 

@@ -48,7 +48,10 @@ def test_on_conformers_finished_creates_confs_when_missing(qapp):  # noqa: ARG00
     packed = _packed_cell("new")
     w = _app_with_row(["ID_HIDDEN", "Structure"], {})
     try:
+        w._begin_tool_progress("Generate conformations", 50)
+        w._on_tool_progress("Generate conformations…", 49, 50)
         w.on_conformers_finished([(0, None, packed)])
+        assert w._tool_progress_state.snapshot()[3] is False
         assert "confs" in w.headers
         cell = w._table_model.value_for_header(0, "confs")
         assert '"h":"confs"' in cell

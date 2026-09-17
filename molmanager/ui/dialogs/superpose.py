@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Tools → Superpose."""
+"""Tools → Conformations → Superpose."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ class SuperposeDialog(QDialog):
         if not self._has_confs:
             _set_combo_item_enabled(self.target_combo, 0, False)
             self.target_combo.setToolTip(
-                "Add a confs column first (Tools → Generate Conformations) to superpose ensembles."
+                "Add a confs column first (Tools → Conformations) to superpose ensembles."
             )
         self.target_combo.setCurrentIndex(0 if target == "conformers" else 1)
         form.addRow("Align:", self.target_combo)

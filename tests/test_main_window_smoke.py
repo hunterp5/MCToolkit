@@ -584,6 +584,9 @@ def test_close_empty_plot_pane_skips_prompt(qapp, monkeypatch):  # noqa: ARG001
     assert called["n"] == 0
     assert len(w._workspace_layout.plot_panes()) == 1
     assert pane not in w._workspace_layout.plot_panes()
+    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+
+    assert w._workspace_layout.layout_id == LAYOUT_TABLE_SINGLE
 
 
 def test_clear_all_re_enables_menubar_after_ingest(qapp):  # noqa: ARG001
@@ -651,22 +654,17 @@ def test_pka_prediction_writes_pi_only_when_requested(qapp):  # noqa: ARG001
     assert w._table_model.value_for_header(0, "pI") == "5.97"
 
 
-def test_tools_menu_lists_conformations_and_superpose_directly(qapp):  # noqa: ARG001
+def test_tools_menu_nests_superpose_under_conformations(qapp):  # noqa: ARG001
     w = ChemicalTableApp()
     mb = w.menuBar()
     tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
     labels = [a.text().replace("&", "") for a in tools.actions()]
-    assert "Conformations" not in labels
-    assert "Generate Conformations" in labels
-    assert any(lbl.startswith("Superpose") for lbl in labels)
-    gen = next(
-        a.menu() for a in tools.actions() if a.text().replace("&", "") == "Generate Conformations"
-    )
-    gen_labels = [a.text().replace("&", "") for a in gen.actions()]
-    assert "Stochastic…" in gen_labels
-    assert "Systematic…" in gen_labels
-    sp = next(a for a in tools.actions() if a.text().replace("&", "").startswith("Superpose"))
-    assert sp.menu() is None
+    assert "Generate Conformations" not in labels
+    assert "Conformations" in labels
+    assert not any(lbl.startswith("Superpose") for lbl in labels)
+    conf = next(a.menu() for a in tools.actions() if a.text().replace("&", "") == "Conformations")
+    conf_labels = [a.text().replace("&", "") for a in conf.actions()]
+    assert conf_labels == ["Stochastic…", "Systematic…", "", "Superpose…"]
     w.close()
 
 
@@ -681,11 +679,41 @@ def test_prepare_structures_nests_explicit_hydrogens(qapp):  # noqa: ARG001
     assert "Add Explicit Hydrogens…" not in labels
     assert "Remove Explicit Hydrogens…" not in labels
     assert "Explicit Hydrogens" in labels
+    assert "Protonate" in labels
+    assert "Protonate Structures" not in labels
+    assert labels.index("Protonate") == labels.index("Disconnect Largest Fragments…") + 1
+    protonate = next(
+        a.menu() for a in prepare.actions() if a.text().replace("&", "") == "Protonate"
+    )
+    p_labels = [a.text().replace("&", "") for a in protonate.actions()]
+    assert p_labels == ["Protonate…", "Generate Protomers…", "Neutralize…"]
     hydrogens = next(
         a.menu() for a in prepare.actions() if a.text().replace("&", "") == "Explicit Hydrogens"
     )
     h_labels = [a.text().replace("&", "") for a in hydrogens.actions()]
     assert h_labels == ["Add…", "Remove…"]
+    w.close()
+
+
+def test_tools_menu_nests_reaction_tools(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    mb = w.menuBar()
+    tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    labels = [a.text().replace("&", "") for a in tools.actions()]
+    assert "R-Group Decomposition" not in labels
+    assert "Reaction Based Enumeration…" not in labels
+    assert "Reaction" in labels
+    reaction = next(a.menu() for a in tools.actions() if a.text().replace("&", "") == "Reaction")
+    rxn_labels = [a.text().replace("&", "") for a in reaction.actions()]
+    assert "R-Group Decomposition" in rxn_labels
+    assert "Extract…" in rxn_labels
+    assert "Reaction Based Enumeration…" in rxn_labels
+    assert rxn_labels.index("Extract…") < rxn_labels.index("R-Group Decomposition")
+    decomp = next(
+        a.menu() for a in reaction.actions() if a.text().replace("&", "") == "R-Group Decomposition"
+    )
+    decomp_labels = [a.text().replace("&", "") for a in decomp.actions()]
+    assert "Core-Based Decomposition…" in decomp_labels
     w.close()
 
 
@@ -704,23 +732,33 @@ def test_data_menu_nests_analyze_and_split_under_table(qapp):  # noqa: ARG001
     w.close()
 
 
-def test_tools_menu_nests_dimensionality_reduction(qapp):  # noqa: ARG001
+def test_data_menu_nests_medchem_with_dimensionality_reduction(qapp):  # noqa: ARG001
     w = ChemicalTableApp()
     mb = w.menuBar()
     tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
-    labels = [a.text().replace("&", "") for a in tools.actions()]
-    assert "Dimensionality Reduction" in labels
+    tools_labels = [a.text().replace("&", "") for a in tools.actions()]
+    assert "Dimensionality Reduction" not in tools_labels
+    assert "MedChem" not in tools_labels
     data = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Data")
     data_labels = [a.text().replace("&", "") for a in data.actions()]
+    assert "MedChem" in data_labels
+    assert "Dimensionality Reduction" in data_labels
+    assert "BOILED-Egg plot…" not in data_labels
+    assert "Golden Triangle plot…" not in data_labels
     assert "Principal Component Analysis…" not in data_labels
     assert "t-SNE Visualization…" not in data_labels
     assert "UMAP Visualization…" not in data_labels
     assert "Self-Organizing Map…" not in data_labels
+    assert data_labels.index("Dimensionality Reduction") == data_labels.index("MedChem") + 1
+    medchem = next(a.menu() for a in data.actions() if a.text().replace("&", "") == "MedChem")
+    assert [a.text().replace("&", "") for a in medchem.actions()] == [
+        "BOILED-Egg plot…",
+        "Golden Triangle plot…",
+    ]
     dimred = next(
-        a.menu() for a in tools.actions() if a.text().replace("&", "") == "Dimensionality Reduction"
+        a.menu() for a in data.actions() if a.text().replace("&", "") == "Dimensionality Reduction"
     )
-    dimred_labels = [a.text().replace("&", "") for a in dimred.actions()]
-    assert dimred_labels == [
+    assert [a.text().replace("&", "") for a in dimred.actions()] == [
         "Principal Component Analysis…",
         "t-SNE Visualization…",
         "UMAP Visualization…",

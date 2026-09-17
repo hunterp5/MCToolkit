@@ -26,6 +26,9 @@ def test_format_tool_progress_text() -> None:
         "Calculate descriptors — 120/500 (24%)"
     )
     assert format_tool_progress_text("", 1, 1) == "1/1 (100%)"
+    assert format_tool_progress_text("Generate conformations…", 49, 50) == (
+        "Generate conformations… — 49/50 (98%)"
+    )
     assert format_tool_progress_text("Building table…", -1, -1) == "Building table…"
     assert format_tool_progress_text("Predict SOM: waiting on NERDD…", 0, -1) == (
         "Predict SOM: waiting on NERDD…"
@@ -67,3 +70,74 @@ def test_tool_progress_state_threaded_updates():
     assert msg == "Calculate descriptors"
     state.end()
     assert state.snapshot()[3] is False
+
+
+class _ProgressEmitter:
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def emit(self, *args) -> None:
+        self.calls.append(args)
+
+
+class _ProgressSignals:
+    def __init__(self) -> None:
+        self.tool_progress = _ProgressEmitter()
+
+
+def test_report_tool_progress_force_signal_bypasses_throttle():
+    from molmanager.tool_progress import report_tool_progress
+
+    signals = _ProgressSignals()
+    state = ToolProgressState()
+    state.begin("Generate conformations…", 50)
+    throttle = [49, 1e12]
+    report_tool_progress(
+        message="Generate conformations…",
+        done=49,
+        total=50,
+        progress_state=state,
+        signals=signals,
+        throttle=throttle,
+    )
+    assert signals.tool_progress.calls == []
+    report_tool_progress(
+        message="Generate conformations…",
+        done=50,
+        total=50,
+        progress_state=state,
+        signals=signals,
+        throttle=throttle,
+        force_signal=True,
+    )
+    assert signals.tool_progress.calls[-1] == ("Generate conformations…", 50, 50)
+    _, done, total, active = state.snapshot()
+    assert active
+    assert done == 50
+    assert total == 50
+
+
+def test_generation_progress_label_calls_out_last_molecule():
+    from molmanager.workers.conformer_generation import generation_progress_label
+
+    assert generation_progress_label(0, 50) == "Generate conformations…"
+    assert generation_progress_label(49, 50) == "Generate conformations… last molecule"
+    assert generation_progress_label(50, 50) == "Generate conformations…"
+    assert generation_progress_label(1, 1) == "Generate conformations…"
+
+
+def test_drain_completed_futures_keeps_pending_and_collects_done():
+    from concurrent.futures import Future
+
+    from molmanager.workers.conformer_generation import drain_completed_futures
+
+    pending = Future()
+    done = Future()
+    done.set_result((1, None, "ok"))
+    cancelled = Future()
+    cancelled.cancel()
+    results: list = []
+    leftover, added = drain_completed_futures({pending, done, cancelled}, results)
+    assert leftover == {pending}
+    assert added == 1
+    assert results == [(1, None, "ok")]

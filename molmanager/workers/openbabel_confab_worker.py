@@ -94,10 +94,21 @@ class SystematicConformerWorker(QRunnable):
                 tot,
                 prog_state,
                 progress_state=self.progress_state,
+                force=(i + 1) >= tot,
             )
         self._emit(results, cancelled=cancelled, tot=tot)
 
     def _emit(self, results: list, *, cancelled: bool, tot: int) -> None:
+        final_done = tot if not cancelled else min(len(results), tot)
+        emit_tool_progress_throttled(
+            self.signals,
+            PROGRESS_LABEL,
+            final_done,
+            tot,
+            [0, 0.0],
+            progress_state=self.progress_state,
+            force=True,
+        )
         emit_partial_results_if_cancelled(
             self.signals, PROGRESS_LABEL, len(results), tot, cancelled
         )

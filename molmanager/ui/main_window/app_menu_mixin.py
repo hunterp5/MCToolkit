@@ -34,20 +34,22 @@ from PyQt5.QtWidgets import (
     QAction,
     QActionGroup,
     QHBoxLayout,
+    QMenu,
     QToolButton,
     QWidget,
 )
 
 from ...config import load_config
+from ..citations_dialog import open_citations_dialog
 from ..user_guides import open_user_guide_dialog
 
-_HELP_HOTKEY_IDS = frozenset({"help.user_guides"})
+_HELP_HOTKEY_IDS = frozenset({"help.user_guides", "help.citations"})
 
 
 def _help_glyph_icon(*, size: int, ink: QColor, paper: QColor) -> QIcon:
     """Filled circular badge with a bold question mark (classic help control)."""
     dpr = 2.0
-    side = max(14, int(size))
+    side = max(12, int(size))
     px = max(1, int(round(side * dpr)))
     pm = QPixmap(px, px)
     pm.fill(Qt.transparent)
@@ -195,6 +197,29 @@ class AppMenuMixin:
             act.setToolTip(tip)
             prepare_menu.addAction(act)
 
+        protonate_menu = prepare_menu.addMenu("Protonate")
+        protonate_menu.setToolTipsVisible(True)
+        for title, slot, tip in (
+            (
+                "Protonate…",
+                self.run_protonate,
+                "Generate the dominant protomer (Uni-pKa) into a column and optionally render it like Structure.",
+            ),
+            (
+                "Generate Protomers…",
+                self.open_protomer_generator,
+                "Enumerate protomers or tautomers from structures and add results to the table.",
+            ),
+            (
+                "Neutralize…",
+                self.run_neutralize,
+                "Adjust protonation so the net formal charge is zero (RDKit Uncharger); updates the target column.",
+            ),
+        ):
+            act = QAction(title, self, triggered=slot)
+            act.setToolTip(tip)
+            protonate_menu.addAction(act)
+
         hydrogens_menu = prepare_menu.addMenu("Explicit Hydrogens")
         hydrogens_menu.setToolTipsVisible(True)
         for title, slot, tip in (
@@ -222,29 +247,6 @@ class AppMenuMixin:
         )
         prepare_menu.addAction(act_render_2d)
 
-        protonate_menu = prepare_menu.addMenu("Protonate Structures")
-        protonate_menu.setToolTipsVisible(True)
-        for title, slot, tip in (
-            (
-                "Protonate…",
-                self.run_protonate,
-                "Generate the dominant protomer (Uni-pKa) into a column and optionally render it like Structure.",
-            ),
-            (
-                "Generate Protomers…",
-                self.open_protomer_generator,
-                "Enumerate protomers or tautomers from structures and add results to the table.",
-            ),
-            (
-                "Neutralize…",
-                self.run_neutralize,
-                "Adjust protonation so the net formal charge is zero (RDKit Uncharger); updates the target column.",
-            ),
-        ):
-            act = QAction(title, self, triggered=slot)
-            act.setToolTip(tip)
-            protonate_menu.addAction(act)
-
         self._act_custom_calc = self._bind_hotkey(
             "tools.calculator",
             QAction("Calculator…", self, triggered=self.open_calculator),
@@ -258,7 +260,7 @@ class AppMenuMixin:
                 "Calculator disabled by MOLMANAGER_DISABLE_CUSTOM_CALC."
             )
 
-        conformations_menu = tools.addMenu("Generate &Conformations")
+        conformations_menu = tools.addMenu("&Conformations")
         conformations_menu.setToolTipsVisible(True)
         act_gen_conf = QAction(
             "Stochastic…",
@@ -278,12 +280,12 @@ class AppMenuMixin:
             "Build ensembles with Open Babel Confab (systematic torsion search)."
         )
         conformations_menu.addAction(act_sys_conf)
-
+        conformations_menu.addSeparator()
         act_superpose = QAction("&Superpose…", self, triggered=self.open_superpose)
         act_superpose.setToolTip(
             "Overlay conformers within a row or structures across rows, in 3D (spatial) or 2D (topological)."
         )
-        tools.addAction(act_superpose)
+        conformations_menu.addAction(act_superpose)
 
         fp_menu = tools.addMenu("&Fingerprints")
         fp_menu.setToolTipsVisible(True)
@@ -309,17 +311,6 @@ class AppMenuMixin:
             "Cluster compounds by fingerprint (K-Means, Butina, sphere exclusion, etc.)."
         )
         fp_menu.addAction(act_cluster)
-
-        dimred_menu = tools.addMenu("&Dimensionality Reduction")
-        dimred_menu.setToolTipsVisible(True)
-        dimred_menu.addAction(
-            QAction("Principal Component Analysis…", self, triggered=self.open_pca_dialog)
-        )
-        dimred_menu.addAction(
-            QAction("t-SNE Visualization…", self, triggered=self.open_tsne_dialog)
-        )
-        dimred_menu.addAction(QAction("UMAP Visualization…", self, triggered=self.open_umap_dialog))
-        dimred_menu.addAction(QAction("Self-Organizing Map…", self, triggered=self.open_som_dialog))
 
         predict_menu = tools.addMenu("&Predict")
         predict_menu.setToolTipsVisible(True)
@@ -398,7 +389,19 @@ class AppMenuMixin:
         self._act_dock_viewer = act_dock_viewer
         dock_menu.addAction(act_dock_viewer)
 
-        decomp_menu = tools.addMenu("&R-Group Decomposition")
+        reaction_menu = tools.addMenu("&Reaction")
+        reaction_menu.setToolTipsVisible(True)
+        act_reaction_extract = QAction(
+            "Extract…",
+            self,
+            triggered=self.open_reaction_extract,
+        )
+        act_reaction_extract.setToolTip(
+            "Split a reaction SMARTS / SMIRKS column into individual reactant and/or "
+            "product columns."
+        )
+        reaction_menu.addAction(act_reaction_extract)
+        decomp_menu = reaction_menu.addMenu("&R-Group Decomposition")
         decomp_menu.setToolTipsVisible(True)
         for title, slot, tip in (
             (
@@ -441,7 +444,7 @@ class AppMenuMixin:
             "pools from structure files or pasted SMILES, then append products to the table "
             "and/or an SDF file."
         )
-        tools.addAction(act_reaction_enum)
+        reaction_menu.addAction(act_reaction_enum)
 
         tools.addSeparator()
         tools.addAction(self._act_custom_calc)
@@ -527,6 +530,11 @@ class AppMenuMixin:
             "Load a PDB, mmCIF, or other crystallographic file and inspect chains in 3D."
         )
         protein_menu.addAction(act_protein_viewer)
+        act_protein_seq = QAction("&Sequence…", self, triggered=self.open_protein_sequence)
+        act_protein_seq.setToolTip(
+            "Align amino-acid sequences with MAFFT (FASTA, paste, or Protein Viewer chains)."
+        )
+        protein_menu.addAction(act_protein_seq)
 
         data_menu = mb.addMenu("&Data")
         table_menu = data_menu.addMenu("&Table")
@@ -562,10 +570,6 @@ class AppMenuMixin:
         )
         data_menu.addAction(act_mpo)
         data_menu.addSeparator()
-        data_menu.addAction(QAction("BOILED-Egg plot…", self, triggered=self.open_boiled_egg_plot))
-        data_menu.addAction(
-            QAction("Golden Triangle plot…", self, triggered=self.open_golden_triangle_plot)
-        )
         act_sali = QAction("SALI…", self, triggered=self.open_sali_dialog)
         act_sali.setToolTip(
             "Plot fingerprint similarity vs |Δactivity| colored by SALI "
@@ -585,6 +589,25 @@ class AppMenuMixin:
         )
         act_plot.setToolTip("Open the plotter or show the docked plot panel.")
         data_menu.addAction(act_plot)
+        data_menu.addSeparator()
+        medchem_menu = data_menu.addMenu("&MedChem")
+        medchem_menu.setToolTipsVisible(True)
+        medchem_menu.addAction(
+            QAction("BOILED-Egg plot…", self, triggered=self.open_boiled_egg_plot)
+        )
+        medchem_menu.addAction(
+            QAction("Golden Triangle plot…", self, triggered=self.open_golden_triangle_plot)
+        )
+        dimred_menu = data_menu.addMenu("&Dimensionality Reduction")
+        dimred_menu.setToolTipsVisible(True)
+        dimred_menu.addAction(
+            QAction("Principal Component Analysis…", self, triggered=self.open_pca_dialog)
+        )
+        dimred_menu.addAction(
+            QAction("t-SNE Visualization…", self, triggered=self.open_tsne_dialog)
+        )
+        dimred_menu.addAction(QAction("UMAP Visualization…", self, triggered=self.open_umap_dialog))
+        dimred_menu.addAction(QAction("Self-Organizing Map…", self, triggered=self.open_som_dialog))
         data_menu.addSeparator()
         act_browser = self._bind_hotkey(
             "file.browser",
@@ -611,6 +634,14 @@ class AppMenuMixin:
         self._act_user_guide.setToolTip("Open MolManager help (F1).")
         self._act_user_guide.triggered.connect(lambda: open_user_guide_dialog(self))
         self.addAction(self._act_user_guide)
+
+        self._act_citations = self._bind_hotkey(
+            "help.citations",
+            QAction("&Citations", self),
+        )
+        self._act_citations.setToolTip("Open papers and licenses for tools used in MolManager.")
+        self._act_citations.triggered.connect(lambda: open_citations_dialog(self))
+        self.addAction(self._act_citations)
 
         # Native Windows menu bars can swallow clicks meant for the corner widget; use in-window bar.
         if sys.platform == "win32":
@@ -645,13 +676,21 @@ class AppMenuMixin:
         corner_ly.addWidget(btn_proc)
 
         btn_help = QToolButton(corner)
-        btn_help.setToolTip("Open the user guide (F1).")
+        btn_help.setToolTip("User Guide and Citations (F1 opens the guide).")
         btn_help.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        btn_help.setPopupMode(QToolButton.InstantPopup)
         btn_help.setAutoRaise(True)
         btn_help.setFocusPolicy(Qt.NoFocus)
-        btn_help.clicked.connect(lambda: open_user_guide_dialog(self))
-        btn_help.setStyleSheet("QToolButton { padding: 0px; margin: 0px; }")
+        help_menu = QMenu(btn_help)
+        help_menu.addAction(self._act_user_guide)
+        help_menu.addAction(self._act_citations)
+        btn_help.setMenu(help_menu)
+        btn_help.setStyleSheet(
+            "QToolButton { padding: 0px; margin: 0px; }"
+            "QToolButton::menu-indicator { image: none; width: 0px; }"
+        )
         self._btn_help = btn_help
+        self._help_menu = help_menu
         corner_ly.addWidget(btn_help)
         self._sync_help_glyph_icon()
         mb.setCornerWidget(corner, Qt.TopRightCorner)
@@ -775,7 +814,7 @@ class AppMenuMixin:
         if btn is None:
             return
         mb = self.menuBar()
-        size = max(16, int(round(mb.fontMetrics().height() * 0.95)))
+        size = max(13, int(round(mb.fontMetrics().height() * 0.80)))
         ink = mb.palette().color(QPalette.WindowText)
         paper = mb.palette().color(QPalette.Window)
         btn.setIcon(_help_glyph_icon(size=size, ink=ink, paper=paper))
@@ -829,6 +868,23 @@ class AppMenuMixin:
             show=show,
         )
         return self._protein_viewer_dialog
+
+    def open_protein_sequence(self):
+        """Open the Protein Sequence MSA window (independent of Viewer Sequence)."""
+        from ..dialogs.protein_sequence_msa import ProteinSequenceMsaDialog
+        from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
+
+        def _on_destroyed() -> None:
+            self._protein_msa_dialog = None
+
+        reuse_or_show_modeless_singleton(
+            self,
+            "_protein_msa_dialog",
+            lambda: ProteinSequenceMsaDialog(self),
+            _on_destroyed,
+            show=True,
+        )
+        return self._protein_msa_dialog
 
     def open_workspace_layout_picker(self) -> None:
         """Show the graphic layout picker and apply the chosen preset."""

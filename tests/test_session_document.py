@@ -81,6 +81,8 @@ def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
     assert "docked_plots" in doc2
     assert "column_widths" in doc2["table_layout"]
     assert "hidden_columns" in doc2["table_layout"]
+    assert "workspace" in doc2["table_layout"]
+    assert doc2["table_layout"]["workspace"]["layout_id"] == doc2["workspace_layout"]["layout_id"]
 
 
 def test_apply_session_document_restores_row(qapp):  # noqa: ARG001
@@ -680,6 +682,94 @@ def test_session_roundtrip_keeps_side_by_side_layout(qapp, monkeypatch) -> None:
     w3._apply_session_document(doc_fallback)
     assert w3._workspace_layout.layout_id == LAYOUT_TABLE_SIDE
     assert len(w3._workspace_layout.plot_panes()) == 2
+
+
+def test_session_roundtrip_keeps_split_view_not_stacked(qapp, monkeypatch) -> None:  # noqa: ARG001
+    from PyQt5.QtWidgets import QWidget
+
+    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
+
+    class FakePlot(QWidget):
+        def collect_session_state(self) -> dict:
+            return {"kind": "plotter", "x": "MW", "plot_title": "split"}
+
+        def _sync_footer_chrome(self) -> None:
+            return None
+
+    def fake_restore(self, spec):  # noqa: ARG001
+        return FakePlot()
+
+    monkeypatch.setattr(ChemicalTableApp, "_restore_docked_plot_widget", fake_restore)
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
+    w.mols[0] = Chem.MolFromSmiles("CC")
+    w.next_oid = 1
+    w.apply_workspace_layout(LAYOUT_TABLE_SINGLE)
+    w._workspace_layout.dock_into_pane(w._workspace_layout.plot_panes()[0], FakePlot())
+    doc = w._build_session_document()
+    assert doc["workspace_layout"]["layout_id"] == LAYOUT_TABLE_SINGLE
+    assert doc["docked_plots"]["layout_id"] == LAYOUT_TABLE_SINGLE
+    assert doc["table_layout"]["workspace"]["layout_id"] == LAYOUT_TABLE_SINGLE
+    assert len(doc["docked_plots"]["panes"]) == 1
+
+    w2 = ChemicalTableApp()
+    w2.apply_workspace_layout(LAYOUT_TABLE_STACK)
+    assert w2._workspace_layout.layout_id == LAYOUT_TABLE_STACK
+    w2._apply_session_document(doc)
+    assert w2._workspace_layout.layout_id == LAYOUT_TABLE_SINGLE
+    assert len(w2._workspace_layout.plot_panes()) == 1
+
+    doc_embedded = json.loads(json.dumps(doc))
+    doc_embedded.pop("workspace_layout", None)
+    w3 = ChemicalTableApp()
+    w3.apply_workspace_layout(LAYOUT_TABLE_STACK)
+    w3._apply_session_document(doc_embedded)
+    assert w3._workspace_layout.layout_id == LAYOUT_TABLE_SINGLE
+    assert len(w3._workspace_layout.plot_panes()) == 1
+
+
+def test_session_save_after_closing_stacked_pane_is_split_view(qapp, monkeypatch) -> None:  # noqa: ARG001
+    from PyQt5.QtWidgets import QWidget
+
+    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
+
+    class FakePlot(QWidget):
+        def collect_session_state(self) -> dict:
+            return {"kind": "plotter", "x": "MW", "plot_title": "kept"}
+
+        def _sync_footer_chrome(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        ChemicalTableApp,
+        "_restore_docked_plot_widget",
+        lambda self, spec: FakePlot(),
+    )
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
+    w.mols[0] = Chem.MolFromSmiles("CC")
+    w.next_oid = 1
+    w.apply_workspace_layout(LAYOUT_TABLE_STACK)
+    p0, p1 = w._workspace_layout.plot_panes()
+    w._workspace_layout.dock_into_pane(p0, FakePlot())
+    assert w._workspace_layout.remove_pane(p1) is True
+    assert w._workspace_layout.layout_id == LAYOUT_TABLE_SINGLE
+    doc = w._build_session_document()
+    assert doc["workspace_layout"]["layout_id"] == LAYOUT_TABLE_SINGLE
+    assert doc["table_layout"]["workspace"]["layout_id"] == LAYOUT_TABLE_SINGLE
+    assert doc["docked_plots"]["layout_id"] == LAYOUT_TABLE_SINGLE
+
+    w2 = ChemicalTableApp()
+    w2.apply_workspace_layout(LAYOUT_TABLE_STACK)
+    w2._apply_session_document(doc)
+    assert w2._workspace_layout.layout_id == LAYOUT_TABLE_SINGLE
+    assert len(w2._workspace_layout.plot_panes()) == 1
 
 
 def test_session_roundtrip_restores_workspace_splitter(qapp, monkeypatch) -> None:  # noqa: ARG001

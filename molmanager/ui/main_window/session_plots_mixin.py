@@ -111,7 +111,7 @@ class SessionPlotsMixin:
         return {
             "panes": panes_out,
             "preferred_pane_id": pref.pane_id if pref is not None else None,
-            "layout_id": mgr.layout_id,
+            "layout_id": mgr.session_layout_id(),
         }
 
     def _iter_floating_plot_hosts(self) -> list:
@@ -273,6 +273,25 @@ class SessionPlotsMixin:
 
         return restore_docked_plot_widget(self, spec)
 
+    def _workspace_layout_payload_from_session_doc(self, doc: object) -> dict | None:
+        """Workspace splitter snapshot: top-level key, else copy inside table_layout."""
+        if not isinstance(doc, dict):
+            return None
+        ws = doc.get("workspace_layout")
+        embedded = None
+        table_layout = doc.get("table_layout")
+        if isinstance(table_layout, dict):
+            maybe = table_layout.get("workspace")
+            if isinstance(maybe, dict) and maybe:
+                embedded = maybe
+        if isinstance(ws, dict) and ws:
+            if not ws.get("layout_id") and isinstance(embedded, dict) and embedded.get("layout_id"):
+                merged = dict(ws)
+                merged["layout_id"] = embedded["layout_id"]
+                return merged
+            return ws
+        return embedded
+
     def _resolve_session_workspace_layout_id(
         self, docked_payload: object, panes_data: list
     ) -> str | None:
@@ -292,9 +311,12 @@ class SessionPlotsMixin:
             if not isinstance(source, dict):
                 continue
             lid = source.get("layout_id")
-            if isinstance(lid, str) and lid in known and lid != "table_only":
-                if lid not in candidates:
-                    candidates.append(lid)
+            if isinstance(lid, str) and lid in known and lid not in candidates:
+                candidates.append(lid)
+
+        # The saved workspace id is authoritative (split vs stacked vs table-only).
+        if candidates:
+            return candidates[0]
 
         max_idx = 0
         for spec in panes_data:
@@ -306,19 +328,10 @@ class SessionPlotsMixin:
                 continue
         need_multi = max_idx > 0 or len(panes_data) > 1
 
-        # Prefer an explicit id that can host the saved pane indices.
-        for lid in candidates:
-            if need_multi and lid == LAYOUT_TABLE_SINGLE:
-                continue
-            return lid
-        if candidates:
-            return candidates[0]
-
         if not panes_data:
             return None
         if not need_multi:
             return LAYOUT_TABLE_SINGLE
-        # Prefer side-by-side over stacked when the saved layout id is unavailable.
         return LAYOUT_TABLE_SIDE
 
     def _restore_floating_plots(self, payload: object) -> None:

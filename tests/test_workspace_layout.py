@@ -411,6 +411,18 @@ def test_remove_pane_reduces_pane_count(qapp):
     assert mgr.remove_pane(p1) is True
     assert len(mgr.plot_panes()) == 1
     assert p1 not in mgr.plot_panes()
+    assert mgr.layout_id == LAYOUT_TABLE_SINGLE
+    assert mgr.session_layout_id() == LAYOUT_TABLE_SINGLE
+
+
+def test_session_layout_id_canonicalizes_leftover_single_pane(qapp):
+    mgr = _manager(qapp)
+    assert mgr.layout_id == LAYOUT_TABLE_STACK
+    mgr._panes.pop()
+    assert len(mgr.plot_panes()) == 1
+    assert mgr.session_layout_id() == LAYOUT_TABLE_SINGLE
+    payload = mgr.collect_splitter_sizes()
+    assert payload["layout_id"] == LAYOUT_TABLE_SINGLE
 
 
 def test_remove_last_pane_switches_to_table_only(qapp):

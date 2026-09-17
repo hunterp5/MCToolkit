@@ -396,7 +396,7 @@ class SessionRestoreMixin:
 
     def _finalize_session_workspace_and_plots(self, doc: dict) -> None:
         self._discard_docked_plot_widgets()
-        ws = doc.get("workspace_layout")
+        ws = self._workspace_layout_payload_from_session_doc(doc)
         self._pending_session_workspace_layout = ws if isinstance(ws, dict) else None
         self._pending_session_column_order = (
             doc.get("column_logical_order")
@@ -426,7 +426,7 @@ class SessionRestoreMixin:
                 if callable(ensure):
                     QTimer.singleShot(0, lambda: ensure(int(saved_w)))
         self._restore_docked_plots(docked_payload)
-        # Re-assert after docking hooks so side-by-side cannot collapse to stacked.
+        # Re-assert the saved layout id after docking so leftover stacked/side panes cannot stick.
         if mgr is not None and saved_layout and mgr.layout_id != saved_layout:
             mgr.apply_layout(saved_layout, preserve_plots=True)
             if isinstance(ws, dict):

@@ -52,7 +52,7 @@ class SessionTableLayoutMixin:
             return False
 
     def _collect_table_layout(self) -> dict:
-        """Column widths, hidden columns, row chrome, and Qt header state."""
+        """Column widths, hidden columns, row chrome, header state, and workspace layout."""
         widths: dict[str, int] = {}
         hidden: list[str] = []
         hh = None
@@ -112,7 +112,7 @@ class SessionTableLayoutMixin:
                 scroll_h = int(hbar.value())
         except RuntimeError:
             pass
-        return {
+        payload = {
             "column_widths": widths,
             "hidden_columns": hidden,
             "pixmap_columns": self._table_model.pixmap_data_column_headers(),
@@ -122,6 +122,13 @@ class SessionTableLayoutMixin:
             "scroll_vertical": scroll_v,
             "scroll_horizontal": scroll_h,
         }
+        mgr = getattr(self, "_workspace_layout", None)
+        if mgr is not None:
+            try:
+                payload["workspace"] = mgr.collect_splitter_sizes()
+            except RuntimeError:
+                pass
+        return payload
 
     def _restore_table_layout(self, payload: object) -> None:
         if not isinstance(payload, dict):

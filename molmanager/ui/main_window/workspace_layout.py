@@ -96,6 +96,15 @@ class WorkspaceLayoutManager(QWidget):
     def layout_id(self) -> str:
         return self._layout_id
 
+    def session_layout_id(self) -> str:
+        """Layout id to persist. A leftover 1-pane stack/side is saved as split view."""
+        n = len(self._panes)
+        if n <= 0:
+            return LAYOUT_TABLE_ONLY
+        if n == 1:
+            return LAYOUT_TABLE_SINGLE
+        return self._layout_id
+
     def plot_panes(self) -> list[PlotPane]:
         return list(self._panes)
 
@@ -163,6 +172,7 @@ class WorkspaceLayoutManager(QWidget):
         """Serializable nested splitter sizes for the current layout."""
         sizes: dict[str, list[int]] = {}
         ratios: dict[str, list[float]] = {}
+        orientations: dict[str, str] = {}
         for i, sp in enumerate(self._splitters):
             try:
                 vals = [int(s) for s in sp.sizes()]
@@ -172,11 +182,18 @@ class WorkspaceLayoutManager(QWidget):
             sizes[key] = vals
             total = float(sum(vals)) or 1.0
             ratios[key] = [float(v) / total for v in vals]
+            try:
+                orientations[key] = (
+                    "horizontal" if sp.orientation() == Qt.Horizontal else "vertical"
+                )
+            except RuntimeError:
+                pass
         return {
-            "layout_id": self._layout_id,
+            "layout_id": self.session_layout_id(),
             "sizes": sizes,
             "ratios": ratios,
             "preferred_pane_id": self._preferred_pane_id,
+            "orientations": orientations,
         }
 
     def restore_splitter_sizes(self, payload: dict | None) -> None:
@@ -368,6 +385,9 @@ class WorkspaceLayoutManager(QWidget):
 
         pref = self.preferred_pane()
         self.set_preferred_pane(pref)
+        # Closing one of two stacked/side panes looks like split view; persist it that way.
+        if len(self._panes) == 1 and self._layout_id != LAYOUT_TABLE_SINGLE:
+            self.apply_layout(LAYOUT_TABLE_SINGLE, preserve_plots=True)
         return True
 
     def _on_pane_activated(self, pane: PlotPane) -> None:

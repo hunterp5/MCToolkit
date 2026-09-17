@@ -27,7 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt5.QtCore import QObject, QRunnable, Qt, QThreadPool, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QMetaObject, QObject, QRunnable, Qt, QThreadPool, pyqtSignal, pyqtSlot
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +240,20 @@ class ProcessQueueManager(QObject):
                 )
         return {"running": running, "queued": queued, "fast_running": fast_running}
 
+    @pyqtSlot()
+    def _enter_app_background_ui(self) -> None:
+        """GUI-thread: slow the progress poll while a queued job holds a pool thread."""
+        fn = getattr(self._app, "_enter_background_job_ui", None)
+        if callable(fn):
+            fn()
+
+    @pyqtSlot()
+    def _exit_app_background_ui(self) -> None:
+        """GUI-thread: restore the progress poll interval after the queued job returns."""
+        fn = getattr(self._app, "_exit_background_job_ui", None)
+        if callable(fn):
+            fn()
+
     @pyqtSlot(str)
     def _on_job_thread_finished(self, job_id: str) -> None:
         if self._current_job_id != job_id:
@@ -295,18 +309,13 @@ class _QueueJobRunner(QRunnable):
         self._inner = inner
 
     def run(self) -> None:
-        app = self._manager._app
-        enter_ui = getattr(app, "_enter_background_job_ui", None)
-        exit_ui = getattr(app, "_exit_background_job_ui", None)
-        if callable(enter_ui):
-            enter_ui()
+        QMetaObject.invokeMethod(self._manager, "_enter_app_background_ui", Qt.QueuedConnection)
         try:
             self._inner.run()
         except Exception:
             logger.exception("Queued job crashed (job_id=%s)", self._job_id)
         finally:
-            if callable(exit_ui):
-                exit_ui()
+            QMetaObject.invokeMethod(self._manager, "_exit_app_background_ui", Qt.QueuedConnection)
             self._manager.thread_finished.emit(self._job_id)
 
 

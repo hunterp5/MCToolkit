@@ -52,7 +52,12 @@ from ..table_file_formats import (
     open_text_maybe_gzip,
 )
 from ..fragment_disconnect import largest_fragment_and_rest
-from ..structure_draw import ReactionDrawSpec, render_molecule_png, render_reaction_png
+from ..structure_draw import (
+    ReactionDrawSpec,
+    render_depict_payload_png,
+    render_molecule_png,
+    render_reaction_png,
+)
 from ..structure_neutralize import neutralize_mol
 from ..structure_hydrogens import add_explicit_hydrogens, remove_explicit_hydrogens
 from ..rxn_io import RXN_TABLE_HEADERS, load_rxn_file
@@ -487,13 +492,13 @@ class RenderWorker(QRunnable):
                 pass
             return
         try:
-            if self.skip_mol_props:
+            if self.skip_mol_props or isinstance(self.mol, ReactionDrawSpec):
                 p = {}
             elif self.props is not None:
                 p = self.props
             else:
                 p = {n: safe_mol_prop_string(self.mol, n) for n in self.mol.GetPropNames()}
-            png = render_molecule_png(self.mol, int(self.w), int(self.h))
+            png = render_depict_payload_png(self.mol, int(self.w), int(self.h))
             self.signals.rendered.emit(oid, p, png, True, self.w, self.h, sid)
         except Exception:
             self.signals.rendered.emit(oid, {}, b"", False, self.w, self.h, sid)

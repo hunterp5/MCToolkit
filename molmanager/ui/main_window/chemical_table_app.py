@@ -295,6 +295,7 @@ class ChemicalTableApp(
         self._sali_browser_dialog = None
         self._sketcher_dialog = None
         self._protein_viewer_dialog = None
+        self._protein_msa_dialog = None
         self._calculator_dialog = None
         self._data_analysis_dialog = None
         self._cluster_dialog = None
@@ -585,7 +586,7 @@ class ChemicalTableApp(
         self._table_stack = self._workspace_stack
         main_v.addWidget(self._workspace_stack, 1)
         status_row = QHBoxLayout()
-        status_row.setContentsMargins(4, 2, 4, 2)
+        status_row.setContentsMargins(8, 6, 8, 6)
         status_row.setSpacing(8)
         self.status_label = QLabel("Ready")
         self.status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)

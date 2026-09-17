@@ -55,6 +55,8 @@ def test_default_wsl_executable_non_windows(monkeypatch) -> None:
 
 
 def test_wsl_settings_dialog_saves_path(qapp, monkeypatch, tmp_path):  # noqa: ARG001
+    from PyQt5.QtWidgets import QDialogButtonBox
+
     from molmanager.ui.dialogs.wsl_settings import WslSettingsDialog
 
     saved: dict[str, str] = {}
@@ -64,6 +66,10 @@ def test_wsl_settings_dialog_saves_path(qapp, monkeypatch, tmp_path):  # noqa: A
         lambda path: saved.setdefault("path", path) or path,
     )
     dlg = WslSettingsDialog()
+    box = dlg.findChild(QDialogButtonBox)
+    assert box is not None
+    assert box.button(QDialogButtonBox.Ok) is not None
+    assert box.button(QDialogButtonBox.Cancel) is None
     dlg.path_edit.setText(str(tmp_path / "wsl.exe"))
     dlg.accept()
     assert saved["path"].endswith("wsl.exe")

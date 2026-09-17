@@ -20,7 +20,7 @@ Global UI preferences for this installation/session; they do not alter table che
 - **Custom Colors...** - edit named custom themes (palette roles, save/delete).
 - **Font...** - **Application font size**, **Table font size**, **Table text alignment** (3×3: top/center/bottom × left/center/right), **Reset to Default**.
 - **Hotkeys...** - category/command/shortcut table with **Reset to Defaults**, **Clear Selected**, and OK/Cancel.
-- **WSL...** - path to ``wsl.exe`` so Windows can run Linux-only tools (AmberTools / GAFF for OpenMM, and similar). **Detect** fills PATH/System32; **Test** runs ``uname -s`` inside WSL.
+- **WSL...** - path to ``wsl.exe`` so Windows can run Linux-only tools (AmberTools / GAFF for OpenMM, and similar). **Test** runs ``uname -s`` inside WSL.
 - **Status Bar** - show or hide the bottom bar (status messages and memory use).
 
 ## Workflow

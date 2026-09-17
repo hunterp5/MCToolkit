@@ -40,6 +40,33 @@ from .superpose import SuperposeParams, run_superpose_conformers
 
 logger = logging.getLogger(__name__)
 
+_PROGRESS_LABEL = "Generate conformations…"
+
+
+def generation_progress_label(done: int, tot: int) -> str:
+    """Status text; call out the last in-flight molecule so n-1/n does not look stuck."""
+    if int(tot) > 1 and 0 < int(done) < int(tot) and (int(tot) - int(done)) == 1:
+        return f"{_PROGRESS_LABEL} last molecule"
+    return _PROGRESS_LABEL
+
+
+def drain_completed_futures(futures, results: list) -> tuple[set, int]:
+    """Move finished (non-cancelled) futures into *results*; return leftover futures and added count."""
+    remaining = set()
+    added = 0
+    for fut in futures:
+        if not fut.done():
+            remaining.add(fut)
+            continue
+        if fut.cancelled():
+            continue
+        try:
+            results.append(fut.result())
+            added += 1
+        except Exception:
+            logger.exception("Conformer row task failed")
+    return remaining, added
+
 
 @dataclass(frozen=True)
 class ConformerGenParams:
@@ -495,7 +522,7 @@ class ConformerGenerationWorker(QRunnable):
             if use_parallel:
                 emit_tool_progress_throttled(
                     self.signals,
-                    "Generate conformations…",
+                    generation_progress_label(0, tot),
                     0,
                     tot,
                     prog_state,
@@ -511,48 +538,31 @@ class ConformerGenerationWorker(QRunnable):
                         if cancel_ev is not None and cancel_ev.is_set():
                             shutdown_cancel = True
                             cancelled = True
-                            for f in list(pending):
-                                if f.done() and not f.cancelled():
-                                    try:
-                                        results.append(f.result())
-                                        done_count += 1
-                                    except Exception:
-                                        logger.exception("Conformer row task failed")
-                                else:
-                                    f.cancel()
+                            pending, added = drain_completed_futures(pending, results)
+                            done_count += added
+                            for fut in list(pending):
+                                fut.cancel()
                             break
                         completed, pending = wait(
                             pending, timeout=0.08, return_when=FIRST_COMPLETED
                         )
-                        for f in completed:
-                            if f.cancelled():
-                                continue
-                            try:
-                                results.append(f.result())
-                                done_count += 1
-                            except Exception:
-                                logger.exception("Conformer row task failed")
+                        pending, added = drain_completed_futures(completed | pending, results)
+                        if added:
+                            done_count += added
                             emit_tool_progress_throttled(
                                 self.signals,
-                                "Generate conformations…",
+                                generation_progress_label(done_count, tot),
                                 done_count,
                                 tot,
                                 prog_state,
                                 progress_state=self.progress_state,
+                                force=done_count >= tot,
                             )
                 finally:
                     try:
                         ex.shutdown(wait=not shutdown_cancel, cancel_futures=shutdown_cancel)
                     except TypeError:
                         ex.shutdown(wait=not shutdown_cancel)
-                emit_tool_progress_throttled(
-                    self.signals,
-                    "Generate conformations…",
-                    min(done_count, tot),
-                    tot,
-                    prog_state,
-                    progress_state=self.progress_state,
-                )
             else:
                 for done, t in enumerate(tasks, start=1):
                     if cancel_ev is not None and cancel_ev.is_set():
@@ -562,13 +572,24 @@ class ConformerGenerationWorker(QRunnable):
                     done_count = done
                     emit_tool_progress_throttled(
                         self.signals,
-                        "Generate conformations…",
+                        generation_progress_label(done, tot),
                         done,
                         tot,
                         prog_state,
                         progress_state=self.progress_state,
+                        force=done >= tot,
                     )
         finally:
+            final_done = tot if not cancelled else min(done_count, tot)
+            emit_tool_progress_throttled(
+                self.signals,
+                _PROGRESS_LABEL,
+                final_done,
+                tot,
+                prog_state,
+                progress_state=self.progress_state,
+                force=True,
+            )
             emit_partial_results_if_cancelled(
                 self.signals, "Generate conformations", done_count, tot, cancelled
             )

@@ -44,6 +44,7 @@ def emit_tool_progress_throttled(
     state: list,
     *,
     progress_state=None,
+    force: bool = False,
 ) -> None:
     """Limit ``tool_progress`` emissions; always refresh ``ToolProgressState`` when provided."""
     from ..tool_progress import report_tool_progress
@@ -55,4 +56,5 @@ def emit_tool_progress_throttled(
         progress_state=progress_state,
         signals=signals,
         throttle=state,
+        force_signal=bool(force),
     )

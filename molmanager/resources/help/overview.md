@@ -19,13 +19,13 @@ Works on the current session table (structures plus property columns). Most tool
 - **File** - open/import data, sessions, export, selection browser.
 - **Edit** - undo/redo, clipboard, and selection commands.
 - **Tools** - prepare structures, fingerprints, docking helpers, design tools, predictors (pKa, permeability, SOM), random generators.
-- **Protein** - 3D structure viewer for PDB, mmCIF, and related crystallographic files.
-- **Data** - statistics, plotter, dimensionality reduction, QSAR, MPO, medchem plots.
+- **Protein** - 3D structure viewer for PDB, mmCIF, and related crystallographic files, plus **Sequence** for MAFFT multiple-sequence alignment.
+- **Data** - statistics, plotter, MedChem plots, dimensionality reduction, QSAR, MPO.
 - **External** - SQL, PubChem, ChEMBL, patents.
-- **Settings** - theme, fonts, hotkeys.
+- **Settings** - theme, fonts, hotkeys, WSL executable for Linux-only tools.
 - **Layout** - rearrange or restore workspace panes.
 - **Processes** - inspect running/queued background jobs.
-- **Help** - question-mark control to the right of Processes. Opens this User Guide. F1 also opens the guide.
+- **Help** - question-mark control to the right of Processes. Opens a menu for this User Guide and the Citations list. F1 also opens the guide.
 
 ## Workflow
 

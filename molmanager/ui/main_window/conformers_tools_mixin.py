@@ -195,7 +195,8 @@ class ConformersToolsMixin:
             )
 
     def on_conformers_finished(self, results: list) -> None:
-        self._finish_tool_progress()
+        self._finish_tool_progress(status_message=None)
+        self.status_label.setText("Writing conformer results…")
         output_opts = getattr(self, "_conformer_output_options", None)
         self._conformer_output_options = None
         added_rows = 0
@@ -382,7 +383,8 @@ class ConformersToolsMixin:
         )
 
     def on_superpose_finished(self, results: list) -> None:
-        self._finish_tool_progress("Superpose")
+        self._finish_tool_progress("Superpose", status_message=None)
+        self.status_label.setText("Writing superpose results…")
         superpose_col = "superpose"
         self.table.setSortingEnabled(False)
         try:

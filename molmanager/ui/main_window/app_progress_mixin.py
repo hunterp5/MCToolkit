@@ -173,10 +173,10 @@ class AppProgressMixin:
         status_message: str | None = STATUS_READY,
     ) -> None:
         """Show 100% once, then stop polling and optionally reset the status line."""
-        msg, _done, total, active = self._tool_progress_state.snapshot()
-        if active:
-            stored = getattr(self, "_tool_progress_active_label", "") or ""
-            final_msg = message or msg or stored
+        msg, done, total, active = self._tool_progress_state.snapshot()
+        stored = getattr(self, "_tool_progress_active_label", "") or ""
+        final_msg = message or msg or stored
+        if total > 0 and (active or done < total):
             self._on_tool_progress(final_msg, total, total)
         self._tool_progress_state.end()
         self._tool_progress_active_label = ""
