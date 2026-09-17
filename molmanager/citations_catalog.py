@@ -180,6 +180,33 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 LIC_BSD3,
                 homepage="https://3dmol.org",
             ),
+            _t(
+                "mafft",
+                "MAFFT",
+                "Protein → Sequence multiple-sequence alignment (`mafft --auto --amino`).",
+                (
+                    (
+                        "Katoh, K.; Misawa, K.; Kuma, K.; Miyata, T. MAFFT: a novel method for "
+                        "rapid multiple sequence alignment based on fast Fourier transform. "
+                        "Nucleic Acids Res. 2002, 30, 3059–3066.",
+                        "https://doi.org/10.1093/nar/gkf436",
+                    ),
+                    (
+                        "Katoh, K.; Standley, D. M. MAFFT multiple sequence alignment software "
+                        "version 7: improvements in performance and usability. Mol. Biol. Evol. "
+                        "2013, 30, 772–780.",
+                        "https://doi.org/10.1093/molbev/mst010",
+                    ),
+                ),
+                LIC_BSD3,
+                homepage="https://mafft.cbrc.jp/alignment/software/",
+                notes=(
+                    "Optional local CLI. Do not commit the Windows all-in-one tree; drop "
+                    "`mafft.bat` (with its `usr/` folder) into `molmanager/resources/bin/win/` "
+                    "or put `mafft` on PATH. Official Windows zip: "
+                    "https://mafft.cbrc.jp/alignment/software/windows.html"
+                ),
+            ),
         ),
     ),
     CitationSection(
@@ -505,7 +532,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "umap",
                 "UMAP (umap-learn)",
-                "Tools → Dimensionality Reduction → UMAP Visualization.",
+                "Data → Dimensionality Reduction → UMAP Visualization.",
                 (
                     (
                         "McInnes, L.; Healy, J.; Melville, J. UMAP: Uniform Manifold Approximation "
@@ -524,7 +551,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "som",
                 "Self-organizing map (Kohonen)",
-                "Tools → Dimensionality Reduction → Self-Organizing Map (NumPy implementation in MolManager).",
+                "Data → Dimensionality Reduction → Self-Organizing Map (NumPy implementation in MolManager).",
                 (
                     (
                         "Kohonen, T. Self-Organized Formation of Topologically Correct Feature Maps. "
@@ -551,7 +578,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "boiled_egg",
                 "BOILED-Egg",
-                "Data → BOILED-Egg plot (TPSA vs WLOGP regions).",
+                "Data → MedChem → BOILED-Egg plot (TPSA vs WLOGP regions).",
                 (
                     (
                         "Daina, A.; Zoete, V. A BOILED-Egg To Predict Gastrointestinal Absorption "
@@ -565,7 +592,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "golden_triangle",
                 "Golden Triangle",
-                "Data → Golden Triangle plot (LogP vs MW).",
+                "Data → MedChem → Golden Triangle plot (LogP vs MW).",
                 (
                     (
                         "Johnson, T. W.; Dress, K. R.; Edwards, M. Using the Golden Triangle to "

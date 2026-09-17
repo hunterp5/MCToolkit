@@ -52,6 +52,7 @@ def test_catalog_includes_key_dois() -> None:
         "10.1186/1758-2946-3-8",
         "10.1021/acs.jmedchem.7b00717",
         "10.1093/bioinformatics/btu829",
+        "10.1093/molbev/mst010",
         "10.1186/s13321-018-0324-5",
     ):
         assert doi in html_all

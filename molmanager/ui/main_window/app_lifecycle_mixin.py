@@ -178,6 +178,7 @@ class AppLifecycleMixin:
             "_sali_browser_dialog",
             "_sketcher_dialog",
             "_protein_viewer_dialog",
+            "_protein_msa_dialog",
             "_calculator_dialog",
             "_data_analysis_dialog",
             "_cluster_dialog",

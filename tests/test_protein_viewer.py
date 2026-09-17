@@ -473,6 +473,7 @@ def test_protein_menu_opens_viewer(qapp):  # noqa: ARG001
     )
     viewer_labels = [a.text().replace("&", "") for a in protein_menu.actions()]
     assert "Viewer" in viewer_labels
+    assert any(lab.startswith("Sequence") for lab in viewer_labels)
     w.open_protein_viewer()
     dlg = w._protein_viewer_dialog
     assert dlg is not None

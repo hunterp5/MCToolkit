@@ -29,6 +29,7 @@ _PACKAGE_ROOT = Path(__file__).resolve().parent
 _TOOL_BINARIES: dict[str, tuple[str, ...]] = {
     "smina": ("smina.exe", "smina"),
     "obabel": ("obabel.exe", "obabel"),
+    "mafft": ("mafft.bat", "mafft.exe", "mafft"),
 }
 
 
@@ -68,7 +69,75 @@ def resolve_bundled_executable(tool: str) -> Path | None:
         candidate = base / name
         if candidate.is_file():
             return candidate
+    if key == "mafft":
+        return find_mafft_executable_in_tree(base)
     return None
+
+
+_MAFFT_BASENAMES = ("mafft.bat", "mafft.exe", "mafft")
+
+
+def find_mafft_executable_in_tree(root: Path) -> Path | None:
+    """Find ``mafft.bat`` / ``mafft`` in *root* or one child directory (all-in-one zip)."""
+    if not root.is_dir():
+        return None
+    for name in _MAFFT_BASENAMES:
+        candidate = root / name
+        if candidate.is_file():
+            return candidate
+    nested = root / "usr" / "bin" / "mafft"
+    if nested.is_file():
+        return nested
+    try:
+        children = sorted(p for p in root.iterdir() if p.is_dir())
+    except OSError:
+        return None
+    for child in children:
+        for name in _MAFFT_BASENAMES:
+            candidate = child / name
+            if candidate.is_file():
+                return candidate
+        nested = child / "usr" / "bin" / "mafft"
+        if nested.is_file():
+            return nested
+    return None
+
+
+def resolve_mafft_executable(user_path: str = "") -> str | None:
+    """Resolve MAFFT from a file, install folder, PATH, or bundled ``resources/bin``."""
+    text = (user_path or "").strip()
+    if text:
+        hit = _mafft_from_user_path(Path(text).expanduser())
+        if hit is not None:
+            return str(hit)
+        via = resolve_user_executable(text)
+        if via:
+            return via
+    bundled = resolve_bundled_executable("mafft")
+    if bundled is not None:
+        return str(bundled)
+    default = default_external_executable("mafft")
+    hit = _mafft_from_user_path(Path(default).expanduser())
+    if hit is not None:
+        return str(hit)
+    return resolve_user_executable(default)
+
+
+def _mafft_from_user_path(path: Path) -> Path | None:
+    if path.is_file() and path.name.lower().startswith("mafft"):
+        return path
+    if path.is_dir():
+        return find_mafft_executable_in_tree(path)
+    return None
+
+
+def ensure_mafft_ready(user_path: str = "") -> str | None:
+    """Return an error string when MAFFT cannot be resolved."""
+    from .protein_msa import MISSING_MAFFT_MSG
+
+    if resolve_mafft_executable(user_path):
+        return None
+    return MISSING_MAFFT_MSG
 
 
 def pip_openbabel_executable() -> Path | None:
