@@ -37,12 +37,10 @@ from PyQt5.QtWidgets import (
 
 from ...bundled_paths import default_external_executable
 from ...openbabel_confab import SystematicConfParams, ensure_openbabel_confab_ready
-from ...science_citations import systematic_conformations_dialog_footer_html
 from ..qt_widget_utils import make_window_minimizable
 from .conformer_output import (
     ConformerOutputOptions,
     ConformerOutputOptionsPanel,
-    citation_footer_label,
     conformer_options_group,
 )
 from .scope import selection_scope_checked
@@ -147,7 +145,6 @@ class SystematicConformationsDialog(QDialog):
             )
         )
         root.addWidget(self.output_panel)
-        root.addWidget(citation_footer_label(systematic_conformations_dialog_footer_html()))
 
         box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         box.accepted.connect(self._try_accept)

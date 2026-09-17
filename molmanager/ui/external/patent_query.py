@@ -40,7 +40,6 @@ from PyQt5.QtWidgets import (
 )
 
 from ...surechembl_api import similarity_search
-from ...science_citations import surechembl_patent_search_html
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 from ..threadpool_access import start_runnable_on_app_pool
 
@@ -57,7 +56,9 @@ class _PatentSearchSignals(QObject):
 
 
 class _PatentSearchWorker(QRunnable):
-    def __init__(self, smiles: str, min_tanimoto: float, max_hits: int, signals: _PatentSearchSignals):
+    def __init__(
+        self, smiles: str, min_tanimoto: float, max_hits: int, signals: _PatentSearchSignals
+    ):
         super().__init__()
         self.smiles = smiles
         self.min_tanimoto = min_tanimoto
@@ -106,13 +107,6 @@ class PatentQueryDialog(QDialog):
         self._signals = _PatentSearchSignals()
 
         root = QVBoxLayout(self)
-
-        ref = QLabel(surechembl_patent_search_html())
-        ref.setWordWrap(True)
-        ref.setTextFormat(Qt.RichText)
-        ref.setOpenExternalLinks(True)
-        ref.setStyleSheet("color: palette(mid);")
-        root.addWidget(ref)
 
         row = QHBoxLayout()
         row.addWidget(QLabel("Query SMILES:"))
@@ -228,7 +222,9 @@ class PatentQueryDialog(QDialog):
         except Exception:
             parts = []
         if not parts:
-            QMessageBox.information(self, "Query Patents", "No valid SMILES could be exported from the sketch.")
+            QMessageBox.information(
+                self, "Query Patents", "No valid SMILES could be exported from the sketch."
+            )
             return
         self.chk_only_selected.setChecked(False)
         self.smiles.setText(parts[0])

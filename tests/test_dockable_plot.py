@@ -101,6 +101,7 @@ def test_selection_browser_widget_is_workspace_dockable():
     assert hasattr(SelectionBrowserWidget, "_open_browser_options")
     assert is_dockable_workspace_widget(SomBrowserWidget)
     assert hasattr(SomBrowserWidget, "create_floating_dialog")
+    assert getattr(SomBrowserWidget, "supports_floating_title", True) is False
 
 
 def test_clear_selection_button_is_glyph(qapp):  # noqa: ARG001

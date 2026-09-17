@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -33,7 +32,6 @@ from PyQt5.QtWidgets import (
 
 from rdkit import Chem
 
-from ...science_citations import som_dialog_footer_html
 from ...som_prediction import (
     DEFAULT_THRESHOLD,
     METABOLISM_SUBSET_OPTIONS,
@@ -143,13 +141,6 @@ class SomPredictorDialog(QDialog):
         btn_row.addWidget(self.predict_btn)
         btn_row.addStretch()
         root.addLayout(btn_row)
-
-        ref_lbl = QLabel(som_dialog_footer_html())
-        ref_lbl.setWordWrap(True)
-        ref_lbl.setTextFormat(Qt.RichText)
-        ref_lbl.setOpenExternalLinks(True)
-        ref_lbl.setStyleSheet("color: palette(mid);")
-        root.addWidget(ref_lbl)
 
         self._refresh_structure_sources()
         self.adjustSize()

@@ -20,8 +20,16 @@ from __future__ import annotations
 
 import sys
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QKeySequence
+from PyQt5.QtCore import QPointF, QRectF, QSize, Qt
+from PyQt5.QtGui import (
+    QColor,
+    QIcon,
+    QKeySequence,
+    QPainter,
+    QPalette,
+    QPen,
+    QPixmap,
+)
 from PyQt5.QtWidgets import (
     QAction,
     QActionGroup,
@@ -31,8 +39,44 @@ from PyQt5.QtWidgets import (
 )
 
 from ...config import load_config
-from ..citations_dialog import open_citations_dialog
 from ..user_guides import open_user_guide_dialog
+
+_HELP_HOTKEY_IDS = frozenset({"help.user_guides"})
+
+
+def _help_glyph_icon(*, size: int, ink: QColor, paper: QColor) -> QIcon:
+    """Filled circular badge with a bold question mark (classic help control)."""
+    dpr = 2.0
+    side = max(14, int(size))
+    px = max(1, int(round(side * dpr)))
+    pm = QPixmap(px, px)
+    pm.fill(Qt.transparent)
+    painter = QPainter(pm)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.scale(dpr, dpr)
+    s = float(side)
+    pad = max(0.5, s * 0.05)
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(ink)
+    painter.drawEllipse(QRectF(pad, pad, s - 2.0 * pad, s - 2.0 * pad))
+
+    stroke = max(1.7, s * 0.13)
+    pen = QPen(paper, stroke)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    painter.setPen(pen)
+    painter.setBrush(Qt.NoBrush)
+    bowl = QRectF(s * 0.30, s * 0.16, s * 0.40, s * 0.40)
+    # Clockwise from the left of the bowl, over the top, down to the stem.
+    painter.drawArc(bowl, 185 * 16, -255 * 16)
+    cx = s * 0.50
+    painter.drawLine(QPointF(cx, s * 0.52), QPointF(cx, s * 0.62))
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(paper)
+    painter.drawEllipse(QPointF(cx, s * 0.76), max(1.35, s * 0.075), max(1.35, s * 0.075))
+    painter.end()
+    pm.setDevicePixelRatio(dpr)
+    return QIcon(pm)
 
 
 class AppMenuMixin:
@@ -141,24 +185,6 @@ class AppMenuMixin:
                 "Split disconnected structure fragments into separate rows, keeping the heaviest fragment.",
                 None,
             ),
-            (
-                "Add Explicit Hydrogens…",
-                self.run_add_explicit_hydrogens,
-                "Expand implicit hydrogens to explicit H atoms in the target column (RDKit AddHs).",
-                None,
-            ),
-            (
-                "Remove Explicit Hydrogens…",
-                self.run_remove_explicit_hydrogens,
-                "Remove explicit H atoms from structures in the target column (RDKit RemoveHs).",
-                None,
-            ),
-            (
-                "Render 2D…",
-                self.run_render_2d_structures,
-                "Regenerate 2D structure drawings for selected rows as a background batch (see Processes).",
-                "tools.render_2d",
-            ),
         ):
             if title is None:
                 prepare_menu.addSeparator()
@@ -168,6 +194,33 @@ class AppMenuMixin:
                 self._bind_hotkey(hk_id, act)
             act.setToolTip(tip)
             prepare_menu.addAction(act)
+
+        hydrogens_menu = prepare_menu.addMenu("Explicit Hydrogens")
+        hydrogens_menu.setToolTipsVisible(True)
+        for title, slot, tip in (
+            (
+                "Add…",
+                self.run_add_explicit_hydrogens,
+                "Expand implicit hydrogens to explicit H atoms in the target column (RDKit AddHs).",
+            ),
+            (
+                "Remove…",
+                self.run_remove_explicit_hydrogens,
+                "Remove explicit H atoms from structures in the target column (RDKit RemoveHs).",
+            ),
+        ):
+            act = QAction(title, self, triggered=slot)
+            act.setToolTip(tip)
+            hydrogens_menu.addAction(act)
+
+        act_render_2d = self._bind_hotkey(
+            "tools.render_2d",
+            QAction("Render 2D…", self, triggered=self.run_render_2d_structures),
+        )
+        act_render_2d.setToolTip(
+            "Regenerate 2D structure drawings for selected rows as a background batch (see Processes)."
+        )
+        prepare_menu.addAction(act_render_2d)
 
         protonate_menu = prepare_menu.addMenu("Protonate Structures")
         protonate_menu.setToolTipsVisible(True)
@@ -256,6 +309,17 @@ class AppMenuMixin:
             "Cluster compounds by fingerprint (K-Means, Butina, sphere exclusion, etc.)."
         )
         fp_menu.addAction(act_cluster)
+
+        dimred_menu = tools.addMenu("&Dimensionality Reduction")
+        dimred_menu.setToolTipsVisible(True)
+        dimred_menu.addAction(
+            QAction("Principal Component Analysis…", self, triggered=self.open_pca_dialog)
+        )
+        dimred_menu.addAction(
+            QAction("t-SNE Visualization…", self, triggered=self.open_tsne_dialog)
+        )
+        dimred_menu.addAction(QAction("UMAP Visualization…", self, triggered=self.open_umap_dialog))
+        dimred_menu.addAction(QAction("Self-Organizing Map…", self, triggered=self.open_som_dialog))
 
         predict_menu = tools.addMenu("&Predict")
         predict_menu.setToolTipsVisible(True)
@@ -465,10 +529,11 @@ class AppMenuMixin:
         protein_menu.addAction(act_protein_viewer)
 
         data_menu = mb.addMenu("&Data")
-        data_menu.addAction(
+        table_menu = data_menu.addMenu("&Table")
+        table_menu.addAction(
             self._bind_hotkey(
                 "data.analyze_table",
-                QAction("Analyze Table…", self, triggered=self.open_data_analysis),
+                QAction("Statistics…", self, triggered=self.open_data_analysis),
             )
         )
         act_split_col = self._bind_hotkey(
@@ -478,7 +543,13 @@ class AppMenuMixin:
         act_split_col.setToolTip(
             "Split a delimited column (comma, tab, space, semicolon, …) into new columns."
         )
-        data_menu.addAction(act_split_col)
+        table_menu.addAction(act_split_col)
+        act_join_col = self._bind_hotkey(
+            "data.join_columns",
+            QAction("Join Columns…", self, triggered=self.open_join_columns_dialog),
+        )
+        act_join_col.setToolTip("Join two columns into one new column with a chosen delimiter.")
+        table_menu.addAction(act_join_col)
         data_menu.addSeparator()
         act_qsar = QAction("QSAR…", self, triggered=self.open_qsar_dialog)
         act_qsar.setToolTip(
@@ -490,19 +561,6 @@ class AppMenuMixin:
             "Score rows with linear, Gaussian, or step desirability functions and combine into an overall MPO score."
         )
         data_menu.addAction(act_mpo)
-        data_menu.addSeparator()
-        data_menu.addAction(
-            QAction("Principal Component Analysis…", self, triggered=self.open_pca_dialog)
-        )
-        data_menu.addAction(QAction("t-SNE Visualization…", self, triggered=self.open_tsne_dialog))
-        data_menu.addAction(QAction("UMAP Visualization…", self, triggered=self.open_umap_dialog))
-        data_menu.addAction(
-            QAction(
-                "Self-Organizing Map…",
-                self,
-                triggered=self.open_som_dialog,
-            )
-        )
         data_menu.addSeparator()
         data_menu.addAction(QAction("BOILED-Egg plot…", self, triggered=self.open_boiled_egg_plot))
         data_menu.addAction(
@@ -546,31 +604,13 @@ class AppMenuMixin:
 
         self._init_settings_menu(mb)
 
-        help_menu = mb.addMenu("&Help")
         self._act_user_guide = self._bind_hotkey(
             "help.user_guides",
-            QAction("&Help", self),
+            QAction("&User Guide", self),
         )
         self._act_user_guide.setToolTip("Open MolManager help (F1).")
         self._act_user_guide.triggered.connect(lambda: open_user_guide_dialog(self))
         self.addAction(self._act_user_guide)
-        help_menu.addAction(self._act_user_guide)
-
-        self._act_user_guide_page = QAction("&User Guide", self)
-        self._act_user_guide_page.setToolTip("Open the MolManager user guide (same as Help).")
-        self._act_user_guide_page.triggered.connect(lambda: open_user_guide_dialog(self))
-        help_menu.addAction(self._act_user_guide_page)
-
-        help_menu.addSeparator()
-
-        self._act_citations = self._bind_hotkey(
-            "help.citations",
-            QAction("&Citations…", self),
-        )
-        self._act_citations.setToolTip("Papers and licenses for tools used in MolManager.")
-        self._act_citations.triggered.connect(lambda: open_citations_dialog(self))
-        self.addAction(self._act_citations)
-        help_menu.addAction(self._act_citations)
 
         # Native Windows menu bars can swallow clicks meant for the corner widget; use in-window bar.
         if sys.platform == "win32":
@@ -603,6 +643,17 @@ class AppMenuMixin:
         btn_proc.clicked.connect(self.open_processes_dialog)
         self._btn_processes = btn_proc
         corner_ly.addWidget(btn_proc)
+
+        btn_help = QToolButton(corner)
+        btn_help.setToolTip("Open the user guide (F1).")
+        btn_help.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        btn_help.setAutoRaise(True)
+        btn_help.setFocusPolicy(Qt.NoFocus)
+        btn_help.clicked.connect(lambda: open_user_guide_dialog(self))
+        btn_help.setStyleSheet("QToolButton { padding: 0px; margin: 0px; }")
+        self._btn_help = btn_help
+        corner_ly.addWidget(btn_help)
+        self._sync_help_glyph_icon()
         mb.setCornerWidget(corner, Qt.TopRightCorner)
         self._sync_main_toolbar_for_table_ready()
 
@@ -637,6 +688,7 @@ class AppMenuMixin:
         for btn in (
             getattr(self, "_btn_workspace_layout", None),
             getattr(self, "_btn_processes", None),
+            getattr(self, "_btn_help", None),
         ):
             if btn is not None:
                 btn.hide()
@@ -717,8 +769,20 @@ class AppMenuMixin:
         self._sync_main_toolbar_for_table_ready()
         self._sync_status_chrome_for_workspace()
 
+    def _sync_help_glyph_icon(self) -> None:
+        """Paint the Help glyph with the current menubar font and text color."""
+        btn = getattr(self, "_btn_help", None)
+        if btn is None:
+            return
+        mb = self.menuBar()
+        size = max(16, int(round(mb.fontMetrics().height() * 0.95)))
+        ink = mb.palette().color(QPalette.WindowText)
+        paper = mb.palette().color(QPalette.Window)
+        btn.setIcon(_help_glyph_icon(size=size, ink=ink, paper=paper))
+        btn.setIconSize(QSize(size, size))
+
     def _sync_main_toolbar_for_table_ready(self) -> None:
-        """Disable File/Edit/Tools menus and Layout while ``_ingest_loading``; keep Processes usable."""
+        """Disable File/Edit/Tools menus and Layout while ``_ingest_loading``; keep Processes/Help usable."""
         if getattr(self, "_dock_results_mode", False):
             return
         enabled = not bool(getattr(self, "_ingest_loading", False))
@@ -731,17 +795,19 @@ class AppMenuMixin:
                 action.setEnabled(enabled)
         calc = getattr(self, "_act_custom_calc", None)
         calc_blocked = bool(load_config().disable_custom_calc)
-        for action in getattr(self, "_hotkey_actions", {}).values():
+        for action_id, action in getattr(self, "_hotkey_actions", {}).items():
             if action is None:
                 continue
-            if action is calc and calc_blocked:
+            if action_id in _HELP_HOTKEY_IDS:
+                action.setEnabled(True)
+            elif action is calc and calc_blocked:
                 action.setEnabled(False)
             else:
                 action.setEnabled(enabled)
         layout_btn = getattr(self, "_btn_workspace_layout", None)
         if layout_btn is not None:
             layout_btn.setEnabled(enabled)
-        # Processes stays enabled so the user can cancel a long open/import.
+        # Processes and Help stay enabled so the user can cancel a long open/import or read the manual.
 
     def open_protein_viewer(self):
         """Open the Protein Viewer window (3Dmol.js + chain Manager)."""

@@ -57,6 +57,7 @@ from .compound_table_view import (
     StructureDelegate,
 )
 from .strings import STRUCTURE_PENDING_HINT
+from .theme import table_text_alignment_flags
 
 # Backward-compatible names (also re-export layout constants for ``from .compound_table_model import …``).
 STRUCTURE_COLUMN_PENDING_HINT = STRUCTURE_PENDING_HINT
@@ -490,7 +491,7 @@ class CompoundTableModel(
             if role in (Qt.DisplayRole, Qt.EditRole):
                 return str(oid)
             if role == Qt.TextAlignmentRole:
-                return int(Qt.AlignCenter)
+                return table_text_alignment_flags()
             return None
 
         if col == self.STRUCTURE_COL:
@@ -508,7 +509,7 @@ class CompoundTableModel(
             if role == Qt.TextAlignmentRole:
                 if has_pix:
                     return int(Qt.AlignCenter)
-                return int(Qt.AlignCenter | Qt.AlignVCenter)
+                return table_text_alignment_flags()
             if role == Qt.SizeHintRole:
                 if has_pix:
                     return QSize(pix.width(), pix.height())
@@ -533,7 +534,7 @@ class CompoundTableModel(
             if role == Qt.ToolTipRole:
                 return None if has_pix else (backing or None)
             if role == Qt.TextAlignmentRole:
-                return int(Qt.AlignCenter) if has_pix else None
+                return int(Qt.AlignCenter) if has_pix else table_text_alignment_flags()
             if role == Qt.SizeHintRole:
                 if has_pix:
                     return QSize(pix.width(), pix.height())
@@ -564,9 +565,7 @@ class CompoundTableModel(
         if role in (Qt.DisplayRole, Qt.EditRole):
             return self._rows[row].values.get(h, "")
         if role == Qt.TextAlignmentRole:
-            v = self._rows[row].values.get(h, "")
-            if safe_float(v) is not None:
-                return int(Qt.AlignRight | Qt.AlignVCenter)
+            return table_text_alignment_flags()
         return None
 
     def setData(self, index: QModelIndex, value, role: int = Qt.EditRole) -> bool:  # noqa: N802

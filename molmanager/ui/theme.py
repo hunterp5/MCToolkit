@@ -22,7 +22,7 @@ import colorsys
 import json
 import random
 
-from PyQt5.QtCore import QSettings
+from PyQt5.QtCore import QSettings, Qt
 from PyQt5.QtGui import QColor, QFont, QPalette
 from PyQt5.QtWidgets import QApplication, QWidget
 
@@ -39,9 +39,20 @@ _SETTINGS_KEY_CUSTOM_PALETTE = "gui/custom_palette"  # legacy single palette
 _SETTINGS_KEY_CUSTOM_THEMES = "gui/custom_themes"
 _SETTINGS_KEY_TABLE_FONT_PT = "gui/table_font_pt"
 _SETTINGS_KEY_APP_FONT_PT = "gui/app_font_pt"
+_SETTINGS_KEY_TABLE_ALIGN_H = "gui/table_text_align_h"
+_SETTINGS_KEY_TABLE_ALIGN_V = "gui/table_text_align_v"
 _SETTINGS_KEY_STATUS_BAR = "gui/status_bar_visible"
 
+TABLE_ALIGN_H_CHOICES = ("left", "center", "right")
+TABLE_ALIGN_V_CHOICES = ("top", "center", "bottom")
+DEFAULT_TABLE_ALIGN_H = "left"
+DEFAULT_TABLE_ALIGN_V = "center"
+_RUNTIME_TABLE_ALIGN_H = DEFAULT_TABLE_ALIGN_H
+_RUNTIME_TABLE_ALIGN_V = DEFAULT_TABLE_ALIGN_V
+
 _CURRENT_THEME = THEME_LIGHT
+# Last point size passed to ``apply_application_font_pt`` (survives Fusion polish).
+_CURRENT_APP_FONT_PT: int | None = None
 
 _FC_CTRL_H = 20
 
@@ -117,6 +128,72 @@ def save_table_font_pt(pt: int) -> None:
     QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_TABLE_FONT_PT, int(pt))
 
 
+def _normalize_table_align_h(value: object) -> str:
+    s = str(value or "").strip().lower()
+    return s if s in TABLE_ALIGN_H_CHOICES else DEFAULT_TABLE_ALIGN_H
+
+
+def _normalize_table_align_v(value: object) -> str:
+    s = str(value or "").strip().lower()
+    if s in {"up", "upper"}:
+        s = "top"
+    elif s in {"down", "lower"}:
+        s = "bottom"
+    return s if s in TABLE_ALIGN_V_CHOICES else DEFAULT_TABLE_ALIGN_V
+
+
+def table_text_alignment() -> tuple[str, str]:
+    """Current table data-cell alignment as ``(horizontal, vertical)``."""
+    return _RUNTIME_TABLE_ALIGN_H, _RUNTIME_TABLE_ALIGN_V
+
+
+def table_text_alignment_label(h: str | None = None, v: str | None = None) -> str:
+    """Short phrase such as ``center left`` or ``top right``."""
+    if h is None or v is None:
+        h, v = table_text_alignment()
+    h = _normalize_table_align_h(h)
+    v = _normalize_table_align_v(v)
+    if h == "center" and v == "center":
+        return "center"
+    if v == "center":
+        return f"center {h}"
+    if h == "center":
+        return f"{v} center"
+    return f"{v} {h}"
+
+
+def table_text_alignment_flags() -> int:
+    """Qt alignment flags for table text cells."""
+    h, v = table_text_alignment()
+    hflag = {"left": Qt.AlignLeft, "center": Qt.AlignHCenter, "right": Qt.AlignRight}[h]
+    vflag = {"top": Qt.AlignTop, "center": Qt.AlignVCenter, "bottom": Qt.AlignBottom}[v]
+    return int(hflag | vflag)
+
+
+def load_saved_table_text_alignment() -> tuple[str, str]:
+    """Saved table text alignment, or left/center when unset."""
+    settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    h = _normalize_table_align_h(settings.value(_SETTINGS_KEY_TABLE_ALIGN_H, DEFAULT_TABLE_ALIGN_H))
+    v = _normalize_table_align_v(settings.value(_SETTINGS_KEY_TABLE_ALIGN_V, DEFAULT_TABLE_ALIGN_V))
+    return h, v
+
+
+def set_table_text_alignment(
+    horizontal: str, vertical: str, *, persist: bool = True
+) -> tuple[str, str]:
+    """Apply table text alignment and optionally persist it."""
+    global _RUNTIME_TABLE_ALIGN_H, _RUNTIME_TABLE_ALIGN_V
+    h = _normalize_table_align_h(horizontal)
+    v = _normalize_table_align_v(vertical)
+    _RUNTIME_TABLE_ALIGN_H = h
+    _RUNTIME_TABLE_ALIGN_V = v
+    if persist:
+        settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+        settings.setValue(_SETTINGS_KEY_TABLE_ALIGN_H, h)
+        settings.setValue(_SETTINGS_KEY_TABLE_ALIGN_V, v)
+    return h, v
+
+
 def load_saved_app_font_pt() -> int:
     """Saved application-wide font point size, clamped (default when unset)."""
     return _load_saved_font_pt(_SETTINGS_KEY_APP_FONT_PT)
@@ -145,13 +222,50 @@ def save_status_bar_visible(visible: bool) -> None:
 
 def apply_application_font_pt(pt: int) -> int:
     """Set the application-wide font point size; returns the clamped size applied."""
+    global _CURRENT_APP_FONT_PT
     app = QApplication.instance()
     pt = _clamp_font_pt(pt)
+    _CURRENT_APP_FONT_PT = pt
     if app is not None:
         font = QFont(app.font())
         font.setPointSize(pt)
         app.setFont(font)
     return pt
+
+
+def _font_pt_from_app(app: QApplication) -> int:
+    """Current application font size, or the default when Qt reports an unset size."""
+    try:
+        pt = int(app.font().pointSize())
+    except (TypeError, ValueError):
+        pt = 0
+    if pt <= 0:
+        return default_app_font_pt()
+    return _clamp_font_pt(pt)
+
+
+def ensure_fusion_style(app: QApplication | None = None) -> bool:
+    """Use Fusion when needed; return True only if the style object was replaced."""
+    if app is None:
+        app = QApplication.instance()
+    if app is None:
+        return False
+    style = app.style()
+    name = (style.objectName() if style is not None else "") or ""
+    if name.lower() == "fusion":
+        return False
+    app.setStyle("Fusion")
+    return True
+
+
+def bootstrap_application_gui(app: QApplication | None = None) -> None:
+    """Set Fusion once and apply the saved application font before widgets exist."""
+    if app is None:
+        app = QApplication.instance()
+    if app is None:
+        return
+    ensure_fusion_style(app)
+    apply_application_font_pt(load_saved_app_font_pt())
 
 
 def is_custom_theme_id(theme: str | None) -> bool:
@@ -688,15 +802,28 @@ def refresh_open_windows_theme(app: QApplication | None = None) -> None:
 
 
 def apply_application_theme(app: QApplication | None, theme: str) -> str:
-    """Apply *theme* to *app*; returns the theme name actually applied."""
+    """Apply *theme* to *app*; returns the theme name actually applied.
+
+    Fusion is set only when the current style is not already Fusion. The saved
+    application font is restored after any style/palette polish so chrome does
+    not jump to Fusion's default point size.
+    """
     global _CURRENT_THEME
     if app is None:
         return _normalize_theme_name(theme)
     theme = _normalize_theme_name(theme)
     _CURRENT_THEME = theme
-    app.setStyle("Fusion")
+    intended_pt = (
+        _clamp_font_pt(_CURRENT_APP_FONT_PT)
+        if _CURRENT_APP_FONT_PT is not None
+        else _font_pt_from_app(app)
+    )
+    ensure_fusion_style(app)
+    apply_application_font_pt(intended_pt)
     app.setPalette(palette_for_theme(theme))
     # No global stylesheet — Fusion draws from the palette so modes share chrome layout.
-    app.setStyleSheet("")
+    if str(app.styleSheet() or ""):
+        app.setStyleSheet("")
     refresh_open_windows_theme(app)
+    apply_application_font_pt(intended_pt)
     return theme

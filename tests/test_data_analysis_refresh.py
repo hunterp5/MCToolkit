@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Analyze Table stays in sync with main-table edits."""
+"""Statistics stays in sync with main-table edits."""
 
 from __future__ import annotations
 

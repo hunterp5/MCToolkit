@@ -45,7 +45,10 @@ def test_generate_conformations_dialog_fine_tune_params(qapp):  # noqa: ARG001
     p = dlg.params()
     assert p.force_field == "MMFF"
     assert p.post_min_rms_threshold == 0.0
-    assert p.max_keep == 0
+    assert p.num_confs == 50
+    assert p.max_keep == 100
+    assert dlg.num_confs_sb.maximum() == 1000
+    assert dlg.max_keep_sb.maximum() == 1000
     assert p.use_random_coords is False
     assert p.keep_hydrogens is False
     dlg.ff_combo.setCurrentText("MMFF94s")

@@ -77,3 +77,20 @@ def test_structure_column_minimum_width_uses_runtime_size() -> None:
 def test_structure_column_minimum_width_tracks_runtime_size() -> None:
     set_structure_depict_size(300, 250, persist=False)
     assert structure_column_minimum_width() == 300 + 28
+
+
+def test_reaction_depict_size_is_wider_same_height() -> None:
+    from molmanager.display_constants import (
+        REACTION_DEPICT_WIDTH_MULTIPLIER,
+        reaction_depict_size,
+    )
+
+    set_structure_depict_size(200, 160, persist=False)
+    w, h = reaction_depict_size()
+    assert w == 200 * REACTION_DEPICT_WIDTH_MULTIPLIER
+    assert h == 160
+    zw, zh = reaction_depict_size(zoomed=True)
+    assert zw == 400 * REACTION_DEPICT_WIDTH_MULTIPLIER
+    assert zh == 320
+    assert structure_depict_width() == 200
+    assert structure_depict_height() == 160

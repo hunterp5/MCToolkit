@@ -21,11 +21,11 @@ from __future__ import annotations
 import logging
 
 from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QApplication
 
 from ...config import load_config
 from ...memory_usage import format_process_memory_status
 from ...tool_progress import format_tool_progress_text
+from ..strings import STATUS_READY
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +117,38 @@ class AppProgressMixin:
     def _background_job_ui_active(self) -> bool:
         return int(getattr(self, "_background_job_ui_depth", 0)) > 0
 
+    def _status_work_is_active(self) -> bool:
+        """True when the status line should keep showing in-progress work."""
+        if bool(getattr(self, "_ingest_loading", False)):
+            return True
+        if bool(getattr(self, "_export_busy", False)):
+            return True
+        render2d_active = getattr(self, "render2d_batch_active", None)
+        if callable(render2d_active) and render2d_active():
+            return True
+        if self._background_job_ui_active():
+            return True
+        state = getattr(self, "_tool_progress_state", None)
+        if state is not None:
+            _msg, _done, _total, active = state.snapshot()
+            if active:
+                return True
+        jobs = getattr(self, "_background_jobs", None)
+        return bool(jobs)
+
+    def _restore_idle_status(self) -> None:
+        """Set the status line to Ready when nothing else is running."""
+        if self._status_work_is_active():
+            return
+        label = getattr(self, "status_label", None)
+        if label is None:
+            return
+        try:
+            if label.text() != STATUS_READY:
+                label.setText(STATUS_READY)
+        except RuntimeError:
+            pass
+
     def _enter_background_job_ui(self) -> None:
         """Reduce main-thread churn while a queued tool holds the machine busy."""
         self._background_job_ui_depth = int(getattr(self, "_background_job_ui_depth", 0)) + 1
@@ -138,7 +170,7 @@ class AppProgressMixin:
         self,
         message: str | None = None,
         *,
-        status_message: str | None = "Ready.",
+        status_message: str | None = STATUS_READY,
     ) -> None:
         """Show 100% once, then stop polling and optionally reset the status line."""
         msg, _done, total, active = self._tool_progress_state.snapshot()
@@ -192,7 +224,7 @@ class AppProgressMixin:
         self._partial_results_notice = None
         return note
 
-    def _clear_tool_progress(self, *, status_message: str | None = "Ready.") -> None:
+    def _clear_tool_progress(self, *, status_message: str | None = STATUS_READY) -> None:
         """Stop polled tool progress; reset status line unless ``status_message`` is ``None``."""
         self._tool_progress_state.end()
         self._tool_progress_active_label = ""

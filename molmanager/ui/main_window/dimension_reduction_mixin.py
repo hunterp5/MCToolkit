@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""PCA, t-SNE, UMAP, and SOM dialogs (Data menu)."""
+"""PCA, t-SNE, UMAP, and SOM dialogs (Tools → Dimensionality Reduction)."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ class DimensionReductionMixin:
         if not self.headers or self._table_model.rowCount() == 0:
             QMessageBox.information(
                 self,
-                "Data",
+                "Dimensionality Reduction",
                 "Open a file or add rows so the table has numeric data to analyze.",
             )
             return
@@ -68,7 +68,9 @@ class DimensionReductionMixin:
             factory = lambda: SOMVisualizationDialog(self)
             destroyed = self._on_som_dialog_destroyed
         else:
-            QMessageBox.warning(self, "Data", f"Unknown embedding method: {kind!r}")
+            QMessageBox.warning(
+                self, "Dimensionality Reduction", f"Unknown embedding method: {kind!r}"
+            )
             return
 
         dlg = getattr(self, attr, None)

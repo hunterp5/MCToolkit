@@ -60,7 +60,7 @@ def iter_scoped_table_analysis_rows(
     visible_only: bool = True,
     only_selected: bool = False,
 ) -> Iterator[tuple[int, dict[str, str]]]:
-    """Yield (table_row_index, row_dict) for rows included in Analyze Table scope."""
+    """Yield (table_row_index, row_dict) for rows included in Statistics scope."""
     m = app._table_model
     ncols = m.columnCount()
     nrows = m.rowCount()
@@ -211,7 +211,7 @@ class DataAnalysisDialog(QDialog):
     def __init__(self, parent: ChemicalTableApp | None = None):
         super().__init__(parent)
         self.parent_app = parent
-        self.setWindowTitle("Analyze Table")
+        self.setWindowTitle("Statistics")
         self.resize(920, 680)
         self._df_raw = pd.DataFrame()
         self._df_num = pd.DataFrame()

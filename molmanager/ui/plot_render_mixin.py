@@ -123,6 +123,9 @@ class PlotRenderMixin:
                     unregister_background_job(app, job_id)
                 except Exception:
                     pass
+            restore_idle = getattr(app, "_restore_idle_status", None) if app is not None else None
+            if callable(restore_idle):
+                restore_idle()
 
     def _plot_scatter(self, mode: str) -> None:
         self._hist_edges = []

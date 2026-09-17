@@ -23,10 +23,12 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QPixmap
 
 from molmanager.ui.compound_table_model import CompoundTableModel
+from molmanager.ui.theme import set_table_text_alignment
 
 
 @pytest.fixture()
 def model(qapp):  # noqa: ARG001 — ensures QApplication exists for Qt types
+    set_table_text_alignment("left", "center", persist=False)
     headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     m = CompoundTableModel(headers)
     return m
@@ -40,13 +42,35 @@ def test_append_row_and_oid_index(model: CompoundTableModel):
     assert (model.cell_text(0, model._headers.index("SMILES")) or "") == "CC"
 
 
-def test_oid_and_row_header_centered(model: CompoundTableModel):
+def test_oid_text_left_aligned_row_header_centered(model: CompoundTableModel):
     model.append_row(42, {"SMILES": "C", "MW": "16"})
     oid_idx = model.index(0, 0)
     assert model.data(oid_idx, Qt.DisplayRole) == "42"
-    assert model.data(oid_idx, Qt.TextAlignmentRole) == int(Qt.AlignCenter)
+    assert model.data(oid_idx, Qt.TextAlignmentRole) == int(Qt.AlignLeft | Qt.AlignVCenter)
     assert model.headerData(0, Qt.Vertical, Qt.TextAlignmentRole) == int(Qt.AlignCenter)
     assert model.headerData(0, Qt.Vertical, Qt.DisplayRole) == "1"
+
+
+def test_table_cell_text_is_left_aligned(model: CompoundTableModel):
+    model.append_row(1, {"SMILES": "CCO", "MW": "46.07"})
+    left = int(Qt.AlignLeft | Qt.AlignVCenter)
+    smiles = model.index(0, model._headers.index("SMILES"))
+    mw = model.index(0, model._headers.index("MW"))
+    struct = model.index(0, CompoundTableModel.STRUCTURE_COL)
+    assert model.data(smiles, Qt.TextAlignmentRole) == left
+    assert model.data(mw, Qt.TextAlignmentRole) == left
+    assert model.data(struct, Qt.TextAlignmentRole) == left
+
+
+def test_table_cell_text_alignment_follows_runtime_setting(model: CompoundTableModel):
+    model.append_row(1, {"SMILES": "CCO", "MW": "46.07"})
+    smiles = model.index(0, model._headers.index("SMILES"))
+    set_table_text_alignment("right", "top", persist=False)
+    assert model.data(smiles, Qt.TextAlignmentRole) == int(Qt.AlignRight | Qt.AlignTop)
+    set_table_text_alignment("center", "bottom", persist=False)
+    assert model.data(smiles, Qt.TextAlignmentRole) == int(Qt.AlignHCenter | Qt.AlignBottom)
+    set_table_text_alignment("left", "center", persist=False)
+    assert model.data(smiles, Qt.TextAlignmentRole) == int(Qt.AlignLeft | Qt.AlignVCenter)
 
 
 def test_set_cell_text_updates_value(model: CompoundTableModel):
@@ -437,4 +461,123 @@ def test_compound_table_view_pixel_scrolls_and_keeps_edge_grip(qapp):
     length = int(hh.length())
     width = int(view.viewport().width())
     assert int(bar.maximum()) >= length - width
+    view.deleteLater()
+
+
+def test_header_drag_scroll_step_grows_toward_viewport_edge(qapp):  # noqa: ARG001
+    from molmanager.ui.compound_table_view import (
+        _HEADER_DRAG_SCROLL_MAX_STEP_PX,
+        _HEADER_DRAG_SCROLL_MIN_STEP_PX,
+        CompoundTableView,
+    )
+
+    view = CompoundTableView()
+    view.resize(400, 240)
+    hh = view.horizontalHeader()
+    vp_w = 400
+    hh.viewport().resize(vp_w, 24)
+    assert hh._header_drag_scroll_step(vp_w // 2) == 0
+    right = hh._header_drag_scroll_step(vp_w - 1)
+    farther = hh._header_drag_scroll_step(vp_w + 40)
+    assert right >= _HEADER_DRAG_SCROLL_MIN_STEP_PX
+    assert farther > right
+    assert farther <= _HEADER_DRAG_SCROLL_MAX_STEP_PX
+    left = hh._header_drag_scroll_step(0)
+    assert left <= -_HEADER_DRAG_SCROLL_MIN_STEP_PX
+    view.deleteLater()
+
+
+def test_header_drag_autoscrolls_quickly_at_viewport_edge(qapp):
+    from PyQt5.QtWidgets import QApplication
+
+    from molmanager.ui.compound_table_model import CompoundTableModel, CompoundTableView
+
+    headers = ["ID_HIDDEN", "Structure"] + [f"C{i}" for i in range(16)]
+    model = CompoundTableModel(headers)
+    model.append_row(1, {f"C{i}": "x" for i in range(16)})
+    view = CompoundTableView()
+    view.set_compound_model(model)
+    view.resize(420, 300)
+    for col in range(2, model.columnCount()):
+        view.setColumnWidth(col, 140)
+    view.show()
+    QApplication.processEvents()
+    hh = view.horizontalHeader()
+    if int(hh.viewport().width()) <= 0:
+        hh.viewport().resize(400, 24)
+    bar = view.horizontalScrollBar()
+    assert bar.maximum() > 80
+    hh._section_drag_active = True
+    before = int(bar.value())
+    hh._update_section_drag_scroll(int(hh.viewport().width()) + 30)
+    for _ in range(4):
+        hh._on_header_drag_scroll_tick()
+    assert int(bar.value()) - before >= 80
+    hh._stop_section_drag_scroll()
+    assert not hh._section_drag_active
+    assert not hh._section_drag_timer.isActive()
+    view.deleteLater()
+
+
+def test_table_header_stylesheet_uses_palette_roles(qapp):  # noqa: ARG001
+    from molmanager.ui.compound_table_view import TABLE_HEADER_SECTION_QSS, CompoundTableView
+
+    qss = TABLE_HEADER_SECTION_QSS.lower()
+    assert "palette(button)" in qss
+    assert "palette(button-text)" in qss
+    view = CompoundTableView()
+    assert "palette(button)" in view.horizontalHeader().styleSheet().lower()
+    assert "palette(button)" in view.verticalHeader().styleSheet().lower()
+    view.deleteLater()
+
+
+def test_compound_table_headers_follow_application_palette(qapp):
+    from PyQt5.QtGui import QColor, QPalette
+
+    from molmanager.ui.compound_table_view import CompoundTableView
+
+    prev = qapp.palette()
+    view = CompoundTableView()
+    try:
+        pal = QPalette(prev)
+        pal.setColor(QPalette.Button, QColor("#112233"))
+        pal.setColor(QPalette.ButtonText, QColor("#c0ffee"))
+        qapp.setPalette(pal)
+        view.refresh_theme()
+        hh = view.horizontalHeader()
+        vh = view.verticalHeader()
+        assert hh.palette().color(QPalette.Button).name() == "#112233"
+        assert hh.viewport().palette().color(QPalette.Button).name() == "#112233"
+        assert vh.palette().color(QPalette.Button).name() == "#112233"
+        pal.setColor(QPalette.Button, QColor("#445566"))
+        qapp.setPalette(pal)
+        view.refresh_theme()
+        assert hh.palette().color(QPalette.Button).name() == "#445566"
+        assert vh.palette().color(QPalette.Button).name() == "#445566"
+    finally:
+        qapp.setPalette(prev)
+        view.deleteLater()
+
+
+def test_compound_table_headers_resize_with_table_font(qapp):  # noqa: ARG001
+    from PyQt5.QtGui import QFont
+
+    from molmanager.ui.compound_table_view import CompoundTableView
+
+    view = CompoundTableView()
+    small = QFont(view.font())
+    small.setPointSize(8)
+    large = QFont(view.font())
+    large.setPointSize(24)
+    view.apply_table_font(small)
+    h_small = int(view.horizontalHeader().height())
+    w_small = int(view.verticalHeader().width())
+    view.apply_table_font(large)
+    h_large = int(view.horizontalHeader().height())
+    w_large = int(view.verticalHeader().width())
+    assert h_large > h_small
+    assert w_large > w_small
+    view.apply_table_font(small)
+    assert int(view.horizontalHeader().height()) == h_small
+    assert int(view.verticalHeader().width()) == w_small
     view.deleteLater()

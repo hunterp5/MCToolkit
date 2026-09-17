@@ -38,6 +38,7 @@ from .theme import (
     list_custom_theme_names,
     load_saved_app_font_pt,
     load_saved_table_font_pt,
+    load_saved_table_text_alignment,
     load_saved_theme_name,
     load_status_bar_visible,
     make_custom_theme_id,
@@ -45,7 +46,9 @@ from .theme import (
     save_status_bar_visible,
     save_table_font_pt,
     save_theme_name,
+    set_table_text_alignment,
     status_bar_font_pt,
+    table_text_alignment_label,
 )
 
 
@@ -55,6 +58,9 @@ class GuiSettingsMixin:
     def _init_gui_settings(self) -> None:
         self._hotkey_actions: dict[str, QAction] = {}
         self._app_font_pt = load_saved_app_font_pt()
+        self._table_font_pt = load_saved_table_font_pt()
+        h, v = load_saved_table_text_alignment()
+        self._table_align_h, self._table_align_v = set_table_text_alignment(h, v, persist=False)
         apply_application_font_pt(self._app_font_pt)
         self._gui_theme = load_saved_theme_name()
         apply_application_theme(QApplication.instance(), self._gui_theme)
@@ -78,8 +84,8 @@ class GuiSettingsMixin:
         self._act_customize_colors.setToolTip("Create, edit, or delete named custom color schemes.")
         self._sync_theme_menu_checks()
         self._refresh_filter_card_styles()
-        self._table_font_pt = load_saved_table_font_pt()
         self._apply_table_font()
+        self._apply_table_text_alignment()
         self._apply_status_font()
 
     def _bind_hotkey(self, action_id: str, action: QAction) -> QAction:
@@ -137,18 +143,30 @@ class GuiSettingsMixin:
 
         prev_app_pt = int(getattr(self, "_app_font_pt", 0) or default_app_font_pt())
         prev_table_pt = int(getattr(self, "_table_font_pt", 0) or default_table_font_pt())
-        dlg = FontSettingsDialog(prev_app_pt, prev_table_pt, self)
+        prev_h = str(getattr(self, "_table_align_h", "left") or "left")
+        prev_v = str(getattr(self, "_table_align_v", "center") or "center")
+        dlg = FontSettingsDialog(
+            prev_app_pt,
+            prev_table_pt,
+            self,
+            current_align_h=prev_h,
+            current_align_v=prev_v,
+        )
         dlg.app_font_size_previewed.connect(self._preview_app_font)
         dlg.table_font_size_previewed.connect(self._preview_table_font)
+        dlg.table_align_previewed.connect(self._preview_table_align)
         if dlg.exec_() == QDialog.Accepted:
             self._set_app_font_pt(dlg.selected_app_point_size())
             self._set_table_font_pt(dlg.selected_table_point_size())
+            self._set_table_text_alignment(*dlg.selected_table_alignment())
         else:
             self._set_app_font_pt(prev_app_pt, persist=False)
             self._set_table_font_pt(prev_table_pt, persist=False)
+            self._set_table_text_alignment(prev_h, prev_v, persist=False)
         if hasattr(self, "status_label"):
             self.status_label.setText(
-                f"Font size — application: {self._app_font_pt} pt, table: {self._table_font_pt} pt"
+                f"Font — application: {self._app_font_pt} pt, table: {self._table_font_pt} pt, "
+                f"align: {table_text_alignment_label(self._table_align_h, self._table_align_v)}"
             )
 
     def _init_settings_menu(self, menubar) -> None:
@@ -274,9 +292,14 @@ class GuiSettingsMixin:
         self._apply_table_font()
         self._apply_status_font()
         self._refresh_workspace_pane_theme()
+        self._sync_menubar_chrome_font()
         table = getattr(self, "table", None)
         if table is not None:
-            table.viewport().update()
+            refresh = getattr(table, "refresh_theme", None)
+            if callable(refresh):
+                refresh()
+            else:
+                table.viewport().update()
 
     def _refresh_workspace_pane_theme(self) -> None:
         layout_mgr = getattr(self, "_workspace_layout", None)
@@ -291,9 +314,8 @@ class GuiSettingsMixin:
         self._gui_theme = theme
         save_theme_name(theme)
         self._sync_theme_menu_checks()
-        # apply_application_theme already refreshes open windows; ensure main chrome is current.
+        # Font is restored inside apply_application_theme before this chrome pass.
         self.refresh_theme()
-        apply_application_font_pt(int(getattr(self, "_app_font_pt", 0) or default_app_font_pt()))
         self._apply_status_font()
 
     def _preview_app_font(self, pt: int) -> None:
@@ -301,6 +323,7 @@ class GuiSettingsMixin:
         apply_application_font_pt(self._app_font_pt)
         self._apply_table_font()
         self._apply_status_font()
+        self._sync_menubar_chrome_font()
 
     def _set_app_font_pt(self, pt: int, *, persist: bool = True) -> None:
         self._app_font_pt = apply_application_font_pt(int(pt))
@@ -309,6 +332,7 @@ class GuiSettingsMixin:
         self._apply_table_font()
         self._apply_status_font()
         self._refresh_workspace_pane_theme()
+        self._sync_menubar_chrome_font()
 
     def _apply_table_font(self) -> None:
         """Set the table font point size on the view and its headers (theme-independent)."""
@@ -318,6 +342,10 @@ class GuiSettingsMixin:
         pt = int(getattr(self, "_table_font_pt", 0) or default_table_font_pt())
         font = QFont(table.font())
         font.setPointSize(pt)
+        apply = getattr(table, "apply_table_font", None)
+        if callable(apply):
+            apply(font)
+            return
         table.setFont(font)
         for header in (table.horizontalHeader(), table.verticalHeader()):
             if header is not None:
@@ -335,6 +363,27 @@ class GuiSettingsMixin:
             font.setPointSize(pt)
             label.setFont(font)
 
+    def _sync_menubar_chrome_font(self) -> None:
+        """Keep the menubar, Layout / Processes, and Help on the application font."""
+        has_chrome = any(
+            getattr(self, name, None) is not None
+            for name in ("_btn_workspace_layout", "_btn_processes", "_btn_help")
+        )
+        if has_chrome:
+            mb = self.menuBar()
+            pt = int(getattr(self, "_app_font_pt", 0) or default_app_font_pt())
+            app = QApplication.instance()
+            font = QFont(app.font()) if app is not None else QFont(mb.font())
+            font.setPointSize(pt)
+            mb.setFont(font)
+            for name in ("_btn_workspace_layout", "_btn_processes"):
+                btn = getattr(self, name, None)
+                if btn is not None:
+                    btn.setFont(font)
+        sync_help = getattr(self, "_sync_help_glyph_icon", None)
+        if callable(sync_help):
+            sync_help()
+
     def _preview_table_font(self, pt: int) -> None:
         self._table_font_pt = int(pt)
         self._apply_table_font()
@@ -344,6 +393,29 @@ class GuiSettingsMixin:
         if persist:
             save_table_font_pt(self._table_font_pt)
         self._apply_table_font()
+
+    def _preview_table_align(self, horizontal: str, vertical: str) -> None:
+        self._set_table_text_alignment(horizontal, vertical, persist=False)
+
+    def _set_table_text_alignment(
+        self, horizontal: str, vertical: str, *, persist: bool = True
+    ) -> None:
+        h, v = set_table_text_alignment(horizontal, vertical, persist=persist)
+        self._table_align_h, self._table_align_v = h, v
+        self._apply_table_text_alignment()
+
+    def _apply_table_text_alignment(self) -> None:
+        """Refresh table cells after the text alignment setting changes."""
+        from PyQt5.QtCore import Qt
+
+        model = getattr(self, "_table_model", None)
+        table = getattr(self, "table", None)
+        if model is not None and model.rowCount() > 0 and model.columnCount() > 0:
+            tl = model.index(0, 0)
+            br = model.index(model.rowCount() - 1, model.columnCount() - 1)
+            model.dataChanged.emit(tl, br, [Qt.TextAlignmentRole])
+        if table is not None:
+            table.viewport().update()
 
     def _refresh_filter_card_styles(self) -> None:
         panel = getattr(self, "f_panel", None)

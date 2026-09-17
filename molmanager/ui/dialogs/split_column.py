@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Split a delimited table column into new columns (Data → Split Column)."""
+"""Split a delimited table column into new columns (Data → Table → Split Column)."""
 
 from __future__ import annotations
 

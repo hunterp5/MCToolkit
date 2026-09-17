@@ -21,6 +21,7 @@ import threading
 from PyQt5.QtCore import QThreadPool, QTimer, Qt, pyqtSlot
 from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtWidgets import (
+    QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -75,6 +76,7 @@ from .table_ui_mixin import TableUIMixin
 from .ingest_export_mixin import IngestExportMixin
 from .chemistry_mixin import ChemistryMixin
 from ..gui_settings_mixin import GuiSettingsMixin
+from ..theme import bootstrap_application_gui
 
 
 _FILTER_PANEL_BTN_H = 28
@@ -238,6 +240,7 @@ class ChemicalTableApp(
         self._undo_stack = QUndoStack(self)
         self._undo_stack.setUndoLimit(load_config().table_undo_limit)
         self._filter_proxy_model: FilterProxyModel | None = None
+        bootstrap_application_gui(QApplication.instance())
         self.init_ui()
         self._apply_filters_timer = QTimer(self)
         self._apply_filters_timer.setSingleShot(True)
@@ -251,6 +254,8 @@ class ChemicalTableApp(
         self._bounds_recalc_timer.timeout.connect(self.calculate_global_bounds)
         self._init_gui_settings()
         self.init_menubar()
+        self._sync_menubar_chrome_font()
+        self._apply_table_font()
         self._refresh_structure_delegate_theme()
         self.next_oid = 0
         self._structure_field_override = None

@@ -23,7 +23,7 @@ Valid molecules in scope; optional **Selected Rows Only**.
 ## Workflow
 
 1. Select target rows if needed.
-2. Run **Add Explicit Hydrogens**.
+2. Run **Tools → Prepare Structures → Explicit Hydrogens → Add**.
 3. Confirm depictions/H counts.
 4. Continue to conformers or other prep.
 

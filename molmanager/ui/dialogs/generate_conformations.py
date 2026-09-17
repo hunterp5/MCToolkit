@@ -31,13 +31,11 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...science_citations import stochastic_conformations_dialog_footer_html
 from ...workers import ConformerGenParams
 from ..qt_widget_utils import make_window_minimizable
 from .conformer_output import (
     ConformerOutputOptions,
     ConformerOutputOptionsPanel,
-    citation_footer_label,
     conformer_options_group,
 )
 from .scope import selection_scope_checked
@@ -46,6 +44,11 @@ _CONFORMER_FORCE_FIELDS = ("MMFF", "MMFF94s", "UFF")
 _CONFORMER_FF_TOOLTIP = (
     "MMFF94 or MMFF94s when parameters exist; otherwise falls back to UFF automatically."
 )
+# Search budget can exceed what we store: packing/viewer stay healthy around 50–200 kept poses.
+_STOCHASTIC_NUM_CONFS_MAX = 1000
+_STOCHASTIC_NUM_CONFS_DEFAULT = 50
+_STOCHASTIC_MAX_KEEP_MAX = 1000
+_STOCHASTIC_MAX_KEEP_DEFAULT = 100
 
 
 class GenerateConformationsDialog(QDialog):
@@ -63,10 +66,11 @@ class GenerateConformationsDialog(QDialog):
         form = QFormLayout()
         form.setSpacing(6)
         self.num_confs_sb = QSpinBox()
-        self.num_confs_sb.setRange(1, 500)
-        self.num_confs_sb.setValue(25)
+        self.num_confs_sb.setRange(1, _STOCHASTIC_NUM_CONFS_MAX)
+        self.num_confs_sb.setValue(_STOCHASTIC_NUM_CONFS_DEFAULT)
         self.num_confs_sb.setToolTip(
-            "Number of conformers to embed before minimization and pruning."
+            "ETKDG search budget: how many conformers to embed before minimization and pruning. "
+            "Use Max keep (and the energy / RMS filters) to limit what is stored."
         )
         form.addRow("Conformers:", self.num_confs_sb)
 
@@ -118,12 +122,13 @@ class GenerateConformationsDialog(QDialog):
         form.addRow("RMS prune (post-min):", self.post_min_rms_sb)
 
         self.max_keep_sb = QSpinBox()
-        self.max_keep_sb.setRange(0, 500)
-        self.max_keep_sb.setValue(0)
+        self.max_keep_sb.setRange(0, _STOCHASTIC_MAX_KEEP_MAX)
+        self.max_keep_sb.setValue(_STOCHASTIC_MAX_KEEP_DEFAULT)
         self.max_keep_sb.setSpecialValueText("0 = no extra cap")
         self.max_keep_sb.setToolTip(
             "Keep at most this many lowest-energy conformers after energy-window and RMS "
-            "pruning. 0 keeps all survivors."
+            "pruning. Default 100 keeps table cells and the 3D viewer compact. "
+            "0 stores every survivor (packed cells still truncate very large ensembles)."
         )
         form.addRow("Max keep:", self.max_keep_sb)
 
@@ -229,7 +234,6 @@ class GenerateConformationsDialog(QDialog):
             )
         )
         root.addWidget(self.output_panel)
-        root.addWidget(citation_footer_label(stochastic_conformations_dialog_footer_html()))
 
         box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         box.accepted.connect(self._try_accept)

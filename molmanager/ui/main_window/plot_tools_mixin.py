@@ -315,11 +315,18 @@ class PlotToolsMixin:
         # Warm sticky visible-row cache once for every open host (incl. debounced Plotter).
         self._visible_source_row_indices()
         hosts = list(self._iter_active_plot_hosts())
-        if hosts and getattr(self, "status_label", None) is not None:
+        restore_idle = getattr(self, "_restore_idle_status", None)
+        work_active = getattr(self, "_status_work_is_active", None)
+        show_update = (
+            bool(hosts)
+            and getattr(self, "status_label", None) is not None
+            and not (callable(work_active) and work_active())
+        )
+        if show_update:
             try:
                 self.status_label.setText(f"Updating plots… ({len(hosts)})")
             except RuntimeError:
-                pass
+                show_update = False
         for host in hosts:
             fn = getattr(host, "_schedule_plot", None) or getattr(host, "_rebuild_figure", None)
             if not callable(fn):
@@ -328,6 +335,8 @@ class PlotToolsMixin:
                 fn()
             except RuntimeError:
                 pass
+        if show_update and callable(restore_idle):
+            restore_idle()
 
     def _schedule_active_plots_replot(self, *, delay_ms: int = 80, force: bool = False) -> None:
         if (

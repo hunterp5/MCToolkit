@@ -49,7 +49,6 @@ from ...bundled_paths import (
     set_configured_biotransformer_jar,
 )
 from ...memory_guards import check_product_enumeration, clamp_max_products_ui
-from ...science_citations import biotransformer_dialog_footer_html
 from ...utils import parse_molecule_from_cell_text
 from ...workers import BiotransformerWorker
 from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
@@ -184,13 +183,6 @@ class BiotransformerDialog(QDialog):
         self.predict_btn.clicked.connect(self._on_predict)
         btn_row.addWidget(self.predict_btn)
         root.addLayout(btn_row)
-
-        ref_lbl = QLabel(biotransformer_dialog_footer_html())
-        ref_lbl.setWordWrap(True)
-        ref_lbl.setTextFormat(Qt.RichText)
-        ref_lbl.setOpenExternalLinks(True)
-        ref_lbl.setStyleSheet("color: palette(mid);")
-        root.addWidget(ref_lbl)
 
         self._refresh_structure_sources()
         self._sync_cyp_mode()

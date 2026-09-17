@@ -668,3 +668,62 @@ def test_tools_menu_lists_conformations_and_superpose_directly(qapp):  # noqa: A
     sp = next(a for a in tools.actions() if a.text().replace("&", "").startswith("Superpose"))
     assert sp.menu() is None
     w.close()
+
+
+def test_prepare_structures_nests_explicit_hydrogens(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    mb = w.menuBar()
+    tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    prepare = next(
+        a.menu() for a in tools.actions() if a.text().replace("&", "") == "Prepare Structures"
+    )
+    labels = [a.text().replace("&", "") for a in prepare.actions()]
+    assert "Add Explicit Hydrogens…" not in labels
+    assert "Remove Explicit Hydrogens…" not in labels
+    assert "Explicit Hydrogens" in labels
+    hydrogens = next(
+        a.menu() for a in prepare.actions() if a.text().replace("&", "") == "Explicit Hydrogens"
+    )
+    h_labels = [a.text().replace("&", "") for a in hydrogens.actions()]
+    assert h_labels == ["Add…", "Remove…"]
+    w.close()
+
+
+def test_data_menu_nests_analyze_and_split_under_table(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    mb = w.menuBar()
+    data = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Data")
+    labels = [a.text().replace("&", "") for a in data.actions()]
+    assert labels[0] == "Table"
+    assert "Statistics…" not in labels
+    assert "Analyze Table…" not in labels
+    assert "Split Column…" not in labels
+    table = next(a.menu() for a in data.actions() if a.text().replace("&", "") == "Table")
+    table_labels = [a.text().replace("&", "") for a in table.actions()]
+    assert table_labels == ["Statistics…", "Split Column…", "Join Columns…"]
+    w.close()
+
+
+def test_tools_menu_nests_dimensionality_reduction(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    mb = w.menuBar()
+    tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    labels = [a.text().replace("&", "") for a in tools.actions()]
+    assert "Dimensionality Reduction" in labels
+    data = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Data")
+    data_labels = [a.text().replace("&", "") for a in data.actions()]
+    assert "Principal Component Analysis…" not in data_labels
+    assert "t-SNE Visualization…" not in data_labels
+    assert "UMAP Visualization…" not in data_labels
+    assert "Self-Organizing Map…" not in data_labels
+    dimred = next(
+        a.menu() for a in tools.actions() if a.text().replace("&", "") == "Dimensionality Reduction"
+    )
+    dimred_labels = [a.text().replace("&", "") for a in dimred.actions()]
+    assert dimred_labels == [
+        "Principal Component Analysis…",
+        "t-SNE Visualization…",
+        "UMAP Visualization…",
+        "Self-Organizing Map…",
+    ]
+    w.close()

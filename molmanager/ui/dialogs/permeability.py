@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -30,7 +29,6 @@ from PyQt5.QtWidgets import (
 )
 
 from ...permeability_prediction import PERMEABILITY_ENDPOINT_OPTIONS
-from ...science_citations import permeability_dialog_footer_html
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -85,13 +83,6 @@ class PermeabilityPredictorDialog(QDialog):
         btn_row.addWidget(self.predict_btn)
         btn_row.addStretch()
         root.addLayout(btn_row)
-
-        ref_lbl = QLabel(permeability_dialog_footer_html())
-        ref_lbl.setWordWrap(True)
-        ref_lbl.setTextFormat(Qt.RichText)
-        ref_lbl.setOpenExternalLinks(True)
-        ref_lbl.setStyleSheet("color: palette(mid);")
-        root.addWidget(ref_lbl)
 
         if parent is not None:
             self.src_combo.addItems(parent.chemistry_tool_structure_sources())

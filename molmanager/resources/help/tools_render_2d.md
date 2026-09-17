@@ -16,7 +16,7 @@ Structure columns for rows in scope; optional **Selected Rows Only**.
 
 ## Options
 
-- Structure source / target column as shown.
+- Structure source / target column as shown. Reaction SMARTS / SMIRKS columns (`>>`) draw as reaction schemes and use a wider column; molecule depictions keep their usual size.
 - **Selected Rows Only** when available.
 - Batch render job (monitor under **Processes**).
 

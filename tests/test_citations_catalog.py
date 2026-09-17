@@ -88,6 +88,6 @@ def test_open_citations_dialog_reuses_window(qapp):  # noqa: ARG001
     dlg.close()
 
 
-def test_citations_hotkey_registered() -> None:
+def test_user_guide_hotkey_registered() -> None:
     assert default_shortcuts("help.user_guides") == ["F1"]
     assert default_shortcuts("help.citations") == []

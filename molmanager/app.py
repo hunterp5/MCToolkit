@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 from .app_logging import configure_app_logging, install_crash_excepthook  # noqa: E402
 from .rdkit_env import configure_rdkit_for_desktop_app  # noqa: E402
 from .ui.main_window import ChemicalTableApp  # noqa: E402
+from .ui.theme import bootstrap_application_gui  # noqa: E402
 
 
 def _configure_logging() -> None:
@@ -99,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     _preload_qt_webengine()
     argv_qt, load_session, open_file = _argv_for_qt(list(argv))
     app = QApplication(argv_qt)
+    bootstrap_application_gui(app)
 
     w = ChemicalTableApp()
     w.show()

@@ -18,13 +18,13 @@ Scoped rows with valid structures; **Selected Rows Only** when checked. Output m
 
 ## Options
 
-- **Conformers** - number to request.
+- **Conformers** - ETKDG search budget (up to 1,000). This is how many poses to embed, not how many are stored.
 - **Energy window** - keep conformers within this window (0 = keep all).
 - **Force field** - MMFF94, MMFF94s, or UFF (MMFF variants fall back to UFF if parameters are missing).
 - **Seed** - reproducibility control.
 - **RMS prune (embed)** - drop near-duplicates during ETKDG embedding (−1 = ETKDG default).
 - **RMS prune (post-min)** - after minimization, drop higher-energy poses within this RMS of a kept conformer (0 = off).
-- **Max keep** - cap the ensemble to this many lowest-energy survivors (0 = no extra cap).
+- **Max keep** - store at most this many lowest-energy survivors (default 100; 0 = no extra cap). Packed table cells still truncate very large ensembles (~200–400 poses, fewer for bigger molecules).
 - **Max iterations** - minimizer budget.
 - **Max embed attempts** - ETKDG embedding attempts per conformer (0 = RDKit default).
 - **Align on** - optional SMILES (or SMARTS) substructure used to overlay the ensemble after generation. Leave empty to keep embedder orientations.
@@ -33,8 +33,8 @@ Scoped rows with valid structures; **Selected Rows Only** when checked. Output m
 
 ## Workflow
 
-1. Select molecules and set ensemble size / energy window.
-2. Choose force field, seed, RMS pruning, max keep, and optional **Align on** substructure.
+1. Select molecules and set the search budget (**Conformers**), energy window, and **Max keep**.
+2. Choose force field, seed, RMS pruning, and optional **Align on** substructure.
 3. Set ETKDG flags and hydrogen handling under **Options** when you need them.
 4. Run generation (watch **Processes**).
 5. Inspect the 3D results window: use **← →** to step through poses in table order (each step selects that row); click a row to select it and show that pose; check **Superpose** to overlay the ensemble, or **Selected Conformers** to overlay the table selection with a color legend. **View Conformers** on a packed cell reopens the same energy table. If several rows were processed, the window is the first ensemble; open the others from the table.
@@ -49,4 +49,4 @@ Scoped rows with valid structures; **Selected Rows Only** when checked. Output m
 
 ## Tips and limits
 
-Cost scales with atoms × conformers × rows. Force-field minima are not protein-aware. Failed embeddings skip or partially fill - check logs/status. Energies in the results window are vacuum molecular-mechanics totals (kcal/mol), not protein-bound or quantum-chemical values. The force field is the one chosen in this dialog (MMFF, MMFF94s, or UFF). Optional **Align on** overlays the ensemble on a common substructure; flexible tails may still diverge after core overlay. Embed RMS prune happens before minimization; use **RMS prune (post-min)** to collapse poses that relaxed onto the same basin. If a **confs** column already exists, new ensembles go to **confs (1)** (then **confs (2)**, …) so the previous column is kept.
+Cost scales with atoms × requested conformers × rows. A larger search budget with **Max keep** around 50–200 is usually better than storing every embedded pose. Force-field minima are not protein-aware. Failed embeddings skip or partially fill - check logs/status. Energies in the results window are vacuum molecular-mechanics totals (kcal/mol), not protein-bound or quantum-chemical values. The force field is the one chosen in this dialog (MMFF, MMFF94s, or UFF). Optional **Align on** overlays the ensemble on a common substructure; flexible tails may still diverge after core overlay. Embed RMS prune happens before minimization; use **RMS prune (post-min)** to collapse poses that relaxed onto the same basin. Packed **confs** cells have a size limit, so uncapped ensembles can still be truncated. If a **confs** column already exists, new ensembles go to **confs (1)** (then **confs (2)**, …) so the previous column is kept.

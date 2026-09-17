@@ -88,6 +88,29 @@ def test_replot_walks_plot_hosts_not_just_selection_views(qapp):  # noqa: ARG001
     w.close()
 
 
+def test_replot_restores_ready_status_when_idle(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    host = _CountingPlotHost()
+    w._plot_dialogs = [_FakePlotDialog(host)]
+    w.status_label.setText("Calculate descriptors — 10/10 (100%)")
+    w._replot_active_plots()
+    assert w.status_label.text() == "Ready"
+    w.close()
+
+
+def test_replot_keeps_status_while_tool_progress_active(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    host = _CountingPlotHost()
+    w._plot_dialogs = [_FakePlotDialog(host)]
+    w._tool_progress_state.begin("Calculate descriptors", 10)
+    w.status_label.setText("Calculate descriptors — 4/10 (40%)")
+    w._replot_active_plots()
+    assert host.calls == 1
+    assert w.status_label.text() == "Calculate descriptors — 4/10 (40%)"
+    w._tool_progress_state.end()
+    w.close()
+
+
 def test_visible_source_rows_cache_reused_until_invalidated(qapp):  # noqa: ARG001
     w = ChemicalTableApp()
     _setup_two_row_mw_table(w)

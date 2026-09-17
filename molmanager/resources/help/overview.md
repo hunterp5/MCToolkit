@@ -20,12 +20,12 @@ Works on the current session table (structures plus property columns). Most tool
 - **Edit** - undo/redo, clipboard, and selection commands.
 - **Tools** - prepare structures, fingerprints, docking helpers, design tools, predictors (pKa, permeability, SOM), random generators.
 - **Protein** - 3D structure viewer for PDB, mmCIF, and related crystallographic files.
-- **Data** - analyze table, plotter, dimensionality reduction, QSAR, MPO, medchem plots.
+- **Data** - statistics, plotter, dimensionality reduction, QSAR, MPO, medchem plots.
 - **External** - SQL, PubChem, ChEMBL, patents.
 - **Settings** - theme, fonts, hotkeys.
-- **Help** - User Guide (this manual) and Citations (papers and licenses for external tools).
 - **Layout** - rearrange or restore workspace panes.
 - **Processes** - inspect running/queued background jobs.
+- **Help** - question-mark control to the right of Processes. Opens this User Guide. F1 also opens the guide.
 
 ## Workflow
 

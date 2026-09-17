@@ -94,7 +94,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "file_open",
                 "Open File",
                 "Open File",
-                "Load SDF, MOL, SMILES, CSV, and related formats.",
+                "Load SDF, MOL, SMILES, CSV, RXN, and related formats.",
             ),
             _e(
                 "file_import",
@@ -154,15 +154,15 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
             ),
             _e(
                 "tools_add_explicit_h",
+                "Explicit Hydrogens — Add",
                 "Add Explicit Hydrogens",
-                "Add Explicit Hydrogens",
-                "Expand implicit hydrogens with RDKit AddHs.",
+                "Tools → Prepare Structures → Explicit Hydrogens → Add.",
             ),
             _e(
                 "tools_remove_explicit_h",
+                "Explicit Hydrogens — Remove",
                 "Remove Explicit Hydrogens",
-                "Remove Explicit Hydrogens",
-                "Strip explicit hydrogens with RDKit RemoveHs.",
+                "Tools → Prepare Structures → Explicit Hydrogens → Remove.",
             ),
             _e(
                 "tools_render_2d",
@@ -343,8 +343,8 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         (
             _e(
                 "data_analyze_table",
-                "Analyze Table",
-                "Analyze Table",
+                "Statistics",
+                "Statistics",
                 "Summary statistics for table columns.",
             ),
             _e(
@@ -353,10 +353,36 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Split Column",
                 "Split a delimited column into new columns.",
             ),
-            _e("data_pca", "PCA", "PCA", "Principal component analysis plot."),
-            _e("data_tsne", "t-SNE", "t-SNE", "t-SNE embedding visualization."),
-            _e("data_umap", "UMAP", "UMAP", "UMAP embedding visualization."),
-            _e("data_som", "SOM", "Self-Organizing Map", "Self-organizing map visualization."),
+            _e(
+                "data_join_columns",
+                "Join Columns",
+                "Join Columns",
+                "Join two columns with a delimiter into a new column.",
+            ),
+            _e(
+                "data_pca",
+                "PCA",
+                "PCA",
+                "Tools → Dimensionality Reduction → Principal Component Analysis.",
+            ),
+            _e(
+                "data_tsne",
+                "t-SNE",
+                "t-SNE",
+                "Tools → Dimensionality Reduction → t-SNE Visualization.",
+            ),
+            _e(
+                "data_umap",
+                "UMAP",
+                "UMAP",
+                "Tools → Dimensionality Reduction → UMAP Visualization.",
+            ),
+            _e(
+                "data_som",
+                "SOM",
+                "Self-Organizing Map",
+                "Tools → Dimensionality Reduction → Self-Organizing Map.",
+            ),
             _e(
                 "data_boiled_egg",
                 "BOILED-Egg",

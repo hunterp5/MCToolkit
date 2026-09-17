@@ -241,6 +241,9 @@ class SessionTableLayoutMixin:
                 self._restore_column_visual_order([int(x) for x in co])
             except (TypeError, ValueError):
                 pass
+        apply_font = getattr(self, "_apply_table_font", None)
+        if callable(apply_font):
+            apply_font()
 
     def _finish_deferred_session_workspace_restore(self) -> None:
         self._restore_pending_workspace_layout()

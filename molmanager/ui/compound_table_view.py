@@ -18,9 +18,10 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QRect, QSize, Qt
-from PyQt5.QtGui import QColor, QPalette, QPixmap
+from PyQt5.QtCore import QRect, QSize, Qt, QTimer
+from PyQt5.QtGui import QColor, QFont, QFontMetrics, QPalette, QPixmap
 from PyQt5.QtWidgets import (
+    QAbstractButton,
     QAbstractItemView,
     QApplication,
     QHeaderView,
@@ -28,6 +29,7 @@ from PyQt5.QtWidgets import (
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QTableView,
+    QWIDGETSIZE_MAX,
 )
 
 from ..display_constants import (
@@ -39,6 +41,91 @@ from ..display_constants import (
 
 # Must match CompoundTableModel.STRUCTURE_COL
 _STRUCTURE_COL = 1
+
+# Palette roles so Fusion headers follow light/dark/custom GUI colors.
+# Any QHeaderView stylesheet without these roles freezes the section fill.
+TABLE_HEADER_SECTION_QSS = """
+QHeaderView {
+    background-color: palette(button);
+    color: palette(button-text);
+}
+QHeaderView::section {
+    padding-top: 1px;
+    padding-bottom: 1px;
+    background-color: palette(button);
+    color: palette(button-text);
+    border: none;
+    border-right: 1px solid palette(mid);
+    border-bottom: 1px solid palette(mid);
+}
+"""
+
+# Compact QSS padding (1px × 2) plus the section border.
+_HEADER_FONT_PAD_PX = 3
+# Fast edge-scroll while dragging a column header off the visible area.
+_HEADER_DRAG_SCROLL_EDGE_PX = 40
+_HEADER_DRAG_SCROLL_INTERVAL_MS = 16
+_HEADER_DRAG_SCROLL_MIN_STEP_PX = 32
+_HEADER_DRAG_SCROLL_MAX_STEP_PX = 180
+
+
+def header_bar_extent_for_font(header: QHeaderView, font: QFont) -> int:
+    """Thickness of the header bar for *font* (height if horizontal, width if vertical)."""
+    fm = QFontMetrics(font)
+    extra = _HEADER_FONT_PAD_PX
+    if header.orientation() == Qt.Horizontal:
+        return max(fm.height(), fm.lineSpacing()) + extra
+    model = header.model()
+    n = int(model.rowCount()) if model is not None else 1
+    sample = str(max(99, n))
+    return max(fm.horizontalAdvance(sample) + extra + 6, 1)
+
+
+def apply_header_font(header: QHeaderView | None, font: QFont) -> None:
+    """Apply *font* and resize the header bar so labels are not clipped."""
+    if header is None:
+        return
+    header.setMinimumSize(0, 0)
+    header.setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX)
+    header.setFont(font)
+    vp = header.viewport()
+    if vp is not None:
+        vp.setFont(font)
+    qss = header.styleSheet()
+    if qss:
+        header.setStyleSheet(qss)
+    extent = header_bar_extent_for_font(header, font)
+    if header.orientation() == Qt.Horizontal:
+        header.setFixedHeight(extent)
+    else:
+        header.setFixedWidth(extent)
+    header.updateGeometry()
+    header.update()
+    if vp is not None:
+        vp.update()
+
+
+def apply_table_header_theme(header: QHeaderView | None, pal: QPalette) -> None:
+    """Push *pal* onto a header and re-resolve its palette() stylesheet colors."""
+    if header is None:
+        return
+    header.setPalette(pal)
+    vp = header.viewport()
+    if vp is not None:
+        vp.setPalette(pal)
+    qss = header.styleSheet()
+    if qss:
+        header.setStyleSheet(qss)
+    style = header.style()
+    if style is not None:
+        style.unpolish(header)
+        style.polish(header)
+        if vp is not None:
+            style.unpolish(vp)
+            style.polish(vp)
+    header.update()
+    if vp is not None:
+        vp.update()
 
 
 class StructureDelegate(QStyledItemDelegate):
@@ -116,7 +203,10 @@ class StructureDelegate(QStyledItemDelegate):
                 max(1, opt.rect.width() - 2 * margin),
                 max(1, opt.rect.height() - 2 * margin),
             )
-            painter.drawText(r, int(Qt.AlignCenter | Qt.TextWordWrap), text)
+            align = index.data(Qt.TextAlignmentRole)
+            if not isinstance(align, int):
+                align = int(Qt.AlignLeft | Qt.AlignVCenter)
+            painter.drawText(r, int(align) | int(Qt.TextWordWrap), text)
             painter.restore()
 
     def sizeHint(self, option, index):  # noqa: N802
@@ -156,10 +246,86 @@ class CompoundTableHeaderView(QHeaderView):
         self._edge_resize_logical = -1
         self._edge_resize_origin_x = 0
         self._edge_resize_origin_size = 0
-        self.setStyleSheet("QHeaderView::section { padding-top: 1px; padding-bottom: 1px; }")
+        self._section_drag_press_x = -1
+        self._section_drag_active = False
+        self._section_drag_x = 0
+        self._section_drag_timer = QTimer(self)
+        self._section_drag_timer.setInterval(_HEADER_DRAG_SCROLL_INTERVAL_MS)
+        self._section_drag_timer.timeout.connect(self._on_header_drag_scroll_tick)
+        self.setStyleSheet(TABLE_HEADER_SECTION_QSS)
         vp = self.viewport()
         if vp is not None:
             vp.setMouseTracking(True)
+
+    def _header_hscroll_bar(self):
+        parent = self.parentWidget()
+        if parent is not None:
+            bar = getattr(parent, "horizontalScrollBar", None)
+            if callable(bar):
+                found = bar()
+                if found is not None:
+                    return found
+        return self.horizontalScrollBar()
+
+    def _header_drag_scroll_step(self, x: int) -> int:
+        """Pixels to scroll this tick; negative is left. Zero if not in the edge zone."""
+        vp = self.viewport()
+        if vp is None:
+            return 0
+        width = int(vp.width())
+        if width <= 0:
+            parent = self.parentWidget()
+            pvp = parent.viewport() if parent is not None else None
+            width = int(pvp.width()) if pvp is not None else 0
+        if width <= 0:
+            return 0
+        edge = _HEADER_DRAG_SCROLL_EDGE_PX
+        if x >= width - edge:
+            overshoot = int(x) - (width - edge)
+            sign = 1
+        elif x <= edge:
+            overshoot = edge - int(x)
+            sign = -1
+        else:
+            return 0
+        step = _HEADER_DRAG_SCROLL_MIN_STEP_PX + max(0, overshoot)
+        return sign * max(
+            _HEADER_DRAG_SCROLL_MIN_STEP_PX,
+            min(_HEADER_DRAG_SCROLL_MAX_STEP_PX, step),
+        )
+
+    def _apply_header_drag_scroll(self, step: int) -> None:
+        if step == 0:
+            return
+        bar = self._header_hscroll_bar()
+        if bar is None:
+            return
+        bar.setValue(int(bar.value()) + int(step))
+
+    def _update_section_drag_scroll(self, x: int) -> None:
+        self._section_drag_x = int(x)
+        step = self._header_drag_scroll_step(x)
+        if step == 0:
+            self._section_drag_timer.stop()
+            return
+        self._apply_header_drag_scroll(step)
+        if not self._section_drag_timer.isActive():
+            self._section_drag_timer.start()
+
+    def _on_header_drag_scroll_tick(self) -> None:
+        if not self._section_drag_active:
+            self._stop_section_drag_scroll()
+            return
+        step = self._header_drag_scroll_step(int(self._section_drag_x))
+        if step == 0:
+            self._section_drag_timer.stop()
+            return
+        self._apply_header_drag_scroll(step)
+
+    def _stop_section_drag_scroll(self) -> None:
+        self._section_drag_active = False
+        self._section_drag_press_x = -1
+        self._section_drag_timer.stop()
 
     def section_for_viewport_right_grip(self, x: int) -> int:
         """Logical section resized by a click at ``x`` on the viewport's right edge, or -1."""
@@ -184,12 +350,15 @@ class CompoundTableHeaderView(QHeaderView):
         if event.button() == Qt.LeftButton:
             logical = self.section_for_viewport_right_grip(event.pos().x())
             if logical >= 0:
+                self._stop_section_drag_scroll()
                 self._edge_resize_logical = logical
                 self._edge_resize_origin_x = int(event.pos().x())
                 self._edge_resize_origin_size = int(self.sectionSize(logical))
                 self.setCursor(Qt.SplitHCursor)
                 event.accept()
                 return
+            self._section_drag_press_x = int(event.pos().x())
+            self._section_drag_active = False
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
@@ -201,6 +370,22 @@ class CompoundTableHeaderView(QHeaderView):
             event.accept()
             return
         super().mouseMoveEvent(event)
+        if (
+            event.buttons() & Qt.LeftButton
+            and self.sectionsMovable()
+            and self.cursor().shape() != Qt.SplitHCursor
+        ):
+            x = int(event.pos().x())
+            if not self._section_drag_active:
+                origin = self._section_drag_press_x
+                dist = abs(x - origin) if origin >= 0 else 0
+                if dist >= int(QApplication.startDragDistance()):
+                    self._section_drag_active = True
+            if self._section_drag_active:
+                self._update_section_drag_scroll(x)
+                return
+        else:
+            self._section_drag_timer.stop()
         hovering_edge = (
             event.buttons() == Qt.NoButton
             and self.section_for_viewport_right_grip(event.pos().x()) >= 0
@@ -209,6 +394,7 @@ class CompoundTableHeaderView(QHeaderView):
             self.setCursor(Qt.SplitHCursor)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        self._stop_section_drag_scroll()
         if self._edge_resize_logical >= 0:
             self._edge_resize_logical = -1
             self.unsetCursor()
@@ -239,12 +425,46 @@ class CompoundTableView(QTableView):
         self.verticalHeader().setDefaultSectionSize(structure_row_default_height())
         self.verticalHeader().setSectionsMovable(True)
         self.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
+        self.verticalHeader().setStyleSheet(TABLE_HEADER_SECTION_QSS)
         hh = CompoundTableHeaderView(Qt.Horizontal, self)
         self.setHorizontalHeader(hh)
         self.setSortingEnabled(False)
         self._compound_model = None
         self._structure_column_min_width = structure_column_minimum_width()
         hh.sectionResized.connect(self._on_horizontal_section_resized)
+
+    def apply_table_font(self, font: QFont) -> None:
+        """Set the table font and grow or shrink header bars to match."""
+        self.setFont(font)
+        apply_header_font(self.horizontalHeader(), font)
+        apply_header_font(self.verticalHeader(), font)
+        hh = self.horizontalHeader()
+        corner = self.findChild(QAbstractButton)
+        if corner is not None:
+            corner.setFont(font)
+            if hh is not None:
+                corner.setFixedHeight(int(hh.height()))
+            corner.update()
+        self.updateGeometries()
+        vp = self.viewport()
+        if vp is not None:
+            vp.update()
+
+    def refresh_theme(self) -> None:
+        """Keep header chrome on the current application palette."""
+        app = QApplication.instance()
+        pal = app.palette() if app is not None else self.palette()
+        self.setPalette(pal)
+        apply_table_header_theme(self.horizontalHeader(), pal)
+        apply_table_header_theme(self.verticalHeader(), pal)
+        corner = self.findChild(QAbstractButton)
+        if corner is not None:
+            corner.setPalette(pal)
+            corner.update()
+        vp = self.viewport()
+        if vp is not None:
+            vp.setPalette(pal)
+            vp.update()
 
     def updateGeometries(self) -> None:  # noqa: N802
         super().updateGeometries()

@@ -505,7 +505,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "umap",
                 "UMAP (umap-learn)",
-                "Data → UMAP Visualization.",
+                "Tools → Dimensionality Reduction → UMAP Visualization.",
                 (
                     (
                         "McInnes, L.; Healy, J.; Melville, J. UMAP: Uniform Manifold Approximation "
@@ -524,7 +524,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "som",
                 "Self-organizing map (Kohonen)",
-                "Data → Self-Organizing Map (NumPy implementation in MolManager).",
+                "Tools → Dimensionality Reduction → Self-Organizing Map (NumPy implementation in MolManager).",
                 (
                     (
                         "Kohonen, T. Self-Organized Formation of Topologically Correct Feature Maps. "

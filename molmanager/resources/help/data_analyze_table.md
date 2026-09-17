@@ -1,6 +1,6 @@
-# Analyze Table
+# Statistics
 
-Analyze Table computes summary statistics for table columns so you can inspect distributions and data quality quickly.
+Statistics computes summary statistics for table columns so you can inspect distributions and data quality quickly. Open from **Data → Table → Statistics**.
 
 ## Goal
 
@@ -23,7 +23,7 @@ Columns in the current table; may respect current visibility/selection depending
 ## Workflow
 
 1. Ensure the columns of interest exist and are populated.
-2. Open **Analyze Table**.
+2. Open **Data → Table → Statistics**.
 3. Review summaries for missingness and outliers.
 4. Follow up with filters or plots on suspicious columns.
 

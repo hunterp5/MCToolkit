@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -35,7 +34,6 @@ from PyQt5.QtWidgets import (
 
 from rdkit import Chem
 
-from ...science_citations import protomer_dialog_footer_html
 from ...services.column_labels import COLUMN_PARENT_OID, COLUMN_PROTOMER_SOURCE_OID_LEGACY
 from ...utils import parse_molecule_from_cell_text
 from ...workers import ProtomerGeneratorSignals, ProtomerGeneratorWorker
@@ -109,13 +107,6 @@ class ProtomerGeneratorDialog(QDialog):
         ph_row.addWidget(self.ph_spin)
         ph_row.addStretch()
         root.addLayout(ph_row)
-
-        ref_lbl = QLabel(protomer_dialog_footer_html())
-        ref_lbl.setWordWrap(True)
-        ref_lbl.setTextFormat(Qt.RichText)
-        ref_lbl.setOpenExternalLinks(True)
-        ref_lbl.setStyleSheet("color: palette(mid); font-size: 11px;")
-        root.addWidget(ref_lbl)
 
         gen_row = QHBoxLayout()
         gen_row.setSpacing(6)
