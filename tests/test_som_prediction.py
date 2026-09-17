@@ -247,6 +247,21 @@ def _dark_ink_span(png: bytes) -> tuple[int, int]:
     return max(0, max_x - min_x), max(0, max_y - min_y)
 
 
+def test_som_map_matches_structure_molecule_scale(qapp) -> None:  # noqa: ARG001
+    from molmanager.structure_draw import render_molecule_png
+
+    mol = Chem.MolFromSmiles("c1ccccc1O")
+    assert mol is not None
+    struct = render_molecule_png(mol, 180, 140)
+    som = render_som_map_png("c1ccccc1O", (), width=180, height=140, reference_mol=mol)
+    assert struct and som
+    w1, h1 = _dark_ink_span(struct)
+    w2, h2 = _dark_ink_span(som)
+    assert w1 > 20 and h1 > 20
+    assert abs(w1 - w2) <= 8
+    assert abs(h1 - h2) <= 8
+
+
 def test_emphasize_does_not_resize_molecule(qapp) -> None:  # noqa: ARG001
     atoms = (
         SomAtomHit(0, 0.2, False),

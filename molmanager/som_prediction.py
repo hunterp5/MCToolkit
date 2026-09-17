@@ -732,24 +732,6 @@ def _match_reference_2d(mol: Chem.Mol, reference: Chem.Mol | None) -> None:
         logger.debug("SOM map could not match structure-column orientation", exc_info=True)
 
 
-def _conf_draw_bounds(mol: Chem.Mol):
-    """Return (min, max) 2D points for *mol*, or ``None`` if a scale cannot be locked."""
-    if mol is None or mol.GetNumAtoms() == 0 or mol.GetNumConformers() == 0:
-        return None
-    conf = mol.GetConformer()
-    xs: list[float] = []
-    ys: list[float] = []
-    for i in range(mol.GetNumAtoms()):
-        p = conf.GetAtomPosition(i)
-        xs.append(float(p.x))
-        ys.append(float(p.y))
-    if max(xs) - min(xs) < 1e-6 and max(ys) - min(ys) < 1e-6:
-        return None
-    from rdkit.Geometry import Point2D
-
-    return Point2D(min(xs), min(ys)), Point2D(max(xs), max(ys))
-
-
 def _draw_som_molecule(
     drawer: rdMolDraw2D.MolDraw2DCairo,
     mol: Chem.Mol,
@@ -760,27 +742,12 @@ def _draw_som_molecule(
     bonds: list[int],
     bond_colors: dict[int, tuple[float, float, float]],
 ) -> None:
-    """Draw *mol* with scale locked to atom coordinates (highlights do not reflow it)."""
-    try:
-        draw_mol = rdMolDraw2D.PrepareMolForDrawing(mol)
-    except Exception:
-        draw_mol = mol
-    bounds = _conf_draw_bounds(draw_mol)
-    if bounds is not None:
-        minv, maxv = bounds
-        try:
-            drawer.SetScale(int(drawer.Width()), int(drawer.Height()), minv, maxv)
-        except TypeError:
-            try:
-                drawer.SetScale(int(drawer.Width()), int(drawer.Height()), minv, maxv, draw_mol)
-            except Exception:
-                logger.debug("SOM map could not lock draw scale", exc_info=True)
-        except Exception:
-            logger.debug("SOM map could not lock draw scale", exc_info=True)
+    """Draw *mol* with the same scale path as table 2D depictions."""
     if highlight:
         try:
-            drawer.DrawMolecule(
-                draw_mol,
+            rdMolDraw2D.PrepareAndDrawMolecule(
+                drawer,
+                mol,
                 highlightAtoms=highlight,
                 highlightAtomColors=colors,
                 highlightAtomRadii=radii,
@@ -789,14 +756,15 @@ def _draw_som_molecule(
             )
             return
         except TypeError:
-            drawer.DrawMolecule(
-                draw_mol,
+            rdMolDraw2D.PrepareAndDrawMolecule(
+                drawer,
+                mol,
                 highlightAtoms=highlight,
                 highlightAtomColors=colors,
                 highlightAtomRadii=radii,
             )
             return
-    drawer.DrawMolecule(draw_mol)
+    rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
 
 
 def render_som_map_png(
@@ -862,10 +830,6 @@ def render_som_map_png(
     configure_mol_drawer(drawer, int(cw))
     opts = drawer.drawOptions()
     opts.annotationFontScale = 0.75
-    try:
-        opts.padding = 0.16
-    except Exception:
-        pass
     try:
         _draw_som_molecule(
             drawer,

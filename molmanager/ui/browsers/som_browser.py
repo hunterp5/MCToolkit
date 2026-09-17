@@ -66,11 +66,11 @@ from ...som_prediction import (
     som_probability_rgb,
 )
 from ..dockable_plot import (
+    PLOT_BODY_MARGINS,
+    PLOT_BODY_SPACING,
     discard_host_dialog_after_dock,
     make_add_to_main_button,
     make_send_window_button,
-    request_close_plot_widget,
-    style_plot_footer_text_button,
 )
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_PREDICT_SOM
@@ -465,6 +465,7 @@ class SomBrowserWidget(QWidget):
     """Forward/back through SOM maps with a Data → Browser style preview."""
 
     dockable_in_workspace = True
+    supports_floating_title = False
 
     def __init__(self, parent_app: Any = None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -479,12 +480,12 @@ class SomBrowserWidget(QWidget):
         self._selection_model = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        root.setContentsMargins(*PLOT_BODY_MARGINS)
+        root.setSpacing(PLOT_BODY_SPACING)
 
         self._meta = QLabel()
-        self._meta.setAlignment(Qt.AlignCenter)
-        root.addWidget(self._meta)
+        self._meta.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._meta.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
         self._struct_label = QLabel()
         self._struct_label.setAlignment(Qt.AlignCenter)
@@ -538,7 +539,11 @@ class SomBrowserWidget(QWidget):
         self._atom_table.itemSelectionChanged.connect(self._on_atom_selection_changed)
         root.addWidget(self._atom_table)
 
-        row_btns = QHBoxLayout()
+        self._nav_bar = QWidget(self)
+        self._nav_bar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        row_btns = QHBoxLayout(self._nav_bar)
+        row_btns.setContentsMargins(0, 0, 0, 0)
+        row_btns.setSpacing(4)
         self._btn_first = QPushButton("<<")
         self._btn_first.setToolTip("First molecule (Home)")
         self._btn_back = QPushButton("←")
@@ -554,14 +559,22 @@ class SomBrowserWidget(QWidget):
         row_btns.addWidget(self._btn_fwd)
         row_btns.addWidget(self._btn_last)
         row_btns.addWidget(self._btn_select)
-        row_btns.addStretch()
-        root.addLayout(row_btns)
+        self._cb_only_selected = QCheckBox("Browse Only Selected")
+        self._cb_only_selected.setToolTip(
+            "When checked, this browser walks only table rows that are currently selected."
+        )
+        self._cb_only_selected.toggled.connect(self._on_only_selected_toggled)
+        row_btns.addWidget(self._cb_only_selected)
+        row_btns.addStretch(1)
+        root.addWidget(self._nav_bar)
 
         self._footer_bar = QWidget(self)
         self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         foot = QHBoxLayout(self._footer_bar)
         foot.setContentsMargins(0, 0, 0, 0)
         foot.setSpacing(4)
+        foot.addWidget(self._meta)
+        foot.addStretch(1)
         self._add_to_main_btn = make_add_to_main_button(
             self,
             tooltip="Dock this browser beside the compound table.",
@@ -574,18 +587,6 @@ class SomBrowserWidget(QWidget):
         )
         self._send_window_btn.clicked.connect(self._send_to_new_window)
         foot.addWidget(self._send_window_btn)
-        self._close_btn = QPushButton("Close")
-        self._close_btn.setToolTip("Close this browser.")
-        self._close_btn.clicked.connect(self._close_docked_browser)
-        style_plot_footer_text_button(self._close_btn)
-        foot.addWidget(self._close_btn)
-        self._cb_only_selected = QCheckBox("Browse Only Selected")
-        self._cb_only_selected.setToolTip(
-            "When checked, this browser walks only table rows that are currently selected."
-        )
-        self._cb_only_selected.toggled.connect(self._on_only_selected_toggled)
-        foot.addWidget(self._cb_only_selected)
-        foot.addStretch()
         root.insertWidget(0, self._footer_bar)
 
         self._btn_first.clicked.connect(self._go_first)
@@ -678,13 +679,6 @@ class SomBrowserWidget(QWidget):
             if callable(undock):
                 undock(self)
 
-    def _close_docked_browser(self) -> None:
-        request_close_plot_widget(
-            self,
-            title="Close Browser",
-            message="Close this browser?",
-        )
-
     def _is_docked_in_main_window(self) -> bool:
         app = self.parent_app
         if app is None:
@@ -702,7 +696,6 @@ class SomBrowserWidget(QWidget):
         docked = self._is_docked_in_main_window()
         self._add_to_main_btn.setVisible(floating)
         self._send_window_btn.setVisible(docked)
-        self._close_btn.setVisible(True)
         sync_docked_footer_bar(self, docked=docked)
 
     def event(self, event) -> bool:  # noqa: N802 — Qt API

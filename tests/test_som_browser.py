@@ -96,6 +96,7 @@ def test_som_browser_widget_is_workspace_dockable():
     assert getattr(SomBrowserWidget, "dockable_in_workspace", False) is True
     assert is_dockable_workspace_widget(SomBrowserWidget)
     assert hasattr(SomBrowserWidget, "create_floating_dialog")
+    assert getattr(SomBrowserWidget, "supports_floating_title", True) is False
     assert not hasattr(SomBrowserWidget, "_toggle_options_visible")
     assert not hasattr(SomBrowserWidget, "_prop_panel")
 
@@ -342,6 +343,19 @@ def test_som_browser_only_selected_filters(qapp) -> None:  # noqa: ARG001
     w = SomBrowserWidget(_FakeApp())
     w.set_records(recs)
     assert w._cb_only_selected.text() == "Browse Only Selected"
+    assert w._cb_only_selected.parent() is w._nav_bar
+    assert w._meta.parent() is w._footer_bar
+    assert not hasattr(w, "_close_btn")
+    foot = w._footer_bar.layout()
+    dock_idx = foot.indexOf(w._add_to_main_btn)
+    send_idx = foot.indexOf(w._send_window_btn)
+    meta_idx = foot.indexOf(w._meta)
+    assert meta_idx == 0
+    assert dock_idx > meta_idx
+    assert send_idx > dock_idx
+    root = w.layout()
+    assert root.indexOf(w._footer_bar) == 0
+    assert root.indexOf(w._nav_bar) > root.indexOf(w._atom_table)
     w._cb_only_selected.setChecked(True)
     assert [r.oid for r in w._records] == [2]
     w._cb_only_selected.setChecked(False)
