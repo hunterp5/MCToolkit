@@ -38,11 +38,14 @@ if TYPE_CHECKING:
 __all__ = [
     "UndoDeleteRowsCommand",
     "UndoPasteCellCommand",
+    "UndoPasteBlockCommand",
     "UndoCellTextChangeCommand",
     "UndoClearCellsCommand",
     "UndoDeleteColumnCommand",
     "UndoDuplicateColumnCommand",
     "UndoInsertRowCommand",
+    "UndoAddBlankRowCommand",
+    "UndoAddBlankColumnCommand",
     "UndoLogarithmicColumnCommand",
     "UndoPrecisionColumnCommand",
     "collect_delete_row_snapshots",
@@ -288,6 +291,82 @@ class UndoPasteCellCommand(QUndoCommand):
                 app._table_model.set_column_pixmap(oid, h, self._prev_pm)
             else:
                 app._table_model.set_cell_text(oid, h, self._prev_text)
+        app.calculate_global_bounds()
+        app.apply_filters()
+        app.status_label.setText("Undo: paste reverted.")
+
+
+@dataclass
+class _PasteBlockCell:
+    row: int
+    col: int
+    oid: int
+    new_text: str
+    prev_text: str = ""
+    prev_mol: Chem.Mol | None = None
+    prev_pm: QPixmap | None = None
+    prev_smiles: str = ""
+    pixmap_header: str | None = None
+
+
+class UndoPasteBlockCommand(QUndoCommand):
+    """Undo/redo for Excel-style paste into a block of cells."""
+
+    def __init__(self, app: TableUIMixin, writes: list[tuple[int, int, int, str]]) -> None:
+        n = len(writes)
+        super().__init__(f"Paste {n} cells" if n != 1 else "Paste")
+        self._app = app
+        self._cells: list[_PasteBlockCell] = []
+        for row, col, oid, text in writes:
+            cell = _PasteBlockCell(row=row, col=col, oid=oid, new_text=text)
+            if col == CompoundTableModel.STRUCTURE_COL:
+                pm = app.mols.get(oid)
+                cell.prev_mol = Chem.Mol(pm) if pm is not None else None
+                cell.prev_pm = app._table_model.structure_pixmap_copy(oid)
+                if "SMILES" in app.headers:
+                    cell.prev_smiles = app._table_model.value_for_header(row, "SMILES")
+            else:
+                h = app.headers[col]
+                cell.prev_text = app._table_model.backing_value_for_row_header(row, h)
+                cell.pixmap_header = h if app._table_model.is_pixmap_data_column(h) else None
+                if cell.pixmap_header:
+                    cell.prev_pm = app._table_model.column_pixmap_copy(oid, h)
+            self._cells.append(cell)
+
+    def redo(self) -> None:
+        app = self._app
+        apply = getattr(app, "_apply_pasted_cell_value", None)
+        if not callable(apply):
+            return
+        for cell in self._cells:
+            apply(cell.row, cell.col, cell.oid, cell.new_text)
+        app.calculate_global_bounds()
+        app.apply_filters()
+        n = len(self._cells)
+        if n == 1:
+            app.status_label.setText("Cell updated from clipboard.")
+        else:
+            app.status_label.setText(f"Paste: filled {n:,} cell(s).")
+
+    def undo(self) -> None:
+        app = self._app
+        for cell in reversed(self._cells):
+            oid = cell.oid
+            if cell.col == CompoundTableModel.STRUCTURE_COL:
+                if cell.prev_mol is not None:
+                    app.mols[oid] = Chem.Mol(cell.prev_mol)
+                else:
+                    app.mols.pop(oid, None)
+                if "SMILES" in app.headers:
+                    app._table_model.set_cell_text(oid, "SMILES", cell.prev_smiles or "")
+                app._table_model.set_structure_pixmap(oid, cell.prev_pm)
+                continue
+            h = app.headers[cell.col]
+            if cell.pixmap_header:
+                app._table_model.set_backing_text(oid, h, cell.prev_text)
+                app._table_model.set_column_pixmap(oid, h, cell.prev_pm)
+            else:
+                app._table_model.set_cell_text(oid, h, cell.prev_text)
         app.calculate_global_bounds()
         app.apply_filters()
         app.status_label.setText("Undo: paste reverted.")
@@ -746,3 +825,149 @@ class UndoInsertRowCommand(QUndoCommand):
         app.apply_filters()
         app.table.setSortingEnabled(False)
         app.status_label.setText("Undo: removed duplicated row.")
+
+
+class UndoAddBlankRowCommand(QUndoCommand):
+    """Undo/redo appending one or more empty table rows."""
+
+    def __init__(self, app: TableUIMixin, count: int = 1) -> None:
+        n = max(1, int(count))
+        super().__init__("Add row" if n == 1 else f"Add {n} rows")
+        self._app = app
+        self._count = n
+        self._new_oids: list[int] = []
+
+    def redo(self) -> None:
+        app = self._app
+        ensure = getattr(app, "_ensure_blank_table_headers", None)
+        if callable(ensure):
+            ensure()
+        if not self._new_oids:
+            start = app.next_oid
+            self._new_oids = list(range(start, start + self._count))
+            app.next_oid = start + self._count
+        app.table.setSortingEnabled(False)
+        app._table_model.append_rows_batch([(oid, {}) for oid in self._new_oids])
+        app.calculate_global_bounds()
+        app.apply_filters()
+        app.table.setSortingEnabled(False)
+        last = self._new_oids[-1]
+        row = app._table_model.logical_row_for_oid(last)
+        if row >= 0:
+            try:
+                app.table.selectRow(row)
+            except Exception:
+                pass
+        mark = getattr(app, "_mark_session_dirty", None)
+        if callable(mark):
+            mark()
+        sqlite = getattr(app, "_mark_sqlite_store_dirty", None)
+        if callable(sqlite):
+            sqlite()
+        n = len(self._new_oids)
+        app.status_label.setText("Added row." if n == 1 else f"Added {n} rows.")
+
+    def undo(self) -> None:
+        if not self._new_oids:
+            return
+        app = self._app
+        kill = frozenset(self._new_oids)
+        app.table.setSortingEnabled(False)
+        app._table_model.remove_rows_by_oids(kill)
+        for oid in self._new_oids:
+            app.mols.pop(oid, None)
+            app.zoomed_ids.discard(oid)
+        discard = getattr(app, "_confs_sidecar_discard_oids", None)
+        if callable(discard):
+            discard(list(self._new_oids))
+        app.calculate_global_bounds()
+        app.apply_filters()
+        app.table.setSortingEnabled(False)
+        mark = getattr(app, "_mark_session_dirty", None)
+        if callable(mark):
+            mark()
+        sqlite = getattr(app, "_mark_sqlite_store_dirty", None)
+        if callable(sqlite):
+            sqlite()
+        n = len(self._new_oids)
+        app.status_label.setText(
+            "Undo: removed added row." if n == 1 else f"Undo: removed {n} added rows."
+        )
+
+
+class UndoAddBlankColumnCommand(QUndoCommand):
+    """Undo/redo inserting empty data columns at the right edge."""
+
+    def __init__(self, app: TableUIMixin, headers: str | list[str]) -> None:
+        names = [headers] if isinstance(headers, str) else [h for h in headers if h]
+        label = names[0] if len(names) == 1 else f"{len(names)} columns"
+        super().__init__(f"Add column '{label}'" if len(names) == 1 else f"Add {label}")
+        self._app = app
+        self._headers = names
+
+    def redo(self) -> None:
+        app = self._app
+        ensure = getattr(app, "_ensure_blank_table_headers", None)
+        if callable(ensure):
+            ensure()
+        to_add = [h for h in self._headers if h not in app.headers]
+        if not to_add:
+            return
+        nc = app._table_model.columnCount()
+        try:
+            app.table.setUpdatesEnabled(False)
+        except Exception:
+            pass
+        try:
+            app.headers.extend(to_add)
+            app._table_model.insert_columns_at(nc, to_add, None)
+            _sync_bounds_after_column_restored(app, to_add[0])
+            mark = getattr(app, "_mark_sqlite_store_dirty", None)
+            if callable(mark):
+                mark()
+        finally:
+            try:
+                app.table.setUpdatesEnabled(True)
+            except Exception:
+                pass
+        session = getattr(app, "_mark_session_dirty", None)
+        if callable(session):
+            session()
+        n = len(to_add)
+        if n == 1:
+            app.status_label.setText(f"Added column '{to_add[0]}'.")
+        else:
+            app.status_label.setText(f"Added {n} columns.")
+
+    def undo(self) -> None:
+        app = self._app
+        app._session_sort = None
+        try:
+            app.table.setUpdatesEnabled(False)
+        except Exception:
+            pass
+        try:
+            for hdr in reversed(self._headers):
+                try:
+                    idx = app.headers.index(hdr)
+                except ValueError:
+                    continue
+                app._table_model.remove_column_at(idx)
+                app.headers.pop(idx)
+                _sync_filters_after_column_removed(app, hdr)
+            mark = getattr(app, "_mark_sqlite_store_dirty", None)
+            if callable(mark):
+                mark()
+        finally:
+            try:
+                app.table.setUpdatesEnabled(True)
+            except Exception:
+                pass
+        session = getattr(app, "_mark_session_dirty", None)
+        if callable(session):
+            session()
+        n = len(self._headers)
+        if n == 1:
+            app.status_label.setText(f"Undo: removed column '{self._headers[0]}'.")
+        else:
+            app.status_label.setText(f"Undo: removed {n} columns.")

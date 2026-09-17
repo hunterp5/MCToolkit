@@ -727,8 +727,27 @@ def test_data_menu_nests_analyze_and_split_under_table(qapp):  # noqa: ARG001
     assert "Analyze Table…" not in labels
     assert "Split Column…" not in labels
     table = next(a.menu() for a in data.actions() if a.text().replace("&", "") == "Table")
-    table_labels = [a.text().replace("&", "") for a in table.actions()]
-    assert table_labels == ["Statistics…", "Split Column…", "Join Columns…"]
+    table_labels = [a.text().replace("&", "") for a in table.actions() if not a.isSeparator()]
+    assert table_labels[:2] == ["Add Row…", "Add Column…"]
+    assert table_labels[2:] == ["Statistics…", "Split Column…", "Join Columns…"]
+    w.close()
+
+
+def test_add_blank_row_and_column_on_empty_table(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    w.add_blank_table_row(3)
+    assert w.headers[:2] == ["ID_HIDDEN", "Structure"]
+    assert w._table_model.rowCount() == 3
+    oid = w._table_model.row_oid(0)
+    assert oid >= 0
+    w.add_blank_table_column("MW", count=2)
+    assert "MW" in w.headers
+    assert "MW (1)" in w.headers
+    w._undo_stack.undo()
+    assert "MW" not in w.headers
+    assert "MW (1)" not in w.headers
+    w._undo_stack.undo()
+    assert w._table_model.rowCount() == 0
     w.close()
 
 

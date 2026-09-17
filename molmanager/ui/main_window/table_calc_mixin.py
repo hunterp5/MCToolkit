@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QDialog, QMessageBox
 
 from ...config import load_config
 from ...utils import safe_float
@@ -172,6 +172,57 @@ class TableCalcMixin:
 
     def _on_calculator_dialog_destroyed(self):
         self._calculator_dialog = None
+
+    def _ensure_blank_table_headers(self) -> None:
+        """Create ID and Structure columns so Add Row/Column work before a file is loaded."""
+        if self.headers and self._table_model.columnCount() >= 2:
+            return
+        self.headers = ["ID_HIDDEN", "Structure"]
+        self.table.setSortingEnabled(False)
+        self._table_model.clear_rows()
+        self._table_model.set_headers(list(self.headers))
+        self.table.setColumnHidden(0, True)
+        set_stack = getattr(self, "_set_workspace_stack_index", None)
+        if callable(set_stack):
+            set_stack(1)
+
+    def add_blank_table_row(self, count: int | None = None) -> None:
+        """Append empty rows (Data → Table → Add Row). *count* skips the dialog."""
+        from ..dialogs.add_table import MAX_ADD_ROWS, AddTableRowsDialog
+        from .table_undo_commands import UndoAddBlankRowCommand
+
+        if count is None:
+            dlg = AddTableRowsDialog(self)
+            if dlg.exec_() != QDialog.Accepted:
+                return
+            count = dlg.row_count()
+        n = max(1, min(MAX_ADD_ROWS, int(count)))
+        self._ensure_blank_table_headers()
+        self._undo_stack.push(UndoAddBlankRowCommand(self, n))
+
+    def add_blank_table_column(self, name: str | None = None, *, count: int | None = None) -> None:
+        """Append empty data columns (Data → Table → Add Column)."""
+        from ..dialogs.add_table import MAX_ADD_COLUMNS, AddTableColumnsDialog
+        from .table_undo_commands import UndoAddBlankColumnCommand
+
+        if name is None and count is None:
+            dlg = AddTableColumnsDialog(self)
+            if dlg.exec_() != QDialog.Accepted:
+                return
+            name = dlg.column_name()
+            count = dlg.column_count()
+        label = (name or "").strip() or "Column"
+        if label in ("ID_HIDDEN", "Structure"):
+            QMessageBox.warning(
+                self,
+                "Add Column",
+                "That name is reserved. Choose a different column name.",
+            )
+            return
+        n = 1 if count is None else max(1, min(MAX_ADD_COLUMNS, int(count)))
+        self._ensure_blank_table_headers()
+        unique = self._unique_table_column_names([label] * n)
+        self._undo_stack.push(UndoAddBlankColumnCommand(self, unique))
 
     def open_split_column_dialog(self) -> None:
         if not self.headers or self._table_model.rowCount() == 0:

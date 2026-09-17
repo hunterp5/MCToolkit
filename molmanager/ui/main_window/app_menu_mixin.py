@@ -538,6 +538,19 @@ class AppMenuMixin:
 
         data_menu = mb.addMenu("&Data")
         table_menu = data_menu.addMenu("&Table")
+        act_add_row = self._bind_hotkey(
+            "data.add_row",
+            QAction("Add &Row…", self, triggered=lambda: self.add_blank_table_row()),
+        )
+        act_add_row.setToolTip("Append one or more empty rows at the bottom of the table.")
+        table_menu.addAction(act_add_row)
+        act_add_col = self._bind_hotkey(
+            "data.add_column",
+            QAction("Add &Column…", self, triggered=lambda: self.add_blank_table_column()),
+        )
+        act_add_col.setToolTip("Append one or more empty data columns. You choose the name and count.")
+        table_menu.addAction(act_add_col)
+        table_menu.addSeparator()
         table_menu.addAction(
             self._bind_hotkey(
                 "data.analyze_table",
