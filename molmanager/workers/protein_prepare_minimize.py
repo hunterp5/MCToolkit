@@ -19,12 +19,20 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from pathlib import Path
 
+from .protein_prepare_amber import (
+    _ligand_ff_is_gaff,
+    _ligand_ff_tag,
+    _normalize_ligand_ff,
+    build_gaff_prmtop,
+)
 from .protein_prepare_constants import (
     _GB_SALT_M,
     _GB_SOLVENT_DIELECTRIC,
     _GB_TEMPERATURE_K,
+    _LIGAND_FF_NONE,
     _PROTEIN_FF_AMBER14,
     _PROTEIN_FF_AMBER99,
     _RESTRAINT_BACKBONE,
@@ -42,6 +50,7 @@ from .protein_prepare_io import (
     _open_openmm_structure,
     _residue_key,
     _write_openmm_structure,
+    log_prepare,
 )
 
 
@@ -189,6 +198,53 @@ def _protein_only_system(
     ) from last_exc
 
 
+def _amber_holo_system(
+    prmtop_path: Path,
+    inpcrd_path: Path,
+    *,
+    solvent: str = _SOLVENT_GBN2,
+    salt_m: float = _GB_SALT_M,
+):
+    """OpenMM system from an AmberTools prmtop (protein AMBER + GAFF ligand)."""
+    from openmm.app import AmberInpcrdFile, AmberPrmtopFile, GBn2, HBonds, NoCutoff, OBC2
+
+    prmtop = AmberPrmtopFile(str(prmtop_path))
+    inpcrd = AmberInpcrdFile(str(inpcrd_path))
+    sol = _normalize_solvent(solvent)
+    last_exc: Exception | None = None
+    attempts: list[tuple[object | None, bool]] = []
+    if sol == _SOLVENT_GBN2:
+        attempts.extend([(GBn2, True), (GBn2, False)])
+    elif sol == _SOLVENT_OBC2:
+        attempts.extend([(OBC2, True), (OBC2, False)])
+    attempts.append((None, False))
+    for gb, with_salt in attempts:
+        kwargs = {"constraints": HBonds, "nonbondedMethod": NoCutoff}
+        xmls: tuple[str, ...] = ()
+        if gb == GBn2:
+            kwargs["implicitSolvent"] = GBn2
+            xmls = ("implicit/gbn2.xml",)
+        elif gb == OBC2:
+            kwargs["implicitSolvent"] = OBC2
+            xmls = ("implicit/obc2.xml",)
+        if gb is not None and with_salt:
+            kwargs["implicitSolventKappa"] = _gb_kappa_per_nm(salt_m=salt_m)
+        try:
+            system = prmtop.createSystem(**kwargs)
+            return (
+                system,
+                prmtop.topology,
+                inpcrd.positions,
+                _solvent_label(xmls, used_gb=gb is not None, used_salt=with_salt, salt_m=salt_m),
+            )
+        except Exception as exc:
+            last_exc = exc
+    raise RuntimeError(
+        "OpenMM could not build a system from the AmberTools prmtop. "
+        f"{last_exc} Uncheck restrained minimization, or use Protein only."
+    ) from last_exc
+
+
 def _rmsd_angstrom(ref_positions, new_positions, indices: list[int]) -> float | None:
     if not indices:
         return None
@@ -255,6 +311,9 @@ def _restrained_minimize_pdb(
     salt_m: float = _GB_SALT_M,
     restraint_set: str = _RESTRAINT_BACKBONE,
     ligand_keys: set[ResidueKey] | None = None,
+    ligand_ff: str = _LIGAND_FF_NONE,
+    ligand_mols: Sequence | None = None,
+    work_dir: Path | None = None,
 ) -> None:
     import openmm
     from openmm import CustomExternalForce, LangevinMiddleIntegrator, unit
@@ -262,18 +321,48 @@ def _restrained_minimize_pdb(
 
     from .protein_prepare_qc import restrain_atom
 
-    pdb = _open_openmm_structure(input_pdb)
     protein_ff = _normalize_protein_ff(protein_ff)
     restraint_set = _normalize_restraint_set(restraint_set)
     ligand_keys = ligand_keys or set()
-    system, solvent_lbl = _protein_only_system(
-        pdb,
-        keep_water=keep_water,
-        protein_ff=protein_ff,
-        solvent=solvent,
-        salt_m=salt_m,
-    )
-    min_tag = f"{protein_ff.upper()} {solvent_lbl}"
+    ligand_ff = _normalize_ligand_ff(ligand_ff)
+    use_gaff = _ligand_ff_is_gaff(ligand_ff) and bool(ligand_mols) and bool(ligand_keys)
+    if use_gaff:
+        scratch = Path(work_dir) if work_dir is not None else input_pdb.parent
+        log_prepare("AmberTools: parameterizing ligand for OpenMM…")
+        prmtop, inpcrd, charge_tag = build_gaff_prmtop(
+            input_pdb,
+            ligand_mols=list(ligand_mols or []),
+            ligand_keys=ligand_keys,
+            keep_water=keep_water,
+            protein_ff=protein_ff,
+            ligand_ff=ligand_ff,
+            solvent=solvent,
+            work_dir=scratch,
+        )
+        system, topology, positions0, solvent_lbl = _amber_holo_system(
+            prmtop, inpcrd, solvent=solvent, salt_m=salt_m
+        )
+
+        class _AmberStruct:
+            pass
+
+        pdb = _AmberStruct()
+        pdb.topology = topology
+        pdb.positions = positions0
+        lig_tag = _ligand_ff_tag(ligand_ff)
+        min_tag = f"{protein_ff.upper()} {lig_tag} {charge_tag} {solvent_lbl}"
+        remarks.append(f"4B AMBERTOOLS {lig_tag} {charge_tag}")
+    else:
+        pdb = _open_openmm_structure(input_pdb)
+        log_prepare("OpenMM: assigning protein force field…")
+        system, solvent_lbl = _protein_only_system(
+            pdb,
+            keep_water=keep_water,
+            protein_ff=protein_ff,
+            solvent=solvent,
+            salt_m=salt_m,
+        )
+        min_tag = f"{protein_ff.upper()} {solvent_lbl}"
     scheme_tag = {
         _RESTRAINT_CA: "CA-RESTRAINED",
         _RESTRAINT_BACKBONE_LIGAND: "BACKBONE+LIGAND-RESTRAINED",
@@ -328,6 +417,7 @@ def _restrained_minimize_pdb(
     else:
         simulation = Simulation(pdb.topology, system, integrator, platform)
     simulation.context.setPositions(pdb.positions)
+    log_prepare(f"OpenMM: running minimizer ({int(max_iterations)} iterations)…")
     simulation.minimizeEnergy(maxIterations=int(max_iterations))
     positions = simulation.context.getState(getPositions=True).getPositions()
     ca_idx = [atom.index for atom in pdb.topology.atoms() if atom.name == "CA"]
@@ -341,6 +431,9 @@ def _restrained_minimize_pdb(
         rmsd_bits.append(f"POCKET={pocket_rmsd:.2f}A")
     if rmsd_bits:
         remarks.append("5 RMSD " + " ".join(rmsd_bits))
+        log_prepare("OpenMM: " + " ".join(rmsd_bits))
+    else:
+        log_prepare("OpenMM: minimization finished")
     _write_openmm_structure(
         pdb.topology,
         positions,

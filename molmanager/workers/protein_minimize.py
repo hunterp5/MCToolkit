@@ -14,14 +14,12 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Background worker for Protein Viewer structure preparation."""
+"""Background worker for Protein Viewer complex minimization."""
 
 from __future__ import annotations
 
 import threading
 from concurrent.futures import FIRST_COMPLETED, BrokenExecutor, ProcessPoolExecutor, wait
-from multiprocessing import Queue
-from queue import Empty
 
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 
@@ -30,50 +28,32 @@ from .process_pool_utils import (
     should_terminate_process_pool,
     shutdown_process_pool_executor,
 )
-from .protein_prepare_runtime import (
-    ProteinPrepareRequest,
-    mp_prepare_protein_structure,
-    prepare_protein_structure,
+from .protein_complex_minimize import (
+    ProteinMinimizeRequest,
+    minimize_protein_complex,
+    mp_minimize_protein_complex,
 )
-from .protein_prepare_smina import ProteinPrepareResult
 
 _OPENMM_VERSION_HINT = (
-    "Prepare subprocess crashed. On Windows this is often caused by OpenMM 8.3+ "
+    "Minimize subprocess crashed. On Windows this is often caused by OpenMM 8.3+ "
     "(native crash during hydrogen placement). Install a supported build:\n"
     "  pip install 'openmm>=8.2,<8.3' pdbfixer pdb2pqr"
 )
 
 
-class ProteinPrepareSignals(QObject):
-    finished = pyqtSignal(object)
+class ProteinMinimizeSignals(QObject):
+    finished = pyqtSignal(str)
     failed = pyqtSignal(str)
-    progress = pyqtSignal(str)
 
 
-def drain_prepare_log_queue(log_queue, emit) -> None:
-    """Pull pending Prepare log lines from the child process and *emit* them."""
-    if log_queue is None or emit is None:
-        return
-    while True:
-        try:
-            msg = log_queue.get_nowait()
-        except Empty:
-            break
-        except Exception:
-            break
-        text = str(msg or "").strip()
-        if text:
-            emit(text)
-
-
-class ProteinPrepareWorker(QRunnable):
-    """Run the Prepare pipeline in an isolated subprocess."""
+class ProteinMinimizeWorker(QRunnable):
+    """Run complex minimization in an isolated subprocess."""
 
     def __init__(
         self,
-        req: ProteinPrepareRequest,
+        req: ProteinMinimizeRequest,
         *,
-        signals: ProteinPrepareSignals,
+        signals: ProteinMinimizeSignals,
         cancel_event: threading.Event | None = None,
     ) -> None:
         super().__init__()
@@ -89,27 +69,19 @@ class ProteinPrepareWorker(QRunnable):
                 return
 
             ex = register_process_pool(ProcessPoolExecutor(max_workers=1))
-            log_q: Queue | None
             try:
-                log_q = Queue()
-            except Exception:
-                log_q = None
-            try:
-                future = ex.submit(mp_prepare_protein_structure, self.req, log_q)
+                future = ex.submit(mp_minimize_protein_complex, self.req)
                 pending = {future}
                 while pending:
-                    drain_prepare_log_queue(log_q, self.signals.progress.emit)
                     if should_terminate_process_pool(cancel_ev):
                         future.cancel()
                         self.signals.failed.emit("Cancelled.")
                         return
                     _done, pending = wait(pending, timeout=0.25, return_when=FIRST_COMPLETED)
-                drain_prepare_log_queue(log_q, self.signals.progress.emit)
                 if future.cancelled():
                     self.signals.failed.emit("Cancelled.")
                     return
                 ok, msg = future.result()
-                drain_prepare_log_queue(log_q, self.signals.progress.emit)
             finally:
                 shutdown_process_pool_executor(
                     ex, kill_workers=should_terminate_process_pool(cancel_ev)
@@ -119,13 +91,13 @@ class ProteinPrepareWorker(QRunnable):
                 self.signals.failed.emit("Cancelled.")
                 return
             if ok:
-                self.signals.finished.emit(msg)
+                self.signals.finished.emit(str(msg))
             else:
-                self.signals.failed.emit(msg)
+                self.signals.failed.emit(str(msg))
         except BrokenExecutor:
             self.signals.failed.emit(_OPENMM_VERSION_HINT)
         except Exception as exc:
-            text = str(exc) or "Structure preparation failed."
+            text = str(exc) or "Complex minimization failed."
             if "terminated abruptly" in text.lower():
                 self.signals.failed.emit(_OPENMM_VERSION_HINT)
             else:
@@ -133,10 +105,8 @@ class ProteinPrepareWorker(QRunnable):
 
 
 __all__ = [
-    "ProteinPrepareRequest",
-    "ProteinPrepareResult",
-    "ProteinPrepareSignals",
-    "ProteinPrepareWorker",
-    "drain_prepare_log_queue",
-    "prepare_protein_structure",
+    "ProteinMinimizeRequest",
+    "ProteinMinimizeSignals",
+    "ProteinMinimizeWorker",
+    "minimize_protein_complex",
 ]

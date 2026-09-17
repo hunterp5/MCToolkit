@@ -24,6 +24,7 @@ GAFF parameterization that is not available as a native Windows binary).
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
@@ -150,3 +151,48 @@ def run_wsl(
     if sys.platform.startswith("win") and _CREATE_NO_WINDOW:
         kwargs["creationflags"] = _CREATE_NO_WINDOW
     return subprocess.run(argv, **kwargs)
+
+
+def linux_path(path: str | Path) -> str:
+    """Path as seen by a Linux tool (WSL ``/mnt/…`` on Windows)."""
+    if sys.platform.startswith("win"):
+        return windows_path_to_wsl(path)
+    return str(path)
+
+
+def run_linux_tool(
+    args: Sequence[str],
+    *,
+    work_dir: str | Path,
+    timeout: float | None = None,
+    check: bool = False,
+) -> subprocess.CompletedProcess:
+    """Run a Linux CLI with *work_dir* as cwd.
+
+    On Windows this is ``wsl.exe -- bash -lic 'cd … && …'`` so conda/AmberTools
+    on the WSL login PATH is found. *args* should use names relative to
+    *work_dir* (or Linux-absolute paths).
+    """
+    work = Path(work_dir)
+    try:
+        work = work.resolve()
+    except OSError:
+        pass
+    work.mkdir(parents=True, exist_ok=True)
+    quoted = " ".join(shlex.quote(str(a)) for a in args)
+    if sys.platform.startswith("win"):
+        script = f"cd {shlex.quote(windows_path_to_wsl(work))} && {quoted}"
+        return run_wsl(["bash", "-lic", script], timeout=timeout, check=check)
+    argv = [str(a) for a in args]
+    kwargs: dict = {
+        "cwd": str(work),
+        "timeout": timeout,
+        "check": check,
+        "capture_output": True,
+        "text": True,
+    }
+    try:
+        return subprocess.run(argv, **kwargs)
+    except FileNotFoundError:
+        script = f"cd {shlex.quote(str(work))} && {quoted}"
+        return subprocess.run(["bash", "-lc", script], **kwargs)

@@ -562,6 +562,37 @@ class ProteinViewerIoMixin:
     def _on_prepare_dialog_destroyed(self) -> None:
         self._prepare_dialog = None
 
+    def open_minimize_dialog(self) -> None:
+        """Open the Minimize dialog for the loaded protein–ligand complex."""
+        if not self._slots:
+            QMessageBox.information(self, "Minimize Complex", "Open a structure first.")
+            return
+        dlg = self._minimize_dialog
+        if dlg is not None and qobject_is_deleted(dlg):
+            self._minimize_dialog = None
+            dlg = None
+        if dlg is None:
+            from .dialogs.protein_minimize import ProteinMinimizeDialog
+
+            dlg = ProteinMinimizeDialog(self)
+            dlg.minimized.connect(self._on_structure_minimized)
+            dlg.destroyed.connect(self._on_minimize_dialog_destroyed)
+            self._minimize_dialog = dlg
+        dlg.prefill_from_viewer()
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    def _on_minimize_dialog_destroyed(self) -> None:
+        self._minimize_dialog = None
+
+    def _on_structure_minimized(self, output_path: str) -> None:
+        path = Path(output_path)
+        if not path.is_file():
+            QMessageBox.warning(self, "Minimize Complex", f"Minimized file was not found:\n{path}")
+            return
+        self.add_structure_path(path, refit=False)
+
     def _on_structure_prepared(self, output_pdb: str) -> None:
         path = Path(output_pdb)
         if not path.is_file():

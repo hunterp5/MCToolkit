@@ -189,6 +189,87 @@ def test_mp_prepare_protein_structure_returns_error_message(tmp_path):
     assert "Input structure not found" in msg
 
 
+def test_mp_prepare_forwards_log_lines(tmp_path):
+    req = ProteinPrepareRequest(
+        input_path=str(tmp_path / "missing.pdb"),
+        output_pdb_path=str(tmp_path / "out.pdb"),
+    )
+
+    class _Q:
+        def __init__(self):
+            self.items: list[str] = []
+
+        def put(self, msg):
+            self.items.append(str(msg))
+
+        def put_nowait(self, msg):
+            self.items.append(str(msg))
+
+    queue = _Q()
+    ok, _msg = mp_prepare_protein_structure(req, queue)
+    assert ok is False
+    assert queue.items == []
+
+
+def test_drain_prepare_log_queue():
+    from queue import Queue
+
+    from molmanager.workers.protein_prepare import drain_prepare_log_queue
+
+    q = Queue()
+    q.put("PDBFixer: loading")
+    q.put("  ")
+    q.put("pdb2pqr/PROPKA: protonating")
+    seen: list[str] = []
+    drain_prepare_log_queue(q, seen.append)
+    assert seen == ["PDBFixer: loading", "pdb2pqr/PROPKA: protonating"]
+    drain_prepare_log_queue(q, seen.append)
+    assert seen == ["PDBFixer: loading", "pdb2pqr/PROPKA: protonating"]
+
+
+@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("molmanager.workers.protein_prepare_runtime._prune_fixer_residues")
+@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+def test_prepare_on_log_reports_major_steps(
+    mock_open_fixer,
+    _mock_prune,
+    mock_write_fixer,
+    mock_pqr,
+    mock_min,
+    tmp_path,
+):
+    req = _request(tmp_path, rebuild_missing_loops=False, minimize=True)
+    fixer = MagicMock()
+    fixer.topology.atoms.return_value = []
+    mock_open_fixer.return_value = fixer
+
+    def _write_fixer(_fixer, path):
+        path.write_text(_ALA_PDB, encoding="utf-8")
+
+    mock_write_fixer.side_effect = _write_fixer
+
+    def _write_pqr(_repaired, _pqr, protonated, **_kwargs):
+        protonated.write_text(_ALA_PDB, encoding="utf-8")
+
+    mock_pqr.side_effect = _write_pqr
+
+    def _min(_src, dest, **_kwargs):
+        dest.write_text(_ALA_PDB, encoding="utf-8")
+
+    mock_min.side_effect = _min
+    logs: list[str] = []
+    prepare_protein_structure(req, on_log=logs.append)
+    text = "\n".join(logs)
+    assert "Reading " in text
+    assert "PDBFixer:" in text
+    assert "pdb2pqr/PROPKA:" in text
+    assert "OpenMM:" in text
+    assert "Writing prepared" in text
+    assert "Prepare finished" in text
+
+
 @patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
 @patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
 @patch("molmanager.workers.protein_prepare_runtime._drop_internal_missing_residues")
@@ -349,6 +430,84 @@ END
         missingResidues={},
     )
     n_added = apply_sequence_missing_residues(fixer, pdb, "pdb")
+    assert n_added == 1
+    assert fixer.missingResidues[(0, 1)] == ["ALA"]
+
+
+_GAP_CIF = """\
+data_gap
+loop_
+_entity_poly_seq.entity_id
+_entity_poly_seq.num
+_entity_poly_seq.mon_id
+_entity_poly_seq.hetero
+1 1 MET n
+1 2 ALA n
+1 3 LEU n
+loop_
+_struct_asym.id
+_struct_asym.entity_id
+A 1
+loop_
+_pdbx_poly_seq_scheme.asym_id
+_pdbx_poly_seq_scheme.mon_id
+_pdbx_poly_seq_scheme.pdb_seq_num
+_pdbx_poly_seq_scheme.auth_seq_num
+_pdbx_poly_seq_scheme.pdb_mon_id
+_pdbx_poly_seq_scheme.pdb_strand_id
+_pdbx_poly_seq_scheme.pdb_ins_code
+_pdbx_poly_seq_scheme.hetero
+A MET 10 ? ? A . n
+A ALA 15 ? ? A . n
+A LEU 20 20 LEU A . n
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_alt_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.auth_seq_id
+_atom_site.auth_comp_id
+_atom_site.auth_asym_id
+_atom_site.pdbx_PDB_ins_code
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.occupancy
+_atom_site.B_iso_or_equiv
+_atom_site.pdbx_PDB_model_num
+ATOM 1 C CA . MET A 10 10 MET A . 0.000 0.000 0.000 1.00 0.00 1
+ATOM 2 C CA . LEU A 20 20 LEU A . 4.000 0.000 0.000 1.00 0.00 1
+"""
+
+_GAP_CIF_ALTLOC = _GAP_CIF.replace(
+    "ATOM 1 C CA . MET A 10 10 MET A . 0.000 0.000 0.000 1.00 0.00 1",
+    "ATOM 1 C CA . MET A 10 10 MET A . 0.000 0.000 0.000 0.40 0.00 1\n"
+    "ATOM 3 C CA A MET A 10 10 MET A . 0.100 0.000 0.000 0.60 0.00 1",
+)
+
+
+def _mock_gap_fixer():
+    from types import SimpleNamespace
+
+    chain = SimpleNamespace(id="A", index=0)
+    met = SimpleNamespace(name="MET", id="10", insertionCode="")
+    leu = SimpleNamespace(name="LEU", id="20", insertionCode="")
+    chain.residues = lambda: [met, leu]
+    return SimpleNamespace(
+        topology=SimpleNamespace(chains=lambda: [chain]),
+        missingResidues={},
+    )
+
+
+def test_apply_sequence_missing_residues_from_cif_scheme():
+    from molmanager.workers.protein_prepare_qc import apply_sequence_missing_residues
+
+    fixer = _mock_gap_fixer()
+    n_added = apply_sequence_missing_residues(fixer, _GAP_CIF, "cif")
     assert n_added == 1
     assert fixer.missingResidues[(0, 1)] == ["ALA"]
 
@@ -692,8 +851,9 @@ def test_prepare_strips_ligand_after_propka_unless_kept(
     )
     prepare_protein_structure(req_keep)
     mock_min.assert_called_once()
-    assert "ligand_mols" not in mock_min.call_args.kwargs
+    assert not mock_min.call_args.kwargs.get("ligand_mols")
     assert mock_min.call_args.kwargs["ligand_keys"] == set()
+    assert (mock_min.call_args.kwargs.get("ligand_ff") or "none") == "none"
     mock_ligands.assert_called_once()
     kept = out_keep.read_text(encoding="utf-8")
     assert "AXI" in kept
@@ -711,6 +871,66 @@ def test_prepare_strips_ligand_after_propka_unless_kept(
     apo = out_apo.read_text(encoding="utf-8")
     assert "AXI" not in apo
     assert mock_min.call_count == 2
+
+
+@patch("molmanager.workers.protein_prepare_ligand.prepare_ligands_for_gaff")
+@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("molmanager.workers.protein_prepare_runtime._prune_fixer_residues")
+@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+def test_prepare_gaff2_keeps_ligand_in_openmm(
+    mock_open_fixer,
+    _mock_prune,
+    mock_write_fixer,
+    mock_pqr,
+    mock_min,
+    mock_ligands,
+    tmp_path,
+):
+    in_path = tmp_path / "holo.pdb"
+    in_path.write_text(_HOLO_PDB, encoding="utf-8")
+    out = tmp_path / "gaff.cif"
+    req = _request(
+        tmp_path,
+        input_path=str(in_path),
+        output_pdb_path=str(out),
+        include_ligand=True,
+        keep_ligand=True,
+        minimize=True,
+        ligand_ff="gaff2",
+        ligand_smiles="C",
+    )
+    fixer = MagicMock()
+    fixer.topology.atoms.return_value = []
+    mock_open_fixer.return_value = fixer
+
+    def _write_fixer(_fixer, path):
+        path.write_text(_HOLO_PDB, encoding="utf-8")
+
+    mock_write_fixer.side_effect = _write_fixer
+
+    def _write_pqr(_repaired, _pqr, protonated, **_kwargs):
+        protonated.write_text(_HOLO_PDB, encoding="utf-8")
+
+    mock_pqr.side_effect = _write_pqr
+    mock_ligands.side_effect = lambda text, _keys, **_k: ([object()], text)
+    seen: dict = {}
+
+    def _min(src, dest, **kwargs):
+        seen["text"] = Path(src).read_text(encoding="utf-8")
+        seen["kwargs"] = kwargs
+        dest.write_text(seen["text"], encoding="utf-8")
+
+    mock_min.side_effect = _min
+    prepare_protein_structure(req)
+    mock_min.assert_called_once()
+    assert "AXI" in seen["text"]
+    assert seen["kwargs"]["ligand_ff"] == "gaff2"
+    assert seen["kwargs"]["ligand_keys"]
+    assert seen["kwargs"]["ligand_mols"]
+    assert seen["kwargs"]["work_dir"] is not None
+    assert "AXI" in out.read_text(encoding="utf-8")
 
 
 @patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
@@ -860,6 +1080,8 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     assert prep.combo_protein_ff.isEnabled()
     assert prep.combo_out_fmt.currentData() == "cif"
     assert prep.combo_protein_ff.currentData() == "amber14"
+    assert prep.combo_ligand_ff.currentData() == "none"
+    assert prep.combo_ligand_ff.isEnabled()
     assert prep.combo_solvent.currentData() == "gbn2"
     assert prep.combo_restraint.currentData() == "backbone"
     assert prep.chk_skip_pocket_loops.isChecked()
@@ -878,19 +1100,23 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     assert prep.chk_minimize.isChecked()
     prep.chk_minimize.setChecked(False)
     assert not prep.combo_protein_ff.isEnabled()
+    assert not prep.combo_ligand_ff.isEnabled()
     prep.chk_minimize.setChecked(True)
     assert prep.chk_minimize.isEnabled()
     assert prep.combo_protein_ff.isEnabled()
+    assert prep.combo_ligand_ff.isEnabled()
     assert prep.edit_ligand_smiles.isEnabled()
     prep.chk_include_ligand.setChecked(False)
     assert prep.chk_keep_ligand.isChecked()
     assert not prep.chk_keep_ligand.isEnabled()
+    assert not prep.combo_ligand_ff.isEnabled()
     assert not prep.edit_ligand_smiles.isEnabled()
     assert not prep.chk_protonate_ligand.isEnabled()
     assert not prep.chk_pocket_ligand.isChecked()
     prep.chk_include_ligand.setChecked(True)
     assert prep.chk_keep_ligand.isChecked()
     assert prep.chk_keep_ligand.isEnabled()
+    assert prep.combo_ligand_ff.isEnabled()
     assert prep.chk_protonate_ligand.isEnabled()
     assert prep.chk_pocket_ligand.isChecked()
     prep.close()
@@ -1221,6 +1447,52 @@ END
     assert "CA A" in text
     assert " 0.40 " not in text
     assert any("altlocs" in n for n in notes)
+
+
+def test_highest_occupancy_altloc_preserves_cif_poly_seq():
+    from molmanager.structure_inventory import polymer_sequence_entries
+    from molmanager.workers.protein_prepare_qc import (
+        apply_highest_occupancy_altlocs,
+        apply_sequence_missing_residues,
+    )
+
+    kept, notes = apply_highest_occupancy_altlocs(_GAP_CIF, "cif")
+    assert notes == ()
+    assert "_pdbx_poly_seq_scheme." in kept
+    assert polymer_sequence_entries(kept, "cif")["A"][1] == ("ALA", "15", "", False)
+
+    rewritten, alt_notes = apply_highest_occupancy_altlocs(_GAP_CIF_ALTLOC, "cif")
+    assert any("altlocs" in note for note in alt_notes)
+    assert "0.40" not in rewritten
+    assert "_pdbx_poly_seq_scheme." in rewritten
+    fixer = _mock_gap_fixer()
+    assert apply_sequence_missing_residues(fixer, rewritten, "cif") == 1
+    assert fixer.missingResidues[(0, 1)] == ["ALA"]
+
+
+def test_4agc_cif_sequence_gaps_survive_altloc_pass():
+    from pathlib import Path
+
+    from molmanager.workers.protein_prepare_qc import (
+        apply_highest_occupancy_altlocs,
+        apply_sequence_missing_residues,
+    )
+
+    path = Path("samples/4AGC.cif")
+    if not path.is_file():
+        pytest.skip("samples/4AGC.cif is not present")
+    pytest.importorskip("pdbfixer")
+    pytest.importorskip("openmm")
+    from molmanager.workers.protein_prepare_io import _open_fixer_from_text
+
+    raw = path.read_text(encoding="utf-8")
+    rewritten, _notes = apply_highest_occupancy_altlocs(raw, "cif")
+    fixer = _open_fixer_from_text(rewritten, "cif")
+    fixer.findMissingResidues()
+    n_added = apply_sequence_missing_residues(fixer, rewritten, "cif")
+    assert n_added == 48
+    assert fixer.missingResidues[(0, 0)][0] == "MET"
+    assert len(fixer.missingResidues[(0, 0)]) == 32
 
 
 def test_bridging_water_keys_near_ligand():

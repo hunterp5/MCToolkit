@@ -18,14 +18,43 @@
 
 from __future__ import annotations
 
+import contextvars
 import errno
 import gc
 import os
 import time
+from collections.abc import Callable
 from io import StringIO
 from pathlib import Path
 
 from .protein_prepare_constants import ResidueKey
+
+_prepare_log: contextvars.ContextVar[Callable[[str], None] | None] = contextvars.ContextVar(
+    "protein_prepare_log", default=None
+)
+
+
+def bind_prepare_log(fn: Callable[[str], None] | None):
+    """Install a Prepare log callback for this task (subprocess-safe via ContextVar)."""
+    return _prepare_log.set(fn)
+
+
+def unbind_prepare_log(token) -> None:
+    _prepare_log.reset(token)
+
+
+def log_prepare(message: str) -> None:
+    """Send a user-facing progress line to the Prepare dialog log, if bound."""
+    fn = _prepare_log.get()
+    if fn is None:
+        return
+    text = (message or "").strip()
+    if not text:
+        return
+    try:
+        fn(text)
+    except Exception:
+        pass
 
 
 def _norm_key(chain: str, resi: str, icode: str) -> ResidueKey:

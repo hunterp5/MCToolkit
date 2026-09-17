@@ -42,6 +42,11 @@ _WATER_CUTOFF = 3.5
 _POCKET_TITRATION_CUTOFF = 5.0
 _LOOP_LIGAND_CUTOFF = 8.0
 _MAX_QC_ROWS = 16
+_CIF_SEQUENCE_LOOP_PREFIXES = (
+    "_entity_poly_seq.",
+    "_struct_asym.",
+    "_pdbx_poly_seq_scheme.",
+)
 
 
 def _norm_key(chain: str, resi: str, icode: str) -> ResidueKey:
@@ -106,17 +111,37 @@ def apply_highest_occupancy_altlocs(text: str, fmt: str) -> tuple[str, tuple[str
                 f"{key[0]}:{copies[0].resn}{key[1]}{key[2]} altlocs={''.join(sorted(alts))}"
             )
     notes = tuple(disordered[:_MAX_QC_ROWS])
+    if len(chosen) == len(atoms):
+        return text or "", notes
     if fmt_l in {"cif", "mmcif"}:
         rebuilt = atoms_to_mmcif(chosen)
-        return (
-            attach_cif_chem_comp(
-                rebuilt,
-                parse_cif_chem_comp_atoms(text),
-                parse_cif_chem_comp_bonds(text),
-            ),
-            notes,
+        rebuilt = attach_cif_chem_comp(
+            rebuilt,
+            parse_cif_chem_comp_atoms(text),
+            parse_cif_chem_comp_bonds(text),
         )
+        return _attach_cif_polymer_sequence(rebuilt, text), notes
     return _rewrite_pdb_altlocs(text or "", chosen), notes
+
+
+def _attach_cif_polymer_sequence(dest: str, source: str) -> str:
+    """Copy SEQRES-equivalent mmCIF loops onto an atom-only rewrite."""
+    from ..structure_cif import _cif_quote, _parse_cif_loops
+
+    chunks: list[str] = []
+    for tags, rows in _parse_cif_loops(source or ""):
+        if not tags or not any(
+            tag.lower().startswith(prefix) for tag in tags for prefix in _CIF_SEQUENCE_LOOP_PREFIXES
+        ):
+            continue
+        chunks.append("loop_")
+        chunks.extend(tags)
+        for row in rows:
+            chunks.append(" ".join(_cif_quote(cell) for cell in row))
+        chunks.append("#")
+    if not chunks:
+        return dest or ""
+    return (dest or "").rstrip() + "\n" + "\n".join(chunks) + "\n"
 
 
 def _rewrite_pdb_altlocs(text: str, chosen) -> str:

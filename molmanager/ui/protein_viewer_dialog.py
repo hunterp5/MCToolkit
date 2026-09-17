@@ -66,6 +66,7 @@ class ProteinViewerDialog(
         self._sequence_chains: list[PolymerChain] = []
         self._sequence_dialog: ProteinSequenceDialog | None = None
         self._prepare_dialog = None
+        self._minimize_dialog = None
         self._residue_highlight: list[dict] = []
         self._syncing_from_atom = False
         self._pocket_payload_data: dict | None = None
@@ -107,6 +108,11 @@ class ProteinViewerDialog(
             "Repair missing atoms, strip waters/heterogens, protonate at pH, and relax with OpenMM."
         )
         menubar.addAction(act_prepare)
+        act_minimize = QAction("&Minimize…", self, triggered=self.open_minimize_dialog)
+        act_minimize.setToolTip(
+            "Restrained OpenMM minimization of the loaded protein–ligand complex (GAFF2)."
+        )
+        menubar.addAction(act_minimize)
         view_menu = menubar.addMenu("&View")
         render_menu = view_menu.addMenu("&Render")
         protein_menu = render_menu.addMenu("&Protein")

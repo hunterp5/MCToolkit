@@ -59,6 +59,7 @@ _EXPORTS: dict[str, str] = {
     "PlotDialog": "..plot",
     "PropertyDialog": ".properties",
     "ProteinPrepareDialog": ".protein_prepare",
+    "ProteinMinimizeDialog": ".protein_minimize",
     "ProteinSequenceMsaDialog": ".protein_sequence_msa",
     "ProtomerGeneratorDialog": ".protomer",
     "ProtonateDialog": ".protonate",

@@ -428,6 +428,11 @@ def test_build_protein_viewer_html_has_setters():
     assert "carbonSpec" in html
     assert "v.setStyle({}, {})" in html
     assert "hetflag: true" in html
+    assert "indexResidueHeavies" in html
+    assert "at.style[k].hidden = true" in html
+    assert 'v.setClickable({elem: ["H", "D", "T"], invert: true}' in html
+    assert "v.addStyle({model: atomModelId(at), serial: at.serial}, {hidden: true})" not in html
+    assert "v.setClickable({}, true" not in html
 
 
 def test_pocket_view_plan_near_ligand_residues_and_polar_h():

@@ -466,8 +466,32 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 homepage="https://openmm.org",
                 notes=(
                     "Protein Viewer Prepare minimization defaults to GBn2 GBSA with 0.15 M salt "
-                    "and backbone restraints (Cα or vacuum optional). OpenMM also includes LGPL "
-                    "components; see the OpenMM license files in that package."
+                    "and backbone restraints (Cα, vacuum, or GAFF/GAFF2 holo min optional). "
+                    "OpenMM also includes LGPL components; see the OpenMM license files in that package."
+                ),
+            ),
+            _t(
+                "ambertools",
+                "AmberTools",
+                "Protein Viewer Prepare: GAFF/GAFF2 ligand parameterization (antechamber, "
+                "parmchk2, tleap) for OpenMM holo minimization. On Windows this runs in WSL.",
+                (
+                    (
+                        "Case, D. A.; et al. AmberTools. J. Chem. Inf. Model. 2023, 63, 6183–6191.",
+                        "https://doi.org/10.1021/acs.jcim.3c01153",
+                    ),
+                    (
+                        "Wang, J.; Wolf, R. M.; Caldwell, J. W.; Kollman, P. A.; Case, D. A. "
+                        "Development and testing of a general amber force field. "
+                        "J. Comput. Chem. 2004, 25, 1157–1174.",
+                        "https://doi.org/10.1002/jcc.20035",
+                    ),
+                ),
+                LIC_GPL3,
+                homepage="https://ambermd.org/AmberTools.php",
+                notes=(
+                    "GAFF2 is the default small-molecule field when Ligand force field is GAFF2. "
+                    "AM1-BCC charges use sqm; Gasteiger is the fallback if BCC fails."
                 ),
             ),
             _t(

@@ -212,7 +212,8 @@ shared column-name/bounds helpers.
 Render 2D result flush.
 Protein Prepare runtime: `workers/protein_prepare_runtime.py` orchestrates;
 IO/residue maps are `protein_prepare_io.py`, pdb2pqr is `protein_prepare_pdb2pqr.py`,
-OpenMM min is `protein_prepare_minimize.py`. Tests patch names on the runtime module.
+AmberTools GAFF/GAFF2 (WSL on Windows) is `protein_prepare_amber.py`,
+OpenMM min is `protein_prepare_minimize.py`. Complex-only Minimize (viewer **Minimize…**) is `protein_complex_minimize.py` with dialog `ui/dialogs/protein_minimize.py`. Tests patch names on the runtime module.
 
 Auto Render 2D after ingest/session: the loading overlay stays until filter bounds
 are ready and restored plot views have settled. Auto Structure renders start in the

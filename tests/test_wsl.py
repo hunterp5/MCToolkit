@@ -24,6 +24,7 @@ import pytest
 
 from molmanager.wsl import (
     default_wsl_executable,
+    linux_path,
     windows_path_to_wsl,
     wsl_argv,
 )
@@ -32,6 +33,11 @@ from molmanager.wsl import (
 def test_windows_path_to_wsl_drive_letter() -> None:
     assert windows_path_to_wsl(r"C:\Users\chem\lig.mol2") == "/mnt/c/Users/chem/lig.mol2"
     assert windows_path_to_wsl(Path(r"D:/tmp/openmm")) == "/mnt/d/tmp/openmm"
+
+
+def test_linux_path_passthrough_on_linux(monkeypatch) -> None:
+    monkeypatch.setattr("molmanager.wsl.sys.platform", "linux")
+    assert linux_path("/tmp/lig.mol2") == "/tmp/lig.mol2"
 
 
 def test_wsl_argv_requires_executable(monkeypatch) -> None:

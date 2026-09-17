@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from PyQt5.QtCore import pyqtSignal
@@ -85,18 +86,6 @@ class ProteinPrepareDialog(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(6)
-
-        intro = QLabel(
-            "Repair missing residues and side chains (PDBFixer), protonate at pH with "
-            "pdb2pqr/PROPKA, then restrained OpenMM minimization of the protein "
-            "(AMBER; the ligand is restored after min). Writes a Smina-ready apo receptor "
-            "PDBQT, crystal ligand, and search box from a ligand in the loaded structure "
-            "or a separate ligand file (4 Å padding by default). Highest-occupancy altlocs "
-            "are kept. Pocket HIS/ASP/GLU states "
-            "and Cα RMSD are written into the output remarks."
-        )
-        intro.setWordWrap(True)
-        root.addWidget(intro)
 
         io_gb = QGroupBox("Structure")
         io_form = QFormLayout(io_gb)
@@ -246,8 +235,9 @@ class ProteinPrepareDialog(QDialog):
         self.chk_minimize.setChecked(True)
         self.chk_minimize.setToolTip(
             "Harmonic restraints on experimental protein atoms so rebuilt loops and "
-            "hydrogens can relieve clashes without the fold drifting. The ligand is "
-            "held out of the OpenMM system and restored afterward."
+            "hydrogens can relieve clashes without the fold drifting. Protein only "
+            "holds the ligand out of OpenMM and restores it afterward. GAFF/GAFF2 "
+            "minimizes the complex with AmberTools ligand parameters."
         )
         min_form.addRow(self.chk_minimize)
 
@@ -256,6 +246,17 @@ class ProteinPrepareDialog(QDialog):
         self.combo_protein_ff.addItem("AMBER ff99SB-ILDN", "amber99sbildn")
         self.combo_protein_ff.setToolTip("Protein force field for OpenMM minimization.")
         min_form.addRow("Protein force field:", self.combo_protein_ff)
+
+        self.combo_ligand_ff = QComboBox()
+        self.combo_ligand_ff.addItem("Protein only", "none")
+        self.combo_ligand_ff.addItem("GAFF2", "gaff2")
+        self.combo_ligand_ff.addItem("GAFF", "gaff")
+        self.combo_ligand_ff.setToolTip(
+            "Protein only holds the ligand out of OpenMM. GAFF2 (recommended) or classic "
+            "GAFF parameterize the ligand with AmberTools (WSL on Windows) so the complex "
+            "is minimized together. Needs ligand SMILES, SDF/MOL2, or mmCIF bonds."
+        )
+        min_form.addRow("Ligand force field:", self.combo_ligand_ff)
 
         self.combo_solvent = QComboBox()
         self.combo_solvent.addItem("GBn2 GBSA (recommended)", "gbn2")
@@ -279,9 +280,11 @@ class ProteinPrepareDialog(QDialog):
         self.combo_restraint = QComboBox()
         self.combo_restraint.addItem("Backbone heavy atoms", "backbone")
         self.combo_restraint.addItem("Cα only", "ca")
+        self.combo_restraint.addItem("Backbone + ligand heavy atoms", "backbone_ligand")
         self.combo_restraint.setToolTip(
             "Backbone restraints keep the fold and pocket orientation. Cα-only lets "
-            "side chains move more."
+            "side chains move more. Backbone + ligand is for GAFF/GAFF2 holo min so the "
+            "ligand stays near the crystal pose."
         )
         min_form.addRow("Restrain:", self.combo_restraint)
 
@@ -379,8 +382,9 @@ class ProteinPrepareDialog(QDialog):
 
         self.log = QTextEdit()
         self.log.setReadOnly(True)
-        self.log.setMaximumHeight(110)
-        self.log.setPlaceholderText("Log")
+        self.log.setMinimumHeight(140)
+        self.log.setMaximumHeight(240)
+        self.log.setPlaceholderText("Progress appears here while Prepare runs.")
         apply_monospace_to_text_edit(self.log)
         root.addWidget(self.log)
 
@@ -404,6 +408,7 @@ class ProteinPrepareDialog(QDialog):
         self._signals = ProteinPrepareSignals(self)
         self._signals.finished.connect(self._on_finished)
         self._signals.failed.connect(self._on_failed)
+        self._signals.progress.connect(self._append_log)
         self._input_tmp: Path | None = None
         self._smina_result = None
 
@@ -471,7 +476,9 @@ class ProteinPrepareDialog(QDialog):
 
     def _sync_min_options(self) -> None:
         on = self.chk_minimize.isChecked()
+        include = self.chk_include_ligand.isChecked()
         self.combo_protein_ff.setEnabled(on)
+        self.combo_ligand_ff.setEnabled(on and include)
         self.combo_solvent.setEnabled(on)
         gb = (self.combo_solvent.currentData() or "gbn2") != "vacuum"
         self.spin_salt.setEnabled(on and gb)
@@ -603,7 +610,8 @@ class ProteinPrepareDialog(QDialog):
         t = (text or "").rstrip()
         if not t:
             return
-        self.log.append(t)
+        stamp = datetime.now().strftime("%H:%M:%S")
+        self.log.append(f"[{stamp}] {t}")
 
     def _process_host(self):
         parent = self._viewer
@@ -666,6 +674,23 @@ class ProteinPrepareDialog(QDialog):
                 return
         if (
             self.chk_include_ligand.isChecked()
+            and self.chk_minimize.isChecked()
+            and (self.combo_ligand_ff.currentData() or "none") in {"gaff", "gaff2"}
+            and not self.edit_ligand_smiles.text().strip()
+            and not self.edit_ligand_ref.text().strip()
+            and self._source_has_ligand(text, fmt)
+            and not self._source_has_cif_ligand_bonds(text, fmt)
+        ):
+            QMessageBox.information(
+                self,
+                "Prepare Structure",
+                "GAFF/GAFF2 minimization needs SMILES, an SDF/MOL2, or mmCIF "
+                "_chem_comp_bond so AmberTools can assign ligand atom types. Add one, "
+                "or set Ligand force field to Protein only.",
+            )
+            return
+        if (
+            self.chk_include_ligand.isChecked()
             and self.chk_protonate_ligand.isChecked()
             and not self.edit_ligand_smiles.text().strip()
             and not self.edit_ligand_ref.text().strip()
@@ -722,6 +747,11 @@ class ProteinPrepareDialog(QDialog):
             restraint_k_kcal_per_ang2=float(self.spin_k.value()),
             max_minimize_iterations=int(self.spin_iters.value()),
             protein_ff=self.combo_protein_ff.currentData() or "amber14",
+            ligand_ff=(
+                (self.combo_ligand_ff.currentData() or "none")
+                if self.chk_include_ligand.isChecked()
+                else "none"
+            ),
             solvent=self.combo_solvent.currentData() or "gbn2",
             salt_m=float(self.spin_salt.value()),
             restraint_set=self.combo_restraint.currentData() or "backbone",
@@ -738,7 +768,23 @@ class ProteinPrepareDialog(QDialog):
         self.btn_open_smina.setEnabled(False)
         self._smina_result = None
         self.lbl_box_preview.setText("Box: —")
-        self._append_log("Starting Prepare (PDBFixer → Uni-pKa/pdb2pqr → OpenMM)…")
+        steps = ["PDBFixer"]
+        if self.chk_include_ligand.isChecked() and self.chk_protonate_ligand.isChecked():
+            steps.append("Uni-pKa")
+        steps.append("pdb2pqr/PROPKA")
+        if self.chk_minimize.isChecked():
+            lig_ff = (
+                (self.combo_ligand_ff.currentData() or "none")
+                if self.chk_include_ligand.isChecked()
+                else "none"
+            )
+            if lig_ff in {"gaff", "gaff2"}:
+                steps.append(f"AmberTools/{lig_ff.upper()} + OpenMM")
+            else:
+                steps.append("OpenMM protein min")
+        if self.chk_write_smina.isChecked():
+            steps.append("Smina files")
+        self._append_log("Starting Prepare: " + " → ".join(steps))
         host = self._process_host()
         if host is not None:
             host.process_queue.enqueue(

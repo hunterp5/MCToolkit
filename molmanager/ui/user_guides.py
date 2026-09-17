@@ -273,7 +273,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "protein_viewer",
                 "Protein Viewer",
                 "Protein Viewer",
-                "Load PDB/mmCIF structures, manage chains in 3D, and prepare docking-ready receptors.",
+                "Load PDB/mmCIF structures, manage chains in 3D, prepare docking-ready receptors, and minimize complexes.",
             ),
             _e(
                 "protein_sequence",
