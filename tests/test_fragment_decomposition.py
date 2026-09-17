@@ -76,3 +76,22 @@ def test_recompose_brics_from_aspirin_fragments():
     products, _skipped, _cancelled = recompose_fragments(frags, "brics", max_depth=2, max_products=50)
     assert len(products) >= 2
     assert any("c1ccccc1" in s for s in products)
+
+
+def test_brics_decomposition_dialog_params(qapp):  # noqa: ARG001
+    from molmanager.ui.dialogs.fragment_decomposition import FragmentDecompositionDialog
+    from molmanager.ui.strings import TOOL_BRICS_DECOMP
+
+    dlg = FragmentDecompositionDialog(
+        window_title=TOOL_BRICS_DECOMP,
+        default_prefix="BRICS",
+        method="brics",
+        structure_sources=["Structure"],
+        selected_row_count=0,
+    )
+    p = dlg.params()
+    assert p.structure_source == "Structure"
+    assert p.column_prefix == "BRICS"
+    assert p.method == "brics"
+    assert p.tool_title == TOOL_BRICS_DECOMP
+    assert p.render_2d is False

@@ -44,6 +44,7 @@ from ..strings import TOOL_CORE_DECOMP
 from .scope import selection_scope_checked
 
 
+@dataclass(frozen=True)
 class FragmentDecompDialogParams:
     """Arguments from :class:`FragmentDecompositionDialog` for the worker."""
 
