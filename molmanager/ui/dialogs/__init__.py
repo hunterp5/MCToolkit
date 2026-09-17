@@ -77,6 +77,8 @@ _EXPORTS: dict[str, str] = {
     "SomPredictorDialog": ".som",
     "SplitColumnDialog": ".split_column",
     "SplitColumnDialogParams": ".split_column",
+    "JoinColumnsDialog": ".join_columns",
+    "JoinColumnsDialogParams": ".join_columns",
     "SuperposeConformersDialog": ".superpose",
     "SuperposeDialog": ".superpose",
     "SuperposeStructuresDialog": ".superpose",

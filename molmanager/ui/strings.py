@@ -36,6 +36,7 @@ TOOL_SALI_MAP = "SALI"
 TOOL_RANDOM_NUMBER = "Random Number"
 TOOL_RANDOM_MOLECULE = "Random Molecule"
 TOOL_SPLIT_COLUMN = "Split Column"
+TOOL_JOIN_COLUMNS = "Join Columns"
 TOOL_PREDICT_SOM = "Predict SOM"
 TOOL_PREDICT_METABOLITES = "Predict Metabolites"
 
@@ -44,6 +45,7 @@ TOOL_PREDICT_METABOLITES = "Predict Metabolites"
 
 STRUCTURE_PENDING_HINT = f"No 2D structure yet.\nUse {TOOLS_ARROW_RENDER_2D} to draw."
 
+STATUS_READY = "Ready"
 STATUS_READY_RENDER_2D = f"Ready — use {TOOLS_ARROW_RENDER_2D} to refresh or redraw 2D images."
 
 LOADING_DETAIL_AFTER_FILE_READ = (

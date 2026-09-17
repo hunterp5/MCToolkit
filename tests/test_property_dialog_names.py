@@ -27,6 +27,7 @@ def test_property_dialog_name_tab_includes_common_name_and_synonyms(qapp) -> Non
     assert "Synonyms" in dlg.cbs
     assert dlg.cbs["Common Name"][1] == "COMMON_NAME"
     assert dlg.cbs["Synonyms"][1] == "SYNONYMS"
+    assert "PubChem" in dlg.cbs["Common Name"][0].toolTip()
     dlg.cbs["Common Name"][0].setChecked(True)
     dlg.cbs["Synonyms"][0].setChecked(True)
     disp, fns = dlg.get_selected()

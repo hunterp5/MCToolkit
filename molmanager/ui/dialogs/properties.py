@@ -63,8 +63,8 @@ _PHYSICOCHEMICAL_DESCRIPTOR_ORDER = (
     "TPSA",
 )
 
+from ...descriptor_tooltips import descriptor_checkbox_tooltip
 from ...descriptors_3d import DESCRIPTOR_3D_ITEMS
-from ...science_citations import descriptor_checkbox_citation_html
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -183,16 +183,6 @@ class PropertyDialog(QDialog):
             scroll.setWidgetResizable(True)
             tab = QWidget()
             tab_lyt = QVBoxLayout(tab)
-            if cat_name == "3D":
-                note = QLabel(
-                    "Uses 3D coordinates from the confs column (or superpose), or from the "
-                    "target molecule when it already has a 3D conformer. Rows without 3D "
-                    "write N/A. Values are for the lowest-energy conformer (MMFF94, UFF "
-                    "fallback). Generate Conformers first if the table has only 2D structures."
-                )
-                note.setWordWrap(True)
-                note.setStyleSheet("color: palette(mid);")
-                tab_lyt.addWidget(note)
             if cat_name == "Physiochemical":
                 ordered_items = [
                     (disp, props[disp])
@@ -208,21 +198,11 @@ class PropertyDialog(QDialog):
             else:
                 ordered_items = sorted(props.items(), key=lambda kv: kv[0].casefold())
             for disp, internal in ordered_items:
-                row = QHBoxLayout()
-                row.setSpacing(8)
                 cb = QCheckBox(disp)
-                row.addWidget(cb, 0, Qt.AlignTop)
-                cite_html = descriptor_checkbox_citation_html(internal)
-                if cite_html:
-                    cite_lbl = QLabel(f"<small>{cite_html}</small>")
-                    cite_lbl.setWordWrap(True)
-                    cite_lbl.setTextFormat(Qt.RichText)
-                    cite_lbl.setOpenExternalLinks(True)
-                    cite_lbl.setStyleSheet("color: palette(mid);")
-                    row.addWidget(cite_lbl, 1, Qt.AlignVCenter)
-                else:
-                    row.addStretch(1)
-                tab_lyt.addLayout(row)
+                tip = descriptor_checkbox_tooltip(internal)
+                if tip:
+                    cb.setToolTip(tip)
+                tab_lyt.addWidget(cb)
                 self.cbs[disp] = (cb, internal)
             tab_lyt.addStretch()
             scroll.setWidget(tab)

@@ -221,6 +221,8 @@ def test_packed_confs_from_ingest_structure_column(qapp):  # noqa: ARG001
 
 
 def test_property_dialog_3d_tab(qapp) -> None:  # noqa: ARG001
+    from PyQt5.QtWidgets import QLabel
+
     from molmanager.ui.dialogs.properties import PropertyDialog
 
     dlg = PropertyDialog(["Structure", "SMILES"], selected_row_count=0)
@@ -230,6 +232,10 @@ def test_property_dialog_3d_tab(qapp) -> None:  # noqa: ARG001
     assert dlg.cbs["Molecular volume"][1] == "MolVolume"
     labels = [dlg.tabs.tabText(i) for i in range(dlg.tabs.count())]
     assert "3D" in labels
+    scroll = dlg.tabs.widget(labels.index("3D"))
+    tab = scroll.widget()
+    assert tab.findChildren(QLabel) == []
+    assert "3D" in dlg.cbs["PMI 1"][0].toolTip()
     dlg.cbs["PMI 1"][0].setChecked(True)
     disp, fns = dlg.get_selected()
     assert disp == ["PMI 1"]
