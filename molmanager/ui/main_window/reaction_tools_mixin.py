@@ -24,6 +24,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMessageBox
 
 from ..strings import TOOL_REACTION_ENUMERATION
+from ...rxn_io import reaction_smarts_from_app_selection
 from ...workers import ReactionEnumerationWorker
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,10 @@ class ReactionToolsMixin:
     def open_reaction_enumeration(self) -> None:
         from ..dialogs import ReactionEnumerationDialog
 
-        d = ReactionEnumerationDialog(parent=self)
+        d = ReactionEnumerationDialog(
+            parent=self,
+            initial_smarts=reaction_smarts_from_app_selection(self),
+        )
         self._prepare_tool_dialog(d)
         d.setAttribute(Qt.WA_DeleteOnClose, True)
         d.accepted.connect(lambda *_, dlg=d: self._on_reaction_enumeration_dialog_accepted(dlg))
@@ -99,7 +103,9 @@ class ReactionToolsMixin:
         if parts:
             self.status_label.setText(f"{TOOL_REACTION_ENUMERATION}: {', '.join(parts)}{suffix}.")
         elif not result.products:
-            self.status_label.setText(f"{TOOL_REACTION_ENUMERATION}: no products generated{suffix}.")
+            self.status_label.setText(
+                f"{TOOL_REACTION_ENUMERATION}: no products generated{suffix}."
+            )
 
     def on_reaction_enum_failed(self, message: str, tool_title: str) -> None:
         if message == "Cancelled.":

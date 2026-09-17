@@ -1,6 +1,6 @@
 # Open File
 
-Open File loads a molecule or data file into a new or current workspace table (SDF, MOL, SMILES, CSV/TSV-style tables, and related formats).
+Open File loads a molecule, reaction, or data file into a new or current workspace table (SDF, MOL, MOL2, SMILES, CSV/TSV, Excel, PDBQT, MDL RXN/RDF, and related formats).
 
 ## Goal
 
@@ -12,12 +12,12 @@ Start a new analysis from disk, replace the current table with a fresh file, or 
 
 ## Inputs / scope
 
-File on disk. Structure columns are parsed when the format carries molecules; CSV/TSV-style tables with a SMILES or structure column (comma, semicolon, tab, or pipe).
+File on disk. Structure columns are parsed when the format carries molecules; CSV/TSV/Excel tables with a SMILES or structure column (comma, semicolon, tab, or pipe). Gzip (``.gz``) wrappers of those text/SDF files are accepted. MDL ``.rxn`` / ``.rdf`` files load as rows with **Reaction SMARTS**, reactant/product SMILES, and a product (or reactant) depiction.
 
 ## Options
 
-- **File browser** / path selection for supported chemistry and table formats (SDF, MOL, SMILES, CSV/TSV-style).
-- **Format parsing** - multi-molecule SDF, SMILES lists, and delimited tables with structure columns.
+- **File browser** / path selection for supported chemistry and table formats (SDF/SD/MOL, MOL2, SMILES, CSV/TSV, Excel ``.xlsx``, TDT, PDB, PDBQT, RXN/RDF, including ``.gz``).
+- **Format parsing** - multi-molecule SDF/MOL2/PDBQT, SMILES lists, delimited or Excel tables with structure columns, and MDL reaction files.
 - **Main table** columns and depictions populated after a successful load.
 
 ## Workflow
@@ -29,9 +29,11 @@ File on disk. Structure columns are parsed when the format carries molecules; CS
 
 ## Use cases
 
-- Load an HTS SDF for clustering and diverse subset picking.
-- Open a CSV of SMILES plus assay columns for QSAR.
+- Load an HTS SDF (or ``.sdf.gz``) for clustering and diverse subset picking.
+- Open a CSV or Excel sheet of SMILES plus assay columns for QSAR.
+- Open an MDL ``.rxn`` file to inspect the transform as **Reaction SMARTS** and run **Reaction Based Enumeration**.
 - Reload a vendor catalog before fingerprint similarity searches.
+- Bring Smina ligand PDBQT or MOL2 files into the table.
 
 ## Tips and limits
 

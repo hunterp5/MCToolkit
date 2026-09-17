@@ -49,6 +49,8 @@ def test_tool_generated_structure_headers():
     assert is_tool_generated_structure_header("Protonated (1)")
     assert is_tool_generated_structure_header("Largest Fragment")
     assert not is_tool_generated_structure_header("SMILES")
+    assert header_looks_like_structure_text("Reaction SMARTS")
+    assert header_looks_like_structure_text("SMIRKS")
     assert header_looks_like_structure_text("Structure (Copy)")
     assert header_looks_like_structure_text("Structure (Copy 2)")
     assert is_tool_generated_structure_header("Structure (Copy)")

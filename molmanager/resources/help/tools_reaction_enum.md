@@ -16,7 +16,7 @@ Reaction SMARTS plus reactant inputs (structure file or SMILES text per reactant
 
 ## Options
 
-- **Reaction** / **Reaction SMARTS**.
+- **Reaction** / **Reaction SMARTS** (paste, **Load RXN…** from an MDL ``.rxn``/``.rdf``, or prefilled from a selected table row with a **Reaction SMARTS** column).
 - **Reactant 1/2** - input mode **Structure file** / **SMILES text**, **Browse...**.
 - **Max products** - cap on enumerated outputs.
 - Optional **Product constraints**.
@@ -25,7 +25,7 @@ Reaction SMARTS plus reactant inputs (structure file or SMILES text per reactant
 
 ## Workflow
 
-1. Enter a validated reaction SMARTS.
+1. Enter a validated reaction SMARTS, load an RXN file, or use SMARTS from a selected table row.
 2. Supply reactants for each role.
 3. Set **Max products** and output destinations.
 4. Run, then filter/deduplicate products in the table.

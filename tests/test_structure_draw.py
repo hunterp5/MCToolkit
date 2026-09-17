@@ -23,7 +23,13 @@ from molmanager.display_constants import (
     STRUCTURE_DEPICT_HEIGHT,
     STRUCTURE_DEPICT_WIDTH,
 )
-from molmanager.structure_draw import render_molecule_png, structure_cairo_dimensions
+from molmanager.structure_draw import (
+    ReactionDrawSpec,
+    render_depict_payload_png,
+    render_molecule_png,
+    render_reaction_png,
+    structure_cairo_dimensions,
+)
 
 
 def test_structure_cairo_dimensions_match_target() -> None:
@@ -62,16 +68,16 @@ def test_table_bond_line_width_constant() -> None:
     assert STRUCTURE_DEPICT_BOND_LINE_WIDTH < 2.0
 
 
-def test_configure_mol_drawer_uses_zero_padding() -> None:
+def test_configure_mol_drawer_uses_structure_padding() -> None:
     from rdkit.Chem.Draw import rdMolDraw2D
 
     from molmanager.display_constants import STRUCTURE_DEPICT_PADDING
     from molmanager.structure_draw import configure_mol_drawer
 
-    assert STRUCTURE_DEPICT_PADDING == 0.0
+    assert STRUCTURE_DEPICT_PADDING == 0.05
     drawer = rdMolDraw2D.MolDraw2DCairo(STRUCTURE_DEPICT_WIDTH, STRUCTURE_DEPICT_HEIGHT)
     configure_mol_drawer(drawer, STRUCTURE_DEPICT_WIDTH)
-    assert drawer.drawOptions().padding == 0.0
+    assert drawer.drawOptions().padding == 0.05
 
 
 def test_structure_column_minimum_width() -> None:
@@ -108,3 +114,38 @@ def test_compound_table_view_clamps_structure_column_width(qapp) -> None:  # noq
     min_w = view.structure_column_minimum_width()
     view.setColumnWidth(col, min_w - 40)
     assert view.columnWidth(col) == min_w
+
+
+def test_render_reaction_png_is_wider_than_molecule() -> None:
+    from rdkit import Chem
+
+    from molmanager.display_constants import (
+        REACTION_DEPICT_WIDTH_MULTIPLIER,
+        reaction_depict_size,
+    )
+
+    mol_png = render_molecule_png(
+        Chem.MolFromSmiles("CCO"),
+        STRUCTURE_DEPICT_WIDTH,
+        STRUCTURE_DEPICT_HEIGHT,
+    )
+    rxn_w, rxn_h = reaction_depict_size()
+    assert rxn_w == STRUCTURE_DEPICT_WIDTH * REACTION_DEPICT_WIDTH_MULTIPLIER
+    assert rxn_h == STRUCTURE_DEPICT_HEIGHT
+    png = render_reaction_png(
+        "[C:1](=[O:2])-[OH].[N]>>[C:1](=[O:2])-[N]",
+        rxn_w,
+        rxn_h,
+    )
+    assert png.startswith(b"\x89PNG")
+    assert int.from_bytes(png[16:20], "big") == rxn_w
+    assert int.from_bytes(png[20:24], "big") == rxn_h
+    assert int.from_bytes(mol_png[16:20], "big") == STRUCTURE_DEPICT_WIDTH
+    assert int.from_bytes(mol_png[20:24], "big") == STRUCTURE_DEPICT_HEIGHT
+
+
+def test_render_depict_payload_png_dispatches_reaction() -> None:
+    spec = ReactionDrawSpec("[C:1]>>[C:1]")
+    png = render_depict_payload_png(spec, 400, 120)
+    assert png.startswith(b"\x89PNG")
+    assert int.from_bytes(png[16:20], "big") == 400

@@ -34,11 +34,28 @@ from rdkit import Chem
 from ..display_constants import structure_depict_height, structure_depict_width
 from ..config import load_config
 from ..import_structure import needs_structure_source_picker
-from ..ingest_text import csv_row_to_cells, smi_line_to_cells, sniff_table_delimiter
+from ..ingest_text import (
+    csv_row_to_cells,
+    find_smiles_column,
+    smi_line_to_cells,
+    sniff_table_delimiter,
+)
+from ..table_file_formats import (
+    RXN_EXTS,
+    SMI_LINE_EXTS,
+    STRUCTURE_MOL_EXTS,
+    TABULAR_EXTS,
+    default_table_delimiter,
+    iter_structure_mols,
+    load_xlsx_table,
+    logical_suffix,
+    open_text_maybe_gzip,
+)
 from ..fragment_disconnect import largest_fragment_and_rest
-from ..structure_draw import render_molecule_png
+from ..structure_draw import ReactionDrawSpec, render_molecule_png, render_reaction_png
 from ..structure_neutralize import neutralize_mol
 from ..structure_hydrogens import add_explicit_hydrogens, remove_explicit_hydrogens
+from ..rxn_io import RXN_TABLE_HEADERS, load_rxn_file
 from ..utils import parse_molecule_from_cell_text, row_cells_from_mol, safe_mol_prop_string
 from ..tool_progress import ToolProgressState, report_tool_progress
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
@@ -92,19 +109,28 @@ def _mp_render_structure_batch(args: tuple) -> list[tuple]:
     than it could keep up, capping throughput regardless of how many workers were running. Batching
     moves that ceiling so extra cores actually help. Batch renders never read mol properties, so
     rows are ``(oid, png, ok, w, h)``.
+
+    Each item is ``(oid, mol_bytes)`` or ``(oid, ("rxn", smarts_bytes))``.
     """
     items, w, h = args
     width, height = int(w), int(h)
     out: list[tuple] = []
-    for oid, mol_bytes in items:
-        if not mol_bytes:
-            out.append((int(oid), b"", False, width, height))
+    for item in items:
+        oid = int(item[0])
+        payload = item[1]
+        if not payload:
+            out.append((oid, b"", False, width, height))
             continue
         try:
-            png = render_molecule_png(Chem.Mol(mol_bytes), width, height)
-            out.append((int(oid), png, True, width, height))
+            if isinstance(payload, tuple) and payload and payload[0] == "rxn":
+                raw = payload[1]
+                smarts = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
+                png = render_reaction_png(smarts, width, height)
+            else:
+                png = render_molecule_png(Chem.Mol(payload), width, height)
+            out.append((oid, png, True, width, height))
         except Exception:
-            out.append((int(oid), b"", False, width, height))
+            out.append((oid, b"", False, width, height))
     return out
 
 
@@ -186,14 +212,17 @@ class Render2DBatchProcessWorker(QRunnable):
         size, and zoomed rows are drawn at 2x.
         """
         ev = self.cancel_event
-        by_size: dict[tuple[int, int], list[tuple[int, bytes]]] = {}
+        by_size: dict[tuple[int, int], list[tuple]] = {}
         for oid, mol, w, h in self.items:
             if ev is not None and ev.is_set():
                 break
-            try:
-                blob = mol.ToBinary() if mol is not None else b""
-            except Exception:
-                blob = b""
+            if isinstance(mol, ReactionDrawSpec):
+                blob: bytes | tuple = ("rxn", mol.smarts.encode("utf-8"))
+            else:
+                try:
+                    blob = mol.ToBinary() if mol is not None else b""
+                except Exception:
+                    blob = b""
             by_size.setdefault((int(w), int(h)), []).append((int(oid), blob))
 
         batch_size = max(1, int(load_config().render2d_batch_size))
@@ -289,7 +318,7 @@ class UniversalLoadWorker(QRunnable):
             self.signals.tool_progress.emit("Reading file…", -1, -1)
         except Exception:
             pass
-        ext = os.path.splitext(self.path)[1].lower()
+        ext = logical_suffix(self.path)
         batch_size = self.batch_size
         cfg = load_config()
         text_first = bool(cfg.ingest_csv_text_first)
@@ -297,125 +326,131 @@ class UniversalLoadWorker(QRunnable):
             headers = ["ID_HIDDEN", "Structure"]
             first_emit = True
             batch = []
-            if ext in [".sdf", ".mol"]:
-                suppl = Chem.SDMolSupplier(self.path)
-                for mol in suppl:
+
+            def _flush(*, last: bool) -> None:
+                nonlocal first_emit, batch
+                if batch:
+                    self.signals.mols_loaded.emit(
+                        batch, headers if first_emit else [], first_emit, last
+                    )
+                    first_emit = False
+                    batch = []
+                elif last and first_emit:
+                    self.signals.mols_loaded.emit([], headers, True, True)
+                elif last:
+                    self.signals.mols_loaded.emit([], [], False, True)
+
+            def _add_mol(mol: Chem.Mol) -> bool:
+                nonlocal headers
+                if first_emit and len(batch) == 0:
+                    headers.extend(sorted(str(p) for p in mol.GetPropNames()))
+                    if not self._wait_for_structure_source_choice(headers):
+                        return False
+                batch.append(_mol_ingest_item(mol, headers[2:]))
+                if len(batch) >= batch_size:
+                    _flush(last=False)
+                return True
+
+            def _add_table_rows(fieldnames: list[str], rows) -> None:
+                nonlocal headers
+                smi_col = find_smiles_column(fieldnames)
+                if smi_col:
+                    headers.append("SMILES")
+                    headers.extend([h for h in fieldnames if h != smi_col])
+                    if not self._wait_for_structure_source_choice(headers):
+                        return
+                for row in rows:
+                    if self._cancelled() or smi_col is None:
+                        break
+                    if text_first:
+                        cells = csv_row_to_cells(row, smi_col=smi_col, fieldnames=fieldnames)
+                        if cells is None:
+                            continue
+                        batch.append(cells)
+                    else:
+                        m = Chem.MolFromSmiles(row[smi_col])
+                        if m:
+                            m.SetProp("SMILES", row[smi_col])
+                            for h in fieldnames:
+                                if h != smi_col:
+                                    m.SetProp(h, str(row[h]))
+                            batch.append(_mol_ingest_item(m, headers[2:]))
+                    if len(batch) >= batch_size:
+                        _flush(last=False)
+
+            if ext in STRUCTURE_MOL_EXTS:
+                for mol in iter_structure_mols(self.path):
                     if self._cancelled():
                         break
-                    if mol:
-                        if first_emit and len(batch) == 0:
-                            headers.extend(sorted([str(p) for p in mol.GetPropNames()]))
-                            if not self._wait_for_structure_source_choice(headers):
-                                break
-                        batch.append(_mol_ingest_item(mol, headers[2:]))
-                        if len(batch) >= batch_size:
-                            self.signals.mols_loaded.emit(batch, headers if first_emit else [], first_emit, False)
-                            first_emit = False
-                            batch = []
-            elif ext in [".smi", ".txt", ".csv"]:
-                default_delim = "," if ext == ".csv" else "\t"
-                with open(self.path, "r", encoding="utf-8-sig", errors="replace") as f:
-                    if ext == ".smi" and text_first:
-                        headers.append("SMILES")
-                        if self._wait_for_structure_source_choice(headers):
-                            for line in f:
-                                if self._cancelled():
-                                    break
-                                cells = smi_line_to_cells(line)
-                                if cells is None:
-                                    continue
-                                batch.append(cells)
-                                if len(batch) >= batch_size:
-                                    self.signals.mols_loaded.emit(
-                                        batch, headers if first_emit else [], first_emit, False
-                                    )
-                                    first_emit = False
-                                    batch = []
-                    else:
-                        sample = f.read(65536)
-                        f.seek(0)
-                        delim = sniff_table_delimiter(sample, default=default_delim)
-                        reader = csv.DictReader(f, delimiter=delim)
-                        fieldnames = list(reader.fieldnames or [])
-                        smi_col = next(
-                            (
-                                fn
-                                for fn in fieldnames
-                                if fn.lower() in ["smiles", "smi", "structure", "mol"]
-                            ),
-                            fieldnames[0] if fieldnames else None,
-                        )
-                        if smi_col:
-                            headers.append("SMILES")
-                            headers.extend([h for h in fieldnames if h != smi_col])
-                            if not self._wait_for_structure_source_choice(headers):
-                                smi_col = None
-                        for row in reader:
+                    if not _add_mol(mol):
+                        break
+            elif ext in SMI_LINE_EXTS and text_first:
+                headers.append("SMILES")
+                if self._wait_for_structure_source_choice(headers):
+                    with open_text_maybe_gzip(self.path) as f:
+                        for line in f:
                             if self._cancelled():
                                 break
-                            if smi_col is None:
+                            cells = smi_line_to_cells(line)
+                            if cells is None:
                                 continue
-                            if text_first:
-                                cells = csv_row_to_cells(row, smi_col=smi_col, fieldnames=fieldnames)
-                                if cells is None:
-                                    continue
-                                batch.append(cells)
-                            else:
-                                m = Chem.MolFromSmiles(row[smi_col])
-                                if m:
-                                    m.SetProp("SMILES", row[smi_col])
-                                    for h in fieldnames:
-                                        if h != smi_col:
-                                            m.SetProp(h, str(row[h]))
-                                    batch.append(_mol_ingest_item(m, headers[2:]))
+                            batch.append(cells)
                             if len(batch) >= batch_size:
-                                self.signals.mols_loaded.emit(
-                                    batch, headers if first_emit else [], first_emit, False
-                                )
-                                first_emit = False
-                                batch = []
-            elif ext == ".tdt":
-                suppl = Chem.TDTMolSupplier(self.path)
-                for mol in suppl:
+                                _flush(last=False)
+            elif ext == ".xlsx":
+                fieldnames, rows = load_xlsx_table(self.path)
+                _add_table_rows(fieldnames, rows)
+            elif ext in TABULAR_EXTS or ext in SMI_LINE_EXTS:
+                default_delim = default_table_delimiter(ext)
+                with open_text_maybe_gzip(self.path) as f:
+                    sample = f.read(65536)
+                    f.seek(0)
+                    delim = sniff_table_delimiter(sample, default=default_delim)
+                    reader = csv.DictReader(f, delimiter=delim)
+                    fieldnames = list(reader.fieldnames or [])
+                    _add_table_rows(fieldnames, reader)
+            elif ext in RXN_EXTS:
+                headers.extend(list(RXN_TABLE_HEADERS))
+                records = load_rxn_file(self.path)
+                if records and not self._wait_for_structure_source_choice(headers):
+                    records = []
+                items: list = []
+                for rec in records:
+                    if rec.mol is not None:
+                        items.append(_mol_ingest_item(rec.mol, headers[2:]))
+                    else:
+                        items.append(
+                            {
+                                RXN_TABLE_HEADERS[0]: rec.smarts,
+                                RXN_TABLE_HEADERS[1]: rec.reactants,
+                                RXN_TABLE_HEADERS[2]: rec.products,
+                                RXN_TABLE_HEADERS[3]: rec.name,
+                            }
+                        )
+                if items and any(isinstance(x, dict) for x in items):
+                    unified: list[dict[str, str]] = []
+                    for item in items:
+                        if isinstance(item, dict):
+                            unified.append(item)
+                        else:
+                            unified.append(item[1])
+                    items = unified
+                for rec_item in items:
                     if self._cancelled():
                         break
-                    if mol:
-                        if first_emit and len(batch) == 0:
-                            headers.extend(sorted([str(p) for p in mol.GetPropNames()]))
-                            if not self._wait_for_structure_source_choice(headers):
-                                break
-                        batch.append(_mol_ingest_item(mol, headers[2:]))
-                        if len(batch) >= batch_size:
-                            self.signals.mols_loaded.emit(batch, headers if first_emit else [], first_emit, False)
-                            first_emit = False
-                            batch = []
-            elif ext == ".pdb":
-                suppl = Chem.PDBMolSupplier(self.path)
-                for mol in suppl:
-                    if self._cancelled():
-                        break
-                    if mol:
-                        batch.append(_mol_ingest_item(mol, headers[2:]))
-                        if len(batch) >= batch_size:
-                            self.signals.mols_loaded.emit(batch, headers if first_emit else [], first_emit, False)
-                            first_emit = False
-                            batch = []
+                    batch.append(rec_item)
+                    if len(batch) >= batch_size:
+                        _flush(last=False)
 
-            # emit remaining
-            if batch:
-                self.signals.mols_loaded.emit(batch, headers if first_emit else [], first_emit, True)
-            else:
-                # if no molecules found, still signal completion
-                if first_emit:
-                    self.signals.mols_loaded.emit([], headers, True, True)
-                else:
-                    self.signals.mols_loaded.emit([], [], False, True)
+            _flush(last=True)
         except Exception:
             logger.exception("UniversalLoadWorker failed")
             try:
                 self.signals.mols_loaded.emit([], ["ID_HIDDEN", "Structure"], True, True)
             except Exception:
-                logger.warning("UniversalLoadWorker: failed to emit empty completion signal", exc_info=True)
+                logger.warning(
+                    "UniversalLoadWorker: failed to emit empty completion signal", exc_info=True
+                )
 
 
 class RenderWorker(QRunnable):
@@ -598,9 +633,7 @@ class NeutralizeWorker(QRunnable):
                 progress_state=self.progress_state,
                 throttle=self._progress_throttle,
             )
-        emit_partial_results_if_cancelled(
-            self.signals, "Neutralize", done_count, total, cancelled
-        )
+        emit_partial_results_if_cancelled(self.signals, "Neutralize", done_count, total, cancelled)
         self.signals.neutralized.emit(res)
 
 
@@ -726,4 +759,3 @@ class RemoveExplicitHydrogensWorker(QRunnable):
             self.signals, "Remove explicit hydrogens", done_count, total, cancelled
         )
         self.signals.explicit_hydrogens_removed.emit(res)
-

@@ -49,6 +49,7 @@ from ...reaction_enumeration import (
     load_reactant_molecules_from_smiles_text,
     validate_reaction_smarts,
 )
+from ...rxn_io import load_reaction_smarts_from_rxn_path
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_REACTION_ENUMERATION
 
@@ -242,7 +243,7 @@ class ReactantInputPanel(QWidget):
 class ReactionEnumerationDialog(QDialog):
     """Pick a reaction template, reactants, and output destinations."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, initial_smarts: str = ""):
         super().__init__(parent)
         self._presets = load_reaction_presets()
         self.setWindowTitle(TOOL_REACTION_ENUMERATION)
@@ -269,7 +270,14 @@ class ReactionEnumerationDialog(QDialog):
         self.smarts_edit.setToolTip(
             "RDKit reaction SMARTS with exactly two reactants separated by a dot before >>."
         )
-        form.addRow("Reaction SMARTS:", self.smarts_edit)
+        smarts_row = QHBoxLayout()
+        smarts_row.setContentsMargins(0, 0, 0, 0)
+        smarts_row.addWidget(self.smarts_edit, 1)
+        self.load_rxn_btn = QPushButton("Load RXN…")
+        self.load_rxn_btn.setToolTip("Fill Reaction SMARTS from an MDL .rxn or .rdf file.")
+        self.load_rxn_btn.clicked.connect(self._browse_rxn)
+        smarts_row.addWidget(self.load_rxn_btn)
+        form.addRow("Reaction SMARTS:", smarts_row)
         root.addLayout(form)
 
         reactants_box = QGroupBox("Reactants")
@@ -319,6 +327,40 @@ class ReactionEnumerationDialog(QDialog):
         make_window_minimizable(self)
 
         self._on_preset_changed(self.preset_combo.currentIndex())
+        if (initial_smarts or "").strip():
+            self._apply_loaded_smarts((initial_smarts or "").strip())
+
+    def _select_custom_preset(self) -> None:
+        for i, preset in enumerate(self._presets):
+            if preset.id == "custom":
+                self.preset_combo.setCurrentIndex(i)
+                return
+
+    def _apply_loaded_smarts(self, smarts: str) -> None:
+        self._select_custom_preset()
+        self.smarts_edit.setText(smarts)
+
+    def _browse_rxn(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open reaction file",
+            "",
+            "Reactions (*.rxn *.rdf);;RXN (*.rxn);;RDF (*.rdf);;All files (*.*)",
+        )
+        if not path:
+            return
+        try:
+            smarts, n_rxn = load_reaction_smarts_from_rxn_path(path)
+        except ValueError as exc:
+            QMessageBox.warning(self, self.windowTitle(), str(exc))
+            return
+        self._apply_loaded_smarts(smarts)
+        if n_rxn > 1:
+            QMessageBox.information(
+                self,
+                self.windowTitle(),
+                f"Loaded the first of {n_rxn} reactions from that file.",
+            )
 
     def _current_preset(self):
         idx = self.preset_combo.currentIndex()

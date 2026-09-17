@@ -134,14 +134,18 @@ class Render2DResultsMixin:
         if getattr(self, "_pending_session_table_layout", None):
             return
         pad = STRUCTURE_COLUMN_HORIZONTAL_PADDING
-        need = max(1, int(structure_depict_width()) + pad)
+        hint = int(getattr(self, "_render2d_flush_max_width", 0) or 0)
+        self._render2d_flush_max_width = 0
+        need = max(1, max(int(structure_depict_width()), hint) + pad)
         try:
             if pix_target:
                 col = self.headers.index(pix_target)
                 if self.table.columnWidth(col) < need:
                     self.table.setColumnWidth(col, need)
             else:
-                self._sync_structure_column_width_for_pixmap(None, structure_depict_width())
+                self._sync_structure_column_width_for_pixmap(
+                    None, max(int(structure_depict_width()), hint)
+                )
         except Exception:
             pass
 
@@ -250,6 +254,10 @@ class Render2DResultsMixin:
                 )
                 if png_items:
                     store.ingest_batch(png_items)
+                self._render2d_flush_max_width = max(
+                    (int(rec[2]) for rec in pending.values() if rec and rec[1]),
+                    default=0,
+                )
                 self._table_model.set_structure_png_store(store)
                 self._ensure_structure_lazy_scroll_hook()
                 self._render2d_eager_flush_queue = []
@@ -259,6 +267,7 @@ class Render2DResultsMixin:
                 eager: list[tuple[int, QPixmap | None]] = []
                 cfg = load_config()
                 set_uniform_height = len(ordered) >= cfg.structure_render_lazy_min_rows
+                max_w = 0
                 for oid in ordered:
                     row = self._resolve_structure_row_for_oid(int(oid))
                     rec = pending.get(oid)
@@ -269,6 +278,8 @@ class Render2DResultsMixin:
                             eager.append((int(oid), None))
                         continue
                     img_b, ok, rw, rh = rec
+                    if ok:
+                        max_w = max(max_w, int(rw))
                     if not ok or row < 0:
                         if pix_target:
                             set_pixmap(oid, pix_target, None)
@@ -282,6 +293,7 @@ class Render2DResultsMixin:
                         eager.append((int(oid), pm))
                     if row >= 0 and not set_uniform_height and self.table.rowHeight(row) != rh:
                         self.table.setRowHeight(row, rh)
+                self._render2d_flush_max_width = max_w
                 self._render2d_eager_flush_queue = eager if not pix_target else []
                 self._render2d_eager_flush_idx = 0
                 self._render2d_eager_uniform_height = bool(set_uniform_height and not pix_target)

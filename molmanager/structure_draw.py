@@ -18,14 +18,25 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from rdkit import Chem
+from rdkit.Chem import AllChem
 from rdkit.Chem.Draw import rdMolDraw2D
 
 from .display_constants import (
+    REACTION_DEPICT_PADDING,
     STRUCTURE_DEPICT_BOND_LINE_WIDTH,
     STRUCTURE_DEPICT_PADDING,
     structure_depict_width,
 )
+
+
+@dataclass(frozen=True)
+class ReactionDrawSpec:
+    """Render-2D payload for a reaction SMARTS / SMIRKS string."""
+
+    smarts: str
 
 
 def structure_cairo_dimensions(target_w: int, target_h: int) -> tuple[int, int]:
@@ -54,3 +65,41 @@ def render_molecule_png(mol: Chem.Mol, target_w: int, target_h: int) -> bytes:
     rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
     drawer.FinishDrawing()
     return drawer.GetDrawingText()
+
+
+def render_reaction_png(smarts: str, target_w: int, target_h: int) -> bytes:
+    """Draw a reaction SMARTS scheme (reactants → products) to PNG bytes."""
+    text = (smarts or "").strip()
+    if not text:
+        raise ValueError("Reaction SMARTS is empty.")
+    rxn = AllChem.ReactionFromSmarts(text)
+    if rxn is None:
+        raise ValueError("Could not parse reaction SMARTS.")
+    try:
+        AllChem.SanitizeRxn(rxn)
+    except Exception:
+        pass
+    try:
+        AllChem.Compute2DCoordsForReaction(rxn)
+    except Exception:
+        pass
+    cw, ch = structure_cairo_dimensions(target_w, target_h)
+    drawer = rdMolDraw2D.MolDraw2DCairo(int(cw), int(ch))
+    # Scale bonds like a molecule cell, not the wider reaction canvas.
+    configure_mol_drawer(drawer, structure_depict_width())
+    drawer.drawOptions().padding = float(REACTION_DEPICT_PADDING)
+    drawer.DrawReaction(rxn, highlightByReactant=False)
+    drawer.FinishDrawing()
+    png = drawer.GetDrawingText()
+    if not png:
+        raise ValueError("Reaction depiction produced no image.")
+    return png
+
+
+def render_depict_payload_png(
+    payload: Chem.Mol | ReactionDrawSpec, target_w: int, target_h: int
+) -> bytes:
+    """Draw a molecule or reaction payload to PNG bytes."""
+    if isinstance(payload, ReactionDrawSpec):
+        return render_reaction_png(payload.smarts, target_w, target_h)
+    return render_molecule_png(payload, target_w, target_h)

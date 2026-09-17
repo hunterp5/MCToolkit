@@ -26,7 +26,13 @@ from PyQt5.QtWidgets import QMessageBox
 from rdkit import Chem
 
 from ...config import load_config
-from ...display_constants import structure_depict_height, structure_depict_width
+from ...display_constants import (
+    reaction_depict_size,
+    structure_depict_height,
+    structure_depict_width,
+)
+from ...rxn_io import looks_like_reaction_smarts, parse_reaction_smarts
+from ...structure_draw import ReactionDrawSpec
 from ...workers import Render2DBatchHeldJob, Render2DBatchProcessWorker
 from ..strings import TOOL_RENDER_2D
 
@@ -84,16 +90,19 @@ class Render2DMixin:
                 if mol is None:
                     continue
                 self.mols[oid] = mol
+                payload = mol
             else:
-                mol = self._mol_for_render2d_source(r, src)
-                if mol is None:
+                payload = self._depict_payload_for_render2d_source(r, src)
+                if payload is None:
                     continue
-            rw, rh = (
-                (structure_depict_width() * 2, structure_depict_height() * 2)
-                if oid in self.zoomed_ids
-                else (base_w, base_h)
-            )
-            renders.append((oid, mol, rw, rh))
+            zoomed = oid in self.zoomed_ids
+            if isinstance(payload, ReactionDrawSpec):
+                rw, rh = reaction_depict_size(zoomed=zoomed)
+            elif zoomed:
+                rw, rh = structure_depict_width() * 2, structure_depict_height() * 2
+            else:
+                rw, rh = base_w, base_h
+            renders.append((oid, payload, rw, rh))
             row_by_oid[oid] = r
         return renders, row_by_oid
 
@@ -422,8 +431,8 @@ class Render2DMixin:
             return self.headers[col]
         return "Structure"
 
-    def _mol_for_render2d_source(self, row: int, src: str) -> Chem.Mol | None:
-        """Molecule to draw for one row from the chosen source column."""
+    def _depict_payload_for_render2d_source(self, row: int, src: str):
+        """Molecule or reaction SMARTS to draw for one row from the chosen source column."""
         if row < 0 or row >= self._table_model.rowCount():
             return None
         if src == "Structure":
@@ -433,13 +442,22 @@ class Render2DMixin:
         ci = self.headers.index(src)
         if self._table_model.is_pixmap_data_column(src):
             raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
-            return self._mol_from_structure_text(raw) if raw else None
-        raw = (self._table_cell_text(row, ci) or "").strip()
-        if not raw:
-            raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
+        else:
+            raw = (self._table_cell_text(row, ci) or "").strip()
+            if not raw:
+                raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
         if not raw:
             return None
+        if looks_like_reaction_smarts(raw) and parse_reaction_smarts(raw) is not None:
+            return ReactionDrawSpec(raw)
         return self._mol_from_structure_text(raw)
+
+    def _mol_for_render2d_source(self, row: int, src: str) -> Chem.Mol | None:
+        """Molecule to draw for one row from the chosen source column."""
+        payload = self._depict_payload_for_render2d_source(row, src)
+        if isinstance(payload, Chem.Mol):
+            return payload
+        return None
 
     def run_render_2d_for_table_row(self, row: int, col: int | None = None) -> None:
         """Run Render 2D for one row: read chemistry from ``col`` and write the pixmap into that column."""
@@ -465,16 +483,16 @@ class Render2DMixin:
             )
             return
         src = self._render2d_source_header_for_column(col if col is not None else -1)
-        mol = self._mol_for_render2d_source(row, src)
-        if mol is None:
+        payload = self._depict_payload_for_render2d_source(row, src)
+        if payload is None:
             QMessageBox.information(
                 self,
                 TOOL_RENDER_2D,
                 f"No structure could be read from column “{src}” for this row.",
             )
             return
-        if src == "Structure":
-            self.mols[oid] = mol
+        if src == "Structure" and isinstance(payload, Chem.Mol):
+            self.mols[oid] = payload
         pixmap_mode = src != "Structure" and self._table_model.is_pixmap_data_column(src)
         base_w, base_h = structure_depict_width(), structure_depict_height()
         renders, row_by_oid = self._build_render2d_tasks_in_table_order(src, base_w, base_h, {oid})

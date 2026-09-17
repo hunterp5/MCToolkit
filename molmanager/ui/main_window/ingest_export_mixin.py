@@ -24,20 +24,19 @@ from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
 from ...config import load_config
+from ...table_file_formats import TABLE_OPEN_FILTER, TABLE_SAVE_FILTER
 from ...workers import ExportWorker, UniversalLoadWorker
 from ..strings import LOADING_DETAIL_APPEND, LOADING_DETAIL_READING_DISK
 
 
 class IngestExportMixin:
     def open_file_dialog(self):
-        f_filter = "All Supported (*.sdf *.mol *.csv *.smi *.txt *.tdt *.pdb);;SDF/Mol (*.sdf *.mol);;SMILES (*.smi *.txt *.csv);;TDT (*.tdt);;PDB (*.pdb)"
-        path, _ = QFileDialog.getOpenFileName(self, "Open File", "", f_filter)
+        path, _ = QFileDialog.getOpenFileName(self, "Open File", "", TABLE_OPEN_FILTER)
         if path:
             self.load_file(path)
 
     def open_import_file_dialog(self) -> None:
-        f_filter = "All Supported (*.sdf *.mol *.csv *.smi *.txt *.tdt *.pdb);;SDF/Mol (*.sdf *.mol);;SMILES (*.smi *.txt *.csv);;TDT (*.tdt);;PDB (*.pdb)"
-        path, _ = QFileDialog.getOpenFileName(self, "Import Data", "", f_filter)
+        path, _ = QFileDialog.getOpenFileName(self, "Import Data", "", TABLE_OPEN_FILTER)
         if path:
             self.import_file(path)
 
@@ -157,10 +156,7 @@ class IngestExportMixin:
             oids_list = oids
         else:
             oids_list = list(self._table_model.all_oids_in_order())
-        f_filter = (
-            "SDF (*.sdf);;Molfile (*.mol);;SMILES (*.smi);;CSV (*.csv);;TDT (*.tdt);;PDB (*.pdb)"
-        )
-        path, sel_f = QFileDialog.getSaveFileName(self, "Export Data", "", f_filter)
+        path, sel_f = QFileDialog.getSaveFileName(self, "Export Data", "", TABLE_SAVE_FILTER)
         if path:
             # Robustly infer the extension even if the Qt filter string is empty/unexpected.
             ext = ""

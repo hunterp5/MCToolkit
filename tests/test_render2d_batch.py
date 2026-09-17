@@ -99,6 +99,30 @@ def test_build_tasks_emits_empty_blob_for_missing_mol() -> None:
     assert tasks == [([(1, b"")], 242, 202)]
 
 
+def test_build_tasks_tags_reaction_smarts() -> None:
+    from molmanager.structure_draw import ReactionDrawSpec
+
+    spec = ReactionDrawSpec("[C:1]>>[C:1]")
+    tasks = _worker([(7, spec, 630, 170)]).build_tasks()
+    assert len(tasks) == 1
+    rows, w, h = tasks[0]
+    assert (w, h) == (630, 170)
+    assert rows == [(7, ("rxn", b"[C:1]>>[C:1]"))]
+
+
+def test_batch_render_reaction_smarts() -> None:
+    items = [(1, ("rxn", b"[C:1](=[O:2])-[OH].[N]>>[C:1](=[O:2])-[N]"))]
+    rows = _mp_render_structure_batch((items, 630, 170))
+    assert len(rows) == 1
+    oid, png, ok, w, h = rows[0]
+    assert oid == 1
+    assert ok is True
+    assert png.startswith(b"\x89PNG")
+    assert (w, h) == (630, 170)
+    assert int.from_bytes(png[16:20], "big") == 630
+    assert int.from_bytes(png[20:24], "big") == 170
+
+
 def test_build_tasks_stops_when_cancelled() -> None:
     import threading
 

@@ -26,6 +26,15 @@ _TABLE_DELIMS = (",", ";", "\t", "|")
 _SMILES_FIELD_NAMES = frozenset({"smiles", "smi", "structure", "mol"})
 
 
+def find_smiles_column(fieldnames: list[str]) -> str | None:
+    """Pick the structure column from a tabular header, else the first field."""
+    names = list(fieldnames or [])
+    for fn in names:
+        if str(fn).lower() in _SMILES_FIELD_NAMES:
+            return fn
+    return names[0] if names else None
+
+
 def _header_fields(line: str, delimiter: str) -> list[str]:
     return next(csv.reader(io.StringIO(line), delimiter=delimiter), [])
 

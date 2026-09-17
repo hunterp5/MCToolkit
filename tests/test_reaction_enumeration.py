@@ -43,9 +43,7 @@ def test_load_reaction_presets_includes_named_templates() -> None:
 
 
 def test_validate_reaction_smarts_requires_two_reactants() -> None:
-    rxn = validate_reaction_smarts(
-        "[C:1](=[O:2])-[OH;D1].[N;H2,H1]>>[C:1](=[O:2])-[N]"
-    )
+    rxn = validate_reaction_smarts("[C:1](=[O:2])-[OH;D1].[N;H2,H1]>>[C:1](=[O:2])-[N]")
     assert int(rxn.GetNumReactantTemplates()) == 2
     with pytest.raises(ValueError, match="two reactants"):
         validate_reaction_smarts("[C:1][OH:2]>>[C:1][O-:2]")
@@ -62,7 +60,9 @@ def test_enumerate_amide_coupling() -> None:
     )
     assert not cancelled
     assert products
-    assert "CC(N)=O" in products[0] or Chem.MolToSmiles(Chem.MolFromSmiles(products[0])) == "CC(N)=O"
+    assert (
+        "CC(N)=O" in products[0] or Chem.MolToSmiles(Chem.MolFromSmiles(products[0])) == "CC(N)=O"
+    )
 
 
 def test_suzuki_template_matches_acid_and_pinacol() -> None:
@@ -110,3 +110,13 @@ def test_write_product_smiles_to_sdf(tmp_path: Path) -> None:
     assert n == 2
     suppl = Chem.SDMolSupplier(str(out))
     assert len([m for m in suppl if m is not None]) == 2
+
+
+def test_reaction_enumeration_dialog_accepts_initial_smarts(qapp):  # noqa: ARG001
+    from molmanager.ui.dialogs.reaction_enumeration import ReactionEnumerationDialog
+
+    smarts = "[C:1](=[O:2])-[OH;D1].[N;H2,H1]>>[C:1](=[O:2])-[N]"
+    dlg = ReactionEnumerationDialog(initial_smarts=smarts)
+    assert dlg.smarts_edit.text() == smarts
+    assert dlg.load_rxn_btn.text().startswith("Load RXN")
+    dlg.close()

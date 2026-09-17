@@ -40,10 +40,14 @@ STRUCTURE_ROW_DEFAULT_HEIGHT = DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT
 
 # Bond stroke at 1× table resolution (default RDKit is 2.0; thinner lines without supersampling).
 STRUCTURE_DEPICT_BOND_LINE_WIDTH = 1.0
-# RDKit MolDraw2D padding fraction (0 fills the pixmap; RDKit default is ~0.05).
-STRUCTURE_DEPICT_PADDING = 0.0
+# RDKit MolDraw2D padding fraction (fraction of the canvas on each side).
+STRUCTURE_DEPICT_PADDING = 0.05
 # Extra horizontal space in the table column beyond the pixmap (margins / scrollbar slop).
 STRUCTURE_COLUMN_HORIZONTAL_PADDING = 28
+# Reaction schemes (A + B → C) need a wider canvas than a single molecule at the same height.
+REACTION_DEPICT_WIDTH_MULTIPLIER = 3
+# Same inset as molecules so the reaction arrow is not clipped.
+REACTION_DEPICT_PADDING = 0.05
 
 _SETTINGS_ORG = "MolManager"
 _SETTINGS_APP = "MolManager"
@@ -81,6 +85,14 @@ def structure_column_minimum_width(*, zoomed: bool = False) -> int:
     """Minimum Structure column width so the depiction is never clipped horizontally."""
     depict_w = structure_depict_width() * (2 if zoomed else 1)
     return int(depict_w) + int(STRUCTURE_COLUMN_HORIZONTAL_PADDING)
+
+
+def reaction_depict_size(*, zoomed: bool = False) -> tuple[int, int]:
+    """PNG size for a reaction scheme: same height as molecules, wider canvas."""
+    scale = 2 if zoomed else 1
+    width = int(structure_depict_width()) * int(REACTION_DEPICT_WIDTH_MULTIPLIER) * scale
+    height = int(structure_depict_height()) * scale
+    return max(1, width), max(1, height)
 
 
 def load_saved_structure_depict_size() -> tuple[int, int]:

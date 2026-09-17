@@ -23,9 +23,20 @@ import threading
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
+from ..table_file_formats import write_openbabel_mols, write_xlsx_table
 from ..utils import mol_to_canonical_smiles
 
 logger = logging.getLogger(__name__)
+
+
+def _row_with_smiles(row: dict, mol) -> dict | None:
+    out = dict(row or {})
+    if not str(out.get("SMILES", "") or "").strip():
+        if mol is not None:
+            out["SMILES"] = mol_to_canonical_smiles(mol)
+        else:
+            return None
+    return out
 
 
 class ExportWorker(QRunnable):
@@ -63,52 +74,97 @@ class ExportWorker(QRunnable):
             mols = self.mols or {}
             oid_list = self.oids or [int(k) for k in (self.table_data or {}).keys()]
             tot = max(len(oid_list), 1)
-            if self.ext == ".csv":
+            ext = (self.ext or "").lower()
+
+            def _mol_and_row(oid: int):
+                mol = mols.get(oid)
+                row = self.table_data.get(oid, {})
+                if mol is None:
+                    smi = str(row.get("SMILES", "") or "").strip()
+                    if smi:
+                        mol = Chem.MolFromSmiles(smi)
+                return mol, row
+
+            if ext in {".csv", ".tsv"}:
                 csv_heads = clean_headers.copy()
                 if "SMILES" not in csv_heads:
                     csv_heads.insert(0, "SMILES")
+                delim = "\t" if ext == ".tsv" else ","
                 with open(self.path, "w", newline="", encoding="utf-8") as f:
-                    writer = csv.DictWriter(f, fieldnames=csv_heads)
+                    writer = csv.DictWriter(f, fieldnames=csv_heads, delimiter=delim)
                     writer.writeheader()
                     for done, oid in enumerate(oid_list, start=1):
                         if self.cancel_event is not None and self.cancel_event.is_set():
                             user_cancelled = True
                             break
-                        mol = mols.get(oid)
-                        row = self.table_data.get(oid, {}).copy()
-                        if "SMILES" not in row or not row["SMILES"]:
-                            if mol is not None:
-                                row["SMILES"] = mol_to_canonical_smiles(mol)
-                            elif not row.get("SMILES"):
-                                continue
-                        writer.writerow({k: v for k, v in row.items() if k in csv_heads})
+                        mol, row = _mol_and_row(oid)
+                        filled = _row_with_smiles(row, mol)
+                        if filled is None:
+                            continue
+                        writer.writerow({k: v for k, v in filled.items() if k in csv_heads})
                         try:
                             self.signals.tool_progress.emit("Exporting…", done, tot)
                         except Exception:
                             pass
-            else:
-                if self.ext in [".sdf", ".mol"]:
-                    writer = Chem.SDWriter(self.path)
-                elif self.ext == ".smi":
-                    writer = Chem.SmilesWriter(self.path)
-                elif self.ext == ".tdt":
-                    writer = Chem.TDTWriter(self.path)
-                elif self.ext == ".pdb":
-                    writer = Chem.PDBWriter(self.path)
+            elif ext == ".xlsx":
+                csv_heads = clean_headers.copy()
+                if "SMILES" not in csv_heads:
+                    csv_heads.insert(0, "SMILES")
+                rows: list[dict[str, str]] = []
                 for done, oid in enumerate(oid_list, start=1):
                     if self.cancel_event is not None and self.cancel_event.is_set():
                         user_cancelled = True
                         break
-                    mol = mols.get(oid)
-                    row = self.table_data.get(oid, {})
-                    out_mol = mol
-                    if out_mol is None:
-                        smi = str(row.get("SMILES", "") or "").strip()
-                        if smi:
-                            out_mol = Chem.MolFromSmiles(smi)
-                    if out_mol is None:
+                    mol, row = _mol_and_row(oid)
+                    filled = _row_with_smiles(row, mol)
+                    if filled is None:
                         continue
-                    out_mol = Chem.Mol(out_mol)
+                    rows.append({k: filled.get(k, "") for k in csv_heads})
+                    try:
+                        self.signals.tool_progress.emit("Exporting…", done, tot)
+                    except Exception:
+                        pass
+                if not user_cancelled:
+                    write_xlsx_table(self.path, csv_heads, rows)
+            elif ext in {".mol2", ".pdbqt"}:
+                fmt = "mol2" if ext == ".mol2" else "pdbqt"
+                out_mols: list = []
+                for done, oid in enumerate(oid_list, start=1):
+                    if self.cancel_event is not None and self.cancel_event.is_set():
+                        user_cancelled = True
+                        break
+                    mol, row = _mol_and_row(oid)
+                    if mol is None:
+                        continue
+                    out_mol = Chem.Mol(mol)
+                    for h in clean_headers:
+                        out_mol.SetProp(h, str(row.get(h, "")))
+                    out_mols.append(out_mol)
+                    try:
+                        self.signals.tool_progress.emit("Exporting…", done, tot)
+                    except Exception:
+                        pass
+                if not user_cancelled:
+                    write_openbabel_mols(self.path, out_mols, fmt)
+            else:
+                if ext in {".sdf", ".sd", ".mol"}:
+                    writer = Chem.SDWriter(self.path)
+                elif ext == ".smi":
+                    writer = Chem.SmilesWriter(self.path)
+                elif ext == ".tdt":
+                    writer = Chem.TDTWriter(self.path)
+                elif ext == ".pdb":
+                    writer = Chem.PDBWriter(self.path)
+                else:
+                    raise ValueError(f"Unsupported export format: {ext or '(none)'}")
+                for done, oid in enumerate(oid_list, start=1):
+                    if self.cancel_event is not None and self.cancel_event.is_set():
+                        user_cancelled = True
+                        break
+                    mol, row = _mol_and_row(oid)
+                    if mol is None:
+                        continue
+                    out_mol = Chem.Mol(mol)
                     for h in clean_headers:
                         out_mol.SetProp(h, str(row.get(h, "")))
                     writer.write(out_mol)
