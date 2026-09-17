@@ -45,6 +45,7 @@ from .theme import (
     save_status_bar_visible,
     save_table_font_pt,
     save_theme_name,
+    status_bar_font_pt,
 )
 
 
@@ -79,6 +80,7 @@ class GuiSettingsMixin:
         self._refresh_filter_card_styles()
         self._table_font_pt = load_saved_table_font_pt()
         self._apply_table_font()
+        self._apply_status_font()
 
     def _bind_hotkey(self, action_id: str, action: QAction) -> QAction:
         """Register *action* for persistence and apply the saved shortcut."""
@@ -270,6 +272,7 @@ class GuiSettingsMixin:
         self._refresh_filter_card_styles()
         self._refresh_structure_delegate_theme()
         self._apply_table_font()
+        self._apply_status_font()
         self._refresh_workspace_pane_theme()
         table = getattr(self, "table", None)
         if table is not None:
@@ -291,17 +294,20 @@ class GuiSettingsMixin:
         # apply_application_theme already refreshes open windows; ensure main chrome is current.
         self.refresh_theme()
         apply_application_font_pt(int(getattr(self, "_app_font_pt", 0) or default_app_font_pt()))
+        self._apply_status_font()
 
     def _preview_app_font(self, pt: int) -> None:
         self._app_font_pt = int(pt)
         apply_application_font_pt(self._app_font_pt)
         self._apply_table_font()
+        self._apply_status_font()
 
     def _set_app_font_pt(self, pt: int, *, persist: bool = True) -> None:
         self._app_font_pt = apply_application_font_pt(int(pt))
         if persist:
             save_app_font_pt(self._app_font_pt)
         self._apply_table_font()
+        self._apply_status_font()
         self._refresh_workspace_pane_theme()
 
     def _apply_table_font(self) -> None:
@@ -317,6 +323,17 @@ class GuiSettingsMixin:
             if header is not None:
                 header.setFont(font)
         table.viewport().update()
+
+    def _apply_status_font(self) -> None:
+        """Keep the status line and memory readout one point smaller than the app font."""
+        pt = status_bar_font_pt(getattr(self, "_app_font_pt", 0) or default_app_font_pt())
+        for name in ("status_label", "_memory_status_label"):
+            label = getattr(self, name, None)
+            if label is None:
+                continue
+            font = QFont(label.font())
+            font.setPointSize(pt)
+            label.setFont(font)
 
     def _preview_table_font(self, pt: int) -> None:
         self._table_font_pt = int(pt)

@@ -25,6 +25,7 @@ pytest.importorskip("PyQt5.QtWidgets")
 from molmanager.display_constants import (
     DEFAULT_STRUCTURE_DEPICT_HEIGHT,
     DEFAULT_STRUCTURE_DEPICT_WIDTH,
+    DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT,
     MAX_STRUCTURE_DEPICT_HEIGHT,
     MAX_STRUCTURE_DEPICT_WIDTH,
     MIN_STRUCTURE_DEPICT_HEIGHT,
@@ -62,7 +63,9 @@ def test_set_structure_depict_size_clamps_and_updates_runtime() -> None:
 
 def test_structure_row_default_height_tracks_depiction_height() -> None:
     set_structure_depict_size(180, 150, persist=False)
-    assert structure_row_default_height() == 150 + (212 - 202)
+    assert structure_row_default_height() == 150 + (
+        DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT - DEFAULT_STRUCTURE_DEPICT_HEIGHT
+    )
 
 
 def test_structure_column_minimum_width_uses_runtime_size() -> None:

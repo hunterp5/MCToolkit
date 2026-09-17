@@ -24,6 +24,29 @@ from PyQt5.QtWidgets import QWidget
 from molmanager.ui.singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 
+def test_reuse_or_show_modeless_singleton_can_create_without_showing(qapp):  # noqa: ARG001
+    class Host:
+        def __init__(self) -> None:
+            self._dlg = None
+
+    host = Host()
+
+    def factory() -> QWidget:
+        w = QWidget()
+        w.setWindowFlags(Qt.Window)
+        return w
+
+    hidden = reuse_or_show_modeless_singleton(host, "_dlg", factory, lambda: None, show=False)
+    assert hidden is host._dlg
+    assert hidden.isVisible() is False
+    shown = reuse_or_show_modeless_singleton(host, "_dlg", factory, lambda: None)
+    assert shown is hidden
+    assert shown.isVisible() is True
+    shown.close()
+    shown.deleteLater()
+    qapp.processEvents()
+
+
 def test_reuse_or_show_modeless_singleton_reuses_hidden_widget(qapp):  # noqa: ARG001
     """Opening the menu again must not replace the singleton while the widget still exists (hidden)."""
     destroyed = []

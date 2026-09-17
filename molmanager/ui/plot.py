@@ -77,6 +77,8 @@ from ..plot_axes import (
     resolve_plot_mode,
 )
 from .dockable_plot import (
+    PLOT_BODY_MARGINS,
+    PLOT_BODY_SPACING,
     apply_plot_chrome_glyphs,
     make_add_to_main_button,
     make_clear_selection_button,
@@ -155,10 +157,8 @@ class PlotWidget(
         self._radar_oids: list[int] = []
 
         root = QVBoxLayout(self)
-        # Top inset matches root spacing so floating (chrome→plot) and docked
-        # (pane header→plot) share the same gap under the toolbar.
-        root.setContentsMargins(4, 4, 4, 4)
-        root.setSpacing(4)
+        root.setContentsMargins(*PLOT_BODY_MARGINS)
+        root.setSpacing(PLOT_BODY_SPACING)
 
         self._opts_panel = QWidget()
         opts_root = QVBoxLayout(self._opts_panel)

@@ -53,13 +53,17 @@ class SessionPlotsMixin:
         if not isinstance(payload, dict) or not payload.get("structures"):
             self._discard_protein_viewer()
             return
-        open_viewer = getattr(self, "open_protein_viewer", None)
-        if not callable(open_viewer):
+        ensure = getattr(self, "_ensure_protein_viewer", None)
+        if not callable(ensure):
             return
-        dlg = open_viewer()
+        dlg = ensure(show=False)
         apply_state = getattr(dlg, "apply_session_state", None)
         if callable(apply_state):
             apply_state(payload)
+        try:
+            dlg.hide()
+        except RuntimeError:
+            pass
 
     def _collect_docked_plots(self) -> dict:
         """Docked plot widgets keyed by workspace pane (Plotter and analysis maps)."""

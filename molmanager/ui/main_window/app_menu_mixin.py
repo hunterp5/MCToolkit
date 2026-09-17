@@ -745,6 +745,10 @@ class AppMenuMixin:
 
     def open_protein_viewer(self):
         """Open the Protein Viewer window (3Dmol.js + chain Manager)."""
+        return self._ensure_protein_viewer(show=True)
+
+    def _ensure_protein_viewer(self, *, show: bool = True):
+        """Create or reuse the Protein Viewer; pass ``show=False`` to preload without raising it."""
         from ..protein_viewer import ProteinViewerDialog
         from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
@@ -756,6 +760,7 @@ class AppMenuMixin:
             "_protein_viewer_dialog",
             lambda: ProteinViewerDialog(self),
             _on_destroyed,
+            show=show,
         )
         return self._protein_viewer_dialog
 

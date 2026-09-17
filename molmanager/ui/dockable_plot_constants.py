@@ -59,8 +59,11 @@ _DOCK_TEXT_CHROME_ATTRS = (
     "select_region_btn",
     "_btn_browse",
 )
-_GLYPH_BTN_SIZE = 22
-_GLYPH_ICON_SIZE = 15
+_GLYPH_BTN_SIZE = 18
+_GLYPH_ICON_SIZE = 13
 _GLYPH_INK = QColor(20, 20, 20)
-_FOOTER_TEXT_FONT_PX = 11
-_FOOTER_TEXT_PAD_H = 5
+_FOOTER_TEXT_FONT_PX = 10
+_FOOTER_TEXT_PAD_H = 4
+# Docked plot body: no extra air under the pane header.
+PLOT_BODY_MARGINS = (2, 0, 2, 2)
+PLOT_BODY_SPACING = 2

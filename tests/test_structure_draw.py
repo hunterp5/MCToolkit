@@ -62,6 +62,18 @@ def test_table_bond_line_width_constant() -> None:
     assert STRUCTURE_DEPICT_BOND_LINE_WIDTH < 2.0
 
 
+def test_configure_mol_drawer_uses_zero_padding() -> None:
+    from rdkit.Chem.Draw import rdMolDraw2D
+
+    from molmanager.display_constants import STRUCTURE_DEPICT_PADDING
+    from molmanager.structure_draw import configure_mol_drawer
+
+    assert STRUCTURE_DEPICT_PADDING == 0.0
+    drawer = rdMolDraw2D.MolDraw2DCairo(STRUCTURE_DEPICT_WIDTH, STRUCTURE_DEPICT_HEIGHT)
+    configure_mol_drawer(drawer, STRUCTURE_DEPICT_WIDTH)
+    assert drawer.drawOptions().padding == 0.0
+
+
 def test_structure_column_minimum_width() -> None:
     from molmanager.display_constants import (
         DEFAULT_STRUCTURE_DEPICT_HEIGHT,

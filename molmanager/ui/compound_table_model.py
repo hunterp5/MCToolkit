@@ -545,7 +545,7 @@ class CompoundTableModel(
             if role == Qt.DecorationRole:
                 return cell_pix
             if role == Qt.SizeHintRole:
-                return QSize(cell_pix.width() + 8, cell_pix.height() + 8)
+                return QSize(cell_pix.width(), cell_pix.height())
             if role == Qt.TextAlignmentRole:
                 return int(Qt.AlignCenter)
 

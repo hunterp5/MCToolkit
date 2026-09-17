@@ -35,6 +35,7 @@ from PyQt5.QtWidgets import (
 
 from ..dockable_plot import (
     PLOT_PANEL_BASE_MINIMUM_WIDTH,
+    _GLYPH_BTN_SIZE,
     adopt_dock_header_buttons,
     embed_in_plot_pane,
     plot_widget_display_title,
@@ -75,14 +76,14 @@ class PlotPane(QFrame):
         self.setMinimumWidth(PLOT_PANEL_BASE_MINIMUM_WIDTH // 2)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._root = QVBoxLayout(self)
-        self._root.setContentsMargins(2, 2, 2, 2)
+        self._root.setContentsMargins(1, 0, 1, 1)
         self._root.setSpacing(0)
 
         self._nav_host = QWidget()
         self._nav_host.setObjectName("PlotPaneNav")
         nav_ly = QHBoxLayout(self._nav_host)
         nav_ly.setContentsMargins(0, 0, 0, 0)
-        nav_ly.setSpacing(3)
+        nav_ly.setSpacing(2)
         self._prev_btn = QPushButton()
         self._next_btn = QPushButton()
         self._move_earlier_btn = QPushButton()
@@ -113,7 +114,8 @@ class PlotPane(QFrame):
         self._page_label.setObjectName("PlotPanePage")
         self._page_label.setAlignment(Qt.AlignCenter)
         self._page_label.setFixedWidth(38)
-        self._page_label.setStyleSheet("QLabel { font-size: 11px; padding: 0px 1px; }")
+        self._page_label.setFixedHeight(_GLYPH_BTN_SIZE)
+        self._page_label.setStyleSheet("QLabel { font-size: 10px; padding: 0px 1px; }")
         nav_ly.addWidget(self._prev_btn)
         nav_ly.addWidget(self._next_btn)
         nav_ly.addWidget(self._title_edit)
@@ -127,26 +129,27 @@ class PlotPane(QFrame):
         self._header = QWidget()
         self._header.setObjectName("PlotPaneHeader")
         self._header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._header.setFixedHeight(_GLYPH_BTN_SIZE)
         header_ly = QHBoxLayout(self._header)
-        header_ly.setContentsMargins(3, 1, 3, 1)
-        header_ly.setSpacing(3)
+        header_ly.setContentsMargins(2, 0, 2, 0)
+        header_ly.setSpacing(2)
 
         self._header_left = QWidget()
         self._header_left.setObjectName("PlotPaneHeaderLeft")
         left_ly = QHBoxLayout(self._header_left)
         left_ly.setContentsMargins(0, 0, 0, 0)
-        left_ly.setSpacing(3)
+        left_ly.setSpacing(2)
         self._leading_opts_host = QWidget()
         self._leading_opts_host.setObjectName("PlotPaneLeadingOpts")
         self._leading_opts_ly = QHBoxLayout(self._leading_opts_host)
         self._leading_opts_ly.setContentsMargins(0, 0, 0, 0)
-        self._leading_opts_ly.setSpacing(3)
+        self._leading_opts_ly.setSpacing(2)
         left_ly.addWidget(self._leading_opts_host, 0)
         self._chrome_host = QWidget()
         self._chrome_host.setObjectName("PlotPaneChrome")
         self._chrome_ly = QHBoxLayout(self._chrome_host)
         self._chrome_ly.setContentsMargins(0, 0, 0, 0)
-        self._chrome_ly.setSpacing(3)
+        self._chrome_ly.setSpacing(2)
         left_ly.addWidget(self._chrome_host, 0)
         left_ly.addStretch(1)
 
@@ -154,23 +157,23 @@ class PlotPane(QFrame):
         self._header_right.setObjectName("PlotPaneHeaderRight")
         right_ly = QHBoxLayout(self._header_right)
         right_ly.setContentsMargins(0, 0, 0, 0)
-        right_ly.setSpacing(3)
+        right_ly.setSpacing(2)
         right_ly.addStretch(1)
         self._send_host = QWidget()
         self._send_host.setObjectName("PlotPaneSend")
         self._send_ly = QHBoxLayout(self._send_host)
         self._send_ly.setContentsMargins(0, 0, 0, 0)
-        self._send_ly.setSpacing(3)
+        self._send_ly.setSpacing(2)
         right_ly.addWidget(self._send_host, 0)
         self._trailing_close_host = QWidget()
         self._trailing_close_host.setObjectName("PlotPaneTrailingClose")
         self._trailing_close_ly = QHBoxLayout(self._trailing_close_host)
         self._trailing_close_ly.setContentsMargins(0, 0, 0, 0)
-        self._trailing_close_ly.setSpacing(3)
+        self._trailing_close_ly.setSpacing(2)
         right_ly.addWidget(self._trailing_close_host, 0)
         self._close_btn = QPushButton("×")
         self._close_btn.setObjectName("PlotPaneClose")
-        self._close_btn.setFixedSize(20, 20)
+        self._close_btn.setFixedSize(_GLYPH_BTN_SIZE, _GLYPH_BTN_SIZE)
         self._close_btn.setFlat(False)
         self._close_btn.setFocusPolicy(Qt.NoFocus)
         self._close_btn.setAutoDefault(False)
@@ -179,7 +182,7 @@ class PlotPane(QFrame):
         self._close_btn.setStyleSheet(
             "QPushButton {"
             " color: #c0392b;"
-            " font-size: 13px;"
+            " font-size: 12px;"
             " font-weight: 700;"
             " padding: 0px;"
             " }"

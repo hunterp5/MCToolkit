@@ -41,6 +41,8 @@ from PyQt5.QtWidgets import (
 from rdkit import Chem
 
 from .dockable_plot import (
+    PLOT_BODY_MARGINS,
+    PLOT_BODY_SPACING,
     make_add_to_main_button,
     make_plot_options_button,
     make_plot_options_dialog,
@@ -149,8 +151,8 @@ class Molecule3DViewerWidget(Mol3DConfMixin, Mol3DChromeMixin, QWidget):
         self._prop_refresh_signals: list = []
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(4, 4, 4, 4)
-        root.setSpacing(4)
+        root.setContentsMargins(*PLOT_BODY_MARGINS)
+        root.setSpacing(PLOT_BODY_SPACING)
 
         web = None
         try:

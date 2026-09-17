@@ -38,6 +38,8 @@ from ..plot_color import (
     resolve_plot_colorscale,
 )
 from .dockable_plot import (
+    PLOT_BODY_MARGINS,
+    PLOT_BODY_SPACING,
     PlotTitlesControls,
     apply_plot_chrome_glyphs,
     make_add_to_main_button,
@@ -174,10 +176,8 @@ class DockableResultPlotPanel(QWidget):
         opts.insertWidget(1, self._extra_opts_host)
 
         self._root = QVBoxLayout(self)
-        # Top inset matches root spacing so floating (chrome→plot) and docked
-        # (pane header→plot) share the same gap under the toolbar as Plotter/PCA.
-        self._root.setContentsMargins(4, 4, 4, 4)
-        self._root.setSpacing(4)
+        self._root.setContentsMargins(*PLOT_BODY_MARGINS)
+        self._root.setSpacing(PLOT_BODY_SPACING)
 
         self._footer_bar = QWidget(self)
         self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)

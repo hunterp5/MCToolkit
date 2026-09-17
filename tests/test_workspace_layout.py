@@ -75,6 +75,46 @@ def test_apply_layout_pane_counts(qapp):
     assert len(mgr.plot_panes()) == 2
 
 
+def _assert_equal_splitter_pair(splitter) -> None:
+    sizes = [int(s) for s in splitter.sizes()]
+    assert len(sizes) == 2
+    assert sizes[0] > 40
+    assert sizes[1] > 40
+    assert abs(sizes[0] - sizes[1]) <= max(2, int(splitter.handleWidth()))
+
+
+def test_quadrants_are_equal_sized(qapp):
+    table = QWidget()
+    mgr = WorkspaceLayoutManager(table)
+    mgr.apply_layout(LAYOUT_QUADRANTS, preserve_plots=False)
+    mgr.resize(900, 700)
+    mgr.show()
+    qapp.processEvents()
+    assert len(mgr.plot_panes()) == 3
+    assert len(mgr._splitters) == 3
+    for splitter in mgr._splitters:
+        _assert_equal_splitter_pair(splitter)
+
+
+def test_quadrants_restore_keeps_saved_splitter_ratios(qapp):
+    table = QWidget()
+    mgr = WorkspaceLayoutManager(table)
+    mgr.apply_layout(LAYOUT_QUADRANTS, preserve_plots=False)
+    mgr.resize(900, 700)
+    mgr.show()
+    qapp.processEvents()
+    top = mgr._splitters[1]
+    top.setSizes([620, 280])
+    qapp.processEvents()
+    payload = mgr.collect_splitter_sizes()
+    mgr.apply_layout(LAYOUT_QUADRANTS, preserve_plots=False)
+    mgr.restore_splitter_sizes(payload)
+    mgr.resize(900, 700)
+    qapp.processEvents()
+    sizes = [int(s) for s in mgr._splitters[1].sizes()]
+    assert sizes[0] > sizes[1] + 80
+
+
 def test_table_only_releases_all_plots(qapp):
     mgr = _manager(qapp)
     w0 = QLabel("a")
@@ -451,3 +491,18 @@ def test_dock_fits_wide_widget_to_existing_splitter_sizes(qapp):
     assert widget.minimumWidth() == 0
     assert mgr.release_widget(widget) is True
     assert widget.minimumWidth() == 1800
+
+
+def test_plot_pane_header_is_vertically_compact(qapp):
+    from molmanager.ui.dockable_plot import PLOT_BODY_MARGINS, _GLYPH_BTN_SIZE
+
+    pane = PlotPane("pane_compact")
+    assert pane._header.minimumHeight() == _GLYPH_BTN_SIZE
+    assert pane._header.maximumHeight() == _GLYPH_BTN_SIZE
+    header_m = pane._header.layout().contentsMargins()
+    assert (header_m.top(), header_m.bottom()) == (0, 0)
+    root_m = pane._root.contentsMargins()
+    assert root_m.top() == 0
+    assert pane._close_btn.height() == _GLYPH_BTN_SIZE
+    assert PLOT_BODY_MARGINS[1] == 0
+    pane.deleteLater()

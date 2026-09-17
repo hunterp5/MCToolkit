@@ -21,7 +21,11 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from .display_constants import STRUCTURE_DEPICT_BOND_LINE_WIDTH, structure_depict_width
+from .display_constants import (
+    STRUCTURE_DEPICT_BOND_LINE_WIDTH,
+    STRUCTURE_DEPICT_PADDING,
+    structure_depict_width,
+)
 
 
 def structure_cairo_dimensions(target_w: int, target_h: int) -> tuple[int, int]:
@@ -35,6 +39,7 @@ def configure_mol_drawer(drawer: rdMolDraw2D.MolDraw2D, target_w: int) -> None:
     base_w = max(1.0, float(structure_depict_width()))
     ratio = max(1.0, float(target_w) / base_w)
     opts.bondLineWidth = float(STRUCTURE_DEPICT_BOND_LINE_WIDTH) * ratio
+    opts.padding = float(STRUCTURE_DEPICT_PADDING)
 
 
 def _apply_table_draw_options(drawer: rdMolDraw2D.MolDraw2DCairo, target_w: int) -> None:

@@ -39,3 +39,13 @@ def test_main_toolbar_disabled_while_ingest_loading(qapp):  # noqa: ARG001
     assert file_menu.isEnabled()
     assert w._btn_workspace_layout.isEnabled()
     assert w._btn_processes.isEnabled()
+    w.close()
+
+
+def test_main_window_table_sits_flush_under_menubar(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    ly = w.centralWidget().layout()
+    m = ly.contentsMargins()
+    assert (m.left(), m.top(), m.right(), m.bottom()) == (0, 0, 0, 0)
+    assert ly.spacing() == 0
+    w.close()

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
     QSizePolicy,
     QSplitter,
@@ -49,6 +49,28 @@ LAYOUT_PRESETS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _equalize_splitter(splitter: QSplitter) -> None:
+    """Give each splitter child the same share of the current span."""
+    try:
+        n = int(splitter.count())
+    except RuntimeError:
+        return
+    if n <= 1:
+        return
+    try:
+        orient = splitter.orientation()
+        span = int(splitter.width() if orient == Qt.Horizontal else splitter.height())
+        handle = int(splitter.handleWidth()) * max(0, n - 1)
+    except RuntimeError:
+        return
+    inner = span - handle if span > handle else 0
+    if inner <= 0:
+        splitter.setSizes([1] * n)
+        return
+    base, rem = divmod(inner, n)
+    splitter.setSizes([base + (1 if i < rem else 0) for i in range(n)])
+
+
 class WorkspaceLayoutManager(QWidget):
     """Owns the content splitter tree: table region + plot panes."""
 
@@ -62,6 +84,7 @@ class WorkspaceLayoutManager(QWidget):
         self._panes: list[PlotPane] = []
         self._preferred_pane_id: str | None = None
         self._splitters: list[QSplitter] = []
+        self._equalize_token = 0
         self._root_ly = QVBoxLayout(self)
         self._root_ly.setContentsMargins(0, 0, 0, 0)
         self._root_ly.setSpacing(0)
@@ -203,6 +226,9 @@ class WorkspaceLayoutManager(QWidget):
                     sp.setSizes([max(0, int(v)) for v in vals])
                 except (RuntimeError, TypeError, ValueError):
                     pass
+        if sizes_map or ratios_map:
+            # Saved sizes win over the deferred equal-quadrant pass from apply_layout.
+            self._cancel_pending_equalize()
         pref_id = payload.get("preferred_pane_id")
         if isinstance(pref_id, str) and pref_id:
             pane = self.find_pane(pref_id)
@@ -267,6 +293,9 @@ class WorkspaceLayoutManager(QWidget):
 
         self._workspace_root = root
         self._root_ly.addWidget(root, 1)
+        if self._layout_id == LAYOUT_QUADRANTS:
+            self.equalize_quadrant_splitters()
+            self._schedule_equal_quadrants()
 
         extras: list[QWidget] = []
         for i, (widgets, idx) in enumerate(kept_stacks):
@@ -369,6 +398,27 @@ class WorkspaceLayoutManager(QWidget):
         self._splitters.append(splitter)
         return splitter
 
+    def _cancel_pending_equalize(self) -> None:
+        self._equalize_token += 1
+
+    def _schedule_equal_quadrants(self) -> None:
+        """Re-equalize after Qt assigns real geometry to the new splitter tree."""
+        self._equalize_token += 1
+        token = self._equalize_token
+        QTimer.singleShot(0, lambda t=token: self._apply_equal_quadrants(t))
+
+    def _apply_equal_quadrants(self, token: int) -> None:
+        if token != self._equalize_token or self._layout_id != LAYOUT_QUADRANTS:
+            return
+        self.equalize_quadrant_splitters()
+
+    def equalize_quadrant_splitters(self) -> None:
+        """Make the 2×2 quadrant splitters 50/50 (table UL, plots UR/LL/LR)."""
+        if self._layout_id != LAYOUT_QUADRANTS:
+            return
+        for splitter in self._splitters:
+            _equalize_splitter(splitter)
+
     def _build_table_only(self) -> QWidget:
         """Full-width table with no plot panes."""
         host = QWidget()
@@ -410,7 +460,7 @@ class WorkspaceLayoutManager(QWidget):
         return outer
 
     def _build_quadrants(self) -> QWidget:
-        """Table upper-left; three plot panes in UR, LL, LR."""
+        """Four equal cells: table upper-left; plot panes UR, LL, LR."""
         outer = self._track_splitter(QSplitter(Qt.Vertical))
         outer.setHandleWidth(6)
         outer.setChildrenCollapsible(False)
@@ -422,7 +472,6 @@ class WorkspaceLayoutManager(QWidget):
         top.addWidget(self._new_pane(0))
         top.setStretchFactor(0, 1)
         top.setStretchFactor(1, 1)
-        top.setSizes([700, 500])
 
         bottom = self._track_splitter(QSplitter(Qt.Horizontal))
         bottom.setHandleWidth(6)
@@ -431,13 +480,14 @@ class WorkspaceLayoutManager(QWidget):
         bottom.addWidget(self._new_pane(2))
         bottom.setStretchFactor(0, 1)
         bottom.setStretchFactor(1, 1)
-        bottom.setSizes([600, 600])
 
         outer.addWidget(top)
         outer.addWidget(bottom)
         outer.setStretchFactor(0, 1)
         outer.setStretchFactor(1, 1)
-        outer.setSizes([450, 450])
+        _equalize_splitter(top)
+        _equalize_splitter(bottom)
+        _equalize_splitter(outer)
         return outer
 
     def _build_table_grid(self) -> QWidget:

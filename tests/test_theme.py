@@ -100,6 +100,15 @@ def test_apply_application_theme_sets_current(qapp, tmp_path, monkeypatch):
     assert current_theme_name() == tid
 
 
+def test_status_bar_font_pt_is_one_point_below_app():
+    from molmanager.ui.theme import MIN_FONT_PT, status_bar_font_pt
+
+    assert status_bar_font_pt(10) == 9
+    assert status_bar_font_pt(None) == 9
+    assert status_bar_font_pt(8) == MIN_FONT_PT
+    assert status_bar_font_pt(32) == 31
+
+
 def test_status_bar_visible_save_and_load(tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
     from molmanager.ui.theme import load_status_bar_visible, save_status_bar_visible

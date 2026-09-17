@@ -48,6 +48,7 @@ _FC_CTRL_H = 20
 MIN_FONT_PT = 8
 MAX_FONT_PT = 32
 DEFAULT_FONT_PT = 10
+STATUS_BAR_FONT_PT_DELTA = 1
 # Backwards-compatible aliases (table-specific names used elsewhere).
 MIN_TABLE_FONT_PT = MIN_FONT_PT
 MAX_TABLE_FONT_PT = MAX_FONT_PT
@@ -83,6 +84,12 @@ def _clamp_font_pt(pt: int) -> int:
 def default_app_font_pt() -> int:
     """Default application-wide font point size."""
     return DEFAULT_FONT_PT
+
+
+def status_bar_font_pt(app_pt: int | None = None) -> int:
+    """Point size for the main-window status line and memory readout."""
+    pt = default_app_font_pt() if app_pt is None else int(app_pt)
+    return max(MIN_FONT_PT, _clamp_font_pt(pt) - STATUS_BAR_FONT_PT_DELTA)
 
 
 def default_table_font_pt() -> int:

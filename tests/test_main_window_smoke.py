@@ -611,6 +611,22 @@ def test_status_memory_tracker_starts_before_window_shown(qapp, monkeypatch):  #
     assert w._memory_status_label.text().startswith("Mem: ")
 
 
+def test_status_and_memory_labels_use_smaller_font(qapp, monkeypatch):  # noqa: ARG001
+    from molmanager.ui.theme import default_app_font_pt, status_bar_font_pt
+
+    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+    w = ChemicalTableApp()
+    app_pt = int(w._app_font_pt or default_app_font_pt())
+    expected = status_bar_font_pt(app_pt)
+    assert w.status_label.font().pointSize() == expected
+    assert w._memory_status_label.font().pointSize() == expected
+    w._set_app_font_pt(14, persist=False)
+    assert w.status_label.font().pointSize() == 13
+    assert w._memory_status_label.font().pointSize() == 13
+    w._set_app_font_pt(app_pt, persist=False)
+
+
 def test_status_memory_tracker_stops_when_status_bar_hidden(qapp, monkeypatch):  # noqa: ARG001
     monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
     monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)

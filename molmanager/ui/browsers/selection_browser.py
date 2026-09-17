@@ -44,6 +44,8 @@ from ...display_constants import (
 )
 from ..compound_table_model import CompoundTableModel
 from ..dockable_plot import (
+    PLOT_BODY_MARGINS,
+    PLOT_BODY_SPACING,
     discard_host_dialog_after_dock,
     make_add_to_main_button,
     make_plot_options_button,
@@ -81,8 +83,8 @@ class SelectionBrowserWidget(QWidget):
         ] = {}  # (oid, w_px, h_px) -> pixmap
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(4, 4, 4, 4)
-        root.setSpacing(4)
+        root.setContentsMargins(*PLOT_BODY_MARGINS)
+        root.setSpacing(PLOT_BODY_SPACING)
 
         self._cb_only_selected = QCheckBox("Browse Selected")
         self._cb_only_selected.setToolTip(

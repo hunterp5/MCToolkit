@@ -34,6 +34,8 @@ from .dockable_plot_chrome import (
     show_plot_options_dialog,
 )
 from .dockable_plot_constants import (
+    PLOT_BODY_MARGINS,
+    PLOT_BODY_SPACING,
     PLOT_PANEL_BASE_MINIMUM_WIDTH,
     PLOT_PANEL_COLLAPSED_WIDTH,
     PLOT_PANEL_DEFAULT_WIDTH,
@@ -83,6 +85,8 @@ from .dockable_plot_title import (
 )
 
 __all__ = [
+    "PLOT_BODY_MARGINS",
+    "PLOT_BODY_SPACING",
     "PLOT_PANEL_BASE_MINIMUM_WIDTH",
     "PLOT_PANEL_COLLAPSED_WIDTH",
     "PLOT_PANEL_DEFAULT_WIDTH",

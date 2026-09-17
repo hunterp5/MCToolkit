@@ -21,9 +21,9 @@ from __future__ import annotations
 from PyQt5.QtCore import QSettings
 
 # Default RDKit draw → QPixmap size for the Structure column.
-DEFAULT_STRUCTURE_DEPICT_WIDTH = 242
-DEFAULT_STRUCTURE_DEPICT_HEIGHT = 202
-DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT = 212
+DEFAULT_STRUCTURE_DEPICT_WIDTH = 210
+DEFAULT_STRUCTURE_DEPICT_HEIGHT = 170
+DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT = 180
 STRUCTURE_ROW_HEIGHT_PADDING = (
     DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT - DEFAULT_STRUCTURE_DEPICT_HEIGHT
 )
@@ -40,6 +40,8 @@ STRUCTURE_ROW_DEFAULT_HEIGHT = DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT
 
 # Bond stroke at 1× table resolution (default RDKit is 2.0; thinner lines without supersampling).
 STRUCTURE_DEPICT_BOND_LINE_WIDTH = 1.0
+# RDKit MolDraw2D padding fraction (0 fills the pixmap; RDKit default is ~0.05).
+STRUCTURE_DEPICT_PADDING = 0.0
 # Extra horizontal space in the table column beyond the pixmap (margins / scrollbar slop).
 STRUCTURE_COLUMN_HORIZONTAL_PADDING = 28
 

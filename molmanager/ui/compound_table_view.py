@@ -40,6 +40,7 @@ from ..display_constants import (
 # Must match CompoundTableModel.STRUCTURE_COL
 _STRUCTURE_COL = 1
 
+
 class StructureDelegate(QStyledItemDelegate):
     """Paints cached structure pixmap or a neutral placeholder."""
 
@@ -122,7 +123,7 @@ class StructureDelegate(QStyledItemDelegate):
         sh = super().sizeHint(option, index)
         pix = index.data(Qt.DecorationRole)
         if isinstance(pix, QPixmap) and not pix.isNull():
-            return QSize(max(sh.width(), pix.width() + 8), max(sh.height(), pix.height() + 8))
+            return QSize(max(sh.width(), pix.width()), max(sh.height(), pix.height()))
         return QSize(structure_depict_width(), max(sh.height(), structure_depict_height()))
 
 
@@ -155,6 +156,7 @@ class CompoundTableHeaderView(QHeaderView):
         self._edge_resize_logical = -1
         self._edge_resize_origin_x = 0
         self._edge_resize_origin_size = 0
+        self.setStyleSheet("QHeaderView::section { padding-top: 1px; padding-bottom: 1px; }")
         vp = self.viewport()
         if vp is not None:
             vp.setMouseTracking(True)
@@ -240,7 +242,7 @@ class CompoundTableView(QTableView):
         hh = CompoundTableHeaderView(Qt.Horizontal, self)
         self.setHorizontalHeader(hh)
         self.setSortingEnabled(False)
-        self._compound_model=None
+        self._compound_model = None
         self._structure_column_min_width = structure_column_minimum_width()
         hh.sectionResized.connect(self._on_horizontal_section_resized)
 
@@ -324,4 +326,3 @@ class CompoundTableView(QTableView):
 
     def compound_model(self):
         return self._compound_model
-

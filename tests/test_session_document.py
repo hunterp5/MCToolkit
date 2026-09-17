@@ -1062,9 +1062,13 @@ def test_session_roundtrip_restores_protein_viewer(qapp, tmp_path) -> None:  # n
     w2._apply_session_document(doc)
     dlg2 = w2._protein_viewer_dialog
     assert dlg2 is not None
+    assert dlg2.isVisible() is False
     assert [slot.name for slot in dlg2._slots] == ["first.pdb", "second.pdb"]
     assert dlg2.manager.tree.topLevelItemCount() == 2
     hidden = next(r for r in dlg2._slots[0].rows if r.spec.kind == "ligand")
     assert hidden.visible is False
+    opened = w2.open_protein_viewer()
+    assert opened is dlg2
+    assert dlg2.isVisible() is True
     w.close()
     w2.close()
