@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Tools → Reaction Based Enumeration."""
+"""Tools → Reaction (extract components, reaction-based enumeration)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,11 @@ import logging
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMessageBox
 
-from ..strings import TOOL_REACTION_ENUMERATION
+from ..strings import TOOL_REACTION_ENUMERATION, TOOL_REACTION_EXTRACT
+from ...reaction_extract import (
+    extract_reaction_column_values,
+    preferred_reaction_source_column,
+)
 from ...rxn_io import reaction_smarts_from_app_selection
 from ...workers import ReactionEnumerationWorker
 
@@ -31,6 +35,93 @@ logger = logging.getLogger(__name__)
 
 
 class ReactionToolsMixin:
+    def open_reaction_extract(self) -> None:
+        if not self.headers or self._table_model.rowCount() == 0:
+            QMessageBox.information(
+                self,
+                TOOL_REACTION_EXTRACT,
+                "Open a file or add rows so the table has a reaction column to extract from.",
+            )
+            return
+        columns = self._filterable_data_column_names()
+        if not columns:
+            QMessageBox.information(
+                self,
+                TOOL_REACTION_EXTRACT,
+                "No text columns are available to extract from.",
+            )
+            return
+        from ..dialogs import ReactionExtractDialog
+
+        d = ReactionExtractDialog(
+            columns,
+            len(self._selected_logical_rows()),
+            self,
+            default_column=preferred_reaction_source_column(self.headers),
+        )
+        self._prepare_tool_dialog(d)
+        d.setAttribute(Qt.WA_DeleteOnClose, True)
+        d.accepted.connect(lambda *_, dlg=d: self._on_reaction_extract_dialog_accepted(dlg))
+        d.show()
+
+    def _on_reaction_extract_dialog_accepted(self, d) -> None:
+        p = d.params()
+        source = p.source_column
+        if not source or source not in self.headers:
+            QMessageBox.warning(self, TOOL_REACTION_EXTRACT, "Choose a reaction column.")
+            return
+        only_selected = d.only_selected_rows()
+        allowed = self._selected_oids_set() if only_selected else None
+        if self._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_REACTION_EXTRACT):
+            return
+        oids = self._all_oids_in_table_order()
+        if allowed is not None:
+            oids = [o for o in oids if o in allowed]
+        if not oids:
+            QMessageBox.information(
+                self, TOOL_REACTION_EXTRACT, "No rows to process for this scope."
+            )
+            return
+        try:
+            ci = self.headers.index(source)
+        except ValueError:
+            QMessageBox.warning(self, TOOL_REACTION_EXTRACT, "Choose a reaction column.")
+            return
+        texts: list[str] = []
+        for oid in oids:
+            row = self._table_model.logical_row_for_oid(int(oid))
+            if row < 0:
+                texts.append("")
+                continue
+            raw = self._table_model.backing_value_for_row_header(row, source) or ""
+            if not raw:
+                raw = self._table_cell_text(row, ci) or ""
+            texts.append(raw)
+        try:
+            headers, row_dicts = extract_reaction_column_values(
+                texts,
+                p.mode,
+                reactant_prefix=p.reactant_prefix,
+                product_prefix=p.product_prefix,
+            )
+        except ValueError as exc:
+            QMessageBox.warning(
+                self, TOOL_REACTION_EXTRACT, str(exc) or "Could not extract that column."
+            )
+            return
+        if not headers:
+            QMessageBox.information(
+                self,
+                TOOL_REACTION_EXTRACT,
+                "No reactants or products could be parsed from that column.",
+            )
+            return
+        rows = [(int(oid), row_dicts[j]) for j, oid in enumerate(oids)]
+        written = self.on_calc_finished(rows, headers, progress_label=TOOL_REACTION_EXTRACT)
+        self.status_label.setText(
+            f'{TOOL_REACTION_EXTRACT}: {len(written)} column(s) from "{source}".'
+        )
+
     def open_reaction_enumeration(self) -> None:
         from ..dialogs import ReactionEnumerationDialog
 
