@@ -1,6 +1,6 @@
 # Settings
 
-Settings control appearance and keyboard shortcuts: themes, application/table fonts, the hotkey editor, and whether the status bar is shown.
+Settings control appearance, keyboard shortcuts, and the WSL executable used for Linux-only tools: themes, application/table fonts, the hotkey editor, whether the status bar is shown, and Windows Subsystem for Linux.
 
 ## Goal
 
@@ -20,6 +20,7 @@ Global UI preferences for this installation/session; they do not alter table che
 - **Custom Colors...** - edit named custom themes (palette roles, save/delete).
 - **Font...** - **Application font size**, **Table font size**, **Table text alignment** (3×3: top/center/bottom × left/center/right), **Reset to Default**.
 - **Hotkeys...** - category/command/shortcut table with **Reset to Defaults**, **Clear Selected**, and OK/Cancel.
+- **WSL...** - path to ``wsl.exe`` so Windows can run Linux-only tools (AmberTools / GAFF for OpenMM, and similar). **Detect** fills PATH/System32; **Test** runs ``uname -s`` inside WSL.
 - **Status Bar** - show or hide the bottom bar (status messages and memory use).
 
 ## Workflow
@@ -27,7 +28,8 @@ Global UI preferences for this installation/session; they do not alter table che
 1. Open **Settings** and pick a theme or **Custom Colors...**.
 2. Set font sizes so the table and dialogs stay readable.
 3. Edit hotkeys for commands you use often; reset if a binding conflicts.
-4. Confirm changes and return to the table.
+4. On Windows, set **WSL...** if you will run Linux-only tools such as GAFF/AmberTools.
+5. Confirm changes and return to the table.
 
 ## Use cases
 

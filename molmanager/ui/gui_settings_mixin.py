@@ -108,6 +108,16 @@ class GuiSettingsMixin:
         if hasattr(self, "status_label"):
             self.status_label.setText("Hotkeys updated.")
 
+    def open_wsl_settings_dialog(self) -> None:
+        from .dialogs.wsl_settings import WslSettingsDialog
+
+        dlg = WslSettingsDialog(self)
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        path = dlg.selected_path() or "default"
+        if hasattr(self, "status_label"):
+            self.status_label.setText(f"WSL executable — {path}")
+
     def open_structure_settings_dialog(self) -> None:
         from ..display_constants import structure_depict_height, structure_depict_width
         from .dialogs.structure_settings import StructureSettingsDialog
@@ -179,6 +189,7 @@ class GuiSettingsMixin:
         )
         settings_menu.addAction(QAction("&Font…", self, triggered=self.open_font_dialog))
         settings_menu.addAction(QAction("&Hotkeys…", self, triggered=self.open_hotkeys_dialog))
+        settings_menu.addAction(QAction("&WSL…", self, triggered=self.open_wsl_settings_dialog))
         settings_menu.addSeparator()
         self._act_status_bar = QAction("Status Bar", self, checkable=True)
         self._act_status_bar.setToolTip(
