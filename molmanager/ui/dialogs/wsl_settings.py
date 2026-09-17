@@ -20,16 +20,13 @@ from __future__ import annotations
 
 from PyQt5.QtWidgets import (
     QDialog,
-    QDialogButtonBox,
     QFileDialog,
-    QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
-    QWidget,
 )
 
 from ...wsl import (
@@ -51,7 +48,6 @@ class WslSettingsDialog(QDialog):
         self.setMinimumWidth(480)
 
         root = QVBoxLayout(self)
-        form = QFormLayout()
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         self.path_edit = QLineEdit(load_wsl_executable())
@@ -65,19 +61,16 @@ class WslSettingsDialog(QDialog):
         test_btn.setToolTip("Run `uname -s` inside WSL to confirm the executable works.")
         test_btn.clicked.connect(self._test)
         row.addWidget(test_btn)
-        wrap = QWidget()
-        wrap.setLayout(row)
-        form.addRow("Executable:", wrap)
-        root.addLayout(form)
+        ok = QPushButton("OK")
+        ok.setDefault(True)
+        ok.clicked.connect(self.accept)
+        row.addWidget(ok)
+        root.addLayout(row)
 
         self.status = QLabel("")
         self.status.setWordWrap(True)
         self.status.setStyleSheet("color: palette(mid);")
         root.addWidget(self.status)
-
-        box = QDialogButtonBox(QDialogButtonBox.Ok)
-        box.accepted.connect(self.accept)
-        root.addWidget(box)
         make_window_minimizable(self)
 
     def selected_path(self) -> str:
