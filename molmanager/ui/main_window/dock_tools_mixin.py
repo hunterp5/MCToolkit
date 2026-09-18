@@ -185,8 +185,37 @@ class DockToolsMixin:
             return
         self._clear_protein_viewer_dock_pose()
 
+    def _pose_browser_window_is_open(self, widget) -> bool:
+        """True when the pose browser is docked in a visible viewer or in a visible window."""
+        from ..qt_widget_utils import qobject_is_deleted
+
+        if widget is None or qobject_is_deleted(widget):
+            return False
+        protein = self._live_protein_viewer()
+        if protein is not None:
+            try:
+                viewer_open = bool(protein.isVisible())
+            except RuntimeError:
+                viewer_open = False
+            check = getattr(protein, "is_side_docked", None)
+            if viewer_open and callable(check) and bool(check(widget)):
+                return True
+        check = getattr(self, "is_plot_docked", None)
+        if callable(check) and bool(check(widget)):
+            return True
+        try:
+            host = widget.window()
+        except RuntimeError:
+            return False
+        if host is None or qobject_is_deleted(host) or host is protein:
+            return False
+        try:
+            return bool(host.isVisible())
+        except RuntimeError:
+            return False
+
     def _live_pose_browser(self):
-        """Return the Manager-docked or floating pose-browser panel, if it is still live."""
+        """Return the Manager-docked or visible floating pose-browser panel."""
         from ..pose_browser import PoseBrowserDialog, PoseBrowserWidget
         from ..qt_widget_utils import qobject_is_deleted
 
@@ -194,21 +223,24 @@ class DockToolsMixin:
         lister = getattr(protein, "side_docked_widgets", None) if protein is not None else None
         if callable(lister):
             for w in lister():
-                if isinstance(w, PoseBrowserWidget):
+                if isinstance(w, PoseBrowserWidget) and self._pose_browser_window_is_open(w):
                     return w
         lister = getattr(self, "iter_docked_plot_widgets", None)
         if callable(lister):
             for w in lister():
-                if isinstance(w, PoseBrowserWidget):
+                if isinstance(w, PoseBrowserWidget) and self._pose_browser_window_is_open(w):
                     return w
         dlg = getattr(self, "_pose_browser_dialog", None)
         if dlg is None or qobject_is_deleted(dlg):
             return None
         panel = getattr(dlg, "_panel", None)
-        if isinstance(panel, PoseBrowserWidget):
+        if not isinstance(panel, PoseBrowserWidget):
+            if isinstance(dlg, PoseBrowserDialog):
+                panel = getattr(dlg, "_panel", None)
+            else:
+                panel = None
+        if isinstance(panel, PoseBrowserWidget) and self._pose_browser_window_is_open(panel):
             return panel
-        if isinstance(dlg, PoseBrowserDialog):
-            return getattr(dlg, "_panel", None)
         return None
 
     def _raise_pose_browser(self, widget) -> None:

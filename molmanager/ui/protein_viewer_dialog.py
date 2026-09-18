@@ -820,4 +820,7 @@ class ProteinViewerDialog(
             event.ignore()
             return
         self._float_side_docks()
+        clearer = getattr(self, "clear_dock_pose", None)
+        if callable(clearer):
+            clearer()
         super().closeEvent(event)
