@@ -8,7 +8,7 @@ Build a named sequence pool from FASTA, pasted text, or polymer chains in an ope
 
 ## When to use
 
-Use **Protein → Sequence…** when you want a Clustal-style multiple-sequence alignment. Use **Protein → Viewer → Sequence** when you want to edit residues on a loaded 3D structure.
+Use **Protein → Sequence…** when you want a Clustal-style multiple-sequence alignment. Use **Protein → Viewer → Sequence** when you want to inspect or right-click **Mutate** residues on a loaded 3D structure.
 
 ## Inputs / scope
 

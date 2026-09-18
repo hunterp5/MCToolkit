@@ -14,9 +14,9 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""PDBQT/SDF docking I/O helpers used by Smina and the dock-results viewer.
+"""PDBQT/SDF docking I/O helpers used by Gnina and the dock-results viewer.
 
-Protein PDB cleanup stays in Tools → Dock → Prepare PDB. Protonation is not run here —
+Protein PDB cleanup stays in Protein → Dock Ligand → Prepare → Receptor PDB. Protonation is not run here —
 use Protonate / Fast Prepare first.
 """
 
@@ -29,6 +29,7 @@ from pathlib import Path
 from rdkit import Chem
 
 from .bundled_paths import resolve_user_executable
+from .confs_codec import is_packed_ensemble_header
 from .services.column_labels import COLUMN_PARENT_OID
 
 logger = logging.getLogger(__name__)
@@ -50,15 +51,25 @@ _MODE_HEADER_RE = re.compile(r"mode\s*\|\s*affinity", re.IGNORECASE)
 _MODE_ROW_RE = re.compile(
     r"^\s*(\d+)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*$"
 )
+_CNN_REMARK_KEYS = {
+    "cnnscore": "CNNscore",
+    "cnnaffinity": "CNNaffinity",
+    "cnn_vs": "CNN_VS",
+    "cnnvs": "CNN_VS",
+}
 _SKIP_REMARK_KEYS = frozenset({"SMILES", "H", "ROOT", "BRANCH", "status", "between"})
 DOCK_RESULT_PREFERRED_COLUMNS = (
     "SMILES",
     COLUMN_PARENT_OID,
     "mode",
+    "CNNscore",
+    "CNNaffinity",
     "minimizedAffinity",
     "minimizedRMSD",
     "rmsd_lb",
     "rmsd_ub",
+    "crystalRMSD",
+    "crystalRef",
     "poseStage",
     "Name",
 )
@@ -212,7 +223,7 @@ def _fmt_score(raw: object) -> str:
 
 
 def pose_metadata_from_pdbqt(pdbqt: str) -> dict[str, str]:
-    """Extract Smina/Vina pose fields from PDBQT remarks (affinity, RMSD, name, …)."""
+    """Extract Gnina/Smina/Vina pose fields from PDBQT remarks (CNN scores, affinity, RMSD, name)."""
     meta: dict[str, str] = {}
     for line in (pdbqt or "").splitlines():
         text = line.strip()
@@ -244,6 +255,10 @@ def pose_metadata_from_pdbqt(pdbqt: str) -> dict[str, str]:
             continue
         if key.lower() == "minimizedaffinity":
             meta.setdefault("minimizedAffinity", _fmt_score(val))
+            continue
+        cnn_key = _CNN_REMARK_KEYS.get(key.lower())
+        if cnn_key is not None:
+            meta.setdefault(cnn_key, _fmt_score(val))
             continue
         meta.setdefault(key, val)
     score = affinity_from_pdbqt(pdbqt)
@@ -344,6 +359,138 @@ def pose_table_props(mol: Chem.Mol | None) -> dict[str, str]:
     return out
 
 
+def _pose_parent_oid(mol: Chem.Mol | None, known_oids: set[int]) -> int | None:
+    """Table OID for a docked pose: Parent OID, else ``_Name`` when it is a live row id."""
+    if mol is None:
+        return None
+    props = pose_table_props(mol)
+    raw = (props.get(COLUMN_PARENT_OID) or "").strip()
+    if raw:
+        try:
+            oid = int(raw)
+        except (TypeError, ValueError):
+            oid = None
+        else:
+            if oid in known_oids:
+                return oid
+    name = ""
+    try:
+        if mol.HasProp("_Name"):
+            name = (mol.GetProp("_Name") or "").strip()
+    except Exception:
+        name = ""
+    if not name:
+        name = (props.get("Name") or "").strip()
+    try:
+        oid = int(name)
+    except (TypeError, ValueError):
+        return None
+    return oid if oid in known_oids else None
+
+
+def stamp_pose_parent_oids(mols: list[Chem.Mol], known_oids: set[int]) -> None:
+    """Write Parent OID onto poses that match a live table row."""
+    for mol in mols or []:
+        if mol is None:
+            continue
+        oid = _pose_parent_oid(mol, known_oids)
+        if oid is None:
+            continue
+        try:
+            mol.SetProp(COLUMN_PARENT_OID, str(oid))
+        except Exception:
+            continue
+
+
+def pose_ligand_group_key(mol: Chem.Mol | None) -> str:
+    """Stable grouping key when a pose is not attached to a table row."""
+    if mol is None:
+        return ""
+    props = pose_table_props(mol)
+    name = (props.get("Name") or "").strip()
+    if name:
+        return f"name:{name}"
+    smi = (props.get("SMILES") or "").strip()
+    if smi:
+        return f"smi:{smi}"
+    return f"id:{id(mol)}"
+
+
+def group_dock_poses(
+    mols: list[Chem.Mol],
+    known_oids: set[int],
+) -> tuple[dict[int, list[Chem.Mol]], list[list[Chem.Mol]]]:
+    """Split poses into parent-row groups and leftover ligand groups."""
+    by_oid: dict[int, list[Chem.Mol]] = {}
+    orphans: dict[str, list[Chem.Mol]] = {}
+    for mol in mols or []:
+        if mol is None:
+            continue
+        oid = _pose_parent_oid(mol, known_oids)
+        if oid is not None:
+            by_oid.setdefault(oid, []).append(mol)
+            continue
+        key = pose_ligand_group_key(mol)
+        orphans.setdefault(key or f"id:{id(mol)}", []).append(mol)
+    return by_oid, list(orphans.values())
+
+
+def ordered_dock_pose_groups(
+    mols: list[Chem.Mol],
+    known_oids: set[int],
+) -> list[list[Chem.Mol]]:
+    """Ligand groups in first-seen order (parent row, then Name/SMILES)."""
+    by_oid, orphans = group_dock_poses(mols, known_oids)
+    orphan_by_key: dict[str, list[Chem.Mol]] = {}
+    for group in orphans:
+        first = next((m for m in group if m is not None), None)
+        if first is None:
+            continue
+        orphan_by_key[pose_ligand_group_key(first)] = group
+    groups: list[list[Chem.Mol]] = []
+    seen_oids: set[int] = set()
+    seen_keys: set[str] = set()
+    for mol in mols or []:
+        if mol is None:
+            continue
+        oid = _pose_parent_oid(mol, known_oids)
+        if oid is not None:
+            if oid not in seen_oids:
+                seen_oids.add(oid)
+                groups.append(by_oid[oid])
+            continue
+        key = pose_ligand_group_key(mol)
+        if key not in seen_keys:
+            seen_keys.add(key)
+            groups.append(orphan_by_key.get(key) or [mol])
+    return groups
+
+
+def dock_poses_pack_meta(mols: list[Chem.Mol]) -> dict:
+    """Packed-ensemble metadata for a ligand's docked poses."""
+    n = len([m for m in (mols or []) if m is not None])
+    meta: dict = {"ok": True, "op": "gnina", "n_kept": n, "n_packed": n}
+    best: float | None = None
+    for mol in mols or []:
+        if mol is None:
+            continue
+        props = pose_table_props(mol)
+        for key in ("minimizedAffinity", "affinity", "CNNaffinity"):
+            raw = (props.get(key) or "").strip()
+            if not raw:
+                continue
+            try:
+                val = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if best is None or val < best:
+                best = val
+            break
+    if best is not None:
+        meta["e_min_kcal"] = best
+    return meta
+
+
 def dock_result_headers(mols: list[Chem.Mol]) -> list[str]:
     """Table headers for a dock-results window: structure plus all pose fields."""
     keys: set[str] = set()
@@ -355,7 +502,7 @@ def dock_result_headers(mols: list[Chem.Mol]) -> list[str]:
             tail.append(name)
             keys.discard(name)
     for name in sorted(keys):
-        if name and name != "confs":
+        if name and not is_packed_ensemble_header(name):
             tail.append(name)
     if "confs" not in tail:
         tail.append("confs")
@@ -811,3 +958,10 @@ def combine_pose_mols(pose_mols: list[Chem.Mol]) -> Chem.Mol | None:
 def smina_executable_ok(path: str) -> bool:
     """True when *path* is an existing file or a name that might be on PATH."""
     return resolve_user_executable(path) is not None
+
+
+def gnina_executable_ok(path: str) -> bool:
+    """True when *path* is a local Gnina binary or a WSL/PATH command name."""
+    from .gnina_launch import gnina_command_ok
+
+    return gnina_command_ok(path)

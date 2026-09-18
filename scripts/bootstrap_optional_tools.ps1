@@ -29,8 +29,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if (Test-Path "scripts\install_pytorch_pka.ps1") {
     Write-Host ""
-    Write-Host "If pKa prediction fails (torch version conflict), run:"
-    Write-Host "  scripts\install_pytorch_pka.ps1"
+    Write-Host "Configuring Uni-pKa PyTorch (CUDA automatically if nvidia-smi sees an NVIDIA GPU)..."
+    & "scripts\install_pytorch_pka.ps1" -SkipRequirements
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
 $perm = Read-Host "Download GNN-MTL permeability model weights? [y/N]"
@@ -47,7 +48,7 @@ $binDir = Join-Path $Root "molmanager\resources\bin\win"
 Write-Host ""
 Write-Host "Optional executables (copy into):"
 Write-Host "  $binDir"
-Write-Host "    vina.exe / smina.exe  - from https://vina.scripps.edu"
+Write-Host "    gnina  - Linux binary from https://github.com/gnina/gnina (run via WSL on Windows)"
 Write-Host ""
 Write-Host "Or set MOLMANAGER_BUNDLE_DIR to a folder containing those binaries."
 Write-Host "Run: python -m molmanager"

@@ -1,8 +1,8 @@
 # Generate Conformations (Stochastic)
 
-Conformations → **Stochastic** builds 3D conformer ensembles per molecule with RDKit ETKDG, energy window, force field, and pruning controls, optionally writing to the table or SDF. When generation finishes, a 3D results window opens with per-conformer **E**, **ΔE vs ref**, **ΔE vs min**, **Pop. %**, and **RMSD**.
+Conformations → **Generate → Stochastic** builds 3D conformer ensembles per molecule with RDKit ETKDG, energy window, force field, and pruning controls, optionally writing to the table or SDF. When generation finishes, a 3D results window opens with per-conformer **E**, **ΔE vs ref**, **ΔE vs min**, **Pop. %**, and **RMSD**.
 
-For a systematic torsion search instead of stochastic ETKDG, use **Conformations → Systematic…** (Open Babel Confab).
+For a systematic torsion search instead of stochastic ETKDG, use **Conformations → Generate → Systematic…** (Open Babel Confab).
 
 ## Goal
 
@@ -20,7 +20,7 @@ Scoped rows with valid structures; **Selected Rows Only** when checked. Output m
 
 - **Conformers** - ETKDG search budget (up to 1,000). This is how many poses to embed, not how many are stored.
 - **Energy window** - keep conformers within this window (0 = keep all).
-- **Force field** - MMFF94, MMFF94s, or UFF (MMFF variants fall back to UFF if parameters are missing).
+- **Force field** - MMFF94, MMFF94s, or UFF (MMFF variants fall back to UFF if parameters are missing). **GAFF2** / **GAFF** minimize each pose with AmberTools (antechamber / parmchk2 / tleap) and OpenMM in vacuum. They require AmberTools on PATH (WSL on Windows: Settings → WSL) and OpenMM (`pip install 'openmm>=8.2,<8.3'`). There is no silent fallback to MMFF/UFF if parameterization fails.
 - **Seed** - reproducibility control.
 - **RMS prune (embed)** - drop near-duplicates during ETKDG embedding (−1 = ETKDG default).
 - **RMS prune (post-min)** - after minimization, drop higher-energy poses within this RMS of a kept conformer (0 = off).
@@ -49,4 +49,4 @@ Scoped rows with valid structures; **Selected Rows Only** when checked. Output m
 
 ## Tips and limits
 
-Cost scales with atoms × requested conformers × rows. A larger search budget with **Max keep** around 50–200 is usually better than storing every embedded pose. Force-field minima are not protein-aware. Failed embeddings skip or partially fill - check logs/status. Energies in the results window are vacuum molecular-mechanics totals (kcal/mol), not protein-bound or quantum-chemical values. The force field is the one chosen in this dialog (MMFF, MMFF94s, or UFF). Optional **Align on** overlays the ensemble on a common substructure; flexible tails may still diverge after core overlay. Embed RMS prune happens before minimization; use **RMS prune (post-min)** to collapse poses that relaxed onto the same basin. Packed **confs** cells have a size limit, so uncapped ensembles can still be truncated. If a **confs** column already exists, new ensembles go to **confs (1)** (then **confs (2)**, …) so the previous column is kept.
+Cost scales with atoms × requested conformers × rows. GAFF/GAFF2 also run AM1-BCC (or Gasteiger) once per molecule, so they are slower than MMFF/UFF. A larger search budget with **Max keep** around 50–200 is usually better than storing every embedded pose. Force-field minima are not protein-aware. Failed embeddings skip or partially fill - check logs/status. Energies in the results window are vacuum molecular-mechanics totals (kcal/mol), not protein-bound or quantum-chemical values. The force field is the one chosen in this dialog (MMFF, MMFF94s, UFF, GAFF2, or GAFF). Optional **Align on** overlays the ensemble on a common substructure; flexible tails may still diverge after core overlay. Embed RMS prune happens before minimization; use **RMS prune (post-min)** to collapse poses that relaxed onto the same basin. Packed **confs** cells have a size limit, so uncapped ensembles can still be truncated. If a **confs** column already exists, new ensembles go to **confs (1)** (then **confs (2)**, …) so the previous column is kept.

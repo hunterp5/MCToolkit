@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Unified signals and helpers for background work (process queue, Render 2D, Smina, …)."""
+"""Unified signals and helpers for background work (process queue, Render 2D, Gnina, …)."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ class BackgroundActivityHub(QObject):
     """
     Single ``changed`` signal for anything that should refresh the Processes dialog
     or other observers. Relays ``ProcessQueueManager.snapshot_changed`` and accepts
-    explicit ``notify_changed()`` for activity outside the queue (e.g. Render 2D, Smina).
+    explicit ``notify_changed()`` for activity outside the queue (e.g. Render 2D, Gnina).
     """
 
     changed = pyqtSignal()
@@ -50,9 +50,13 @@ class BackgroundActivityHub(QObject):
         fn = getattr(self._app, "render2d_batch_active", None)
         return bool(fn()) if callable(fn) else False
 
-    def smina_dock_active(self) -> bool:
-        fn = getattr(self._app, "smina_dock_active", None)
+    def gnina_dock_active(self) -> bool:
+        fn = getattr(self._app, "gnina_dock_active", None) or getattr(
+            self._app, "smina_dock_active", None
+        )
         return bool(fn()) if callable(fn) else False
+
+    smina_dock_active = gnina_dock_active
 
     def _render2d_on_process_queue(self, snap: dict[str, Any] | None = None) -> bool:
         """True when Render 2D is the currently running serial queue job."""
@@ -127,9 +131,9 @@ class BackgroundActivityHub(QObject):
             rows.insert(0, ("Running", "(render-2d)", "Render 2D — drawing structures…"))
             metas.insert(0, {"kind": "render2d"})
 
-        if self.smina_dock_active():
-            rows.insert(0, ("Running", "(smina)", "Dock — Smina"))
-            metas.insert(0, {"kind": "smina"})
+        if self.gnina_dock_active():
+            rows.insert(0, ("Running", "(gnina)", "Dock — Gnina"))
+            metas.insert(0, {"kind": "gnina"})
 
         for job_id, title in sorted((getattr(self._app, "_background_jobs", None) or {}).items()):
             from .background_jobs import background_job_is_cancellable
@@ -182,11 +186,13 @@ class BackgroundActivityHub(QObject):
                 return (None, "Render 2D cancelled.")
             return (("Cancel", "Render 2D is not active."), None)
 
-        if kind == "smina":
-            cancel = getattr(app, "cancel_smina_dock", None)
+        if kind in {"gnina", "smina"}:
+            cancel = getattr(app, "cancel_gnina_dock", None) or getattr(
+                app, "cancel_smina_dock", None
+            )
             if callable(cancel) and cancel():
-                return (None, "Smina stopped.")
-            return (("Cancel", "Smina is not running."), None)
+                return (None, "Gnina stopped.")
+            return (("Cancel", "Gnina is not running."), None)
 
         if kind == "pq_running":
             if self.render2d_batch_active():
@@ -244,7 +250,9 @@ class BackgroundActivityHub(QObject):
             app._invalidate_substructure_async_jobs()
         if hasattr(app, "cancel_render_2d_batch"):
             app.cancel_render_2d_batch()
-        if hasattr(app, "cancel_smina_dock"):
+        if hasattr(app, "cancel_gnina_dock"):
+            app.cancel_gnina_dock()
+        elif hasattr(app, "cancel_smina_dock"):
             app.cancel_smina_dock()
         from .background_jobs import cancel_background_job
 

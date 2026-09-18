@@ -54,14 +54,24 @@ class ProteinPrepareResult:
     warning: str = ""
 
     def can_open_smina(self) -> bool:
-        """True when Open Smina can prefill receptor, ligand, or search box."""
+        """True when Open Gnina can prefill receptor, ligand, or search box."""
         return bool(
-            self.receptor_pdbqt
+            self.receptor_pdbqt_path()
             or self.ligand_sdf
             or self.ligand_pdb
             or self.box_path
             or self.box is not None
         )
+
+    def receptor_pdbqt_path(self) -> str:
+        """Apo receptor PDBQT for Gnina, or empty if none was written."""
+        rec = (self.receptor_pdbqt or "").strip()
+        if rec.lower().endswith(".pdbqt"):
+            return rec
+        out = (self.output_path or "").strip()
+        if out.lower().endswith(".pdbqt") and Path(out).is_file():
+            return out
+        return ""
 
 
 def _atom_key(atom) -> ResidueKey:
@@ -238,6 +248,49 @@ def _emit_box_files(
     return box, ligand_pdb, ligand_sdf
 
 
+def ligand_keys_from_structure(text: str, fmt: str) -> set[ResidueKey]:
+    """Residue keys for every ligand component in a PDB/mmCIF string."""
+    from ..structure_components import parse_structure_components
+
+    keys: set[ResidueKey] = set()
+    try:
+        comps = parse_structure_components(text or "", fmt or "pdb")
+    except Exception:
+        return keys
+    for spec in comps:
+        if spec.kind != "ligand":
+            continue
+        keys.add(_norm_key(spec.chain, spec.resi, spec.icode))
+    return keys
+
+
+def write_dock_file_artifacts(
+    *,
+    text: str,
+    fmt: str,
+    output_path: Path,
+    box_ligand_keys: set[ResidueKey] | None = None,
+    box_ligand_path: str = "",
+    padding: float = DEFAULT_BOX_PADDING_A,
+    source_text: str = "",
+    source_fmt: str = "",
+) -> ProteinPrepareResult:
+    """Write Smina sidecars from an already-ready structure (no chemistry pipeline)."""
+    ligands = ligand_keys_from_structure(text, fmt)
+    return write_smina_prepare_artifacts(
+        holo_text=text,
+        fmt=fmt,
+        output_path=output_path,
+        ligand_keys=ligands,
+        box_ligand_keys=box_ligand_keys,
+        orig_box_ligand_keys=box_ligand_keys,
+        padding=padding,
+        box_ligand_path=box_ligand_path,
+        source_text=source_text,
+        source_fmt=source_fmt,
+    )
+
+
 def write_smina_prepare_artifacts(
     *,
     holo_text: str,
@@ -343,7 +396,7 @@ def write_smina_prepare_artifacts(
 
             warnings.append(meeko_import_error(exc))
         except Exception as exc:
-            logger.exception("Smina receptor PDBQT export failed")
+            logger.exception("Gnina receptor PDBQT export failed")
             warnings.append(str(exc) or "Meeko could not write receptor PDBQT.")
         finally:
             if tmp_path is not None:

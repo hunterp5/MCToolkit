@@ -114,6 +114,34 @@ def test_pdb2pqr_argv_includes_propka_and_ph():
     assert "lig.mol2" in lig
 
 
+def test_openmm_platform_candidates_prefer_gpu(monkeypatch):
+    from molmanager.workers.protein_prepare_minimize import (
+        _iter_openmm_platform_candidates,
+        _openmm_platform_properties,
+    )
+
+    monkeypatch.delenv("MOLMANAGER_OPENMM_PLATFORM", raising=False)
+    monkeypatch.setattr(
+        "molmanager.workers.protein_prepare_minimize._openmm_platform_names",
+        lambda: ["Reference", "CPU", "OpenCL"],
+    )
+    assert _iter_openmm_platform_candidates("auto") == ["OpenCL", "CPU"]
+    monkeypatch.setattr(
+        "molmanager.workers.protein_prepare_minimize._openmm_platform_names",
+        lambda: ["CPU", "CUDA", "OpenCL"],
+    )
+    assert _iter_openmm_platform_candidates("auto") == ["CUDA", "OpenCL", "CPU"]
+    assert _iter_openmm_platform_candidates("CPU") == ["CPU"]
+    monkeypatch.setattr(
+        "molmanager.workers.protein_prepare_minimize._openmm_platform_names",
+        lambda: ["CPU", "OpenCL"],
+    )
+    assert _iter_openmm_platform_candidates("CUDA") == ["OpenCL", "CPU"]
+    assert _iter_openmm_platform_candidates("OpenCL") == ["OpenCL", "CPU"]
+    props = _openmm_platform_properties("CPU")
+    assert int(props["Threads"]) >= 1
+
+
 def test_drop_uncappable_polymer_residues_n_only_gln():
     from molmanager.workers.protein_prepare_pdb2pqr import drop_uncappable_polymer_residues
 
@@ -194,37 +222,29 @@ def test_mp_prepare_forwards_log_lines(tmp_path):
         input_path=str(tmp_path / "missing.pdb"),
         output_pdb_path=str(tmp_path / "out.pdb"),
     )
-
-    class _Q:
-        def __init__(self):
-            self.items: list[str] = []
-
-        def put(self, msg):
-            self.items.append(str(msg))
-
-        def put_nowait(self, msg):
-            self.items.append(str(msg))
-
-    queue = _Q()
-    ok, _msg = mp_prepare_protein_structure(req, queue)
+    log_path = tmp_path / "prepare.log"
+    ok, _msg = mp_prepare_protein_structure(req, str(log_path))
     assert ok is False
-    assert queue.items == []
+    assert not log_path.exists() or log_path.read_text(encoding="utf-8").strip() == ""
 
 
-def test_drain_prepare_log_queue():
-    from queue import Queue
+def test_drain_prepare_log_file(tmp_path):
+    from molmanager.workers.protein_prepare import drain_prepare_log_file
+    from molmanager.workers.protein_prepare_io import append_prepare_log_file
 
-    from molmanager.workers.protein_prepare import drain_prepare_log_queue
-
-    q = Queue()
-    q.put("PDBFixer: loading")
-    q.put("  ")
-    q.put("pdb2pqr/PROPKA: protonating")
-    seen: list[str] = []
-    drain_prepare_log_queue(q, seen.append)
-    assert seen == ["PDBFixer: loading", "pdb2pqr/PROPKA: protonating"]
-    drain_prepare_log_queue(q, seen.append)
-    assert seen == ["PDBFixer: loading", "pdb2pqr/PROPKA: protonating"]
+    path = tmp_path / "prepare.log"
+    append_prepare_log_file(path, "PDBFixer: loading")
+    append_prepare_log_file(path, "  ")
+    append_prepare_log_file(path, "pdb2pqr/PROPKA: protonating")
+    seen = [0]
+    got: list[str] = []
+    drain_prepare_log_file(path, seen, got.append)
+    assert got == ["PDBFixer: loading", "pdb2pqr/PROPKA: protonating"]
+    drain_prepare_log_file(path, seen, got.append)
+    assert got == ["PDBFixer: loading", "pdb2pqr/PROPKA: protonating"]
+    append_prepare_log_file(path, "OpenMM: minimizing")
+    drain_prepare_log_file(path, seen, got.append)
+    assert got[-1] == "OpenMM: minimizing"
 
 
 @patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
@@ -268,6 +288,94 @@ def test_prepare_on_log_reports_major_steps(
     assert "OpenMM:" in text
     assert "Writing prepared" in text
     assert "Prepare finished" in text
+
+
+@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("molmanager.workers.protein_prepare_runtime._prune_fixer_residues")
+@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+def test_prepare_skips_pdb2pqr_when_protonate_false(
+    mock_open_fixer,
+    _mock_prune,
+    mock_write_fixer,
+    mock_pqr,
+    mock_min,
+    tmp_path,
+):
+    req = _request(tmp_path, rebuild_missing_loops=False, minimize=False, protonate=False)
+    fixer = MagicMock()
+    fixer.topology.atoms.return_value = []
+    mock_open_fixer.return_value = fixer
+
+    def _write_fixer(_fixer, path):
+        path.write_text(_ALA_PDB, encoding="utf-8")
+
+    mock_write_fixer.side_effect = _write_fixer
+    logs: list[str] = []
+    out = prepare_protein_structure(req, on_log=logs.append)
+    mock_pqr.assert_not_called()
+    mock_min.assert_not_called()
+    text = "\n".join(logs)
+    assert "Skipping pdb2pqr/PROPKA" in text
+    assert "pdb2pqr/PROPKA:" not in text
+    assert "OpenMM:" not in text
+    written = Path(out.output_path).read_text(encoding="utf-8")
+    assert "ALA" in written
+    assert (
+        "PDB2PQR SKIPPED" in written
+        or "pdb2pqr skipped" in written.lower()
+        or "3 PDB2PQR SKIPPED" in written
+    )
+
+
+@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+def test_prepare_skips_pdbfixer_when_repair_false(
+    mock_open_fixer,
+    mock_write_fixer,
+    mock_pqr,
+    mock_min,
+    tmp_path,
+):
+    in_path = tmp_path / "in.pdb"
+    in_path.write_text(_HOLO_PDB, encoding="utf-8")
+    req = _request(
+        tmp_path,
+        repair=False,
+        protonate=True,
+        minimize=False,
+        keep_waters=True,
+        keep_ligand=True,
+        protonate_ligand=False,
+        pocket_ligand_protonation=False,
+        remove_other_heterogens=False,
+        strip_additives=False,
+    )
+
+    def _write_pqr(_repaired, _pqr, protonated, **_kwargs):
+        protonated.write_text(_HOLO_PDB, encoding="utf-8")
+
+    mock_pqr.side_effect = _write_pqr
+    logs: list[str] = []
+    out = prepare_protein_structure(req, on_log=logs.append)
+    mock_open_fixer.assert_not_called()
+    mock_write_fixer.assert_not_called()
+    mock_min.assert_not_called()
+    mock_pqr.assert_called_once()
+    assert mock_pqr.call_args.kwargs["ph"] == 7.4
+    assert mock_pqr.call_args.kwargs["drop_water"] is False
+    text = "\n".join(logs)
+    assert "Skipping PDBFixer" in text
+    assert "pdb2pqr/PROPKA:" in text
+    assert "PDBFixer:" not in text
+    written = Path(out.output_path).read_text(encoding="utf-8")
+    assert "ALA" in written
+    assert "AXI" in written
+    assert "HOH" in written
+    assert "PDBFIXER SKIPPED" in written or "1 PDBFIXER SKIPPED" in written
 
 
 @patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
@@ -391,6 +499,121 @@ def test_residues_to_drop_keeps_ligand_and_selected_water():
     )
     assert ("A", "2000", "") in apo
     assert ("A", "2002", "") in apo
+
+
+def test_residues_to_drop_strips_additives_and_can_keep_metals():
+    kinds = {
+        ("A", "1", ""): "polymer",
+        ("A", "2000", ""): "ligand",
+        ("A", "50", ""): "ligand",
+        ("A", "2001", ""): "metal",
+    }
+    names = {
+        ("A", "1", ""): "ALA",
+        ("A", "2000", ""): "AXI",
+        ("A", "50", ""): "EDO",
+        ("A", "2001", ""): "ZN",
+    }
+    drop = residues_to_drop(
+        kinds,
+        include_ligand=True,
+        keep_water_keys=set(),
+        remove_other_heterogens=True,
+        names_by_key=names,
+        strip_additives=True,
+        keep_metals=False,
+    )
+    assert ("A", "2000", "") not in drop
+    assert ("A", "50", "") in drop
+    assert ("A", "2001", "") in drop
+    keep_zn = residues_to_drop(
+        kinds,
+        include_ligand=True,
+        keep_water_keys=set(),
+        remove_other_heterogens=True,
+        names_by_key=names,
+        strip_additives=True,
+        keep_metals=True,
+    )
+    assert ("A", "2001", "") not in keep_zn
+    assert ("A", "50", "") in keep_zn
+    chain = residues_to_drop(
+        kinds,
+        include_ligand=True,
+        keep_water_keys=set(),
+        remove_other_heterogens=True,
+        names_by_key=names,
+        keep_chain_ids=("B",),
+    )
+    assert ("A", "1", "") in chain
+
+
+def test_drop_long_missing_gaps_skips_n_terminal_tag():
+    from types import SimpleNamespace
+
+    from molmanager.workers.protein_prepare_qc import drop_long_missing_gaps
+
+    fixer = SimpleNamespace(
+        missingResidues={(0, 0): ["GLY"] * 28, (0, 5): ["ALA", "SER"]},
+    )
+    n = drop_long_missing_gaps(fixer, 8)
+    assert n == 28
+    assert (0, 0) not in fixer.missingResidues
+    assert fixer.missingResidues[(0, 5)] == ["ALA", "SER"]
+
+
+def test_apply_sequence_missing_residues_n_terminal_tag_is_a_long_gap():
+    from types import SimpleNamespace
+
+    from molmanager.workers.protein_prepare_qc import (
+        apply_sequence_missing_residues,
+        drop_long_missing_gaps,
+    )
+
+    names = [
+        "GLY",
+        "SER",
+        "ILE",
+        "MET",
+        "ARG",
+        "ASP",
+        "ILE",
+        "ASN",
+        "LYS",
+        "LEU",
+        "GLU",
+        "GLU",
+        "PRO",
+        "THR",
+    ]
+    seqres = " ".join(names)
+    remark_lines = [
+        "REMARK 465 MISSING",
+        "REMARK 465   M RES C SSSEQI",
+    ]
+    for i, resn in enumerate(names[:-2], start=1):
+        remark_lines.append(f"REMARK 465     {resn:3s} A{i:5d}")
+    pdb = (
+        f"SEQRES   1 A   {len(names):4d}  {seqres}\n" + "\n".join(remark_lines) + "\n"
+        "ATOM      1  CA  PRO A  13      0.000   0.000   0.000  1.00  0.00           C\n"
+        "ATOM      2  CA  THR A  14      3.800   0.000   0.000  1.00  0.00           C\n"
+        "END\n"
+    )
+    chain = SimpleNamespace(id="A", index=0)
+    pro = SimpleNamespace(name="PRO", id="13", insertionCode="")
+    thr = SimpleNamespace(name="THR", id="14", insertionCode="")
+    chain.residues = lambda: [pro, thr]
+    fixer = SimpleNamespace(
+        topology=SimpleNamespace(chains=lambda: [chain]),
+        missingResidues={},
+    )
+    n_added = apply_sequence_missing_residues(fixer, pdb, "pdb")
+    assert n_added == 12
+    assert (0, 0) in fixer.missingResidues
+    assert len(fixer.missingResidues[(0, 0)]) == 12
+    skipped = drop_long_missing_gaps(fixer, 8)
+    assert skipped == 12
+    assert fixer.missingResidues == {}
 
 
 def test_remap_residue_keys_auth_chain_to_mmcif_label_chain():
@@ -1040,7 +1263,7 @@ def test_prepare_water_keys_from_manager_selection(qapp, tmp_path):  # noqa: ARG
 
 
 def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMenuBar, QMessageBox
+    from PyQt5.QtWidgets import QGroupBox, QMenuBar, QMessageBox, QTextEdit
 
     from molmanager.ui.protein_prepare_dialog import ProteinPrepareDialog
     from molmanager.ui.protein_viewer import ProteinViewerDialog
@@ -1048,10 +1271,17 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     dlg = ProteinViewerDialog()
     mb = dlg.findChild(QMenuBar)
     labels = [a.text().replace("&", "") for a in mb.actions()]
-    assert any(label.startswith("Prepare") for label in labels)
-    view_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "View")
-    view_labels = [a.text().replace("&", "") for a in view_menu.actions()]
-    assert "Docking Box" in view_labels
+    assert "Prepare" in labels
+    prepare_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Prepare")
+    prepare_labels = [a.text().replace("&", "") for a in prepare_menu.actions()]
+    assert any(label.startswith("Fast Prepare") for label in prepare_labels)
+    assert any(label.startswith("PDBFixer") for label in prepare_labels)
+    assert any("pdb2pqr" in label for label in prepare_labels)
+    assert any(label.startswith("Minimize") for label in prepare_labels)
+    assert any(label.startswith("Dock File") for label in prepare_labels)
+    render_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Render")
+    render_labels = [a.text().replace("&", "") for a in render_menu.actions()]
+    assert "Docking Box" in render_labels
 
     shown: list[str] = []
 
@@ -1061,7 +1291,10 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
 
     monkeypatch.setattr(QMessageBox, "information", _info)
     dlg.open_prepare_dialog()
-    assert shown
+    assert not shown
+    empty_prep = dlg._prepare_dialog
+    assert empty_prep.radio_src_file.isChecked()
+    assert empty_prep.combo_src_manager.count() == 0
 
     path = tmp_path / "mini.pdb"
     path.write_text(_ALA_PDB, encoding="utf-8")
@@ -1069,13 +1302,31 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     dlg.open_prepare_dialog()
     prep = dlg._prepare_dialog
     assert isinstance(prep, ProteinPrepareDialog)
+    assert dlg.log.isReadOnly()
+    assert not prep.findChildren(QTextEdit)
+    prep._append_log("Starting Fast Prepare")
+    assert "Starting Fast Prepare" in dlg.log.toPlainText()
+    titles = [gb.title() for gb in prep.findChildren(QGroupBox)]
+    assert "PDBFixer" in titles
+    assert "pdb2pqr" in titles
+    assert "Minimization" in titles
+    assert titles.index("PDBFixer") < titles.index("pdb2pqr") < titles.index("Minimization")
+    assert prep.chk_repair.isChecked()
+    assert prep.chk_repair.text() == "Clean up"
+    assert prep.chk_protonate.isChecked()
+    assert prep.chk_protonate.text() == "Protonate"
     assert prep.chk_rebuild_loops.isChecked()
     assert prep.chk_include_ligand.isChecked()
     assert prep.chk_protonate_ligand.isChecked()
     assert prep.chk_pocket_ligand.isChecked()
     assert prep.chk_keep_ligand.isChecked()
     assert not prep.chk_keep_selected_waters.isChecked()
-    assert prep.chk_remove_other_heterogens.isChecked()
+    assert prep.chk_strip_additives.isChecked()
+    assert not prep.chk_keep_metals.isChecked()
+    assert prep.chk_skip_long_gaps.isChecked()
+    assert prep.spin_max_gap.value() == 8
+    assert prep.chk_add_missing_atoms.isChecked()
+    assert prep.chk_highest_altloc.isChecked()
     assert prep.chk_minimize.isChecked()
     assert prep.combo_protein_ff.isEnabled()
     assert prep.combo_out_fmt.currentData() == "cif"
@@ -1083,6 +1334,10 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     assert prep.combo_ligand_ff.currentData() == "none"
     assert prep.combo_ligand_ff.isEnabled()
     assert prep.combo_solvent.currentData() == "gbn2"
+    assert prep.combo_openmm_platform.currentData() == "auto"
+    assert prep.radio_src_manager.isChecked()
+    assert prep.combo_src_manager.count() == 1
+    assert "mini.pdb" in prep.combo_src_manager.currentText()
     assert prep.combo_restraint.currentData() == "backbone"
     assert prep.chk_skip_pocket_loops.isChecked()
     assert prep.chk_write_smina.isChecked()
@@ -1092,6 +1347,8 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     assert prep.box_ligand_file_row.isEnabled()
     assert not prep.combo_box_ligand.isEnabled()
     prep.radio_box_loaded.setChecked(True)
+    assert prep.btn_open_smina.text() == "Open Gnina…"
+    assert "Write Gnina files" in prep.chk_write_smina.text()
     assert not prep.btn_open_smina.isEnabled()
     assert not prep.chk_keep_bridging_waters.isChecked()
     assert prep.spin_salt.value() == 0.15
@@ -1119,7 +1376,131 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     assert prep.combo_ligand_ff.isEnabled()
     assert prep.chk_protonate_ligand.isEnabled()
     assert prep.chk_pocket_ligand.isChecked()
+    prep.chk_repair.setChecked(False)
+    assert not prep.chk_rebuild_loops.isEnabled()
+    assert not prep.chk_skip_pocket_loops.isEnabled()
+    assert not prep.chk_strip_additives.isEnabled()
+    assert not prep.chk_highest_altloc.isEnabled()
+    assert prep.chk_keep_ligand.isEnabled()
+    assert prep.chk_protonate.isChecked()
+    prep.chk_repair.setChecked(True)
+    assert prep.chk_rebuild_loops.isEnabled()
+    assert prep.chk_skip_pocket_loops.isEnabled()
+    prep.chk_protonate.setChecked(False)
+    assert not prep.spin_ph.isEnabled()
+    assert not prep.chk_protonate_ligand.isEnabled()
+    assert not prep.chk_pocket_ligand.isChecked()
+    assert prep.chk_include_ligand.isEnabled()
+    prep.chk_protonate.setChecked(True)
+    assert prep.spin_ph.isEnabled()
+    assert prep.chk_protonate_ligand.isEnabled()
+    assert prep.chk_pocket_ligand.isChecked()
+    prep.chk_repair.setChecked(False)
+    prep.chk_protonate.setChecked(False)
+    prep.chk_minimize.setChecked(False)
+    prep.chk_write_smina.setChecked(False)
+    shown.clear()
+    prep._on_run()
+    assert shown
     prep.close()
+
+    dlg.open_pdbfixer_dialog()
+    fixer = dlg._pdbfixer_dialog
+    from molmanager.ui.dialogs.protein_pdbfixer import ProteinPdbFixerDialog
+
+    assert isinstance(fixer, ProteinPdbFixerDialog)
+    assert fixer.windowTitle() == "PDBFixer"
+    assert not fixer.findChildren(QTextEdit)
+    fixer._append_log("Starting PDBFixer")
+    assert "Starting PDBFixer" in dlg.log.toPlainText()
+    assert fixer.chk_rebuild_loops.isChecked()
+    assert fixer.chk_replace_nonstandard.isChecked()
+    assert fixer.chk_include_ligand.isChecked()
+    assert fixer.chk_keep_ligand.isChecked()
+    assert not fixer.chk_keep_selected_waters.isChecked()
+    assert fixer.chk_strip_additives.isChecked()
+    assert not fixer.chk_keep_metals.isChecked()
+    assert fixer.chk_skip_long_gaps.isChecked()
+    assert fixer.spin_max_gap.value() == 8
+    assert fixer.combo_out_fmt.currentData() == "cif"
+    assert fixer.radio_src_manager.isChecked()
+    assert fixer.edit_out.text().endswith("mini_fixed.cif")
+    fixer.chk_include_ligand.setChecked(False)
+    assert fixer.chk_keep_ligand.isChecked()
+    assert not fixer.chk_keep_ligand.isEnabled()
+    fixer.chk_include_ligand.setChecked(True)
+    assert fixer.chk_keep_ligand.isEnabled()
+    fixer.close()
+
+    dlg.open_pdb2pqr_dialog()
+    pqr = dlg._pdb2pqr_dialog
+    from molmanager.ui.dialogs.protein_pdb2pqr import ProteinPdb2pqrDialog
+
+    assert isinstance(pqr, ProteinPdb2pqrDialog)
+    assert pqr.windowTitle() == "pdb2pqr"
+    assert not pqr.findChildren(QTextEdit)
+    pqr._append_log("Starting pdb2pqr")
+    assert "Starting pdb2pqr" in dlg.log.toPlainText()
+    assert pqr.chk_include_ligand.isChecked()
+    assert pqr.chk_keep_ligand.isChecked()
+    assert pqr.chk_protonate_ligand.isChecked()
+    assert pqr.chk_pocket_ligand.isChecked()
+    assert pqr.chk_keep_water.isChecked()
+    assert pqr.spin_ph.value() == 7.4
+    assert pqr.combo_out_fmt.currentData() == "cif"
+    assert pqr.radio_src_manager.isChecked()
+    assert pqr.edit_out.text().endswith("mini_protonated.cif")
+    pqr.chk_include_ligand.setChecked(False)
+    assert pqr.chk_keep_ligand.isChecked()
+    assert not pqr.chk_keep_ligand.isEnabled()
+    assert not pqr.chk_protonate_ligand.isEnabled()
+    assert not pqr.chk_pocket_ligand.isChecked()
+    pqr.chk_include_ligand.setChecked(True)
+    assert pqr.chk_keep_ligand.isEnabled()
+    assert pqr.chk_protonate_ligand.isEnabled()
+    assert pqr.chk_pocket_ligand.isChecked()
+    pqr.close()
+    dlg.close()
+
+
+def test_prepare_dialogs_use_manager_or_file_source(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    manager_path = tmp_path / "manager.pdb"
+    manager_path.write_text(_ALA_PDB, encoding="utf-8")
+    file_path = tmp_path / "from_disk.pdb"
+    file_path.write_text(_HOLO_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(manager_path)
+    dlg.open_prepare_dialog()
+    prep = dlg._prepare_dialog
+    assert prep.radio_src_manager.isChecked()
+    _name, text, fmt, path = prep.chosen_structure_source()
+    assert path == manager_path
+    assert "ALA" in text
+    prep.edit_src_file.setText(str(file_path))
+    prep.radio_src_file.setChecked(True)
+    name, text, fmt, path = prep.chosen_structure_source()
+    assert path == file_path
+    assert "AXI" in text
+    snap = prep._write_input_snapshot()
+    assert "AXI" in snap.read_text(encoding="utf-8")
+    assert prep.edit_out.text().endswith("from_disk_prepared.cif")
+    dlg.open_pdbfixer_dialog()
+    fixer = dlg._pdbfixer_dialog
+    fixer.edit_src_file.setText(str(file_path))
+    fixer.radio_src_file.setChecked(True)
+    _n, text, _f, path = fixer.chosen_structure_source()
+    assert path == file_path
+    assert "AXI" in text
+    dlg.open_dock_file_dialog()
+    dock = dlg._dock_file_dialog
+    dock.edit_src_file.setText(str(file_path))
+    dock.radio_src_file.setChecked(True)
+    _n, text, _f, path = dock.chosen_structure_source()
+    assert path == file_path
+    assert "AXI" in text
+    assert dock.edit_out.text().endswith("from_disk_smina.pdbqt")
     dlg.close()
 
 
@@ -1550,6 +1931,7 @@ def test_prepare_dialog_enables_open_smina_without_receptor(qapp):  # noqa: ARG0
     from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
 
     dlg = ProteinPrepareDialog(None)
+    dlg.show()
     assert not dlg.btn_open_smina.isEnabled()
     result = ProteinPrepareResult(
         output_path="out.cif",
@@ -1560,4 +1942,129 @@ def test_prepare_dialog_enables_open_smina_without_receptor(qapp):  # noqa: ARG0
     dlg._on_finished(result)
     assert dlg.btn_open_smina.isEnabled()
     assert dlg._smina_result is result
+    assert dlg.isVisible() is False
+    dlg.close()
+
+
+def test_prepare_tool_dialogs_close_after_finished(qapp, tmp_path, monkeypatch):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    monkeypatch.setattr(ProteinViewerDialog, "_overlay_prepared_path", lambda *a, **k: None)
+    monkeypatch.setattr(ProteinViewerDialog, "_on_structure_minimized", lambda *a, **k: None)
+    monkeypatch.setattr(ProteinViewerDialog, "_on_smina_prepared", lambda *a, **k: None)
+
+    out = tmp_path / "done.pdb"
+    out.write_text("ATOM\n", encoding="utf-8")
+    viewer = ProteinViewerDialog()
+    viewer.open_prepare_dialog()
+    prep = viewer._prepare_dialog
+    assert prep.isVisible()
+    prep._on_finished(str(out))
+    assert prep.isVisible() is False
+
+    viewer.open_pdbfixer_dialog()
+    fixer = viewer._pdbfixer_dialog
+    assert fixer.isVisible()
+    fixer._on_finished(str(out))
+    assert fixer.isVisible() is False
+
+    viewer.open_pdb2pqr_dialog()
+    pqr = viewer._pdb2pqr_dialog
+    assert pqr.isVisible()
+    pqr._on_finished(str(out))
+    assert pqr.isVisible() is False
+
+    viewer.open_minimize_dialog()
+    mini = viewer._minimize_dialog
+    assert mini.isVisible()
+    mini._on_finished(str(out))
+    assert mini.isVisible() is False
+    viewer.close()
+
+
+def test_dock_file_dialog_defaults_and_auto_open_smina(qapp, tmp_path, monkeypatch):  # noqa: ARG001
+    from types import SimpleNamespace
+
+    from PyQt5.QtWidgets import QMessageBox
+
+    from molmanager.docking_box import DockingBox
+    from molmanager.ui.dialogs.protein_dock_file import ProteinDockFileDialog
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+
+    dlg = ProteinViewerDialog()
+    shown: list[str] = []
+
+    def _info(*_a, **_k):
+        shown.append("info")
+        return QMessageBox.Ok
+
+    monkeypatch.setattr(QMessageBox, "information", _info)
+    dlg.open_dock_file_dialog()
+    assert not shown
+    empty = dlg._dock_file_dialog
+    assert empty.radio_src_file.isChecked()
+
+    path = tmp_path / "holo.pdb"
+    path.write_text(_HOLO_PDB, encoding="utf-8")
+    dlg.load_structure_path(path)
+    dlg.open_dock_file_dialog()
+    dock = dlg._dock_file_dialog
+    assert isinstance(dock, ProteinDockFileDialog)
+    assert dock.radio_src_manager.isChecked()
+    assert dock.edit_out.text().endswith("holo_smina.pdbqt")
+    dock.edit_out.setText(str(tmp_path / "holo_smina.cif"))
+    assert dock._receptor_output_path().endswith("holo_smina.pdbqt")
+    dock.edit_out.setText(str(tmp_path / "holo_smina.pdbqt"))
+    assert dock.spin_box_padding.value() == 4.0
+    assert dock.combo_box_ligand.count() >= 1
+    assert dock.btn_open_smina.text() == "Open Gnina…"
+    assert not dock.btn_open_smina.isEnabled()
+    dock._append_log("Starting Dock File: Gnina files")
+    assert "Starting Dock File" in dlg.log.toPlainText()
+
+    applied: list[object] = []
+    filled: list[str] = []
+
+    class _Edit:
+        def setText(self, text):
+            filled.append(str(text))
+
+        def text(self):
+            return filled[-1] if filled else ""
+
+    fake = SimpleNamespace(
+        apply_prepare_result=lambda r: applied.append(r),
+        edit_receptor=_Edit(),
+    )
+    dock._process_host = lambda: SimpleNamespace(open_gnina_dock=lambda: fake)
+    rec = tmp_path / "rec.pdbqt"
+    rec.write_text("ATOM\n", encoding="utf-8")
+    ghost = ProteinPrepareResult(
+        output_path=str(tmp_path / "missing_smina.pdbqt"),
+        ligand_pdb="lig.pdb",
+        box=DockingBox(1.0, 2.0, 3.0, 10.0, 11.0, 12.0, padding=4.0),
+        warning="unable to build rdkit mol for residue GLU corresponding to key A:913",
+    )
+    dock._on_finished(ghost)
+    assert applied == []
+    assert filled == []
+    assert not dock.btn_open_smina.isEnabled()
+    assert "Receptor PDBQT was not written" in dlg.log.toPlainText()
+    assert dock.isVisible()
+
+    result = ProteinPrepareResult(
+        output_path=str(tmp_path / "holo_smina.pdbqt"),
+        receptor_pdbqt=str(rec),
+        ligand_sdf="lig.sdf",
+        ligand_pdb="lig.pdb",
+        box=DockingBox(1.0, 2.0, 3.0, 10.0, 11.0, 12.0, padding=4.0),
+    )
+    dock._on_finished(result)
+    assert applied == [result]
+    assert filled == [str(rec)]
+    assert dock.btn_open_smina.isEnabled()
+    assert "Receptor PDBQT" in dlg.log.toPlainText()
+    assert dock.isVisible() is False
+    dock.close()
     dlg.close()

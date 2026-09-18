@@ -377,10 +377,10 @@ class GuiSettingsMixin:
             label.setFont(font)
 
     def _sync_menubar_chrome_font(self) -> None:
-        """Keep the menubar, Layout / Processes, and Help on the application font."""
+        """Keep the menubar, Layout, and Processes on the application font."""
         has_chrome = any(
             getattr(self, name, None) is not None
-            for name in ("_btn_workspace_layout", "_btn_processes", "_btn_help")
+            for name in ("_btn_workspace_layout", "_btn_processes")
         )
         if has_chrome:
             mb = self.menuBar()
@@ -393,9 +393,6 @@ class GuiSettingsMixin:
                 btn = getattr(self, name, None)
                 if btn is not None:
                     btn.setFont(font)
-        sync_help = getattr(self, "_sync_help_glyph_icon", None)
-        if callable(sync_help):
-            sync_help()
 
     def _preview_table_font(self, pt: int) -> None:
         self._table_font_pt = int(pt)

@@ -34,6 +34,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
 )
 
+from .dockable_plot import style_browser_nav_buttons
 from .mol_3d_html import conf_legend_entries, distinct_superpose_colors
 from .mol_3d_strain import _STRAIN_TABLE_BASE_HEADERS, populate_strain_energy_table
 
@@ -232,6 +233,12 @@ class Mol3DConfMixin:
         self._btn_conf_fwd.setToolTip("Next conformer (→)")
         self._btn_conf_last = QPushButton(">>")
         self._btn_conf_last.setToolTip("Last conformer (End)")
+        style_browser_nav_buttons(
+            self._btn_conf_first,
+            self._btn_conf_back,
+            self._btn_conf_fwd,
+            self._btn_conf_last,
+        )
         for btn in (
             self._btn_conf_first,
             self._btn_conf_back,

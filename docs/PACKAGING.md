@@ -42,7 +42,7 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-The pKa repair script is only needed when another package upgrades PyTorch:
+The pKa install script selects CUDA automatically when `nvidia-smi` sees a GPU (`-Cpu` / `--cpu` keeps the CPU wheel):
 
 ```bash
 # Windows
@@ -59,9 +59,9 @@ pip install -e ".[pka,permeability,docking,dev]"
 
 ## Bundling external tools
 
-1. Run `scripts\bootstrap_optional_tools.ps1` (Windows) or `scripts/bootstrap_optional_tools.sh` (Linux/macOS) to install Python deps and print where to place Vina/Smina binaries.
-2. Copy `vina.exe` / `smina.exe` into `molmanager/resources/bin/win/` (or set `MOLMANAGER_BUNDLE_DIR`).
-3. Tools → Dock defaults to bundled paths when present.
+1. Run `scripts\bootstrap_optional_tools.ps1` (Windows) or `scripts/bootstrap_optional_tools.sh` (Linux/macOS) to install Python deps, swap in CUDA PyTorch when an NVIDIA GPU is present, and print where to place a Gnina binary.
+2. On Linux, copy `gnina` into `molmanager/resources/bin/linux/` (or set `MOLMANAGER_BUNDLE_DIR`). On Windows, install Gnina in WSL so `gnina` is on that distro’s PATH (Settings → WSL).
+3. Protein → Dock Ligand defaults to bundled paths when present.
 
 ## PyInstaller (starter)
 
@@ -75,7 +75,7 @@ pyinstaller packaging/molmanager.spec
 Output under `dist/molmanager/`. You still need to ship:
 
 - Qt platform plugins (PyInstaller usually collects these)
-- Optional `resources/bin/` for Vina/Smina
+- Optional `resources/bin/` for Gnina
 
 Tune `packaging/molmanager.spec` hidden imports as you enable more Tools menu features.
 

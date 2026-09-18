@@ -33,12 +33,17 @@ from .protein_prepare_constants import (
     _SOLVENT_VACUUM,
     ResidueKey,
 )
-from .protein_prepare_io import _is_cif_path, _open_openmm_structure, log_prepare
+from .protein_prepare_io import _is_cif_path, _open_openmm_structure, _write_text, log_prepare
 
 _ANTECHAMBER_TIMEOUT_S = 900.0
 _PARMCHK_TIMEOUT_S = 120.0
 _TLEAP_TIMEOUT_S = 180.0
 _WHICH_TIMEOUT_S = 20.0
+
+_HIS_RESNS = frozenset({"HIS", "HID", "HIE", "HIP", "HSD", "HSE", "HSP"})
+_HIS_HD1_ATOMS = frozenset({"HD1", "1HD", "HND1"})
+_HIS_HE2_ATOMS = frozenset({"HE2", "2HE", "HNE2"})
+_HIS_CHARMM_TO_AMBER = {"HSD": "HID", "HSE": "HIE", "HSP": "HIP"}
 
 
 def _normalize_ligand_ff(name: str) -> str:
@@ -120,6 +125,24 @@ def leap_input(
     lines.append(f"saveAmberParm COMP {prmtop} {inpcrd}")
     lines.append("quit")
     return "\n".join(lines) + "\n"
+
+
+def ligand_only_leap_input(
+    *,
+    mol2: str,
+    frcmod: str,
+    ligand_ff: str,
+    prmtop: str,
+    inpcrd: str,
+) -> str:
+    """tleap script: vacuum GAFF ligand (no protein)."""
+    return (
+        f"source {_leaprc_gaff(ligand_ff)}\n"
+        f"loadamberparams {frcmod}\n"
+        f"LIG = loadMol2 {mol2}\n"
+        f"saveAmberParm LIG {prmtop} {inpcrd}\n"
+        "quit\n"
+    )
 
 
 def _proc_tail(proc, extra: str = "") -> str:
@@ -254,6 +277,58 @@ def _parameterize_ligand(
     return used
 
 
+def _amber_histidine_resn(atom_names: set[str], current: str) -> str:
+    """HID / HIE / HIP from ND1 vs NE2 hydrogens (Amber ff14SB templates)."""
+    names = {(name or "").strip().upper() for name in atom_names}
+    has_hd1 = bool(names & _HIS_HD1_ATOMS)
+    has_he2 = bool(names & _HIS_HE2_ATOMS)
+    if has_hd1 and has_he2:
+        return "HIP"
+    if has_hd1:
+        return "HID"
+    if has_he2:
+        return "HIE"
+    cur = (current or "HIS").strip().upper()
+    return _HIS_CHARMM_TO_AMBER.get(cur, cur if cur in {"HIS", "HID", "HIE", "HIP"} else "HIS")
+
+
+def relabel_amber_histidines_pdb(text: str) -> str:
+    """Match HIS tautomer residue names to the hydrogens tleap will see.
+
+    OpenMM ``PDBFile.writeFile`` can emit HIE while leaving HID's ``HD1`` atoms,
+    which tleap then rejects (``Atom .R<HIE n>.A<HD1> does not have a type``).
+    """
+    from collections import defaultdict
+
+    from ..structure_components import _norm_chain, rewrite_pdb_residue_names
+
+    atoms_by_key: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    resn_by_key: dict[tuple[str, str, str], str] = {}
+    for line in (text or "").splitlines():
+        rec = line[:6].strip().upper() if line else ""
+        if rec not in {"ATOM", "HETATM"}:
+            continue
+        padded = line.ljust(80)
+        resn = padded[17:20].strip().upper()
+        if resn not in _HIS_RESNS:
+            continue
+        chain = _norm_chain(padded[21:22])
+        resi = padded[22:26].strip() or "0"
+        icode = padded[26:27].strip()
+        key = (chain, resi, icode)
+        atoms_by_key[key].add(padded[12:16].strip().upper())
+        resn_by_key[key] = resn
+    changes: list[tuple[str, str, str, str]] = []
+    for key, names in atoms_by_key.items():
+        new_resn = _amber_histidine_resn(names, resn_by_key[key])
+        if new_resn != resn_by_key[key]:
+            chain, resi, icode = key
+            changes.append((chain, resi, icode, new_resn))
+    if not changes:
+        return text
+    return rewrite_pdb_residue_names(text, changes)
+
+
 def _write_protein_pdb(holo: Path, dest: Path, ligand_keys: set[ResidueKey]) -> None:
     """Ligand-stripped PDB for tleap (AMBER names, hydrogens kept)."""
     text = holo.read_text(encoding="utf-8", errors="replace")
@@ -267,14 +342,18 @@ def _write_protein_pdb(holo: Path, dest: Path, ligand_keys: set[ResidueKey]) -> 
 
         stripped = delete_pdb_residues(text, ligand_keys)
         scratch = dest.with_name(dest.stem + ".src.pdb")
-    scratch.write_text(stripped, encoding="utf-8")
+    scratch.write_text(stripped, encoding="utf-8", newline="\n")
     try:
         pdb = _open_openmm_structure(scratch)
         from openmm.app import PDBFile
 
         buf = StringIO()
         PDBFile.writeFile(pdb.topology, pdb.positions, buf, keepIds=True)
-        dest.write_text(buf.getvalue(), encoding="utf-8")
+        raw = buf.getvalue()
+        labeled = relabel_amber_histidines_pdb(raw)
+        if labeled != raw:
+            log_prepare("AmberTools: renamed histidines to HID/HIE/HIP from ND1/NE2 hydrogens.")
+        _write_text(dest, labeled)
     finally:
         try:
             scratch.unlink()
@@ -357,6 +436,7 @@ def build_gaff_prmtop(
             inpcrd=inpcrd.name,
         ),
         encoding="utf-8",
+        newline="\n",
     )
     log_prepare("AmberTools: tleap building protein–ligand topology…")
     from ..wsl import run_linux_tool

@@ -23,11 +23,15 @@ from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PyQt5.QtWidgets import QLineEdit, QPushButton, QSizePolicy
 
 from .dockable_plot_constants import (
+    _BROWSER_NAV_BTN_HEIGHT,
+    _BROWSER_NAV_BTN_WIDTH,
+    _BROWSER_NAV_ICON_SIZE,
     _FOOTER_TEXT_FONT_PX,
     _FOOTER_TEXT_PAD_H,
     _GLYPH_BTN_SIZE,
     _GLYPH_ICON_SIZE,
     _GLYPH_INK,
+    _PANE_TITLE_EDIT_WIDTH,
 )
 
 
@@ -176,6 +180,128 @@ def pane_nav_arrow_glyph_icon(direction: str, size: int = _GLYPH_ICON_SIZE) -> Q
     return _paint_glyph_icon(paint, size)
 
 
+def browser_nav_glyph_icon(kind: str, size: int = _BROWSER_NAV_ICON_SIZE) -> QIcon:
+    """Filled skip / step arrow for browser first / previous / next / last."""
+    k = str(kind or "").strip().lower()
+    if k in {"left", "prev", "back"}:
+        return pane_nav_arrow_glyph_icon("left", size)
+    if k in {"right", "next", "fwd"}:
+        return pane_nav_arrow_glyph_icon("right", size)
+
+    def paint(p: QPainter, s: float) -> None:
+        p.setPen(Qt.NoPen)
+        p.setBrush(_GLYPH_INK)
+        radius = max(0.8, s * 0.07)
+        bar_w = s * 0.12
+        bar_h = s * 0.64
+        bar_y = (s - bar_h) * 0.5
+        mid = s * 0.50
+        spread = s * 0.32
+        if k == "first":
+            p.drawRoundedRect(QRectF(s * 0.08, bar_y, bar_w, bar_h), radius, radius)
+            tip = s * 0.28
+            back = s * 0.92
+            pts = (QPointF(tip, mid), QPointF(back, mid - spread), QPointF(back, mid + spread))
+        else:
+            p.drawRoundedRect(QRectF(s * 0.80, bar_y, bar_w, bar_h), radius, radius)
+            tip = s * 0.72
+            back = s * 0.08
+            pts = (QPointF(tip, mid), QPointF(back, mid - spread), QPointF(back, mid + spread))
+        path = QPainterPath()
+        path.moveTo(pts[0])
+        path.lineTo(pts[1])
+        path.lineTo(pts[2])
+        path.closeSubpath()
+        p.drawPath(path)
+
+    return _paint_glyph_icon(paint, size)
+
+
+def select_row_glyph_icon(size: int = _BROWSER_NAV_ICON_SIZE) -> QIcon:
+    """Checkmark for Select this row / pair in the compound table."""
+
+    def paint(p: QPainter, s: float) -> None:
+        p.setPen(_glyph_pen(max(1.8, s * 0.16)))
+        p.setBrush(Qt.NoBrush)
+        path = QPainterPath()
+        path.moveTo(s * 0.16, s * 0.52)
+        path.lineTo(s * 0.40, s * 0.78)
+        path.lineTo(s * 0.86, s * 0.20)
+        p.drawPath(path)
+
+    return _paint_glyph_icon(paint, size)
+
+
+def _style_browser_glyph_button(btn: QPushButton, icon: QIcon, tooltip: str = "") -> None:
+    """Glyph control that stretches horizontally in the browser nav row."""
+    btn.setText("")
+    btn.setIcon(icon)
+    btn.setIconSize(QSize(_BROWSER_NAV_ICON_SIZE, _BROWSER_NAV_ICON_SIZE))
+    btn.setMinimumWidth(_BROWSER_NAV_BTN_WIDTH)
+    btn.setFixedHeight(_BROWSER_NAV_BTN_HEIGHT)
+    btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+    if tooltip:
+        btn.setToolTip(tooltip)
+    btn.setAutoDefault(False)
+    btn.setDefault(False)
+    btn.setFocusPolicy(Qt.NoFocus)
+    btn.setFlat(False)
+    btn.setStyleSheet("QPushButton { padding: 0px; margin: 0px; }")
+
+
+def style_browser_nav_arrow(btn: QPushButton, kind: str, tooltip: str = "") -> None:
+    """Skip/step control for browser first / previous / next / last."""
+    _style_browser_glyph_button(btn, browser_nav_glyph_icon(kind), tooltip)
+
+
+def style_browser_select_button(btn: QPushButton, *, checkable: bool = False) -> None:
+    """Select-row glyph; *checkable* for Data → Browser toggle select/deselect."""
+    _style_browser_glyph_button(btn, select_row_glyph_icon(), btn.toolTip())
+    btn.setCheckable(bool(checkable))
+
+
+def style_browser_nav_buttons(
+    first: QPushButton,
+    back: QPushButton,
+    fwd: QPushButton,
+    last: QPushButton,
+    select: QPushButton | None = None,
+    *,
+    select_checkable: bool = False,
+) -> None:
+    """Replace unicode nav / Select labels with glyphs; keep existing tooltips."""
+    style_browser_nav_arrow(first, "first")
+    style_browser_nav_arrow(back, "left")
+    style_browser_nav_arrow(fwd, "right")
+    style_browser_nav_arrow(last, "last")
+    if select is not None:
+        style_browser_select_button(select, checkable=select_checkable)
+
+
+def add_centered_browser_nav(
+    layout,
+    buttons: list,
+    *,
+    trailing=None,
+) -> None:
+    """Share leftover row width across nav buttons; trailing chrome stays compact."""
+    for btn in buttons:
+        policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        policy.setHorizontalStretch(1)
+        btn.setSizePolicy(policy)
+        layout.addWidget(btn, 1)
+    extras = trailing
+    if extras is None:
+        return
+    if not isinstance(extras, (list, tuple)):
+        extras = (extras,)
+    for widget in extras:
+        policy = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        policy.setHorizontalStretch(0)
+        widget.setSizePolicy(policy)
+        layout.addWidget(widget, 0)
+
+
 def style_plot_pane_nav_arrow(btn: QPushButton, direction: str, tooltip: str = "") -> None:
     """Square antialiased triangle control for plot-pane pager / reorder."""
     style_plot_chrome_glyph_button(
@@ -217,7 +343,7 @@ def style_plot_footer_text_button(btn: QPushButton) -> None:
 def style_plot_pane_title_edit(edit: QLineEdit) -> None:
     """Compact transparent title field between pager arrows."""
     edit.setFixedHeight(_GLYPH_BTN_SIZE)
-    edit.setFixedWidth(130)
+    edit.setFixedWidth(_PANE_TITLE_EDIT_WIDTH)
     edit.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
     edit.setAlignment(Qt.AlignCenter)
     edit.setFrame(False)

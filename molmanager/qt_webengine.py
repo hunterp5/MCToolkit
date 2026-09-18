@@ -18,10 +18,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import sys
+
+logger = logging.getLogger(__name__)
 
 _QTWEBENGINE_CHROMIUM_FLAGS_ENV = "QTWEBENGINE_CHROMIUM_FLAGS"
 _QUIET_LOG_LEVEL_FLAG = "--log-level=3"
+_PREWARM_VIEW = None
 
 
 def configure_qtwebengine_quiet_logs() -> str:
@@ -38,3 +43,47 @@ def configure_qtwebengine_quiet_logs() -> str:
     flags = " ".join(parts)
     os.environ[_QTWEBENGINE_CHROMIUM_FLAGS_ENV] = flags
     return flags
+
+
+def schedule_qtwebengine_prewarm(*, delay_ms: int = 0) -> None:
+    """Start Chromium after the first GUI paint so later 3D views do not stall."""
+    if "pytest" in sys.modules:
+        return
+    from PyQt5.QtCore import QTimer
+
+    QTimer.singleShot(max(0, int(delay_ms)), prewarm_qtwebengine)
+
+
+def prewarm_qtwebengine() -> None:
+    """Create a hidden WebEngine view so the first protein canvas is not the Chromium cold start."""
+    global _PREWARM_VIEW
+    if _PREWARM_VIEW is not None or "pytest" in sys.modules:
+        return
+    try:
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtWebEngineWidgets import QWebEngineView
+        from PyQt5.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is None:
+            return
+        view = QWebEngineView()
+        view.setAttribute(Qt.WA_DontShowOnScreen, True)
+        view.resize(2, 2)
+        view.setHtml("<!DOCTYPE html><html><body></body></html>")
+        _PREWARM_VIEW = view
+        app.aboutToQuit.connect(_release_qtwebengine_prewarm)
+    except Exception:
+        logger.debug("Qt WebEngine prewarm skipped", exc_info=True)
+
+
+def _release_qtwebengine_prewarm() -> None:
+    global _PREWARM_VIEW
+    view = _PREWARM_VIEW
+    _PREWARM_VIEW = None
+    if view is None:
+        return
+    try:
+        view.deleteLater()
+    except RuntimeError:
+        pass

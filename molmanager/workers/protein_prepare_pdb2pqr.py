@@ -216,18 +216,17 @@ def _run_pdb2pqr(
             parse_cif_chem_comp_bonds,
             pdb_to_mmcif,
         )
+        from ..structure_cif import repair_cif_hydrogen_chem_bonds
 
         src = ""
         if write_cif_in and input_pdb.is_file():
             src = input_pdb.read_text(encoding="utf-8", errors="replace")
         output_pdb.parent.mkdir(parents=True, exist_ok=True)
-        _write_text(
-            output_pdb,
-            pdb_to_mmcif(
-                pdb_out.read_text(encoding="utf-8", errors="replace"),
-                data_name=output_pdb.stem,
-                chem_atoms=parse_cif_chem_comp_atoms(src) if src else None,
-                chem_bonds=parse_cif_chem_comp_bonds(src) if src else None,
-            ),
+        cif_text = pdb_to_mmcif(
+            pdb_out.read_text(encoding="utf-8", errors="replace"),
+            data_name=output_pdb.stem,
+            chem_atoms=parse_cif_chem_comp_atoms(src) if src else None,
+            chem_bonds=parse_cif_chem_comp_bonds(src) if src else None,
         )
+        _write_text(output_pdb, repair_cif_hydrogen_chem_bonds(cif_text))
         _unlink_quiet(pdb_out)

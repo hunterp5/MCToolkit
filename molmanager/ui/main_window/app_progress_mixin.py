@@ -41,6 +41,20 @@ class AppProgressMixin:
         except RuntimeError:
             return False
 
+    def _session_overlay_owns_loading_detail(self) -> bool:
+        """True while session restore is writing the loading page (not tool progress)."""
+        if getattr(self, "_session_waiting_for_render", False):
+            return False
+        if getattr(self, "_session_awaiting_ready", False):
+            return True
+        if getattr(self, "_session_finalize_ctx", None) is not None:
+            return True
+        if getattr(self, "_session_restore_ctx", None) is not None:
+            return True
+        if getattr(self, "_csv_session_ctx", None) is not None:
+            return True
+        return False
+
     def _sync_status_chrome_for_workspace(self) -> None:
         """Hide status/memory on the loading page; restore the user's status-bar setting after."""
         apply_bar = getattr(self, "_apply_status_bar_visible", None)
@@ -201,7 +215,11 @@ class AppProgressMixin:
         self._last_tool_progress_status = text
         if text:
             self.status_label.setText(text)
-        if text and self._workspace_loading_overlay_visible():
+        if (
+            text
+            and self._workspace_loading_overlay_visible()
+            and not self._session_overlay_owns_loading_detail()
+        ):
             detail = getattr(self, "_loading_detail", None)
             if detail is not None:
                 try:

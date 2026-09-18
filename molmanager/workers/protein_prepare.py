@@ -18,10 +18,11 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 import threading
 from concurrent.futures import FIRST_COMPLETED, BrokenExecutor, ProcessPoolExecutor, wait
-from multiprocessing import Queue
-from queue import Empty
+from pathlib import Path
 
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 
@@ -50,20 +51,24 @@ class ProteinPrepareSignals(QObject):
     progress = pyqtSignal(str)
 
 
-def drain_prepare_log_queue(log_queue, emit) -> None:
-    """Pull pending Prepare log lines from the child process and *emit* them."""
-    if log_queue is None or emit is None:
+def drain_prepare_log_file(path: str | Path | None, seen: list[int], emit) -> None:
+    """Emit new lines from the Prepare log file written by the child process."""
+    if not path or emit is None:
         return
-    while True:
-        try:
-            msg = log_queue.get_nowait()
-        except Empty:
-            break
-        except Exception:
-            break
-        text = str(msg or "").strip()
-        if text:
-            emit(text)
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    lines = [ln.strip() for ln in text.splitlines()]
+    start = seen[0] if seen else 0
+    for line in lines[start:]:
+        if line:
+            emit(line)
+    n = len(lines)
+    if seen:
+        seen[0] = n
+    else:
+        seen.append(n)
 
 
 class ProteinPrepareWorker(QRunnable):
@@ -89,31 +94,38 @@ class ProteinPrepareWorker(QRunnable):
                 return
 
             ex = register_process_pool(ProcessPoolExecutor(max_workers=1))
-            log_q: Queue | None
+            log_path: str | None = None
             try:
-                log_q = Queue()
-            except Exception:
-                log_q = None
+                fd, log_path = tempfile.mkstemp(prefix="molmanager_prepare_log_", suffix=".txt")
+                os.close(fd)
+            except OSError:
+                log_path = None
+            seen = [0]
             try:
-                future = ex.submit(mp_prepare_protein_structure, self.req, log_q)
+                future = ex.submit(mp_prepare_protein_structure, self.req, log_path)
                 pending = {future}
                 while pending:
-                    drain_prepare_log_queue(log_q, self.signals.progress.emit)
+                    drain_prepare_log_file(log_path, seen, self.signals.progress.emit)
                     if should_terminate_process_pool(cancel_ev):
                         future.cancel()
                         self.signals.failed.emit("Cancelled.")
                         return
                     _done, pending = wait(pending, timeout=0.25, return_when=FIRST_COMPLETED)
-                drain_prepare_log_queue(log_q, self.signals.progress.emit)
+                drain_prepare_log_file(log_path, seen, self.signals.progress.emit)
                 if future.cancelled():
                     self.signals.failed.emit("Cancelled.")
                     return
                 ok, msg = future.result()
-                drain_prepare_log_queue(log_q, self.signals.progress.emit)
+                drain_prepare_log_file(log_path, seen, self.signals.progress.emit)
             finally:
                 shutdown_process_pool_executor(
                     ex, kill_workers=should_terminate_process_pool(cancel_ev)
                 )
+                if log_path:
+                    try:
+                        os.unlink(log_path)
+                    except OSError:
+                        pass
 
             if cancel_ev is not None and cancel_ev.is_set():
                 self.signals.failed.emit("Cancelled.")
@@ -137,6 +149,6 @@ __all__ = [
     "ProteinPrepareResult",
     "ProteinPrepareSignals",
     "ProteinPrepareWorker",
-    "drain_prepare_log_queue",
+    "drain_prepare_log_file",
     "prepare_protein_structure",
 ]

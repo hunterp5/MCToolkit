@@ -27,9 +27,15 @@ from .structure_component_types import (
     CifChemAtom,
     CifChemBond,
     StructureAtom,
+    _atom_key4,
     _norm_chain,
     _residue_key3,
 )
+
+_CIF_LOOPS_CACHE_KEY: tuple | None = None
+_CIF_LOOPS_CACHE: list[tuple[list[str], list[list[str]]]] | None = None
+_HYDROGEN_ELEMS = frozenset({"H", "D", "T"})
+_H_BOND_MAX_SQ = 1.45 * 1.45
 
 
 def _cif_tokens(text: str) -> list[str]:
@@ -87,6 +93,18 @@ def _cif_yes(value: str) -> bool:
 
 def _parse_cif_loops(text: str) -> list[tuple[list[str], list[list[str]]]]:
     """Return ``(tags, rows)`` for every ``loop_`` table in *text*."""
+    global _CIF_LOOPS_CACHE_KEY, _CIF_LOOPS_CACHE
+    key = (id(text), len(text), hash(text))
+    cached = _CIF_LOOPS_CACHE
+    if cached is not None and key == _CIF_LOOPS_CACHE_KEY:
+        return cached
+    loops = _parse_cif_loops_uncached(text)
+    _CIF_LOOPS_CACHE_KEY = key
+    _CIF_LOOPS_CACHE = loops
+    return loops
+
+
+def _parse_cif_loops_uncached(text: str) -> list[tuple[list[str], list[list[str]]]]:
     tokens = _cif_tokens(text)
     loops: list[tuple[list[str], list[list[str]]]] = []
     i = 0
@@ -143,6 +161,29 @@ def _cif_bond_order_int(value: str) -> int:
     if key in {"arom"}:
         return 2
     return 1
+
+
+def _cif_bond_order_token(order: int) -> str:
+    if int(order) >= 3:
+        return "trip"
+    if int(order) == 2:
+        return "doub"
+    return "sing"
+
+
+def _chem_bond_pair(atom_id_1: str, atom_id_2: str) -> tuple[str, str]:
+    return tuple(sorted(((atom_id_1 or "").strip(), (atom_id_2 or "").strip())))
+
+
+def _is_h_elem(elem: str) -> bool:
+    return (elem or "").upper() in _HYDROGEN_ELEMS
+
+
+def _xyz_dist_sq(a: StructureAtom, b: StructureAtom) -> float:
+    dx = float(a.x) - float(b.x)
+    dy = float(a.y) - float(b.y)
+    dz = float(a.z) - float(b.z)
+    return dx * dx + dy * dy + dz * dz
 
 
 def parse_cif_chem_comp_atoms(text: str) -> dict[str, tuple[CifChemAtom, ...]]:
@@ -217,17 +258,123 @@ def parse_cif_chem_comp_bonds(text: str) -> dict[str, tuple[CifChemBond, ...]]:
 
 
 def cif_viewer_bond_tables(text: str) -> dict[str, list[list[object]]]:
-    """``comp_id → [[atom1, atom2, order], …]`` for bonds with order > 1.
+    """Heavy-atom ``comp_id → [[atom1, atom2, order], …]`` for the protein canvas.
 
-    3Dmol's text mmCIF parser never reads ``_chem_comp_bond``; the protein
-    canvas applies this table after ``addModel`` so double/triple sticks draw.
+    3Dmol's text mmCIF parser never reads ``_chem_comp_bond``; the canvas
+    replaces intra-residue *heavy* bonds after ``addModel`` so double/triple
+    sticks draw. Hydrogen connectivity stays with distance inference because
+    Amber/OpenMM often rename H while copied CCD tables keep old H ids.
     """
+    h_ids_by_comp: dict[str, set[str]] = {}
+    for comp, atoms in parse_cif_chem_comp_atoms(text).items():
+        h_ids_by_comp[comp] = {atom.atom_id for atom in atoms if _is_h_elem(atom.symbol)}
     tables: dict[str, list[list[object]]] = {}
     for comp, bonds in parse_cif_chem_comp_bonds(text).items():
-        rows = [[bond.atom_id_1, bond.atom_id_2, bond.order] for bond in bonds if bond.order >= 1]
-        if rows:
-            tables[comp] = rows
+        h_ids = h_ids_by_comp.get(comp, set())
+        tables[comp] = [
+            [bond.atom_id_1, bond.atom_id_2, bond.order]
+            for bond in bonds
+            if bond.order >= 1 and bond.atom_id_1 not in h_ids and bond.atom_id_2 not in h_ids
+        ]
     return tables
+
+
+def rebuild_hydrogen_chem_bonds(
+    atoms: Iterable[StructureAtom],
+    chem_bonds: dict[str, tuple[CifChemBond, ...]],
+) -> dict[str, tuple[CifChemBond, ...]]:
+    """Replace H–X ``_chem_comp_bond`` rows using current coordinates.
+
+    Amber/OpenMM often rename hydrogens while copied CCD tables keep the
+    previous H ids, which draws stretched sticks if those bonds are applied.
+    """
+    if not chem_bonds:
+        return chem_bonds
+    h_names: dict[str, set[str]] = defaultdict(set)
+    residues: dict[tuple[str, str, str, str], list[StructureAtom]] = defaultdict(list)
+    for atom in atoms or ():
+        resn = (atom.resn or "").upper()
+        if not resn:
+            continue
+        residues[(atom.chain, atom.resi, atom.icode, resn)].append(atom)
+        if _is_h_elem(atom.elem):
+            h_names[resn].add(atom.name)
+    observed: dict[str, set[tuple[str, str]]] = defaultdict(set)
+    for (_chain, _resi, _icode, resn), group in residues.items():
+        if resn not in chem_bonds:
+            continue
+        heavies = [atom for atom in group if not _is_h_elem(atom.elem)]
+        hydrogens = [atom for atom in group if _is_h_elem(atom.elem)]
+        if not heavies:
+            continue
+        for hydrogen in hydrogens:
+            parent = min(heavies, key=lambda heavy: _xyz_dist_sq(hydrogen, heavy))
+            if _xyz_dist_sq(hydrogen, parent) > _H_BOND_MAX_SQ:
+                continue
+            observed[resn].add((hydrogen.name, parent.name))
+    out: dict[str, tuple[CifChemBond, ...]] = {}
+    for comp, bonds in chem_bonds.items():
+        skip = h_names.get(comp, set())
+        kept = [bond for bond in bonds if bond.atom_id_1 not in skip and bond.atom_id_2 not in skip]
+        seen = {_chem_bond_pair(bond.atom_id_1, bond.atom_id_2) for bond in kept}
+        for h_name, parent_name in sorted(
+            observed.get(comp, ()), key=lambda pair: (pair[1], pair[0])
+        ):
+            pair = _chem_bond_pair(h_name, parent_name)
+            if pair in seen:
+                continue
+            seen.add(pair)
+            kept.append(
+                CifChemBond(
+                    atom_id_1=parent_name,
+                    atom_id_2=h_name,
+                    order=1,
+                    order_token="sing",
+                    aromatic=False,
+                )
+            )
+        out[comp] = tuple(kept)
+    return out
+
+
+def rebuild_hydrogen_chem_tables(
+    atoms: Iterable[StructureAtom],
+    chem_atoms: dict[str, tuple[CifChemAtom, ...]],
+    chem_bonds: dict[str, tuple[CifChemBond, ...]],
+) -> tuple[dict[str, tuple[CifChemAtom, ...]], dict[str, tuple[CifChemBond, ...]]]:
+    """Keep heavy CCD rows; rewrite hydrogen atoms/bonds from *atoms*."""
+    bonds = rebuild_hydrogen_chem_bonds(atoms, chem_bonds)
+    h_by_resn: dict[str, dict[str, str]] = defaultdict(dict)
+    for atom in atoms or ():
+        if not _is_h_elem(atom.elem):
+            continue
+        resn = (atom.resn or "").upper()
+        if resn:
+            h_by_resn[resn][atom.name] = (atom.elem or "H").upper()
+    out_atoms: dict[str, tuple[CifChemAtom, ...]] = {}
+    comps = sorted({*(chem_atoms or {}), *bonds, *h_by_resn})
+    for comp in comps:
+        kept = [row for row in (chem_atoms or {}).get(comp, ()) if not _is_h_elem(row.symbol)]
+        for name, symbol in sorted(h_by_resn.get(comp, {}).items()):
+            kept.append(CifChemAtom(atom_id=name, symbol=symbol))
+        if kept:
+            out_atoms[comp] = tuple(kept)
+    return out_atoms, bonds
+
+
+def repair_cif_hydrogen_chem_bonds(text: str) -> str:
+    """Rewrite H–X ``_chem_comp_bond`` rows from the current ``_atom_site`` geometry."""
+    if not parse_cif_chem_comp_bonds(text):
+        return text
+    from .structure_atoms import parse_structure_atoms
+
+    site = parse_structure_atoms(text, "cif")
+    chem_atoms, chem_bonds = rebuild_hydrogen_chem_tables(
+        site,
+        parse_cif_chem_comp_atoms(text),
+        parse_cif_chem_comp_bonds(text),
+    )
+    return attach_cif_chem_comp(text, chem_atoms=chem_atoms, chem_bonds=chem_bonds)
 
 
 def cif_has_component_bonds(text: str, resns: Iterable[str]) -> bool:
@@ -523,6 +670,104 @@ def append_missing_cif_residues(dest: str, source: str, keys: set[tuple[str, str
         chem_atoms=chem_atoms,
         chem_bonds=chem_bonds,
     )
+
+
+def delete_cif_atoms(text: str, keys: set[tuple[str, str, str, str]]) -> str:
+    """Drop mmCIF ``_atom_site`` rows by ``(chain, resi, icode, name)``."""
+    wanted = {_atom_key4(*key) for key in keys}
+    if not wanted:
+        return text
+    from .structure_atoms import parse_structure_atoms
+
+    atoms = [
+        atom
+        for atom in parse_structure_atoms(text, "cif")
+        if _atom_key4(atom.chain, atom.resi, atom.icode, atom.name) not in wanted
+    ]
+    remaining_names: dict[str, set[str]] = defaultdict(set)
+    remaining_resn: set[str] = set()
+    for atom in atoms:
+        resn = (atom.resn or "").upper()
+        if not resn:
+            continue
+        remaining_resn.add(resn)
+        remaining_names[resn].add(atom.name)
+    chem_atoms = {
+        comp: tuple(row for row in rows if row.atom_id in remaining_names.get(comp, set()))
+        for comp, rows in parse_cif_chem_comp_atoms(text).items()
+        if comp in remaining_resn
+    }
+    chem_atoms = {comp: rows for comp, rows in chem_atoms.items() if rows}
+    chem_bonds = {
+        comp: tuple(
+            bond
+            for bond in rows
+            if bond.atom_id_1 in remaining_names.get(comp, set())
+            and bond.atom_id_2 in remaining_names.get(comp, set())
+        )
+        for comp, rows in parse_cif_chem_comp_bonds(text).items()
+        if comp in remaining_resn
+    }
+    chem_bonds = {comp: rows for comp, rows in chem_bonds.items() if rows}
+    return atoms_to_mmcif(
+        atoms,
+        remarks=cif_comment_remarks(text),
+        chem_atoms=chem_atoms,
+        chem_bonds=chem_bonds,
+    )
+
+
+def add_cif_chem_bond(
+    text: str,
+    comp_id: str,
+    atom_id_1: str,
+    atom_id_2: str,
+    *,
+    order: int = 1,
+) -> str:
+    """Add or replace an intra-residue ``_chem_comp_bond`` row."""
+    comp = (comp_id or "").strip().upper()
+    a1 = (atom_id_1 or "").strip()
+    a2 = (atom_id_2 or "").strip()
+    if not comp or not a1 or not a2 or a1 == a2:
+        return text
+    pair = _chem_bond_pair(a1, a2)
+    token = _cif_bond_order_token(order)
+    bonds = dict(parse_cif_chem_comp_bonds(text))
+    current = [
+        bond
+        for bond in (bonds.get(comp) or ())
+        if _chem_bond_pair(bond.atom_id_1, bond.atom_id_2) != pair
+    ]
+    current.append(
+        CifChemBond(
+            atom_id_1=a1,
+            atom_id_2=a2,
+            order=int(order) if int(order) >= 1 else 1,
+            order_token=token,
+        )
+    )
+    bonds[comp] = tuple(current)
+    return attach_cif_chem_comp(text, chem_atoms=parse_cif_chem_comp_atoms(text), chem_bonds=bonds)
+
+
+def remove_cif_chem_bond(text: str, comp_id: str, atom_id_1: str, atom_id_2: str) -> str:
+    """Drop an intra-residue ``_chem_comp_bond`` row if present."""
+    comp = (comp_id or "").strip().upper()
+    pair = _chem_bond_pair(atom_id_1, atom_id_2)
+    if not comp or not pair[0] or pair[0] == pair[1]:
+        return text
+    bonds = dict(parse_cif_chem_comp_bonds(text))
+    current = tuple(
+        bond
+        for bond in (bonds.get(comp) or ())
+        if _chem_bond_pair(bond.atom_id_1, bond.atom_id_2) != pair
+    )
+    if current:
+        bonds[comp] = current
+    else:
+        bonds.pop(comp, None)
+    return attach_cif_chem_comp(text, chem_atoms=parse_cif_chem_comp_atoms(text), chem_bonds=bonds)
 
 
 def attach_cif_chem_comp(

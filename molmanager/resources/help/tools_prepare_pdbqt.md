@@ -1,6 +1,6 @@
 # Prepare PDBQT
 
-Prepare PDBQT builds receptor and/or ligand PDBQT files used by AutoDock-style engines such as Smina.
+Prepare PDBQT builds receptor and/or ligand PDBQT files used by AutoDock-style engines such as Gnina.
 
 ## Goal
 
@@ -24,13 +24,13 @@ Receptor from **Input PDB**. Ligands from **SDF**, **PDB**, **SMILES**, or **Row
 
 1. Set receptor input PDB and PDBQT output, then **Generate PDBQT** in the Receptor box.
 2. Choose ligand input (SDF, ligand PDB, SMILES, or selected rows) and **Generate PDBQT** in the Ligand box.
-3. Point **Smina…** at the resulting receptor and ligand files.
+3. Point **Gnina…** at the resulting receptor and ligand files.
 
 ## Use cases
 
 - Prepare a receptor once, then batch ligands from selected rows.
 - Convert an SDF hit list or a ligand PDB to ligand PDBQT.
-- Build files for a Smina exhaustiveness sweep.
+- Build files for a Gnina exhaustiveness sweep.
 
 ## Tips and limits
 

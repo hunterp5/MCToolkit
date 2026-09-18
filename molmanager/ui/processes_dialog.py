@@ -67,7 +67,7 @@ class ProcessesDialog(QDialog):
         self._btn_cancel = QPushButton("Cancel")
         self._btn_cancel.setToolTip(
             "Apply to the selected row: stop a running job (cooperative), end Render 2D, "
-            "stop Smina docking, or remove a queued job from the line without running it."
+            "stop Gnina docking, or remove a queued job from the line without running it."
         )
         self._btn_clear = QPushButton("Clear queue")
         self._btn_clear.setToolTip(
@@ -118,9 +118,15 @@ class ProcessesDialog(QDialog):
             self._btn_cancel.setEnabled(
                 bool(hub.render2d_batch_active()) if hub is not None else False
             )
-        elif m.get("kind") == "smina":
+        elif m.get("kind") in {"gnina", "smina"}:
             hub = getattr(self._app, "background_activity", None)
-            self._btn_cancel.setEnabled(bool(hub.smina_dock_active()) if hub is not None else False)
+            active = False
+            if hub is not None:
+                probe = getattr(hub, "gnina_dock_active", None) or getattr(
+                    hub, "smina_dock_active", None
+                )
+                active = bool(probe()) if callable(probe) else False
+            self._btn_cancel.setEnabled(active)
         elif m.get("kind") == "pq_running":
             hub = getattr(self._app, "background_activity", None)
             if hub is not None and hub.render2d_batch_active():
@@ -176,7 +182,7 @@ class ProcessesDialog(QDialog):
             return False
         if prev.get("kind") == "render2d":
             return True
-        if prev.get("kind") == "smina":
+        if prev.get("kind") in {"gnina", "smina"}:
             return True
         return prev.get("job_id") == cur.get("job_id")
 

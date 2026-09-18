@@ -270,18 +270,20 @@ def permeability_dialog_footer_html() -> str:
 
 
 def stochastic_conformations_dialog_footer_html() -> str:
-    """Rich text for Tools → Conformations → Stochastic…."""
+    """Rich text for Tools → Conformations → Generate → Stochastic…."""
     return (
         "<small><b>Method</b>: RDKit <b>ETKDG</b> (experimental-torsion-knowledge distance geometry) — "
         '<a href="https://doi.org/10.1021/acs.jcim.5b00654">Riniker &amp; Landrum, J. Chem. Inf. Model. 2015</a>. '
-        "Stochastic embedding, then MMFF/UFF minimization and energy/RMS pruning. "
+        "Stochastic embedding, then MMFF/UFF or GAFF/GAFF2 (AmberTools + OpenMM) "
+        "vacuum minimization and energy/RMS pruning. "
         "Energies in the results window are vacuum molecular-mechanics totals (kcal/mol), "
-        "not protein-bound or quantum-chemical values.</small>"
+        "not protein-bound or quantum-chemical values. GAFF/GAFF2 need AmberTools "
+        "(WSL on Windows) and OpenMM.</small>"
     )
 
 
 def systematic_conformations_dialog_footer_html() -> str:
-    """Rich text for Tools → Conformations → Systematic…."""
+    """Rich text for Tools → Conformations → Generate → Systematic…."""
     return (
         "<small><b>Method</b>: Open Babel <b>Confab</b> — "
         '<a href="https://doi.org/10.1186/1758-2946-3-8">O\'Boyle et al., J. Cheminform. 2011</a>. '

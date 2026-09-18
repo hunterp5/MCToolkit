@@ -18,7 +18,6 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 from PyQt5.QtCore import pyqtSignal
@@ -31,12 +30,10 @@ from PyQt5.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QTextEdit,
     QVBoxLayout,
 )
 
@@ -45,23 +42,28 @@ from ...workers.protein_minimize import (
     ProteinMinimizeSignals,
     ProteinMinimizeWorker,
 )
-from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
-from .protein_prepare import _browse_path_row
+from ..qt_widget_utils import append_viewer_log, make_window_minimizable
+from .protein_prepare import _browse_path_row, add_openmm_platform_combo
+from .protein_source_picker import ProteinStructureSourceMixin
 
 _MINIMIZE_FMTS = frozenset({"pdb", "pqr", "cif"})
 
 
-class ProteinMinimizeDialog(QDialog):
-    """Options and log for Protein Viewer → Minimize."""
+class ProteinMinimizeDialog(ProteinStructureSourceMixin, QDialog):
+    """Options for Protein Viewer → Prepare → Minimize."""
 
     minimized = pyqtSignal(str)
+    _source_output_tag = "minimized"
+    _source_tmp_prefix = "molmanager_minimize_in_"
+    _source_tool_title = "Minimize Complex"
+    _source_empty_message = "Choose a Manager structure or a PDB/mmCIF file."
 
     def __init__(self, viewer, parent=None) -> None:
         super().__init__(parent or viewer)
         self._viewer = viewer
         self.setWindowTitle("Minimize Complex")
         self.setMinimumWidth(480)
-        self.resize(520, 560)
+        self.resize(520, 480)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
@@ -71,9 +73,7 @@ class ProteinMinimizeDialog(QDialog):
         io_form = QFormLayout(io_gb)
         io_form.setContentsMargins(8, 6, 8, 6)
         io_form.setSpacing(4)
-        self.lbl_source = QLabel("—")
-        self.lbl_source.setWordWrap(True)
-        io_form.addRow("Current:", self.lbl_source)
+        self._add_structure_source_rows(io_form)
         self.edit_out = QLineEdit()
         self.edit_out.setPlaceholderText("receptor_minimized.cif")
         io_form.addRow("Output:", _browse_path_row(self.edit_out, self._browse_output))
@@ -143,6 +143,9 @@ class ProteinMinimizeDialog(QDialog):
             "GBn2 is the usual implicit solvent. Vacuum over-attracts charges."
         )
         min_form.addRow("Solvation:", self.combo_solvent)
+        self.combo_openmm_platform = QComboBox()
+        add_openmm_platform_combo(self.combo_openmm_platform)
+        min_form.addRow("Compute:", self.combo_openmm_platform)
         self.spin_salt = QDoubleSpinBox()
         self.spin_salt.setRange(0.0, 2.0)
         self.spin_salt.setDecimals(2)
@@ -179,13 +182,6 @@ class ProteinMinimizeDialog(QDialog):
         self._sync_ligand_options()
         self._sync_min_options()
 
-        self.log = QTextEdit()
-        self.log.setReadOnly(True)
-        self.log.setMaximumHeight(110)
-        self.log.setPlaceholderText("Log")
-        apply_monospace_to_text_edit(self.log)
-        root.addWidget(self.log)
-
         btn_row = QHBoxLayout()
         self.btn_run = QPushButton("Minimize")
         self.btn_run.clicked.connect(self._on_run)
@@ -204,22 +200,13 @@ class ProteinMinimizeDialog(QDialog):
         make_window_minimizable(self)
 
     def prefill_from_viewer(self) -> None:
-        viewer = self._viewer
-        name, _text, _fmt, path = viewer.prepare_source()
-        self.lbl_source.setText(name or "—")
-        if path is not None and not (self.edit_out.text() or "").strip():
-            suggested = path.with_name(f"{path.stem}_minimized.cif")
-            self.edit_out.setText(str(suggested))
-        self._refresh_ligand_combo()
+        self._refresh_structure_source()
         self._sync_ligand_options()
 
     def _refresh_ligand_combo(self) -> None:
         self.combo_ligand.clear()
         self.combo_ligand.addItem("All ligands", None)
-        options = []
-        getter = getattr(self._viewer, "prepare_ligand_options", None)
-        if callable(getter):
-            options = list(getter() or [])
+        options = list(self.chosen_ligand_options())
         selected_index = 0
         for i, item in enumerate(options):
             label, key, selected = item[0], item[1], item[2]
@@ -314,10 +301,7 @@ class ProteinMinimizeDialog(QDialog):
             self.edit_out.setText(path)
 
     def _append_log(self, text: str) -> None:
-        t = (text or "").rstrip()
-        if not t:
-            return
-        self.log.append(t)
+        append_viewer_log(self._viewer, text)
 
     def _process_host(self):
         parent = self._viewer
@@ -327,24 +311,15 @@ class ProteinMinimizeDialog(QDialog):
             parent = parent.parent()
         return None
 
-    def _write_input_snapshot(self) -> Path:
-        viewer = self._viewer
-        _name, text, fmt, _path = viewer.prepare_source()
-        fmt = fmt or "pdb"
-        if fmt not in _MINIMIZE_FMTS:
-            raise ValueError("Minimize supports PDB and mmCIF structures.")
-        suffix = ".cif" if fmt == "cif" else ".pdb"
-        tmp_dir = Path(tempfile.mkdtemp(prefix="molmanager_minimize_in_"))
-        path = tmp_dir / f"input{suffix}"
-        path.write_text(text, encoding="utf-8")
-        self._input_tmp = path
-        return path
-
     def _on_run(self) -> None:
-        viewer = self._viewer
-        _name, text, fmt, _path = viewer.prepare_source()
+        self._resolved_source = None
+        try:
+            _name, text, fmt, _path = self.chosen_structure_source()
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Minimize Complex", str(exc))
+            return
         if not (text or "").strip():
-            QMessageBox.information(self, "Minimize Complex", "Open a structure first.")
+            QMessageBox.information(self, "Minimize Complex", self._source_empty_message)
             return
         fmt = fmt or "pdb"
         if fmt not in _MINIMIZE_FMTS:
@@ -398,6 +373,7 @@ class ProteinMinimizeDialog(QDialog):
             protein_ff=self.combo_protein_ff.currentData() or "amber14",
             ligand_ff=ligand_ff,
             solvent=self.combo_solvent.currentData() or "gbn2",
+            openmm_platform=self.combo_openmm_platform.currentData() or "auto",
             salt_m=float(self.spin_salt.value()),
             restraint_set=self.combo_restraint.currentData() or "backbone_ligand",
             restraint_k_kcal_per_ang2=float(self.spin_k.value()),
@@ -427,6 +403,7 @@ class ProteinMinimizeDialog(QDialog):
         self.btn_run.setEnabled(True)
         self._append_log(f"Minimized file written: {path}")
         self.minimized.emit(path)
+        self.close()
 
     def _on_failed(self, msg: str) -> None:
         self.btn_run.setEnabled(True)

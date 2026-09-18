@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import math
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from .protein_prepare_constants import (
     _GB_SOLVENT_DIELECTRIC,
     _GB_TEMPERATURE_K,
     _LIGAND_FF_NONE,
+    _OPENMM_PLATFORM_AUTO,
     _PROTEIN_FF_AMBER14,
     _PROTEIN_FF_AMBER99,
     _RESTRAINT_BACKBONE,
@@ -80,6 +82,114 @@ def _normalize_solvent(name: str) -> str:
     if raw in {_SOLVENT_OBC2, "obc", "gbsa-obc"}:
         return _SOLVENT_OBC2
     return _SOLVENT_GBN2
+
+
+def _normalize_openmm_platform(name: str) -> str:
+    raw = (name or _OPENMM_PLATFORM_AUTO).strip()
+    env = (os.environ.get("MOLMANAGER_OPENMM_PLATFORM") or "").strip()
+    if not raw or raw.lower() == _OPENMM_PLATFORM_AUTO:
+        raw = env or _OPENMM_PLATFORM_AUTO
+    key = raw.lower()
+    if key in {_OPENMM_PLATFORM_AUTO, "gpu"}:
+        return _OPENMM_PLATFORM_AUTO
+    if key in {"cuda"}:
+        return "CUDA"
+    if key in {"opencl"}:
+        return "OpenCL"
+    if key in {"cpu"}:
+        return "CPU"
+    if key in {"reference"}:
+        return "Reference"
+    return raw
+
+
+def _openmm_platform_names() -> list[str]:
+    import openmm
+
+    return [
+        openmm.Platform.getPlatform(i).getName() for i in range(openmm.Platform.getNumPlatforms())
+    ]
+
+
+def _cpu_thread_count() -> int:
+    n = os.cpu_count() or 1
+    return max(1, n - 1) if n > 1 else 1
+
+
+def _openmm_platform_properties(name: str) -> dict[str, str]:
+    if name == "CUDA":
+        return {"CudaPrecision": "single"}
+    if name == "OpenCL":
+        return {"OpenCLPrecision": "single"}
+    if name == "CPU":
+        return {"Threads": str(_cpu_thread_count())}
+    return {}
+
+
+def _iter_openmm_platform_candidates(preferred: str = _OPENMM_PLATFORM_AUTO) -> list[str]:
+    """Preference order: requested GPU, other GPU plugins, then CPU."""
+    preferred = _normalize_openmm_platform(preferred)
+    available = set(_openmm_platform_names())
+    ordered: list[str] = []
+
+    def _add(name: str) -> None:
+        if name in available and name not in ordered:
+            ordered.append(name)
+
+    if preferred == "CPU":
+        _add("CPU")
+        return ordered
+    if preferred == "Reference":
+        _add("Reference")
+        _add("CPU")
+        return ordered
+    if preferred in {"CUDA", "OpenCL"}:
+        _add(preferred)
+        if preferred not in available:
+            log_prepare(f"OpenMM: {preferred} plugin not installed; trying another platform")
+    for name in ("CUDA", "OpenCL", "CPU"):
+        _add(name)
+    return ordered
+
+
+def _platform_context_label(simulation) -> str:
+    platform = simulation.context.getPlatform()
+    name = platform.getName()
+    bits = [name]
+    for key in ("DeviceName", "Threads", "Precision", "CudaPrecision", "OpenCLPrecision"):
+        try:
+            value = platform.getPropertyValue(simulation.context, key)
+        except Exception:
+            continue
+        if value:
+            bits.append(f"{key}={value}")
+    return " ".join(bits)
+
+
+def _create_openmm_simulation(
+    topology, system, integrator, *, preferred: str = _OPENMM_PLATFORM_AUTO
+):
+    import openmm
+    from openmm.app import Simulation
+
+    last_err: BaseException | None = None
+    for name in _iter_openmm_platform_candidates(preferred):
+        try:
+            platform = openmm.Platform.getPlatformByName(name)
+            simulation = Simulation(
+                topology,
+                system,
+                integrator,
+                platform,
+                _openmm_platform_properties(name),
+            )
+            log_prepare(f"OpenMM: using {_platform_context_label(simulation)}")
+            return simulation
+        except Exception as exc:
+            last_err = exc
+            log_prepare(f"OpenMM: {name} unavailable ({exc}); trying next platform")
+    detail = str(last_err) if last_err else "no platforms"
+    raise RuntimeError(f"Could not create an OpenMM Simulation ({detail})")
 
 
 def _normalize_restraint_set(name: str) -> str:
@@ -314,10 +424,9 @@ def _restrained_minimize_pdb(
     ligand_ff: str = _LIGAND_FF_NONE,
     ligand_mols: Sequence | None = None,
     work_dir: Path | None = None,
+    openmm_platform: str = _OPENMM_PLATFORM_AUTO,
 ) -> None:
-    import openmm
     from openmm import CustomExternalForce, LangevinMiddleIntegrator, unit
-    from openmm.app import Simulation
 
     from .protein_prepare_qc import restrain_atom
 
@@ -405,17 +514,15 @@ def _restrained_minimize_pdb(
     if n_restrained:
         system.addForce(restraint)
 
-    try:
-        platform = openmm.Platform.getPlatformByName("CPU")
-    except Exception:
-        platform = None
     integrator = LangevinMiddleIntegrator(
         300 * unit.kelvin, 1.0 / unit.picosecond, 0.002 * unit.picoseconds
     )
-    if platform is None:
-        simulation = Simulation(pdb.topology, system, integrator)
-    else:
-        simulation = Simulation(pdb.topology, system, integrator, platform)
+    simulation = _create_openmm_simulation(
+        pdb.topology,
+        system,
+        integrator,
+        preferred=openmm_platform,
+    )
     simulation.context.setPositions(pdb.positions)
     log_prepare(f"OpenMM: running minimizer ({int(max_iterations)} iterations)…")
     simulation.minimizeEnergy(maxIterations=int(max_iterations))
@@ -483,4 +590,9 @@ def _ligand_chem_tables(
 
     _take(text, fmt, overwrite=True)
     _take(input_text, input_fmt, overwrite=True)
+    if bonds:
+        from ..structure_atoms import parse_structure_atoms
+        from ..structure_cif import rebuild_hydrogen_chem_tables
+
+        atoms, bonds = rebuild_hydrogen_chem_tables(parse_structure_atoms(text, fmt), atoms, bonds)
     return atoms, bonds

@@ -42,7 +42,6 @@ from ...session_codec import (
     session_version_ok,
 )
 from ...utils import mol_graph_binary, mol_to_canonical_smiles
-from ..qt_widget_utils import qobject_is_deleted
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
 
 logger = logging.getLogger(__name__)
@@ -131,7 +130,7 @@ class SessionSaveMixin:
             f.write(dumps_session_document(self._build_session_document()))
         return out_path
 
-    def _build_session_document(self) -> dict:
+    def _build_session_document(self, *, oids: set[int] | None = None) -> dict:
         hh = self.table.horizontalHeader()
         n = self._table_model.columnCount()
         logical_order = sorted(range(n), key=lambda lg: hh.visualIndex(lg)) if n else []
@@ -150,8 +149,11 @@ class SessionSaveMixin:
         structure_mols: list[str] = []
         n_rows = self._table_model.rowCount()
         smiles_col = "SMILES" in self.headers
+        want = oids
         for r in range(n_rows):
             oid = int(self._table_model.row_oid(r))
+            if want is not None and oid not in want:
+                continue
             cells: dict[str, str] = {}
             for ci, h in enumerate(self.headers):
                 if h in ("ID_HIDDEN", "Structure"):
@@ -234,7 +236,7 @@ class SessionSaveMixin:
             "structure_mols": structure_mols,
             "global_bounds": compact_global_bounds(getattr(self, "global_bounds", None)),
             "next_oid": int(self.next_oid),
-            "zoomed_ids": sorted(int(x) for x in self.zoomed_ids),
+            "zoomed_ids": sorted(int(x) for x in self.zoomed_ids if want is None or int(x) in want),
             "structure_field_override": getattr(self, "_structure_field_override", None),
             "filter_panel_visible": bool(self.f_panel.isVisible()),
             "workspace_layout": (
@@ -256,10 +258,8 @@ class SessionSaveMixin:
             "logarithmic_columns": sorted(
                 h for h in getattr(self, "_logarithmic_columns", set()) if h in self.headers
             ),
-            "confs_sidecar": serialize_confs_sidecar(
-                getattr(self, "_confs_blocks_sidecar", {}) or {}
-            ),
-            "som_browse": self._session_som_browse_payload(),
+            "confs_sidecar": serialize_confs_sidecar(self._confs_sidecar_for_session(want)),
+            "som_browse": self._session_som_browse_payload(oids=want),
             "ionization_sidecar": serialize_ionization_sidecar(),
             "mmp_ledger": self._session_mmp_ledger_payload(),
             "protein_viewer": self._collect_protein_viewer(),
@@ -271,14 +271,31 @@ class SessionSaveMixin:
                 doc["table_search"] = search_payload
         return compact_session_document(doc)
 
-    def _session_som_browse_payload(self) -> list[dict]:
+    def _confs_sidecar_for_session(self, oids: set[int] | None) -> dict[tuple[int, str], str]:
+        store = getattr(self, "_confs_blocks_sidecar", {}) or {}
+        if oids is None:
+            return store
+        return {k: v for k, v in store.items() if int(k[0]) in oids}
+
+    def _session_som_browse_payload(self, *, oids: set[int] | None = None) -> list[dict]:
         """Atom-level SOM maps for session restore (redraws table images on open)."""
         from ..som_browser import records_from_table, serialize_som_browse_records
 
         records = list(getattr(self, "_som_browse_records", None) or ())
         if not records:
             records = records_from_table(self)
-        return serialize_som_browse_records(records)
+        payload = serialize_som_browse_records(records)
+        if oids is None:
+            return payload
+        kept: list[dict] = []
+        for item in payload:
+            try:
+                oid = int(item.get("oid"))
+            except (TypeError, ValueError):
+                continue
+            if oid in oids:
+                kept.append(item)
+        return kept
 
     def _session_mmp_ledger_payload(self) -> dict | None:
         """Last MMP run for Transform Ledger reopen after session open."""
@@ -290,30 +307,61 @@ class SessionSaveMixin:
         )
 
     def _collect_protein_viewer(self) -> dict | None:
-        dlg = getattr(self, "_protein_viewer_dialog", None)
-        if dlg is None or qobject_is_deleted(dlg):
-            return None
-        collect = getattr(dlg, "collect_session_state", None)
-        if not callable(collect):
+        payload = getattr(self, "_protein_viewer_session", None)
+        if not isinstance(payload, dict) or not payload.get("structures"):
             return None
         try:
-            state = collect()
-        except Exception:
-            logger.exception("Skipping Protein Viewer while collecting session state")
-            return None
-        if not isinstance(state, dict) or not state.get("structures"):
-            return None
-        try:
-            json.dumps(state)
+            return json.loads(json.dumps(payload))
         except (TypeError, ValueError):
             logger.exception("Skipping Protein Viewer with non-JSON-serializable session state")
             return None
-        return state
+
+    def commit_protein_viewer_session(self, payload: dict | None) -> None:
+        """Store a Protein Viewer snapshot for the next File → Session → Save Session."""
+        if isinstance(payload, dict) and payload.get("structures"):
+            self._protein_viewer_session = json.loads(json.dumps(payload))
+        else:
+            self._protein_viewer_session = None
+        mark = getattr(self, "_mark_session_dirty", None)
+        if callable(mark):
+            mark()
 
     def save_session_as(self) -> bool:
         """Prompt for a path and save the session. Returns True if a file was written."""
+        return self._prompt_save_session_document(
+            dialog_title="Save Session",
+            document=self._build_session_document(),
+            clear_dirty=True,
+            status_prefix="Session saved to",
+        )
+
+    def save_selected_to_session(self) -> bool:
+        """Write a new ``.cms`` that contains only the currently selected table rows."""
+        oids = {int(o) for o in self._selected_oids_set()}
+        if not oids:
+            QMessageBox.information(
+                self,
+                "Save Selected to Session",
+                "No rows are selected. Select one or more rows in the table first.",
+            )
+            return False
+        return self._prompt_save_session_document(
+            dialog_title="Save Selected to Session",
+            document=self._build_session_document(oids=oids),
+            clear_dirty=False,
+            status_prefix="Selected rows saved to session",
+        )
+
+    def _prompt_save_session_document(
+        self,
+        *,
+        dialog_title: str,
+        document: dict,
+        clear_dirty: bool,
+        status_prefix: str,
+    ) -> bool:
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save Session", "", "MolManager Session (*.cms);;JSON (*.json)"
+            self, dialog_title, "", "MolManager Session (*.cms);;JSON (*.json)"
         )
         if not path:
             return False
@@ -322,15 +370,16 @@ class SessionSaveMixin:
             path += ".cms"
         try:
             with open(path, "wb") as f:
-                f.write(dumps_session_document(self._build_session_document()))
-            self.status_label.setText(f"Session saved to {path}")
-            clear = getattr(self, "_clear_session_dirty", None)
-            if callable(clear):
-                clear()
+                f.write(dumps_session_document(document))
+            self.status_label.setText(f"{status_prefix} {path}")
+            if clear_dirty:
+                clear = getattr(self, "_clear_session_dirty", None)
+                if callable(clear):
+                    clear()
             return True
         except Exception as e:
             logger.exception("Save session failed: %s", path)
-            QMessageBox.warning(self, "Save Session", str(e))
+            QMessageBox.warning(self, dialog_title, str(e))
             return False
 
     def open_session_file(self) -> None:

@@ -9,7 +9,7 @@
 molmanager can run these when installed on the system **or** when copied into:
 
 ```
-molmanager/resources/bin/win/     # Windows: vina.exe, smina.exe, optional obabel.exe / mafft.bat
+molmanager/resources/bin/win/     # Windows: optional obabel.exe / mafft.bat (Gnina runs via WSL)
 molmanager/resources/bin/linux/ # Linux
 molmanager/resources/bin/mac/   # macOS
 ```
@@ -18,7 +18,7 @@ Override the search directory with environment variable `MOLMANAGER_BUNDLE_DIR`.
 
 | Tool | License / size | Install |
 |------|----------------|---------|
-| **AutoDock Vina / smina** | Academic/free; small binary | [vina.scripps.edu](https://vina.scripps.edu) — copy `vina` / `vina.exe` (or `smina`) into `bin/<platform>/` |
+| **Gnina** | Apache-2.0; CNN docking | [github.com/gnina/gnina](https://github.com/gnina/gnina) — Linux prebuilt (WSL on Windows). Copy `gnina` into `bin/linux/` or put it on the WSL PATH. |
 | **Open Babel (`obabel`)** | GPL; Confab systematic conformers | `pip install openbabel` (project dependency). Systematic defaults to the wheel’s `openbabel/bin/obabel`. Optional: copy `obabel` into `bin/<platform>/` to override. |
 | **MAFFT** | BSD; Protein → Sequence MSA | Not in git. Linux/macOS: `mafft` from apt/brew/conda. Windows: official all-in-one zip from [mafft.cbrc.jp](https://mafft.cbrc.jp/alignment/software/windows.html) — copy `mafft.bat` **and** the sibling `usr/` tree into `bin/win/` (or a `mafft-win/` folder under it). The Sequence dialog can also Browse the folder. |
 

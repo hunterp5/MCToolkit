@@ -49,6 +49,7 @@ from ...mmp_analysis import (
     canonicalize_pair_direction,
     highlight_atoms_for_pair,
 )
+from ..dockable_plot import add_centered_browser_nav, style_browser_nav_buttons
 from ..qt_widget_utils import make_window_minimizable
 
 
@@ -148,8 +149,15 @@ class MmpBrowserDialog(QDialog):
         self._btn_fwd.setToolTip("Next pair (→)")
         self._btn_last = QPushButton(">>")
         self._btn_last.setToolTip("Last pair (End)")
-        self._btn_select = QPushButton("Select pair in table")
+        self._btn_select = QPushButton()
         self._btn_select.setToolTip("Select both molecules of this pair in the main table")
+        style_browser_nav_buttons(
+            self._btn_first,
+            self._btn_back,
+            self._btn_fwd,
+            self._btn_last,
+            self._btn_select,
+        )
         self._btn_write = QPushButton("Write to table")
         self._btn_write.setToolTip(
             "Write MMP_Partners / MMP_Transforms / MMP_Delta columns for all pairs"
@@ -159,14 +167,17 @@ class MmpBrowserDialog(QDialog):
             "When checked, browse only pairs that involve at least one molecule "
             "from the current table selection."
         )
-        nav.addWidget(self._btn_first)
-        nav.addWidget(self._btn_back)
-        nav.addWidget(self._btn_fwd)
-        nav.addWidget(self._btn_last)
-        nav.addWidget(self._btn_select)
-        nav.addWidget(self._btn_write)
-        nav.addWidget(self._cb_selected_only)
-        nav.addStretch()
+        add_centered_browser_nav(
+            nav,
+            [
+                self._btn_first,
+                self._btn_back,
+                self._btn_fwd,
+                self._btn_last,
+                self._btn_select,
+            ],
+            trailing=[self._btn_write, self._cb_selected_only],
+        )
         root.addLayout(nav)
 
         self._btn_first.clicked.connect(self._go_first)

@@ -27,6 +27,7 @@ from .protein_viewer_html import build_protein_viewer_html
 from .protein_viewer_models import (
     COMPONENT_COLOR_CHOICES,
     COMPONENT_STYLE_CHOICES,
+    LIGAND_STYLE_CHOICES,
     STRUCTURE_FILE_FILTER,
     STRUCTURE_SAVE_FILTER,
     _ID_ROLE,
@@ -40,6 +41,7 @@ from .protein_viewer_models import (
 __all__ = [
     "COMPONENT_COLOR_CHOICES",
     "COMPONENT_STYLE_CHOICES",
+    "LIGAND_STYLE_CHOICES",
     "ProteinChainManager",
     "ProteinEmbedView",
     "ProteinViewerDialog",

@@ -110,6 +110,72 @@ def test_save_session_clears_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
     assert not w._session_has_unsaved_changes()
 
 
+def test_file_session_submenu_lists_session_actions(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    mb = w.menuBar()
+    file_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "File")
+    file_labels = [a.text().replace("&", "") for a in file_menu.actions() if a.text().strip()]
+    assert "Session" in file_labels
+    assert "Open Session…" not in file_labels
+    assert "Save Session…" not in file_labels
+    session_menu = next(
+        a.menu() for a in file_menu.actions() if a.text().replace("&", "") == "Session"
+    )
+    session_labels = [a.text().replace("&", "") for a in session_menu.actions() if a.text().strip()]
+    assert session_labels == [
+        "Open Session…",
+        "Save Session…",
+        "Save Selected to Session…",
+        "New Session",
+        "Duplicate Session",
+    ]
+
+
+def test_save_selected_to_session_writes_subset_without_clearing_dirty(
+    qapp, monkeypatch, tmp_path
+):  # noqa: ARG001
+    from PyQt5.QtWidgets import QFileDialog
+
+    from molmanager.session_codec import expand_session_document, loads_session_bytes
+
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    w._selected_oids_override = frozenset({1})
+    w._mark_session_dirty()
+    out = tmp_path / "selected.cms"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        lambda *args, **kwargs: (str(out), "MolManager Session (*.cms)"),
+    )
+    assert w.save_selected_to_session() is True
+    assert w._session_has_unsaved_changes()
+    doc = expand_session_document(loads_session_bytes(out.read_bytes()))
+    assert [row["id"] for row in doc["rows"]] == [1]
+
+
+def test_save_selected_to_session_requires_selection(qapp, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtWidgets import QFileDialog, QMessageBox
+
+    w = ChemicalTableApp()
+    _seed_two_rows(w)
+    seen: dict[str, str] = {}
+
+    def fake_info(_parent, title, text):
+        seen["title"] = title
+        seen["text"] = text
+
+    monkeypatch.setattr(QMessageBox, "information", fake_info)
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("dialog should not open")),
+    )
+    assert w.save_selected_to_session() is False
+    assert seen["title"] == "Save Selected to Session"
+    assert "No rows are selected" in seen["text"]
+
+
 def test_session_load_uses_loading_page_then_reveals(qapp, monkeypatch):  # noqa: ARG001
     monkeypatch.setattr(
         ChemicalTableApp,
@@ -152,9 +218,10 @@ def test_session_load_uses_loading_page_then_reveals(qapp, monkeypatch):  # noqa
 
 
 def test_session_load_reveals_before_auto_render_finishes(qapp, monkeypatch):  # noqa: ARG001
-    held = {"loading": False}
+    held = {"loading": True, "called": False}
 
     def fake_render(self):
+        held["called"] = True
         held["loading"] = self._table_stack.currentIndex() == 0
         return True
 
@@ -172,11 +239,26 @@ def test_session_load_reveals_before_auto_render_finishes(qapp, monkeypatch):  #
         "next_oid": 1,
     }
     w._apply_session_document(doc)
-    assert held["loading"] is True
+    assert held["called"] is True
+    assert held["loading"] is False
     assert w._table_stack.currentIndex() == 1
     assert not w._session_awaiting_ready
     assert not w._session_waiting_for_render
     assert not w._ingest_loading
+
+
+def test_session_overlay_keeps_plot_restore_over_render2d_progress(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    w._set_ingest_loading(True)
+    w._set_workspace_stack_index(0)
+    w._session_awaiting_ready = True
+    w._loading_detail.setText("Preparing plots…")
+    w._on_tool_progress("Render 2D", 3, 10)
+    assert w._loading_detail.text() == "Preparing plots…"
+    w._session_awaiting_ready = False
+    w._on_tool_progress("Render 2D", 4, 10)
+    assert "Render 2D" in (w._loading_detail.text() or "")
+    assert "4/10" in (w._loading_detail.text() or "")
 
 
 def test_file_ingest_reveals_before_auto_render_finishes(qapp, monkeypatch):  # noqa: ARG001
@@ -664,7 +746,9 @@ def test_tools_menu_nests_superpose_under_conformations(qapp):  # noqa: ARG001
     assert not any(lbl.startswith("Superpose") for lbl in labels)
     conf = next(a.menu() for a in tools.actions() if a.text().replace("&", "") == "Conformations")
     conf_labels = [a.text().replace("&", "") for a in conf.actions()]
-    assert conf_labels == ["Stochastic…", "Systematic…", "", "Superpose…"]
+    assert conf_labels == ["Generate", "", "Superpose…"]
+    gen = next(a.menu() for a in conf.actions() if a.text().replace("&", "") == "Generate")
+    assert [a.text().replace("&", "") for a in gen.actions()] == ["Stochastic…", "Systematic…"]
     w.close()
 
 

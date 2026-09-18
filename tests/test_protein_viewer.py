@@ -19,9 +19,13 @@
 from __future__ import annotations
 
 from molmanager.structure_components import (
+    add_cif_chem_bond,
+    add_pdb_conect,
     cif_has_component_bonds,
     cif_viewer_bond_tables,
     component_id_for_atom,
+    delete_cif_atoms,
+    delete_pdb_atoms,
     delete_pdb_residues,
     diff_sequence_edit,
     letter_to_resn,
@@ -29,8 +33,12 @@ from molmanager.structure_components import (
     parse_cif_chem_comp_bonds,
     parse_polymer_sequences,
     parse_structure_components,
+    pdb_conect_partners,
+    pdb_serial_for_atom,
     pocket_view_plan,
     polymer_sequence_entries,
+    remove_cif_chem_bond,
+    remove_pdb_conect,
     rewrite_pdb_residue_names,
     scope_structure_component,
     sniff_structure_format,
@@ -130,6 +138,8 @@ HETATM  100  C1  LIG A  99       4.200   1.400   0.200  1.00  0.00           C
 HETATM  101  O1  LIG A  99       5.400   1.400   0.200  1.00  0.00           O
 HETATM  102  HO1 LIG A  99       5.900   2.100   0.200  1.00  0.00           H
 HETATM  103  H1  LIG A  99       4.000   0.500   0.700  1.00  0.00           H
+HETATM  104  P1  LIG A  99       6.800   1.400   0.200  1.00  0.00           P
+HETATM  105  HP1 LIG A  99       7.400   2.200   0.200  1.00  0.00           H
 END
 """
 
@@ -207,6 +217,14 @@ def test_parse_cif_chem_comp_double_bonds():
     assert not cif_has_component_bonds(_MINI_CIF, ["AXI"])
 
 
+def test_parse_cif_loops_reuses_same_text():
+    from molmanager.structure_cif import _parse_cif_loops
+
+    first = _parse_cif_loops(_MINI_CIF_BONDS)
+    second = _parse_cif_loops(_MINI_CIF_BONDS)
+    assert first is second
+
+
 def test_mol_from_cif_component_sets_double_bond():
     from rdkit import Chem
 
@@ -274,6 +292,10 @@ def test_protein_viewer_help_topic():
     assert "Prepare" in h
     assert "Color" in h
     assert "Select" in h
+    assert "Save to Session" in h
+    assert "dock pane" in h.lower()
+    assert "header arrows" in h.lower()
+    assert "pose browser" in h.lower()
 
 
 def test_parse_polymer_sequences_one_letter_codes():
@@ -400,39 +422,296 @@ def test_rewrite_and_delete_pdb_residues():
     assert "LEU" in removed
 
 
+_CONECT_PDB = """\
+HETATM  100  C80 LIG A   1       0.000   0.000   0.000  1.00  0.00           C
+HETATM  101  O81 LIG A   1       1.210   0.000   0.000  1.00  0.00           O
+HETATM  102  C82 LIG A   1       2.420   0.000   0.000  1.00  0.00           C
+CONECT  100  101
+CONECT  101  100  102
+END
+"""
+
+
+def test_delete_pdb_atoms_strips_conect():
+    dropped = delete_pdb_atoms(_CONECT_PDB, {("A", "1", "", "C80")})
+    assert "C80" not in dropped
+    assert "O81" in dropped
+    assert "C82" in dropped
+    partners = pdb_conect_partners(dropped)
+    assert 100 not in partners
+    assert partners.get(101) == (102,)
+    assert pdb_serial_for_atom(_CONECT_PDB, ("A", "1", "", "O81")) == 101
+
+
+def test_pdb_conect_add_and_remove():
+    added = add_pdb_conect(_CONECT_PDB, 100, 102)
+    partners = pdb_conect_partners(added)
+    assert 102 in partners[100]
+    assert 100 in partners[102]
+    removed = remove_pdb_conect(added, 100, 101)
+    partners = pdb_conect_partners(removed)
+    assert 101 not in partners.get(100, ())
+    assert 102 in partners[100]
+
+
+def test_delete_cif_atoms_and_chem_bonds():
+    dropped = delete_cif_atoms(_MINI_CIF_BONDS, {("A", "1", "", "C80")})
+    assert "C80" not in dropped
+    assert "O81" in dropped
+    bonds = parse_cif_chem_comp_bonds(dropped)
+    assert "LIG" not in bonds
+    added = add_cif_chem_bond(_MINI_CIF_BONDS.replace("doub", "sing"), "LIG", "C80", "O81", order=2)
+    tables = cif_viewer_bond_tables(added)
+    assert any(row[:2] == ["C80", "O81"] and row[2] == 2 for row in tables["LIG"])
+    cleared = remove_cif_chem_bond(added, "LIG", "O81", "C80")
+    assert "LIG" not in parse_cif_chem_comp_bonds(cleared)
+
+
 def test_build_protein_viewer_html_has_setters():
     html = build_protein_viewer_html()
     assert "molmanagerSetProteinPayload" in html
+    assert "molmanagerAddProteinModels" in html
+    assert "addModelsFromPayload" in html
+    assert "molmanagerModelCount" in html
     assert "payload.models" in html
+    assert "payload.camera" in html
+    assert "molmanagerGetView" in html
+    assert "molmanagerSetView" in html
     assert "molmanagerApplyComponentStates" in html
     assert "molmanagerDeleteComponents" in html
     assert "molmanagerZoomToComponents" in html
     assert "molmanagerSetResidueHighlight" in html
     assert "molmanagerSetPocket" in html
+    assert "molmanagerSetPocketSurface" in html
+    assert "applyPocketSurface" in html
+    assert "p.wireframe" in html
+    assert "p.surfaceType" in html
     assert "molmanagerSetHydrogens" in html
     assert "molmanagerSetHbonds" in html
     assert "applyHydrogenVisibility" in html
+    assert "indexVisibleHeavyResidues" in html
+    assert "normalizeHydrogensMode" in html
+    assert 'mode === "none"' in html
     assert "applyHydrogenBonds" in html
     assert "applyPocketOverlay" in html
-    assert "addPocketResidueLabels" in html
-    assert "addResLabels" in html
+    assert "addStyle(resSel, {stick: {radius: 0.15}})" in html
+    assert "addPocketResidueLabels" not in html
+    assert "addResLabels" not in html
     assert "molmanagerMutateResidues" in html
     assert "molmanagerDeleteResidues" in html
+    assert "molmanagerEditBond" in html
+    assert "ord >= 1" in html
     assert "Reset Structure" in html
     assert "__RESET_JS__" not in html
     assert "qwebchannel.js" in html
     assert "cartoon" in html
     assert "applyCifBondOrders" in html
     assert "md.cifBonds" in html
+    assert "atomIsHydrogen" in html
     assert "carbonScheme" in html
     assert "carbonSpec" in html
     assert "v.setStyle({}, {})" in html
     assert "hetflag: true" in html
     assert "indexResidueHeavies" in html
     assert "at.style[k].hidden = true" in html
-    assert 'v.setClickable({elem: ["H", "D", "T"], invert: true}' in html
+    assert "atomLooksHidden" in html
+    assert "v.setClickable({}, true" in html
+    assert "doubleClick" in html
+    assert "ligandComponentId" in html
+    assert 'sphere: {scale: 0.28, color: "orange"}' in html
+    assert 'sphere: {scale: 0.42, color: "orange"}' not in html
+    assert 'v.setClickable({elem: ["H", "D", "T"], invert: true}' not in html
     assert "v.addStyle({model: atomModelId(at), serial: at.serial}, {hidden: true})" not in html
-    assert "v.setClickable({}, true" not in html
+
+
+def test_protein_viewer_has_prepare_log(qapp):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    dlg = ProteinViewerDialog()
+    assert dlg.log.isReadOnly()
+    dlg.append_log("")
+    assert dlg.log.toPlainText() == ""
+    dlg.append_log("hello")
+    text = dlg.log.toPlainText()
+    assert "hello" in text
+    assert "[" in text
+    dlg.close()
+
+
+def test_protein_viewer_canvas_load_overlay_nests(qapp):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    dlg = ProteinViewerDialog()
+    assert dlg.canvas_loading_visible() is False
+    dlg.begin_canvas_load("Loading structures…", paint=False)
+    assert dlg.canvas_loading_visible() is True
+    assert "Loading structures" in dlg._loading_detail.text()
+    dlg.begin_canvas_load("Loading structure…", paint=False)
+    assert dlg.canvas_loading_visible() is True
+    dlg.end_canvas_load()
+    assert dlg.canvas_loading_visible() is True
+    dlg.end_canvas_load()
+    assert dlg.canvas_loading_visible() is False
+    dlg.close()
+
+
+def test_open_protein_viewer_shows_before_session_restore(qapp, tmp_path, monkeypatch):
+    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.protein_embed import ProteinEmbedView
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    monkeypatch.setattr(ProteinEmbedView, "_ensure_web", lambda self: None)
+
+    src = tmp_path / "mini.pdb"
+    src.write_text(_MINI_PDB, encoding="utf-8")
+    w = ChemicalTableApp()
+    seed = w.open_protein_viewer()
+    seed.add_structure_path(src, refit=True)
+    assert seed.save_viewer_to_session() is True
+    payload = w._collect_protein_viewer()
+    seed._suppress_close_prompt = True
+    seed.close()
+    w._protein_viewer_dialog = None
+    w._protein_viewer_session = payload
+
+    seen: list[tuple[bool, bool]] = []
+    orig = ProteinViewerDialog.apply_session_state
+
+    def wrapped(self, state):
+        seen.append((self.isVisible(), self.canvas_loading_visible()))
+        return orig(self, state)
+
+    monkeypatch.setattr(ProteinViewerDialog, "apply_session_state", wrapped)
+    dlg = w.open_protein_viewer()
+    assert seen == [(True, True)]
+    assert dlg.canvas_loading_visible() is False
+    assert [slot.name for slot in dlg._slots] == ["mini.pdb"]
+    dlg._suppress_close_prompt = True
+    dlg.close()
+    w.close()
+
+
+def test_open_protein_viewer_empty_releases_start_overlay(qapp, monkeypatch):  # noqa: ARG001
+    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.protein_embed import ProteinEmbedView
+
+    monkeypatch.setattr(ProteinEmbedView, "_ensure_web", lambda self: None)
+    w = ChemicalTableApp()
+    dlg = w.open_protein_viewer()
+    assert dlg is not None
+    assert dlg.isVisible() is True
+    assert dlg._canvas_bootstrapped is True
+    assert dlg.canvas_loading_visible() is False
+    dlg._suppress_close_prompt = True
+    dlg.close()
+    w.close()
+
+
+def test_atom_pick_selects_individual_atom(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    path = tmp_path / "mini.pdb"
+    path.write_text(_MINI_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(path)
+    dlg._on_atom_picked(
+        '{"chain":"A","resn":"MET","resi":"1","icode":"","atom":"CA","elem":"C","serial":2,"model":0}'
+    )
+    hl = dlg._residue_highlight
+    assert len(hl) == 1
+    assert hl[0]["atom"] == "CA"
+    assert hl[0]["serial"] == 2
+    assert hl[0]["chain"] == "A"
+    assert hl[0]["resi"] == 1
+    assert "CA" in dlg._atom_status.text()
+    polymer = next(r for r in dlg._rows if r.spec.kind == "polymer" and r.spec.chain == "A")
+    assert polymer.selected
+    dlg._on_atom_picked(
+        '{"chain":"A","resn":"MET","resi":"1","atom":"H","elem":"H","serial":9,"model":0}'
+    )
+    assert dlg._residue_highlight[0]["atom"] == "H"
+    assert dlg._residue_highlight[0]["serial"] == 9
+    assert "H" in dlg._atom_status.text()
+    dlg._on_atom_picked(
+        '{"chain":"A","resn":"MET","resi":"1","icode":"","atom":"CA","elem":"C","serial":2,'
+        '"doubleClick":true,"model":0}'
+    )
+    res_hl = dlg._residue_highlight[0]
+    assert res_hl.get("atom") in (None, "")
+    assert "serial" not in res_hl
+    assert res_hl["chain"] == "A"
+    assert res_hl["resi"] == 1
+    assert "CA" not in dlg._atom_status.text()
+    assert "MET" in dlg._atom_status.text()
+    polymer = next(r for r in dlg._rows if r.spec.kind == "polymer" and r.spec.chain == "A")
+    assert polymer.selected
+    dlg._on_atom_picked(
+        '{"chain":"A","resn":"AXI","resi":"2000","atom":"C80","elem":"C","serial":101,'
+        '"doubleClick":true,"model":0}'
+    )
+    lig_hl = dlg._residue_highlight[0]
+    assert lig_hl.get("atom") in (None, "")
+    assert "serial" not in lig_hl
+    ligand = next(r for r in dlg._rows if r.spec.kind == "ligand")
+    assert ligand.selected
+    assert not next(
+        r for r in dlg._rows if r.spec.kind == "polymer" and r.spec.chain == "A"
+    ).selected
+    dlg.clear_selection()
+    assert dlg._residue_highlight == []
+    assert dlg._atom_status.text() == ""
+    assert not any(r.selected for r in dlg._rows)
+    dlg.close()
+
+
+def test_edit_structure_two_atom_pick_and_atom_delete(qapp, tmp_path, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtWidgets import QMenuBar, QMessageBox
+
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    path = tmp_path / "mini.pdb"
+    path.write_text(_MINI_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(path)
+    mb = dlg.findChild(QMenuBar)
+    edit_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Edit")
+    edit_labels = [a.text().replace("&", "") for a in edit_menu.actions() if a.text().strip()]
+    assert edit_labels == [
+        "Undo",
+        "Redo",
+        "Edit Structure",
+        "Delete Atom(s)",
+        "Add Bond",
+        "Delete Bond",
+    ]
+    dlg._act_edit_structure.setChecked(True)
+    dlg._on_atom_picked(
+        '{"chain":"A","resn":"AXI","resi":"2000","atom":"O81","elem":"O","serial":100,"model":0}'
+    )
+    dlg._on_atom_picked(
+        '{"chain":"A","resn":"AXI","resi":"2000","atom":"C80","elem":"C","serial":101,"model":0}'
+    )
+    atoms = dlg._highlighted_edit_atoms()
+    assert [sel["atom"] for sel in atoms] == ["O81", "C80"]
+    assert dlg._act_add_bond.isEnabled() is True
+    dlg.add_highlighted_bond()
+    partners = pdb_conect_partners(dlg._slots[0].text)
+    assert 101 in partners[100]
+    assert dlg._act_undo.isEnabled() is True
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+    dlg._act_edit_structure.setChecked(False)
+    dlg._on_atom_picked(
+        '{"chain":"A","resn":"MET","resi":"1","icode":"","atom":"CA","elem":"C","serial":2,"model":0}'
+    )
+    ligand_id = next(r.spec.component_id for r in dlg._rows if r.spec.kind == "ligand")
+    dlg.delete_selected()
+    text = dlg._slots[0].text
+    assert " CA  MET" not in text
+    assert " N   MET" in text
+    assert ligand_id in {r.spec.component_id for r in dlg._rows}
+    dlg.undo_manager_delete()
+    assert "CA" in dlg._slots[0].text
+    dlg.close()
 
 
 def test_pocket_view_plan_near_ligand_residues_and_polar_h():
@@ -463,8 +742,17 @@ def test_pocket_view_plan_keeps_only_polar_hydrogens():
     }
     assert "HG" in h_names
     assert "HO1" in h_names
+    assert "HP1" in h_names
     assert "HA" not in h_names
     assert "H1" not in h_names
+
+
+def test_protein_viewer_html_draws_heteroatom_polar_hydrogens():
+    html = build_protein_viewer_html()
+    assert "function polarHeavy" in html
+    assert 'e !== "C"' in html
+    assert "showPolarHydrogen" in html
+    assert "foundPolar" in html
 
 
 def test_protein_menu_opens_viewer(qapp):  # noqa: ARG001
@@ -479,6 +767,7 @@ def test_protein_menu_opens_viewer(qapp):  # noqa: ARG001
     viewer_labels = [a.text().replace("&", "") for a in protein_menu.actions()]
     assert "Viewer" in viewer_labels
     assert any(lab.startswith("Sequence") for lab in viewer_labels)
+    assert "Dock Ligand" in viewer_labels
     w.open_protein_viewer()
     dlg = w._protein_viewer_dialog
     assert dlg is not None
@@ -565,7 +854,116 @@ def test_manager_hide_select_delete(qapp, tmp_path, monkeypatch):  # noqa: ARG00
     dlg.close()
 
 
+def test_manager_delete_undo_redo(qapp, tmp_path, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtWidgets import QMenuBar, QMessageBox
+
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    path = tmp_path / "mini.pdb"
+    path.write_text(_MINI_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(path)
+    mb = dlg.findChild(QMenuBar)
+    labels = [a.text().replace("&", "") for a in mb.actions()]
+    assert labels[:3] == ["File", "Edit", "Render"]
+    edit_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Edit")
+    edit_labels = [a.text().replace("&", "") for a in edit_menu.actions() if a.text().strip()]
+    assert edit_labels == [
+        "Undo",
+        "Redo",
+        "Edit Structure",
+        "Delete Atom(s)",
+        "Add Bond",
+        "Delete Bond",
+    ]
+    assert dlg._act_undo.isEnabled() is False
+    assert dlg._act_redo.isEnabled() is False
+
+    ligand_id = next(r.spec.component_id for r in dlg._rows if r.spec.kind == "ligand")
+    dlg._on_manager_selection([ligand_id])
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+    dlg.delete_selected()
+    assert ligand_id not in {r.spec.component_id for r in dlg._rows}
+    assert dlg._act_undo.isEnabled() is True
+    assert dlg._act_redo.isEnabled() is False
+
+    dlg.undo_manager_delete()
+    assert ligand_id in {r.spec.component_id for r in dlg._rows}
+    assert dlg._act_undo.isEnabled() is False
+    assert dlg._act_redo.isEnabled() is True
+
+    dlg.redo_manager_delete()
+    assert ligand_id not in {r.spec.component_id for r in dlg._rows}
+    assert dlg._act_undo.isEnabled() is True
+    assert dlg._act_redo.isEnabled() is False
+    dlg.close()
+
+
+def test_manager_context_menu_duplicate(qapp, tmp_path, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtCore import QPoint, Qt
+    from PyQt5.QtWidgets import QMenu
+
+    from molmanager.ui.protein_viewer import _ID_ROLE, ProteinViewerDialog
+
+    path = tmp_path / "mini.pdb"
+    path.write_text(_MINI_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(path)
+    assert dlg.manager.tree.contextMenuPolicy() == Qt.CustomContextMenu
+    menu_labels = [
+        action.text().replace("&", "") for action in dlg.manager._make_context_menu().actions()
+    ]
+    assert menu_labels == ["Delete", "Duplicate"]
+
+    ligand_id = next(r.spec.component_id for r in dlg._rows if r.spec.kind == "ligand")
+    ligand_item = None
+    for i in range(dlg.manager.tree.topLevelItemCount()):
+        file_item = dlg.manager.tree.topLevelItem(i)
+        for j in range(file_item.childCount()):
+            group = file_item.child(j)
+            for k in range(group.childCount()):
+                item = group.child(k)
+                if item.data(0, _ID_ROLE) == ligand_id:
+                    ligand_item = item
+    assert ligand_item is not None
+
+    dlg.manager.tree.clearSelection()
+    shown: list[list[str]] = []
+
+    def fake_exec(self, *a, **k):  # noqa: ARG001
+        shown.append([action.text().replace("&", "") for action in self.actions()])
+        return None
+
+    monkeypatch.setattr(dlg.manager.tree, "itemAt", lambda _pos: ligand_item)
+    monkeypatch.setattr(QMenu, "exec_", fake_exec)
+    dlg.manager._on_context_menu(QPoint(0, 0))
+    assert ligand_item.isSelected()
+    assert shown == [["Delete", "Duplicate"]]
+
+    dlg._on_manager_selection([ligand_id])
+    dlg._apply_selected_color("green")
+    dlg.duplicate_selected()
+    assert len(dlg._slots) == 2
+    assert dlg._slots[1].name == "mini copy.pdb"
+    assert {row.spec.kind for row in dlg._slots[1].rows} == {"ligand"}
+    assert "AXI" in dlg._slots[1].text
+    assert "MET" not in dlg._slots[1].text
+    assert any(row.spec.kind == "polymer" for row in dlg._slots[0].rows)
+    copy_ligand = next(row for row in dlg._slots[1].rows if row.spec.kind == "ligand")
+    assert copy_ligand.color_scheme == "green"
+
+    dlg.manager.tree.clearSelection()
+    dlg.manager.tree.topLevelItem(0).setSelected(True)
+    dlg.duplicate_selected()
+    assert len(dlg._slots) == 3
+    assert dlg._slots[2].name == "mini copy (2).pdb"
+    assert len(dlg._slots[2].rows) == len(dlg._slots[0].rows)
+    dlg.close()
+
+
 def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
     from PyQt5.QtWidgets import QMenuBar
 
     from molmanager.ui.protein_viewer import ProteinViewerDialog
@@ -574,16 +972,21 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     path.write_text(_MINI_PDB, encoding="utf-8")
     dlg = ProteinViewerDialog()
     dlg.load_structure_path(path)
+    dlg._refresh_sequence_chains(force=True)
     assert [c.sequence for c in dlg._sequence_chains] == ["M+*~", "L~"]
     mb = dlg.findChild(QMenuBar)
     assert mb is not None
     labels = [a.text().replace("&", "") for a in mb.actions()]
+    assert labels[0] == "File"
+    assert labels[1] == "Edit"
+    assert labels[2] == "Render"
+    assert labels[3] == "Select"
     assert "Sequence" in labels
-    assert "Select" in labels
     assert any(label.startswith("Prepare") for label in labels)
     select_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Select")
     select_labels = [a.text().replace("&", "") for a in select_menu.actions() if a.text().strip()]
-    assert select_labels[:4] == ["Hide", "Show", "Focus", "Delete"]
+    assert select_labels[:5] == ["Hide", "Show", "Focus", "Delete", "Duplicate"]
+    assert "Clear Selection" in select_labels
     assert "Render" in select_labels
     assert "Color" in select_labels
     select_render = next(
@@ -594,17 +997,12 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     )
     assert "Cartoon" in [a.text().replace("&", "") for a in select_render.actions()]
     assert "Custom…" in [a.text().replace("&", "") for a in select_color.actions()]
-    view_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "View")
-    view_labels = [a.text().replace("&", "") for a in view_menu.actions() if a.text().strip()]
-    assert "Render" in view_labels
-    assert "Pocket" in view_labels
-    assert "All Atoms" in view_labels
-    render_menu = next(
-        a.menu() for a in view_menu.actions() if a.text().replace("&", "") == "Render"
-    )
-    render_labels = [a.text().replace("&", "") for a in render_menu.actions()]
+    render_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Render")
+    render_labels = [a.text().replace("&", "") for a in render_menu.actions() if a.text().strip()]
     assert "Protein" in render_labels
     assert "Ligand" in render_labels
+    assert "Pocket" in render_labels
+    assert "All Atoms" in render_labels
     protein_menu = next(
         a.menu() for a in render_menu.actions() if a.text().replace("&", "") == "Protein"
     )
@@ -613,9 +1011,12 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     )
     protein_styles = [a.text().replace("&", "") for a in protein_menu.actions() if a.text().strip()]
     ligand_styles = [a.text().replace("&", "") for a in ligand_menu.actions() if a.text().strip()]
-    assert protein_styles == ligand_styles
     assert "Cartoon" in protein_styles
+    assert "Spheres" in protein_styles
+    assert "Cartoon" not in ligand_styles
+    assert "Spheres" not in ligand_styles
     assert "Ball and stick" in ligand_styles
+    assert "Sticks" in ligand_styles
     assert "Color" in protein_styles
     protein_color_menu = next(
         a.menu() for a in protein_menu.actions() if a.text().replace("&", "") == "Color"
@@ -653,7 +1054,25 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     seq.residues_mutated.connect(captured.append)
     editor = seq._editor_at(0)
     assert editor is not None
-    editor.sequence_committed.emit("S+*~")
+    assert editor.isReadOnly()
+    ligand_menu = editor._make_context_menu()
+    ligand_mutate = next(
+        a.menu() for a in ligand_menu.actions() if a.text().replace("&", "") == "Mutate"
+    )
+    assert not ligand_mutate.isEnabled()
+    seq.select_residue("A", "1", "")
+    original = editor.toPlainText()
+    QTest.keyClick(editor, Qt.Key_S)
+    assert editor.toPlainText() == original
+    assert not captured
+    menu = editor._make_context_menu()
+    mutate_menu = next(a.menu() for a in menu.actions() if a.text().replace("&", "") == "Mutate")
+    assert mutate_menu is not None
+    assert mutate_menu.isEnabled()
+    labels = [a.text().replace("&", "") for a in mutate_menu.actions()]
+    assert "S  SER" in labels
+    ser_act = next(a for a in mutate_menu.actions() if a.text().replace("&", "") == "S  SER")
+    ser_act.trigger()
     assert captured
     residue, letter = captured[0][0]
     assert letter == "S"
@@ -663,6 +1082,58 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     dlg._act_all_atoms.setChecked(False)
     assert all(r.style == "cartoon" for r in dlg._rows if r.spec.kind == "polymer")
     seq.close()
+    dlg.close()
+
+
+def test_reset_camera_restores_loaded_styles(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    path = tmp_path / "reset.pdb"
+    path.write_text(_POCKET_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(path)
+    assert all(r.style == "cartoon" for r in dlg._rows if r.spec.kind == "polymer")
+    assert all(r.style == "ballstick" for r in dlg._rows if r.spec.kind == "ligand")
+    dlg._on_render_style_chosen("polymer", "surface")
+    dlg._on_render_style_chosen("ligand", "stick")
+    dlg._on_render_color_chosen("polymer", "cyan")
+    dlg._on_render_color_chosen("ligand", "green")
+    dlg._act_all_atoms.setChecked(True)
+    dlg._on_pocket()
+    assert dlg._pocket_payload_data is not None
+    dlg._reset_camera()
+    assert all(r.style == "cartoon" for r in dlg._rows if r.spec.kind == "polymer")
+    assert all(r.style == "ballstick" for r in dlg._rows if r.spec.kind == "ligand")
+    assert all(
+        r.color_scheme == "default" for r in dlg._rows if r.spec.kind in ("polymer", "ligand")
+    )
+    assert not dlg._act_all_atoms.isChecked()
+    assert dlg._protein_style_actions["cartoon"].isChecked()
+    assert dlg._ligand_style_actions["ballstick"].isChecked()
+    assert dlg._protein_color_actions["default"].isChecked()
+    assert dlg._ligand_color_actions["default"].isChecked()
+    assert dlg._pocket_payload_data is None
+    dlg.close()
+
+
+def test_reset_camera_keeps_styles_from_load_menus(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    path = tmp_path / "reset_menu.pdb"
+    path.write_text(_MINI_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg._protein_style_actions["surface"].trigger()
+    dlg._ligand_style_actions["stick"].trigger()
+    dlg.load_structure_path(path)
+    assert all(r.style == "surface" for r in dlg._rows if r.spec.kind == "polymer")
+    assert all(r.style == "stick" for r in dlg._rows if r.spec.kind == "ligand")
+    dlg._on_render_style_chosen("polymer", "cartoon")
+    dlg._on_render_style_chosen("ligand", "ballstick")
+    dlg._reset_camera()
+    assert all(r.style == "surface" for r in dlg._rows if r.spec.kind == "polymer")
+    assert all(r.style == "stick" for r in dlg._rows if r.spec.kind == "ligand")
+    assert dlg._protein_style_actions["surface"].isChecked()
+    assert dlg._ligand_style_actions["stick"].isChecked()
     dlg.close()
 
 
@@ -676,14 +1147,17 @@ def test_pocket_view_menu_builds_overlay(qapp, tmp_path):  # noqa: ARG001
     assert not dlg._act_pocket.isCheckable()
     assert dlg._act_hydrogens_polar.isChecked()
     assert not dlg._act_hydrogens_all.isChecked()
+    assert not dlg._act_hydrogens_none.isChecked()
     dlg._act_hydrogens_all.trigger()
     assert dlg._hydrogen_mode() == "all"
+    dlg._act_hydrogens_none.trigger()
+    assert dlg._hydrogen_mode() == "none"
     dlg._act_hydrogens_polar.trigger()
     assert dlg._hydrogen_mode() == "polar"
     assert dlg._act_hbond_protein is not None
     assert not dlg._act_hbond_protein.isChecked()
-    assert not dlg._act_hbond_ligand.isChecked()
-    assert not dlg._act_hbond_complex.isChecked()
+    assert dlg._act_hbond_ligand.isChecked()
+    assert dlg._act_hbond_complex.isChecked()
     dlg._on_pocket()
     payload = dlg._pocket_payload_data
     assert payload is not None
@@ -691,7 +1165,115 @@ def test_pocket_view_menu_builds_overlay(qapp, tmp_path):  # noqa: ARG001
     assert payload["ligandSels"]
     assert any(s.get("resn") == "SER" for s in payload["residueSels"])
     assert payload["polarHPdb"]
+    dlg._on_render_style_chosen("polymer", "cartoon")
+    assert dlg._pocket_payload_data is None
+    dlg._on_pocket()
+    assert dlg._pocket_payload_data is not None
+    dlg._on_render_style_chosen("polymer", "surface")
+    assert dlg._pocket_payload_data is None
+    assert all(r.style == "surface" for r in dlg._rows if r.spec.kind == "polymer")
     dlg.close()
+
+
+def test_normalize_pocket_surface_settings():
+    from molmanager.ui.dialogs.protein_pocket_surface import (
+        DEFAULT_POCKET_SURFACE_SETTINGS,
+        normalize_pocket_surface_settings,
+    )
+
+    assert normalize_pocket_surface_settings(None)["color"] == "lightgray"
+    custom = normalize_pocket_surface_settings({"color": "#1a2b3c", "opacity": 0.2, "wireframe": 1})
+    assert custom["color"] == "#1a2b3c"
+    assert custom["opacity"] == 0.2
+    assert custom["wireframe"] is True
+    element = normalize_pocket_surface_settings({"colorScheme": "element"})
+    assert element["colorScheme"] == "element"
+    clamped = normalize_pocket_surface_settings(
+        {"opacity": 9, "linewidth": 0.1, "surfaceType": "nope"}
+    )
+    assert clamped["opacity"] == 1.0
+    assert clamped["linewidth"] == 0.5
+    assert clamped["surfaceType"] == "ms"
+    assert (
+        normalize_pocket_surface_settings({})["opacity"]
+        == DEFAULT_POCKET_SURFACE_SETTINGS["opacity"]
+    )
+
+
+def test_pocket_surface_menu_toggle(qapp, tmp_path, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtWidgets import QMessageBox
+
+    from molmanager.ui.dialogs.protein_pocket_surface import ProteinPocketSurfaceDialog
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    shown: list[str] = []
+
+    def _info(_parent, title, *_a, **_k):
+        shown.append(str(title))
+        return QMessageBox.Ok
+
+    monkeypatch.setattr(QMessageBox, "information", _info)
+    path = tmp_path / "pocket.pdb"
+    path.write_text(_POCKET_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(path)
+    assert not dlg._act_pocket_surface.isCheckable()
+    dlg.open_pocket_surface_dialog()
+    surf = dlg._pocket_surface_dialog
+    assert isinstance(surf, ProteinPocketSurfaceDialog)
+    assert surf.isVisible()
+    assert surf.chk_show.isChecked()
+    payload = dlg._pocket_surface_payload
+    assert payload is not None
+    assert payload["active"] is True
+    assert payload["opacity"] == 0.7
+    assert payload["color"] == "lightgray"
+    assert payload["wireframe"] is False
+    assert payload["surfaceType"] == "ms"
+    assert any(s.get("resn") == "SER" for s in payload["residueSels"])
+    surf.spin_opacity.setValue(40)
+    assert dlg._pocket_surface_payload["opacity"] == 0.4
+    surf.chk_wireframe.setChecked(True)
+    assert dlg._pocket_surface_payload["wireframe"] is True
+    green = surf.combo_color.findData("green")
+    surf.combo_color.setCurrentIndex(green)
+    assert dlg._pocket_surface_payload["color"] == "green"
+    vdw = surf.combo_type.findData("vdw")
+    surf.combo_type.setCurrentIndex(vdw)
+    assert dlg._pocket_surface_payload["surfaceType"] == "vdw"
+    dlg._on_render_style_chosen("polymer", "cartoon")
+    assert dlg._pocket_surface_payload is not None
+    dlg._reset_camera()
+    assert dlg._pocket_surface_payload is not None
+    state = dlg.collect_session_state()
+    assert state["pocketSurface"]["active"] is True
+    assert state["pocketSurface"]["color"] == "green"
+    assert state["pocketSurface"]["opacity"] == 0.4
+    surf.chk_show.setChecked(False)
+    assert dlg._pocket_surface_payload is None
+    surf.close()
+    dlg.close()
+
+    dlg2 = ProteinViewerDialog()
+    dlg2.apply_session_state(state)
+    assert dlg2._pocket_surface_payload is not None
+    assert dlg2._pocket_surface_payload["color"] == "green"
+    assert dlg2._pocket_surface_payload["wireframe"] is True
+    dlg2.close()
+
+    empty = tmp_path / "apo.pdb"
+    empty.write_text(
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00  0.00           C\nEND\n",
+        encoding="utf-8",
+    )
+    dlg3 = ProteinViewerDialog()
+    dlg3.load_structure_path(empty)
+    dlg3.open_pocket_surface_dialog()
+    assert dlg3._pocket_surface_dialog is not None
+    assert not dlg3._pocket_surface_dialog.is_showing()
+    assert "Pocket Surface" in shown
+    dlg3._pocket_surface_dialog.close()
+    dlg3.close()
 
 
 def test_hbond_menu_filters_kinds(qapp, tmp_path):  # noqa: ARG001
@@ -717,6 +1299,14 @@ END
     dlg = ProteinViewerDialog()
     dlg.load_structure_path(path)
     empty = dlg._hbond_overlay_payload()
+    assert empty["active"] is True
+    assert dlg._act_hbond_complex.isChecked()
+    dlg._act_hbond_complex.setChecked(False)
+    dlg._act_hbond_ligand.setChecked(False)
+    for act in dlg._protein_ligand_interaction_actions():
+        if act is not None:
+            act.setChecked(False)
+    empty = dlg._hbond_overlay_payload()
     assert empty["active"] is False
     dlg._act_hbond_protein.setChecked(True)
     protein = dlg._hbond_overlay_payload()
@@ -735,6 +1325,154 @@ END
     hidden_kinds = {b["kind"] for b in dlg._hbond_overlay_payload()["bonds"]}
     assert hidden_kinds == {"protein"}
     dlg.close()
+
+
+def test_dock_pose_hides_crystal_ligand_contacts(qapp, tmp_path):  # noqa: ARG001
+    from rdkit import Chem
+    from rdkit.Geometry import Point3D
+
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    pdb = """\
+ATOM      1  N   ALA A   1      -1.240   0.150   0.000  1.00  0.00           N
+ATOM      2  O   ALA A   1       0.000   0.000   0.000  1.00  0.00           O
+ATOM      3  N   ALA A   3       2.900   0.100   0.000  1.00  0.00           N
+ATOM      4  CA  ALA A   3       4.000   0.400   0.000  1.00  0.00           C
+ATOM      5  CB  SER A  10      10.000  10.000  10.000  1.00  0.00           C
+ATOM      6  OG  SER A  10      11.430  10.000  10.000  1.00  0.00           O
+HETATM  100  C1  LIG A  99      15.330  10.200  10.000  1.00  0.00           C
+HETATM  101  O1  LIG A  99      14.230  10.100  10.000  1.00  0.00           O
+HETATM  102  C2  LIG A  99      17.560  20.000  20.000  1.00  0.00           C
+HETATM  103  O2  LIG A  99      18.780  20.000  20.000  1.00  0.00           O
+HETATM  104  C3  LIG A  99      22.750  20.150  20.000  1.00  0.00           C
+HETATM  105  O3  LIG A  99      21.530  20.150  20.000  1.00  0.00           O
+END
+"""
+    path = tmp_path / "holo.pdb"
+    path.write_text(pdb, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(path)
+    before = dlg._hbond_overlay_payload()
+    crystal_pl = [
+        b
+        for b in before["bonds"]
+        if b.get("kind") in {"ligand", "complex"} or (b.get("ligand") or {}).get("resi") == "99"
+    ]
+    assert crystal_pl
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    conf = Chem.Conformer(mol.GetNumAtoms())
+    conf.SetAtomPosition(0, Point3D(40.0, 0.0, 0.0))
+    conf.SetAtomPosition(1, Point3D(41.4, 0.0, 0.0))
+    conf.SetAtomPosition(2, Point3D(42.0, 1.1, 0.0))
+    mol.AddConformer(conf, assignId=True)
+    assert dlg.set_dock_pose(mol, zoom=False, caption="Dock pose") is True
+    assert dlg._dock_pose_mol is not None
+    after = dlg._hbond_overlay_payload()
+    for bond in after["bonds"]:
+        lig = bond.get("ligand") or {}
+        donor = bond.get("donor") or {}
+        acc = bond.get("acceptor") or {}
+        assert lig.get("resi") != "99"
+        assert donor.get("resi") != "99" or donor.get("kind") != "ligand"
+        assert acc.get("resi") != "99" or acc.get("kind") != "ligand"
+    dlg.clear_dock_pose()
+    restored = dlg._hbond_overlay_payload()
+    assert any(
+        b.get("kind") in {"ligand", "complex"} or (b.get("ligand") or {}).get("resi") == "99"
+        for b in restored["bonds"]
+    )
+    dlg.close()
+
+
+def test_interaction_menu_toggles_prolif_families(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.protein_interactions import FAMILY_HYDROPHOBIC
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    pdb = """\
+ATOM      1  C   ALA A   1      -1.240   0.150   0.000  1.00  0.00           C
+ATOM      2  O   ALA A   1       0.000   0.000   0.000  1.00  0.00           O
+HETATM  100  C1  LIG A  99      14.230  10.100  10.000  1.00  0.00           C
+END
+"""
+    path = tmp_path / "interactions.pdb"
+    path.write_text(pdb, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(path)
+    assert dlg._act_interact_hydrophobic is not None
+    assert dlg._act_interact_hydrophobic.isChecked()
+    assert dlg._act_hbond_complex.isChecked()
+    assert dlg._act_interact_ionic.isChecked()
+    dlg._act_hbond_complex.setChecked(False)
+    dlg._act_interact_ionic.setChecked(False)
+    dlg._act_interact_pi_stacking.setChecked(False)
+    dlg._act_interact_pi_cation.setChecked(False)
+    dlg._act_interact_halogen.setChecked(False)
+    assert dlg._prolif_families_enabled() == {FAMILY_HYDROPHOBIC}
+    payload = dlg._hbond_overlay_payload()
+    assert payload["active"] is True
+    assert all(b.get("family") != "hbond" for b in payload["bonds"])
+    state = dlg.collect_session_state()
+    assert state["interactions"]["hydrophobic"] is True
+    assert state["interactions"]["ionic"] is False
+    dlg.close()
+
+
+def test_complex_load_enables_protein_ligand_interactions(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    apo = tmp_path / "apo.pdb"
+    apo.write_text(
+        """\
+ATOM      1  N   ALA A   1      0.000   0.000   0.000  1.00  0.00           N
+ATOM      2  CA  ALA A   1      1.500   0.000   0.000  1.00  0.00           C
+END
+""",
+        encoding="utf-8",
+    )
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(apo)
+    assert not dlg._act_hbond_complex.isChecked()
+    assert not dlg._act_interact_hydrophobic.isChecked()
+    dlg.close()
+
+    lig_only = tmp_path / "lig.pdb"
+    lig_only.write_text(
+        """\
+HETATM  100  C1  LIG A  99      0.000   0.000   0.000  1.00  0.00           C
+HETATM  101  O1  LIG A  99      1.400   0.000   0.000  1.00  0.00           O
+END
+""",
+        encoding="utf-8",
+    )
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(lig_only)
+    assert dlg._act_hbond_ligand.isChecked()
+    assert not dlg._act_hbond_complex.isChecked()
+    assert not dlg._act_interact_hydrophobic.isChecked()
+    dlg.close()
+
+    holo = tmp_path / "holo.pdb"
+    holo.write_text(_POCKET_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(holo)
+    assert dlg._act_hbond_complex.isChecked()
+    assert dlg._act_hbond_ligand.isChecked()
+    assert dlg._act_interact_hydrophobic.isChecked()
+    assert dlg._act_interact_ionic.isChecked()
+    assert dlg._act_interact_pi_stacking.isChecked()
+    assert dlg._act_interact_pi_cation.isChecked()
+    assert dlg._act_interact_halogen.isChecked()
+    assert not dlg._act_hbond_protein.isChecked()
+    assert dlg._act_hbond_ligand.isChecked()
+    dlg._act_interact_hydrophobic.setChecked(False)
+    state = dlg.collect_session_state()
+    dlg2 = ProteinViewerDialog()
+    dlg2.apply_session_state(state)
+    assert dlg2._act_hbond_complex.isChecked()
+    assert dlg2._act_interact_hydrophobic.isChecked() is False
+    dlg.close()
+    dlg2.close()
 
 
 def test_multi_file_session_and_prepare_overlay(qapp, tmp_path):  # noqa: ARG001
@@ -766,6 +1504,64 @@ def test_multi_file_session_and_prepare_overlay(qapp, tmp_path):  # noqa: ARG001
     assert "first_prepared.pdb" in names
     assert "second.pdb" in names
     assert len(dlg._slots) == 3
+    dlg.close()
+
+
+def test_second_structure_appends_without_replacing_canvas(qapp, tmp_path, monkeypatch):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    a = tmp_path / "first.pdb"
+    b = tmp_path / "second.pdb"
+    a.write_text(_MINI_PDB, encoding="utf-8")
+    b.write_text(_MINI_PDB.replace("MET", "SER").replace("M  ", "S  "), encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    sets: list[dict] = []
+    adds: list[dict] = []
+    monkeypatch.setattr(dlg.viewer, "set_payload", lambda payload: sets.append(payload))
+    monkeypatch.setattr(dlg.viewer, "add_models", lambda payload: adds.append(payload))
+    dlg.viewer._web_ready = True
+    dlg.add_structure_path(a, refit=True)
+    assert len(sets) == 1
+    assert len(sets[0]["models"]) == 1
+    assert adds == []
+    first_id = dlg._slots[0].structure_id
+    first_hbonds = dlg._hbond_cache.get(first_id)
+    dlg.add_structure_path(b, refit=False)
+    assert len(sets) == 1
+    assert len(adds) == 1
+    assert len(adds[0]["models"]) == 1
+    assert dlg._hbond_cache.get(first_id) == first_hbonds
+    dlg.close()
+
+
+def test_delete_extra_structures_stops_overlay_work(qapp, tmp_path, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtWidgets import QMessageBox
+
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    files = []
+    for name in ("one.pdb", "two.pdb", "three.pdb"):
+        path = tmp_path / name
+        path.write_text(_MINI_PDB, encoding="utf-8")
+        files.append(path)
+    dlg = ProteinViewerDialog()
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+    for path in files:
+        dlg.add_structure_path(path, refit=False)
+    assert len(dlg._slots) == 3
+    keep_id = dlg._slots[0].structure_id
+    drop_ids = [slot.structure_id for slot in dlg._slots[1:]]
+    dlg.manager.tree.clearSelection()
+    for i in range(1, dlg.manager.tree.topLevelItemCount()):
+        dlg.manager.tree.topLevelItem(i).setSelected(True)
+    dlg.delete_selected_chains()
+    assert [slot.structure_id for slot in dlg._slots] == [keep_id]
+    skip = dlg._overlay_skip_sids()
+    assert drop_ids[0] in skip
+    assert drop_ids[1] in skip
+    assert keep_id not in skip
+    assert drop_ids[0] not in dlg._hbond_cache
+    assert drop_ids[1] not in dlg._hbond_cache
     dlg.close()
 
 
@@ -804,6 +1600,7 @@ def test_save_structure_writes_active_slot(qapp, tmp_path, monkeypatch):  # noqa
     file_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "File")
     labels = [a.text().replace("&", "") for a in file_menu.actions()]
     assert "Save Structure…" in labels
+    assert "Save to Session" in labels
     monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(dest), "PDB (*.pdb)"))
     dlg.save_structure_dialog()
     saved = dest.read_bytes().decode("utf-8").replace("\r\n", "\n")
@@ -827,6 +1624,12 @@ def test_collect_session_state_keeps_manager_rows(qapp, tmp_path):  # noqa: ARG0
     state = dlg.collect_session_state()
     assert state is not None
     assert [s["name"] for s in state["structures"]] == ["first.pdb", "second.pdb"]
+    assert "allAtoms" in state
+    assert "splitters" in state
+    assert "residueHighlight" in state
+    dlg._act_all_atoms.setChecked(True)
+    state = dlg.collect_session_state()
+    assert state["allAtoms"] is True
     dlg2 = ProteinViewerDialog()
     dlg2.apply_session_state(state)
     assert [slot.name for slot in dlg2._slots] == ["first.pdb", "second.pdb"]
@@ -834,5 +1637,103 @@ def test_collect_session_state_keeps_manager_rows(qapp, tmp_path):  # noqa: ARG0
     restored = next(r for r in dlg2._slots[0].rows if r.spec.kind == "ligand")
     assert restored.visible is False
     assert dlg2._act_hbond_complex.isChecked()
+    assert dlg2._act_all_atoms.isChecked()
+    polymer = next(r for r in dlg2._slots[0].rows if r.spec.kind == "polymer")
+    assert polymer.style == "ballstick"
     dlg.close()
     dlg2.close()
+
+
+def test_save_to_session_is_required_for_cms(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.ui.main_window import ChemicalTableApp
+
+    src = tmp_path / "mini.pdb"
+    src.write_text(_MINI_PDB, encoding="utf-8")
+    w = ChemicalTableApp()
+    dlg = w.open_protein_viewer()
+    dlg.add_structure_path(src, refit=True)
+    assert w._collect_protein_viewer() is None
+    assert dlg.save_viewer_to_session() is True
+    payload = w._collect_protein_viewer()
+    assert isinstance(payload, dict)
+    assert payload["structures"][0]["name"] == "mini.pdb"
+    assert w._session_has_unsaved_changes()
+    dlg.close()
+    w.close()
+
+
+def test_close_without_save_to_session_discards_live_viewer(qapp, tmp_path, monkeypatch):
+    from PyQt5.QtGui import QCloseEvent
+    from PyQt5.QtWidgets import QMessageBox
+
+    from molmanager.ui.main_window import ChemicalTableApp
+
+    first = tmp_path / "first.pdb"
+    second = tmp_path / "second.pdb"
+    first.write_text(_MINI_PDB, encoding="utf-8")
+    second.write_text(_MINI_PDB.replace("MET", "SER").replace("M  ", "S  "), encoding="utf-8")
+    w = ChemicalTableApp()
+    dlg = w.open_protein_viewer()
+    dlg._suppress_close_prompt = False
+    dlg.add_structure_path(first, refit=True)
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Discard)
+    ev = QCloseEvent()
+    dlg.closeEvent(ev)
+    assert ev.isAccepted()
+    assert w._collect_protein_viewer() is None
+
+    dlg.show()
+    dlg.add_structure_path(first, refit=True)
+    assert dlg.save_viewer_to_session() is True
+    dlg.close_structure()
+    dlg.add_structure_path(second, refit=True)
+    ev2 = QCloseEvent()
+    dlg.closeEvent(ev2)
+    assert ev2.isAccepted()
+    kept = w._collect_protein_viewer()
+    assert kept["structures"][0]["name"] == "first.pdb"
+    w.close()
+
+
+def test_close_save_to_session_commits_live_viewer(qapp, tmp_path, monkeypatch):
+    from PyQt5.QtGui import QCloseEvent
+    from PyQt5.QtWidgets import QMessageBox
+
+    from molmanager.ui.main_window import ChemicalTableApp
+
+    src = tmp_path / "live.pdb"
+    src.write_text(_MINI_PDB, encoding="utf-8")
+    w = ChemicalTableApp()
+    dlg = w.open_protein_viewer()
+    dlg._suppress_close_prompt = False
+    dlg.add_structure_path(src, refit=True)
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Save)
+    ev = QCloseEvent()
+    dlg.closeEvent(ev)
+    assert ev.isAccepted()
+    payload = w._collect_protein_viewer()
+    assert payload["structures"][0]["name"] == "live.pdb"
+    w.close()
+
+
+def test_close_cancel_keeps_protein_viewer_open(qapp, tmp_path, monkeypatch):
+    from PyQt5.QtGui import QCloseEvent
+    from PyQt5.QtWidgets import QMessageBox
+
+    from molmanager.ui.main_window import ChemicalTableApp
+
+    src = tmp_path / "mini.pdb"
+    src.write_text(_MINI_PDB, encoding="utf-8")
+    w = ChemicalTableApp()
+    dlg = w.open_protein_viewer()
+    dlg._suppress_close_prompt = False
+    dlg.add_structure_path(src, refit=True)
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Cancel)
+    ev = QCloseEvent()
+    dlg.closeEvent(ev)
+    assert not ev.isAccepted()
+    assert dlg.isVisible()
+    assert w._collect_protein_viewer() is None
+    dlg._suppress_close_prompt = True
+    dlg.close()
+    w.close()

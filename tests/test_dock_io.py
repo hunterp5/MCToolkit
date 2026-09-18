@@ -30,6 +30,7 @@ from molmanager.dock_io import (
     combine_pose_mols,
     combine_sdf_placement_and_minimized,
     dock_result_headers,
+    gnina_executable_ok,
     is_autobox_ligand_path,
     load_sdf_mols,
     merge_pdbqt_files,
@@ -338,6 +339,16 @@ def test_smina_executable_ok(tmp_path):
     assert not smina_executable_ok(str(tmp_path / "missing.bin"))
 
 
+def test_gnina_executable_ok_accepts_wsl_name(monkeypatch, tmp_path):
+    exe = tmp_path / "gnina"
+    exe.write_bytes(b"")
+    assert gnina_executable_ok(str(exe))
+    monkeypatch.setattr("molmanager.gnina_launch.gnina_uses_wsl", lambda: True)
+    monkeypatch.setattr("molmanager.gnina_launch.resolve_user_executable", lambda _p: None)
+    assert gnina_executable_ok("gnina")
+    assert not gnina_executable_ok("")
+
+
 def test_is_autobox_ligand_path():
     assert is_autobox_ligand_path("crystal.pdb")
     assert is_autobox_ligand_path("crystal.PDB")
@@ -372,6 +383,14 @@ def test_pose_metadata_from_pdbqt_extracts_smina_and_vina_fields():
     assert vina["rmsd_ub"] == "1.250"
     skipped = pose_metadata_from_pdbqt("REMARK minimizedRMSD -1\nREMARK minimizedAffinity -3.1\n")
     assert "minimizedRMSD" not in skipped
+    cnn = pose_metadata_from_pdbqt(
+        "REMARK CNNscore 0.9123\nREMARK CNNaffinity 6.45\nREMARK CNN_VS 5.2\n"
+        "REMARK minimizedAffinity -8.1\n"
+    )
+    assert cnn["CNNscore"] == "0.912"
+    assert cnn["CNNaffinity"] == "6.450"
+    assert cnn["CNN_VS"] == "5.200"
+    assert cnn["minimizedAffinity"] == "-8.100"
     assert skipped["minimizedAffinity"] == "-3.100"
 
 
@@ -396,6 +415,8 @@ def test_mols_from_dock_output_merges_log(tmp_path):
     sdf = tmp_path / "out.sdf"
     mol = Chem.MolFromSmiles("CCO")
     mol.SetProp("minimizedAffinity", "-7.250")
+    mol.SetProp("CNNscore", "0.910")
+    mol.SetProp("CNNaffinity", "6.200")
     from rdkit.Chem import SDWriter
 
     writer = SDWriter(str(sdf))
@@ -415,6 +436,76 @@ def test_mols_from_dock_output_merges_log(tmp_path):
     headers = dock_result_headers(mols)
     assert headers[:2] == ["ID_HIDDEN", "Structure"]
     assert "minimizedAffinity" in headers
+    assert "CNNscore" in headers
+    assert "CNNaffinity" in headers
+    assert headers.index("CNNscore") < headers.index("CNNaffinity")
+    assert headers.index("CNNaffinity") < headers.index("minimizedAffinity")
     assert "mode" in headers
     assert "rmsd_lb" in headers
     assert "confs" in headers
+    assert "poses" not in headers
+
+
+def test_group_dock_poses_by_parent_oid():
+    from molmanager.dock_io import dock_poses_pack_meta, group_dock_poses, stamp_pose_parent_oids
+    from molmanager.services.column_labels import COLUMN_PARENT_OID
+
+    parent = Chem.MolFromSmiles("CCO")
+    orphan = Chem.MolFromSmiles("CCN")
+    assert parent is not None and orphan is not None
+    parent.SetProp("_Name", "7")
+    parent.SetProp("minimizedAffinity", "-8.1")
+    orphan.SetProp("_Name", "filelig")
+    orphan.SetProp("CNNaffinity", "-5.0")
+    stamp_pose_parent_oids([parent, orphan], {7})
+    assert parent.GetProp(COLUMN_PARENT_OID) == "7"
+    assert not orphan.HasProp(COLUMN_PARENT_OID)
+    by_oid, orphans = group_dock_poses([parent, orphan], {7})
+    assert list(by_oid.keys()) == [7]
+    assert len(by_oid[7]) == 1
+    assert len(orphans) == 1
+    assert len(orphans[0]) == 1
+    meta = dock_poses_pack_meta(by_oid[7])
+    assert meta["op"] == "gnina"
+    assert meta["n_packed"] == 1
+    assert meta["e_min_kcal"] == -8.1
+
+
+def test_ordered_dock_pose_groups_first_seen():
+    from molmanager.dock_io import ordered_dock_pose_groups
+    from molmanager.services.column_labels import COLUMN_PARENT_OID
+
+    a = Chem.MolFromSmiles("CCO")
+    b = Chem.MolFromSmiles("CCO")
+    c = Chem.MolFromSmiles("CCN")
+    assert a is not None and b is not None and c is not None
+    a.SetProp(COLUMN_PARENT_OID, "1")
+    b.SetProp(COLUMN_PARENT_OID, "1")
+    c.SetProp("_Name", "filelig")
+    groups = ordered_dock_pose_groups([a, c, b], {1})
+    assert len(groups) == 2
+    assert groups[0] == [a, b]
+    assert groups[1] == [c]
+
+
+def test_dock_result_headers_skip_packed_poses():
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    mol.SetProp("minimizedAffinity", "-7.250")
+    mol.SetProp("poses", "blob")
+    headers = dock_result_headers([mol])
+    assert "poses" not in headers
+    assert "minimizedAffinity" in headers
+
+
+def test_dock_result_headers_include_crystal_ref():
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    mol.SetProp("crystalRMSD", "1.250")
+    mol.SetProp("crystalRef", "AXI A 2000")
+    mol.SetProp("minimizedAffinity", "-7.250")
+    headers = dock_result_headers([mol])
+    assert "crystalRMSD" in headers
+    assert "crystalRef" in headers
+    assert headers.index("minimizedAffinity") < headers.index("crystalRMSD")
+    assert headers.index("crystalRMSD") < headers.index("crystalRef")

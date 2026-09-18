@@ -58,6 +58,8 @@ from ..dockable_plot import (
     make_add_to_main_button,
     make_send_window_button,
     request_close_plot_widget,
+    add_centered_browser_nav,
+    style_browser_nav_buttons,
     style_plot_footer_text_button,
 )
 from ..qt_widget_utils import make_window_minimizable
@@ -288,7 +290,9 @@ class MetaboliteBrowserWidget(QWidget):
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.verticalHeader().setVisible(False)
         self._table.setMaximumHeight(_TABLE_MAX_HEIGHT)
-        self._table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self._table.setFixedHeight(_TABLE_MAX_HEIGHT)
+        self._table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         hdr = self._table.horizontalHeader()
         hdr.setSectionResizeMode(_COL_ROLE, QHeaderView.ResizeToContents)
         hdr.setSectionResizeMode(_COL_STRUCT, QHeaderView.ResizeToContents)
@@ -311,14 +315,25 @@ class MetaboliteBrowserWidget(QWidget):
         self._btn_fwd.setToolTip("Next parent (→)")
         self._btn_last = QPushButton(">>")
         self._btn_last.setToolTip("Last parent (End)")
-        self._btn_select = QPushButton("Select")
+        self._btn_select = QPushButton()
         self._btn_select.setToolTip("Select this parent row in the compound table")
-        row_btns.addWidget(self._btn_first)
-        row_btns.addWidget(self._btn_back)
-        row_btns.addWidget(self._btn_fwd)
-        row_btns.addWidget(self._btn_last)
-        row_btns.addWidget(self._btn_select)
-        row_btns.addStretch(1)
+        style_browser_nav_buttons(
+            self._btn_first,
+            self._btn_back,
+            self._btn_fwd,
+            self._btn_last,
+            self._btn_select,
+        )
+        add_centered_browser_nav(
+            row_btns,
+            [
+                self._btn_first,
+                self._btn_back,
+                self._btn_fwd,
+                self._btn_last,
+                self._btn_select,
+            ],
+        )
         root.addWidget(self._nav_bar)
 
         self._footer_bar = QWidget(self)

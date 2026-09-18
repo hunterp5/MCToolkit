@@ -99,8 +99,12 @@ def test_parse_molecule_from_cell_text_accepts_smiles_and_inchi():
 def test_smina_dock_guide_html(qapp):  # noqa: ARG001
     from molmanager.ui.user_guides import guide_html
 
-    h = guide_html("tools_smina")
-    assert "Smina" in h and "PDBQT" in h
+    h = guide_html("tools_gnina")
+    assert "Gnina" in h and "PDBQT" in h
+    assert "Selected rows" in h
+    assert "Flexible side chains" in h
+    assert "Protein Viewer" in h
+    assert "Manager" in h
     assert "Topic unavailable" not in h
 
 
@@ -113,10 +117,10 @@ def test_systematic_conformations_guide_html(qapp):  # noqa: ARG001
 
 
 def test_smina_dock_dialog_constructible(qapp):  # noqa: ARG001
-    from molmanager.ui.smina_dock import SminaDockDialog
+    from molmanager.ui.gnina_dock import GninaDockDialog
 
-    d = SminaDockDialog(None)
-    assert d.windowTitle()
+    d = GninaDockDialog(None)
+    assert d.windowTitle() == "Dock — Gnina"
     d.close()
 
 

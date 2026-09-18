@@ -250,6 +250,28 @@ def test_cuda_missing_hint_emits_once(monkeypatch, caplog) -> None:
         warn_if_cuda_torch_missing()
         warn_if_cuda_torch_missing()
     assert caplog.text.count("NVIDIA GPU detected") == 1
+    assert "install_pytorch_pka" in caplog.text
+
+
+def test_cpu_torch_with_nvidia_gpu(monkeypatch) -> None:
+    from molmanager.ionization import cpu_torch_with_nvidia_gpu
+
+    monkeypatch.setattr("molmanager.ionization.torch_is_cuda_build", lambda: True)
+    monkeypatch.setattr("molmanager.ionization._nvidia_gpu_present", lambda: True)
+    assert cpu_torch_with_nvidia_gpu() is False
+    monkeypatch.setattr("molmanager.ionization.torch_is_cuda_build", lambda: False)
+    assert cpu_torch_with_nvidia_gpu() is True
+    monkeypatch.setattr("molmanager.ionization._nvidia_gpu_present", lambda: False)
+    assert cpu_torch_with_nvidia_gpu() is False
+
+
+def test_cuda_pka_install_hint_points_at_auto_script() -> None:
+    from molmanager.ionization import cuda_pka_install_hint
+
+    text = cuda_pka_install_hint()
+    assert "install_pytorch_pka.ps1" in text
+    assert "install_pytorch_pka.sh" in text
+    assert "-Cuda" not in text
 
 
 def test_unipka_tempdir_cleanup_swallows_permission_error(monkeypatch) -> None:

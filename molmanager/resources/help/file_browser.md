@@ -16,9 +16,9 @@ The active selection in the compound table (and associated structures/properties
 
 ## Options
 
-- **Selection list** - browser view of currently selected rows.
-- **Review actions** - inspect or act on the selection as offered in the dialog.
-- **Live sync** - updates when the main table selection changes while open.
+- **Current-row table** - compact copy of the visible table columns for the row being browsed (structure stays in the preview above).
+- **Browse Selected** - walk only the current selection, or the whole table when unchecked.
+- **Live sync** - updates when the main table selection or data change while open.
 
 ## Workflow
 

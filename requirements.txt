@@ -46,7 +46,7 @@ unipkainfer>=0.2.0
 chemprop>=2.1.0,<2.3
 lightning>=2.0,<3
 
-# --- Docking (Tools → Dock → Prepare / Smina) ---
+# --- Docking (Protein → Dock Ligand → Prepare / Gnina) ---
 meeko>=0.5.0
 # Meeko does not always install gemmi; receptor PDBQT import needs it.
 gemmi>=0.6
@@ -54,6 +54,8 @@ pdbfixer>=1.9
 # OpenMM 8.3+ can segfault during PDBFixer hydrogen placement on Windows (use 8.2.x).
 openmm>=8.2,<8.3
 pdb2pqr>=3.6.1
+# Protein Viewer interaction overlays (H-bond / hydrophobic / ionic / π / halogen).
+prolif>=2.1
 
 # --- Development / CI ---
 pytest>=7.4,<9

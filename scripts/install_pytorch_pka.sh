@@ -18,18 +18,45 @@
 # Repair or install the PyTorch 2.5.1 + Uni-pKa (unipkainfer) stack in the active Python.
 # On a fresh install, `pip install -r requirements.txt` already includes the CPU wheel.
 # Run this script when pKa fails due to a conflicting torch build (e.g. after installing admet-ai).
-# Pass --cuda to replace the CPU wheel with the CUDA 12.4 build (NVIDIA GPU pKa).
+# With no flags, an NVIDIA GPU (nvidia-smi) selects the CUDA 12.4 wheel automatically.
+# Pass --cuda to force CUDA, or --cpu to keep the CPU wheel.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 CUDA=0
+CPU=0
+SKIP_REQUIREMENTS=0
 for arg in "$@"; do
   case "$arg" in
     --cuda) CUDA=1 ;;
+    --cpu) CPU=1 ;;
+    --skip-requirements) SKIP_REQUIREMENTS=1 ;;
     *) echo "Unknown argument: $arg" >&2; exit 1 ;;
   esac
 done
+if [[ "$CUDA" -eq 1 && "$CPU" -eq 1 ]]; then
+  echo "Use only one of --cuda or --cpu." >&2
+  exit 1
+fi
+
+nvidia_gpu_present() {
+  command -v nvidia-smi >/dev/null 2>&1 || return 1
+  local out
+  out="$(nvidia-smi -L 2>/dev/null || true)"
+  [[ "$out" == *GPU* ]]
+}
+
+if [[ "$CPU" -eq 1 ]]; then
+  CUDA=0
+elif [[ "$CUDA" -eq 0 ]]; then
+  if nvidia_gpu_present; then
+    CUDA=1
+    echo "NVIDIA GPU detected; installing CUDA 12.4 PyTorch (~2.5 GB). Pass --cpu to keep the CPU wheel."
+  else
+    echo "No NVIDIA GPU detected; installing CPU PyTorch. Pass --cuda to force the CUDA wheel."
+  fi
+fi
 
 if [[ "$CUDA" -eq 1 ]]; then
   echo "Installing CUDA 12.4 PyTorch 2.5.1 and Uni-pKa stack into: $(python -c 'import sys; print(sys.executable)')"
@@ -42,14 +69,16 @@ echo
 echo "Removing ADMET-AI (requires torch>=2.8; conflicts with this torch pin)..."
 python -m pip uninstall -y admet-ai 2>/dev/null || true
 
-echo
-echo "Removing mismatched torch builds..."
-python -m pip uninstall -y torch torchvision torchaudio 2>/dev/null || true
+if [[ "$SKIP_REQUIREMENTS" -eq 0 ]]; then
+  echo
+  echo "Removing mismatched torch builds..."
+  python -m pip uninstall -y torch torchvision torchaudio 2>/dev/null || true
 
-echo
-echo "Reinstalling dependencies from requirements.txt..."
-python -m pip install -r requirements.txt
-echo "If pip reported dependency conflicts for molscribe/openchemie/opennmt-py, they are unrelated to Uni-pKa and can be ignored."
+  echo
+  echo "Reinstalling dependencies from requirements.txt..."
+  python -m pip install -r requirements.txt
+  echo "If pip reported dependency conflicts for molscribe/openchemie/opennmt-py, they are unrelated to Uni-pKa and can be ignored."
+fi
 
 if [[ "$CUDA" -eq 1 ]]; then
   echo

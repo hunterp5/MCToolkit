@@ -30,6 +30,17 @@ from rdkit.Chem import AllChem
 
 logger = logging.getLogger(__name__)
 
+_MEEKO_RES_FAIL = re.compile(
+    r"unable to build rdkit mol for residue \S+ corresponding to key (\S+)",
+    re.I,
+)
+_MEEKO_KEY_HINTS = re.compile(
+    r"(?:corresponding to key|inter-residue bond\(s\):|residue_key=)\s*"
+    r"([A-Za-z]*:-?\d+[A-Za-z]?)",
+    re.I,
+)
+_MEEKO_SKIP_ROUNDS = 48
+
 _MEEKO_MISSING = "Meeko is required to generate PDBQT. Install with: pip install meeko"
 _GEMMI_MISSING = (
     "Meeko needs gemmi to write PDBQT (receptor Polymer templates). "
@@ -247,12 +258,95 @@ def _apply_meeko_rdkit_compat() -> None:
     Chem.Mol._molmanager_hasquery_patched = True  # type: ignore[attr-defined]
 
 
+def _pdb_without_hydrogens(pdb_string: str) -> str:
+    """Drop explicit hydrogens so Meeko can apply residue templates."""
+    lines: list[str] = []
+    for line in pdb_string.splitlines():
+        if line.startswith(("ATOM", "HETATM")):
+            elem = line[76:78].strip().upper() if len(line) >= 78 else ""
+            name = line[12:16].strip().upper() if len(line) >= 16 else ""
+            if elem in {"H", "D", "T"}:
+                continue
+            if not elem and (name.startswith("H") or name in {"D", "T"}):
+                continue
+        lines.append(line)
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+def _meeko_residue_keys(*texts: str) -> list[str]:
+    """Residue keys Meeko mentions in errors or warnings (``A:913``, ``:42``)."""
+    keys: list[str] = []
+    seen: set[str] = set()
+    for text in texts:
+        for match in _MEEKO_KEY_HINTS.finditer(text or ""):
+            key = match.group(1).strip().rstrip(".,;:")
+            if key and key not in seen:
+                seen.add(key)
+                keys.append(key)
+        fail = _MEEKO_RES_FAIL.search(text or "")
+        if fail:
+            key = fail.group(1).strip().rstrip(".,;:")
+            if key and key not in seen:
+                seen.add(key)
+                keys.append(key)
+    return keys
+
+
+def _meeko_failed_residue_key(message: str) -> str:
+    keys = _meeko_residue_keys(message)
+    return keys[0] if keys else ""
+
+
+class _MeekoLogBuffer(logging.Handler):
+    """Collect Meeko log lines so padding failures can name residues to skip."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.INFO)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self.messages.append(record.getMessage())
+        except Exception:
+            return
+
+
+def _strip_pdb_residue(pdb_string: str, reskey: str) -> tuple[str, int]:
+    """Remove ATOM/HETATM records for a Meeko residue key (``A:913`` or ``A:913A``)."""
+    key = (reskey or "").strip()
+    if ":" not in key:
+        return pdb_string, 0
+    chain, rest = key.split(":", 1)
+    chain = (chain or " ").strip() or " "
+    icode = ""
+    resi = rest
+    if rest and rest[-1].isalpha() and rest[:-1].lstrip("-").isdigit():
+        icode = rest[-1]
+        resi = rest[:-1]
+    dropped = 0
+    kept: list[str] = []
+    for line in pdb_string.splitlines():
+        if line.startswith(("ATOM", "HETATM")) and len(line) >= 26:
+            f_chain = line[21:22].strip() or " "
+            f_resi = line[22:26].strip()
+            f_icode = line[26:27].strip() if len(line) >= 27 else ""
+            if f_chain == chain and f_resi == resi and f_icode == icode:
+                dropped += 1
+                continue
+        kept.append(line)
+    return "\n".join(kept) + ("\n" if kept else ""), dropped
+
+
 def _write_receptor_pdbqt_file(pdb_path: Path, out_path: Path) -> tuple[str | None, list[str]]:
     """
     Prepare a receptor PDB with Meeko and write rigid PDBQT to *out_path*.
 
-    Incomplete residues are skipped (Meeko ``allow_bad_res``). Runs in-process so the
-    RDKit ``Mol.HasQuery`` shim applies (Meeko 0.7.x / RDKit 2023.09+).
+    Protonated hydrogens are stripped first so RDKit can build residue mols; Meeko
+    templates restore hydrogens. Residues that still fail RDKit sanitize or Meeko
+    padding (``unable to build rdkit mol``, excess inter-residue bonds) are
+    dropped and the parse is retried. Incomplete residues are also skipped
+    (Meeko ``allow_bad_res``). Runs in-process so the RDKit ``Mol.HasQuery``
+    shim applies (Meeko 0.7.x / RDKit 2023.09+).
 
     Returns ``(error_message, ignored_residue_ids)``.
     """
@@ -269,21 +363,48 @@ def _write_receptor_pdbqt_file(pdb_path: Path, out_path: Path) -> tuple[str | No
         pdb_string = pdb_path.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
         return f"Could not read receptor PDB: {exc}", []
+    pdb_string = _pdb_without_hydrogens(pdb_string)
     templates = ResidueChemTemplates.create_from_defaults()
     mk_prep = MoleculePreparation.from_config({})
+    skipped: list[str] = []
+    to_delete: list[str] = []
+    polymer = None
+    last_err = ""
+    meeko_log = logging.getLogger("meeko.polymer")
+    buf = _MeekoLogBuffer()
+    meeko_log.addHandler(buf)
     try:
-        polymer = Polymer.from_pdb_string(
-            pdb_string,
-            templates,
-            mk_prep,
-            allow_bad_res=True,
-        )
-    except PolymerCreationError as exc:
-        return str(exc) or "Meeko could not parse the receptor PDB.", []
-    except Exception as exc:
-        logger.exception("Meeko receptor preparation failed")
-        return str(exc) or "Meeko receptor preparation failed.", []
-    ignored = [str(k) for k in (polymer.get_ignored_monomers() or {})]
+        for _round in range(_MEEKO_SKIP_ROUNDS):
+            buf.messages.clear()
+            try:
+                polymer = Polymer.from_pdb_string(
+                    pdb_string,
+                    templates,
+                    mk_prep,
+                    residues_to_delete=list(to_delete) or None,
+                    allow_bad_res=True,
+                )
+                last_err = ""
+                break
+            except Exception as exc:
+                last_err = str(exc) or "Meeko receptor preparation failed."
+                keys = _meeko_residue_keys(last_err, "\n".join(buf.messages))
+                new_keys = [key for key in keys if key not in skipped]
+                if not new_keys:
+                    if not isinstance(exc, PolymerCreationError):
+                        logger.exception("Meeko receptor preparation failed")
+                    return last_err, skipped
+                for key in new_keys:
+                    pdb_string, n_drop = _strip_pdb_residue(pdb_string, key)
+                    skipped.append(key)
+                    if n_drop <= 0:
+                        to_delete.append(key)
+                    logger.info("Skipping Meeko residue %s (%s)", key, last_err)
+    finally:
+        meeko_log.removeHandler(buf)
+    if polymer is None:
+        return last_err or "Meeko could not parse the receptor PDB.", skipped
+    ignored = skipped + [str(k) for k in (polymer.get_ignored_monomers() or {})]
     try:
         rigid_pdbqt, _flex = PDBQTWriterLegacy.write_from_polymer(polymer)
     except Exception as exc:

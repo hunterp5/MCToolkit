@@ -26,7 +26,7 @@ from ...column_log_transform import (
     transform_column_values_log10,
     transform_column_values_precision,
 )
-from ...confs_codec import resolve_blocks_b64_for_viewer
+from ...confs_codec import is_packed_ensemble_header, resolve_blocks_b64_for_viewer
 from ...utils import mol_to_canonical_smiles
 from ..strings import TOOL_RENDER_2D
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
@@ -423,7 +423,7 @@ class TableMenuMixin:
             confs_col = "confs"
             if 0 <= col < len(self.headers):
                 hdr = self.headers[col]
-                if hdr in ("confs", "superpose"):
+                if is_packed_ensemble_header(hdr):
                     confs_col = hdr
             self.open_packed_conformer_viewer(
                 packed_confs_b64,

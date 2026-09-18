@@ -32,7 +32,11 @@ from molmanager.ui.dialogs.pdbqt_generator import PdbqtGeneratorDialog
 from molmanager.workers.pdbqt_generator import (
     PdbqtGenRequest,
     _ligand_mols_from_request,
+    _meeko_failed_residue_key,
+    _meeko_residue_keys,
+    _pdb_without_hydrogens,
     _read_pdb_molecules,
+    _strip_pdb_residue,
     _write_receptor_pdbqt_file,
     meeko_import_error,
     prepare_ligand_with_hydrogens,
@@ -235,3 +239,64 @@ def test_write_receptor_pdbqt_4agc_sample(tmp_path):
     assert err is None
     assert any("1169" in item for item in ignored)
     assert out.stat().st_size > 1000
+
+
+def test_pdb_without_hydrogens_drops_h_records():
+    pdb = (
+        "ATOM      1  N   GLU A 913      -3.578  23.811 -24.665  1.00  0.00           N\n"
+        "ATOM      2  CA  GLU A 913      -4.175  22.755 -25.605  1.00  0.00           C\n"
+        "ATOM      3  HA  GLU A 913      -3.906  23.245 -26.671  1.00  0.00           H\n"
+        "ATOM      4  H   GLU A 913      -3.189  24.664 -24.974  1.00  0.00           H\n"
+        "TER\n"
+    )
+    out = _pdb_without_hydrogens(pdb)
+    kept = [ln for ln in out.splitlines() if ln.startswith("ATOM")]
+    assert len(kept) == 2
+    assert all((ln[76:78].strip() if len(ln) >= 78 else "") not in {"H", "D", "T"} for ln in kept)
+    assert "N   GLU" in out
+    assert "CA  GLU" in out
+
+
+def test_meeko_failed_residue_key_and_strip():
+    msg = "unable to build rdkit mol for residue GLU corresponding to key A:913"
+    assert _meeko_failed_residue_key(msg) == "A:913"
+    assert _meeko_residue_keys(
+        "adjacent_mol doesn't contain the mapped atoms",
+        "matched with excess inter-residue bond(s): A:914\n"
+        "matched with excess inter-residue bond(s): A:946",
+    ) == ["A:914", "A:946"]
+    pdb = (
+        "ATOM      1  N   TYR A 912      -1.000   0.000   0.000  1.00  0.00           N\n"
+        "ATOM      2  N   GLU A 913      -3.578  23.811 -24.665  1.00  0.00           N\n"
+        "ATOM      3  CA  GLU A 913      -4.175  22.755 -25.605  1.00  0.00           C\n"
+        "ATOM      4  N   LEU A 913A     -5.000   0.000   0.000  1.00  0.00           N\n"
+        "TER\n"
+    )
+    stripped, n_drop = _strip_pdb_residue(pdb, "A:913")
+    assert n_drop == 2
+    assert "GLU A 913" not in stripped
+    assert "TYR A 912" in stripped
+    assert "LEU A 913A" in stripped
+
+
+def test_write_receptor_pdbqt_protonated_glu_slice(tmp_path):
+    pytest.importorskip("meeko")
+    from molmanager.structure_atoms import _pdb_from_atoms, parse_structure_atoms
+
+    src = Path(__file__).resolve().parents[1] / "samples" / "6bbu_fixed_protonated.cif"
+    if not src.is_file():
+        pytest.skip("6bbu_fixed_protonated.cif sample missing")
+    text = src.read_text(encoding="utf-8")
+    atoms = [
+        a
+        for a in parse_structure_atoms(text, "cif")
+        if a.chain == "A" and a.resi in {"912", "913", "914"}
+    ]
+    assert any(a.resn == "GLU" and a.resi == "913" for a in atoms)
+    pdb_path = tmp_path / "glu913.pdb"
+    pdb_path.write_text(_pdb_from_atoms(atoms), encoding="utf-8")
+    out = tmp_path / "glu913.pdbqt"
+    err, _ignored = _write_receptor_pdbqt_file(pdb_path, out)
+    assert err is None
+    assert out.is_file()
+    assert out.stat().st_size > 100

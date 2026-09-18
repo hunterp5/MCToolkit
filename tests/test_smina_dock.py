@@ -14,19 +14,31 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Smina CLI dialog: autobox vs manual search box."""
+"""Gnina CLI dialog: autobox vs manual search box."""
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 
 pytest.importorskip("PyQt5.QtWidgets")
 
-from molmanager.ui.smina_dock import SminaDockDialog
+from molmanager.ui.gnina_dock import GninaDockDialog
+
+_CARBONYL_PDBQT = (
+    "REMARK SMILES C=O\n"
+    "REMARK SMILES IDX 1 1 2 2\n"
+    "ROOT\n"
+    "ATOM      1  C   UNL     1       0.000   0.000   0.000  1.00  0.00     0.000 C\n"
+    "ATOM      2  O   UNL     1       1.210   0.000   0.000  1.00  0.00     0.000 OA\n"
+    "ENDROOT\n"
+    "TORSDOF 0\n"
+)
 
 
 def _filled_dialog(qapp):  # noqa: ARG001
-    dlg = SminaDockDialog(None)
+    dlg = GninaDockDialog(None)
     dlg.edit_receptor.setText("rec.pdbqt")
     dlg.edit_ligand.setText("lig.pdbqt")
     dlg.edit_out.setText("out.pdbqt")
@@ -42,6 +54,28 @@ def test_smina_argv_manual_box(qapp):  # noqa: ARG001
     assert "--autobox_ligand" not in argv
     assert argv[argv.index("--center_x") + 1] == "1.500"
     assert argv[argv.index("--size_x") + 1] == "22.00"
+    assert argv[argv.index("--cnn_scoring") + 1] == "rescore"
+    assert argv[argv.index("--pose_sort_order") + 1] == "CNNscore"
+    assert "--energy_range" not in argv
+    dlg.close()
+
+
+def test_gnina_argv_gpu_off_adds_no_gpu(qapp):  # noqa: ARG001
+    dlg = _filled_dialog(qapp)
+    dlg.gpu_cb.setChecked(False)
+    argv = dlg._build_argv()
+    assert "--no_gpu" in argv
+    dlg.close()
+
+
+def test_gnina_argv_empirical_when_cnn_none(qapp):  # noqa: ARG001
+    dlg = _filled_dialog(qapp)
+    dlg.combo_cnn_scoring.setCurrentIndex(dlg.combo_cnn_scoring.findData("none"))
+    dlg.combo_emp_scoring.setCurrentIndex(dlg.combo_emp_scoring.findData("vinardo"))
+    argv = dlg._build_argv()
+    assert argv[argv.index("--cnn_scoring") + 1] == "none"
+    assert argv[argv.index("--scoring") + 1] == "vinardo"
+    assert "--pose_sort_order" not in argv
     dlg.close()
 
 
@@ -75,15 +109,84 @@ def test_smina_autobox_optional_box_ligand(qapp):  # noqa: ARG001
     dlg.close()
 
 
+def test_gnina_flex_off_omits_flex_flags(qapp):  # noqa: ARG001
+    dlg = _filled_dialog(qapp)
+    assert dlg.combo_flex_mode.currentData() == "off"
+    argv = dlg._build_argv()
+    assert "--flexres" not in argv
+    assert "--flexdist" not in argv
+    assert "--flexdist_ligand" not in argv
+    assert "--out_flex" not in argv
+    dlg.close()
+
+
+def test_gnina_flex_distance_argv(qapp):  # noqa: ARG001
+    dlg = _filled_dialog(qapp)
+    dlg.combo_flex_mode.setCurrentIndex(dlg.combo_flex_mode.findData("dist"))
+    dlg.edit_flexdist_ligand.setText("crystal.pdb")
+    dlg.spin_flexdist.setValue(3.5)
+    dlg.spin_flex_max.setValue(8)
+    argv = dlg._build_argv()
+    assert argv[argv.index("--flexdist_ligand") + 1] == "crystal.pdb"
+    assert argv[argv.index("--flexdist") + 1] == "3.50"
+    assert argv[argv.index("--flex_max") + 1] == "8"
+    assert argv[argv.index("--out_flex") + 1] == "out_flex.pdb"
+    assert "--full_flex_output" not in argv
+    dlg.close()
+
+
+def test_gnina_flex_distance_falls_back_to_autobox_ligand(qapp):  # noqa: ARG001
+    dlg = _filled_dialog(qapp)
+    dlg.combo_flex_mode.setCurrentIndex(dlg.combo_flex_mode.findData("dist"))
+    dlg.edit_autobox_ligand.setText("box_lig.pdb")
+    argv = dlg._build_argv()
+    assert argv[argv.index("--flexdist_ligand") + 1] == "box_lig.pdb"
+    dlg.close()
+
+
+def test_gnina_flex_named_residues_argv(qapp):  # noqa: ARG001
+    dlg = _filled_dialog(qapp)
+    dlg.combo_flex_mode.setCurrentIndex(dlg.combo_flex_mode.findData("res"))
+    dlg.edit_flexres.setText("A:123, A:145")
+    dlg.chk_full_flex.setChecked(True)
+    argv = dlg._build_argv()
+    assert argv[argv.index("--flexres") + 1] == "A:123,A:145"
+    assert "--flex_max" not in argv
+    assert "--full_flex_output" in argv
+    assert argv[argv.index("--out_flex") + 1] == "out_flex.pdb"
+    dlg.close()
+
+
+def test_gnina_flex_named_residues_rejects_bad_token(qapp):  # noqa: ARG001
+    dlg = _filled_dialog(qapp)
+    dlg.combo_flex_mode.setCurrentIndex(dlg.combo_flex_mode.findData("res"))
+    dlg.edit_flexres.setText("HIS123")
+    with pytest.raises(ValueError, match="CHAIN:RESNUM"):
+        dlg._build_argv()
+    dlg.close()
+
+
+def test_normalize_flexres_and_flex_out_path():
+    from molmanager.ui.gnina_dock import flex_out_path, normalize_flexres
+
+    assert normalize_flexres(" A:123 ; B:4A ") == "A:123,B:4A"
+    assert flex_out_path("C:/tmp/rec_docked.sdf") == str(Path("C:/tmp/rec_docked_flex.pdb"))
+    with pytest.raises(ValueError, match="CHAIN:RESNUM"):
+        normalize_flexres("")
+
+
 def test_smina_dialog_defaults_to_resolved_executable(qapp):  # noqa: ARG001
     from molmanager.bundled_paths import default_external_executable
 
-    dlg = SminaDockDialog(None)
-    assert dlg.edit_exe.text() == default_external_executable("smina")
+    dlg = GninaDockDialog(None)
+    assert dlg.edit_exe.text() == default_external_executable("gnina")
     assert not hasattr(dlg, "progress")
     assert dlg.save_sdf_cb.isChecked()
     assert not dlg.minimize_poses_cb.isChecked()
     assert dlg.edit_out.placeholderText() == "out.sdf"
+    assert dlg.combo_ligand_source.currentData() == "file"
+    assert dlg.combo_confs.findText("Structure") >= 0
+    assert dlg.combo_flex_mode.currentData() == "off"
     dlg.close()
 
 
@@ -98,12 +201,9 @@ def test_smina_argv_uses_sdf_out_when_save_sdf(qapp):  # noqa: ARG001
 
 
 def test_smina_writes_sidecar_sdf_on_success(qapp, tmp_path):  # noqa: ARG001
-    from pathlib import Path
-
-    sample = Path(__file__).resolve().parents[1] / "samples" / "4AGC_liigand.pdbqt"
     pdbqt = tmp_path / "out.pdbqt"
-    pdbqt.write_bytes(sample.read_bytes())
-    dlg = SminaDockDialog(None)
+    pdbqt.write_text("MODEL 1\n" + _CARBONYL_PDBQT + "ENDMDL\n", encoding="utf-8")
+    dlg = GninaDockDialog(None)
     dlg.save_sdf_cb.setChecked(False)
     dlg.edit_out.setText(str(pdbqt))
     dlg.save_sdf_cb.setChecked(True)
@@ -114,12 +214,11 @@ def test_smina_writes_sidecar_sdf_on_success(qapp, tmp_path):  # noqa: ARG001
 
 
 def test_smina_prepares_ligand_batch_from_concatenated_pdbqt(qapp, tmp_path):  # noqa: ARG001
-    from pathlib import Path
-
     from rdkit import Chem
 
-    sample = Path(__file__).resolve().parents[1] / "samples" / "axitininb_conformers.pdbqt"
-    dlg = SminaDockDialog(None)
+    sample = tmp_path / "ligands.pdbqt"
+    sample.write_text(_CARBONYL_PDBQT + _CARBONYL_PDBQT, encoding="utf-8")
+    dlg = GninaDockDialog(None)
     dlg.edit_receptor.setText("rec.pdbqt")
     dlg.edit_ligand.setText(str(sample))
     out = str(tmp_path / "out.sdf")
@@ -145,7 +244,7 @@ def test_smina_sdf_ligand_skips_pdbqt_split(qapp, tmp_path):  # noqa: ARG001
 
     from rdkit import Chem
 
-    sample = Path(__file__).resolve().parents[1] / "samples" / "axitininb_conformers.sdf"
+    sample = Path(__file__).resolve().parents[1] / "samples" / "test_ligand.sdf"
     dlg = _filled_dialog(qapp)
     dlg.edit_ligand.setText(str(sample))
     n = dlg._prepare_ligand_batch(str(sample))
@@ -213,14 +312,11 @@ def test_write_smina_config_repeats_ligand(tmp_path):
 
 
 def test_smina_skips_sidecar_sdf_when_unchecked(qapp, tmp_path):  # noqa: ARG001
-    from pathlib import Path
-
     from PyQt5.QtCore import QProcess
 
-    sample = Path(__file__).resolve().parents[1] / "samples" / "4AGC_liigand.pdbqt"
     pdbqt = tmp_path / "out.pdbqt"
-    pdbqt.write_bytes(sample.read_bytes())
-    dlg = SminaDockDialog(None)
+    pdbqt.write_text("MODEL 1\n" + _CARBONYL_PDBQT + "ENDMDL\n", encoding="utf-8")
+    dlg = GninaDockDialog(None)
     dlg.save_sdf_cb.setChecked(False)
     dlg.edit_out.setText(str(pdbqt))
     dlg._on_proc_finished(0, QProcess.NormalExit)
@@ -257,11 +353,11 @@ def test_smina_present_dock_results_opens_table(qapp, tmp_path):  # noqa: ARG001
     opened: list = []
 
     class _Host:
-        def open_dock_results_window(self, mols, *, title="", receptor_path=None):
+        def open_dock_results_window(self, mols, *, title="", receptor_path=None, **_kwargs):
             opened.append((list(mols), title, receptor_path))
             return None
 
-    dlg = SminaDockDialog(None)
+    dlg = GninaDockDialog(None)
     dlg._main_window = _Host()
     dlg._stdout_buf = (
         "mode |   affinity | dist from best mode\n"
@@ -302,16 +398,276 @@ def test_apply_prepare_result_fills_numeric_box(qapp, tmp_path):  # noqa: ARG001
         box_path=str(tmp_path / "rec_box.txt"),
         box=box,
     )
-    dlg = SminaDockDialog(None)
+    dlg = GninaDockDialog(None)
+    dlg.edit_ligand.setText("stale.sdf")
     dlg.apply_prepare_result(result)
     assert dlg.edit_receptor.text() == str(rec)
-    assert dlg.edit_ligand.text() == str(lig)
+    assert dlg.combo_ligand_source.currentData() == "file"
+    assert dlg.edit_ligand.text() == ""
+    assert dlg._crystal_ligand_path == str(lig)
+    assert dlg._prepare_receptor_path == str(rec)
     assert dlg.edit_autobox_ligand.text() == str(lig_pdb)
+    assert dlg.edit_flexdist_ligand.text() == str(lig_pdb)
     assert dlg.autobox_cb.isChecked() is False
     assert dlg.spin_cx.value() == 1.5
     assert dlg.spin_sx.value() == 22.0
-    assert dlg.edit_out.text().endswith("rec_ligand_docked.sdf")
+    assert dlg.edit_out.text().endswith("rec_receptor_docked.sdf")
+    dlg.edit_ligand.setText("lig.sdf")
     argv = dlg._build_argv()
     assert argv[argv.index("--center_x") + 1] == "1.500"
     assert argv[argv.index("--size_x") + 1] == "22.00"
+    dlg.close()
+
+
+def test_apply_prepare_result_loads_output_pdbqt_as_receptor(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+
+    rec = tmp_path / "holo_smina.pdbqt"
+    rec.write_text("ATOM\n", encoding="utf-8")
+    result = ProteinPrepareResult(
+        output_path=str(rec),
+        receptor_pdbqt=str(rec),
+    )
+    dlg = GninaDockDialog(None)
+    dlg.edit_receptor.setText("stale.pdb")
+    dlg.apply_prepare_result(result)
+    assert dlg.edit_receptor.text() == str(rec)
+    assert dlg.edit_receptor.text().lower().endswith(".pdbqt")
+    dlg.close()
+
+
+def test_apply_prepare_result_skips_missing_output_pdbqt(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+
+    missing = tmp_path / "holo_smina.pdbqt"
+    result = ProteinPrepareResult(output_path=str(missing))
+    dlg = GninaDockDialog(None)
+    dlg.edit_receptor.setText("stale.pdb")
+    dlg.apply_prepare_result(result)
+    assert dlg.edit_receptor.text() == "stale.pdb"
+    dlg.close()
+
+
+def test_ensemble_column_headers_lists_confs_and_sidecar(qapp):  # noqa: ARG001
+    from molmanager.ui.gnina_dock import ensemble_column_headers
+
+    class _App:
+        headers = [
+            "ID_HIDDEN",
+            "Structure",
+            "SMILES",
+            "confs",
+            "confs_2",
+            "confidence",
+            "superpose",
+            "poses",
+            "extra_ens",
+        ]
+        _confs_blocks_sidecar = {(1, "extra_ens"): "x"}
+
+    names = ensemble_column_headers(_App())
+    assert names == ["confs", "confs_2", "superpose", "poses", "extra_ens"]
+
+
+def test_ligand_mol_from_ensemble_keeps_one_start(qapp):  # noqa: ARG001
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    from molmanager.ui.gnina_dock import ligand_mol_from_ensemble
+
+    mol = Chem.AddHs(Chem.MolFromSmiles("CCO"))
+    AllChem.EmbedMultipleConfs(mol, 2, randomSeed=1)
+    ligand = ligand_mol_from_ensemble(mol, 9)
+    assert ligand is not None
+    assert ligand.GetProp("_Name") == "9"
+    assert ligand.GetProp("Parent OID") == "9"
+    assert ligand.GetNumConformers() == 1
+
+
+def test_gnina_selected_rows_writes_confs_sdf(qapp, tmp_path):  # noqa: ARG001
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    from molmanager.confs_codec import pack_confs_cell
+    from molmanager.ui.gnina_dock import GninaDockDialog
+
+    mol = Chem.AddHs(Chem.MolFromSmiles("CCO"))
+    AllChem.EmbedMultipleConfs(mol, 2, randomSeed=1)
+    cell = pack_confs_cell({"n_packed": int(mol.GetNumConformers())}, mol)
+
+    class _Model:
+        def row_oid(self, _row):
+            return 7
+
+        def backing_value_for_row_header(self, _row, header):
+            return cell if header == "confs" else ""
+
+    class _App:
+        headers = ["ID_HIDDEN", "Structure", "SMILES", "confs"]
+        _confs_blocks_sidecar = {}
+        _table_model = _Model()
+
+        def _selected_logical_rows(self):
+            return [0]
+
+    dlg = GninaDockDialog(None)
+    dlg._main_window = _App()
+    dlg.combo_ligand_source.setCurrentIndex(dlg.combo_ligand_source.findData("rows"))
+    dlg._refresh_confs_columns()
+    dlg.combo_confs.setCurrentText("confs")
+    paths = dlg._prepare_table_row_ligands()
+    assert len(paths) == 1
+    assert paths[0].suffix.lower() == ".sdf"
+    mols = [m for m in Chem.SDMolSupplier(str(paths[0]), removeHs=False) if m is not None]
+    assert len(mols) == 1
+    assert mols[0].GetProp("_Name") == "7"
+    dlg.close()
+
+
+def test_gnina_selected_rows_requires_selection(qapp):  # noqa: ARG001
+    class _App:
+        headers = ["ID_HIDDEN", "Structure", "SMILES", "confs"]
+        _confs_blocks_sidecar = {}
+        _table_model = None
+
+        def _selected_logical_rows(self):
+            return []
+
+    dlg = GninaDockDialog(None)
+    dlg._main_window = _App()
+    dlg.combo_ligand_source.setCurrentIndex(dlg.combo_ligand_source.findData("rows"))
+    dlg.combo_confs.setCurrentText("confs")
+    try:
+        dlg._prepare_table_row_ligands()
+        raise AssertionError("expected missing selection")
+    except ValueError as exc:
+        assert "Select one or more table rows" in str(exc)
+    dlg.close()
+
+
+def test_build_argv_uses_apo_receptor_override(qapp):  # noqa: ARG001
+    dlg = _filled_dialog(qapp)
+    dlg._apo_receptor_path = "apo_rec.pdbqt"
+    argv = dlg._build_argv()
+    assert argv[argv.index("--receptor") + 1] == "apo_rec.pdbqt"
+    dlg.close()
+
+
+def test_setup_crystal_validation_strips_holo_pdb(qapp, tmp_path):  # noqa: ARG001
+    rec = tmp_path / "holo.pdb"
+    rec.write_text(
+        "ATOM      1  N   ALA A   1      11.104   6.134  10.000  1.00  0.00           N\n"
+        "ATOM      2  CA  ALA A   1      12.260   6.859  10.000  1.00  0.00           C\n"
+        "HETATM  100  O81 AXI A2000     -26.050  -1.540  -9.129  1.00 32.47           O\n"
+        "HETATM  101  C80 AXI A2000     -26.813  -2.112  -9.925  1.00 30.83           C\n"
+        "HETATM  201  O   HOH A2002     -11.000   1.000   0.000  1.00 30.00           O\n"
+        "END\n",
+        encoding="utf-8",
+    )
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    dlg = GninaDockDialog(None)
+    dlg.edit_receptor.setText(str(rec))
+    dlg._setup_crystal_validation(str(rec), durable_dir=outdir)
+    assert dlg._apo_receptor_path
+    apo_text = Path(dlg._apo_receptor_path).read_text(encoding="utf-8")
+    assert "AXI" not in apo_text
+    assert "ALA" in apo_text
+    assert dlg._validation_ligand_path
+    lig_text = Path(dlg._validation_ligand_path).read_text(encoding="utf-8")
+    assert "AXI" in lig_text or "crystal" in Path(dlg._validation_ligand_path).name.lower()
+    assert dlg._crystal_ref_mol is not None
+    dlg.close()
+
+
+def test_internal_validation_checkbox_defaults_on(qapp):  # noqa: ARG001
+    dlg = GninaDockDialog(None)
+    assert dlg.validate_crystal_cb.isChecked() is True
+    dlg.close()
+
+
+def test_setup_crystal_validation_off_strips_but_skips_redock(qapp, tmp_path):  # noqa: ARG001
+    rec = tmp_path / "holo.pdb"
+    rec.write_text(
+        "ATOM      1  N   ALA A   1      11.104   6.134  10.000  1.00  0.00           N\n"
+        "ATOM      2  CA  ALA A   1      12.260   6.859  10.000  1.00  0.00           C\n"
+        "HETATM  100  O81 AXI A2000     -26.050  -1.540  -9.129  1.00 32.47           O\n"
+        "HETATM  101  C80 AXI A2000     -26.813  -2.112  -9.925  1.00 30.83           C\n"
+        "END\n",
+        encoding="utf-8",
+    )
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    dlg = GninaDockDialog(None)
+    dlg.validate_crystal_cb.setChecked(False)
+    dlg.edit_receptor.setText(str(rec))
+    dlg._setup_crystal_validation(str(rec), durable_dir=outdir, validate=False)
+    assert dlg._apo_receptor_path
+    assert "AXI" not in Path(dlg._apo_receptor_path).read_text(encoding="utf-8")
+    assert dlg._validation_ligand_path == ""
+    assert dlg._crystal_ref_mol is None
+    dlg.close()
+
+
+def test_present_dock_results_title_includes_crystal_rmsd(qapp, tmp_path):  # noqa: ARG001
+    from rdkit import Chem
+    from rdkit.Chem import SDWriter
+
+    sdf = tmp_path / "docked.sdf"
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    writer = SDWriter(str(sdf))
+    writer.write(mol)
+    writer.close()
+    opened: list = []
+
+    class _Host:
+        def open_dock_results_window(self, mols, *, title="", receptor_path=None, **_kwargs):
+            opened.append(title)
+            return None
+
+    dlg = GninaDockDialog(None)
+    dlg._main_window = _Host()
+    dlg._crystal_rmsd = 1.25
+    rec = tmp_path / "rec.pdbqt"
+    rec.write_text("ATOM\n", encoding="utf-8")
+    dlg.edit_receptor.setText(str(rec))
+    dlg._present_dock_results(str(sdf))
+    assert opened
+    assert "crystal RMSD 1.250 Å" in opened[0]
+    dlg.close()
+
+
+def test_present_dock_results_stamps_crystal_ref(qapp, tmp_path):  # noqa: ARG001
+    from rdkit import Chem
+    from rdkit.Chem import SDWriter
+
+    from molmanager.dock_validation import CRYSTAL_REF_PROP
+
+    sdf = tmp_path / "docked.sdf"
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    writer = SDWriter(str(sdf))
+    writer.write(mol)
+    writer.close()
+    captured: list = []
+
+    class _Host:
+        def open_dock_results_window(self, mols, *, title="", receptor_path=None, **_kwargs):
+            captured.append(list(mols))
+            return None
+
+    dlg = GninaDockDialog(None)
+    dlg._main_window = _Host()
+    crystal = Chem.MolFromSmiles("CCO")
+    assert crystal is not None
+    crystal.SetProp("_Name", "AXI")
+    dlg._crystal_ref_mol = crystal
+    dlg._validation_ligand_path = str(tmp_path / "holo_smina_ligand.sdf")
+    rec = tmp_path / "rec.pdbqt"
+    rec.write_text("ATOM\n", encoding="utf-8")
+    dlg.edit_receptor.setText(str(rec))
+    dlg._present_dock_results(str(sdf))
+    assert captured
+    assert captured[0][0].GetProp(CRYSTAL_REF_PROP) == "AXI"
     dlg.close()

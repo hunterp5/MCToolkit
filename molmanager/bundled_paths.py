@@ -28,6 +28,7 @@ _PACKAGE_ROOT = Path(__file__).resolve().parent
 # Basenames searched under ``resources/bin/<platform>/`` (first match wins).
 _TOOL_BINARIES: dict[str, tuple[str, ...]] = {
     "smina": ("smina.exe", "smina"),
+    "gnina": ("gnina.exe", "gnina"),
     "obabel": ("obabel.exe", "obabel"),
     "mafft": ("mafft.bat", "mafft.exe", "mafft"),
 }
@@ -62,15 +63,24 @@ def resolve_bundled_executable(tool: str) -> Path | None:
     names = _TOOL_BINARIES.get(key)
     if not names:
         return None
-    base = bundled_bin_dir()
-    if not base.is_dir():
-        return None
-    for name in names:
-        candidate = base / name
-        if candidate.is_file():
-            return candidate
-    if key == "mafft":
-        return find_mafft_executable_in_tree(base)
+    bases = [bundled_bin_dir()]
+    override = (os.environ.get("MOLMANAGER_BUNDLE_DIR") or "").strip()
+    # Official Gnina is a Linux ELF; Windows still looks in bin/linux/ when no override.
+    if key == "gnina" and not override:
+        linux_dir = resources_dir() / "bin" / "linux"
+        if linux_dir not in bases:
+            bases.append(linux_dir)
+    for base in bases:
+        if not base.is_dir():
+            continue
+        for name in names:
+            candidate = base / name
+            if candidate.is_file():
+                return candidate
+        if key == "mafft":
+            hit = find_mafft_executable_in_tree(base)
+            if hit is not None:
+                return hit
     return None
 
 
@@ -190,6 +200,8 @@ def default_external_executable(tool: str) -> str:
         scripts_exe = _interpreter_scripts_executable(names)
         if scripts_exe is not None:
             return str(scripts_exe)
+        if key == "gnina" and sys.platform.startswith("win"):
+            return "gnina"
         if sys.platform.startswith("win"):
             return names[0]
         return names[-1]
@@ -301,6 +313,11 @@ def apply_openbabel_runtime_env(obabel_path: str = "") -> dict[str, str]:
 
 def smina_launch_env(exe: str) -> dict[str, str]:
     """Environment so Smina's OpenBabel can load format plugins and data files."""
+    return openbabel_launch_env(exe)
+
+
+def gnina_launch_env(exe: str) -> dict[str, str]:
+    """Environment so a native Gnina OpenBabel build can load format plugins."""
     return openbabel_launch_env(exe)
 
 

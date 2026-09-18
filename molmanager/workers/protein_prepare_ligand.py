@@ -654,8 +654,11 @@ def _prepare_ligands_for_gaff_cif(
     chem_atoms = parse_cif_chem_comp_atoms(cif_text)
     chem_bonds = parse_cif_chem_comp_bonds(cif_text)
     remaining = {atom.resn.upper() for atom in new_atoms if atom.resn}
+    mol_atoms, mol_bonds = chem_comp_tables_from_mols(mols)
     chem_atoms = {comp: rows for comp, rows in chem_atoms.items() if comp in remaining}
     chem_bonds = {comp: rows for comp, rows in chem_bonds.items() if comp in remaining}
+    chem_atoms.update(mol_atoms)
+    chem_bonds.update(mol_bonds)
     return mols, atoms_to_mmcif(
         new_atoms,
         remarks=cif_comment_remarks(cif_text),

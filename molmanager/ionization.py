@@ -215,19 +215,37 @@ def _nvidia_gpu_present() -> bool:
         return False
 
 
+def cpu_torch_with_nvidia_gpu() -> bool:
+    """True when nvidia-smi sees a GPU but this PyTorch wheel has no CUDA."""
+    if torch_is_cuda_build():
+        return False
+    return _nvidia_gpu_present()
+
+
+def cuda_pka_install_hint() -> str:
+    """User-facing steps to swap the CPU PyTorch wheel for CUDA Uni-pKa."""
+    return (
+        "An NVIDIA GPU was found, but this Python has a CPU-only PyTorch, "
+        "so Uni-pKa (Predict pKa, Protonate, LogD) runs on the CPU.\n\n"
+        "Close MolManager and, in the same virtual environment, run:\n"
+        "  Windows:      .\\scripts\\install_pytorch_pka.ps1\n"
+        "  macOS/Linux:  bash scripts/install_pytorch_pka.sh\n\n"
+        "Those scripts install the CUDA 12.4 wheel when nvidia-smi sees a GPU "
+        "(pass -Cpu / --cpu to keep the CPU wheel). Restart MolManager afterward."
+    )
+
+
 def warn_if_cuda_torch_missing() -> None:
     """Log once if an NVIDIA GPU is present but this PyTorch build cannot use it."""
     if os.environ.get("MOLMANAGER_UNIPKA_GPU_HINT_EMITTED"):
         return
-    if torch_is_cuda_build():
-        return
-    if not _nvidia_gpu_present():
+    if not cpu_torch_with_nvidia_gpu():
         return
     os.environ["MOLMANAGER_UNIPKA_GPU_HINT_EMITTED"] = "1"
     logger.warning(
         "NVIDIA GPU detected, but this PyTorch build is CPU-only. "
-        "Close MolManager and reinstall a CUDA wheel "
-        "(Windows: scripts\\install_pytorch_pka.ps1 -Cuda)."
+        "Close MolManager and run scripts\\install_pytorch_pka.ps1 "
+        "(or bash scripts/install_pytorch_pka.sh); CUDA is selected automatically."
     )
 
 

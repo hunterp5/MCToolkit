@@ -20,7 +20,7 @@
 from __future__ import annotations
 
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
@@ -35,6 +35,11 @@ COMPONENT_STYLE_CHOICES = (
     ("sphere", "Spheres"),
     ("line", "Wireframe"),
 )
+
+LIGAND_STYLE_CHOICES = tuple(
+    item for item in COMPONENT_STYLE_CHOICES if item[0] not in {"cartoon", "sphere"}
+)
+LIGAND_STYLE_IDS = {key for key, _label in LIGAND_STYLE_CHOICES}
 
 COMPONENT_COLOR_CHOICES = (
     ("default", "Default"),
@@ -84,6 +89,8 @@ class _ComponentView:
     selected: bool
     style: str
     color_scheme: str = "default"
+    loaded_style: str = ""
+    loaded_color_scheme: str = "default"
 
 
 @dataclass
@@ -94,6 +101,21 @@ class _LoadedSlot:
     text: str
     fmt: str
     rows: list[_ComponentView]
+
+
+def copy_loaded_slots(slots: list[_LoadedSlot]) -> list[_LoadedSlot]:
+    """Shallow-copy slot list and row lists for Manager delete undo/redo."""
+    return [
+        _LoadedSlot(
+            structure_id=slot.structure_id,
+            name=slot.name,
+            path=slot.path,
+            text=slot.text,
+            fmt=slot.fmt,
+            rows=[replace(row) for row in slot.rows],
+        )
+        for slot in slots
+    ]
 
 
 def _component_state_key(item) -> tuple[str, str, str, str, str]:

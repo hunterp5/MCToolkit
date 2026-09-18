@@ -62,6 +62,15 @@ LOADING_DETAIL_SESSION = (
     "Loading session…\n"
     "Restoring table, filters, and plots. 2D images continue after the workspace is shown."
 )
+LOADING_DETAIL_PROTEIN_VIEWER = (
+    "Loading structures…\nDrawing the 3D view. The window stays open while this finishes."
+)
+LOADING_DETAIL_PROTEIN_VIEWER_START = (
+    "Starting 3D view…\nThe window stays open while the canvas starts."
+)
+LOADING_DETAIL_PROTEIN_STRUCTURE = (
+    "Loading structure…\nDrawing the 3D view. The window stays open while this finishes."
+)
 
 DISCONNECT_FRAGMENTS_HELP = (
     "Split salts and multi-component entries, keep the largest fragment as the working molecule,\n"

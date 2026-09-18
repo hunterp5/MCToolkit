@@ -29,6 +29,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -99,6 +100,23 @@ class PdbFixerDialog(QDialog):
         self.chk_add_missing_atoms.setChecked(True)
         opt_form.addRow(self.chk_add_missing_atoms)
 
+        self.chk_skip_long_gaps = QCheckBox("Skip long missing stretches")
+        self.chk_skip_long_gaps.setChecked(True)
+        self.chk_skip_long_gaps.setToolTip(
+            "Do not rebuild SEQRES gaps longer than the residue limit (N-terminal "
+            "tags and disordered loops). PDBFixer cannot place those stretches well."
+        )
+        self.spin_max_gap = QSpinBox()
+        self.spin_max_gap.setRange(0, 80)
+        self.spin_max_gap.setValue(8)
+        self.spin_max_gap.setSuffix(" res")
+        gap_row = QWidget()
+        gap_l = QHBoxLayout(gap_row)
+        gap_l.setContentsMargins(0, 0, 0, 0)
+        gap_l.addWidget(self.chk_skip_long_gaps, 1)
+        gap_l.addWidget(self.spin_max_gap)
+        opt_form.addRow(gap_row)
+
         self.chk_add_hydrogens = QCheckBox("Add missing hydrogens at pH")
         self.chk_add_hydrogens.setChecked(True)
         self.chk_add_hydrogens.toggled.connect(self._sync_ph_enabled)
@@ -134,6 +152,8 @@ class PdbFixerDialog(QDialog):
         self._signals.failed.connect(self._on_failed)
 
         make_window_minimizable(self)
+        self.chk_skip_long_gaps.toggled.connect(self.spin_max_gap.setEnabled)
+        self.spin_max_gap.setEnabled(self.chk_skip_long_gaps.isChecked())
         self._sync_water_enabled()
         self._sync_ph_enabled()
 
@@ -206,6 +226,8 @@ class PdbFixerDialog(QDialog):
             add_missing_atoms=self.chk_add_missing_atoms.isChecked(),
             add_hydrogens=self.chk_add_hydrogens.isChecked(),
             ph=float(self.spin_ph.value()),
+            skip_long_gaps=self.chk_skip_long_gaps.isChecked(),
+            max_missing_gap=int(self.spin_max_gap.value()),
         )
 
         self.btn_run.setEnabled(False)

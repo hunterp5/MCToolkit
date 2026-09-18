@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QDialog,
     QMessageBox,
 )
 
@@ -176,21 +175,21 @@ class ConformersToolsMixin:
         )
 
     def cancel_active_tool_process(self) -> None:
-        """Request cooperative cancellation of the process-queue job, Render 2D, and/or Smina."""
+        """Request cooperative cancellation of the process-queue job, Render 2D, and/or Gnina."""
         r2d = self.cancel_render_2d_batch()
-        smina = self.cancel_smina_dock()
+        gnina = self.cancel_gnina_dock()
         pq_ok = self.process_queue.cancel_running()
         if pq_ok:
             self.status_label.setText("Cancelling…")
         elif r2d:
             self.status_label.setText("Render 2D cancelled.")
-        elif smina:
-            self.status_label.setText("Smina stopped.")
+        elif gnina:
+            self.status_label.setText("Gnina stopped.")
         else:
             QMessageBox.information(
                 self,
                 "Cancel Process",
-                "Nothing to cancel (no process-queue job, Render 2D batch, or Smina run), "
+                "Nothing to cancel (no process-queue job, Render 2D batch, or Gnina run), "
                 "or cancellation was already requested.",
             )
 
@@ -317,8 +316,11 @@ class ConformersToolsMixin:
             parent=self,
         )
         self._prepare_tool_dialog(d)
-        if d.exec_() != QDialog.Accepted:
-            return
+        d.setAttribute(Qt.WA_DeleteOnClose, True)
+        d.accepted.connect(lambda *_, dlg=d: self._on_superpose_dialog_accepted(dlg))
+        d.show()
+
+    def _on_superpose_dialog_accepted(self, d) -> None:
         if d.target() == "conformers":
             self._run_superpose_conformers(d)
         else:

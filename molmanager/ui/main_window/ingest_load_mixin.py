@@ -28,7 +28,12 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 from rdkit import Chem
 
 from ...config import load_config
-from ...confs_codec import demote_v1_cell_to_sidecar, mol_has_3d_coordinates, pack_confs_cell
+from ...confs_codec import (
+    demote_v1_cell_to_sidecar,
+    is_packed_ensemble_header,
+    mol_has_3d_coordinates,
+    pack_confs_cell,
+)
 from ...ingest_text import is_ingest_cell_batch
 from ..strings import LOADING_DETAIL_AFTER_FILE_READ, STATUS_READY_RENDER_2D, TOOL_RENDER_2D
 
@@ -373,7 +378,7 @@ class IngestLoadMixin:
         self._loading_detail.setText(
             f"Table built ({n:,} row(s)).\nPreparing table, then {TOOL_RENDER_2D}…"
         )
-        if "confs" in self.headers or "superpose" in self.headers:
+        if any(is_packed_ensemble_header(h) for h in self.headers):
             QTimer.singleShot(0, self._migrate_legacy_confs_cells_to_sidecar)
         QTimer.singleShot(0, self._deferred_post_ingest_follow_up)
 

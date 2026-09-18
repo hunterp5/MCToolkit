@@ -20,9 +20,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import QObject, Qt
+from PyQt5.QtCore import QEvent, QObject, Qt
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QTextEdit, QWidget
+from PyQt5.QtWidgets import (
+    QAbstractScrollArea,
+    QAbstractSpinBox,
+    QApplication,
+    QComboBox,
+    QDial,
+    QSlider,
+    QTextEdit,
+    QWidget,
+)
 
 
 def qobject_is_deleted(obj: Any) -> bool:
@@ -51,8 +60,90 @@ def apply_monospace_to_text_edit(w: QTextEdit) -> None:
     w.setFont(monospace_text_font())
 
 
+def append_viewer_log(viewer, text: str) -> None:
+    """Forward a progress line to Protein Viewer ``append_log`` when present."""
+    append = getattr(viewer, "append_log", None)
+    if callable(append):
+        append(text)
+
+
 def make_window_minimizable(widget: QWidget) -> None:
     """Add minimize and maximize buttons to a secondary top-level window (e.g. ``QDialog``)."""
     flags = widget.windowFlags()
     flags |= Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
     widget.setWindowFlags(flags)
+
+
+_WHEEL_STEALERS = (QAbstractSpinBox, QComboBox, QSlider, QDial)
+_WHEEL_FILTER_NAME = "molmanager_unfocused_wheel_passthrough"
+
+
+def _is_wheel_stealing_control(obj: object) -> bool:
+    return isinstance(obj, _WHEEL_STEALERS)
+
+
+def _control_should_accept_wheel(widget: QWidget) -> bool:
+    if widget.hasFocus():
+        return True
+    if isinstance(widget, QComboBox):
+        view = widget.view()
+        if view is not None and view.isVisible():
+            return True
+    return False
+
+
+def _nearest_scroll_area(widget: QWidget) -> QAbstractScrollArea | None:
+    parent = widget.parentWidget()
+    while parent is not None:
+        if isinstance(parent, QAbstractScrollArea):
+            return parent
+        parent = parent.parentWidget()
+    return None
+
+
+class _UnfocusedWheelPassthroughFilter(QObject):
+    """Let page scroll win over spin boxes / combos that the cursor happens to cover."""
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._forwarding = False
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # noqa: N802
+        if self._forwarding or event.type() != QEvent.Wheel:
+            return False
+        if not _is_wheel_stealing_control(obj):
+            return False
+        widget = obj
+        if not isinstance(widget, QWidget) or _control_should_accept_wheel(widget):
+            return False
+        scroll = _nearest_scroll_area(widget)
+        target = scroll.viewport() if scroll is not None else widget.parentWidget()
+        if target is None:
+            event.ignore()
+            return True
+        self._forwarding = True
+        try:
+            QApplication.sendEvent(target, event)
+        finally:
+            self._forwarding = False
+        return True
+
+
+def install_unfocused_wheel_passthrough(app: QApplication | None = None) -> QObject | None:
+    """Stop hover-wheel from editing spin boxes and combo boxes; keep scrolling the page.
+
+    Qt's ``QAbstractSpinBox`` and ``QComboBox`` accept wheel events on hover (even without
+    focus), which traps scrolling in Prepare and other tall forms. After a click, wheel
+    still changes the focused control.
+    """
+    if app is None:
+        app = QApplication.instance()
+    if app is None:
+        return None
+    existing = app.findChild(_UnfocusedWheelPassthroughFilter, _WHEEL_FILTER_NAME)
+    if existing is not None and not qobject_is_deleted(existing):
+        return existing
+    filt = _UnfocusedWheelPassthroughFilter(app)
+    filt.setObjectName(_WHEEL_FILTER_NAME)
+    app.installEventFilter(filt)
+    return filt

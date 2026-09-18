@@ -35,6 +35,7 @@ from PyQt5.QtWidgets import (
 
 from ..dockable_plot import (
     PLOT_PANEL_BASE_MINIMUM_WIDTH,
+    _FOOTER_TEXT_FONT_PX,
     _GLYPH_BTN_SIZE,
     adopt_dock_header_buttons,
     embed_in_plot_pane,
@@ -115,7 +116,9 @@ class PlotPane(QFrame):
         self._page_label.setAlignment(Qt.AlignCenter)
         self._page_label.setFixedWidth(38)
         self._page_label.setFixedHeight(_GLYPH_BTN_SIZE)
-        self._page_label.setStyleSheet("QLabel { font-size: 10px; padding: 0px 1px; }")
+        self._page_label.setStyleSheet(
+            f"QLabel {{ font-size: {_FOOTER_TEXT_FONT_PX}px; padding: 0px 1px; }}"
+        )
         nav_ly.addWidget(self._prev_btn)
         nav_ly.addWidget(self._next_btn)
         nav_ly.addWidget(self._title_edit)
@@ -182,7 +185,7 @@ class PlotPane(QFrame):
         self._close_btn.setStyleSheet(
             "QPushButton {"
             " color: #c0392b;"
-            " font-size: 12px;"
+            f" font-size: {_FOOTER_TEXT_FONT_PX + 2}px;"
             " font-weight: 700;"
             " padding: 0px;"
             " }"

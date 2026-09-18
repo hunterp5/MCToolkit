@@ -26,8 +26,8 @@ python -m pip install -e .
 
 if [[ -f scripts/install_pytorch_pka.sh ]]; then
   echo ""
-  echo "If pKa prediction fails (torch version conflict), run:"
-  echo "  bash scripts/install_pytorch_pka.sh"
+  echo "Configuring Uni-pKa PyTorch (CUDA automatically if nvidia-smi sees an NVIDIA GPU)..."
+  bash scripts/install_pytorch_pka.sh --skip-requirements
 fi
 
 read -r -p "Download GNN-MTL permeability model weights? [y/N] " perm
@@ -45,6 +45,6 @@ PLAT=linux
 BINDIR="$ROOT/molmanager/resources/bin/$PLAT"
 echo ""
 echo "Optional executables (copy into): $BINDIR"
-echo "  vina / smina  - https://vina.scripps.edu"
+echo "  gnina  - https://github.com/gnina/gnina (Linux binary; WSL on Windows)"
 echo ""
 echo "Or set MOLMANAGER_BUNDLE_DIR. Run: python -m molmanager"

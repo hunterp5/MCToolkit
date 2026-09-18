@@ -143,6 +143,7 @@ def test_protein_menu_has_viewer_and_sequence(qapp):  # noqa: ARG001
     labels = [a.text().replace("&", "") for a in protein_menu.actions()]
     assert "Viewer" in labels
     assert any(lab.startswith("Sequence") for lab in labels)
+    assert "Dock Ligand" in labels
     dlg = w.open_protein_sequence()
     assert isinstance(dlg, ProteinSequenceMsaDialog)
     assert dlg.windowTitle() == "Protein Sequence"

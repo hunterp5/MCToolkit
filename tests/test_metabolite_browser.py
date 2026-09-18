@@ -109,10 +109,14 @@ def test_metabolite_browser_nav_buttons_in_footer(qapp) -> None:  # noqa: ARG001
     w.set_records(recs)
     assert w._nav_bar is not None
     assert w._footer_bar is not None
-    assert w._btn_first.text() == "<<"
-    assert w._btn_back.text() == "←"
-    assert w._btn_fwd.text() == "→"
-    assert w._btn_last.text() == ">>"
+    assert w._btn_first.text() == ""
+    assert w._btn_back.text() == ""
+    assert w._btn_fwd.text() == ""
+    assert w._btn_last.text() == ""
+    assert w._btn_select.text() == ""
+    assert not w._btn_first.icon().isNull()
+    assert not w._btn_back.icon().isNull()
+    assert not w._btn_select.icon().isNull()
     root = w.layout()
     nav_index = root.indexOf(w._nav_bar)
     table_index = root.indexOf(w._table)
@@ -121,9 +125,11 @@ def test_metabolite_browser_nav_buttons_in_footer(qapp) -> None:  # noqa: ARG001
     assert preview_index < table_index < nav_index < footer_index
     assert w._cb_only_selected.parent() is w._footer_bar
     assert "1 / 2" in w._meta.text()
+    table_h = w._table.height()
     w._step(1)
     assert "2 / 2" in w._meta.text()
     assert w._canvas_smiles == "c1ccccc1"
+    assert w._table.height() == table_h
     w._go_first()
     assert "1 / 2" in w._meta.text()
     w.close()

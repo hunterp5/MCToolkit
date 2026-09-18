@@ -23,7 +23,11 @@ from pathlib import Path
 import pytest
 
 from molmanager.docking_box import box_from_points, smina_artifact_paths
-from molmanager.workers.protein_prepare_smina import write_smina_prepare_artifacts
+from molmanager.workers.protein_prepare_smina import (
+    ligand_keys_from_structure,
+    write_dock_file_artifacts,
+    write_smina_prepare_artifacts,
+)
 
 _HOLO_PDB = """\
 ATOM      1  N   ALA A   1      11.104   6.134  10.000  1.00  0.00           N
@@ -58,6 +62,37 @@ def test_smina_artifact_paths():
     assert paths["ligand_sdf"].name == "4AGC_prepared_ligand.sdf"
     assert paths["ligand_pdb"].name == "4AGC_prepared_ligand.pdb"
     assert paths["box"].name == "4AGC_prepared_box.txt"
+    dock = smina_artifact_paths(Path("out") / "holo_smina.pdbqt")
+    assert dock["receptor_pdbqt"].name == "holo_smina.pdbqt"
+    assert dock["ligand_sdf"].name == "holo_smina_ligand.sdf"
+
+
+def test_protein_prepare_result_receptor_pdbqt_path():
+    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+
+    result = ProteinPrepareResult(
+        output_path="holo_smina.pdbqt",
+        receptor_pdbqt="holo_smina.pdbqt",
+    )
+    assert result.receptor_pdbqt_path() == "holo_smina.pdbqt"
+    sidecar = ProteinPrepareResult(
+        output_path="holo_smina.cif",
+        receptor_pdbqt="holo_smina_receptor.pdbqt",
+    )
+    assert sidecar.receptor_pdbqt_path() == "holo_smina_receptor.pdbqt"
+    missing = ProteinPrepareResult(output_path="holo.cif")
+    assert missing.receptor_pdbqt_path() == ""
+    ghost = ProteinPrepareResult(output_path="holo_smina.pdbqt")
+    assert ghost.receptor_pdbqt_path() == ""
+
+
+def test_protein_prepare_result_output_pdbqt_fallback_requires_file(tmp_path):
+    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+
+    rec = tmp_path / "holo_smina.pdbqt"
+    rec.write_text("ATOM\n", encoding="utf-8")
+    result = ProteinPrepareResult(output_path=str(rec))
+    assert result.receptor_pdbqt_path() == str(rec)
 
 
 def test_write_smina_artifacts_holo_skips_water(tmp_path, monkeypatch):
@@ -214,3 +249,29 @@ def test_write_smina_artifacts_missing_gemmi_keeps_box(tmp_path, monkeypatch):
     assert result.ligand_pdb
     assert result.can_open_smina()
     assert "pip install gemmi" in result.warning
+
+
+def test_write_dock_file_artifacts_from_holo(tmp_path, monkeypatch):
+    def _fake_write(_pdb_path, out_path):
+        Path(out_path).write_text("REMARK  test\n", encoding="utf-8")
+        return "", []
+
+    monkeypatch.setattr(
+        "molmanager.workers.pdbqt_generator._write_receptor_pdbqt_file",
+        _fake_write,
+    )
+    keys = ligand_keys_from_structure(_HOLO_PDB, "pdb")
+    assert ("A", "2000", "") in keys
+    out = tmp_path / "holo_smina.cif"
+    result = write_dock_file_artifacts(
+        text=_HOLO_PDB,
+        fmt="pdb",
+        output_path=out,
+        box_ligand_keys={("A", "2000", "")},
+        padding=4.0,
+    )
+    assert result.receptor_pdbqt
+    assert Path(result.receptor_pdbqt).is_file()
+    assert result.box is not None
+    assert result.ligand_pdb
+    assert result.can_open_smina()

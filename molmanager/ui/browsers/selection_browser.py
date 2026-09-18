@@ -20,20 +20,23 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import QItemSelectionModel, Qt, QTimer, QEvent, QSize
-from PyQt5.QtGui import QImage, QKeySequence, QPixmap
+from PyQt5.QtCore import QEvent, QItemSelectionModel, QSize, Qt, QTimer
+from PyQt5.QtGui import QBrush, QFont, QIcon, QImage, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QDialog,
     QFormLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLayout,
     QPushButton,
     QShortcut,
     QSizePolicy,
-    QSpinBox,
+    QStyle,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -46,6 +49,7 @@ from ..compound_table_model import CompoundTableModel
 from ..dockable_plot import (
     PLOT_BODY_MARGINS,
     PLOT_BODY_SPACING,
+    _GLYPH_BTN_SIZE,
     discard_host_dialog_after_dock,
     make_add_to_main_button,
     make_plot_options_button,
@@ -53,15 +57,15 @@ from ..dockable_plot import (
     make_send_window_button,
     request_close_plot_widget,
     show_plot_options_dialog,
+    add_centered_browser_nav,
+    style_browser_nav_buttons,
     style_plot_footer_text_button,
-)
-from ..property_columns_panel import (
-    PROPERTY_COLUMN_SLOT_COUNT,
-    PROPERTY_COLUMN_SLOT_MAX,
-    PropertyColumnsPanel,
 )
 from ..qt_widget_utils import make_window_minimizable
 from ..table_selection import item_selection_for_view_rows
+
+_ROW_TABLE_PIXMAP_MAX = QSize(48, 36)
+_ROW_TABLE_ROW_HEIGHT = _ROW_TABLE_PIXMAP_MAX.height() + 8
 
 
 class SelectionBrowserWidget(QWidget):
@@ -114,18 +118,36 @@ class SelectionBrowserWidget(QWidget):
         self._preview_3d_mode = False
         root.addWidget(self._preview_host, 1)
 
-        self._meta = QLabel()
-        self._meta.setAlignment(Qt.AlignCenter)
-        self._meta.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        root.addWidget(self._meta)
-
         self._options_host = QWidget(self)
         options_ly = QVBoxLayout(self._options_host)
         options_ly.setContentsMargins(0, 0, 0, 0)
         options_ly.setSpacing(0)
-        self._prop_panel = PropertyColumnsPanel(self._options_host)
-        self._prop_panel.bind_app(self._app)
-        options_ly.addWidget(self._prop_panel)
+        self._row_table = QTableWidget(0, 0, self._options_host)
+        self._row_table.setObjectName("BrowserRowTable")
+        self._row_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._row_table.setSelectionBehavior(QAbstractItemView.SelectItems)
+        self._row_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._row_table.setFocusPolicy(Qt.NoFocus)
+        self._row_table.verticalHeader().setVisible(False)
+        self._row_table.horizontalHeader().setHighlightSections(False)
+        self._row_table.horizontalHeader().setStretchLastSection(True)
+        self._row_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self._row_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._row_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._row_table.setWordWrap(False)
+        self._row_table.setShowGrid(True)
+        self._row_table.setIconSize(_ROW_TABLE_PIXMAP_MAX)
+        self._row_table.verticalHeader().setDefaultSectionSize(_ROW_TABLE_ROW_HEIGHT)
+        self._row_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._row_table.setStyleSheet(
+            "QTableWidget { background-color: palette(base); "
+            "border: 1px solid palette(mid); border-radius: 4px; }"
+        )
+        options_ly.addWidget(self._row_table)
+        bar = self._row_table.horizontalScrollBar()
+        if bar is not None:
+            bar.rangeChanged.connect(lambda *_a: self._fit_row_table_height())
+        self._fit_row_table_height()
         root.addWidget(self._options_host)
         self._options_visible = True
 
@@ -142,46 +164,83 @@ class SelectionBrowserWidget(QWidget):
         self._btn_fwd.setToolTip("Next eligible row (→)")
         self._btn_last = QPushButton(">>")
         self._btn_last.setToolTip("Last eligible row in scope (End)")
-        row_btns.addWidget(self._btn_first)
-        row_btns.addWidget(self._btn_back)
-        row_btns.addWidget(self._btn_fwd)
-        row_btns.addWidget(self._btn_last)
-        self._btn_toggle_select = QPushButton("Select")
+        self._btn_toggle_select = QPushButton()
         self._btn_toggle_select.setToolTip("Select or deselect this row in the table")
-        row_btns.addWidget(self._btn_toggle_select)
-        row_btns.addWidget(self._cb_only_selected)
-        row_btns.addStretch(1)
+        style_browser_nav_buttons(
+            self._btn_first,
+            self._btn_back,
+            self._btn_fwd,
+            self._btn_last,
+            self._btn_toggle_select,
+            select_checkable=True,
+        )
+        add_centered_browser_nav(
+            row_btns,
+            [
+                self._btn_first,
+                self._btn_back,
+                self._btn_fwd,
+                self._btn_last,
+                self._btn_toggle_select,
+            ],
+            trailing=self._cb_only_selected,
+        )
         root.addWidget(self._nav_bar)
 
         self._footer_bar = QWidget(self)
         self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self._footer_bar.setMinimumHeight(_GLYPH_BTN_SIZE)
         foot = QHBoxLayout(self._footer_bar)
         foot.setContentsMargins(0, 0, 0, 0)
         foot.setSpacing(4)
+
+        # Equal-stretch side strips keep the caption geometrically centered.
+        self._header_left = QWidget(self._footer_bar)
+        self._header_left.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        left_ly = QHBoxLayout(self._header_left)
+        left_ly.setContentsMargins(0, 0, 0, 0)
+        left_ly.setSpacing(4)
         self._opts_btn = make_plot_options_button(
             self,
-            tooltip="Browser settings: data fields and options visibility.",
+            tooltip="Browser settings: row table and 3D preview.",
         )
         self._opts_btn.clicked.connect(self._open_browser_options)
-        foot.addWidget(self._opts_btn)
-        foot.addStretch(1)
+        left_ly.addWidget(self._opts_btn)
+        left_ly.addStretch(1)
+
+        self._meta = QLabel(self._footer_bar)
+        self._meta.setAlignment(Qt.AlignCenter)
+        self._meta.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        self._meta.setMinimumHeight(_GLYPH_BTN_SIZE)
+
+        self._header_right = QWidget(self._footer_bar)
+        self._header_right.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        right_ly = QHBoxLayout(self._header_right)
+        right_ly.setContentsMargins(0, 0, 0, 0)
+        right_ly.setSpacing(4)
+        right_ly.addStretch(1)
         self._add_to_main_btn = make_add_to_main_button(
             self,
             tooltip="Dock this browser beside the compound table.",
         )
         self._add_to_main_btn.clicked.connect(self._add_to_main_window)
-        foot.addWidget(self._add_to_main_btn)
+        right_ly.addWidget(self._add_to_main_btn)
         self._send_window_btn = make_send_window_button(
             self,
             tooltip="Open this docked browser in a separate floating window.",
         )
         self._send_window_btn.clicked.connect(self._send_to_new_window)
-        foot.addWidget(self._send_window_btn)
+        right_ly.addWidget(self._send_window_btn)
         self._close_btn = QPushButton("Close")
         self._close_btn.setToolTip("Close this browser.")
         self._close_btn.clicked.connect(self._close_docked_browser)
         style_plot_footer_text_button(self._close_btn)
-        foot.addWidget(self._close_btn)
+        right_ly.addWidget(self._close_btn)
+
+        foot.addWidget(self._header_left, 1)
+        foot.addWidget(self._meta, 0)
+        foot.addWidget(self._header_right, 1)
+        self._apply_header_caption_font()
         root.insertWidget(0, self._footer_bar)
 
         self._opts_panel = QWidget(self)
@@ -191,7 +250,8 @@ class SelectionBrowserWidget(QWidget):
         opts_form.setVerticalSpacing(8)
         self._cb_hide_options = QCheckBox("Hide Options")
         self._cb_hide_options.setToolTip(
-            "Hide column pickers so only the structure preview and navigation controls are shown."
+            "Hide the current-row table so only the structure preview and navigation "
+            "controls are shown."
         )
         self._cb_hide_options.toggled.connect(self._on_hide_options_toggled)
         opts_form.addRow(self._cb_hide_options)
@@ -202,20 +262,12 @@ class SelectionBrowserWidget(QWidget):
         )
         self._cb_view_3d.toggled.connect(self._on_view_3d_toggled)
         opts_form.addRow(self._cb_view_3d)
-        self._spin_field_count = QSpinBox()
-        self._spin_field_count.setRange(0, PROPERTY_COLUMN_SLOT_MAX)
-        self._spin_field_count.setValue(PROPERTY_COLUMN_SLOT_COUNT)
-        self._spin_field_count.setToolTip(
-            "How many table data fields to show under the structure preview."
-        )
-        self._spin_field_count.valueChanged.connect(self._on_field_count_changed)
-        opts_form.addRow("Data fields:", self._spin_field_count)
         self._opts_dialog = make_plot_options_dialog(
             self,
             self._opts_panel,
             title="Browser Settings",
             min_width=320,
-            min_height=180,
+            min_height=140,
         )
 
         self._btn_first.clicked.connect(self._go_first)
@@ -257,7 +309,7 @@ class SelectionBrowserWidget(QWidget):
         """Update the host app after dock/undock."""
         self.parent_app = parent_app
         self._app = parent_app
-        self._prop_panel.bind_app(parent_app)
+        self._refresh_row_table()
 
     def embedded_minimum_width(self) -> int:
         return max(360, BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH // 2)
@@ -319,10 +371,29 @@ class SelectionBrowserWidget(QWidget):
             return bool(check(self))
         return False
 
+    def _apply_header_caption_font(self) -> None:
+        """Use the compound-table header font so the caption matches header chrome."""
+        meta = getattr(self, "_meta", None)
+        if meta is None:
+            return
+        font = None
+        table = getattr(self._app, "table", None) if self._app is not None else None
+        if table is not None:
+            header = table.horizontalHeader()
+            if header is not None:
+                try:
+                    font = QFont(header.font())
+                except RuntimeError:
+                    font = None
+        if font is None:
+            font = QFont(self.font())
+        meta.setFont(font)
+
     def _sync_footer_chrome(self) -> None:
         from ..dockable_plot import apply_plot_chrome_glyphs, sync_docked_footer_bar
 
         apply_plot_chrome_glyphs(self)
+        self._apply_header_caption_font()
         floating = isinstance(self.window(), SelectionBrowserDialog)
         docked = self._is_docked_in_main_window()
         self._add_to_main_btn.setVisible(floating)
@@ -336,13 +407,11 @@ class SelectionBrowserWidget(QWidget):
                 ensure()
 
     def _sync_options_chrome(self) -> None:
-        """Show or hide property column pickers from Browser Settings."""
+        """Show or hide the current-row table from Browser Settings."""
         visible = bool(getattr(self, "_options_visible", True))
-        spin = getattr(self, "_spin_field_count", None)
-        count = int(spin.value()) if spin is not None else 1
         host = getattr(self, "_options_host", None)
         if host is not None:
-            host.setVisible(visible and count > 0)
+            host.setVisible(visible)
         cb = getattr(self, "_cb_hide_options", None)
         if cb is not None and cb.isChecked() == visible:
             cb.blockSignals(True)
@@ -394,12 +463,6 @@ class SelectionBrowserWidget(QWidget):
             view = getattr(self, "_view_3d", None)
             if view is not None:
                 view.hide()
-
-    def _on_field_count_changed(self, value: int) -> None:
-        panel = getattr(self, "_prop_panel", None)
-        if panel is not None:
-            panel.set_visible_slot_count(int(value))
-        self._sync_options_chrome()
 
     def _open_browser_options(self) -> None:
         show_plot_options_dialog(getattr(self, "_opts_dialog", None))
@@ -488,7 +551,7 @@ class SelectionBrowserWidget(QWidget):
                     cur_oid = int(app._table_model.row_oid(row))
                 except Exception:
                     cur_oid = None
-        self._refresh_property_columns()
+        self._refresh_row_table()
         self._rows = self._rows_for_scope(app)
         self._idx = 0
         if self._rows:
@@ -615,8 +678,101 @@ class SelectionBrowserWidget(QWidget):
         self._meta.setText(f"{scope}: {self._idx + 1} / {n}  ·  Row {logical_row + 1}")
         self._update_property_values()
 
-    def _refresh_property_columns(self) -> None:
-        self._prop_panel.refresh_columns()
+    def _visible_data_columns(self) -> list[tuple[int, str]]:
+        """Visible non-structure table columns in visual order."""
+        app = self._app
+        headers = list(getattr(app, "headers", []) or [])
+        table = getattr(app, "table", None)
+        vis_fn = getattr(app, "_visual_logical_columns", None)
+        logical = vis_fn() if callable(vis_fn) else list(range(len(headers)))
+        out: list[tuple[int, str]] = []
+        for i in logical:
+            if i < 0 or i >= len(headers):
+                continue
+            name = str(headers[i])
+            if name in ("ID_HIDDEN", "Structure"):
+                continue
+            if table is not None:
+                try:
+                    if table.isColumnHidden(i):
+                        continue
+                except RuntimeError:
+                    pass
+            out.append((i, name))
+        return out
+
+    def _refresh_row_table(self) -> None:
+        """Rebuild the one-row table headers from the main compound table."""
+        table = getattr(self, "_row_table", None)
+        if table is None:
+            return
+        cols = self._visible_data_columns()
+        names = [name for _i, name in cols]
+        table.blockSignals(True)
+        table.setColumnCount(len(names))
+        table.setHorizontalHeaderLabels(names)
+        table.blockSignals(False)
+        self._fill_row_table()
+
+    def _row_table_item_for_cell(self, logical_row: int, col: int) -> QTableWidgetItem:
+        app = self._app
+        model = getattr(app, "_table_model", None)
+        item = QTableWidgetItem()
+        item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+        if model is None:
+            return item
+        index = model.index(logical_row, col)
+        pix = model.data(index, Qt.DecorationRole)
+        if isinstance(pix, QPixmap) and not pix.isNull():
+            scaled = pix.scaled(
+                _ROW_TABLE_PIXMAP_MAX,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+            item.setIcon(QIcon(scaled))
+            item.setText("")
+        else:
+            cell_fn = getattr(app, "_table_cell_text", None)
+            text = ""
+            if callable(cell_fn):
+                text = (cell_fn(logical_row, col) or "").strip()
+            if not text:
+                text = (model.cell_text(logical_row, col) or "").strip()
+            item.setText(text)
+            if text:
+                item.setToolTip(text)
+        bg = model.data(index, Qt.BackgroundRole)
+        if bg is not None:
+            item.setBackground(bg if isinstance(bg, QBrush) else QBrush(bg))
+        return item
+
+    def _fit_row_table_height(self) -> None:
+        table = getattr(self, "_row_table", None)
+        if table is None:
+            return
+        hdr_h = int(table.horizontalHeader().sizeHint().height())
+        frame = 2 * int(table.frameWidth())
+        style = table.style()
+        extent = int(style.pixelMetric(QStyle.PM_ScrollBarExtent, None, table))
+        bar = table.horizontalScrollBar()
+        hinted = int(bar.sizeHint().height()) if bar is not None else 0
+        scroll = max(extent, hinted, 16)
+        table.setFixedHeight(hdr_h + _ROW_TABLE_ROW_HEIGHT + frame + scroll + 4)
+
+    def _fill_row_table(self) -> None:
+        table = getattr(self, "_row_table", None)
+        if table is None:
+            return
+        cols = self._visible_data_columns()
+        row = self._current_row()
+        table.blockSignals(True)
+        table.setRowCount(0 if row is None else 1)
+        if row is not None:
+            for i, (col, _name) in enumerate(cols):
+                table.setItem(0, i, self._row_table_item_for_cell(row, col))
+            table.setRowHeight(0, _ROW_TABLE_ROW_HEIGHT)
+        table.blockSignals(False)
+        self._fit_row_table_height()
 
     def _current_row(self) -> int | None:
         if not self._rows:
@@ -687,24 +843,22 @@ class SelectionBrowserWidget(QWidget):
             self._sync_select_button()
 
     def _update_property_values(self) -> None:
-        r = self._current_row()
-        oid = None
-        if r is not None:
-            try:
-                oid = int(self._app._table_model.row_oid(r))
-            except Exception:
-                oid = None
-        self._prop_panel.set_source_oid(oid)
+        self._fill_row_table()
         self._sync_select_button()
 
     def _sync_select_button(self) -> None:
         r = self._current_row()
         if r is None:
             self._btn_toggle_select.setEnabled(False)
-            self._btn_toggle_select.setText("Select")
+            self._btn_toggle_select.setChecked(False)
+            self._btn_toggle_select.setToolTip("Select or deselect this row in the table")
             return
         self._btn_toggle_select.setEnabled(True)
-        self._btn_toggle_select.setText("Deselect" if self._is_row_selected(r) else "Select")
+        selected = self._is_row_selected(r)
+        self._btn_toggle_select.setChecked(selected)
+        self._btn_toggle_select.setToolTip(
+            "Deselect this row in the table" if selected else "Select this row in the table"
+        )
 
     def _structure_pixmap(self, logical_row: int):
         m = self._app._table_model
@@ -819,6 +973,8 @@ class SelectionBrowserWidget(QWidget):
             view = getattr(self, "_view_3d", None)
             if view is not None:
                 view.clear()
+            self._fill_row_table()
+            self._sync_select_button()
             return
         self._idx = max(0, min(self._idx, n - 1))
         self._idx = self._first_navigable_index(self._idx, +1)

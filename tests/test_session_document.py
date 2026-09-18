@@ -85,6 +85,35 @@ def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
     assert doc2["table_layout"]["workspace"]["layout_id"] == doc2["workspace_layout"]["layout_id"]
 
 
+def test_build_session_document_keeps_only_selected_oids(qapp):  # noqa: ARG001
+    from molmanager.session_codec import (
+        dumps_session_document,
+        expand_session_document,
+        loads_session_bytes,
+    )
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
+    w._table_model.append_row(1, {"SMILES": "CCO", "Note": "ethanol"})
+    w.mols[0] = Chem.MolFromSmiles("CC")
+    w.mols[1] = Chem.MolFromSmiles("CCO")
+    w.next_oid = 2
+    w.zoomed_ids = {0, 1}
+    w._confs_blocks_sidecar = {(0, "confs"): "aaa", (1, "confs"): "bbb"}
+
+    doc = w._build_session_document(oids={1})
+    assert doc["ids"] == [1]
+    sidecar = doc.get("confs_sidecar") or {}
+    assert "1:confs" in sidecar
+    assert "0:confs" not in sidecar
+
+    doc2 = expand_session_document(loads_session_bytes(dumps_session_document(doc)))
+    assert [row["id"] for row in doc2["rows"]] == [1]
+    assert doc2.get("zoomed_ids") == [1]
+
+
 def test_apply_session_document_restores_row(qapp):  # noqa: ARG001
     w = ChemicalTableApp()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
@@ -179,6 +208,36 @@ def test_session_rows_parse_prefers_mol_binary_over_smiles(qapp):  # noqa: ARG00
     result = captured[0]
     assert isinstance(result, SessionRowsParseResult)
     assert mol_to_canonical_smiles(result.mols[1]) == mol_to_canonical_smiles(parent)
+
+
+def test_decode_session_mols_prefers_blob_over_smiles():
+    from molmanager.utils import mol_graph_binary, mol_to_canonical_smiles
+    from molmanager.workers.session_rows_parse import decode_session_mols
+
+    parent = Chem.MolFromSmiles("CCO")
+    blob = mol_graph_binary(parent)
+    jobs = [(i, blob, "not-a-smiles") for i in range(40)]
+    mols = decode_session_mols(jobs)
+    assert len(mols) == 40
+    expected = mol_to_canonical_smiles(parent)
+    for oid in range(40):
+        assert mol_to_canonical_smiles(mols[oid]) == expected
+
+
+def test_session_gui_chunk_covers_typical_library(qapp):  # noqa: ARG001
+    w = ChemicalTableApp()
+    assert w._session_gui_chunk_size() >= 4096
+
+
+def test_session_plots_ready_without_waiting_for_webengine(qapp):  # noqa: ARG001
+    class _Host:
+        _web_ready = False
+        _pending_payload_json = "{}"
+
+    w = ChemicalTableApp()
+    w._iter_active_plot_hosts = lambda: [_Host()]
+    assert w._session_plots_ready_for_reveal() is True
+    assert w._session_plot_host_waiting_for_web(_Host()) is True
 
 
 def test_session_roundtrip_keeps_structure_independent_of_protonated(qapp):  # noqa: ARG001
@@ -1142,6 +1201,7 @@ def test_session_roundtrip_restores_protein_viewer(qapp, tmp_path) -> None:  # n
     dlg.add_structure_path(second, refit=False)
     lig = next(r for r in dlg._slots[0].rows if r.spec.kind == "ligand")
     dlg._on_visibility_changed(lig.spec.component_id, False)
+    assert dlg.save_viewer_to_session() is True
 
     doc = w._build_session_document()
     pv = doc.get("protein_viewer")
@@ -1150,15 +1210,19 @@ def test_session_roundtrip_restores_protein_viewer(qapp, tmp_path) -> None:  # n
 
     w2 = ChemicalTableApp()
     w2._apply_session_document(doc)
-    dlg2 = w2._protein_viewer_dialog
+    assert w2._protein_viewer_dialog is None
+    assert [s["name"] for s in w2._collect_protein_viewer()["structures"]] == [
+        "first.pdb",
+        "second.pdb",
+    ]
+    dlg2 = w2.open_protein_viewer()
     assert dlg2 is not None
-    assert dlg2.isVisible() is False
+    assert dlg2.isVisible() is True
     assert [slot.name for slot in dlg2._slots] == ["first.pdb", "second.pdb"]
     assert dlg2.manager.tree.topLevelItemCount() == 2
     hidden = next(r for r in dlg2._slots[0].rows if r.spec.kind == "ligand")
     assert hidden.visible is False
     opened = w2.open_protein_viewer()
     assert opened is dlg2
-    assert dlg2.isVisible() is True
     w.close()
     w2.close()

@@ -54,6 +54,7 @@ def test_catalog_includes_key_dois() -> None:
         "10.1093/bioinformatics/btu829",
         "10.1093/molbev/mst010",
         "10.1186/s13321-018-0324-5",
+        "10.1186/s13321-021-00548-6",
     ):
         assert doi in html_all
     fame = tool_citation("fame3r")
@@ -79,10 +80,10 @@ def test_open_citations_dialog_reuses_window(qapp):  # noqa: ARG001
     from PyQt5.QtWidgets import QWidget
 
     host = QWidget()
-    open_citations_dialog(host, tool_id="smina")
+    open_citations_dialog(host, tool_id="gnina")
     dlg = host._citations_dialog
     assert dlg is not None
-    assert "Smina" in dlg.windowTitle()
+    assert "Gnina" in dlg.windowTitle()
     open_citations_dialog(host, tool_id="rdkit")
     assert host._citations_dialog is dlg
     assert "RDKit" in dlg.windowTitle()

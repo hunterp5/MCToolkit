@@ -22,13 +22,22 @@ from .signals import WorkerSignals
 
 
 def normalize_force_field(force_field: str) -> str:
-    """Map dialog / param strings onto MMFF, MMFF94s, or UFF."""
+    """Map dialog / param strings onto MMFF, MMFF94s, UFF, GAFF, or GAFF2."""
     key = (force_field or "MMFF").strip().upper().replace(" ", "")
     if key in {"UFF"}:
         return "UFF"
     if key in {"MMFF94S"}:
         return "MMFF94s"
+    if key in {"GAFF2", "GAFF-2", "GAFF2.11", "GAFF-2.11"}:
+        return "GAFF2"
+    if key in {"GAFF", "GAFF1", "GAFF-1.81"}:
+        return "GAFF"
     return "MMFF"
+
+
+def is_gaff_force_field(force_field: str) -> bool:
+    """True when *force_field* is GAFF or GAFF2 (AmberTools + OpenMM)."""
+    return normalize_force_field(force_field) in {"GAFF", "GAFF2"}
 
 
 def mmff_variant(force_field: str) -> str:

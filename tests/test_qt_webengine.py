@@ -36,6 +36,14 @@ def test_configure_qtwebengine_quiet_logs_keeps_user_log_level(monkeypatch):
     assert flags.count("--log-level=") == 1
 
 
+def test_schedule_qtwebengine_prewarm_skips_pytest():
+    from molmanager import qt_webengine
+
+    qt_webengine.schedule_qtwebengine_prewarm()
+    qt_webengine.prewarm_qtwebengine()
+    assert qt_webengine._PREWARM_VIEW is None
+
+
 def test_js_console_filters_shared_image_gpu_noise():
     assert _js_console_is_benign(
         "GL ERROR :GL_INVALID_OPERATION : DoEndSharedImageAccessCHROMIUM: "

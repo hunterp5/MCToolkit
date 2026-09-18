@@ -245,6 +245,24 @@ The `-e` means “editable”: if you update the source code later, you do not n
 
 **When everything succeeds**, you should see no red `ERROR` lines at the end. Warnings in yellow are usually fine.
 
+### Step 6d — NVIDIA GPU for Uni-pKa (recommended)
+
+`requirements.txt` installs a **CPU** PyTorch wheel so machines without a GPU still work. If you have an NVIDIA GPU, run this in the **same** venv so **Predict pKa**, **Protonate**, and **LogD** use CUDA. The script detects `nvidia-smi` and installs the CUDA 12.4 wheel automatically (~2.5 GB). Pass `-Cpu` / `--cpu` to skip that.
+
+**Windows**
+
+```powershell
+.\scripts\install_pytorch_pka.ps1
+```
+
+**macOS / Linux**
+
+```bash
+bash scripts/install_pytorch_pka.sh
+```
+
+Restart MolManager after this step. The guided optional-setup script (`bootstrap_optional_tools`) also runs this automatically.
+
 ---
 
 ## Part 7 — Start MolManager
@@ -272,43 +290,29 @@ Every time you want to use MolManager:
 
 Most Python packages are already installed by **Step 6b**. The items below are binaries or data files that are not installed by pip.
 
-### pKa / PyTorch repair
+### pKa / PyTorch
 
-If **Tools → Predict → pKa** fails with a PyTorch version error (often after installing another package that upgrades torch), run this in the **same** venv — do **not** create a second environment:
+`pip install -r requirements.txt` installs CPU PyTorch. If you have an NVIDIA GPU, run the script in **Step 6d** (same venv) so Uni-pKa uses CUDA. With no flags it selects CUDA when `nvidia-smi` sees a GPU.
 
-**Windows:**
+If **Tools → Predict → pKa** fails with a PyTorch version error (often after installing another package that upgrades torch), run the same script again to repair the stack. Do **not** create a second environment. Pass `-Cpu` / `--cpu` to force the CPU wheel, or `-Cuda` / `--cuda` to force CUDA. The first **Predict pKa** run downloads Uni-pKa fold weights from Hugging Face (`unipka-download-model`). For offline machines, prefetch with that CLI or copy the fold into unipkainfer’s `model_dir`.
 
-```powershell
-.\scripts\install_pytorch_pka.ps1
-```
+### Docking (Gnina)
 
-**macOS / Linux:**
+Docking is **Protein → Dock Ligand → Gnina…** (file-based CLI with CNN scoring). Receptor PDBQT still comes from **Prepare → Receptor PDB…** then **Prepare → PDBQT…** (Gnina also accepts a PDB receptor). Ligand PDBQT can come from the same PDBQT dialog (Meeko). Python pieces are in the docking extra (`pip install -e ".[docking]"` or `requirements.txt`). Protein Viewer **Render → Interactions** uses ProLIF from that same extra.
 
-```bash
-bash scripts/install_pytorch_pka.sh
-```
+The **Gnina** engine is not included in the Python install. Download the official Linux binary from [https://github.com/gnina/gnina](https://github.com/gnina/gnina). On Windows, install it in WSL (Settings → WSL) so `gnina` is on that distro’s PATH. On Linux, either:
 
-This removes conflicting packages (such as **admet-ai**) and reinstalls from `requirements.txt` (CPU PyTorch). With an NVIDIA GPU, pass `-Cuda` (Windows) or `--cuda` (macOS/Linux) to replace that wheel with the CUDA 12.4 build so **Predict pKa** can run on the GPU. The first **Predict pKa** run downloads Uni-pKa fold weights from Hugging Face (`unipka-download-model`). For offline machines, prefetch with that CLI or copy the fold into unipkainfer’s `model_dir`.
+- Put `gnina` in:
+  - `molmanager/resources/bin/linux/`
+- Or set `MOLMANAGER_BUNDLE_DIR` to a folder that contains the executable.
 
-### Docking (Smina)
-
-Docking is **Tools → Dock → Smina…** (file-based CLI). Receptor PDBQT still comes from **Prepare → Receptor PDB…** then **Prepare → PDBQT…**. Ligand PDBQT can come from the same PDBQT dialog (Meeko). Python pieces are in the docking extra (`pip install -e ".[docking]"` or `requirements.txt`).
-
-The **Smina** engine is not included in the Python install. Download a binary from [https://sourceforge.net/projects/smina](https://sourceforge.net/projects/smina) or your package manager, then either:
-
-- Put `smina.exe` (Windows) or `smina` (macOS/Linux) in:
-  - `molmanager/resources/bin/win/` (Windows)
-  - `molmanager/resources/bin/mac/` (macOS)
-  - `molmanager/resources/bin/linux/` (Linux)
-- Or set the environment variable `MOLMANAGER_BUNDLE_DIR` to a folder that contains the executable.
-
-See **Tools → Dock** in the app after the binary is in place.
+macOS has no official Gnina binary. See **Protein → Dock Ligand** in the app after the binary is reachable.
 
 ### Systematic conformers (Open Babel)
 
-**Tools → Conformations → Systematic…** uses Open Babel Confab. Open Babel is a project dependency (`pip install openbabel`, also in `requirements-core.txt`). The dialog defaults to that wheel’s `obabel` (`site-packages/openbabel/bin/obabel`). You can still override the path, or place `obabel.exe` / `obabel` under `molmanager/resources/bin/<platform>/` to prefer a bundled copy.
+**Tools → Conformations → Generate → Systematic…** uses Open Babel Confab. Open Babel is a project dependency (`pip install openbabel`, also in `requirements-core.txt`). The dialog defaults to that wheel’s `obabel` (`site-packages/openbabel/bin/obabel`). You can still override the path, or place `obabel.exe` / `obabel` under `molmanager/resources/bin/<platform>/` to prefer a bundled copy.
 
-Distance-geometry ensembles remain **Tools → Conformations → Stochastic…** (RDKit ETKDG; no Open Babel).
+Distance-geometry ensembles remain **Tools → Conformations → Generate → Stochastic…** (RDKit ETKDG; no Open Babel).
 
 ### Guided optional setup script
 
@@ -324,7 +328,7 @@ Distance-geometry ensembles remain **Tools → Conformations → Stochastic…**
 bash scripts/bootstrap_optional_tools.sh
 ```
 
-This runs `pip install -r requirements.txt`, `pip install -e .`, and can download permeability model weights.
+This runs `pip install -r requirements.txt`, `pip install -e .`, then `install_pytorch_pka` (CUDA PyTorch when an NVIDIA GPU is present), and can download permeability model weights.
 
 ### Permeability model weights
 
@@ -417,7 +421,7 @@ pip install -e .
 
 ### pKa / PyTorch conflicts
 
-Use **one** environment only. Run `scripts\install_pytorch_pka.ps1` or `bash scripts/install_pytorch_pka.sh` in the same venv where MolManager is installed. Do not install **admet-ai** in that environment.
+Use **one** environment only. Run `scripts\install_pytorch_pka.ps1` or `bash scripts/install_pytorch_pka.sh` in the same venv where MolManager is installed (CUDA is selected automatically when `nvidia-smi` sees a GPU). Do not install **admet-ai** in that environment.
 
 ### Apple Silicon (M1/M2/M3 Mac)
 
@@ -436,12 +440,14 @@ pip install -U pip
 pip install -r requirements.txt
 pip install -e .
 
+# NVIDIA GPU: Uni-pKa CUDA wheel (auto if nvidia-smi sees a GPU)
+# Windows:  scripts\install_pytorch_pka.ps1
+# Unix:     bash scripts/install_pytorch_pka.sh
+
 # Run
 python -m molmanager
 
-# Repair pKa / PyTorch conflicts (same venv)
-# Windows:  scripts\install_pytorch_pka.ps1
-# Unix:     bash scripts/install_pytorch_pka.sh
+# Repair pKa / PyTorch conflicts (same venv; same scripts as above)
 
 # Tests (pytest is already in requirements.txt)
 # Windows:  set QT_QPA_PLATFORM=offscreen
@@ -467,6 +473,8 @@ Optional settings for power users and IT deployments:
 | `MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS` | Row count for async substructure filtering (default `400`) |
 | `MOLMANAGER_FILTER_DEBOUNCE_SUBSTRUCTURE_ROWS` / `MOLMANAGER_FILTER_DEBOUNCE_SUBSTRUCTURE_MS` | Debounce when a substructure filter is active |
 | `MOLMANAGER_FILTER_DEBOUNCE_DEFAULT_ROWS` / `MOLMANAGER_FILTER_DEBOUNCE_DEFAULT_MS` | Debounce for other filters |
+| `MOLMANAGER_INGEST_GUI_CHUNK` | File-ingest table insert batch size (default `512`) |
+| `MOLMANAGER_SESSION_GUI_CHUNK` | Session restore table insert batch size (default `4096`) |
 | `MOLMANAGER_PERF_METRICS` | Enable performance metric logging |
 | `MOLMANAGER_PERF_LOG_EVERY` | Perf log interval (default `25` samples) |
 | `MOLMANAGER_PLOT_SCATTERGL_MIN_POINTS` | Upgrade marker scatters to WebGL above this count (default `2000`) |
@@ -474,6 +482,7 @@ Optional settings for power users and IT deployments:
 | `MOLMANAGER_CONFORMER_THREADS` | Parallel workers for conformer generation (`1`–`16`) |
 | `MOLMANAGER_DESCRIPTOR_THREADS` | Parallel workers for descriptors (`1`–`32`) |
 | `MOLMANAGER_PROTOMER_PROCESSES` | Parallel processes for Protonate and Generate Protomers (`1`–`8`) |
+| `MOLMANAGER_PKA_GPU` | Set to `0` / `cpu` to force Uni-pKa onto CPU even with a CUDA PyTorch wheel |
 | `MOLMANAGER_SQL_MAX_ROWS_HARD` | Hard cap for SQL load row count (default `2000000`) |
 | `MOLMANAGER_MEMORY_GUARD_DIVERSE_MAX_ROWS` | Hard cap for Diverse Subset pool size (default `200000`) |
 | `MOLMANAGER_DIVERSE_SUBSET_EXACT_MAX_ROWS` | Auto mode uses Exact MaxMin at or below this size (default `50000`) |
@@ -485,7 +494,7 @@ Optional settings for power users and IT deployments:
 | `MOLMANAGER_DISABLE_CUSTOM_CALC` | Set to `1` / `true` to disable Tools → Custom Calculator |
 | `MOLMANAGER_LOG_DIR` | Directory for rotating `molmanager.log` (platform default under user app data / state) |
 | `MOLMANAGER_LOG_TO_FILE` | Set to `0` / `false` to disable file logging (console only) |
-| `MOLMANAGER_BUNDLE_DIR` | Folder containing optional `vina` / `smina` binaries |
+| `MOLMANAGER_BUNDLE_DIR` | Folder containing optional `gnina` / `vina` binaries |
 | `MOLMANAGER_BIOTRANSFORMER_JAR` | Path to the BioTransformer JAR (`btkb/` or `database/`, and `supportfiles/`, must be siblings of the JAR) |
 
 **Custom calculator:** expressions always use a restricted AST interpreter (`safe_calc`). Treat them as trusted input only. `MOLMANAGER_CUSTOM_CALC_LEGACY_EVAL` is retired and ignored if set.

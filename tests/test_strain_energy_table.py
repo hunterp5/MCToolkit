@@ -89,8 +89,10 @@ def test_strain_energy_viewer_shows_conformer_table(qapp) -> None:  # noqa: ARG0
     assert root.indexOf(viewer._conf_nav_host) == root.count() - 1
     assert viewer.embedded_minimum_width() >= 1200
     assert not hasattr(viewer, "_toggle_options_btn")
-    assert viewer._btn_conf_back.text() == "←"
-    assert viewer._btn_conf_fwd.text() == "→"
+    assert viewer._btn_conf_back.text() == ""
+    assert not viewer._btn_conf_back.icon().isNull()
+    assert viewer._btn_conf_fwd.text() == ""
+    assert not viewer._btn_conf_fwd.icon().isNull()
     assert not viewer._cb_superpose.isChecked()
     assert getattr(viewer, "_radio_conf_one", None) is None
     assert getattr(viewer, "_conf_label", None) is None

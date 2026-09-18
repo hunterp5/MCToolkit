@@ -130,6 +130,16 @@ def _widget_is_docked_in_main(widget: QWidget) -> bool:
     return getattr(app, "_docked_plot_widget", None) is widget
 
 
+def _widget_is_docked_in_viewer(widget: QWidget) -> bool:
+    app = getattr(widget, "parent_app", None)
+    if app is None:
+        return False
+    finder = getattr(app, "_live_protein_viewer", None)
+    protein = finder() if callable(finder) else None
+    check = getattr(protein, "is_side_docked", None) if protein is not None else None
+    return callable(check) and bool(check(widget))
+
+
 def request_close_plot_widget(
     widget: QWidget,
     *,
@@ -138,6 +148,14 @@ def request_close_plot_widget(
 ) -> None:
     """Close a docked plot or its floating host dialog without confirmation."""
     _ = title, message
+    if _widget_is_docked_in_viewer(widget):
+        app = getattr(widget, "parent_app", None)
+        finder = getattr(app, "_live_protein_viewer", None) if app is not None else None
+        protein = finder() if callable(finder) else None
+        close = getattr(protein, "close_side_dock_widget", None) if protein is not None else None
+        if callable(close):
+            close(widget)
+        return
     if _widget_is_docked_in_main(widget):
         app = getattr(widget, "parent_app", None)
         close = getattr(app, "close_docked_plot", None) if app is not None else None

@@ -145,6 +145,85 @@ def ligand_display_payload(mol: Chem.Mol | None) -> tuple[str, str]:
     return "", "sdf"
 
 
+def ligand_mol_to_pdb_text(
+    mol: Chem.Mol | None,
+    *,
+    resn: str = "LIG",
+    chain: str = "Z",
+) -> str:
+    """Write a docked pose as HETATM PDB so Protein Viewer inventories it as a ligand."""
+    from ..structure_atoms import _pdb_from_atoms
+    from ..structure_component_types import AMINO_ACIDS, NUCLEIC_ACIDS, StructureAtom
+
+    if mol is None:
+        return ""
+    try:
+        if mol.GetNumAtoms() == 0 or mol.GetNumConformers() < 1:
+            return ""
+        conf = mol.GetConformer()
+    except Exception:
+        return ""
+    default_resn = (resn or "LIG").strip().upper() or "LIG"
+    default_chain = ((chain or "Z").strip() or "Z")[:1]
+    atoms: list[StructureAtom] = []
+    for atom in mol.GetAtoms():
+        try:
+            pos = conf.GetAtomPosition(atom.GetIdx())
+        except Exception:
+            continue
+        info = atom.GetPDBResidueInfo() if hasattr(atom, "GetPDBResidueInfo") else None
+        name = (atom.GetSymbol() or "C").strip() or "C"
+        atom_resn = default_resn
+        atom_chain = default_chain
+        atom_resi = "1"
+        icode = ""
+        if info is not None:
+            raw_name = (info.GetName() or "").strip()
+            if raw_name:
+                name = raw_name
+            raw_resn = (info.GetResidueName() or "").strip().upper()
+            if raw_resn and raw_resn not in AMINO_ACIDS and raw_resn not in NUCLEIC_ACIDS:
+                atom_resn = raw_resn
+            raw_chain = (info.GetChainId() or "").strip()
+            if raw_chain:
+                atom_chain = raw_chain[:1]
+            try:
+                atom_resi = str(int(info.GetResidueNumber()))
+            except (TypeError, ValueError):
+                atom_resi = str(info.GetResidueNumber() or "1")
+            icode = (info.GetInsertionCode() or "").strip()
+        atoms.append(
+            StructureAtom(
+                chain=atom_chain,
+                resn=atom_resn,
+                resi=atom_resi or "1",
+                icode=icode,
+                name=name,
+                elem=(atom.GetSymbol() or "C").upper(),
+                x=float(pos.x),
+                y=float(pos.y),
+                z=float(pos.z),
+                het=True,
+            )
+        )
+    return _pdb_from_atoms(atoms)
+
+
+def pose_manager_slot_name(mol: Chem.Mol | None, index: int, *, prefix: str = "Pose") -> str:
+    """Manager file name for a docked pose (``Pose 3.pdb``)."""
+    label = f"{prefix} {max(1, int(index))}"
+    if mol is not None:
+        for key in ("minimizedAffinity", "CNNaffinity", "CNNscore"):
+            try:
+                val = (mol.GetProp(key) or "").strip() if mol.HasProp(key) else ""
+            except Exception:
+                val = ""
+            if val:
+                label = f"{prefix} {max(1, int(index))} ({val})"
+                break
+    return f"{label}.pdb"
+
+
 DEFAULT_RENDER_STYLES = {
     "receptor": "cartoon",
     "ligand": "ballstick",

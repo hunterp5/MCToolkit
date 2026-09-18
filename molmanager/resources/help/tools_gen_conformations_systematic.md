@@ -1,8 +1,8 @@
 # Generate Conformations (Systematic)
 
-Conformations → **Systematic** builds 3D conformer ensembles with Open Babel **Confab**, a knowledge-based systematic torsion search. When generation finishes, a 3D results window opens with per-conformer **E**, **ΔE vs ref**, **ΔE vs min**, **Pop. %**, and **RMSD**.
+Conformations → **Generate → Systematic** builds 3D conformer ensembles with Open Babel **Confab**, a knowledge-based systematic torsion search. When generation finishes, a 3D results window opens with per-conformer **E**, **ΔE vs ref**, **ΔE vs min**, **Pop. %**, and **RMSD**.
 
-For RDKit ETKDG stochastic sampling, use **Conformations → Stochastic…**.
+For RDKit ETKDG stochastic sampling, use **Conformations → Generate → Stochastic…**.
 
 ## Goal
 

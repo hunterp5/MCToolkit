@@ -102,7 +102,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Import Data",
                 "Append or merge data into the current table.",
             ),
-            _e("file_sessions", "Sessions", "Sessions", "Open, save, new, and duplicate sessions."),
+            _e(
+                "file_sessions",
+                "Sessions",
+                "Sessions",
+                "Open, save, save selected rows, create, and duplicate sessions.",
+            ),
             _e(
                 "file_export",
                 "Save File",
@@ -113,7 +118,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "file_browser",
                 "Selection Browser",
                 "Selection Browser",
-                "Browse selected (or all) table rows with a structure preview.",
+                "Browse selected (or all) table rows with a structure preview and a compact row table.",
             ),
         ),
     ),
@@ -204,13 +209,13 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "tools_gen_conformations",
                 "Generate Conformations",
                 "Generate Conformations",
-                "Build 3D conformer ensembles (Tools → Conformations → Stochastic).",
+                "Build 3D conformer ensembles (Tools → Conformations → Generate → Stochastic).",
             ),
             _e(
                 "tools_gen_conformations_systematic",
                 "Systematic Conformations",
                 "Systematic Conformations",
-                "Build 3D ensembles (Tools → Conformations → Systematic).",
+                "Build 3D ensembles (Tools → Conformations → Generate → Systematic).",
             ),
             _e(
                 "tools_superpose",
@@ -244,7 +249,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "6 — Docking",
+        "6 — Dock Ligand",
         (
             _e(
                 "tools_prepare_pdb",
@@ -259,10 +264,10 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Build receptor/ligand PDBQT (SDF, PDB, SMILES, or table rows).",
             ),
             _e(
-                "tools_smina",
-                "Smina",
-                "Smina",
-                "Run Smina as a file-based CLI (no table writeback).",
+                "tools_gnina",
+                "Gnina",
+                "Gnina",
+                "Run Gnina from a ligand file or selected table rows (CNN scoring).",
             ),
         ),
     ),

@@ -404,9 +404,30 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
         "Docking and biomolecular simulation",
         (
             _t(
+                "gnina",
+                "Gnina",
+                "Protein → Dock Ligand → Gnina (file-based docking with CNN scoring).",
+                (
+                    (
+                        "McNutt, A. T.; Li, Y.; Meli, R.; Aggarwal, R.; Koes, D. R. "
+                        "GNINA 1.3: the next increment in molecular docking with deep learning. "
+                        "J. Cheminformatics 2025, 17, 28.",
+                        "https://doi.org/10.1186/s13321-025-00973-x",
+                    ),
+                    (
+                        "McNutt, A. T.; Francoeur, P.; Aggarwal, R.; Masuda, T.; Meli, R.; Ragoza, M.; "
+                        "Sunseri, J.; Koes, D. R. GNINA 1.0: molecular docking with deep learning. "
+                        "J. Cheminformatics 2021, 13, 43.",
+                        "https://doi.org/10.1186/s13321-021-00522-2",
+                    ),
+                ),
+                LIC_APACHE2,
+                homepage="https://github.com/gnina/gnina",
+            ),
+            _t(
                 "vina",
                 "AutoDock Vina",
-                "Smina is a fork of AutoDock Vina; pose logs may include VINA RESULT remarks.",
+                "Gnina and Smina are forks of AutoDock Vina; pose logs may include VINA RESULT remarks.",
                 (
                     (
                         "Trott, O.; Olson, A. J. AutoDock Vina: Improving the speed and accuracy of docking "
@@ -421,7 +442,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "smina",
                 "Smina",
-                "Tools → Dock → Smina (file-based docking).",
+                "Ancestor of Gnina; empirical Vina-style scoring used when CNN scoring is None.",
                 (
                     (
                         "Koes, D. R.; Baumgartner, M. P.; Camacho, C. J. Lessons Learned in Empirical Scoring "
@@ -474,7 +495,9 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 "ambertools",
                 "AmberTools",
                 "Protein Viewer Prepare: GAFF/GAFF2 ligand parameterization (antechamber, "
-                "parmchk2, tleap) for OpenMM holo minimization. On Windows this runs in WSL.",
+                "parmchk2, tleap) for OpenMM holo minimization. Stochastic conformer "
+                "generation: vacuum GAFF/GAFF2 minimization of ETKDG poses. On Windows "
+                "AmberTools runs in WSL.",
                 (
                     (
                         "Case, D. A.; et al. AmberTools. J. Chem. Inf. Model. 2023, 63, 6183–6191.",
@@ -491,7 +514,8 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 homepage="https://ambermd.org/AmberTools.php",
                 notes=(
                     "GAFF2 is the default small-molecule field when Ligand force field is GAFF2. "
-                    "AM1-BCC charges use sqm; Gasteiger is the fallback if BCC fails."
+                    "AM1-BCC charges use sqm; Gasteiger is the fallback if BCC fails. "
+                    "Conformer generation uses the same parameterization in vacuum."
                 ),
             ),
             _t(
@@ -528,6 +552,28 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 LIC_BSD3,
                 homepage="https://pdb2pqr.readthedocs.io/",
                 notes="PROPKA assigns protein titration states at the chosen pH. Ligand ionization is Uni-pKa, not PROPKA.",
+            ),
+            _t(
+                "prolif",
+                "ProLIF",
+                "Protein Viewer Render → Interactions: protein–ligand hydrogen bonds, "
+                "hydrophobic contacts, salt bridges, π-stacking, π-cation, and halogen bonds.",
+                (
+                    (
+                        "Bouysset, C.; Fiorucci, S. ProLIF: a library to encode molecular "
+                        "interactions as fingerprints. J. Cheminform. 2021, 13, 72.",
+                        "https://doi.org/10.1186/s13321-021-00548-6",
+                    ),
+                ),
+                LIC_APACHE2,
+                homepage="https://github.com/chemosim-lab/ProLIF",
+                notes=(
+                    "Optional docking extra (`pip install prolif`). Intramolecular protein and "
+                    "ligand hydrogen bonds still use MolManager's geometric detector. "
+                    "Protein–ligand H-bonds fall back to that detector when ProLIF is missing "
+                    "or hydrogens are absent. Pose Browser overlays recompute ProLIF against "
+                    "the receptor only (cached protein molecule; crystal ligand ignored)."
+                ),
             ),
         ),
     ),

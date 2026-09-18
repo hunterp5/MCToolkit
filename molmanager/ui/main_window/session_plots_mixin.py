@@ -21,8 +21,7 @@ from __future__ import annotations
 import json
 import logging
 
-from PyQt5.QtCore import QByteArray, Qt
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QByteArray
 
 from ..qt_widget_utils import qobject_is_deleted
 
@@ -30,12 +29,13 @@ logger = logging.getLogger(__name__)
 
 
 class SessionPlotsMixin:
-    def _discard_protein_viewer(self) -> None:
+    def _close_live_protein_viewer(self) -> None:
         dlg = getattr(self, "_protein_viewer_dialog", None)
         if dlg is None or qobject_is_deleted(dlg):
             self._protein_viewer_dialog = None
             return
         try:
+            dlg._suppress_close_prompt = True
             close_struct = getattr(dlg, "close_structure", None)
             if callable(close_struct):
                 close_struct(mark_dirty=False)
@@ -49,19 +49,31 @@ class SessionPlotsMixin:
             pass
         self._protein_viewer_dialog = None
 
+    def _discard_protein_viewer(self) -> None:
+        self._protein_viewer_session = None
+        self._close_live_protein_viewer()
+
     def _restore_protein_viewer(self, payload: object) -> None:
+        """Keep the snapshot only; the window is rebuilt when Protein → Viewer opens."""
+        self._close_live_protein_viewer()
         if not isinstance(payload, dict) or not payload.get("structures"):
-            self._discard_protein_viewer()
+            self._protein_viewer_session = None
             return
-        ensure = getattr(self, "_ensure_protein_viewer", None)
-        if not callable(ensure):
+        try:
+            self._protein_viewer_session = json.loads(json.dumps(payload))
+        except (TypeError, ValueError):
+            logger.exception("Skipping Protein Viewer restore with invalid session state")
+            self._protein_viewer_session = None
+
+    def _apply_committed_protein_viewer_session(self, dlg) -> None:
+        payload = getattr(self, "_protein_viewer_session", None)
+        if not isinstance(payload, dict) or not payload.get("structures"):
             return
-        dlg = ensure(show=False)
         apply_state = getattr(dlg, "apply_session_state", None)
         if callable(apply_state):
             apply_state(payload)
         try:
-            dlg.hide()
+            dlg._session_dirty = False
         except RuntimeError:
             pass
 
@@ -150,6 +162,7 @@ class SessionPlotsMixin:
             "_activity_cliff_map_dialog",
             "_mmp_neighborhood_map_dialog",
             "_selection_browser_dialog",
+            "_pose_browser_dialog",
             "_som_browser_dialog",
             "_metabolite_browser_dialog",
             "_molecule_3d_viewer_dialog",
@@ -245,6 +258,7 @@ class SessionPlotsMixin:
             "_activity_cliff_map_dialog",
             "_mmp_neighborhood_map_dialog",
             "_selection_browser_dialog",
+            "_pose_browser_dialog",
             "_som_browser_dialog",
             "_metabolite_browser_dialog",
             "_molecule_3d_viewer_dialog",

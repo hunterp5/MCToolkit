@@ -32,11 +32,11 @@ from .structure_cif import (
 )
 from .structure_component_types import (
     POCKET_CUTOFF_ANGSTROM,
-    POLAR_HEAVY_ELEMENTS,
     PocketViewPlan,
     StructureAtom,
     _HYDROGEN_ELEMENTS,
     _POLAR_H_BOND_ANGSTROM,
+    is_hetero_heavy_element,
     _ResidueBucket,
     _norm_chain,
     _optional_float,
@@ -44,15 +44,27 @@ from .structure_component_types import (
 )
 from .structure_inventory import _classify_residue
 
+_ATOM_CACHE_KEY: tuple | None = None
+_ATOM_CACHE: tuple[StructureAtom, ...] | None = None
+
 
 def parse_structure_atoms(
     text: str, fmt: str, *, include_altlocs: bool = False
 ) -> tuple[StructureAtom, ...]:
     """Coordinate atoms from the first model of a PDB-like or mmCIF file."""
+    global _ATOM_CACHE_KEY, _ATOM_CACHE
     fmt_l = (fmt or "pdb").lower()
+    key = (id(text), len(text), hash(text), fmt_l, bool(include_altlocs))
+    cached = _ATOM_CACHE
+    if cached is not None and key == _ATOM_CACHE_KEY:
+        return cached
     if fmt_l in {"cif", "mmcif"}:
-        return tuple(_atoms_from_cif(text, include_altlocs=include_altlocs))
-    return tuple(_atoms_from_pdb(text, include_altlocs=include_altlocs))
+        atoms = tuple(_atoms_from_cif(text, include_altlocs=include_altlocs))
+    else:
+        atoms = tuple(_atoms_from_pdb(text, include_altlocs=include_altlocs))
+    _ATOM_CACHE_KEY = key
+    _ATOM_CACHE = atoms
+    return atoms
 
 
 def pocket_view_plan(
@@ -290,7 +302,7 @@ def _atoms_from_cif(text: str, *, include_altlocs: bool = False) -> list[Structu
 
 
 def _polar_hydrogen_overlay_pdb(atoms: list[StructureAtom]) -> str:
-    """PDB of polar hydrogens plus their parent N/O/S/F atoms for a 3Dmol overlay."""
+    """PDB of polar hydrogens plus their parent heteroatoms for a 3Dmol overlay."""
     if not atoms:
         return ""
     hydrogens = _existing_polar_hydrogens(atoms)
@@ -299,7 +311,7 @@ def _polar_hydrogen_overlay_pdb(atoms: list[StructureAtom]) -> str:
     hydrogens = _unique_atoms_by_xyz(hydrogens)
     if not hydrogens:
         return ""
-    parents = [a for a in atoms if a.elem in POLAR_HEAVY_ELEMENTS]
+    parents = [a for a in atoms if is_hetero_heavy_element(a.elem)]
     return _pdb_from_atoms(parents + hydrogens)
 
 
@@ -310,20 +322,16 @@ def _existing_polar_hydrogens(atoms: list[StructureAtom]) -> list[StructureAtom]
     for atom in atoms:
         if not _is_hydrogen(atom):
             continue
-        parent = min(
-            (
-                heavy
-                for heavy in heavies
-                if (heavy.chain, heavy.resi, heavy.icode) == (atom.chain, atom.resi, atom.icode)
-            ),
-            key=lambda heavy: _dist_sq(atom, heavy),
-            default=None,
-        )
-        if parent is None or parent.elem not in POLAR_HEAVY_ELEMENTS:
-            continue
-        if _dist_sq(atom, parent) > bond_sq:
-            continue
-        out.append(replace(atom, elem="H", het=True))
+        same = [
+            heavy
+            for heavy in heavies
+            if (heavy.chain, heavy.resi, heavy.icode) == (atom.chain, atom.resi, atom.icode)
+        ]
+        if any(
+            is_hetero_heavy_element(heavy.elem) and _dist_sq(atom, heavy) <= bond_sq
+            for heavy in same
+        ):
+            out.append(replace(atom, elem="H", het=True))
     return out
 
 
@@ -353,13 +361,12 @@ def _rdkit_polar_hydrogens(pdb_block: str) -> list[StructureAtom]:
     if mol_h is None or mol_h.GetNumConformers() == 0:
         return []
     conf = mol_h.GetConformer()
-    polar = set(POLAR_HEAVY_ELEMENTS)
     out: list[StructureAtom] = []
     for atom in mol_h.GetAtoms():
         if atom.GetAtomicNum() != 1:
             continue
         neighbors = atom.GetNeighbors()
-        if not neighbors or neighbors[0].GetSymbol() not in polar:
+        if not neighbors or not is_hetero_heavy_element(neighbors[0].GetSymbol()):
             continue
         parent = neighbors[0]
         info = atom.GetPDBResidueInfo() or parent.GetPDBResidueInfo()

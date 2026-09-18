@@ -57,6 +57,21 @@ def log_prepare(message: str) -> None:
         pass
 
 
+def append_prepare_log_file(path: str | Path | None, message: str) -> None:
+    """Append one Prepare log line to *path* (pickle-safe IPC for ProcessPoolExecutor)."""
+    if not path:
+        return
+    text = (message or "").strip()
+    if not text:
+        return
+    try:
+        with Path(path).open("a", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+            fh.flush()
+    except OSError:
+        pass
+
+
 def _norm_key(chain: str, resi: str, icode: str) -> ResidueKey:
     from ..structure_components import _norm_chain
 
@@ -108,7 +123,7 @@ def _write_text(path: Path, text: str) -> None:
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
 
     def _do() -> None:
-        tmp.write_text(text, encoding="utf-8")
+        tmp.write_text(text, encoding="utf-8", newline="\n")
         os.replace(tmp, path)
 
     try:
@@ -217,6 +232,9 @@ def _write_openmm_structure(
             parse_cif_chem_comp_atoms(chem_source),
             parse_cif_chem_comp_bonds(chem_source),
         )
+        from ..structure_cif import repair_cif_hydrogen_chem_bonds
+
+        text = repair_cif_hydrogen_chem_bonds(text)
     _write_text(path, text)
 
 
@@ -348,16 +366,36 @@ def residues_to_drop(
     include_ligand: bool,
     keep_water_keys: set[ResidueKey],
     remove_other_heterogens: bool,
+    names_by_key: dict[ResidueKey, str] | None = None,
+    keep_metals: bool = False,
+    keep_cofactors: bool = False,
+    strip_additives: bool = True,
+    keep_chain_ids: tuple[str, ...] | set[str] = (),
 ) -> set[ResidueKey]:
     """Residue keys to delete before pdb2pqr (unwanted waters and heteros)."""
+    from ..structure_components import _norm_chain
+    from .protein_prepare_qc import het_role
+
     keep_water = {_norm_key(*key) for key in keep_water_keys}
+    names = names_by_key or {}
+    keep_chains = {_norm_chain(cid) for cid in keep_chain_ids if cid}
     drop: set[ResidueKey] = set()
     for key, kind in kind_by_key.items():
-        if kind == "water" and key not in keep_water:
+        if keep_chains and key[0] not in keep_chains:
             drop.add(key)
-        elif kind == "ligand" and not include_ligand:
+            continue
+        role = het_role(names.get(key, ""), kind)
+        if role == "water" and key not in keep_water:
             drop.add(key)
-        elif kind in {"metal", "other"} and remove_other_heterogens:
+        elif role == "ligand" and not include_ligand:
+            drop.add(key)
+        elif role == "metal" and not keep_metals and remove_other_heterogens:
+            drop.add(key)
+        elif role == "cofactor" and not keep_cofactors and not include_ligand:
+            drop.add(key)
+        elif role == "additive" and strip_additives:
+            drop.add(key)
+        elif role == "other" and remove_other_heterogens:
             drop.add(key)
     return drop
 
@@ -382,20 +420,42 @@ def _prune_fixer_residues(
     keep_water_keys: set[ResidueKey],
     remove_other_heterogens: bool,
     kind_by_key: dict[ResidueKey, str],
+    keep_metals: bool = False,
+    keep_cofactors: bool = False,
+    strip_additives: bool = True,
+    keep_chain_ids: tuple[str, ...] | set[str] = (),
 ) -> None:
     from openmm.app import Modeller
 
+    from ..structure_components import _norm_chain
+    from .protein_prepare_qc import het_role
+
     keep_water = {_norm_key(*key) for key in keep_water_keys}
+    keep_chains = {_norm_chain(cid) for cid in keep_chain_ids if cid}
     modeller = Modeller(fixer.topology, fixer.positions)
     to_delete = []
     for residue in modeller.topology.residues():
         key = _residue_key(residue)
         kind = kind_by_key.get(key) or _topology_residue_kind(residue)
-        if kind == "water" and key not in keep_water:
+        name = (getattr(residue, "name", "") or "").strip().upper()
+        chain_id = ""
+        if getattr(residue, "chain", None) is not None:
+            chain_id = _norm_chain(getattr(residue.chain, "id", "") or "")
+        if keep_chains and chain_id not in keep_chains:
             to_delete.append(residue)
-        elif kind == "ligand" and not include_ligand:
+            continue
+        role = het_role(name, kind)
+        if role == "water" and key not in keep_water:
             to_delete.append(residue)
-        elif kind in {"metal", "other"} and remove_other_heterogens:
+        elif role == "ligand" and not include_ligand:
+            to_delete.append(residue)
+        elif role == "metal" and not keep_metals and remove_other_heterogens:
+            to_delete.append(residue)
+        elif role == "cofactor" and not keep_cofactors and not include_ligand:
+            to_delete.append(residue)
+        elif role == "additive" and strip_additives:
+            to_delete.append(residue)
+        elif role == "other" and remove_other_heterogens:
             to_delete.append(residue)
     if to_delete:
         modeller.delete(to_delete)

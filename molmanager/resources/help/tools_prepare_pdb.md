@@ -8,7 +8,7 @@ Produce a tidier receptor PDB suitable for PDBQT generation and docking.
 
 ## When to use
 
-Use when raw PDB deposits need standard cleanup before Smina or other docking.
+Use when raw PDB deposits need standard cleanup before Gnina or other docking.
 
 ## Inputs / scope
 
@@ -21,6 +21,7 @@ An input PDB path on disk; writes an output PDB path. Not a table-row tool.
 - **Keep crystallographic waters**
 - **Replace non-standard residues...**
 - **Add missing heavy atoms...**
+- **Skip long missing stretches** + residue limit (default 8; skips N-terminal tags PDBFixer cannot place)
 - **Add missing hydrogens at pH** + **pH**
 - **Prepare PDB** / **Close**
 
@@ -39,4 +40,4 @@ An input PDB path on disk; writes an output PDB path. Not a table-row tool.
 
 ## Tips and limits
 
-Automated fixes can mis-handle cofactors - inspect the site. This does not flex side chains for induced fit. Always visually check the binding pocket after prep. Protein Viewer **Prepare…** runs a fuller pipeline (pdb2pqr/PROPKA protein protonation, Uni-pKa ligand protomer at the same pH with optional pocket Coulomb reweight, and OpenMM GBn2 GBSA restrained minimization — protein-only AMBER by default, or GAFF/GAFF2 via AmberTools/WSL for the complex) on the structure already in the 3D canvas.
+Automated fixes can mis-handle cofactors - inspect the site. This does not flex side chains for induced fit. Always visually check the binding pocket after prep. Protein Viewer **Prepare → Fast Prepare…** runs a fuller pipeline (pdb2pqr/PROPKA protein protonation, Uni-pKa ligand protomer at the same pH with optional pocket Coulomb reweight, and OpenMM GBn2 GBSA restrained minimization — protein-only AMBER by default, or GAFF/GAFF2 via AmberTools/WSL for the complex) on the structure already in the 3D canvas. **Prepare → PDBFixer…** is the in-viewer equivalent of this tool's repair/clean step without adding hydrogens.

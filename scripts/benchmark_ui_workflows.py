@@ -222,34 +222,105 @@ def _bench_one(scale: int) -> dict[str, float]:
     }
 
 
+def _print_stats(label: str, samples: list[dict[str, float]], keys: tuple[str, ...]) -> None:
+    print(f"\n{label}")
+    for key in keys:
+        vals = [float(s[key]) for s in samples]
+        avg = statistics.fmean(vals)
+        p50 = _percentile(vals, 0.50)
+        p95 = _percentile(vals, 0.95)
+        unit = "MB" if key.endswith("_mb") else "ms"
+        print(f"  {key:18s} avg={avg:9.1f}{unit}  p50={p50:9.1f}{unit}  p95={p95:9.1f}{unit}")
+
+
+def _bench_cms_file(cms_path: Path) -> dict[str, float]:
+    """Time Open Session on an existing .cms (decode vs apply+drain)."""
+    app = ChemicalTableApp()
+    app._try_auto_render_all_structures_after_ingest = lambda: False
+
+    tracemalloc.start()
+    t0 = time.perf_counter()
+    raw = cms_path.read_bytes()
+    read_ms = (time.perf_counter() - t0) * 1000.0
+
+    t0 = time.perf_counter()
+    doc = expand_session_document(loads_session_bytes(raw))
+    decode_ms = (time.perf_counter() - t0) * 1000.0
+
+    t0 = time.perf_counter()
+    app._apply_session_document(doc)
+    _drain_session(app)
+    apply_ms = (time.perf_counter() - t0) * 1000.0
+    _cur_b, peak_b = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
+    rows = int(app._table_model.rowCount())
+    mols_n = len(getattr(app, "mols", {}) or {})
+    qapp = QApplication.instance()
+    if qapp is not None:
+        qapp.processEvents()
+    try:
+        app.hide()
+    except Exception:
+        pass
+    return {
+        "read_ms": read_ms,
+        "decode_ms": decode_ms,
+        "apply_ms": apply_ms,
+        "cms_load_ms": read_ms + decode_ms + apply_ms,
+        "peak_mem_mb": peak_b / (1024.0 * 1024.0),
+        "rows": float(rows),
+        "mols": float(mols_n),
+        "file_mb": cms_path.stat().st_size / (1024.0 * 1024.0),
+    }
+
+
+def run_cms_benchmark(cms_path: Path, runs: int) -> None:
+    _app = QApplication.instance() or QApplication([])
+    samples = [_bench_cms_file(cms_path) for _ in range(runs)]
+    first = samples[0]
+    print(
+        f"\nCMS: {cms_path}  "
+        f"file={first['file_mb']:.1f}MB  rows={int(first['rows']):,}  mols={int(first['mols']):,}"
+    )
+    _print_stats(
+        f"Runs: {runs}",
+        samples,
+        ("read_ms", "decode_ms", "apply_ms", "cms_load_ms", "peak_mem_mb"),
+    )
+
+
 def run_benchmark(scales: list[int], runs: int) -> None:
     _app = QApplication.instance() or QApplication([])
     for scale in scales:
         samples = [_bench_one(scale) for _ in range(runs)]
-        print(f"\nRows: {scale:,}")
-        for key in (
-            "load_ms",
-            "cms_load_ms",
-            "text_filter_ms",
-            "substructure_ms",
-            "plot_collect_ms",
-            "plot_replot_ms",
-            "search_ms",
-            "export_snapshot_ms",
-            "export_write_ms",
-            "peak_mem_mb",
-        ):
-            vals = [float(s[key]) for s in samples]
-            avg = statistics.fmean(vals)
-            p50 = _percentile(vals, 0.50)
-            p95 = _percentile(vals, 0.95)
-            unit = "MB" if key.endswith("_mb") else "ms"
-            print(f"  {key:18s} avg={avg:9.1f}{unit}  p50={p50:9.1f}{unit}  p95={p95:9.1f}{unit}")
+        _print_stats(
+            f"Rows: {scale:,}",
+            samples,
+            (
+                "load_ms",
+                "cms_load_ms",
+                "text_filter_ms",
+                "substructure_ms",
+                "plot_collect_ms",
+                "plot_replot_ms",
+                "search_ms",
+                "export_snapshot_ms",
+                "export_write_ms",
+                "peak_mem_mb",
+            ),
+        )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="End-to-end UI workflow benchmark.")
     parser.add_argument("--runs", type=int, default=1, help="Runs per scale (default: 1)")
+    parser.add_argument(
+        "--cms",
+        type=str,
+        default="",
+        help="Existing .cms to time (Open Session decode + restore). Skips synthetic scales.",
+    )
     parser.add_argument(
         "--scales",
         type=str,
@@ -257,6 +328,12 @@ def main() -> None:
         help="Comma-separated row counts (default: 10000,50000,100000)",
     )
     args = parser.parse_args()
+    if (args.cms or "").strip():
+        cms_path = Path(args.cms).expanduser()
+        if not cms_path.is_file():
+            raise SystemExit(f"Session file not found: {cms_path}")
+        run_cms_benchmark(cms_path, max(1, int(args.runs)))
+        return
     scales = [max(100, int(x.strip())) for x in (args.scales or "").split(",") if x.strip()]
     run_benchmark(scales, max(1, int(args.runs)))
 

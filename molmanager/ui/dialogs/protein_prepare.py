@@ -14,12 +14,10 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Protein Viewer Prepare dialog: PDBFixer, pdb2pqr, OpenMM restrained min."""
+"""Protein Viewer Fast Prepare dialog: PDBFixer, pdb2pqr, OpenMM restrained min."""
 
 from __future__ import annotations
 
-import tempfile
-from datetime import datetime
 from pathlib import Path
 
 from PyQt5.QtCore import pyqtSignal
@@ -41,7 +39,6 @@ from PyQt5.QtWidgets import (
     QRadioButton,
     QScrollArea,
     QSpinBox,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -51,35 +48,49 @@ from ...workers.protein_prepare import (
     ProteinPrepareSignals,
     ProteinPrepareWorker,
 )
-from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
+from ..qt_widget_utils import append_viewer_log, make_window_minimizable
+from .protein_fixer_options import (
+    add_fixer_extra_options,
+    fixer_extra_request_kwargs,
+    populate_fixer_chain_list,
+)
+from .protein_source_picker import (
+    ProteinStructureSourceMixin,
+    _PREPARE_SOURCE_FMTS,
+    _browse_path_row,
+)
 
-_PREPARE_FMTS = frozenset({"pdb", "pqr", "cif"})
-
-
-def _browse_path_row(edit: QLineEdit, on_browse) -> QWidget:
-    row = QHBoxLayout()
-    row.setContentsMargins(0, 0, 0, 0)
-    row.setSpacing(4)
-    row.addWidget(edit, 1)
-    btn = QPushButton("Browse…")
-    btn.setFixedWidth(76)
-    btn.clicked.connect(on_browse)
-    row.addWidget(btn)
-    wrap = QWidget()
-    wrap.setLayout(row)
-    return wrap
+_PREPARE_FMTS = _PREPARE_SOURCE_FMTS
 
 
-class ProteinPrepareDialog(QDialog):
-    """Options and log for Protein Viewer → Prepare."""
+def add_openmm_platform_combo(combo: QComboBox) -> QComboBox:
+    """Fill Compute device choices for OpenMM minimization."""
+    combo.addItem("Auto (GPU if available)", "auto")
+    combo.addItem("OpenCL", "OpenCL")
+    combo.addItem("CUDA", "CUDA")
+    combo.addItem("CPU", "CPU")
+    combo.setToolTip(
+        "OpenMM device for restrained minimization. Auto prefers CUDA, then OpenCL, "
+        "then CPU. The pip OpenMM wheel includes OpenCL (NVIDIA GPUs) but not CUDA. "
+        "CPU uses all but one core if no GPU platform loads."
+    )
+    return combo
+
+
+class ProteinPrepareDialog(ProteinStructureSourceMixin, QDialog):
+    """Options for Protein Viewer → Prepare → Fast Prepare."""
 
     prepared = pyqtSignal(str)
     smina_prepared = pyqtSignal(object)
+    _source_output_tag = "prepared"
+    _source_tmp_prefix = "molmanager_prepare_in_"
+    _source_tool_title = "Fast Prepare"
+    _source_empty_message = "Choose a Manager structure or a PDB/mmCIF file."
 
     def __init__(self, viewer, parent=None) -> None:
         super().__init__(parent or viewer)
         self._viewer = viewer
-        self.setWindowTitle("Prepare Structure")
+        self.setWindowTitle("Fast Prepare")
         self.setMinimumWidth(500)
         self.resize(540, 640)
 
@@ -91,9 +102,7 @@ class ProteinPrepareDialog(QDialog):
         io_form = QFormLayout(io_gb)
         io_form.setContentsMargins(8, 6, 8, 6)
         io_form.setSpacing(4)
-        self.lbl_source = QLabel("—")
-        self.lbl_source.setWordWrap(True)
-        io_form.addRow("Current:", self.lbl_source)
+        self._add_structure_source_rows(io_form)
         self.edit_out = QLineEdit()
         self.edit_out.setPlaceholderText("receptor_prepared.cif")
         io_form.addRow("Output:", _browse_path_row(self.edit_out, self._browse_output))
@@ -113,19 +122,27 @@ class ProteinPrepareDialog(QDialog):
         host_l.setContentsMargins(0, 0, 0, 0)
         host_l.setSpacing(6)
 
-        opt_gb = QGroupBox("Pipeline")
-        opt_form = QFormLayout(opt_gb)
-        opt_form.setContentsMargins(8, 6, 8, 6)
-        opt_form.setSpacing(4)
+        fixer_gb = QGroupBox("PDBFixer")
+        fixer_form = QFormLayout(fixer_gb)
+        fixer_form.setContentsMargins(8, 6, 8, 6)
+        fixer_form.setSpacing(4)
+
+        self.chk_repair = QCheckBox("Clean up")
+        self.chk_repair.setChecked(True)
+        self.chk_repair.setToolTip(
+            "PDBFixer repair: rebuild missing atoms/loops, replace non-standard "
+            "residues, and strip waters/additives. Uncheck to skip this step."
+        )
+        fixer_form.addRow(self.chk_repair)
 
         self.chk_rebuild_loops = QCheckBox("Rebuild missing loops from SEQRES")
         self.chk_rebuild_loops.setChecked(True)
         self.chk_rebuild_loops.setToolTip(
             "Model internal sequence gaps, then let restrained minimization relax "
-            "the new residues. Uncheck to fill only terminal gaps (safer for large "
-            "disordered domains)."
+            "the new residues. Uncheck to skip internal loops. Long terminal tags "
+            "are skipped separately (Skip long missing stretches)."
         )
-        opt_form.addRow(self.chk_rebuild_loops)
+        fixer_form.addRow(self.chk_rebuild_loops)
 
         self.chk_skip_pocket_loops = QCheckBox("Skip loop rebuild near the ligand")
         self.chk_skip_pocket_loops.setChecked(True)
@@ -133,15 +150,9 @@ class ProteinPrepareDialog(QDialog):
             "Do not fill SEQRES gaps whose flanking residues sit within 8 Å of the ligand. "
             "Rebuilt loops next to the site are models, not crystal coordinates."
         )
-        opt_form.addRow(self.chk_skip_pocket_loops)
+        fixer_form.addRow(self.chk_skip_pocket_loops)
 
-        self.chk_include_ligand = QCheckBox("Include ligand in PROPKA protonation")
-        self.chk_include_ligand.setChecked(True)
-        self.chk_include_ligand.setToolTip(
-            "Keep organic HETATM in the structure while PROPKA assigns protein "
-            "titration states (holo protonation). Recommended before docking."
-        )
-        opt_form.addRow(self.chk_include_ligand)
+        add_fixer_extra_options(fixer_form, self)
 
         self.chk_keep_ligand = QCheckBox("Keep ligand in prepared mmCIF")
         self.chk_keep_ligand.setChecked(True)
@@ -150,7 +161,47 @@ class ProteinPrepareDialog(QDialog):
             "(ligand can still be present during PROPKA). The prepared file is mmCIF "
             "so ligand bond orders are kept in _chem_comp_bond. mmCIF inputs stay mmCIF."
         )
-        opt_form.addRow(self.chk_keep_ligand)
+        fixer_form.addRow(self.chk_keep_ligand)
+
+        self.chk_keep_selected_waters = QCheckBox("Keep Manager-selected waters")
+        self.chk_keep_selected_waters.setChecked(False)
+        self.chk_keep_selected_waters.setToolTip(
+            "Keep water groups currently selected in the Manager through protonation "
+            "and into the output. Other waters are stripped unless bridging waters "
+            "are also kept. Select a Chain group or its Water row first."
+        )
+        fixer_form.addRow(self.chk_keep_selected_waters)
+
+        self.chk_keep_bridging_waters = QCheckBox("Keep waters near ligand")
+        self.chk_keep_bridging_waters.setChecked(False)
+        self.chk_keep_bridging_waters.setToolTip(
+            "Keep crystallographic waters whose oxygen is within the water cutoff of a "
+            "ligand heavy atom, occupancy ≥ 0.5, and B-factor ≤ 80. Combined with Manager "
+            "selection when both are on."
+        )
+        fixer_form.addRow(self.chk_keep_bridging_waters)
+        host_l.addWidget(fixer_gb)
+
+        pqr_gb = QGroupBox("pdb2pqr")
+        pqr_form = QFormLayout(pqr_gb)
+        pqr_form.setContentsMargins(8, 6, 8, 6)
+        pqr_form.setSpacing(4)
+
+        self.chk_protonate = QCheckBox("Protonate")
+        self.chk_protonate.setChecked(True)
+        self.chk_protonate.setToolTip(
+            "pdb2pqr/PROPKA protein protonation at the chosen pH. Uncheck to skip "
+            "this step (ligand Uni-pKa is skipped with it)."
+        )
+        pqr_form.addRow(self.chk_protonate)
+
+        self.chk_include_ligand = QCheckBox("Include ligand in PROPKA protonation")
+        self.chk_include_ligand.setChecked(True)
+        self.chk_include_ligand.setToolTip(
+            "Keep organic HETATM in the structure while PROPKA assigns protein "
+            "titration states (holo protonation). Recommended before docking."
+        )
+        pqr_form.addRow(self.chk_include_ligand)
 
         self.chk_protonate_ligand = QCheckBox("Protonate ligand (Uni-pKa at pH)")
         self.chk_protonate_ligand.setChecked(True)
@@ -159,7 +210,7 @@ class ProteinPrepareDialog(QDialog):
             "on the crystal coordinates. Needs SMILES, an SDF/MOL2, or mmCIF "
             "_chem_comp_bond. Requires the pka extra."
         )
-        opt_form.addRow(self.chk_protonate_ligand)
+        pqr_form.addRow(self.chk_protonate_ligand)
 
         self.chk_pocket_ligand = QCheckBox("Reweight ligand protomer in the pocket")
         self.chk_pocket_ligand.setChecked(True)
@@ -169,7 +220,7 @@ class ProteinPrepareDialog(QDialog):
             "electrostatic estimate, not Poisson–Boltzmann or GBSA. Only protomers that are "
             "already populated in water (≥5%) are considered."
         )
-        opt_form.addRow(self.chk_pocket_ligand)
+        pqr_form.addRow(self.chk_pocket_ligand)
 
         self.edit_ligand_smiles = QLineEdit()
         self.edit_ligand_smiles.setPlaceholderText(
@@ -180,40 +231,14 @@ class ProteinPrepareDialog(QDialog):
             "Leave empty if the mmCIF already has _chem_comp_bond for the ligand, "
             "or if ligand protonation is off (orders guessed from geometry)."
         )
-        opt_form.addRow("Ligand SMILES:", self.edit_ligand_smiles)
+        pqr_form.addRow("Ligand SMILES:", self.edit_ligand_smiles)
 
         self.edit_ligand_ref = QLineEdit()
         self.edit_ligand_ref.setPlaceholderText("Optional SDF or MOL2")
-        opt_form.addRow(
+        pqr_form.addRow(
             "Bond-order file:",
             _browse_path_row(self.edit_ligand_ref, self._browse_ligand_ref),
         )
-
-        self.chk_keep_selected_waters = QCheckBox("Keep Manager-selected waters")
-        self.chk_keep_selected_waters.setChecked(False)
-        self.chk_keep_selected_waters.setToolTip(
-            "Keep water groups currently selected in the Manager through protonation "
-            "and into the output. Other waters are stripped unless bridging waters "
-            "are also kept. Select a Chain group or its Water row first."
-        )
-        opt_form.addRow(self.chk_keep_selected_waters)
-
-        self.chk_keep_bridging_waters = QCheckBox("Keep waters near ligand (≤3.5 Å, occ≥0.5)")
-        self.chk_keep_bridging_waters.setChecked(False)
-        self.chk_keep_bridging_waters.setToolTip(
-            "Keep crystallographic waters whose oxygen is within 3.5 Å of a ligand "
-            "heavy atom, occupancy ≥ 0.5, and B-factor ≤ 80. Combined with Manager "
-            "selection when both are on."
-        )
-        opt_form.addRow(self.chk_keep_bridging_waters)
-
-        self.chk_remove_other_heterogens = QCheckBox("Strip metals and other non-ligand HETATM")
-        self.chk_remove_other_heterogens.setChecked(True)
-        self.chk_remove_other_heterogens.setToolTip(
-            "Removes ions, cofactors, and crystallization additives. Uncheck to keep "
-            "a catalytic metal or tightly bound cofactor."
-        )
-        opt_form.addRow(self.chk_remove_other_heterogens)
 
         self.spin_ph = QDoubleSpinBox()
         self.spin_ph.setRange(0.0, 14.0)
@@ -223,8 +248,8 @@ class ProteinPrepareDialog(QDialog):
         self.spin_ph.setToolTip(
             "pH for PROPKA protein titration and Uni-pKa ligand protomer selection."
         )
-        opt_form.addRow("pH:", self.spin_ph)
-        host_l.addWidget(opt_gb)
+        pqr_form.addRow("pH:", self.spin_ph)
+        host_l.addWidget(pqr_gb)
 
         min_gb = QGroupBox("Minimization")
         min_form = QFormLayout(min_gb)
@@ -268,6 +293,10 @@ class ProteinPrepareDialog(QDialog):
         )
         min_form.addRow("Solvation:", self.combo_solvent)
 
+        self.combo_openmm_platform = QComboBox()
+        add_openmm_platform_combo(self.combo_openmm_platform)
+        min_form.addRow("Compute:", self.combo_openmm_platform)
+
         self.spin_salt = QDoubleSpinBox()
         self.spin_salt.setRange(0.0, 2.0)
         self.spin_salt.setDecimals(2)
@@ -303,15 +332,15 @@ class ProteinPrepareDialog(QDialog):
         min_form.addRow("Max iterations:", self.spin_iters)
         host_l.addWidget(min_gb)
 
-        smina_gb = QGroupBox("Smina docking")
+        smina_gb = QGroupBox("Gnina docking")
         smina_form = QFormLayout(smina_gb)
         smina_form.setContentsMargins(8, 6, 8, 6)
         smina_form.setSpacing(4)
-        self.chk_write_smina = QCheckBox("Write Smina files (receptor PDBQT, ligand, box)")
+        self.chk_write_smina = QCheckBox("Write Gnina files (receptor PDBQT, ligand, box)")
         self.chk_write_smina.setChecked(True)
         self.chk_write_smina.setToolTip(
             "After chemistry prep, write an apo receptor PDBQT (Meeko), a crystal "
-            "ligand PDB/SDF, and a Vina/Smina box file from the ligand bounding box."
+            "ligand PDB/SDF, and a Vina/Gnina box file from the ligand bounding box."
         )
         smina_form.addRow(self.chk_write_smina)
         self.radio_box_loaded = QRadioButton("Loaded structure")
@@ -357,7 +386,7 @@ class ProteinPrepareDialog(QDialog):
         self.spin_box_padding.setValue(4.0)
         self.spin_box_padding.setSuffix(" Å")
         self.spin_box_padding.setToolTip(
-            "Padding added on each side of the ligand bounding box (Smina --autobox_add)."
+            "Padding added on each side of the ligand bounding box (Gnina --autobox_add)."
         )
         smina_form.addRow("Box padding:", self.spin_box_padding)
         self.lbl_box_preview = QLabel("Box: —")
@@ -368,6 +397,8 @@ class ProteinPrepareDialog(QDialog):
         scroll.setWidget(host)
         root.addWidget(scroll, 1)
 
+        self.chk_repair.toggled.connect(self._sync_repair_options)
+        self.chk_protonate.toggled.connect(self._sync_ligand_options)
         self.chk_include_ligand.toggled.connect(self._sync_ligand_options)
         self.chk_protonate_ligand.toggled.connect(self._sync_ligand_options)
         self.chk_minimize.toggled.connect(self._sync_min_options)
@@ -376,26 +407,23 @@ class ProteinPrepareDialog(QDialog):
         self.chk_write_smina.toggled.connect(self._sync_smina_options)
         self.radio_box_loaded.toggled.connect(self._sync_smina_options)
         self.radio_box_file.toggled.connect(self._sync_smina_options)
+        self.chk_keep_bridging_waters.toggled.connect(self._sync_water_cutoff)
+        self._sync_repair_options()
         self._sync_ligand_options()
         self._sync_min_options()
         self._sync_smina_options()
-
-        self.log = QTextEdit()
-        self.log.setReadOnly(True)
-        self.log.setMinimumHeight(140)
-        self.log.setMaximumHeight(240)
-        self.log.setPlaceholderText("Progress appears here while Prepare runs.")
-        apply_monospace_to_text_edit(self.log)
-        root.addWidget(self.log)
+        self._sync_water_cutoff()
 
         btn_row = QHBoxLayout()
-        self.btn_run = QPushButton("Prepare")
+        self.btn_run = QPushButton("Fast Prepare")
         self.btn_run.clicked.connect(self._on_run)
         btn_row.addWidget(self.btn_run)
-        self.btn_open_smina = QPushButton("Open Smina…")
+        self.btn_open_smina = QPushButton("Open Gnina…")
         self.btn_open_smina.setEnabled(False)
         self.btn_open_smina.setToolTip(
-            "Open Tools → Dock → Smina with the prepared receptor, ligand, and box filled in."
+            "Open Protein → Dock Ligand → Gnina with the prepared receptor, box, and "
+            "crystal ligand for internal validation. The docking ligand field is left "
+            "empty so you can choose compounds to dock."
         )
         self.btn_open_smina.clicked.connect(self._on_open_smina)
         btn_row.addWidget(self.btn_open_smina)
@@ -415,17 +443,13 @@ class ProteinPrepareDialog(QDialog):
         make_window_minimizable(self)
 
     def prefill_from_viewer(self) -> None:
-        viewer = self._viewer
-        name, _text, _fmt, path = viewer.prepare_source()
-        self.lbl_source.setText(name or "—")
-        if path is not None and not (self.edit_out.text() or "").strip():
-            suggested = path.with_name(f"{path.stem}_prepared.cif")
-            self.edit_out.setText(str(suggested))
-        self._refresh_water_label()
-        self._refresh_box_ligand_combo()
+        self._refresh_structure_source()
+
+    def _refresh_chain_list(self) -> None:
+        populate_fixer_chain_list(self, self.chosen_chain_ids())
 
     def _refresh_water_label(self) -> None:
-        keys = self._viewer.prepare_water_keys()
+        keys = self.chosen_water_keys()
         if keys:
             self.chk_keep_selected_waters.setText(
                 f"Keep Manager-selected waters ({len(keys)} residue{'s' if len(keys) != 1 else ''})"
@@ -454,24 +478,40 @@ class ProteinPrepareDialog(QDialog):
         resns = {c.resn for c in comps if c.kind == "ligand"}
         return cif_has_component_bonds(text or "", resns)
 
+    def _sync_repair_options(self) -> None:
+        on = self.chk_repair.isChecked()
+        self.chk_rebuild_loops.setEnabled(on)
+        self.list_chains.setEnabled(on)
+        self.chk_skip_long_gaps.setEnabled(on)
+        self.spin_max_gap.setEnabled(on and self.chk_skip_long_gaps.isChecked())
+        self.chk_add_missing_atoms.setEnabled(on)
+        self.chk_highest_altloc.setEnabled(on)
+        self.chk_keep_metals.setEnabled(on)
+        self.chk_keep_cofactors.setEnabled(on)
+        self.chk_strip_additives.setEnabled(on)
+        self._sync_min_options()
+
     def _sync_ligand_options(self) -> None:
         include = self.chk_include_ligand.isChecked()
+        run_pqr = self.chk_protonate.isChecked()
+        self.spin_ph.setEnabled(run_pqr)
         self.chk_keep_ligand.setEnabled(include)
-        self.chk_protonate_ligand.setEnabled(include)
+        self.chk_protonate_ligand.setEnabled(run_pqr and include)
         self.edit_ligand_smiles.setEnabled(include)
         self.edit_ligand_ref.setEnabled(include)
-        protonate = include and self.chk_protonate_ligand.isChecked()
+        protonate_lig = run_pqr and include and self.chk_protonate_ligand.isChecked()
         pocket_was_enabled = self.chk_pocket_ligand.isEnabled()
-        self.chk_pocket_ligand.setEnabled(protonate)
-        if protonate and not pocket_was_enabled:
+        self.chk_pocket_ligand.setEnabled(protonate_lig)
+        if protonate_lig and not pocket_was_enabled:
             self.chk_pocket_ligand.setChecked(True)
-        elif not protonate:
+        elif not protonate_lig:
             self.chk_pocket_ligand.blockSignals(True)
             self.chk_pocket_ligand.setChecked(False)
             self.chk_pocket_ligand.blockSignals(False)
         self.chk_keep_bridging_waters.setEnabled(include)
         if not include:
             self.chk_keep_bridging_waters.setChecked(False)
+        self._sync_water_cutoff()
         self._sync_min_options()
 
     def _sync_min_options(self) -> None:
@@ -480,15 +520,21 @@ class ProteinPrepareDialog(QDialog):
         self.combo_protein_ff.setEnabled(on)
         self.combo_ligand_ff.setEnabled(on and include)
         self.combo_solvent.setEnabled(on)
+        self.combo_openmm_platform.setEnabled(on)
         gb = (self.combo_solvent.currentData() or "gbn2") != "vacuum"
         self.spin_salt.setEnabled(on and gb)
         self.combo_restraint.setEnabled(on)
         self.spin_k.setEnabled(on)
         self.spin_iters.setEnabled(on)
         loops = self.chk_rebuild_loops.isChecked()
-        self.chk_skip_pocket_loops.setEnabled(loops)
+        self.chk_skip_pocket_loops.setEnabled(self.chk_repair.isChecked() and loops)
         if not loops:
             self.chk_skip_pocket_loops.setChecked(False)
+
+    def _sync_water_cutoff(self, *_args) -> None:
+        self.spin_water_cutoff.setEnabled(
+            self.chk_include_ligand.isChecked() and self.chk_keep_bridging_waters.isChecked()
+        )
 
     def _sync_smina_options(self) -> None:
         on = self.chk_write_smina.isChecked()
@@ -547,10 +593,10 @@ class ProteinPrepareDialog(QDialog):
         _key, sid = self._box_ligand_choice()
         if not sid:
             return "", ""
-        getter = getattr(self._viewer, "prepare_slot_payload", None)
-        source_id = getattr(self._viewer, "prepare_source_id", None)
-        if callable(source_id) and sid == source_id():
+        chosen_sid = self._chosen_manager_id()
+        if sid and chosen_sid and sid == chosen_sid:
             return "", ""
+        getter = getattr(self._viewer, "prepare_slot_payload", None)
         if callable(getter):
             text, fmt = getter(sid)
             return text or "", fmt or "pdb"
@@ -607,11 +653,7 @@ class ProteinPrepareDialog(QDialog):
             self.edit_out.setText(path)
 
     def _append_log(self, text: str) -> None:
-        t = (text or "").rstrip()
-        if not t:
-            return
-        stamp = datetime.now().strftime("%H:%M:%S")
-        self.log.append(f"[{stamp}] {t}")
+        append_viewer_log(self._viewer, text)
 
     def _process_host(self):
         parent = self._viewer
@@ -621,36 +663,27 @@ class ProteinPrepareDialog(QDialog):
             parent = parent.parent()
         return None
 
-    def _write_input_snapshot(self) -> Path:
-        viewer = self._viewer
-        _name, text, fmt, _path = viewer.prepare_source()
-        fmt = fmt or "pdb"
-        if fmt not in _PREPARE_FMTS:
-            raise ValueError("Prepare supports PDB and mmCIF structures.")
-        suffix = ".cif" if fmt == "cif" else ".pdb"
-        tmp_dir = Path(tempfile.mkdtemp(prefix="molmanager_prepare_in_"))
-        path = tmp_dir / f"input{suffix}"
-        path.write_text(text, encoding="utf-8")
-        self._input_tmp = path
-        return path
-
     def _on_run(self) -> None:
-        viewer = self._viewer
-        _name, text, fmt, _path = viewer.prepare_source()
+        self._resolved_source = None
+        try:
+            _name, text, fmt, _path = self.chosen_structure_source()
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Fast Prepare", str(exc))
+            return
         if not (text or "").strip():
-            QMessageBox.information(self, "Prepare Structure", "Open a structure first.")
+            QMessageBox.information(self, "Fast Prepare", self._source_empty_message)
             return
         fmt = fmt or "pdb"
         if fmt not in _PREPARE_FMTS:
             QMessageBox.warning(
                 self,
-                "Prepare Structure",
-                "Prepare supports PDB and mmCIF. Convert or reload as PDB first.",
+                "Fast Prepare",
+                "Fast Prepare supports PDB and mmCIF. Convert or reload as PDB first.",
             )
             return
         out_path = (self.edit_out.text() or "").strip()
         if not out_path:
-            QMessageBox.information(self, "Prepare Structure", "Set an output path.")
+            QMessageBox.information(self, "Fast Prepare", "Set an output path.")
             return
         out_rec = Path(out_path)
         out_fmt = self.combo_out_fmt.currentData() or "cif"
@@ -661,13 +694,28 @@ class ProteinPrepareDialog(QDialog):
             out_rec = out_rec.with_suffix(".cif")
         out_path = str(out_rec)
         self.edit_out.setText(out_path)
+        run_repair = self.chk_repair.isChecked()
+        run_protonate = self.chk_protonate.isChecked()
+        if (
+            not run_repair
+            and not run_protonate
+            and not self.chk_minimize.isChecked()
+            and not self.chk_write_smina.isChecked()
+        ):
+            QMessageBox.information(
+                self,
+                "Fast Prepare",
+                "Check Clean up, Protonate, Restrained minimization, or Write Gnina "
+                "files so there is a step to run.",
+            )
+            return
         keep_water_keys: tuple[tuple[str, str, str], ...] = ()
         if self.chk_keep_selected_waters.isChecked():
-            keep_water_keys = self._viewer.prepare_water_keys()
+            keep_water_keys = self.chosen_water_keys()
             if not keep_water_keys:
                 QMessageBox.information(
                     self,
-                    "Prepare Structure",
+                    "Fast Prepare",
                     "Select water groups in the Manager (a Chain row or its Water row), "
                     "then try again — or uncheck Keep Manager-selected waters.",
                 )
@@ -683,14 +731,15 @@ class ProteinPrepareDialog(QDialog):
         ):
             QMessageBox.information(
                 self,
-                "Prepare Structure",
+                "Fast Prepare",
                 "GAFF/GAFF2 minimization needs SMILES, an SDF/MOL2, or mmCIF "
                 "_chem_comp_bond so AmberTools can assign ligand atom types. Add one, "
                 "or set Ligand force field to Protein only.",
             )
             return
         if (
-            self.chk_include_ligand.isChecked()
+            run_protonate
+            and self.chk_include_ligand.isChecked()
             and self.chk_protonate_ligand.isChecked()
             and not self.edit_ligand_smiles.text().strip()
             and not self.edit_ligand_ref.text().strip()
@@ -699,7 +748,7 @@ class ProteinPrepareDialog(QDialog):
         ):
             QMessageBox.information(
                 self,
-                "Prepare Structure",
+                "Fast Prepare",
                 "Ligand protonation needs SMILES, an SDF/MOL2, or mmCIF _chem_comp_bond "
                 "so Uni-pKa can pick the protomer at this pH. Add one, or uncheck "
                 "Protonate ligand (Uni-pKa).",
@@ -710,7 +759,7 @@ class ProteinPrepareDialog(QDialog):
             if not lig_file:
                 QMessageBox.information(
                     self,
-                    "Prepare Structure",
+                    "Fast Prepare",
                     "Choose a ligand file for the docking box, or switch Box from "
                     "to Loaded structure.",
                 )
@@ -718,17 +767,20 @@ class ProteinPrepareDialog(QDialog):
             if not Path(lig_file).expanduser().is_file():
                 QMessageBox.warning(
                     self,
-                    "Prepare Structure",
+                    "Fast Prepare",
                     f"Ligand file not found:\n{lig_file}",
                 )
                 return
         try:
             in_path = self._write_input_snapshot()
         except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, "Prepare Structure", str(exc))
+            QMessageBox.warning(self, "Fast Prepare", str(exc))
             return
 
         box_source_text, box_source_fmt = self._box_source_payload()
+        extra = fixer_extra_request_kwargs(self)
+        if not run_repair:
+            extra["keep_highest_occupancy_altlocs"] = False
         req = ProteinPrepareRequest(
             input_path=str(in_path),
             output_pdb_path=out_path,
@@ -738,12 +790,13 @@ class ProteinPrepareDialog(QDialog):
             keep_ligand=self.chk_keep_ligand.isChecked(),
             keep_water_keys=keep_water_keys,
             keep_bridging_waters=self.chk_keep_bridging_waters.isChecked(),
-            remove_other_heterogens=self.chk_remove_other_heterogens.isChecked(),
+            repair=run_repair,
+            protonate=run_protonate,
             minimize=self.chk_minimize.isChecked(),
             ligand_smiles=self.edit_ligand_smiles.text().strip(),
             ligand_ref_path=self.edit_ligand_ref.text().strip(),
-            protonate_ligand=self.chk_protonate_ligand.isChecked(),
-            pocket_ligand_protonation=self.chk_pocket_ligand.isChecked(),
+            protonate_ligand=run_protonate and self.chk_protonate_ligand.isChecked(),
+            pocket_ligand_protonation=run_protonate and self.chk_pocket_ligand.isChecked(),
             restraint_k_kcal_per_ang2=float(self.spin_k.value()),
             max_minimize_iterations=int(self.spin_iters.value()),
             protein_ff=self.combo_protein_ff.currentData() or "amber14",
@@ -753,6 +806,7 @@ class ProteinPrepareDialog(QDialog):
                 else "none"
             ),
             solvent=self.combo_solvent.currentData() or "gbn2",
+            openmm_platform=self.combo_openmm_platform.currentData() or "auto",
             salt_m=float(self.spin_salt.value()),
             restraint_set=self.combo_restraint.currentData() or "backbone",
             skip_pocket_loops=self.chk_skip_pocket_loops.isChecked(),
@@ -763,15 +817,23 @@ class ProteinPrepareDialog(QDialog):
             box_ligand_path=self._box_ligand_path(),
             box_source_text=box_source_text,
             box_source_fmt=box_source_fmt,
+            **extra,
         )
         self.btn_run.setEnabled(False)
         self.btn_open_smina.setEnabled(False)
         self._smina_result = None
         self.lbl_box_preview.setText("Box: —")
-        steps = ["PDBFixer"]
-        if self.chk_include_ligand.isChecked() and self.chk_protonate_ligand.isChecked():
+        steps = []
+        if run_repair:
+            steps.append("PDBFixer")
+        if (
+            run_protonate
+            and self.chk_include_ligand.isChecked()
+            and self.chk_protonate_ligand.isChecked()
+        ):
             steps.append("Uni-pKa")
-        steps.append("pdb2pqr/PROPKA")
+        if run_protonate:
+            steps.append("pdb2pqr/PROPKA")
         if self.chk_minimize.isChecked():
             lig_ff = (
                 (self.combo_ligand_ff.currentData() or "none")
@@ -783,12 +845,12 @@ class ProteinPrepareDialog(QDialog):
             else:
                 steps.append("OpenMM protein min")
         if self.chk_write_smina.isChecked():
-            steps.append("Smina files")
-        self._append_log("Starting Prepare: " + " → ".join(steps))
+            steps.append("Gnina files")
+        self._append_log("Starting Fast Prepare: " + " → ".join(steps))
         host = self._process_host()
         if host is not None:
             host.process_queue.enqueue(
-                "Prepare Structure",
+                "Fast Prepare",
                 lambda ev, r=req, sig=self._signals: ProteinPrepareWorker(
                     r, signals=sig, cancel_event=ev
                 ),
@@ -833,23 +895,28 @@ class ProteinPrepareDialog(QDialog):
             self.btn_open_smina.setEnabled(smina.can_open_smina())
             self.smina_prepared.emit(smina)
         self.prepared.emit(path)
+        self.close()
 
     def _on_open_smina(self) -> None:
         result = self._smina_result
         if result is None or not result.can_open_smina():
             QMessageBox.information(
                 self,
-                "Prepare Structure",
-                "Prepare with Write Smina files checked first.",
+                "Fast Prepare",
+                "Prepare with Write Gnina files checked first.",
             )
             return
         host = self._process_host()
-        opener = getattr(host, "open_smina_dock", None) if host is not None else None
+        opener = (
+            (getattr(host, "open_gnina_dock", None) or getattr(host, "open_smina_dock", None))
+            if host is not None
+            else None
+        )
         if not callable(opener):
             QMessageBox.information(
                 self,
-                "Prepare Structure",
-                "Open Smina from Tools → Dock → Smina… and browse to the written files.",
+                "Fast Prepare",
+                "Open Gnina from Protein → Dock Ligand → Gnina… and browse to the written files.",
             )
             return
         dlg = opener()

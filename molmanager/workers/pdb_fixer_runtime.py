@@ -33,6 +33,8 @@ class PdbFixerRequest:
     add_missing_atoms: bool = True
     add_hydrogens: bool = True
     ph: float = 7.0
+    skip_long_gaps: bool = True
+    max_missing_gap: int = 8
 
 
 def _configure_openmm_runtime() -> None:
@@ -53,7 +55,7 @@ def _drop_internal_missing_residues(fixer) -> None:
 
 def prepare_pdb_for_docking(req: PdbFixerRequest) -> None:
     """
-    Clean a receptor PDB with PDBFixer for rigid docking (Smina / Meeko).
+    Clean a receptor PDB with PDBFixer for rigid docking (Gnina / Meeko).
 
     Raises RuntimeError when PDBFixer/OpenMM is missing or preparation fails.
     """
@@ -64,8 +66,7 @@ def prepare_pdb_for_docking(req: PdbFixerRequest) -> None:
         from pdbfixer import PDBFixer
     except Exception as exc:
         raise RuntimeError(
-            "PDBFixer is required to prepare receptor PDB files. "
-            "Install with: pip install pdbfixer"
+            "PDBFixer is required to prepare receptor PDB files. Install with: pip install pdbfixer"
         ) from exc
 
     in_path = Path(req.input_pdb_path).expanduser()
@@ -82,6 +83,10 @@ def prepare_pdb_for_docking(req: PdbFixerRequest) -> None:
     if req.add_missing_atoms or req.replace_nonstandard:
         fixer.findMissingResidues()
         _drop_internal_missing_residues(fixer)
+        if req.skip_long_gaps:
+            from .protein_prepare_qc import drop_long_missing_gaps
+
+            drop_long_missing_gaps(fixer, int(req.max_missing_gap))
 
     if req.replace_nonstandard:
         fixer.findNonstandardResidues()

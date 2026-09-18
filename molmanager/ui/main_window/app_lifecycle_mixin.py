@@ -114,9 +114,10 @@ class AppLifecycleMixin:
             return
         # Skip modal prompt under pytest / headless teardown, or when nothing changed.
         if not getattr(self, "_suppress_exit_session_prompt", False):
+            if not self._confirm_protein_viewer_before_quit():
+                event.ignore()
+                return
             if self._session_has_unsaved_changes():
-                from PyQt5.QtWidgets import QMessageBox
-
                 reply = QMessageBox.question(
                     self,
                     "Save Session",
@@ -134,6 +135,30 @@ class AppLifecycleMixin:
                         return
         self._prepare_application_shutdown()
         QMainWindow.closeEvent(self, event)
+
+    def _confirm_protein_viewer_before_quit(self) -> bool:
+        """Ask to Save to Session if the Protein Viewer is still open with unsaved edits."""
+        dlg = getattr(self, "_protein_viewer_dialog", None)
+        if dlg is None:
+            return True
+        try:
+            visible = dlg.isVisible()
+        except RuntimeError:
+            return True
+        if not visible:
+            try:
+                dlg._suppress_close_prompt = True
+            except RuntimeError:
+                pass
+            return True
+        confirm = getattr(dlg, "confirm_close_or_save_to_session", None)
+        if callable(confirm) and not confirm():
+            return False
+        try:
+            dlg._suppress_close_prompt = True
+        except RuntimeError:
+            pass
+        return True
 
     def _prepare_application_shutdown(self) -> None:
         """Stop timers, cancel background work, close modeless dialogs, drain thread pools."""
@@ -168,6 +193,7 @@ class AppLifecycleMixin:
         for attr in (
             "_processes_dialog",
             "_selection_browser_dialog",
+            "_pose_browser_dialog",
             "_som_browser_dialog",
             "_metabolite_browser_dialog",
             "_mmp_browser_dialog",
@@ -198,6 +224,11 @@ class AppLifecycleMixin:
                 dlg.destroyed.disconnect()
             except (TypeError, RuntimeError):
                 pass
+            if attr == "_protein_viewer_dialog":
+                try:
+                    dlg._suppress_close_prompt = True
+                except RuntimeError:
+                    pass
             try:
                 dlg.hide()
                 dlg.close()

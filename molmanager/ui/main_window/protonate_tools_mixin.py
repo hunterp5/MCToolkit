@@ -36,7 +36,9 @@ class ProtonateToolsMixin:
         if not self.headers or self._table_model.rowCount() == 0:
             return
         from ..dialogs import ProtonateDialog
+        from ..pka_gpu_hint import maybe_remind_unipka_cuda_wheel
 
+        maybe_remind_unipka_cuda_wheel(self)
         candidates = self.chemistry_tool_structure_sources()
         n_sel = len(self._selected_logical_rows())
         dlg = ProtonateDialog(candidates, n_sel, self)

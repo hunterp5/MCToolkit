@@ -21,6 +21,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 from typing import Any
 
 from rdkit import Chem
@@ -34,6 +35,19 @@ CONFS_PACK_SIDECAR_VERSION = 2
 CONFS_CELL_JSON_MAX = 2000
 # Packed cell (meta + base64 mol blocks) upper bound; truncate conformers if exceeded.
 CONFS_CELL_PACK_MAX_CHARS = 950_000
+PACKED_ENSEMBLE_BASES = ("confs", "superpose", "poses")
+_PACKED_ENSEMBLE_HEADER_RE = re.compile(
+    r"^(?:" + "|".join(PACKED_ENSEMBLE_BASES) + r")(?:_\d+| \(\d+\))?$",
+    re.IGNORECASE,
+)
+
+
+def is_packed_ensemble_header(name: str) -> bool:
+    """True for ``confs`` / ``superpose`` / ``poses`` and numbered copies (``confs (1)``, ``poses_2``)."""
+    low = (name or "").strip()
+    if not low:
+        return False
+    return _PACKED_ENSEMBLE_HEADER_RE.match(low) is not None
 
 
 def conformer_is_3d(conf, *, z_eps: float = 1e-3) -> bool:
@@ -213,7 +227,9 @@ def pack_mols_as_confs_cell(
     return base
 
 
-def pack_confs_cell(meta: dict, mol: Chem.Mol | None, *, max_chars: int = CONFS_CELL_PACK_MAX_CHARS) -> str:
+def pack_confs_cell(
+    meta: dict, mol: Chem.Mol | None, *, max_chars: int = CONFS_CELL_PACK_MAX_CHARS
+) -> str:
     """
     Store generation metadata plus, when possible, all conformers as mol blocks for later 3D viewing.
 

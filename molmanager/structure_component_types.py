@@ -215,8 +215,15 @@ NUCLEIC_ACIDS = frozenset(
 WATER_RESIDUES = frozenset({"HOH", "WAT", "H2O", "DOD", "D2O", "TIP", "SOL", "OH2"})
 POCKET_CUTOFF_ANGSTROM = 4.5
 POLAR_HEAVY_ELEMENTS = frozenset({"N", "O", "S", "F"})
-_HYDROGEN_ELEMENTS = frozenset({"H", "D"})
-_POLAR_H_BOND_ANGSTROM = 1.35
+_HYDROGEN_ELEMENTS = frozenset({"H", "D", "T"})
+_CARBON_ELEMENTS = frozenset({"C"})
+_POLAR_H_BOND_ANGSTROM = 1.50
+
+
+def is_hetero_heavy_element(elem: str) -> bool:
+    """True for a non-carbon heavy atom that can carry a polar hydrogen."""
+    symbol = (elem or "").strip().upper()
+    return bool(symbol) and symbol not in _HYDROGEN_ELEMENTS and symbol not in _CARBON_ELEMENTS
 
 
 def _resi_selection_value(resi: str) -> int | str:
@@ -536,7 +543,15 @@ def _norm_chain(chain: str | None) -> str:
 
 
 def _residue_key3(chain: str, resi: str, icode: str) -> tuple[str, str, str]:
-    return (_norm_chain(chain), str(resi or "").strip() or "0", (icode or "").strip())
+    code = (icode or "").strip()
+    if code in {".", "?"}:
+        code = ""
+    return (_norm_chain(chain), str(resi or "").strip() or "0", code)
+
+
+def _atom_key4(chain: str, resi: str, icode: str, name: str) -> tuple[str, str, str, str]:
+    """Normalize ``(chain, resi, icode, atom name)`` for PDB/mmCIF atom edits."""
+    return (*_residue_key3(chain, resi, icode), (name or "").strip())
 
 
 @dataclass(frozen=True)

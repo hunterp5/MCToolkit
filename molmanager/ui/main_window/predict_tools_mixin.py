@@ -96,7 +96,9 @@ class PredictToolsMixin:
         if not ensure_table_ready_for_tool(self, "Predict pKa"):
             return
         from ..dialogs import PKaPredictorDialog
+        from ..pka_gpu_hint import maybe_remind_unipka_cuda_wheel
 
+        maybe_remind_unipka_cuda_wheel(self)
         dlg = PKaPredictorDialog(self)
         self._prepare_tool_dialog(dlg)
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
@@ -659,7 +661,9 @@ class PredictToolsMixin:
         if not ensure_table_ready_for_tool(self, "Generate Protomers"):
             return
         from ..dialogs import ProtomerGeneratorDialog
+        from ..pka_gpu_hint import maybe_remind_unipka_cuda_wheel
 
+        maybe_remind_unipka_cuda_wheel(self)
         dlg = ProtomerGeneratorDialog(self)
         self._prepare_tool_dialog(dlg)
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)

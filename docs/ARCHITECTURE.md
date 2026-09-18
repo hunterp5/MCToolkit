@@ -135,7 +135,7 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 ## Adding a new Tool
 
 1. Dialog under `molmanager/ui/dialogs/` (use `scope.selection_scope_checked`, `parent_app` on docked panels).
-   Protein Prepare, Smina dock, and Data Analysis live there; shims remain at the old `ui/`
+   Protein Prepare, Gnina dock, and Data Analysis live there; shims remain at the old `ui/`
    paths. Package `__init__` loads exports lazily so submodule imports do not pull Qt WebEngine.
 2. Worker under `molmanager/workers/` if work is heavy.
 3. Wire menu action in `chemical_table_app.py` / `chemistry_mixin.py`.

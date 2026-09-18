@@ -28,6 +28,25 @@ def test_default_external_executable_falls_back_to_name(monkeypatch, tmp_path):
     assert bundled_paths.default_external_executable("smina") in ("smina", "smina.exe")
 
 
+def test_default_external_executable_gnina_wsl_name(monkeypatch, tmp_path):
+    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
+    monkeypatch.setattr(bundled_paths.sys, "platform", "win32")
+    assert bundled_paths.default_external_executable("gnina") == "gnina"
+
+
+def test_resolve_bundled_gnina_uses_linux_dir_on_windows(tmp_path, monkeypatch):
+    linux_dir = tmp_path / "bin" / "linux"
+    linux_dir.mkdir(parents=True)
+    exe = linux_dir / "gnina"
+    exe.write_bytes(b"")
+    monkeypatch.delenv("MOLMANAGER_BUNDLE_DIR", raising=False)
+    monkeypatch.setattr(bundled_paths.sys, "platform", "win32")
+    monkeypatch.setattr(bundled_paths, "resources_dir", lambda: tmp_path)
+    monkeypatch.setattr(bundled_paths, "bundled_bin_dir", lambda: tmp_path / "bin" / "win")
+    assert bundled_paths.resolve_bundled_executable("gnina") == exe
+    assert bundled_paths.default_external_executable("gnina") == str(exe)
+
+
 def test_default_obabel_uses_pip_wheel(monkeypatch, tmp_path):
     monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
     pip_exe = bundled_paths.pip_openbabel_executable()

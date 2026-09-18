@@ -33,6 +33,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # ML extras expect a matching PyTorch stack (see requirements.txt / install_pytorch_pka.*).
+# install_pytorch_pka.ps1 / .sh install CUDA 12.4 when nvidia-smi sees an NVIDIA GPU.
 pka = [
     "unipkainfer>=0.2.0",
 ]
@@ -46,6 +47,7 @@ docking = [
     "pdbfixer>=1.9",
     "openmm>=8.2,<8.3",
     "pdb2pqr>=3.6.1",
+    "prolif>=2.1",
 ]
 dev = [
     "pytest>=7.4,<9",

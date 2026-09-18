@@ -19,6 +19,8 @@
 from __future__ import annotations
 
 import csv
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -27,6 +29,63 @@ from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
 from ..session_codec import decode_mol_blob_b64, row_structure_smiles
+
+_SERIAL_MOL_DECODE_MAX = 32
+_MAX_MOL_DECODE_WORKERS = 8
+
+
+def mol_from_session_blob(blob: bytes | None, smiles: str = "") -> Chem.Mol | None:
+    """Rebuild a structure from an RDKit pickle blob, then SMILES if needed."""
+    if blob:
+        try:
+            mol = Chem.Mol(blob)
+            if mol is not None:
+                return mol
+        except Exception:
+            pass
+    smi = (smiles or "").strip()
+    if not smi:
+        return None
+    try:
+        return Chem.MolFromSmiles(smi)
+    except Exception:
+        return None
+
+
+def decode_session_mols(jobs: list[tuple[int, bytes | None, str]]) -> dict[int, Any]:
+    """Decode session structure blobs. Threads are opt-in; RDKit pickle is usually GIL-bound."""
+    mols: dict[int, Any] = {}
+    if not jobs:
+        return mols
+    n = len(jobs)
+    workers = _session_mol_decode_workers(n)
+    if n <= _SERIAL_MOL_DECODE_MAX or workers <= 1:
+        for oid, blob, smi in jobs:
+            mol = mol_from_session_blob(blob, smi)
+            if mol is not None:
+                mols[oid] = mol
+        return mols
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(mol_from_session_blob, blob, smi) for _oid, blob, smi in jobs]
+        for (oid, _blob, _smi), fut in zip(jobs, futures, strict=True):
+            mol = fut.result()
+            if mol is not None:
+                mols[oid] = mol
+    return mols
+
+
+def _session_mol_decode_workers(n: int) -> int:
+    raw = (os.environ.get("MOLMANAGER_SESSION_MOL_WORKERS") or "").strip()
+    if not raw:
+        return 1
+    try:
+        requested = int(raw)
+    except ValueError:
+        return 1
+    if requested <= 1:
+        return 1
+    cpu = os.cpu_count() or 1
+    return max(1, min(_MAX_MOL_DECODE_WORKERS, cpu, n, requested))
 
 
 def _safe_emit(obj: QObject | None, emitter_name: str, *args) -> None:
@@ -94,7 +153,7 @@ class SessionRowsParseWorker(QRunnable):
     def run(self) -> None:
         try:
             prepared: list[tuple[int, dict[str, str]]] = []
-            mols: dict[int, Any] = {}
+            jobs: list[tuple[int, bytes | None, str]] = []
             max_id = -1
             headers = self.data_headers
             for i, entry in enumerate(self.rows):
@@ -114,19 +173,11 @@ class SessionRowsParseWorker(QRunnable):
                 smi = row_structure_smiles(cells, saved_smi)
                 row_cells = {cname: str(cells.get(cname, "") or "") for cname in headers}
                 prepared.append((oid, row_cells))
-                mol = None
                 blob = None
                 if i < len(self.structure_mols):
                     blob = decode_mol_blob_b64(self.structure_mols[i])
-                if blob:
-                    try:
-                        mol = Chem.Mol(blob)
-                    except Exception:
-                        mol = None
-                if mol is None and smi:
-                    mol = Chem.MolFromSmiles(smi)
-                if mol is not None:
-                    mols[oid] = mol
+                jobs.append((oid, blob, smi))
+            mols = decode_session_mols(jobs)
             _safe_emit(
                 self.signals,
                 "finished",

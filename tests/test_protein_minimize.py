@@ -85,6 +85,7 @@ def test_minimize_gaff_keeps_ligand_in_openmm(mock_write, mock_min, mock_ligands
     assert seen["kwargs"]["ligand_ff"] == "gaff2"
     assert seen["kwargs"]["ligand_keys"]
     assert seen["kwargs"]["ligand_mols"]
+    assert seen["kwargs"]["openmm_platform"] == "auto"
     assert Path(out).is_file()
 
 
@@ -137,15 +138,16 @@ def test_minimize_gaff_requires_ligand_chemistry(mock_ligands, tmp_path):
 
 
 def test_minimize_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMenuBar, QMessageBox
+    from PyQt5.QtWidgets import QMenuBar, QMessageBox, QTextEdit
 
     from molmanager.ui.dialogs.protein_minimize import ProteinMinimizeDialog
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
     dlg = ProteinViewerDialog()
     mb = dlg.findChild(QMenuBar)
-    labels = [a.text().replace("&", "") for a in mb.actions()]
-    assert any(label.startswith("Minimize") for label in labels)
+    prepare_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Prepare")
+    prepare_labels = [a.text().replace("&", "") for a in prepare_menu.actions()]
+    assert any(label.startswith("Minimize") for label in prepare_labels)
 
     shown: list[str] = []
 
@@ -155,7 +157,9 @@ def test_minimize_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa
 
     monkeypatch.setattr(QMessageBox, "information", _info)
     dlg.open_minimize_dialog()
-    assert shown
+    assert not shown
+    empty = dlg._minimize_dialog
+    assert empty.radio_src_file.isChecked()
 
     path = tmp_path / "holo.pdb"
     path.write_text(_HOLO_PDB, encoding="utf-8")
@@ -163,9 +167,15 @@ def test_minimize_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa
     dlg.open_minimize_dialog()
     mini = dlg._minimize_dialog
     assert isinstance(mini, ProteinMinimizeDialog)
+    assert not mini.findChildren(QTextEdit)
+    mini._append_log("Starting OpenMM restrained minimization")
+    assert "Starting OpenMM restrained minimization" in dlg.log.toPlainText()
     assert mini.combo_ligand_ff.currentData() == "gaff2"
     assert mini.combo_protein_ff.currentData() == "amber14"
     assert mini.combo_solvent.currentData() == "gbn2"
+    assert mini.combo_openmm_platform.currentData() == "auto"
+    assert mini.radio_src_manager.isChecked()
+    assert mini.combo_src_manager.count() == 1
     assert mini.combo_restraint.currentData() == "backbone_ligand"
     assert mini.chk_keep_water.isChecked()
     assert mini.combo_out_fmt.currentData() == "cif"
@@ -176,3 +186,62 @@ def test_minimize_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa
     mini.combo_ligand_ff.setCurrentIndex(mini.combo_ligand_ff.findData("none"))
     assert not mini.edit_ligand_smiles.isEnabled()
     dlg.close()
+
+
+def _d7d_h_bond_lengths(text: str) -> list[float]:
+    from molmanager.structure_atoms import parse_structure_atoms
+    from molmanager.structure_cif import parse_cif_chem_comp_bonds
+
+    by_name = {}
+    for atom in parse_structure_atoms(text, "cif"):
+        if (atom.resn or "").upper() != "D7D":
+            continue
+        by_name[atom.name] = atom
+    lengths = []
+    for bond in parse_cif_chem_comp_bonds(text).get("D7D") or ():
+        a = by_name.get(bond.atom_id_1)
+        b = by_name.get(bond.atom_id_2)
+        if a is None or b is None:
+            continue
+        if (a.elem or "").upper() not in {"H", "D", "T"} and (b.elem or "").upper() not in {
+            "H",
+            "D",
+            "T",
+        }:
+            continue
+        dx = a.x - b.x
+        dy = a.y - b.y
+        dz = a.z - b.z
+        lengths.append((dx * dx + dy * dy + dz * dz) ** 0.5)
+    return lengths
+
+
+def test_rebuild_hydrogen_chem_bonds_fixes_6bbu_abrocitinib():
+    from pathlib import Path
+
+    from molmanager.structure_cif import (
+        cif_viewer_bond_tables,
+        parse_cif_chem_comp_atoms,
+        repair_cif_hydrogen_chem_bonds,
+    )
+
+    path = Path("samples/6bbu_fixed_protonated_minimized.cif")
+    if not path.is_file():
+        pytest.skip("samples/6bbu_fixed_protonated_minimized.cif is not present")
+    text = path.read_text(encoding="utf-8")
+    before = _d7d_h_bond_lengths(text)
+    assert before
+    assert max(before) > 1.5
+    repaired = repair_cif_hydrogen_chem_bonds(text)
+    after = _d7d_h_bond_lengths(repaired)
+    assert after
+    assert max(after) < 1.45
+    h_ids = {
+        atom.atom_id
+        for atom in parse_cif_chem_comp_atoms(repaired).get("D7D") or ()
+        if (atom.symbol or "").upper() in {"H", "D", "T"}
+    }
+    tables = cif_viewer_bond_tables(text)
+    for a1, a2, _order in tables.get("D7D") or []:
+        assert a1 not in h_ids
+        assert a2 not in h_ids

@@ -14,12 +14,26 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Packed confs / superpose columns are never overwritten in place."""
+"""Packed confs / superpose / poses columns are never overwritten in place."""
 
 from __future__ import annotations
 
 import base64
 import json
+
+from molmanager.confs_codec import is_packed_ensemble_header
+
+
+def test_is_packed_ensemble_header_matches_confs_superpose_poses():
+    assert is_packed_ensemble_header("confs")
+    assert is_packed_ensemble_header("confs (1)")
+    assert is_packed_ensemble_header("confs_2")
+    assert is_packed_ensemble_header("superpose")
+    assert is_packed_ensemble_header("poses")
+    assert is_packed_ensemble_header("poses (1)")
+    assert not is_packed_ensemble_header("confidence")
+    assert not is_packed_ensemble_header("SMILES")
+    assert not is_packed_ensemble_header("")
 
 
 def _packed_cell(tag: str) -> str:

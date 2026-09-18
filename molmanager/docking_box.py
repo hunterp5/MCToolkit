@@ -148,12 +148,21 @@ def docking_box_from_dict(payload: dict | None) -> DockingBox | None:
 
 
 def smina_artifact_paths(output_path: str | Path) -> dict[str, Path]:
-    """Sidecar paths next to the prepared mmCIF/PDB."""
+    """Sidecar paths next to a prepared structure or Dock File PDBQT.
+
+    When *output_path* is already ``.pdbqt`` (Dock File), that file is the apo
+    receptor. Otherwise the receptor is ``{stem}_receptor.pdbqt`` beside a
+    prepared mmCIF/PDB.
+    """
     rec = Path(output_path)
     stem = rec.stem
     parent = rec.parent
+    if rec.suffix.lower() == ".pdbqt":
+        receptor = rec.with_suffix(".pdbqt")
+    else:
+        receptor = parent / f"{stem}_receptor.pdbqt"
     return {
-        "receptor_pdbqt": parent / f"{stem}_receptor.pdbqt",
+        "receptor_pdbqt": receptor,
         "ligand_sdf": parent / f"{stem}_ligand.sdf",
         "ligand_pdb": parent / f"{stem}_ligand.pdb",
         "box": parent / f"{stem}_box.txt",

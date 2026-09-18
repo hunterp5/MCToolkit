@@ -130,6 +130,83 @@ def test_clear_selection_button_is_glyph(qapp):  # noqa: ARG001
     assert _DOCK_LEADING_OPTS_ATTRS == ("_opts_btn", "_clear_sel_btn")
 
 
+def test_pane_title_chrome_is_readable(qapp):  # noqa: ARG001
+    from PyQt5.QtWidgets import QLineEdit, QPushButton
+
+    from molmanager.ui.dockable_plot import (
+        _FOOTER_TEXT_FONT_PX,
+        _GLYPH_BTN_SIZE,
+        style_plot_footer_text_button,
+        style_plot_pane_title_edit,
+    )
+    from molmanager.ui.main_window.plot_pane import PlotPane
+
+    assert _FOOTER_TEXT_FONT_PX >= 12
+    edit = QLineEdit("Histogram")
+    style_plot_pane_title_edit(edit)
+    assert f"font-size: {_FOOTER_TEXT_FONT_PX}px" in (edit.styleSheet() or "")
+    assert edit.height() == _GLYPH_BTN_SIZE
+    close = PlotPane("p1")._close_btn
+    assert f"font-size: {_FOOTER_TEXT_FONT_PX + 2}px" in (close.styleSheet() or "")
+    btn = QPushButton("Close")
+    style_plot_footer_text_button(btn)
+    assert f"font-size: {_FOOTER_TEXT_FONT_PX}px" in (btn.styleSheet() or "")
+
+
+def test_browser_nav_buttons_use_skip_glyphs(qapp):  # noqa: ARG001
+    from PyQt5.QtWidgets import QCheckBox, QHBoxLayout, QLayout, QPushButton, QSizePolicy, QWidget
+
+    from molmanager.ui.dockable_plot import add_centered_browser_nav, style_browser_nav_buttons
+    from molmanager.ui.dockable_plot_constants import (
+        _BROWSER_NAV_BTN_HEIGHT,
+        _BROWSER_NAV_BTN_WIDTH,
+    )
+
+    first, back, fwd, last, select = (QPushButton("x") for _ in range(5))
+    first.setToolTip("First")
+    select.setToolTip("Select this row")
+    style_browser_nav_buttons(first, back, fwd, last, select)
+    for btn in (first, back, fwd, last, select):
+        assert btn.text() == ""
+        assert not btn.icon().isNull()
+        assert btn.minimumWidth() == _BROWSER_NAV_BTN_WIDTH
+        assert btn.height() == _BROWSER_NAV_BTN_HEIGHT
+        assert btn.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
+    assert first.toolTip() == "First"
+    assert select.toolTip() == "Select this row"
+    assert not select.isCheckable()
+
+    toggle = QPushButton("Select")
+    style_browser_nav_buttons(first, back, fwd, last, toggle, select_checkable=True)
+    assert toggle.isCheckable()
+    assert toggle.text() == ""
+    assert not toggle.icon().isNull()
+
+    host = QWidget()
+    layout = QHBoxLayout(host)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(4)
+    trailing = QCheckBox("Browse Selected")
+    add_centered_browser_nav(layout, [first, back, fwd, last, select], trailing=trailing)
+    layout.setSizeConstraint(QLayout.SetNoConstraint)
+    assert layout.count() == 6
+    for i in range(5):
+        assert layout.stretch(i) == 1
+        assert layout.itemAt(i).widget() is (first, back, fwd, last, select)[i]
+    assert layout.stretch(5) == 0
+    assert layout.itemAt(5).widget() is trailing
+    trailing.setFixedWidth(100)
+    host.setFixedWidth(520)
+    host.show()
+    qapp.processEvents()
+    widths = {first.width(), back.width(), fwd.width(), last.width(), select.width()}
+    assert min(widths) > _BROWSER_NAV_BTN_WIDTH
+    assert max(widths) - min(widths) <= 1
+    leftover = 520 - trailing.width() - layout.spacing() * 5
+    assert abs(first.width() * 5 - leftover) <= 5
+    host.close()
+
+
 def test_pane_nav_arrow_glyph_is_vector(qapp):  # noqa: ARG001
     from PyQt5.QtWidgets import QPushButton
 

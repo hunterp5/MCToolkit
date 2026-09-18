@@ -21,10 +21,17 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from ..confs_codec import is_packed_ensemble_header
 from ..utils import safe_float
 
-# Packed multi-conformer / alignment payloads — not numeric filter columns.
-NON_NUMERIC_BLOB_COLUMNS = frozenset({"confs", "superpose"})
+# Packed multi-conformer / alignment / dock-pose payloads — not numeric filter columns.
+NON_NUMERIC_BLOB_COLUMNS = frozenset({"confs", "superpose", "poses"})
+
+
+def is_non_numeric_blob_header(header: str) -> bool:
+    """True when *header* is a packed ensemble column (including ``confs (1)``, ``poses_2``)."""
+    name = str(header or "").strip()
+    return name in NON_NUMERIC_BLOB_COLUMNS or is_packed_ensemble_header(name)
 
 
 def merge_numeric_bounds_rows(

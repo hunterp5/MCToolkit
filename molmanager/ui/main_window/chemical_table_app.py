@@ -281,6 +281,7 @@ class ChemicalTableApp(
         self._plot_table_sync_timer.setSingleShot(True)
         self._plot_table_sync_timer.timeout.connect(self._sync_active_plots_from_table_selection)
         self._selection_browser_dialog = None
+        self._pose_browser_dialog = None
         self._som_browser_dialog = None
         self._som_browse_records = []
         self._metabolite_browser_dialog = None
@@ -295,6 +296,7 @@ class ChemicalTableApp(
         self._sali_browser_dialog = None
         self._sketcher_dialog = None
         self._protein_viewer_dialog = None
+        self._protein_viewer_session = None
         self._protein_msa_dialog = None
         self._calculator_dialog = None
         self._data_analysis_dialog = None
@@ -385,27 +387,31 @@ class ChemicalTableApp(
             cancel_event=cancel_event,
         )
 
-    def smina_dock_active(self) -> bool:
-        """True while Tools → Dock has a ``smina`` subprocess running."""
+    def gnina_dock_active(self) -> bool:
+        """True while Protein → Dock Ligand has a ``gnina`` subprocess running."""
         dlg = getattr(self, "_smina_dock_dialog", None)
         if dlg is None:
             return False
         try:
-            fn = getattr(dlg, "is_smina_running", None)
+            fn = getattr(dlg, "is_gnina_running", None) or getattr(dlg, "is_smina_running", None)
             return bool(fn()) if callable(fn) else False
         except RuntimeError:
             return False
 
-    def cancel_smina_dock(self) -> bool:
-        """Stop the Smina ``QProcess`` if the dialog exists and a run is active."""
+    smina_dock_active = gnina_dock_active
+
+    def cancel_gnina_dock(self) -> bool:
+        """Stop the Gnina ``QProcess`` if the dialog exists and a run is active."""
         dlg = getattr(self, "_smina_dock_dialog", None)
         if dlg is None:
             return False
         try:
-            fn = getattr(dlg, "cancel_smina", None)
+            fn = getattr(dlg, "cancel_gnina", None) or getattr(dlg, "cancel_smina", None)
             return bool(fn()) if callable(fn) else False
         except RuntimeError:
             return False
+
+    cancel_smina_dock = cancel_gnina_dock
 
     def start_render_worker(
         self,

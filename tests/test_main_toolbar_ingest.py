@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QToolButton
 
 from molmanager.ui.main_window import ChemicalTableApp
 
@@ -32,71 +31,41 @@ def test_main_toolbar_disabled_while_ingest_loading(qapp):  # noqa: ARG001
     assert file_menu.isEnabled()
     assert w._btn_workspace_layout.isEnabled()
     assert w._btn_processes.isEnabled()
-    assert w._btn_help.isEnabled()
+    assert w._help_menu.isEnabled()
 
     w._set_ingest_loading(True)
     assert not file_menu.isEnabled()
     assert not w._btn_workspace_layout.isEnabled()
-    assert w._btn_processes.isEnabled()
-    assert w._btn_help.isEnabled()
-    assert w._act_user_guide.isEnabled()
-    assert w._act_citations.isEnabled()
+    assert not w._btn_processes.isEnabled()
+    assert not w._help_menu.isEnabled()
+    assert not w._act_user_guide.isEnabled()
+    assert not w._act_citations.isEnabled()
 
     w._set_ingest_loading(False)
     assert file_menu.isEnabled()
     assert w._btn_workspace_layout.isEnabled()
     assert w._btn_processes.isEnabled()
-    assert w._btn_help.isEnabled()
+    assert w._help_menu.isEnabled()
     w.close()
 
 
-def test_help_is_corner_glyph_right_of_processes(qapp):  # noqa: ARG001
+def test_help_is_menubar_dropdown_after_settings(qapp):  # noqa: ARG001
     w = ChemicalTableApp()
     mb = w.menuBar()
     labels = [a.text().replace("&", "") for a in mb.actions() if a.text()]
-    assert "Help" not in labels
-    btn = w._btn_help
-    assert btn.toolButtonStyle() == Qt.ToolButtonIconOnly
-    assert not btn.icon().isNull()
-    assert 12 <= btn.iconSize().width() <= mb.fontMetrics().height()
+    assert labels[-1] == "Help"
+    assert labels[-2] == "Settings"
+    menu = w._help_menu
+    assert menu is not None
+    item_labels = [a.text().replace("&", "") for a in menu.actions()]
+    assert item_labels == ["User Guide", "Citations"]
+    assert w._act_user_guide in menu.actions()
+    assert w._act_citations in menu.actions()
     corner = mb.cornerWidget(Qt.TopRightCorner)
     ly = corner.layout()
     widgets = [ly.itemAt(i).widget() for i in range(ly.count())]
-    assert widgets[-2] is w._btn_processes
-    assert widgets[-1] is btn
-    assert btn.popupMode() == QToolButton.InstantPopup
-    menu = btn.menu()
-    assert menu is not None
-    labels = [a.text().replace("&", "") for a in menu.actions()]
-    assert labels == ["User Guide", "Citations"]
-    assert w._act_user_guide in menu.actions()
-    assert w._act_citations in menu.actions()
+    assert widgets == [w._btn_workspace_layout, w._btn_processes]
     w.close()
-
-
-def test_help_glyph_is_filled_question_badge(qapp):  # noqa: ARG001
-    from PyQt5.QtGui import QColor, QImage
-
-    from molmanager.ui.main_window.app_menu_mixin import _help_glyph_icon
-
-    ink = QColor(20, 20, 20)
-    paper = QColor(240, 240, 240)
-    icon = _help_glyph_icon(size=24, ink=ink, paper=paper)
-    pm = icon.pixmap(24, 24)
-    img = pm.toImage().convertToFormat(QImage.Format_ARGB32)
-    dark = 0
-    light = 0
-    for y in range(img.height()):
-        for x in range(img.width()):
-            c = QColor(img.pixel(x, y))
-            if c.alpha() < 40:
-                continue
-            if c.lightness() < 80:
-                dark += 1
-            elif c.lightness() > 180:
-                light += 1
-    assert dark > 80
-    assert light > 20
 
 
 def test_main_window_table_sits_flush_under_menubar(qapp):  # noqa: ARG001

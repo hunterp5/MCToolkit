@@ -63,6 +63,17 @@ def test_generate_conformations_dialog_fine_tune_params(qapp):  # noqa: ARG001
     assert p.use_random_coords is True
     assert p.keep_hydrogens is True
     assert p.enforce_chirality is True
+    dlg.ff_combo.setCurrentText("GAFF2")
+    assert dlg.params().force_field == "GAFF2"
+    dlg.ff_combo.setCurrentText("GAFF")
+    assert dlg.params().force_field == "GAFF"
+    assert {dlg.ff_combo.itemText(i) for i in range(dlg.ff_combo.count())} >= {
+        "MMFF",
+        "MMFF94s",
+        "UFF",
+        "GAFF2",
+        "GAFF",
+    }
     dlg.close()
 
 

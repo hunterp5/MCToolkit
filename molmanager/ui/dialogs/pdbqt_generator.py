@@ -333,7 +333,7 @@ class PdbqtGeneratorDialog(QDialog):
         self._enqueue(req, "Generate ligand PDBQT")
 
     def _populate_open_smina_paths(self, receptor_pdbqt: str, ligand_pdbqt: str) -> None:
-        """If Dock or Smina dialogs are open, fill receptor/ligand path fields with generated PDBQT files."""
+        """If Dock or Gnina dialogs are open, fill receptor/ligand path fields with generated PDBQT files."""
         app = self.parent_app
         if app is None:
             return

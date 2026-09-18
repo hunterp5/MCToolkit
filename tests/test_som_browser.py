@@ -118,13 +118,19 @@ def test_som_browser_steps_between_maps(qapp) -> None:  # noqa: ARG001
     ]
     w = SomBrowserWidget(None)
     w.set_records(recs)
-    assert w._btn_back.text() == "←"
-    assert w._btn_fwd.text() == "→"
+    assert w._btn_back.text() == ""
+    assert w._btn_fwd.text() == ""
+    assert w._btn_select.text() == ""
+    assert not w._btn_back.icon().isNull()
+    assert not w._btn_fwd.icon().isNull()
+    assert not w._btn_select.icon().isNull()
     assert "1 / 2" in w._meta.text()
     assert w._atom_table.rowCount() == 2
+    atom_h = w._atom_table.height()
     w._step(1)
     assert "2 / 2" in w._meta.text()
     assert w._atom_table.rowCount() == 1
+    assert w._atom_table.height() == atom_h
     w._go_first()
     assert "1 / 2" in w._meta.text()
     w.close()

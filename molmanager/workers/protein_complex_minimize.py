@@ -30,6 +30,7 @@ from .protein_prepare_constants import (
     _GB_SALT_M,
     _LIGAND_FF_GAFF2,
     _LIGAND_FF_NONE,
+    _OPENMM_PLATFORM_AUTO,
     _PROTEIN_FF_AMBER14,
     _RESTRAINT_BACKBONE_LIGAND,
     _SOLVENT_GBN2,
@@ -60,6 +61,7 @@ class ProteinMinimizeRequest:
     restraint_set: str = _RESTRAINT_BACKBONE_LIGAND
     restraint_k_kcal_per_ang2: float = _DEFAULT_CA_K_KCAL
     max_iterations: int = _DEFAULT_MIN_ITERS
+    openmm_platform: str = _OPENMM_PLATFORM_AUTO
     ligand_smiles: str = ""
     ligand_ref_path: str = ""
     ligand_keys: tuple[ResidueKey, ...] = ()
@@ -205,6 +207,7 @@ def _minimize_protein_complex(req: ProteinMinimizeRequest) -> str:
         ligand_ff=ligand_ff if use_gaff else _LIGAND_FF_NONE,
         ligand_mols=ligand_mols if use_gaff else None,
         work_dir=work if use_gaff else None,
+        openmm_platform=req.openmm_platform,
     )
     protein_min = minimized.read_text(encoding="utf-8")
     if use_gaff:

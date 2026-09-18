@@ -32,6 +32,7 @@ from ..config import load_config
 from ..confs_codec import format_confs_table_cell, pack_confs_cell
 from .chemistry_worker_common import (
     emit_tool_progress_throttled,
+    is_gaff_force_field,
     mmff_variant,
     normalize_force_field,
 )
@@ -242,6 +243,35 @@ def _keep_lowest_energy(
     return {cid: energies_by_cid[cid] for cid in keep}
 
 
+def _gaff_minimize_error(exc: BaseException) -> str:
+    msg = str(exc).strip() or exc.__class__.__name__
+    if len(msg) > 400:
+        msg = msg[:397] + "..."
+    if msg.lower() in {"cancelled"}:
+        return "cancelled"
+    if msg.lower().startswith("gaff") or "ambertools" in msg.lower():
+        return msg
+    return f"gaff:{msg}"
+
+
+def _optimize_conformer_energies_gaff(
+    m: Chem.Mol,
+    params: ConformerGenParams,
+    meta: dict,
+    max_it: int,
+    cancel_event: threading.Event | None = None,
+) -> tuple[list[float], str] | None:
+    from .conformer_gaff import optimize_conformer_energies_gaff
+
+    try:
+        return optimize_conformer_energies_gaff(
+            m, params.force_field, max_it, cancel_event=cancel_event
+        )
+    except Exception as e:
+        meta["err"] = _gaff_minimize_error(e)
+        return None
+
+
 def _optimize_conformer_energies_cooperative(
     m: Chem.Mol,
     params: ConformerGenParams,
@@ -251,6 +281,8 @@ def _optimize_conformer_energies_cooperative(
 ) -> tuple[list[float], str] | None:
     """Per-conformer minimization so ``cancel_event`` can abort between conformers."""
     ff_choice = normalize_force_field(params.force_field)
+    if is_gaff_force_field(ff_choice):
+        return _optimize_conformer_energies_gaff(m, params, meta, max_it, cancel_event=cancel_event)
     cids = _conformer_ids(m)
     energies: list[float] = []
     if ff_choice in {"MMFF", "MMFF94s"}:
@@ -297,6 +329,8 @@ def _optimize_conformer_energies_batch(
 ) -> tuple[list[float], str] | None:
     """Fast path: RDKit batch optimizers (no cooperative cancel during minimization)."""
     ff = normalize_force_field(params.force_field)
+    if is_gaff_force_field(ff):
+        return _optimize_conformer_energies_gaff(m, params, meta, max_it)
     res = None
     try:
         if ff in {"MMFF", "MMFF94s"}:
@@ -329,7 +363,7 @@ def run_conformer_generation(
     cancel_event: threading.Event | None = None,
 ) -> tuple[Chem.Mol | None, dict]:
     """
-    Embed multiple conformers, minimize (MMFF, MMFF94s, or UFF), prune by energy window
+    Embed multiple conformers, minimize (MMFF, MMFF94s, UFF, GAFF, or GAFF2), prune by energy window
     (and optional post-minimize RMS / max-keep), then RemoveHs unless ``keep_hydrogens``.
 
     When ``params.align_pattern`` is set and at least two conformers remain, they are

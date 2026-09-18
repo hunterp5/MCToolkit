@@ -40,7 +40,7 @@ IONIZATION_SIDECAR_VERSION = 1
 _SIDECAR_ENGINE = "unipka"
 
 
-def _alias_keys_for_states(states: Any) -> list[str]:
+def _alias_keys_for_states(states: Any, *, from_blobs: bool = True) -> list[str]:
     """Canonical SMILES for every microstate so later tools can look up the same ensemble."""
     from molmanager.ionization import PicklableIonizationEnsemble
     from molmanager.utils import mol_to_canonical_smiles
@@ -51,30 +51,36 @@ def _alias_keys_for_states(states: Any) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
     for ms in states.microstates:
-        mol = None
-        blob = getattr(ms, "mol_binary", None)
-        if blob:
-            try:
-                mol = Chem.Mol(blob)
-            except Exception:
-                mol = None
         smi = str(getattr(ms, "smiles", "") or "").strip()
-        if mol is None and smi:
-            mol = Chem.MolFromSmiles(smi)
-        key = mol_to_canonical_smiles(mol) if mol is not None else ""
-        if not key:
-            key = smi
+        key = smi
+        if from_blobs:
+            mol = None
+            blob = getattr(ms, "mol_binary", None)
+            if blob:
+                try:
+                    mol = Chem.Mol(blob)
+                except Exception:
+                    mol = None
+            if mol is None and smi:
+                mol = Chem.MolFromSmiles(smi)
+            key = mol_to_canonical_smiles(mol) if mol is not None else smi
         if key and key not in seen:
             seen.add(key)
             out.append(key)
     return out
 
 
-def _write_entry(store: dict[str, Any], structure_key: str, states: list[Any] | None) -> None:
+def _write_entry(
+    store: dict[str, Any],
+    structure_key: str,
+    states: list[Any] | None,
+    *,
+    from_blobs: bool = True,
+) -> None:
     store[structure_key] = states
     if states is None:
         return
-    for alias in _alias_keys_for_states(states):
+    for alias in _alias_keys_for_states(states, from_blobs=from_blobs):
         store[alias] = states
 
 
@@ -291,7 +297,7 @@ def deserialize_ionization_sidecar(raw: Any) -> dict[str, Any]:
             logger.debug("skipping corrupt ionization sidecar entry %s", k[:48], exc_info=True)
             continue
         if restored is not None:
-            _write_entry(out, k, restored)
+            _write_entry(out, k, restored, from_blobs=False)
     return out
 
 

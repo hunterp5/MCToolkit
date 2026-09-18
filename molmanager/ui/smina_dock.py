@@ -14,10 +14,15 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Compatibility re-export; prefer ``molmanager.ui.dialogs.smina_dock``."""
+"""Compatibility re-export; prefer ``molmanager.ui.dialogs.gnina_dock``."""
 
 from __future__ import annotations
 
-from .dialogs.smina_dock import SminaDockDialog, _ligand_cli_args, _write_smina_config
+from .dialogs.gnina_dock import (
+    GninaDockDialog,
+    SminaDockDialog,
+    _ligand_cli_args,
+    _write_smina_config,
+)
 
-__all__ = ["SminaDockDialog", "_ligand_cli_args", "_write_smina_config"]
+__all__ = ["GninaDockDialog", "SminaDockDialog", "_ligand_cli_args", "_write_smina_config"]

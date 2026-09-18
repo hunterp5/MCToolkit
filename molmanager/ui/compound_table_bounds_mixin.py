@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from ..services.numeric_bounds import (
-    NON_NUMERIC_BLOB_COLUMNS,
+    is_non_numeric_blob_header,
     merge_numeric_bounds_rows as merge_numeric_bounds_rows_fn,
     scan_numeric_column,
 )
@@ -32,7 +32,7 @@ class CompoundTableBoundsMixin:
             for h in self._headers[2:]
             if h not in ("ID_HIDDEN", "Structure")
             and h not in self._pixmap_columns
-            and h not in NON_NUMERIC_BLOB_COLUMNS
+            and not is_non_numeric_blob_header(h)
         )
 
     def _invalidate_numeric_bounds_all(self) -> None:
@@ -55,7 +55,7 @@ class CompoundTableBoundsMixin:
             for h in self._headers[2:]
             if h not in ("ID_HIDDEN", "Structure")
             and h not in self._pixmap_columns
-            and h not in NON_NUMERIC_BLOB_COLUMNS
+            and not is_non_numeric_blob_header(h)
         )
 
     def _mark_headers_added_for_bounds(self, new_headers: list[str]) -> None:
@@ -137,7 +137,7 @@ class CompoundTableBoundsMixin:
             for h in self._headers[2:]
             if h not in ("ID_HIDDEN", "Structure")
             and h not in self._pixmap_columns
-            and h not in NON_NUMERIC_BLOB_COLUMNS
+            and not is_non_numeric_blob_header(h)
         )
         if not data_headers:
             return {}
@@ -158,7 +158,7 @@ class CompoundTableBoundsMixin:
             for h in self._headers[2:]
             if h not in ("ID_HIDDEN", "Structure")
             and h not in self._pixmap_columns
-            and h not in NON_NUMERIC_BLOB_COLUMNS
+            and not is_non_numeric_blob_header(h)
         )
         key = tuple(data_headers)
         if not data_headers:

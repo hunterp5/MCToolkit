@@ -26,6 +26,7 @@ from PyQt5.QtWidgets import (
 
 from ...confs_codec import (
     demote_v1_cell_to_sidecar,
+    is_packed_ensemble_header,
     rehydrate_v1_confs_cell,
 )
 from ...exception_policy import log_swallowed_exception
@@ -299,7 +300,7 @@ class TableUIMixin(
         if sc is None:
             self._confs_blocks_sidecar = {}
             sc = self._confs_blocks_sidecar
-        cols = [c for c in ("confs", "superpose") if c in self.headers]
+        cols = [c for c in self.headers if is_packed_ensemble_header(c)]
         if not cols:
             return
         n = self._table_model.rowCount()
@@ -329,7 +330,7 @@ class TableUIMixin(
         sc = getattr(self, "_confs_blocks_sidecar", None)
         if not sc:
             return
-        for col in ("confs", "superpose"):
+        for col in [h for h in self.headers if is_packed_ensemble_header(h)]:
             b = sc.get((int(src_oid), col))
             if b:
                 sc[(int(dst_oid), col)] = b
@@ -339,7 +340,7 @@ class TableUIMixin(
         if col == 1:
             return ""
         h = self.headers[col] if 0 <= col < len(self.headers) else ""
-        if h in ("confs", "superpose"):
+        if is_packed_ensemble_header(h):
             raw = self._table_model.backing_value_for_row_header(row, h)
             t0 = self._table_model.cell_text(row, 0)
             oid = int(t0) if t0.isdigit() else -1

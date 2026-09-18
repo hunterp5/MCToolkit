@@ -27,6 +27,15 @@ from PyQt5.QtWidgets import QMessageBox
 logger = logging.getLogger(__name__)
 
 
+def _plot_dialog_and_widget_types():
+    """Import plot window types when QtWebEngine is available in this process."""
+    try:
+        from .plot import PlotDialog, PlotWidget
+    except ImportError:
+        return None, None
+    return PlotDialog, PlotWidget
+
+
 class PlotDockHost:
     """Owns docked-plot lifecycle for :class:`~molmanager.ui.main_window.ChemicalTableApp`.
 
@@ -196,12 +205,11 @@ class PlotDockHost:
     def dock_plot_widget(self, plot_widget, pane=None) -> bool:
         """Move a plot or viewer widget into the active workspace plot pane."""
         from .dockable_plot import is_dockable_workspace_widget
-        from .plot import PlotWidget
 
-        if not is_dockable_workspace_widget(plot_widget) and not isinstance(
-            plot_widget, PlotWidget
-        ):
-            return False
+        if not is_dockable_workspace_widget(plot_widget):
+            _dialog_cls, plot_cls = _plot_dialog_and_widget_types()
+            if plot_cls is None or not isinstance(plot_widget, plot_cls):
+                return False
         mgr = self.workspace()
         if mgr is None:
             return False
@@ -254,12 +262,12 @@ class PlotDockHost:
                 self._app._prepare_tool_dialog(dlg)
                 if hasattr(dlg, "_plot_widget") or hasattr(dlg, "_panel"):
                     pass
-                from .plot import PlotDialog
-
-                if isinstance(dlg, PlotDialog):
-                    self._app._register_plot_dialog(dlg)
-                elif not self._app._bind_undocked_browser_dialog(dlg):
-                    self._app._register_floating_result_dialog(dlg)
+                if not self._app._bind_undocked_browser_dialog(dlg):
+                    plot_dialog_cls, _plot_cls = _plot_dialog_and_widget_types()
+                    if plot_dialog_cls is not None and isinstance(dlg, plot_dialog_cls):
+                        self._app._register_plot_dialog(dlg)
+                    else:
+                        self._app._register_floating_result_dialog(dlg)
                 plot_widget.show()
                 dlg.show()
                 dlg.raise_()
@@ -342,6 +350,7 @@ class PlotDockHost:
         if plot_widget is None:
             self._app.status_label.setText("No docked plot to close.")
             return
+        self._notify_docked_plot_closing(plot_widget)
         self._release_plot_widget_from_panel_host(plot_widget)
         try:
             plot_widget.setParent(None)
@@ -377,6 +386,7 @@ class PlotDockHost:
                 return
 
         for plot_widget in widgets:
+            self._notify_docked_plot_closing(plot_widget)
             self._release_plot_widget_from_panel_host(plot_widget)
             try:
                 plot_widget.setParent(None)
@@ -414,10 +424,17 @@ class PlotDockHost:
                 pass
         self._apply_plot_panel_minimum_width()
 
+    def _notify_docked_plot_closing(self, plot_widget) -> None:
+        closing = getattr(plot_widget, "on_docked_plot_closing", None)
+        if not callable(closing):
+            return
+        try:
+            closing()
+        except RuntimeError:
+            pass
+
     def undock_plot_to_window(self, plot_widget=None) -> bool:
         """Move a docked plot into a floating window."""
-        from .plot import PlotDialog, PlotWidget
-
         mgr = self.workspace()
         if mgr is None:
             return False
@@ -437,10 +454,12 @@ class PlotDockHost:
             self._release_plot_widget_from_panel_host(plot_widget)
             dlg = factory(self._app)
             self._app._prepare_tool_dialog(dlg)
-            if isinstance(dlg, PlotDialog):
-                self._app._register_plot_dialog(dlg)
-            elif not self._app._bind_undocked_browser_dialog(dlg):
-                self._app._register_floating_result_dialog(dlg)
+            if not self._app._bind_undocked_browser_dialog(dlg):
+                plot_dialog_cls, _plot_cls = _plot_dialog_and_widget_types()
+                if plot_dialog_cls is not None and isinstance(dlg, plot_dialog_cls):
+                    self._app._register_plot_dialog(dlg)
+                else:
+                    self._app._register_floating_result_dialog(dlg)
             plot_widget.show()
             dlg.show()
             dlg.raise_()
@@ -455,9 +474,12 @@ class PlotDockHost:
                 mark()
             return True
 
-        if not isinstance(plot_widget, PlotWidget):
+        _dialog_cls, plot_cls = _plot_dialog_and_widget_types()
+        if plot_cls is None or not isinstance(plot_widget, plot_cls):
             self._release_plot_widget_from_panel_host(plot_widget)
             return False
+
+        from .plot import PlotDialog
 
         self._release_plot_widget_from_panel_host(plot_widget)
         dlg = PlotDialog(self._app, plot_widget=plot_widget)

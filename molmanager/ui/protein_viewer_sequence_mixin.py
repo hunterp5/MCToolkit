@@ -47,6 +47,7 @@ class ProteinViewerSequenceMixin:
             dlg.focus_residues_requested.connect(self._on_sequence_focus)
             dlg.destroyed.connect(self._on_sequence_dialog_destroyed)
             self._sequence_dialog = dlg
+        self._refresh_sequence_chains(force=True)
         dlg.set_chains(self._sequence_chains)
         dlg.show()
         dlg.raise_()
@@ -55,7 +56,11 @@ class ProteinViewerSequenceMixin:
     def _on_sequence_dialog_destroyed(self) -> None:
         self._sequence_dialog = None
 
-    def _refresh_sequence_chains(self) -> None:
+    def _refresh_sequence_chains(self, *, force: bool = False) -> None:
+        dlg = self._sequence_dialog
+        live = dlg is not None and not qobject_is_deleted(dlg)
+        if not force and not live:
+            return
         filtered: list[PolymerChain] = []
         for model, slot in enumerate(self._slots):
             fmt = "cif" if slot.fmt == "cif" else "pdb"
@@ -106,6 +111,12 @@ class ProteinViewerSequenceMixin:
     def _set_residue_highlight(self, selections: list[dict]) -> None:
         self._residue_highlight = list(selections)
         self.viewer.set_residue_highlight(self._residue_highlight)
+        atom_level = any(
+            (sel or {}).get("atom") or ((sel or {}).get("serial") not in (None, ""))
+            for sel in self._residue_highlight
+        )
+        if not atom_level:
+            self._set_atom_status("")
 
     def _on_sequence_selection(self, selections: list) -> None:
         self._set_residue_highlight(list(selections or []))

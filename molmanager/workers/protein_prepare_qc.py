@@ -279,6 +279,53 @@ def pocket_titration_remarks(
     return tuple(rows)
 
 
+def drop_long_missing_gaps(fixer, max_len: int) -> int:
+    """Drop SEQRES gaps longer than *max_len* residues (terminal tags, disordered loops).
+
+    PDBFixer places short missing stretches reasonably, but long N-terminal tags
+    (for example 6BBU residues 839–866) and large disordered loops come out as
+    strained models that do not help docking and can dominate minimization.
+    """
+    missing = getattr(fixer, "missingResidues", None)
+    if not isinstance(missing, dict) or not missing:
+        return 0
+    try:
+        limit = int(max_len)
+    except (TypeError, ValueError):
+        return 0
+    if limit < 0:
+        return 0
+    dropped = 0
+    for key in list(missing):
+        gap = missing.get(key) or []
+        if len(gap) > limit:
+            dropped += len(gap)
+            del missing[key]
+    return dropped
+
+
+def het_role(resn: str, kind: str = "") -> str:
+    """Classify a residue as polymer, water, metal, cofactor, additive, or ligand."""
+    from ..structure_components import AMINO_ACIDS, METAL_RESIDUES, NUCLEIC_ACIDS, WATER_RESIDUES
+    from .protein_prepare_constants import COFACTOR_RESIDUES, CRYSTAL_ADDITIVE_RESIDUES
+
+    name = (resn or "").strip().upper()
+    kind_s = (kind or "").strip().lower()
+    if kind_s == "water" or name in WATER_RESIDUES:
+        return "water"
+    if kind_s == "polymer" or name in AMINO_ACIDS or name in NUCLEIC_ACIDS:
+        return "polymer"
+    if kind_s == "metal" or name in METAL_RESIDUES:
+        return "metal"
+    if name in COFACTOR_RESIDUES:
+        return "cofactor"
+    if name in CRYSTAL_ADDITIVE_RESIDUES:
+        return "additive"
+    if kind_s:
+        return kind_s
+    return "ligand"
+
+
 def drop_missing_residues_near_ligand(
     fixer,
     ligand_keys: set[ResidueKey],

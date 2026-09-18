@@ -57,6 +57,7 @@ from .structure_component_types import (
     WATER_RESIDUES,
     _REMARK_465_ROW,
     _ResidueBucket,
+    _atom_key4,
     _norm_chain,
     _resi_selection_value,
 )
@@ -804,3 +805,152 @@ def delete_pdb_residues(text: str, keys: set[tuple[str, str, str]]) -> str:
             continue
         out.append(line.rstrip())
     return "\n".join(out) + ("\n" if out else "")
+
+
+def _pdb_atom_serial(line: str) -> int | None:
+    rec = line[:6].strip().upper() if line else ""
+    if rec not in {"ATOM", "HETATM"}:
+        return None
+    try:
+        return int(line.ljust(80)[6:11])
+    except (TypeError, ValueError):
+        return None
+
+
+def _pdb_atom_key(line: str) -> tuple[str, str, str, str] | None:
+    rec = line[:6].strip().upper() if line else ""
+    if rec not in {"ATOM", "HETATM"}:
+        return None
+    residue = _pdb_residue_key(line)
+    if residue is None:
+        return None
+    return _atom_key4(*residue, line.ljust(80)[12:16].strip())
+
+
+def _parse_conect_serials(line: str) -> list[int]:
+    rec = line[:6].strip().upper() if line else ""
+    if rec != "CONECT":
+        return []
+    padded = line.rstrip("\n").ljust(81)
+    out: list[int] = []
+    for start in range(6, min(len(padded), 81), 5):
+        chunk = padded[start : start + 5].strip()
+        if not chunk:
+            continue
+        try:
+            out.append(int(chunk))
+        except ValueError:
+            break
+    return out
+
+
+def _format_conect(serials: Iterable[int]) -> str:
+    return "CONECT" + "".join(f"{int(serial):5d}" for serial in serials)
+
+
+def pdb_conect_partners(text: str) -> dict[int, tuple[int, ...]]:
+    """Map each PDB serial to CONECT partners (both recorded directions)."""
+    partners: dict[int, set[int]] = defaultdict(set)
+    for line in (text or "").splitlines():
+        serials = _parse_conect_serials(line)
+        if len(serials) < 2:
+            continue
+        origin = serials[0]
+        for other in serials[1:]:
+            if other == origin:
+                continue
+            partners[origin].add(other)
+            partners[other].add(origin)
+    return {serial: tuple(sorted(bonded)) for serial, bonded in partners.items()}
+
+
+def pdb_serial_for_atom(text: str, key: tuple[str, str, str, str]) -> int | None:
+    """Return the first PDB serial matching ``(chain, resi, icode, name)``."""
+    wanted = _atom_key4(*key)
+    for line in (text or "").splitlines():
+        atom_key = _pdb_atom_key(line)
+        if atom_key == wanted:
+            return _pdb_atom_serial(line)
+    return None
+
+
+def _rewrite_pdb_conect(text: str, partners: dict[int, set[int]]) -> str:
+    body: list[str] = []
+    trailer: list[str] = []
+    seen_end = False
+    for line in (text or "").splitlines():
+        rec = line[:6].strip().upper() if line else ""
+        if rec == "CONECT":
+            continue
+        stripped = line.rstrip()
+        if stripped.upper() in {"END", "MASTER"} or rec in {"END", "MASTER"}:
+            seen_end = True
+            trailer.append(stripped)
+            continue
+        if seen_end:
+            trailer.append(stripped)
+            continue
+        body.append(stripped)
+    conect_lines: list[str] = []
+    for serial in sorted(partners):
+        bonded = sorted(other for other in partners[serial] if other != serial)
+        for offset in range(0, len(bonded), 4):
+            conect_lines.append(_format_conect([serial, *bonded[offset : offset + 4]]))
+    out = body + conect_lines + trailer
+    if conect_lines and not any(line.strip().upper() == "END" for line in trailer):
+        out.append("END")
+    return "\n".join(out) + ("\n" if out else "")
+
+
+def delete_pdb_atoms(text: str, keys: set[tuple[str, str, str, str]]) -> str:
+    """Drop ATOM/HETATM records by ``(chain, resi, icode, name)`` and strip CONECT."""
+    wanted = {_atom_key4(*key) for key in keys}
+    if not wanted:
+        return text
+    drop_serials: set[int] = set()
+    kept: list[str] = []
+    for line in (text or "").splitlines():
+        atom_key = _pdb_atom_key(line)
+        if atom_key is not None and atom_key in wanted:
+            serial = _pdb_atom_serial(line)
+            if serial is not None:
+                drop_serials.add(serial)
+            continue
+        kept.append(line.rstrip())
+    if not drop_serials:
+        return "\n".join(kept) + ("\n" if kept else "")
+    out: list[str] = []
+    for line in kept:
+        serials = _parse_conect_serials(line)
+        if serials:
+            if serials[0] in drop_serials:
+                continue
+            remain = [serials[0], *[serial for serial in serials[1:] if serial not in drop_serials]]
+            if len(remain) < 2:
+                continue
+            out.append(_format_conect(remain))
+            continue
+        out.append(line)
+    return "\n".join(out) + ("\n" if out else "")
+
+
+def add_pdb_conect(text: str, serial_a: int, serial_b: int) -> str:
+    """Record an undirected CONECT pair between two atom serials."""
+    if serial_a == serial_b:
+        return text
+    partners: dict[int, set[int]] = defaultdict(set)
+    for serial, bonded in pdb_conect_partners(text).items():
+        partners[serial].update(bonded)
+    partners[int(serial_a)].add(int(serial_b))
+    partners[int(serial_b)].add(int(serial_a))
+    return _rewrite_pdb_conect(text, partners)
+
+
+def remove_pdb_conect(text: str, serial_a: int, serial_b: int) -> str:
+    """Drop an undirected CONECT pair between two atom serials."""
+    partners: dict[int, set[int]] = defaultdict(set)
+    for serial, bonded in pdb_conect_partners(text).items():
+        partners[serial].update(bonded)
+    partners[int(serial_a)].discard(int(serial_b))
+    partners[int(serial_b)].discard(int(serial_a))
+    return _rewrite_pdb_conect(text, partners)

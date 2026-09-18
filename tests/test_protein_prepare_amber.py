@@ -94,6 +94,40 @@ def test_leap_input_vacuum_skips_pbradii() -> None:
     assert "PBradii" not in text
 
 
+def test_relabel_amber_histidines_hie_with_hd1_becomes_hid() -> None:
+    from molmanager.workers.protein_prepare_amber import relabel_amber_histidines_pdb
+
+    pdb = """\
+ATOM      1  ND1 HIE A 869       0.000   0.000   0.000  1.00  0.00           N
+ATOM      2  HD1 HIE A 869       0.000   0.000   1.000  1.00  0.00           H
+ATOM      3  NE2 HIE A 869       1.000   0.000   0.000  1.00  0.00           N
+ATOM      4  CA  ALA A 870       2.000   0.000   0.000  1.00  0.00           C
+END
+"""
+    out = relabel_amber_histidines_pdb(pdb)
+    assert "HID A 869" in out
+    assert "HIE A 869" not in out
+    assert "ALA A 870" in out
+
+
+def test_relabel_amber_histidines_keeps_hie_and_promotes_hip() -> None:
+    from molmanager.workers.protein_prepare_amber import relabel_amber_histidines_pdb
+
+    pdb = """\
+ATOM      1  NE2 HIE A   1       0.000   0.000   0.000  1.00  0.00           N
+ATOM      2  HE2 HIE A   1       0.000   0.000   1.000  1.00  0.00           H
+ATOM      3  ND1 HIS A   2       1.000   0.000   0.000  1.00  0.00           N
+ATOM      4  HD1 HIS A   2       1.000   0.000   1.000  1.00  0.00           H
+ATOM      5  NE2 HIS A   2       2.000   0.000   0.000  1.00  0.00           N
+ATOM      6  HE2 HIS A   2       2.000   0.000   1.000  1.00  0.00           H
+END
+"""
+    out = relabel_amber_histidines_pdb(pdb)
+    assert "HIE A   1" in out
+    assert "HIP A   2" in out
+    assert "HIS A   2" not in out
+
+
 def test_run_linux_tool_wsl_login_shell(monkeypatch, tmp_path) -> None:
     from molmanager.wsl import run_linux_tool
 

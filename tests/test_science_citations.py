@@ -30,6 +30,7 @@ def test_plain_citations_contain_dois() -> None:
     assert "Confab" in sc.systematic_conformations_dialog_footer_html()
     assert "10.1021/acs.jcim.5b00654" in sc.stochastic_conformations_dialog_footer_html()
     assert "ETKDG" in sc.stochastic_conformations_dialog_footer_html()
+    assert "GAFF" in sc.stochastic_conformations_dialog_footer_html()
 
 
 def test_descriptor_footer_html_links() -> None:

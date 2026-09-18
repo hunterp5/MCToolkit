@@ -266,6 +266,9 @@ def bootstrap_application_gui(app: QApplication | None = None) -> None:
         return
     ensure_fusion_style(app)
     apply_application_font_pt(load_saved_app_font_pt())
+    from .qt_widget_utils import install_unfocused_wheel_passthrough
+
+    install_unfocused_wheel_passthrough(app)
 
 
 def is_custom_theme_id(theme: str | None) -> bool:

@@ -44,8 +44,7 @@ def reuse_or_show_modeless_singleton(
     ``close()`` without ``WA_DeleteOnClose``), so a long-running tool job is not orphaned when
     the user reopens the menu action.
 
-    Pass ``show=False`` to create or reuse without raising the window (session restore can
-    preload a tool and open it later from the menu).
+    Pass ``show=False`` to create or reuse without raising the window.
 
     ``factory`` should return a fully configured dialog (modal flags, signals, etc.) before show.
     """

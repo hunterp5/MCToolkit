@@ -32,6 +32,17 @@ from ..hydrogen_bonds import (
     HBOND_KIND_PROTEIN,
     detect_hydrogen_bonds,
 )
+from ..protein_interactions import (
+    FAMILY_HALOGEN,
+    FAMILY_HBOND,
+    FAMILY_HYDROPHOBIC,
+    FAMILY_IONIC,
+    FAMILY_PI_CATION,
+    FAMILY_PI_STACKING,
+    detect_prolif_interactions,
+    prolif_available,
+    residue_pair_key,
+)
 from ..structure_components import (
     component_id_for_atom,
     pocket_view_plan,
@@ -40,11 +51,16 @@ from ..structure_components import (
 from .protein_viewer_models import (
     COMPONENT_COLOR_CHOICES,
     COMPONENT_STYLE_CHOICES,
+    LIGAND_STYLE_CHOICES,
+    LIGAND_STYLE_IDS,
     _LoadedSlot,
+    copy_loaded_slots,
 )
 from .qt_widget_utils import qobject_is_deleted
 
 logger = logging.getLogger(__name__)
+
+_MANAGER_DELETE_UNDO_LIMIT = 50
 
 
 class ProteinViewerStyleMixin:
@@ -56,11 +72,40 @@ class ProteinViewerStyleMixin:
     def _hydrogen_mode(self) -> str:
         if self._act_hydrogens_all is not None and self._act_hydrogens_all.isChecked():
             return "all"
+        if self._act_hydrogens_none is not None and self._act_hydrogens_none.isChecked():
+            return "none"
         return "polar"
 
     def _set_hydrogen_mode(self, mode: str) -> None:
-        chosen = "all" if mode == "all" else "polar"
+        chosen = mode if mode in ("all", "polar", "none") else "polar"
         self.viewer.set_hydrogens(chosen)
+        self._mark_viewer_unsaved()
+
+    def _protein_ligand_interaction_actions(self):
+        """Intermolecular contact toggles (not intramolecular protein/ligand H-bonds)."""
+        return (
+            self._act_hbond_complex,
+            self._act_interact_hydrophobic,
+            self._act_interact_ionic,
+            self._act_interact_pi_stacking,
+            self._act_interact_pi_cation,
+            self._act_interact_halogen,
+        )
+
+    def _enable_protein_ligand_interactions_for_complex(self) -> None:
+        """Turn on ligand intramolecular H-bonds and protein–ligand overlays when present."""
+        kinds = {row.spec.kind for row in self._rows}
+        acts = []
+        if "ligand" in kinds:
+            acts.append(self._act_hbond_ligand)
+        if "ligand" in kinds and "polymer" in kinds:
+            acts.extend(self._protein_ligand_interaction_actions())
+        for act in acts:
+            if act is None or act.isChecked():
+                continue
+            act.blockSignals(True)
+            act.setChecked(True)
+            act.blockSignals(False)
 
     def _hbond_kinds_enabled(self) -> set[str]:
         kinds: set[str] = set()
@@ -72,11 +117,31 @@ class ProteinViewerStyleMixin:
             kinds.add(HBOND_KIND_COMPLEX)
         return kinds
 
+    def _prolif_families_enabled(self) -> set[str]:
+        families: set[str] = set()
+        for act, family in (
+            (self._act_interact_hydrophobic, FAMILY_HYDROPHOBIC),
+            (self._act_interact_ionic, FAMILY_IONIC),
+            (self._act_interact_pi_stacking, FAMILY_PI_STACKING),
+            (self._act_interact_pi_cation, FAMILY_PI_CATION),
+            (self._act_interact_halogen, FAMILY_HALOGEN),
+        ):
+            if act is not None and act.isChecked():
+                families.add(family)
+        return families
+
+    def _interaction_overlay_active(self) -> bool:
+        return bool(self._hbond_kinds_enabled() or self._prolif_families_enabled())
+
     def _invalidate_hbonds(self, structure_id: str | None = None) -> None:
+        if getattr(self, "_prolif_cache", None) is None:
+            self._prolif_cache = {}
         if structure_id is None:
             self._hbond_cache.clear()
+            self._prolif_cache.clear()
         else:
             self._hbond_cache.pop(structure_id, None)
+            self._prolif_cache.pop(structure_id, None)
 
     def _slot_model_index(self, slot: _LoadedSlot) -> int | None:
         for row in slot.rows:
@@ -98,21 +163,140 @@ class ProteinViewerStyleMixin:
                 slot.text, slot.fmt, model=self._slot_model_index(slot)
             )
 
+    def _ensure_prolif_cache(self) -> None:
+        if getattr(self, "_prolif_cache", None) is None:
+            self._prolif_cache = {}
+        families = self._prolif_families_enabled()
+        need_complex = HBOND_KIND_COMPLEX in self._hbond_kinds_enabled()
+        if not families and not need_complex:
+            return
+        if not prolif_available():
+            if families and not getattr(self, "_prolif_missing_logged", False):
+                self._prolif_missing_logged = True
+                self.append_log(
+                    "ProLIF is not installed. Hydrophobic, ionic, π-stacking, π-cation, "
+                    "and halogen overlays need `pip install prolif` "
+                    '(or `pip install -e ".[docking]"`). Protein–ligand hydrogen bonds '
+                    "still use the geometric detector."
+                )
+            for slot in self._slots:
+                self._prolif_cache.setdefault(slot.structure_id, ())
+            return
+        for slot in self._slots:
+            if slot.structure_id in self._prolif_cache:
+                continue
+            self.append_log(f"Running ProLIF on {slot.name}…")
+            try:
+                contacts = detect_prolif_interactions(
+                    slot.text, slot.fmt, model=self._slot_model_index(slot)
+                )
+            except Exception as exc:
+                logger.debug("ProLIF overlay failed for %s", slot.name, exc_info=True)
+                self.append_log(f"ProLIF failed for {slot.name}: {exc}")
+                self._prolif_cache[slot.structure_id] = ()
+                continue
+            self._prolif_cache[slot.structure_id] = contacts
+            self.append_log(f"ProLIF found {len(contacts)} contact(s) in {slot.name}.")
+
     def _hbond_endpoint_visible(self, bond, *, model: int | None) -> bool:
+        return self._residue_pair_visible(
+            bond.donor_chain,
+            bond.donor_resn,
+            bond.donor_resi,
+            bond.donor_icode,
+            bond.donor_kind,
+            bond.acceptor_chain,
+            bond.acceptor_resn,
+            bond.acceptor_resi,
+            bond.acceptor_icode,
+            bond.acceptor_kind,
+            model=model,
+        )
+
+    def _prolif_contact_visible(self, contact, *, model: int | None) -> bool:
+        return self._residue_pair_visible(
+            contact.ligand_chain,
+            contact.ligand_resn,
+            contact.ligand_resi,
+            contact.ligand_icode,
+            "ligand",
+            contact.protein_chain,
+            contact.protein_resn,
+            contact.protein_resi,
+            contact.protein_icode,
+            "polymer",
+            model=model,
+        )
+
+    def _dock_pose_live(self) -> bool:
+        return bool(getattr(self, "_dock_pose_payload", None))
+
+    def _pose_hbond_visible(self, bond, *, model: int | None) -> bool:
+        if bond.kind == HBOND_KIND_LIGAND:
+            return True
+        return self._residue_pair_visible(
+            bond.donor_chain,
+            bond.donor_resn,
+            bond.donor_resi,
+            bond.donor_icode,
+            bond.donor_kind,
+            bond.acceptor_chain,
+            bond.acceptor_resn,
+            bond.acceptor_resi,
+            bond.acceptor_icode,
+            bond.acceptor_kind,
+            model=model,
+            allow_dock_pose_ligand=True,
+        )
+
+    def _pose_prolif_contact_visible(self, contact, *, model: int | None) -> bool:
+        return self._residue_pair_visible(
+            contact.ligand_chain,
+            contact.ligand_resn,
+            contact.ligand_resi,
+            contact.ligand_icode,
+            "ligand",
+            contact.protein_chain,
+            contact.protein_resn,
+            contact.protein_resi,
+            contact.protein_icode,
+            "polymer",
+            model=model,
+            allow_dock_pose_ligand=True,
+        )
+
+    def _residue_pair_visible(
+        self,
+        chain_a: str,
+        resn_a: str,
+        resi_a: str,
+        icode_a: str,
+        kind_a: str,
+        chain_b: str,
+        resn_b: str,
+        resi_b: str,
+        icode_b: str,
+        kind_b: str,
+        *,
+        model: int | None,
+        allow_dock_pose_ligand: bool = False,
+    ) -> bool:
         return self._residue_is_visible(
-            chain=bond.donor_chain,
-            resn=bond.donor_resn,
-            resi=bond.donor_resi,
-            icode=bond.donor_icode,
-            kind=bond.donor_kind,
+            chain=chain_a,
+            resn=resn_a,
+            resi=resi_a,
+            icode=icode_a,
+            kind=kind_a,
             model=model,
+            allow_dock_pose_ligand=allow_dock_pose_ligand,
         ) and self._residue_is_visible(
-            chain=bond.acceptor_chain,
-            resn=bond.acceptor_resn,
-            resi=bond.acceptor_resi,
-            icode=bond.acceptor_icode,
-            kind=bond.acceptor_kind,
+            chain=chain_b,
+            resn=resn_b,
+            resi=resi_b,
+            icode=icode_b,
+            kind=kind_b,
             model=model,
+            allow_dock_pose_ligand=allow_dock_pose_ligand,
         )
 
     def _residue_is_visible(
@@ -124,7 +308,10 @@ class ProteinViewerStyleMixin:
         icode: str,
         kind: str,
         model: int | None,
+        allow_dock_pose_ligand: bool = False,
     ) -> bool:
+        if allow_dock_pose_ligand and kind == "ligand" and self._dock_pose_live():
+            return True
         resi_s = str(resi)
         for row in self._rows:
             if not row.visible:
@@ -151,29 +338,137 @@ class ProteinViewerStyleMixin:
 
     def _hbond_overlay_payload(self) -> dict:
         kinds = self._hbond_kinds_enabled()
-        if not kinds or not self._slots:
+        families = self._prolif_families_enabled()
+        if (not kinds and not families) or not self._slots:
             return {"active": False, "bonds": []}
         self._ensure_hbond_cache()
+        pose_live = self._dock_pose_live()
+        if not pose_live and (families or HBOND_KIND_COMPLEX in kinds):
+            self._ensure_prolif_cache()
+        pose_overlay = getattr(self, "_dock_pose_overlay", None) if pose_live else None
         bonds = []
         for slot in self._slots:
             model = self._slot_model_index(slot)
-            for bond in self._hbond_cache.get(slot.structure_id, ()):
-                if bond.kind not in kinds:
+            prolif_hits = () if pose_live else self._prolif_cache.get(slot.structure_id, ())
+            prolif_hbonds = [c for c in prolif_hits if c.family == FAMILY_HBOND]
+            prolif_pairs = {
+                residue_pair_key(
+                    c.ligand_chain,
+                    c.ligand_resi,
+                    c.ligand_icode,
+                    c.ligand_resn,
+                    c.protein_chain,
+                    c.protein_resi,
+                    c.protein_icode,
+                    c.protein_resn,
+                )
+                for c in prolif_hbonds
+            }
+            if kinds:
+                for bond in self._hbond_cache.get(slot.structure_id, ()):
+                    if bond.kind not in kinds:
+                        continue
+                    if pose_live and bond.kind in {HBOND_KIND_LIGAND, HBOND_KIND_COMPLEX}:
+                        continue
+                    if bond.kind == HBOND_KIND_COMPLEX and prolif_pairs:
+                        pair = residue_pair_key(
+                            bond.donor_chain,
+                            bond.donor_resi,
+                            bond.donor_icode,
+                            bond.donor_resn,
+                            bond.acceptor_chain,
+                            bond.acceptor_resi,
+                            bond.acceptor_icode,
+                            bond.acceptor_resn,
+                        )
+                        if pair in prolif_pairs:
+                            continue
+                    if not self._hbond_endpoint_visible(bond, model=model):
+                        continue
+                    bonds.append(bond.to_payload())
+                if HBOND_KIND_COMPLEX in kinds:
+                    for contact in prolif_hbonds:
+                        if not self._prolif_contact_visible(contact, model=model):
+                            continue
+                        bonds.append(contact.to_payload())
+            for contact in prolif_hits:
+                if contact.family == FAMILY_HBOND or contact.family not in families:
                     continue
-                if not self._hbond_endpoint_visible(bond, model=model):
+                if not self._prolif_contact_visible(contact, model=model):
                     continue
-                bonds.append(bond.to_payload())
+                bonds.append(contact.to_payload())
+        if pose_live and isinstance(pose_overlay, tuple) and len(pose_overlay) == 2:
+            pose_hbonds, pose_prolif = pose_overlay
+            slot = self._receptor_slot_for_dock_pose()
+            model = self._slot_model_index(slot) if slot is not None else None
+            prolif_hbonds = [c for c in pose_prolif if c.family == FAMILY_HBOND]
+            prolif_pairs = {
+                residue_pair_key(
+                    c.ligand_chain,
+                    c.ligand_resi,
+                    c.ligand_icode,
+                    c.ligand_resn,
+                    c.protein_chain,
+                    c.protein_resi,
+                    c.protein_icode,
+                    c.protein_resn,
+                )
+                for c in prolif_hbonds
+            }
+            if kinds:
+                for bond in pose_hbonds or ():
+                    if bond.kind not in kinds:
+                        continue
+                    if bond.kind == HBOND_KIND_COMPLEX and prolif_pairs:
+                        pair = residue_pair_key(
+                            bond.donor_chain,
+                            bond.donor_resi,
+                            bond.donor_icode,
+                            bond.donor_resn,
+                            bond.acceptor_chain,
+                            bond.acceptor_resi,
+                            bond.acceptor_icode,
+                            bond.acceptor_resn,
+                        )
+                        if pair in prolif_pairs:
+                            continue
+                    if not self._pose_hbond_visible(bond, model=model):
+                        continue
+                    bonds.append(bond.to_payload())
+                if HBOND_KIND_COMPLEX in kinds:
+                    for contact in prolif_hbonds:
+                        if not self._pose_prolif_contact_visible(contact, model=model):
+                            continue
+                        bonds.append(contact.to_payload())
+            for contact in pose_prolif or ():
+                if contact.family == FAMILY_HBOND or contact.family not in families:
+                    continue
+                if not self._pose_prolif_contact_visible(contact, model=model):
+                    continue
+                bonds.append(contact.to_payload())
         return {"active": True, "bonds": bonds}
 
     def _on_hbond_toggles(self, _checked: bool = False) -> None:
+        if self._dock_pose_live():
+            self._invalidate_dock_pose_overlay()
+            if self._interaction_overlay_active():
+                self._schedule_dock_pose_overlay_job()
         self._push_hbonds()
+        self._mark_viewer_unsaved()
 
     def _push_hbonds(self) -> None:
         self.viewer.set_hbonds(self._hbond_overlay_payload())
 
+    def _style_choices_for_kind(self, kind: str) -> tuple[tuple[str, str], ...]:
+        if kind == "ligand":
+            return LIGAND_STYLE_CHOICES
+        return COMPONENT_STYLE_CHOICES
+
+    def _style_allowed_for_kind(self, kind: str, style: str) -> bool:
+        return style in {key for key, _label in self._style_choices_for_kind(kind)}
+
     def _apply_kind_style(self, kind: str, style: str) -> None:
-        allowed = {key for key, _label in COMPONENT_STYLE_CHOICES}
-        if style not in allowed:
+        if not self._style_allowed_for_kind(kind, style):
             return
         changed = False
         for slot in self._slots:
@@ -185,6 +480,7 @@ class ProteinViewerStyleMixin:
                 else:
                     new_rows.append(row)
             slot.rows = new_rows
+        self._clear_pocket_overlay()
         if changed:
             self.manager.apply_row_states(self._rows)
             self._push_states()
@@ -263,14 +559,22 @@ class ProteinViewerStyleMixin:
                 else:
                     new_rows.append(row)
             slot.rows = new_rows
+        self._clear_pocket_overlay()
         if changed:
             self._push_states()
 
-    def _add_render_style_menu(self, menu, *, kind: str, default: str) -> dict[str, QAction]:
+    def _add_render_style_menu(
+        self,
+        menu,
+        *,
+        kind: str,
+        default: str,
+        choices: tuple[tuple[str, str], ...] | None = None,
+    ) -> dict[str, QAction]:
         group = QActionGroup(self)
         group.setExclusive(True)
         actions: dict[str, QAction] = {}
-        for style_id, label in COMPONENT_STYLE_CHOICES:
+        for style_id, label in choices or COMPONENT_STYLE_CHOICES:
             act = QAction(label, self)
             act.setCheckable(True)
             act.setData(style_id)
@@ -324,6 +628,7 @@ class ProteinViewerStyleMixin:
                 else:
                     new_rows.append(row)
             slot.rows = new_rows
+        self._clear_pocket_overlay()
         if changed:
             self._push_states()
 
@@ -348,6 +653,28 @@ class ProteinViewerStyleMixin:
         self._act_all_atoms.setChecked(checked)
         self._act_all_atoms.blockSignals(False)
 
+    def _restore_loaded_render_styles(self) -> bool:
+        """Restore each component's style and color from when it was loaded."""
+        changed = False
+        for slot in self._slots:
+            new_rows = []
+            for row in slot.rows:
+                style = row.loaded_style or row.spec.default_style
+                color_scheme = row.loaded_color_scheme or "default"
+                if row.style != style or row.color_scheme != color_scheme:
+                    new_rows.append(replace(row, style=style, color_scheme=color_scheme))
+                    changed = True
+                else:
+                    new_rows.append(row)
+            slot.rows = new_rows
+        return changed
+
+    def _clear_pocket_overlay(self) -> None:
+        if self._pocket_payload_data is None:
+            return
+        self._pocket_payload_data = None
+        self.viewer.set_pocket({"active": False})
+
     def _sync_render_menus_from_rows(self) -> None:
         polymer = {r.style for r in self._rows if r.spec.kind == "polymer"}
         ligand = {r.style for r in self._rows if r.spec.kind == "ligand"}
@@ -356,7 +683,10 @@ class ProteinViewerStyleMixin:
             self._check_style_action(self._protein_style_actions, style)
             self._sync_all_atoms_check(style == "ballstick")
         if len(ligand) == 1:
-            self._check_style_action(self._ligand_style_actions, next(iter(ligand)))
+            style = next(iter(ligand))
+            if style not in LIGAND_STYLE_IDS:
+                style = "ballstick"
+            self._check_style_action(self._ligand_style_actions, style)
         polymer_color = {r.color_scheme for r in self._rows if r.spec.kind == "polymer"}
         ligand_color = {r.color_scheme for r in self._rows if r.spec.kind == "ligand"}
         if len(polymer_color) == 1:
@@ -366,6 +696,128 @@ class ProteinViewerStyleMixin:
 
     def _on_pocket(self) -> None:
         self._activate_pocket(zoom=True)
+
+    def open_pocket_surface_dialog(self) -> None:
+        """Open the Pocket Surface options window and show the overlay if possible."""
+        from .dialogs.protein_pocket_surface import ProteinPocketSurfaceDialog
+
+        dlg = self._pocket_surface_dialog
+        if dlg is not None and qobject_is_deleted(dlg):
+            self._pocket_surface_dialog = None
+            dlg = None
+        if dlg is None:
+            dlg = ProteinPocketSurfaceDialog(self)
+            dlg.settings_changed.connect(self._on_pocket_surface_settings)
+            dlg.show_toggled.connect(self._on_pocket_surface_show)
+            dlg.destroyed.connect(self._on_pocket_surface_dialog_destroyed)
+            self._pocket_surface_dialog = dlg
+        dlg.set_settings(self._pocket_surface_style())
+        showing = bool(
+            self._pocket_surface_payload is not None and self._pocket_surface_payload.get("active")
+        )
+        dlg.set_showing(showing)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+        if not showing:
+            dlg.set_showing(True)
+            self._on_pocket_surface_show(True)
+
+    def _on_pocket_surface_dialog_destroyed(self) -> None:
+        self._pocket_surface_dialog = None
+
+    def _on_pocket_surface_show(self, show: bool) -> None:
+        if show:
+            if self._activate_pocket_surface():
+                self._sync_pocket_surface_dialog()
+                return
+            self._sync_pocket_surface_dialog()
+            return
+        self._hide_pocket_surface()
+
+    def _on_pocket_surface_settings(self, settings: dict) -> None:
+        from .dialogs.protein_pocket_surface import normalize_pocket_surface_settings
+
+        self._pocket_surface_settings = normalize_pocket_surface_settings(settings)
+        if self._pocket_surface_payload is None or not self._pocket_surface_payload.get("active"):
+            return
+        self._activate_pocket_surface(notify=False)
+
+    def _pocket_surface_style(self) -> dict:
+        from .dialogs.protein_pocket_surface import normalize_pocket_surface_settings
+
+        return normalize_pocket_surface_settings(self._pocket_surface_settings)
+
+    def _hide_pocket_surface(self) -> None:
+        self._pocket_surface_payload = None
+        self.viewer.set_pocket_surface({"active": False})
+        self._sync_pocket_surface_dialog()
+        self._mark_viewer_unsaved()
+
+    def _sync_pocket_surface_dialog(self) -> None:
+        dlg = getattr(self, "_pocket_surface_dialog", None)
+        if dlg is None or qobject_is_deleted(dlg):
+            return
+        dlg.set_settings(self._pocket_surface_style())
+        dlg.set_showing(
+            bool(
+                self._pocket_surface_payload is not None
+                and self._pocket_surface_payload.get("active")
+            )
+        )
+
+    def _activate_pocket_surface(self, *, notify: bool = True) -> bool:
+        payload = self._compute_pocket_payload()
+        residue_sels = list((payload or {}).get("residueSels") or [])
+        if payload is None:
+            if notify:
+                QMessageBox.information(
+                    self,
+                    "Pocket Surface",
+                    "Open a structure that contains a ligand, or select a ligand in the Manager.",
+                )
+            self._pocket_surface_payload = None
+            self.viewer.set_pocket_surface({"active": False})
+            return False
+        if not residue_sels:
+            if notify:
+                QMessageBox.information(
+                    self,
+                    "Pocket Surface",
+                    "No protein residues are within 4.5 Å of the ligand.",
+                )
+            self._pocket_surface_payload = None
+            self.viewer.set_pocket_surface({"active": False})
+            return False
+        surface = {
+            "active": True,
+            "residueSels": residue_sels,
+            **self._pocket_surface_style(),
+        }
+        self._pocket_surface_payload = surface
+        self.viewer.set_pocket_surface(surface)
+        self._mark_viewer_unsaved()
+        return True
+
+    def _pocket_surface_overlay_payload(self) -> dict | None:
+        payload = self._pocket_surface_payload
+        if payload is None or not payload.get("active"):
+            return {"active": False}
+        return payload
+
+    def _refresh_pocket_surface(self) -> None:
+        payload = self._pocket_surface_payload
+        if payload is None or not payload.get("active"):
+            return
+        if self._activate_pocket_surface(notify=False):
+            self._sync_pocket_surface_dialog()
+            return
+        self._hide_pocket_surface()
+
+    def _refresh_pocket_overlays(self, *, zoom: bool = False) -> None:
+        if self._pocket_payload_data is not None:
+            self._refresh_pocket(zoom=zoom)
+        self._refresh_pocket_surface()
 
     def _activate_pocket(self, *, zoom: bool) -> bool:
         payload = self._compute_pocket_payload()
@@ -408,7 +860,7 @@ class ProteinViewerStyleMixin:
         self.viewer.set_docking_box(self._docking_box_overlay_payload())
 
     def set_docking_box_from_prepare(self, result) -> None:
-        """Show the Smina box from a Prepare run and enable View → Docking Box."""
+        """Show the Gnina box from a Prepare run and enable Render → Docking Box."""
         box = getattr(result, "box", None)
         if box is None:
             return
@@ -420,7 +872,52 @@ class ProteinViewerStyleMixin:
             act.setChecked(True)
             act.blockSignals(False)
         self.viewer.set_docking_box(payload)
-        self._mark_host_session_dirty()
+        self._mark_viewer_unsaved()
+
+    def _dock_pose_overlay_payload(self) -> dict | None:
+        payload = getattr(self, "_dock_pose_payload", None)
+        if not payload:
+            return None
+        return payload
+
+    def set_dock_pose(self, mol, *, zoom: bool = False, caption: str = "") -> bool:
+        """Overlay a docked pose in the pocket without adding a Manager slot."""
+        from .dock_complex_viewer import ligand_display_payload
+
+        if mol is None:
+            self.clear_dock_pose()
+            return False
+        b64, fmt = ligand_display_payload(mol)
+        if not b64:
+            return False
+        live = {"active": True, "data": b64, "fmt": fmt or "sdf", "zoom": bool(zoom)}
+        stored = dict(live)
+        stored["zoom"] = False
+        from rdkit import Chem
+
+        try:
+            self._dock_pose_mol = Chem.Mol(mol)
+        except Exception:
+            self._dock_pose_mol = mol
+        self._dock_pose_payload = stored
+        self.viewer.set_dock_pose(live)
+        if caption:
+            self._set_atom_status(caption)
+        on_changed = getattr(self, "_on_dock_pose_changed", None)
+        if callable(on_changed):
+            on_changed()
+        return True
+
+    def clear_dock_pose(self) -> None:
+        """Remove the transient dock-pose overlay from the 3D canvas."""
+        self._dock_pose_mol = None
+        self._dock_pose_payload = None
+        invalidate = getattr(self, "_invalidate_dock_pose_overlay", None)
+        if callable(invalidate):
+            invalidate()
+        self.viewer.set_dock_pose({"active": False})
+        if self._interaction_overlay_active():
+            self._push_hbonds()
 
     def _compute_pocket_payload(self) -> dict | None:
         selected_ligands = [r for r in self._rows if r.selected and r.spec.kind == "ligand"]
@@ -453,7 +950,7 @@ class ProteinViewerStyleMixin:
             "polarHPdb": polar_b64,
         }
 
-    def delete_selected(self) -> None:
+    def delete_selected_chains(self) -> None:
         ids = self._selected_component_ids()
         if not ids:
             return
@@ -472,29 +969,135 @@ class ProteinViewerStyleMixin:
             != QMessageBox.Yes
         ):
             return
+        before = copy_loaded_slots(self._slots)
         drop = set(ids)
         kept: list[_LoadedSlot] = []
+        dropped_sids: list[str] = []
         for slot in self._slots:
             rows = [r for r in slot.rows if r.spec.component_id not in drop]
             if rows:
                 slot.rows = rows
                 kept.append(slot)
+            else:
+                dropped_sids.append(slot.structure_id)
         self._slots = kept
         self._reindex_models()
+        drop_overlays = getattr(self, "_drop_overlay_structures", None)
+        if callable(drop_overlays) and dropped_sids:
+            drop_overlays(dropped_sids)
+        self._push_manager_delete_undo(before, copy_loaded_slots(self._slots))
         if not self._slots:
-            self.close_structure()
+            self.close_structure(keep_edit_history=True)
+            return
+        self._refresh_manager()
+        self._refresh_sequence_chains()
+        if dropped_sids:
+            invalidate = getattr(self, "_invalidate_hbonds", None)
+            if callable(invalidate):
+                invalidate()
+        schedule = getattr(self, "_schedule_canvas_structure_push", None)
+        if callable(schedule):
+            schedule(refit=False)
+        else:
+            self._push_structure(refit=False)
+            self._refresh_pocket_overlays(zoom=False)
+        self._mark_viewer_unsaved()
+
+    def _clear_manager_delete_history(self) -> None:
+        self._manager_delete_undo = []
+        self._manager_delete_redo = []
+        self._sync_manager_edit_actions()
+
+    def _sync_manager_edit_actions(self) -> None:
+        undo = getattr(self, "_act_undo", None)
+        redo = getattr(self, "_act_redo", None)
+        if undo is not None:
+            undo.setEnabled(bool(self._manager_delete_undo))
+        if redo is not None:
+            redo.setEnabled(bool(self._manager_delete_redo))
+
+    def _push_manager_delete_undo(
+        self,
+        before: list[_LoadedSlot],
+        after: list[_LoadedSlot],
+    ) -> None:
+        self._manager_delete_undo.append((before, after))
+        if len(self._manager_delete_undo) > _MANAGER_DELETE_UNDO_LIMIT:
+            self._manager_delete_undo = self._manager_delete_undo[-_MANAGER_DELETE_UNDO_LIMIT:]
+        self._manager_delete_redo = []
+        self._sync_manager_edit_actions()
+
+    def _restore_manager_slots(self, slots: list[_LoadedSlot]) -> None:
+        self._slots = copy_loaded_slots(slots)
+        self._reindex_models()
+        self._residue_highlight = []
+        self._set_atom_status("")
+        skip = getattr(self, "_overlay_skip_sids", None)
+        if callable(skip):
+            skip().difference_update(slot.structure_id for slot in self._slots)
+        invalidate = getattr(self, "_invalidate_hbonds", None)
+        if callable(invalidate):
+            invalidate()
+        if not self._slots:
+            self.close_structure(keep_edit_history=True)
             return
         self._refresh_manager()
         self._refresh_sequence_chains()
         self._push_structure(refit=False)
-        if self._pocket_payload_data is not None:
-            self._refresh_pocket(zoom=False)
-        self._mark_host_session_dirty()
+        self._refresh_pocket_overlays(zoom=False)
+        self._mark_viewer_unsaved()
+        sync_edit = getattr(self, "_sync_structure_edit_actions", None)
+        if callable(sync_edit):
+            sync_edit()
+
+    def undo_manager_delete(self) -> None:
+        if not self._manager_delete_undo:
+            return
+        before, after = self._manager_delete_undo.pop()
+        self._manager_delete_redo.append((before, after))
+        self._restore_manager_slots(before)
+        self._sync_manager_edit_actions()
+
+    def redo_manager_delete(self) -> None:
+        if not self._manager_delete_redo:
+            return
+        before, after = self._manager_delete_redo.pop()
+        self._manager_delete_undo.append((before, after))
+        self._restore_manager_slots(after)
+        self._sync_manager_edit_actions()
 
     def focus_selected(self) -> None:
         ids = self._require_selection()
         if ids:
             self.viewer.zoom_to_components(ids)
+
+    def clear_selection(self) -> None:
+        """Deselect Manager rows and drop the 3D atom/residue highlight."""
+        changed = False
+        for slot in self._slots:
+            new_rows = []
+            for row in slot.rows:
+                if row.selected:
+                    new_rows.append(replace(row, selected=False))
+                    changed = True
+                else:
+                    new_rows.append(row)
+            slot.rows = new_rows
+        self._syncing_from_atom = True
+        try:
+            self.manager.apply_row_states(self._rows)
+            clearer = getattr(self.manager, "clear_component_selection", None)
+            if callable(clearer):
+                clearer()
+            self._set_residue_highlight([])
+            self._set_atom_status("")
+        finally:
+            self._syncing_from_atom = False
+        sync_edit = getattr(self, "_sync_structure_edit_actions", None)
+        if callable(sync_edit):
+            sync_edit()
+        if changed:
+            self._push_states()
 
     def _on_visibility_changed(self, component_id: str, visible: bool) -> None:
         changed = False
@@ -527,6 +1130,7 @@ class ProteinViewerStyleMixin:
         if not self._syncing_from_atom and self._residue_highlight:
             self._residue_highlight = []
             self.viewer.set_residue_highlight([])
+            self._set_atom_status("")
         if changed:
             self._push_states()
 
@@ -541,15 +1145,51 @@ class ProteinViewerStyleMixin:
         for slot in self._slots:
             new_rows = []
             for row in slot.rows:
-                if row.spec.component_id in ids and row.style != style:
-                    new_rows.append(replace(row, style=style))
-                    changed = True
-                else:
-                    new_rows.append(row)
+                if row.spec.component_id in ids:
+                    if not self._style_allowed_for_kind(row.spec.kind, style):
+                        new_rows.append(row)
+                        continue
+                    if row.style != style:
+                        new_rows.append(replace(row, style=style))
+                        changed = True
+                        continue
+                new_rows.append(row)
             slot.rows = new_rows
+        self._clear_pocket_overlay()
         if changed:
             self._push_states()
             self._sync_render_menus_from_rows()
+
+    def _set_atom_status(self, text: str) -> None:
+        lbl = getattr(self, "_atom_status", None)
+        if lbl is None:
+            return
+        lbl.setText(text or "")
+
+    def _atom_status_text(self, data: dict) -> str:
+        chain = str(data.get("chain") or "").strip()
+        resn = str(data.get("resn") or "").strip()
+        resi = data.get("resi")
+        resi_s = str(resi).strip() if resi is not None and str(resi).strip() != "" else ""
+        icode = str(data.get("icode") or "").strip()
+        atom = str(data.get("atom") or "").strip()
+        elem = str(data.get("elem") or "").strip()
+        serial = data.get("serial")
+        alt = str(data.get("altLoc") or data.get("altloc") or "").strip()
+        loc = f"{chain}:" if chain else ""
+        loc += " ".join(part for part in (resn, resi_s + icode) if part)
+        bits = [part for part in (loc.strip(), atom) if part]
+        if elem and elem.upper() != atom.upper():
+            bits.append(elem)
+        if alt and alt not in {"", " ", "A"}:
+            bits.append(f"alt {alt}")
+        try:
+            if serial is not None and str(serial).strip() != "":
+                bits.append(f"#{int(serial)}")
+        except (TypeError, ValueError):
+            if serial not in (None, ""):
+                bits.append(f"#{serial}")
+        return "  ".join(bits)
 
     def _on_atom_picked(self, payload: str) -> None:
         try:
@@ -571,19 +1211,87 @@ class ProteinViewerStyleMixin:
         )
         if not cid:
             return
-        sel = {
-            "chain": str(data.get("chain") or ""),
-            "resi": data.get("resi"),
-        }
+        spec = next((r.spec for r in self._rows if r.spec.component_id == cid), None)
         icode = str(data.get("icode") or "")
-        if icode:
-            sel["icode"] = icode
-        if model_i is not None:
-            sel["model"] = model_i
-        try:
-            sel["resi"] = int(str(sel["resi"]).strip())
-        except (TypeError, ValueError):
-            sel["resi"] = str(sel.get("resi") or "")
+        double_click = bool(data.get("doubleClick"))
+        kind = spec.kind if spec is not None else ""
+        whole_ligand = double_click and kind == "ligand"
+        whole_residue = double_click and kind == "polymer"
+        if whole_ligand:
+            sel = dict(spec.selection or {})
+            if not sel:
+                sel = {
+                    "chain": str(data.get("chain") or ""),
+                    "resi": data.get("resi"),
+                }
+                if icode:
+                    sel["icode"] = icode
+                if spec.resn:
+                    sel["resn"] = spec.resn
+            if model_i is not None and "model" not in sel:
+                sel["model"] = model_i
+        elif whole_residue:
+            sel = {
+                "chain": str(data.get("chain") or ""),
+                "resi": data.get("resi"),
+            }
+            if icode:
+                sel["icode"] = icode
+            if model_i is not None:
+                sel["model"] = model_i
+            try:
+                sel["resi"] = int(str(sel["resi"]).strip())
+            except (TypeError, ValueError):
+                sel["resi"] = str(sel.get("resi") or "")
+        else:
+            sel = {
+                "chain": str(data.get("chain") or ""),
+                "resi": data.get("resi"),
+            }
+            if icode:
+                sel["icode"] = icode
+            atom = str(data.get("atom") or "").strip()
+            if atom:
+                sel["atom"] = atom
+            serial = data.get("serial")
+            try:
+                if serial is not None and str(serial).strip() != "":
+                    sel["serial"] = int(serial)
+            except (TypeError, ValueError):
+                pass
+            if model_i is not None:
+                sel["model"] = model_i
+            try:
+                sel["resi"] = int(str(sel["resi"]).strip())
+            except (TypeError, ValueError):
+                sel["resi"] = str(sel.get("resi") or "")
+        sel["resn"] = str(data.get("resn") or sel.get("resn") or "")
+        sel["kind"] = kind
+        if spec is not None:
+            sel["structure_id"] = spec.structure_id
+        highlights = [sel]
+        merger = getattr(self, "_merge_structure_edit_pick", None)
+        if callable(merger) and not whole_ligand and not whole_residue:
+            highlights = merger(sel) or [sel]
+        if whole_ligand and spec is not None and len(highlights) == 1:
+            status = spec.label
+        elif whole_residue and len(highlights) == 1:
+            residue_data = {
+                "chain": data.get("chain"),
+                "resn": data.get("resn"),
+                "resi": data.get("resi"),
+                "icode": data.get("icode"),
+            }
+            status = self._atom_status_text(residue_data)
+        elif len(highlights) > 1:
+            status_fn = getattr(self, "_structure_edit_status_text", None)
+            status = (
+                status_fn(highlights)
+                if callable(status_fn)
+                else "  —  ".join(self._atom_status_text(item) for item in highlights)
+            )
+        else:
+            status = self._atom_status_text(data)
         self._syncing_from_atom = True
         try:
             for slot in self._slots:
@@ -591,13 +1299,16 @@ class ProteinViewerStyleMixin:
                     replace(row, selected=row.spec.component_id == cid) for row in slot.rows
                 ]
             self.manager.apply_row_states(self._rows)
-            self._set_residue_highlight([sel])
+            self._set_residue_highlight(highlights)
+            self._set_atom_status(status)
             self._push_states()
         finally:
             self._syncing_from_atom = False
+        sync_edit = getattr(self, "_sync_structure_edit_actions", None)
+        if callable(sync_edit):
+            sync_edit()
         dlg = self._sequence_dialog
         if dlg is not None and not qobject_is_deleted(dlg):
-            spec = next((r.spec for r in self._rows if r.spec.component_id == cid), None)
             hit = polymer_residue_for_atom(
                 self._sequence_chains,
                 chain=str(data.get("chain") or ""),

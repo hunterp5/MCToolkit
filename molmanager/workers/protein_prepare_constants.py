@@ -22,6 +22,7 @@ from __future__ import annotations
 # 10 kcal mol⁻¹ Å⁻² is a typical heavy-atom restraint for clash relief.
 _DEFAULT_CA_K_KCAL = 10.0
 _DEFAULT_MIN_ITERS = 400
+_OPENMM_PLATFORM_AUTO = "auto"
 _PDB2PQR_FF = "AMBER"
 # Physiological salt for GB screening (Onufriev/Simmerling GB; OpenMM kappa conversion).
 _GB_SALT_M = 0.15
@@ -38,5 +39,82 @@ _SOLVENT_VACUUM = "vacuum"
 _RESTRAINT_CA = "ca"
 _RESTRAINT_BACKBONE = "backbone"
 _RESTRAINT_BACKBONE_LIGAND = "backbone_ligand"
+_DEFAULT_MAX_MISSING_GAP = 8
+_DEFAULT_WATER_CUTOFF = 3.5
+
+# Crystallization/buffer leftovers commonly stripped before docking.
+CRYSTAL_ADDITIVE_RESIDUES = frozenset(
+    {
+        "EDO",
+        "GOL",
+        "PEG",
+        "PGE",
+        "PG4",
+        "PE8",
+        "1PE",
+        "2PE",
+        "P6G",
+        "CME",
+        "MPD",
+        "MRD",
+        "ACT",
+        "ACY",
+        "FMT",
+        "SO4",
+        "PO4",
+        "NO3",
+        "CO3",
+        "CIT",
+        "FLC",
+        "TAR",
+        "LAC",
+        "BME",
+        "DTT",
+        "DMS",
+        "IPA",
+        "MOH",
+        "EOH",
+        "MES",
+        "TRS",
+        "EPE",
+        "HEP",
+        "IMD",
+        "NAG",
+        "BMA",
+        "MAN",
+        "FUC",
+        "GAL",
+        "GLC",
+        "SIA",
+        "NDG",
+    }
+)
+COFACTOR_RESIDUES = frozenset(
+    {
+        "HEM",
+        "HEC",
+        "HEA",
+        "HEB",
+        "NAD",
+        "NAP",
+        "NDP",
+        "FAD",
+        "FMN",
+        "SAM",
+        "SAH",
+        "ATP",
+        "ADP",
+        "AMP",
+        "GTP",
+        "GDP",
+        "COA",
+        "PLP",
+        "TPP",
+        "THF",
+        "FES",
+        "SF4",
+        "F3S",
+    }
+)
 
 ResidueKey = tuple[str, str, str]

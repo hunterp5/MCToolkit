@@ -48,7 +48,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ...display_constants import (
-    browser_structure_preview_height,
+    BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
     browser_structure_preview_width,
 )
 from ...som_prediction import (
@@ -71,6 +71,8 @@ from ..dockable_plot import (
     discard_host_dialog_after_dock,
     make_add_to_main_button,
     make_send_window_button,
+    add_centered_browser_nav,
+    style_browser_nav_buttons,
 )
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_PREDICT_SOM
@@ -346,9 +348,8 @@ def restore_som_maps_for_session(app: Any, sidecar: Any = None) -> int:
 
     Returns the number of map images written.
     """
-    records = deserialize_som_browse_records(sidecar)
-    if not records:
-        records = records_from_table(app)
+    sidecar_records = deserialize_som_browse_records(sidecar)
+    records = sidecar_records or records_from_table(app)
     app._som_browse_records = list(records)
     headers = list(getattr(app, "headers", None) or [])
     map_headers = [h for h in headers if is_som_map_header(h)]
@@ -368,10 +369,13 @@ def restore_som_maps_for_session(app: Any, sidecar: Any = None) -> int:
     last_pm = None
     drawn = 0
     n = int(model.rowCount())
+    sidecar_oids = set(rec_by_oid) if sidecar_records else None
     for row in range(n):
         try:
             oid = int(model.row_oid(row))
         except (TypeError, ValueError):
+            continue
+        if sidecar_oids is not None and oid not in sidecar_oids:
             continue
         rec = rec_by_oid.get(oid)
         smiles = rec.smiles if rec is not None else ""
@@ -527,7 +531,8 @@ class SomBrowserWidget(QWidget):
             "Select an atom to highlight it on the 2D map. Click a column header to sort."
         )
         self._atom_table.setMaximumHeight(180)
-        self._atom_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self._atom_table.setFixedHeight(180)
+        self._atom_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._atom_sort_header: str | None = None
         self._atom_sort_order = Qt.AscendingOrder
         self._atom_table.setSortingEnabled(True)
@@ -552,20 +557,31 @@ class SomBrowserWidget(QWidget):
         self._btn_fwd.setToolTip("Next molecule (→)")
         self._btn_last = QPushButton(">>")
         self._btn_last.setToolTip("Last molecule (End)")
-        self._btn_select = QPushButton("Select")
+        self._btn_select = QPushButton()
         self._btn_select.setToolTip("Select this row in the compound table")
-        row_btns.addWidget(self._btn_first)
-        row_btns.addWidget(self._btn_back)
-        row_btns.addWidget(self._btn_fwd)
-        row_btns.addWidget(self._btn_last)
-        row_btns.addWidget(self._btn_select)
+        style_browser_nav_buttons(
+            self._btn_first,
+            self._btn_back,
+            self._btn_fwd,
+            self._btn_last,
+            self._btn_select,
+        )
         self._cb_only_selected = QCheckBox("Browse Only Selected")
         self._cb_only_selected.setToolTip(
             "When checked, this browser walks only table rows that are currently selected."
         )
         self._cb_only_selected.toggled.connect(self._on_only_selected_toggled)
-        row_btns.addWidget(self._cb_only_selected)
-        row_btns.addStretch(1)
+        add_centered_browser_nav(
+            row_btns,
+            [
+                self._btn_first,
+                self._btn_back,
+                self._btn_fwd,
+                self._btn_last,
+                self._btn_select,
+            ],
+            trailing=self._cb_only_selected,
+        )
         root.addWidget(self._nav_bar)
 
         self._footer_bar = QWidget(self)

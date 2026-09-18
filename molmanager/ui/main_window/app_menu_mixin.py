@@ -14,27 +14,16 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Main menubar, dock-results chrome, and workspace dialog openers."""
+"""Main menubar and workspace dialog openers."""
 
 from __future__ import annotations
 
 import sys
 
-from PyQt5.QtCore import QPointF, QRectF, QSize, Qt
-from PyQt5.QtGui import (
-    QColor,
-    QIcon,
-    QKeySequence,
-    QPainter,
-    QPalette,
-    QPen,
-    QPixmap,
-)
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QAction,
-    QActionGroup,
     QHBoxLayout,
-    QMenu,
     QToolButton,
     QWidget,
 )
@@ -42,43 +31,6 @@ from PyQt5.QtWidgets import (
 from ...config import load_config
 from ..citations_dialog import open_citations_dialog
 from ..user_guides import open_user_guide_dialog
-
-_HELP_HOTKEY_IDS = frozenset({"help.user_guides", "help.citations"})
-
-
-def _help_glyph_icon(*, size: int, ink: QColor, paper: QColor) -> QIcon:
-    """Filled circular badge with a bold question mark (classic help control)."""
-    dpr = 2.0
-    side = max(12, int(size))
-    px = max(1, int(round(side * dpr)))
-    pm = QPixmap(px, px)
-    pm.fill(Qt.transparent)
-    painter = QPainter(pm)
-    painter.setRenderHint(QPainter.Antialiasing, True)
-    painter.scale(dpr, dpr)
-    s = float(side)
-    pad = max(0.5, s * 0.05)
-    painter.setPen(Qt.NoPen)
-    painter.setBrush(ink)
-    painter.drawEllipse(QRectF(pad, pad, s - 2.0 * pad, s - 2.0 * pad))
-
-    stroke = max(1.7, s * 0.13)
-    pen = QPen(paper, stroke)
-    pen.setCapStyle(Qt.RoundCap)
-    pen.setJoinStyle(Qt.RoundJoin)
-    painter.setPen(pen)
-    painter.setBrush(Qt.NoBrush)
-    bowl = QRectF(s * 0.30, s * 0.16, s * 0.40, s * 0.40)
-    # Clockwise from the left of the bowl, over the top, down to the stem.
-    painter.drawArc(bowl, 185 * 16, -255 * 16)
-    cx = s * 0.50
-    painter.drawLine(QPointF(cx, s * 0.52), QPointF(cx, s * 0.62))
-    painter.setPen(Qt.NoPen)
-    painter.setBrush(paper)
-    painter.drawEllipse(QPointF(cx, s * 0.76), max(1.35, s * 0.075), max(1.35, s * 0.075))
-    painter.end()
-    pm.setDevicePixelRatio(dpr)
-    return QIcon(pm)
 
 
 class AppMenuMixin:
@@ -104,10 +56,20 @@ class AppMenuMixin:
             QAction("Import &Data...", self, triggered=self.open_import_file_dialog)
         )
         file_menu.addSeparator()
-        file_menu.addAction(QAction("Open Session…", self, triggered=self.open_session_file))
-        file_menu.addAction(QAction("Save Session…", self, triggered=self.save_session_as))
-        file_menu.addAction(QAction("New Session", self, triggered=self.new_session))
-        file_menu.addAction(QAction("Duplicate Session", self, triggered=self.duplicate_session))
+        session_menu = file_menu.addMenu("&Session")
+        session_menu.addAction(QAction("&Open Session…", self, triggered=self.open_session_file))
+        session_menu.addAction(QAction("&Save Session…", self, triggered=self.save_session_as))
+        session_menu.addAction(
+            QAction(
+                "Save Selected to Session…",
+                self,
+                triggered=self.save_selected_to_session,
+            )
+        )
+        session_menu.addAction(QAction("&New Session", self, triggered=self.new_session))
+        session_menu.addAction(
+            QAction("&Duplicate Session", self, triggered=self.duplicate_session)
+        )
         edit = mb.addMenu("&Edit")
         act_undo = self._bind_hotkey("edit.undo", self._undo_stack.createUndoAction(self))
         act_redo = self._bind_hotkey("edit.redo", self._undo_stack.createRedoAction(self))
@@ -262,6 +224,8 @@ class AppMenuMixin:
 
         conformations_menu = tools.addMenu("&Conformations")
         conformations_menu.setToolTipsVisible(True)
+        generate_menu = conformations_menu.addMenu("&Generate")
+        generate_menu.setToolTipsVisible(True)
         act_gen_conf = QAction(
             "Stochastic…",
             self,
@@ -270,7 +234,7 @@ class AppMenuMixin:
         act_gen_conf.setToolTip(
             "Build ensembles with RDKit ETKDG (stochastic distance geometry), then minimize and prune."
         )
-        conformations_menu.addAction(act_gen_conf)
+        generate_menu.addAction(act_gen_conf)
         act_sys_conf = QAction(
             "Systematic…",
             self,
@@ -279,7 +243,7 @@ class AppMenuMixin:
         act_sys_conf.setToolTip(
             "Build ensembles with Open Babel Confab (systematic torsion search)."
         )
-        conformations_menu.addAction(act_sys_conf)
+        generate_menu.addAction(act_sys_conf)
         conformations_menu.addSeparator()
         act_superpose = QAction("&Superpose…", self, triggered=self.open_superpose)
         act_superpose.setToolTip(
@@ -358,36 +322,6 @@ class AppMenuMixin:
         self._act_metabolite_viewer = act_met_viewer
         met_menu.addAction(act_met_viewer)
         predict_menu.aboutToShow.connect(self._sync_predict_viewer_actions)
-
-        dock_menu = tools.addMenu("&Dock")
-        dock_menu.setToolTipsVisible(True)
-        prepare_menu = dock_menu.addMenu("Prepare")
-        prepare_menu.setToolTipsVisible(True)
-        act_dock_prepare = QAction("PDBQT…", self, triggered=self.open_dock_prepare)
-        act_dock_prepare.setToolTip(
-            "Generate receptor and/or ligand PDBQT (receptor PDB; ligand SDF, PDB, SMILES, or table rows)."
-        )
-        prepare_menu.addAction(act_dock_prepare)
-        act_dock_prepare_pdb = QAction("Receptor PDB…", self, triggered=self.open_dock_prepare_pdb)
-        act_dock_prepare_pdb.setToolTip(
-            "Clean a receptor PDB with PDBFixer (remove ligands/waters, add atoms and hydrogens) "
-            "before PDBQT conversion or docking."
-        )
-        prepare_menu.addAction(act_dock_prepare_pdb)
-        dock_menu.addSeparator()
-        act_dock_smina = QAction("Smina…", self, triggered=self.open_smina_dock)
-        act_dock_smina.setToolTip(
-            "Run Smina as a file-based CLI on PDBQT inputs (log only; no table writeback)."
-        )
-        dock_menu.addAction(act_dock_smina)
-        dock_menu.addSeparator()
-        act_dock_viewer = QAction("Viewer", self, triggered=self.open_dock_results_viewer)
-        act_dock_viewer.setToolTip(
-            "Show the last docking results window, even after it has been closed."
-        )
-        act_dock_viewer.setEnabled(False)
-        self._act_dock_viewer = act_dock_viewer
-        dock_menu.addAction(act_dock_viewer)
 
         reaction_menu = tools.addMenu("&Reaction")
         reaction_menu.setToolTipsVisible(True)
@@ -535,6 +469,35 @@ class AppMenuMixin:
             "Align amino-acid sequences with MAFFT (FASTA, paste, or Protein Viewer chains)."
         )
         protein_menu.addAction(act_protein_seq)
+        dock_menu = protein_menu.addMenu("&Dock Ligand")
+        dock_menu.setToolTipsVisible(True)
+        prepare_menu = dock_menu.addMenu("Prepare")
+        prepare_menu.setToolTipsVisible(True)
+        act_dock_prepare = QAction("PDBQT…", self, triggered=self.open_dock_prepare)
+        act_dock_prepare.setToolTip(
+            "Generate receptor and/or ligand PDBQT (receptor PDB; ligand SDF, PDB, SMILES, or table rows)."
+        )
+        prepare_menu.addAction(act_dock_prepare)
+        act_dock_prepare_pdb = QAction("Receptor PDB…", self, triggered=self.open_dock_prepare_pdb)
+        act_dock_prepare_pdb.setToolTip(
+            "Clean a receptor PDB with PDBFixer (remove ligands/waters, add atoms and hydrogens) "
+            "before PDBQT conversion or docking."
+        )
+        prepare_menu.addAction(act_dock_prepare_pdb)
+        dock_menu.addSeparator()
+        act_dock_gnina = QAction("Gnina…", self, triggered=self.open_gnina_dock)
+        act_dock_gnina.setToolTip(
+            "Run Gnina as a file-based CLI (CNN scoring; no table writeback)."
+        )
+        dock_menu.addAction(act_dock_gnina)
+        dock_menu.addSeparator()
+        act_dock_viewer = QAction("Pose Browser", self, triggered=self.open_dock_results_viewer)
+        act_dock_viewer.setToolTip(
+            "Show the pose browser for the last docking run, even after it has been closed."
+        )
+        act_dock_viewer.setEnabled(False)
+        self._act_dock_viewer = act_dock_viewer
+        dock_menu.addAction(act_dock_viewer)
 
         data_menu = mb.addMenu("&Data")
         table_menu = data_menu.addMenu("&Table")
@@ -548,7 +511,9 @@ class AppMenuMixin:
             "data.add_column",
             QAction("Add &Column…", self, triggered=lambda: self.add_blank_table_column()),
         )
-        act_add_col.setToolTip("Append one or more empty data columns. You choose the name and count.")
+        act_add_col.setToolTip(
+            "Append one or more empty data columns. You choose the name and count."
+        )
         table_menu.addAction(act_add_col)
         table_menu.addSeparator()
         table_menu.addAction(
@@ -640,6 +605,7 @@ class AppMenuMixin:
 
         self._init_settings_menu(mb)
 
+        help_menu = mb.addMenu("&Help")
         self._act_user_guide = self._bind_hotkey(
             "help.user_guides",
             QAction("&User Guide", self),
@@ -647,6 +613,7 @@ class AppMenuMixin:
         self._act_user_guide.setToolTip("Open MolManager help (F1).")
         self._act_user_guide.triggered.connect(lambda: open_user_guide_dialog(self))
         self.addAction(self._act_user_guide)
+        help_menu.addAction(self._act_user_guide)
 
         self._act_citations = self._bind_hotkey(
             "help.citations",
@@ -655,6 +622,8 @@ class AppMenuMixin:
         self._act_citations.setToolTip("Open papers and licenses for tools used in MolManager.")
         self._act_citations.triggered.connect(lambda: open_citations_dialog(self))
         self.addAction(self._act_citations)
+        help_menu.addAction(self._act_citations)
+        self._help_menu = help_menu
 
         # Native Windows menu bars can swallow clicks meant for the corner widget; use in-window bar.
         if sys.platform == "win32":
@@ -687,133 +656,8 @@ class AppMenuMixin:
         btn_proc.clicked.connect(self.open_processes_dialog)
         self._btn_processes = btn_proc
         corner_ly.addWidget(btn_proc)
-
-        btn_help = QToolButton(corner)
-        btn_help.setToolTip("User Guide and Citations (F1 opens the guide).")
-        btn_help.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        btn_help.setPopupMode(QToolButton.InstantPopup)
-        btn_help.setAutoRaise(True)
-        btn_help.setFocusPolicy(Qt.NoFocus)
-        help_menu = QMenu(btn_help)
-        help_menu.addAction(self._act_user_guide)
-        help_menu.addAction(self._act_citations)
-        btn_help.setMenu(help_menu)
-        btn_help.setStyleSheet(
-            "QToolButton { padding: 0px; margin: 0px; }"
-            "QToolButton::menu-indicator { image: none; width: 0px; }"
-        )
-        self._btn_help = btn_help
-        self._help_menu = help_menu
-        corner_ly.addWidget(btn_help)
-        self._sync_help_glyph_icon()
         mb.setCornerWidget(corner, Qt.TopRightCorner)
         self._sync_main_toolbar_for_table_ready()
-
-    def apply_dock_results_chrome(self) -> None:
-        """Keep File → Save File / Save Selected; drop the rest of the toolbar."""
-        self._dock_results_mode = True
-        mb = self.menuBar()
-        mb.clear()
-        file_menu = mb.addMenu("&File")
-        export_all = (getattr(self, "_hotkey_actions", {}) or {}).get("file.export_all")
-        if export_all is None:
-            export_all = self._bind_hotkey(
-                "file.export_all",
-                QAction("&Save File...", self, triggered=lambda: self.run_export(False)),
-            )
-        else:
-            export_all.setText("&Save File...")
-        file_menu.addAction(export_all)
-        file_menu.addAction(
-            QAction("Save Selected...", self, triggered=lambda: self.run_export(True))
-        )
-        self._add_dock_view_menu(mb)
-        keep = {"file.export_all"}
-        for action_id, action in list(getattr(self, "_hotkey_actions", {}).items()):
-            if action_id in keep or action is None:
-                continue
-            try:
-                action.setShortcut(QKeySequence())
-                action.setEnabled(False)
-            except RuntimeError:
-                pass
-        for btn in (
-            getattr(self, "_btn_workspace_layout", None),
-            getattr(self, "_btn_processes", None),
-            getattr(self, "_btn_help", None),
-        ):
-            if btn is not None:
-                btn.hide()
-        corner = mb.cornerWidget(Qt.TopRightCorner)
-        if corner is not None:
-            corner.hide()
-        if sys.platform == "win32":
-            mb.setNativeMenuBar(False)
-
-    def _add_dock_view_menu(self, mb) -> None:
-        """View → Render submenu for receptor / ligand / pocket drawing styles."""
-        from ..dock_complex_viewer import (
-            DEFAULT_RENDER_STYLES,
-            RENDER_COMPONENT_LABELS,
-            RENDER_STYLE_CHOICES,
-        )
-
-        view_menu = mb.addMenu("&View")
-        render_menu = view_menu.addMenu("&Render")
-        render_menu.setToolTipsVisible(True)
-        render_menu.setToolTip("Choose how each component of the 3D complex is drawn.")
-        self._dock_render_groups = {}
-        for component, choices in RENDER_STYLE_CHOICES.items():
-            sub = render_menu.addMenu(RENDER_COMPONENT_LABELS[component])
-            group = QActionGroup(self)
-            group.setExclusive(True)
-            default = DEFAULT_RENDER_STYLES[component]
-            for style_id, label in choices:
-                act = QAction(label, self)
-                act.setCheckable(True)
-                act.setChecked(style_id == default)
-                act.setData((component, style_id))
-                group.addAction(act)
-                sub.addAction(act)
-            group.triggered.connect(self._on_dock_render_style_triggered)
-            self._dock_render_groups[component] = group
-        view_menu.addSeparator()
-        pocket_act = QAction("Pocket View", self)
-        pocket_act.setToolTip(
-            "Show nearby amino acids as ball-and-stick with residue labels, and zoom to the ligand."
-        )
-        pocket_act.triggered.connect(self._on_dock_pocket_view)
-        view_menu.addAction(pocket_act)
-
-    def _sync_dock_render_menu_checks(self, styles: dict) -> None:
-        groups = getattr(self, "_dock_render_groups", None) or {}
-        for component, group in groups.items():
-            want = (styles or {}).get(component)
-            group.blockSignals(True)
-            try:
-                for act in group.actions():
-                    data = act.data()
-                    act.setChecked(bool(data) and data[1] == want)
-            finally:
-                group.blockSignals(False)
-
-    def _on_dock_pocket_view(self) -> None:
-        viewer = getattr(self, "_dock_complex_viewer", None)
-        apply = getattr(viewer, "apply_pocket_view", None) if viewer is not None else None
-        if callable(apply):
-            apply()
-        if viewer is not None:
-            self._sync_dock_render_menu_checks(viewer.render_styles())
-
-    def _on_dock_render_style_triggered(self, action: QAction) -> None:
-        data = action.data() if action is not None else None
-        if not data or len(data) != 2:
-            return
-        component, style = data
-        viewer = getattr(self, "_dock_complex_viewer", None)
-        setter = getattr(viewer, "set_render_style", None) if viewer is not None else None
-        if callable(setter):
-            setter(str(component), str(style))
 
     def _set_ingest_loading(self, loading: bool) -> None:
         """Track file/import ingest and gray out the main toolbar until the table is ready."""
@@ -821,20 +665,8 @@ class AppMenuMixin:
         self._sync_main_toolbar_for_table_ready()
         self._sync_status_chrome_for_workspace()
 
-    def _sync_help_glyph_icon(self) -> None:
-        """Paint the Help glyph with the current menubar font and text color."""
-        btn = getattr(self, "_btn_help", None)
-        if btn is None:
-            return
-        mb = self.menuBar()
-        size = max(13, int(round(mb.fontMetrics().height() * 0.80)))
-        ink = mb.palette().color(QPalette.WindowText)
-        paper = mb.palette().color(QPalette.Window)
-        btn.setIcon(_help_glyph_icon(size=size, ink=ink, paper=paper))
-        btn.setIconSize(QSize(size, size))
-
     def _sync_main_toolbar_for_table_ready(self) -> None:
-        """Disable File/Edit/Tools menus and Layout while ``_ingest_loading``; keep Processes/Help usable."""
+        """Disable menubar, Layout, and Processes while ``_ingest_loading``."""
         if getattr(self, "_dock_results_mode", False):
             return
         enabled = not bool(getattr(self, "_ingest_loading", False))
@@ -847,28 +679,62 @@ class AppMenuMixin:
                 action.setEnabled(enabled)
         calc = getattr(self, "_act_custom_calc", None)
         calc_blocked = bool(load_config().disable_custom_calc)
-        for action_id, action in getattr(self, "_hotkey_actions", {}).items():
+        for action in getattr(self, "_hotkey_actions", {}).values():
             if action is None:
                 continue
-            if action_id in _HELP_HOTKEY_IDS:
-                action.setEnabled(True)
-            elif action is calc and calc_blocked:
+            if action is calc and calc_blocked:
                 action.setEnabled(False)
             else:
                 action.setEnabled(enabled)
-        layout_btn = getattr(self, "_btn_workspace_layout", None)
-        if layout_btn is not None:
-            layout_btn.setEnabled(enabled)
-        # Processes and Help stay enabled so the user can cancel a long open/import or read the manual.
+        for btn in (
+            getattr(self, "_btn_workspace_layout", None),
+            getattr(self, "_btn_processes", None),
+        ):
+            if btn is not None:
+                btn.setEnabled(enabled)
 
     def open_protein_viewer(self):
         """Open the Protein Viewer window (3Dmol.js + chain Manager)."""
-        return self._ensure_protein_viewer(show=True)
+        dlg = self._ensure_protein_viewer(show=True)
+        finder = getattr(self, "_live_pose_browser", None)
+        browser = finder() if callable(finder) else None
+        if dlg is not None and browser is not None:
+
+            def _sync_live_poses() -> None:
+                begin = getattr(dlg, "begin_canvas_load", None)
+                end = getattr(dlg, "end_canvas_load", None)
+                if callable(begin):
+                    from ..strings import LOADING_DETAIL_PROTEIN_VIEWER
+
+                    begin(LOADING_DETAIL_PROTEIN_VIEWER)
+                try:
+                    snap = getattr(self, "_last_dock_results", None) or {}
+                    prepare = getattr(self, "_prepare_protein_viewer_for_poses", None)
+                    if callable(prepare):
+                        prepare(dlg, snap.get("receptor_path"), crystal_path=snap.get("crystal_path"))
+                    self._dock_pose_zoomed = False
+                    sync = getattr(browser, "_sync_pose_views", None)
+                    if callable(sync):
+                        sync()
+                finally:
+                    if callable(end):
+                        end()
+
+            queue = getattr(dlg, "queue_after_canvas_bootstrap", None)
+            if callable(queue) and not getattr(dlg, "_canvas_bootstrapped", True):
+                queue(_sync_live_poses)
+            else:
+                _sync_live_poses()
+        return dlg
 
     def _ensure_protein_viewer(self, *, show: bool = True):
-        """Create or reuse the Protein Viewer; pass ``show=False`` to preload without raising it."""
+        """Create or reuse the Protein Viewer; apply a saved session snapshot on first create."""
         from ..protein_viewer import ProteinViewerDialog
+        from ..qt_widget_utils import qobject_is_deleted
         from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
+
+        existing = getattr(self, "_protein_viewer_dialog", None)
+        created = existing is None or qobject_is_deleted(existing)
 
         def _on_destroyed() -> None:
             self._protein_viewer_dialog = None
@@ -878,9 +744,41 @@ class AppMenuMixin:
             "_protein_viewer_dialog",
             lambda: ProteinViewerDialog(self),
             _on_destroyed,
-            show=show,
+            show=False,
         )
-        return self._protein_viewer_dialog
+        dlg = self._protein_viewer_dialog
+        payload = getattr(self, "_protein_viewer_session", None)
+        has_content = bool(created and isinstance(payload, dict) and payload.get("structures"))
+        if dlg is not None and created and not getattr(dlg, "_canvas_bootstrapped", False):
+            begin = getattr(dlg, "begin_canvas_load", None)
+            if callable(begin):
+                from ..strings import (
+                    LOADING_DETAIL_PROTEIN_VIEWER,
+                    LOADING_DETAIL_PROTEIN_VIEWER_START,
+                )
+
+                detail = (
+                    LOADING_DETAIL_PROTEIN_VIEWER
+                    if has_content
+                    else LOADING_DETAIL_PROTEIN_VIEWER_START
+                )
+                begin(detail, paint=False)
+            if has_content:
+                setter = getattr(dlg, "set_pending_session_state", None)
+                if callable(setter):
+                    setter(payload)
+        if show and dlg is not None:
+            dlg.show()
+            dlg.raise_()
+            dlg.activateWindow()
+            flush = getattr(dlg, "flush_canvas_load_paint", None)
+            if created and callable(flush):
+                flush()
+        if created and dlg is not None:
+            boot = getattr(dlg, "schedule_canvas_bootstrap", None)
+            if callable(boot):
+                boot()
+        return dlg
 
     def open_protein_sequence(self):
         """Open the Protein Sequence MSA window (independent of Viewer Sequence)."""

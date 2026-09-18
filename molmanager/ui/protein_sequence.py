@@ -18,11 +18,12 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtGui import QFont, QTextCursor, QTextOption
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QFont, QKeyEvent, QTextCursor, QTextOption
 from PyQt5.QtWidgets import (
     QDialog,
     QLabel,
+    QMenu,
     QPlainTextEdit,
     QTabWidget,
     QVBoxLayout,
@@ -30,6 +31,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ..structure_components import (
+    AA_ONE_TO_THREE,
     VALID_SEQUENCE_LETTERS,
     PolymerChain,
     PolymerResidue,
@@ -38,19 +40,26 @@ from ..structure_components import (
 )
 from .qt_widget_utils import make_window_minimizable, monospace_text_font
 
+# Canonical mutate targets (skip ambiguous B/Z/X codes).
+_MUTATE_AMINO_ACIDS = tuple(
+    (letter, resn) for letter, resn in AA_ONE_TO_THREE.items() if letter not in {"B", "Z", "X"}
+)
+
 
 class _ChainSequenceEdit(QPlainTextEdit):
-    """One-letter sequence editor; typing overwrites, selection maps to residues."""
+    """One-letter sequence display; right-click Mutate, Delete removes residues."""
 
     sequence_committed = pyqtSignal(str)
     residue_range_changed = pyqtSignal(int, int)
     focus_requested = pyqtSignal()
+    mutate_requested = pyqtSignal(str)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
         self.setWordWrapMode(QTextOption.WrapAnywhere)
-        self.setOverwriteMode(True)
+        self.setReadOnly(True)
+        self.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         self.setUndoRedoEnabled(False)
         font = QFont(monospace_text_font())
         font.setPointSize(max(12, font.pointSize() + 2))
@@ -58,7 +67,8 @@ class _ChainSequenceEdit(QPlainTextEdit):
         self.setTabChangesFocus(True)
         self._applying = False
         self._chain_sequence = ""
-        self.textChanged.connect(self._on_text_changed)
+        self.viewport().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.viewport().customContextMenuRequested.connect(self._on_context_menu)
         self.selectionChanged.connect(self._on_selection_changed)
         self.cursorPositionChanged.connect(self._on_selection_changed)
 
@@ -74,6 +84,67 @@ class _ChainSequenceEdit(QPlainTextEdit):
         cursor.setPosition(pos + 1, QTextCursor.KeepAnchor)
         self.setTextCursor(cursor)
         self.focus_requested.emit()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802
+        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            self._emit_delete_selected()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def _emit_delete_selected(self) -> None:
+        start, end = self.selected_span()
+        seq = self._chain_sequence
+        if not seq or start >= end:
+            return
+        start = max(0, min(start, len(seq)))
+        end = max(start, min(end, len(seq)))
+        if start >= end:
+            return
+        self.sequence_committed.emit(seq[:start] + seq[end:])
+
+    def _select_clicked_residue(self, pos) -> None:
+        n = len(self.toPlainText())
+        if n == 0:
+            return
+        click_pos = self.cursorForPosition(pos).position()
+        click_pos = max(0, min(click_pos, n - 1))
+        start, end = self.selected_span()
+        if start <= click_pos < end:
+            return
+        cursor = self.textCursor()
+        cursor.setPosition(click_pos)
+        cursor.setPosition(click_pos + 1, QTextCursor.KeepAnchor)
+        self.setTextCursor(cursor)
+
+    def selection_can_mutate(self) -> bool:
+        seq = self.toPlainText()
+        start, end = self.selected_span()
+        for i in range(start, min(end, len(seq))):
+            ch = seq[i]
+            if ch.isupper() and ch in VALID_SEQUENCE_LETTERS:
+                return True
+        return False
+
+    def _make_context_menu(self) -> QMenu:
+        menu = QMenu(self)
+        mutate_menu = menu.addMenu("&Mutate")
+        can_mutate = self.selection_can_mutate()
+        mutate_menu.setEnabled(can_mutate)
+        for letter, resn in _MUTATE_AMINO_ACIDS:
+            act = mutate_menu.addAction(f"{letter}  {resn}")
+            act.setEnabled(can_mutate)
+            act.triggered.connect(
+                lambda _checked=False, code=letter: self.mutate_requested.emit(code)
+            )
+        return menu
+
+    def _on_context_menu(self, pos) -> None:
+        if not self.toPlainText():
+            return
+        self._select_clicked_residue(pos)
+        menu = self._make_context_menu()
+        menu.exec_(self.viewport().mapToGlobal(pos))
 
     def set_sequence(self, sequence: str, *, select_start: int = -1, select_end: int = -1) -> None:
         self._applying = True
@@ -101,41 +172,6 @@ class _ChainSequenceEdit(QPlainTextEdit):
                 pos = n - 1
             return (pos, pos + 1)
         return (start, end)
-
-    def _normalized_text(self) -> str:
-        raw = "".join(ch for ch in self.toPlainText() if not ch.isspace())
-        orig = self._chain_sequence
-        out: list[str] = []
-        for i, ch in enumerate(raw):
-            if ch.isalpha():
-                if (
-                    i < len(orig)
-                    and orig[i].islower()
-                    and orig[i].upper() in VALID_SEQUENCE_LETTERS
-                    and ch.upper() == orig[i].upper()
-                ):
-                    out.append(orig[i])
-                else:
-                    out.append(ch.upper())
-            else:
-                out.append(ch)
-        return "".join(out)
-
-    def _on_text_changed(self) -> None:
-        if self._applying:
-            return
-        cleaned = self._normalized_text()
-        raw = self.toPlainText()
-        if raw != cleaned:
-            pos = min(self.textCursor().position(), len(cleaned))
-            self._applying = True
-            self.setPlainText(cleaned)
-            cursor = self.textCursor()
-            cursor.setPosition(pos)
-            self.setTextCursor(cursor)
-            self._applying = False
-        if cleaned != self._chain_sequence:
-            self.sequence_committed.emit(cleaned)
 
     def _on_selection_changed(self) -> None:
         if self._applying:
@@ -166,7 +202,7 @@ class ProteinSequenceDialog(QDialog):
         self.hint = QLabel(
             "Letters are amino acids; lowercase letters are missing from the coordinates "
             "(SEQRES / mmCIF gaps). + ligand/cofactor, * metal, ~ water. "
-            "Select characters to highlight them in 3D. Type to mutate observed residues; "
+            "Select characters to highlight them in 3D. Right-click a residue letter to mutate it. "
             "Delete removes residues."
         )
         self.hint.setWordWrap(True)
@@ -212,6 +248,7 @@ class ProteinSequenceDialog(QDialog):
             editor.set_sequence(poly.sequence)
             editor.residue_range_changed.connect(self._on_editor_range)
             editor.sequence_committed.connect(self._on_editor_committed)
+            editor.mutate_requested.connect(self._on_mutate_requested)
             editor.focus_requested.connect(self._on_focus_requested)
             layout.addWidget(editor, 1)
             tab = (
@@ -327,6 +364,27 @@ class ProteinSequenceDialog(QDialog):
             return
         self._update_status(poly, start, end)
         self.residue_selection_changed.emit(self.selected_residue_selections())
+
+    def _on_mutate_requested(self, letter: str) -> None:
+        code = (letter or "").strip().upper()
+        if letter_to_resn(code) is None:
+            return
+        poly = self._current_chain()
+        editor = self._editor_at(self.tabs.currentIndex())
+        if poly is None or editor is None:
+            return
+        start, end = editor.selected_span()
+        seq = list(poly.sequence)
+        changed = False
+        for i in range(start, min(end, len(seq))):
+            ch = seq[i]
+            if ch.isupper() and ch in VALID_SEQUENCE_LETTERS:
+                seq[i] = code
+                changed = True
+        if not changed:
+            self.status.setText("Right-click an observed amino-acid letter to mutate it.")
+            return
+        self._on_editor_committed("".join(seq))
 
     def _on_editor_committed(self, new_seq: str) -> None:
         if self._syncing:

@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Tools → Conformations → Stochastic."""
+"""Tools → Conformations → Generate → Stochastic."""
 
 from __future__ import annotations
 
@@ -40,9 +40,11 @@ from .conformer_output import (
 )
 from .scope import selection_scope_checked
 
-_CONFORMER_FORCE_FIELDS = ("MMFF", "MMFF94s", "UFF")
+_CONFORMER_FORCE_FIELDS = ("MMFF", "MMFF94s", "UFF", "GAFF2", "GAFF")
 _CONFORMER_FF_TOOLTIP = (
-    "MMFF94 or MMFF94s when parameters exist; otherwise falls back to UFF automatically."
+    "MMFF94 or MMFF94s when parameters exist; otherwise falls back to UFF automatically. "
+    "GAFF2/GAFF minimize with AmberTools (antechamber) and OpenMM in vacuum; "
+    "on Windows AmberTools runs in WSL (Settings → WSL)."
 )
 # Search budget can exceed what we store: packing/viewer stay healthy around 50–200 kept poses.
 _STOCHASTIC_NUM_CONFS_MAX = 1000

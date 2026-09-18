@@ -89,3 +89,26 @@ def test_superpose_dialog_ring_and_pattern_params(qapp):  # noqa: ARG001
     assert sp.align_mode == ""
     assert sp.align_pattern == "c1ccccc1"
     d.close()
+
+
+def test_open_superpose_keeps_table_selectable(qapp):  # noqa: ARG001
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtWidgets import QAbstractItemView
+
+    from molmanager.ui.main_window import ChemicalTableApp
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CCO"})
+    w.next_oid = 1
+    w.open_superpose()
+    qapp.processEvents()
+    dlg = next(iter(w.findChildren(SuperposeDialog)), None)
+    assert dlg is not None
+    assert dlg.isModal() is False
+    assert dlg.windowModality() == Qt.NonModal
+    assert w.table.isEnabled()
+    assert w.table.selectionMode() == QAbstractItemView.ExtendedSelection
+    dlg.close()
+    w.close()

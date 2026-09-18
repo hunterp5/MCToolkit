@@ -164,7 +164,8 @@ class SessionRestoreMixin:
         raise TimeoutError("Timed out waiting for session restore to finish.")
 
     def _session_gui_chunk_size(self) -> int:
-        return max(64, int(load_config().ingest_gui_chunk_size))
+        cfg = load_config()
+        return max(64, int(cfg.session_gui_chunk_size), int(cfg.ingest_gui_chunk_size))
 
     def _on_session_rows_parse_failed(self, message: str, generation: int) -> None:
         if generation != getattr(self, "_session_load_generation", 0):
@@ -474,9 +475,7 @@ class SessionRestoreMixin:
                 self._confs_blocks_sidecar = {}
                 cs = self._confs_blocks_sidecar
             cs.update(side)
-        from ..som_browser import restore_som_maps_for_session
-
-        restore_som_maps_for_session(self, doc.get("som_browse"))
+        self._pending_session_som_browse = doc.get("som_browse")
         restore_ionization_sidecar(doc.get("ionization_sidecar"))
         from ...mmp_analysis import restore_mmp_ledger_for_session
 
@@ -503,6 +502,22 @@ class SessionRestoreMixin:
             self.table.setUpdatesEnabled(True)
         except Exception:
             pass
+        self._restore_pending_session_som_maps()
+        self._start_deferred_session_auto_render2d()
+
+    def _restore_pending_session_som_maps(self) -> None:
+        """Redraw SOM Map pixmaps after the overlay lifts so Open is not blocked on depictions."""
+        payload = getattr(self, "_pending_session_som_browse", None)
+        self._pending_session_som_browse = None
+        from ..som_browser import restore_som_maps_for_session
+
+        restore_som_maps_for_session(self, payload)
+
+    def _start_deferred_session_auto_render2d(self) -> None:
+        """Start auto Render 2D after the workspace is shown so plot restore keeps the overlay."""
+        render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
+        if callable(render):
+            render()
 
     def _hide_session_workspace_until_ready(self) -> None:
         """Keep independent floating plot windows hidden until the workspace overlay lifts."""
@@ -555,23 +570,7 @@ class SessionRestoreMixin:
         return False
 
     def _session_plots_ready_for_reveal(self) -> bool:
-        """Skip waiting in tests; otherwise poll briefly so Plotly views are not blank."""
-        if "pytest" in sys.modules:
-            return True
-        hosts_fn = getattr(self, "_iter_active_plot_hosts", None)
-        hosts = list(hosts_fn()) if callable(hosts_fn) else []
-        if not hosts:
-            return True
-        now = time.monotonic()
-        deadline = getattr(self, "_session_plot_wait_deadline", None)
-        if deadline is None:
-            self._session_plot_wait_deadline = now + 8.0
-            deadline = self._session_plot_wait_deadline
-        if now >= float(deadline):
-            return True
-        for host in hosts:
-            if self._session_plot_host_waiting_for_web(host):
-                return False
+        """Do not stall overlay on Plotly WebEngine; widgets are already constructed."""
         return True
 
     def _session_on_render2d_batch_finished(self) -> None:
@@ -589,7 +588,7 @@ class SessionRestoreMixin:
         QTimer.singleShot(0, self._session_try_reveal_when_ready)
 
     def _session_try_reveal_when_ready(self) -> None:
-        """Show the workspace once plot views have settled (2D may still be drawing)."""
+        """Show the workspace after session prep; Plotly may still be drawing."""
         if not getattr(self, "_session_awaiting_ready", False):
             return
         if getattr(self, "_session_waiting_for_render", False):
@@ -621,29 +620,11 @@ class SessionRestoreMixin:
         self.status_label.setText(loaded_session_status(n) if n else "Ready.")
 
     def _deferred_session_post_load_follow_up(self) -> None:
-        """Migrate packed ensembles, then auto-render 2D using the same rules as file ingest."""
+        """Migrate packed ensembles, restore chrome, then reveal; auto-render 2D after overlay lifts."""
         migrate = getattr(self, "_migrate_legacy_confs_cells_to_sidecar", None)
         if callable(migrate):
             migrate()
-        render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
         pending = getattr(self, "_pending_session_table_layout", None)
         self._restore_pending_workspace_layout()
-        started = callable(render) and render()
-        blocks = False
-        if started:
-            blocks_fn = getattr(self, "_auto_render2d_blocks_workspace_reveal", None)
-            blocks = bool(callable(blocks_fn) and blocks_fn(self._table_model.rowCount()))
-        if started and blocks:
-            detail = getattr(self, "_loading_detail", None)
-            if detail is not None:
-                try:
-                    detail.setText(f"{TOOL_RENDER_2D}…")
-                except RuntimeError:
-                    pass
-            self._session_waiting_for_render = True
-            self._restore_session_table_chrome(pending)
-            self._restore_pending_workspace_layout()
-            QTimer.singleShot(0, self._restore_pending_workspace_layout)
-            return
         self._restore_session_table_chrome(pending)
         self._session_try_reveal_when_ready()

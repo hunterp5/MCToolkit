@@ -104,6 +104,9 @@ def main(argv: list[str] | None = None) -> int:
 
     w = ChemicalTableApp()
     w.show()
+    from .qt_webengine import schedule_qtwebengine_prewarm
+
+    schedule_qtwebengine_prewarm()
     if load_session:
         try:
             p = load_session.lower()
