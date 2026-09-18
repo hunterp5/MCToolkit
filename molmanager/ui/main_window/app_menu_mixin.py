@@ -697,10 +697,12 @@ class AppMenuMixin:
         """Open the Protein Viewer window (3Dmol.js + chain Manager)."""
         dlg = self._ensure_protein_viewer(show=True)
         finder = getattr(self, "_live_pose_browser", None)
-        browser = finder() if callable(finder) else None
-        if dlg is not None and browser is not None:
+        if dlg is not None and callable(finder) and finder() is not None:
 
             def _sync_live_poses() -> None:
+                browser = finder() if callable(finder) else None
+                if browser is None:
+                    return
                 begin = getattr(dlg, "begin_canvas_load", None)
                 end = getattr(dlg, "end_canvas_load", None)
                 if callable(begin):
@@ -711,7 +713,9 @@ class AppMenuMixin:
                     snap = getattr(self, "_last_dock_results", None) or {}
                     prepare = getattr(self, "_prepare_protein_viewer_for_poses", None)
                     if callable(prepare):
-                        prepare(dlg, snap.get("receptor_path"), crystal_path=snap.get("crystal_path"))
+                        prepare(
+                            dlg, snap.get("receptor_path"), crystal_path=snap.get("crystal_path")
+                        )
                     self._dock_pose_zoomed = False
                     sync = getattr(browser, "_sync_pose_views", None)
                     if callable(sync):

@@ -212,6 +212,112 @@ def test_pose_browser_overlays_open_protein_viewer(qapp, tmp_path, monkeypatch):
         parent.close()
 
 
+def test_closed_pose_browser_does_not_restore_overlay_on_viewer_reopen(
+    qapp, tmp_path, monkeypatch
+):  # noqa: ARG001
+    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
+    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.protein_embed import ProteinEmbedView
+
+    monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
+    monkeypatch.setattr(ProteinEmbedView, "_ensure_web", lambda self: None)
+
+    rec = tmp_path / "rec.pdb"
+    rec.write_text(
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00  0.00           C\n"
+        "HETATM    2  C1  LIG A  99       1.000   0.000   0.000  1.00  0.00           C\n"
+        "END\n",
+        encoding="utf-8",
+    )
+    parent = ChemicalTableApp()
+    viewer = parent.open_protein_viewer()
+    viewer.load_structure_path(rec)
+    parent.open_dock_results_window(
+        [_ethanol_pose("-8.100", 1.0)],
+        title="Pose browser",
+        receptor_path=str(rec),
+    )
+    panel = parent._live_pose_browser()
+    try:
+        assert panel is not None
+        assert viewer.manager.is_docked(panel)
+        assert viewer._dock_pose_payload is not None
+        viewer.close_side_dock_widget(panel)
+        qapp.processEvents()
+        assert parent._live_pose_browser() is None
+        assert viewer._dock_pose_payload is None
+        viewer.close()
+        qapp.processEvents()
+        again = parent.open_protein_viewer()
+        qapp.processEvents()
+        assert again._dock_pose_payload is None
+        assert parent._live_pose_browser() is None
+    finally:
+        live = parent._live_pose_browser()
+        if live is not None:
+            host = live.window()
+            if host is not None and host is not live:
+                host.close()
+        viewer = parent._live_protein_viewer()
+        if viewer is not None:
+            viewer.close()
+        parent.close()
+
+
+def test_hidden_pose_browser_does_not_restore_overlay_on_viewer_reopen(
+    qapp, tmp_path, monkeypatch
+):  # noqa: ARG001
+    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
+    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.protein_embed import ProteinEmbedView
+
+    monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
+    monkeypatch.setattr(ProteinEmbedView, "_ensure_web", lambda self: None)
+
+    rec = tmp_path / "rec.pdb"
+    rec.write_text(
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00  0.00           C\n"
+        "HETATM    2  C1  LIG A  99       1.000   0.000   0.000  1.00  0.00           C\n"
+        "END\n",
+        encoding="utf-8",
+    )
+    parent = ChemicalTableApp()
+    viewer = parent.open_protein_viewer()
+    viewer.load_structure_path(rec)
+    parent.open_dock_results_window(
+        [_ethanol_pose("-8.100", 1.0)],
+        title="Pose browser",
+        receptor_path=str(rec),
+    )
+    panel = parent._live_pose_browser()
+    try:
+        assert panel is not None
+        assert viewer._dock_pose_payload is not None
+        viewer.close()
+        qapp.processEvents()
+        live = parent._live_pose_browser()
+        assert live is not None
+        host = live.window()
+        assert host is not None and host is not viewer
+        host.close()
+        qapp.processEvents()
+        assert parent._live_pose_browser() is None
+        again = parent.open_protein_viewer()
+        qapp.processEvents()
+        assert again._dock_pose_payload is None
+        assert parent._live_pose_browser() is None
+    finally:
+        live = parent._live_pose_browser()
+        if live is not None:
+            host = live.window()
+            if host is not None and host is not live:
+                host.close()
+        viewer = parent._live_protein_viewer()
+        if viewer is not None:
+            viewer.close()
+        parent.close()
+
+
 def test_write_dock_poses_to_table_packs_parent_row(qapp):  # noqa: ARG001
     from molmanager.confs_codec import mol_from_packed_confs_cell, rehydrate_v1_confs_cell
     from molmanager.services.column_labels import COLUMN_PARENT_OID
