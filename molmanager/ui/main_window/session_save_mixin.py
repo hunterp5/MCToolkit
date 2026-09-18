@@ -262,6 +262,7 @@ class SessionSaveMixin:
             "som_browse": self._session_som_browse_payload(oids=want),
             "ionization_sidecar": serialize_ionization_sidecar(),
             "mmp_ledger": self._session_mmp_ledger_payload(),
+            "dock_results": self._session_dock_results_payload(oids=want),
             "protein_viewer": self._collect_protein_viewer(),
         }
         collect_search = getattr(self, "collect_table_search_session", None)
@@ -304,6 +305,15 @@ class SessionSaveMixin:
         return serialize_mmp_ledger_payload(
             getattr(self, "_mmp_last_pairs", None),
             activity_column=str(getattr(self, "_mmp_last_activity_column", "") or ""),
+        )
+
+    def _session_dock_results_payload(self, *, oids: set[int] | None = None) -> dict | None:
+        """Last docking run for Pose Browser reopen after session open."""
+        from ...dock_io import serialize_dock_results_payload
+
+        return serialize_dock_results_payload(
+            getattr(self, "_last_dock_results", None),
+            oids=oids,
         )
 
     def _collect_protein_viewer(self) -> dict | None:

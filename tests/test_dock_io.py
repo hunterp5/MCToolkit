@@ -509,3 +509,61 @@ def test_dock_result_headers_include_crystal_ref():
     assert "crystalRef" in headers
     assert headers.index("minimizedAffinity") < headers.index("crystalRMSD")
     assert headers.index("crystalRMSD") < headers.index("crystalRef")
+
+
+def test_is_poses_header():
+    from molmanager.dock_io import is_poses_header
+
+    assert is_poses_header("poses") is True
+    assert is_poses_header("poses (1)") is True
+    assert is_poses_header("poses_2") is True
+    assert is_poses_header("confs") is False
+    assert is_poses_header("superpose") is False
+
+
+def test_dock_results_session_payload_roundtrip():
+    from rdkit.Geometry import Point3D
+
+    from molmanager.dock_io import (
+        deserialize_dock_results_payload,
+        serialize_dock_results_payload,
+    )
+    from molmanager.services.column_labels import COLUMN_PARENT_OID
+
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    conf = Chem.Conformer(mol.GetNumAtoms())
+    conf.SetAtomPosition(0, Point3D(1.0, 0.0, 0.0))
+    conf.SetAtomPosition(1, Point3D(2.4, 0.0, 0.0))
+    conf.SetAtomPosition(2, Point3D(3.0, 1.1, 0.0))
+    mol.AddConformer(conf, assignId=True)
+    mol.SetProp("minimizedAffinity", "-8.100")
+    mol.SetProp(COLUMN_PARENT_OID, "0")
+    other = Chem.Mol(mol)
+    other.SetProp(COLUMN_PARENT_OID, "1")
+    other.SetProp("minimizedAffinity", "-6.400")
+    snap = {
+        "mols": [mol, other],
+        "title": "Pose browser — out.sdf",
+        "receptor_path": "/tmp/rec.pdbqt",
+        "crystal_path": "/tmp/xtal.sdf",
+    }
+    payload = serialize_dock_results_payload(snap)
+    assert payload is not None
+    assert payload["title"] == "Pose browser — out.sdf"
+    assert payload["receptor_path"] == "/tmp/rec.pdbqt"
+    assert len(payload["poses"]) == 2
+    restored = deserialize_dock_results_payload(payload)
+    assert restored is not None
+    assert restored["crystal_path"] == "/tmp/xtal.sdf"
+    assert len(restored["mols"]) == 2
+    assert restored["mols"][0].GetProp("minimizedAffinity") == "-8.100"
+    assert restored["mols"][0].GetNumConformers() == 1
+    filtered = serialize_dock_results_payload(snap, oids={1})
+    assert filtered is not None
+    assert len(filtered["poses"]) == 1
+    kept = deserialize_dock_results_payload(filtered)
+    assert kept is not None
+    assert kept["mols"][0].GetProp("minimizedAffinity") == "-6.400"
+    assert serialize_dock_results_payload(None) is None
+    assert deserialize_dock_results_payload(None) is None

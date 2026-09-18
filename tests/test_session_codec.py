@@ -39,6 +39,7 @@ def test_compact_expand_roundtrip_preserves_cells():
         "zoomed_ids": [],
         "filters": [],
         "mmp_ledger": None,
+        "dock_results": None,
     }
     compact = compact_session_document(doc)
     assert compact["version"] == 2
@@ -47,6 +48,7 @@ def test_compact_expand_roundtrip_preserves_cells():
     assert "zoomed_ids" not in compact
     assert "filters" not in compact
     assert "mmp_ledger" not in compact
+    assert "dock_results" not in compact
     expanded = expand_session_document(compact)
     assert expanded["rows"][0]["cells"]["SMILES"] == "CC"
     assert expanded["rows"][1]["cells"]["MW"] == ""

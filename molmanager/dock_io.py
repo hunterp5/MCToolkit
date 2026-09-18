@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 from rdkit import Chem
 
@@ -525,6 +526,121 @@ def mols_from_pose_payloads(items: list) -> list[Chem.Mol]:
         apply_pose_metadata(mol, dict(props or {}), overwrite=True)
         mols.append(mol)
     return mols
+
+
+def is_poses_header(name: str) -> bool:
+    """True for ``poses`` and numbered copies (``poses (1)``, ``poses_2``)."""
+    text = (name or "").strip()
+    if not text:
+        return False
+    return is_packed_ensemble_header(text) and text.lower().startswith("poses")
+
+
+def serialize_dock_results_payload(
+    snap: dict | None,
+    *,
+    oids: set[int] | None = None,
+) -> dict[str, Any] | None:
+    """Session sidecar so Pose Browser can reopen after Open / Duplicate."""
+    if not isinstance(snap, dict):
+        return None
+    known = set(oids) if oids is not None else None
+    from .session_codec import encode_mol_blob_b64
+
+    poses: list[dict[str, Any]] = []
+    for mol in snap.get("mols") or []:
+        if mol is None:
+            continue
+        if known is not None and _pose_parent_oid(mol, known) is None:
+            continue
+        try:
+            blob = mol.ToBinary()
+        except Exception:
+            continue
+        if not blob:
+            continue
+        poses.append(
+            {
+                "mol": encode_mol_blob_b64(blob),
+                "props": pose_table_props(mol),
+            }
+        )
+    if not poses:
+        return None
+    rec = str(snap.get("receptor_path") or "").strip()
+    xtal = str(snap.get("crystal_path") or "").strip()
+    return {
+        "title": str(snap.get("title") or "Pose browser"),
+        "receptor_path": rec or None,
+        "crystal_path": xtal or None,
+        "poses": poses,
+    }
+
+
+def deserialize_dock_results_payload(raw: Any) -> dict[str, Any] | None:
+    """Parse ``serialize_dock_results_payload`` output into ``_last_dock_results`` shape."""
+    if not isinstance(raw, dict):
+        return None
+    items = raw.get("poses")
+    if not isinstance(items, list):
+        return None
+    from .session_codec import decode_mol_blob_b64
+
+    payloads: list[tuple[bytes, dict[str, str]]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        blob = decode_mol_blob_b64(item.get("mol"))
+        if not blob:
+            continue
+        props = item.get("props")
+        payloads.append((blob, props if isinstance(props, dict) else {}))
+    mols = mols_from_pose_payloads(payloads)
+    if not mols:
+        return None
+    rec = str(raw.get("receptor_path") or "").strip()
+    xtal = str(raw.get("crystal_path") or "").strip()
+    return {
+        "mols": mols,
+        "title": str(raw.get("title") or "Pose browser"),
+        "receptor_path": rec or None,
+        "crystal_path": xtal or None,
+    }
+
+
+def restore_dock_results_for_session(app: Any, payload: Any = None) -> int:
+    """Restore last docking run so Pose Browser can reopen after Open Session."""
+    snap = deserialize_dock_results_payload(payload)
+    mols = list((snap or {}).get("mols") or [])
+    title = str((snap or {}).get("title") or "Pose browser")
+    rec = (snap or {}).get("receptor_path") if snap else None
+    xtal = (snap or {}).get("crystal_path") if snap else None
+    if not mols:
+        loader = getattr(app, "_mols_from_table_pose_columns", None)
+        if callable(loader):
+            try:
+                mols = list(loader() or [])
+            except Exception:
+                logger.exception("Failed to rebuild dock poses from table columns")
+                mols = []
+    store = getattr(app, "_store_last_dock_results", None)
+    if callable(store):
+        store(mols, title=title, receptor_path=rec, crystal_path=xtal)
+        return len(mols)
+    try:
+        app._last_dock_results = (
+            {
+                "mols": mols,
+                "title": title,
+                "receptor_path": rec,
+                "crystal_path": xtal,
+            }
+            if mols
+            else None
+        )
+    except Exception:
+        return 0
+    return len(mols)
 
 
 def write_pose_mols_sdf(mols: list[Chem.Mol], path: str | Path) -> int:

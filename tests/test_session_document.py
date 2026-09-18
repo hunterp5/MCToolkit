@@ -486,6 +486,144 @@ def test_session_roundtrip_restores_mmp_ledger(qapp):  # noqa: ARG001
     assert len(restored) == 1
     assert restored[0] == pair
     assert w2._mmp_last_activity_column == "IC50"
+    w.close()
+    w2.close()
+
+
+def _session_ethanol_pose(affinity: str, x: float):
+    from rdkit.Geometry import Point3D
+
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    conf = Chem.Conformer(mol.GetNumAtoms())
+    conf.SetAtomPosition(0, Point3D(x, 0.0, 0.0))
+    conf.SetAtomPosition(1, Point3D(x + 1.4, 0.0, 0.0))
+    conf.SetAtomPosition(2, Point3D(x + 2.0, 1.1, 0.0))
+    mol.AddConformer(conf, assignId=True)
+    mol.SetProp("minimizedAffinity", affinity)
+    return mol
+
+
+def test_session_roundtrip_restores_dock_results(qapp, monkeypatch) -> None:  # noqa: ARG001
+    from molmanager.confs_codec import mol_from_packed_confs_cell, rehydrate_v1_confs_cell
+    from molmanager.services.column_labels import COLUMN_PARENT_OID
+    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
+    from molmanager.ui.pose_browser import PoseBrowserWidget
+
+    monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CCO"})
+    w.mols[0] = Chem.MolFromSmiles("CCO")
+    w.next_oid = 1
+    a = _session_ethanol_pose("-8.100", 1.0)
+    b = _session_ethanol_pose("-6.400", 4.0)
+    a.SetProp(COLUMN_PARENT_OID, "0")
+    b.SetProp(COLUMN_PARENT_OID, "0")
+    assert w.write_dock_poses_to_table([a, b]) == "poses"
+    w.open_dock_results_window(
+        [a, b],
+        title="Pose browser — out.sdf",
+        receptor_path="/tmp/rec.pdbqt",
+        crystal_path="/tmp/xtal.sdf",
+    )
+    live = w._live_pose_browser()
+    if live is not None:
+        host = live.window()
+        if host is not None and host is not live:
+            host.close()
+        else:
+            live.close()
+
+    doc = w._build_session_document()
+    assert doc["dock_results"]["title"] == "Pose browser — out.sdf"
+    assert len(doc["dock_results"]["poses"]) == 2
+    sidecar = doc.get("confs_sidecar") or {}
+    assert any(str(k).endswith(":poses") for k in sidecar)
+
+    w2 = ChemicalTableApp()
+    w2._apply_session_document(doc)
+    assert w2._live_pose_browser() is None
+    assert w2._act_dock_viewer.isEnabled() is True
+    snap = getattr(w2, "_last_dock_results", None) or {}
+    mols = list(snap.get("mols") or [])
+    assert len(mols) == 2
+    assert mols[0].GetProp("minimizedAffinity") == "-8.100"
+    assert snap.get("receptor_path") == "/tmp/rec.pdbqt"
+    assert "poses" in w2.headers
+    raw = w2._table_model.backing_value_for_row_header(0, "poses")
+    full = rehydrate_v1_confs_cell(raw, "poses", 0, getattr(w2, "_confs_blocks_sidecar", {}) or {})
+    packed = mol_from_packed_confs_cell(full, min_conformers=1)
+    assert packed is not None
+    assert packed.GetNumConformers() == 2
+
+    win = w2.open_dock_results_viewer()
+    assert win is not None
+    panel = w2._live_pose_browser()
+    assert isinstance(panel, PoseBrowserWidget)
+    assert len(panel._all_mols) == 2
+    assert panel._all_mols[0].GetProp("minimizedAffinity") == "-8.100"
+    w.close()
+    w2.close()
+
+
+def test_session_roundtrip_restores_pose_browser_from_table_poses(qapp, monkeypatch) -> None:  # noqa: ARG001
+    from molmanager.services.column_labels import COLUMN_PARENT_OID
+    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
+    from molmanager.ui.pose_browser import PoseBrowserWidget
+
+    monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CCO"})
+    w.mols[0] = Chem.MolFromSmiles("CCO")
+    w.next_oid = 1
+    a = _session_ethanol_pose("-8.100", 1.0)
+    b = _session_ethanol_pose("-6.400", 4.0)
+    a.SetProp(COLUMN_PARENT_OID, "0")
+    b.SetProp(COLUMN_PARENT_OID, "0")
+    assert w.write_dock_poses_to_table([a, b]) == "poses"
+    w._store_last_dock_results([], title="Pose browser")
+
+    doc = w._build_session_document()
+    assert "dock_results" not in doc
+
+    w2 = ChemicalTableApp()
+    w2._apply_session_document(doc)
+    assert w2._act_dock_viewer.isEnabled() is True
+    win = w2.open_dock_results_viewer()
+    assert win is not None
+    panel = w2._live_pose_browser()
+    assert isinstance(panel, PoseBrowserWidget)
+    assert len(panel._all_mols) == 2
+    w.close()
+    w2.close()
+
+
+def test_build_session_document_keeps_selected_dock_results(qapp):  # noqa: ARG001
+    from molmanager.services.column_labels import COLUMN_PARENT_OID
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {"SMILES": "CCO"})
+    w._table_model.append_row(1, {"SMILES": "CCN"})
+    w.mols[0] = Chem.MolFromSmiles("CCO")
+    w.mols[1] = Chem.MolFromSmiles("CCN")
+    w.next_oid = 2
+    a = _session_ethanol_pose("-8.100", 1.0)
+    b = _session_ethanol_pose("-6.400", 4.0)
+    a.SetProp(COLUMN_PARENT_OID, "0")
+    b.SetProp(COLUMN_PARENT_OID, "1")
+    w._store_last_dock_results([a, b], title="Pose browser — out.sdf")
+    doc = w._build_session_document(oids={1})
+    poses = (doc.get("dock_results") or {}).get("poses") or []
+    assert len(poses) == 1
+    w.close()
 
 
 def test_session_roundtrip_restores_ionization_cache(qapp, monkeypatch) -> None:  # noqa: ARG001

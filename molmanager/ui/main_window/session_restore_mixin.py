@@ -480,6 +480,9 @@ class SessionRestoreMixin:
         from ...mmp_analysis import restore_mmp_ledger_for_session
 
         restore_mmp_ledger_for_session(self, doc.get("mmp_ledger"))
+        from ...dock_io import restore_dock_results_for_session
+
+        restore_dock_results_for_session(self, doc.get("dock_results"))
         self._pending_session_table_layout = doc.get("table_layout")
         self._restore_table_layout(self._pending_session_table_layout)
         restore_search = getattr(self, "restore_table_search_session", None)

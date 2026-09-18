@@ -212,6 +212,12 @@ class TableUIMixin(
     def clear_all(self):
         self._confs_blocks_sidecar = {}
         self._som_browse_records = []
+        clearer = getattr(self, "_store_last_dock_results", None)
+        if callable(clearer):
+            clearer([], title="Pose browser")
+        else:
+            self._last_dock_results = None
+        self._dock_pose_zoomed = False
         if getattr(self, "_undo_stack", None) is not None:
             self._undo_stack.clear()
         try:

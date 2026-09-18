@@ -29,6 +29,7 @@ from ...confs_codec import pack_mols_as_confs_cell
 from ...dock_io import (
     dock_poses_pack_meta,
     group_dock_poses,
+    is_poses_header,
     pose_table_props,
     stamp_pose_parent_oids,
 )
@@ -68,18 +69,12 @@ class DockToolsMixin:
         copies = _copy_dock_pose_mols(usable)
         rec_path = (receptor_path or "").strip() or None
         xtal_path = (crystal_path or "").strip() or None
-        self._last_dock_results = {
-            "mols": _copy_dock_pose_mols(copies),
-            "title": title,
-            "receptor_path": rec_path,
-            "crystal_path": xtal_path,
-        }
-        act = getattr(self, "_act_dock_viewer", None)
-        if act is not None:
-            try:
-                act.setEnabled(True)
-            except RuntimeError:
-                pass
+        self._store_last_dock_results(
+            copies,
+            title=title,
+            receptor_path=rec_path,
+            crystal_path=xtal_path,
+        )
         protein = self._live_protein_viewer()
         if protein is not None:
             self._prepare_protein_viewer_for_poses(protein, rec_path, crystal_path=xtal_path)
@@ -307,6 +302,16 @@ class DockToolsMixin:
         snap = getattr(self, "_last_dock_results", None) or {}
         mols = list(snap.get("mols") or [])
         if not mols:
+            mols = self._mols_from_table_pose_columns()
+            if mols:
+                self._store_last_dock_results(
+                    mols,
+                    title=str(snap.get("title") or "Pose browser"),
+                    receptor_path=snap.get("receptor_path"),
+                    crystal_path=snap.get("crystal_path"),
+                )
+                snap = getattr(self, "_last_dock_results", None) or {}
+        if not mols:
             QMessageBox.information(
                 self,
                 "Pose Browser",
@@ -319,6 +324,78 @@ class DockToolsMixin:
             receptor_path=snap.get("receptor_path"),
             crystal_path=snap.get("crystal_path"),
         )
+
+    def _store_last_dock_results(
+        self,
+        mols: list,
+        *,
+        title: str = "Pose browser",
+        receptor_path: str | None = None,
+        crystal_path: str | None = None,
+    ) -> None:
+        """Keep the last docking run so Pose Browser can reopen, including after Open Session."""
+        copies = _copy_dock_pose_mols(mols)
+        rec_path = (receptor_path or "").strip() or None
+        xtal_path = (crystal_path or "").strip() or None
+        self._last_dock_results = (
+            {
+                "mols": copies,
+                "title": str(title or "Pose browser"),
+                "receptor_path": rec_path,
+                "crystal_path": xtal_path,
+            }
+            if copies
+            else None
+        )
+        self._set_pose_browser_action_enabled(bool(copies))
+
+    def _set_pose_browser_action_enabled(self, enabled: bool) -> None:
+        act = getattr(self, "_act_dock_viewer", None)
+        if act is None:
+            return
+        try:
+            act.setEnabled(bool(enabled))
+        except RuntimeError:
+            pass
+
+    def _mols_from_table_pose_columns(self) -> list:
+        """Rebuild pose molecules from packed ``poses`` table columns (session fallback)."""
+        from ...confs_codec import mol_from_packed_confs_cell, rehydrate_v1_confs_cell
+        from ...conformer_output import iter_single_conformer_mols
+
+        model = getattr(self, "_table_model", None)
+        if model is None:
+            return []
+        headers = [h for h in list(getattr(self, "headers", []) or []) if is_poses_header(h)]
+        if not headers:
+            return []
+        try:
+            n = int(model.rowCount())
+        except Exception:
+            return []
+        sidecar = getattr(self, "_confs_blocks_sidecar", {}) or {}
+        out: list = []
+        for row in range(n):
+            try:
+                oid = int(model.row_oid(row))
+            except Exception:
+                continue
+            for header in headers:
+                try:
+                    raw = model.backing_value_for_row_header(row, header)
+                except Exception:
+                    continue
+                full = rehydrate_v1_confs_cell(raw, header, oid, sidecar)
+                packed = mol_from_packed_confs_cell(full, min_conformers=1)
+                if packed is None:
+                    continue
+                for mol in iter_single_conformer_mols(packed):
+                    try:
+                        mol.SetProp(COLUMN_PARENT_OID, str(oid))
+                    except Exception:
+                        pass
+                    out.append(mol)
+        return out
 
     def _sync_dock_complex_viewer(self) -> None:
         """Keep a live pose browser in sync after table selection changes."""
@@ -411,6 +488,11 @@ class DockToolsMixin:
             oid = self._append_orphan_dock_pose_row(group)
             if oid is None:
                 continue
+            for mol in group:
+                try:
+                    mol.SetProp(COLUMN_PARENT_OID, str(int(oid)))
+                except Exception:
+                    continue
             pairs.append((int(oid), pack_mols_as_confs_cell(dock_poses_pack_meta(group), group)))
         if pairs:
             self._write_packed_ensemble_cells(col, pairs)
