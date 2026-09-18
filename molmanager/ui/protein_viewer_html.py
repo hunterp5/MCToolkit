@@ -372,6 +372,7 @@ def _viewer_protein_init_script() -> str:
           applyHydrogenBonds(v);
           applyDockingBox(v);
           applyDockPose(v);
+          applyPharmacophore(v);
           bindPicking(v);
         }
         function isHydrogenAtom(at) {
@@ -618,6 +619,39 @@ def _viewer_protein_init_script() -> str:
             }
           }
         }
+        function applyPharmacophore(v) {
+          v = v || window.molmanagerViewer;
+          if (!v) return;
+          var spec = window.molmanagerPharmacophore;
+          if (!spec || !spec.active) return;
+          var feats = spec.features || [];
+          for (var i = 0; i < feats.length; i++) {
+            var f = feats[i] || {};
+            if (f.enabled === false) continue;
+            var cx = f.x, cy = f.y, cz = f.z;
+            if (cx == null || cy == null || cz == null) continue;
+            var color = f.color || "#9b59b6";
+            var radius = f.radius || 1.0;
+            try {
+              v.addSphere({
+                center: {x: cx, y: cy, z: cz},
+                radius: radius,
+                color: color,
+                alpha: 0.35
+              });
+            } catch (eSph) {}
+            try {
+              v.addLabel(String(f.type || ""), {
+                position: {x: cx, y: cy, z: cz},
+                backgroundColor: color,
+                backgroundOpacity: 0.75,
+                fontColor: "white",
+                fontSize: 10,
+                showBackground: true
+              });
+            } catch (eLb) {}
+          }
+        }
         function applyDockingBox(v) {
           v = v || window.molmanagerViewer;
           if (!v) return;
@@ -756,6 +790,9 @@ def _viewer_protein_init_script() -> str:
                 elem: atom.elem || "",
                 serial: atom.serial == null ? "" : atom.serial,
                 altLoc: atom.altLoc || atom.altloc || "",
+                x: atom.x,
+                y: atom.y,
+                z: atom.z,
                 doubleClick: isDouble,
                 model: (atom.model && typeof atom.model.id === "number")
                   ? atom.model.id
@@ -800,6 +837,7 @@ def _viewer_protein_init_script() -> str:
         window.molmanagerHbonds = null;
         window.molmanagerDockingBox = null;
         window.molmanagerDockPose = null;
+        window.molmanagerPharmacophore = null;
         window.molmanagerDockPoseModel = null;
         installResetStructureMenu();
         connectBridge();
@@ -825,6 +863,9 @@ def _viewer_protein_init_script() -> str:
           }
           if (payload.dockPose !== undefined) {
             window.molmanagerDockPose = payload.dockPose || null;
+          }
+          if (payload.pharmacophore !== undefined) {
+            window.molmanagerPharmacophore = payload.pharmacophore || null;
           }
           if (payload.hydrogens) {
             window.molmanagerHydrogens = normalizeHydrogensMode(payload.hydrogens);
@@ -979,6 +1020,12 @@ def _viewer_protein_init_script() -> str:
           applyAll(v);
           if (pose && pose.active && pose.zoom && zoomToDockPose(v)) return;
           keepViewResize(v);
+        };
+        window.molmanagerSetPharmacophore = function (spec) {
+          window.molmanagerPharmacophore = spec || null;
+          if (!window.molmanagerViewer) return;
+          applyAll(window.molmanagerViewer);
+          keepViewResize(window.molmanagerViewer);
         };
         window.molmanagerMutateResidues = function (items) {
           var v = window.molmanagerViewer;

@@ -116,6 +116,14 @@ def test_systematic_conformations_guide_html(qapp):  # noqa: ARG001
     assert "Topic unavailable" not in h
 
 
+def test_conforge_conformations_guide_html(qapp):  # noqa: ARG001
+    from molmanager.ui.user_guides import guide_html
+
+    h = guide_html("tools_gen_conformations_conforge")
+    assert "CONFORGE" in h and "CDPKit" in h
+    assert "Topic unavailable" not in h
+
+
 def test_smina_dock_dialog_constructible(qapp):  # noqa: ARG001
     from molmanager.ui.gnina_dock import GninaDockDialog
 

@@ -167,3 +167,17 @@ def test_resolve_biotransformer_jar_uses_saved_path(tmp_path, monkeypatch):
     jar.write_bytes(b"")
     monkeypatch.setattr(bundled_paths, "configured_biotransformer_jar_text", lambda: str(jar))
     assert bundled_paths.resolve_biotransformer_jar() == jar
+
+
+def test_default_confgen_uses_cdpkit_program_files(monkeypatch, tmp_path):
+    exe = tmp_path / "CDPKit" / "Bin" / "confgen.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"")
+    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path / "empty_bundle"))
+    monkeypatch.setenv("ProgramFiles", str(tmp_path))
+    monkeypatch.setenv("ProgramFiles(x86)", str(tmp_path / "none"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "none2"))
+    monkeypatch.setattr(bundled_paths.sys, "platform", "win32")
+    monkeypatch.setattr(bundled_paths, "_interpreter_scripts_executable", lambda _n: None)
+    assert bundled_paths.system_cdpkit_confgen() == exe
+    assert bundled_paths.default_external_executable("confgen") == str(exe)

@@ -179,7 +179,7 @@ def crystal_ref_label(crystal: Chem.Mol | None, path: str | Path | None = None) 
 
 
 def stamp_crystal_ref(mols: list[Chem.Mol], label: str) -> None:
-    """Write ``crystalRef`` on each pose naming the validation reference."""
+    """Write ``crystalRef`` on crystal-redock poses naming the validation reference."""
     text = (label or "").strip()
     if not text:
         return

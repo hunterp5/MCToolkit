@@ -8,7 +8,7 @@ This document supports building an installer (PyInstaller, Inno Setup, MSI, etc.
 |---------|---------|----------|
 | **Core desktop** | `pip install -r requirements-core.txt` then `pip install -e ".[dev]"` | Table/filter/plot work; smaller CI / laptops |
 | **Full (default docs)** | `pip install -r requirements.txt` then `pip install -e .` | pKa, permeability, docking helpers, and torch |
-| **Extras only** | `pip install -e ".[pka,permeability,docking,dev]"` after a matching torch | Editable workflows that already have a CUDA/CPU torch |
+| **Extras only** | `pip install -e ".[pka,permeability,docking,conforge,dev]"` after a matching torch | Editable workflows that already have a CUDA/CPU torch |
 
 `requirements.txt` remains the one-shot “install everything” path. Prefer **core** when you do not need ML tools.
 
@@ -54,7 +54,7 @@ bash scripts/install_pytorch_pka.sh
 Editable install with extras (optional):
 
 ```bash
-pip install -e ".[pka,permeability,docking,dev]"
+pip install -e ".[pka,permeability,docking,conforge,dev]"
 ```
 
 ## Bundling external tools

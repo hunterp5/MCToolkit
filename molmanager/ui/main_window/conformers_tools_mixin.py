@@ -35,6 +35,7 @@ from ...confs_codec import (
     unpack_confs_blocks_json_b64,
 )
 from ...workers import (
+    ConforgeConformerWorker,
     ConformerGenerationWorker,
     SuperposeConformersWorker,
     SuperposeStructuresWorker,
@@ -75,6 +76,22 @@ class ConformersToolsMixin:
         self._prepare_tool_dialog(d)
         d.setAttribute(Qt.WA_DeleteOnClose, True)
         d.accepted.connect(lambda *_, dlg=d: self._on_systematic_conformations_dialog_accepted(dlg))
+        d.show()
+
+    def open_conforge_conformations(self):
+        if not self.headers or self._table_model.rowCount() == 0:
+            QMessageBox.information(
+                self,
+                "Generate Conformations — CONFORGE",
+                "Open a file or add rows so the table has molecules to process.",
+            )
+            return
+        from ..dialogs import ConforgeConformationsDialog
+
+        d = ConforgeConformationsDialog(len(self._selected_logical_rows()), self)
+        self._prepare_tool_dialog(d)
+        d.setAttribute(Qt.WA_DeleteOnClose, True)
+        d.accepted.connect(lambda *_, dlg=d: self._on_conforge_conformations_dialog_accepted(dlg))
         d.show()
 
     def _collect_mols_for_conformer_tools(
@@ -170,6 +187,49 @@ class ConformersToolsMixin:
         self.process_queue.enqueue(
             f"Systematic conformations ({n} structures)",
             lambda ev, d=data, p=params, sigs=self.signals, prog=ps: SystematicConformerWorker(
+                d, p, sigs, cancel_event=ev, progress_state=prog
+            ),
+        )
+
+    def _on_conforge_conformations_dialog_accepted(self, d) -> None:
+        only_selected = d.only_selected_rows()
+        allowed = self._selected_oids_set() if only_selected else None
+        if self._abort_if_only_selected_but_empty(
+            only_selected, allowed, "Generate Conformations — CONFORGE"
+        ):
+            return
+        data = self._collect_mols_for_conformer_tools(only_selected=only_selected)
+        if not data:
+            QMessageBox.information(
+                self,
+                "Generate Conformations — CONFORGE",
+                "No parseable structures for those rows (in-memory molecules or chemistry in table cells).",
+            )
+            return
+        params = d.params()
+        from ...conforge import ensure_conforge_ready
+
+        missing = ensure_conforge_ready(params.confgen_path)
+        if missing:
+            QMessageBox.warning(self, "Generate Conformations — CONFORGE", missing)
+            return
+        self._conformer_output_options = d.output_options()
+        self._pending_conformer_initial_superpose = False
+        n = len(data)
+        from ...memory_guards import check_conformer_workload
+
+        guard = check_conformer_workload(n, max(1, int(getattr(params, "num_confs", 1) or 1)))
+        if not guard.ok:
+            QMessageBox.warning(self, "Generate Conformations — CONFORGE", guard.message)
+            return
+        from ...workers import StrainEnergyParams
+
+        self._pending_strain_params = StrainEnergyParams(force_field="MMFF")
+        ps = self._tool_progress_state
+        self._begin_tool_progress("CONFORGE conformations", n)
+        self.process_queue.enqueue(
+            f"CONFORGE conformations ({n} structures)",
+            lambda ev, d=data, p=params, sigs=self.signals, prog=ps: ConforgeConformerWorker(
                 d, p, sigs, cancel_event=ev, progress_state=prog
             ),
         )

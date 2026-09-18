@@ -30,6 +30,7 @@ _TOOL_BINARIES: dict[str, tuple[str, ...]] = {
     "smina": ("smina.exe", "smina"),
     "gnina": ("gnina.exe", "gnina"),
     "obabel": ("obabel.exe", "obabel"),
+    "confgen": ("confgen.exe", "confgen"),
     "mafft": ("mafft.bat", "mafft.exe", "mafft"),
 }
 
@@ -150,6 +151,36 @@ def ensure_mafft_ready(user_path: str = "") -> str | None:
     return MISSING_MAFFT_MSG
 
 
+def system_cdpkit_confgen() -> Path | None:
+    """``confgen`` from an official CDPKit install (``Program Files``, ``/opt``, …)."""
+    names = _TOOL_BINARIES.get("confgen", ("confgen.exe", "confgen"))
+    for directory in _cdpkit_bin_dirs():
+        for name in names:
+            candidate = directory / name
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+def _cdpkit_bin_dirs() -> list[Path]:
+    dirs: list[Path] = []
+    if sys.platform.startswith("win"):
+        for key in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
+            root = (os.environ.get(key) or "").strip()
+            if root:
+                dirs.append(Path(root) / "CDPKit" / "Bin")
+    else:
+        dirs.extend(
+            [
+                Path("/opt/CDPKit/Bin"),
+                Path("/usr/local/CDPKit/Bin"),
+                Path("/Users/Shared/CDPKit/Bin"),
+                Path.home() / "CDPKit" / "Bin",
+            ]
+        )
+    return dirs
+
+
 def pip_openbabel_executable() -> Path | None:
     """``obabel`` shipped inside the pip ``openbabel`` wheel (``site-packages/openbabel/bin``)."""
     try:
@@ -200,6 +231,10 @@ def default_external_executable(tool: str) -> str:
         scripts_exe = _interpreter_scripts_executable(names)
         if scripts_exe is not None:
             return str(scripts_exe)
+        if key == "confgen":
+            cdpkit = system_cdpkit_confgen()
+            if cdpkit is not None:
+                return str(cdpkit)
         if key == "gnina" and sys.platform.startswith("win"):
             return "gnina"
         if sys.platform.startswith("win"):

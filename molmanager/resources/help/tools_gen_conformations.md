@@ -2,7 +2,7 @@
 
 Conformations → **Generate → Stochastic** builds 3D conformer ensembles per molecule with RDKit ETKDG, energy window, force field, and pruning controls, optionally writing to the table or SDF. When generation finishes, a 3D results window opens with per-conformer **E**, **ΔE vs ref**, **ΔE vs min**, **Pop. %**, and **RMSD**.
 
-For a systematic torsion search instead of stochastic ETKDG, use **Conformations → Generate → Systematic…** (Open Babel Confab).
+For a systematic torsion search instead of stochastic ETKDG, use **Conformations → Generate → Systematic…** (Open Babel Confab). For CONFORGE (CDPKit), use **CONFORGE…**.
 
 ## Goal
 

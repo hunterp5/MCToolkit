@@ -105,6 +105,13 @@ CONFAB = (
     "https://openbabel.org/docs/3DStructureGen/multipleconformers.html"
 )
 
+CONFORGE = (
+    "CONFORGE (CDPKit conformer generator): Seidel, T.; Permann, C.; Wieder, O.; Kohlbacher, S. M.; "
+    "Langer, T. High-Quality Conformer Generation with CONFORGE: Algorithm and Performance Assessment. "
+    "J. Chem. Inf. Model. 2023, 63, 5549–5570. https://doi.org/10.1021/acs.jcim.3c00563 — "
+    "https://cdpkit.org/applications/confgen.html"
+)
+
 OPENBABEL = (
     "Open Babel: O'Boyle, N. M.; Banck, M.; James, C. A.; Morley, C.; Vandermeersch, T.; "
     "Hutchison, G. R. Open Babel: An open chemical toolbox. J. Cheminform. 2011, 3, 33. "
@@ -291,6 +298,20 @@ def systematic_conformations_dialog_footer_html() -> str:
         "Requires Open Babel (<code>obabel</code> or the Python bindings). "
         "Confab needs a 3D starting geometry; MolManager embeds with ETKDG when the ligand is 2D. "
         "Energies in the results window are vacuum MMFF/UFF totals, not protein-bound ΔG.</small>"
+    )
+
+
+def conforge_conformations_dialog_footer_html() -> str:
+    """Rich text for Tools → Conformations → Generate → CONFORGE…."""
+    return (
+        "<small><b>Method</b>: <b>CONFORGE</b> (CDPKit) — "
+        '<a href="https://doi.org/10.1021/acs.jcim.3c00563">Seidel et al., J. Chem. Inf. Model. 2023</a>. '
+        "Knowledge-based fragment/torsion sampling for typical drug-like molecules; "
+        "stochastic DG for large macrocycles. On Windows, install CDPKit and point at "
+        "<code>confgen.exe</code> (PyPI has no Python 3.11 wheel). On Linux/macOS, "
+        "<code>pip install cdpkit</code> when a wheel exists. Energies in the results window "
+        "are vacuum MMFF totals, "
+        "not protein-bound ΔG.</small>"
     )
 
 

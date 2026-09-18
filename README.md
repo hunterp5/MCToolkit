@@ -314,6 +314,14 @@ macOS has no official Gnina binary. See **Protein → Dock Ligand** in the app a
 
 Distance-geometry ensembles remain **Tools → Conformations → Generate → Stochastic…** (RDKit ETKDG; no Open Babel).
 
+### CONFORGE conformers (CDPKit)
+
+**Tools → Conformations → Generate → CONFORGE…** uses CONFORGE from [CDPKit](https://cdpkit.org).
+
+On **Windows with Python 3.11**, `pip install cdpkit` (and `pip install -e ".[conforge]"`) will try to compile from source and fail — PyPI has wheels for Windows 3.10/3.12/3.14, not 3.11. Install the CDPKit **MSVC** package from [GitHub Releases](https://github.com/molinfo-vienna/CDPKit/releases), then Browse to `confgen.exe` (usually `C:\Program Files\CDPKit\Bin\confgen.exe`) or add that `Bin` folder to PATH. MolManager also looks in `Program Files\CDPKit\Bin` automatically.
+
+On **Linux/macOS**, `pip install cdpkit` uses a wheel when one exists for your Python version. You can still use a `confgen` binary from PATH, `resources/bin/<platform>/`, or Browse.
+
 ### Guided optional setup script
 
 **Windows:**
@@ -455,7 +463,7 @@ python -m molmanager
 python -m pytest tests/ -v
 ```
 
-Editable install extras in `pyproject.toml` (`pka`, `permeability`, `docking`, `dev`) mirror subsets of `requirements.txt` for `pip install -e ".[extra]"` workflows. Prefer `requirements-core.txt` when you only need the table desktop app.
+Editable install extras in `pyproject.toml` (`pka`, `permeability`, `docking`, `conforge`, `dev`) mirror subsets of `requirements.txt` for `pip install -e ".[extra]"` workflows. Prefer `requirements-core.txt` when you only need the table desktop app.
 
 Packaging and installer builds: `docs/PACKAGING.md`.
 

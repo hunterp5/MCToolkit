@@ -50,6 +50,7 @@ def test_catalog_includes_key_dois() -> None:
         "10.1021/cn100008c",
         "10.1021/acs.jcim.5b00654",
         "10.1186/1758-2946-3-8",
+        "10.1021/acs.jcim.3c00563",
         "10.1021/acs.jmedchem.7b00717",
         "10.1093/bioinformatics/btu829",
         "10.1093/molbev/mst010",
@@ -61,6 +62,10 @@ def test_catalog_includes_key_dois() -> None:
     assert fame is not None
     assert "non-commercial" in fame.notes.lower()
     assert "University of Milan" in fame.notes
+    cf = tool_citation("conforge")
+    assert cf is not None
+    assert "CONFORGE" in cf.name
+    assert "LGPL" in cf.license_name
     bt = tool_citation("biotransformer")
     assert bt is not None
     assert "LGPL" in bt.license_name

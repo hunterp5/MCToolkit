@@ -49,6 +49,12 @@ docking = [
     "pdb2pqr>=3.6.1",
     "prolif>=2.1",
 ]
+# Linux/macOS wheels exist for Python 3.11. Windows wheels are cp310/cp312/cp314 only, so
+# `pip install cdpkit` on Windows 3.11 builds from source and fails without Boost. Prefer the
+# CDPKit MSVC installer + confgen.exe: https://github.com/molinfo-vienna/CDPKit/releases
+conforge = [
+    "cdpkit",
+]
 dev = [
     "pytest>=7.4,<9",
     "ruff>=0.6",

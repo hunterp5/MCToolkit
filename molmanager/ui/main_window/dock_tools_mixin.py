@@ -549,6 +549,17 @@ class DockToolsMixin:
         )
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
         self._prepare_tool_dialog(dlg)
+        protein = self._live_protein_viewer()
+        if protein is not None:
+            current = (
+                getattr(dlg, "edit_pharmacophore", None) and dlg.edit_pharmacophore.text()
+            ) or ""
+            if not str(current).strip():
+                getter = getattr(protein, "pharmacophore_file_for_gnina", None)
+                path = getter() if callable(getter) else ""
+                setter = getattr(dlg, "set_pharmacophore_path", None)
+                if path and callable(setter):
+                    setter(path)
         return dlg
 
     open_smina_dock = open_gnina_dock

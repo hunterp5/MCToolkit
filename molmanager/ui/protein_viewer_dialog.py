@@ -55,6 +55,7 @@ from .protein_viewer_models import (
     _RENDER_COLOR_SPEC,
 )
 from .protein_viewer_overlays import ProteinViewerOverlayJobMixin
+from .protein_viewer_pharmacophore_mixin import ProteinViewerPharmacophoreMixin
 from .protein_viewer_sequence_mixin import ProteinViewerSequenceMixin
 from .protein_viewer_style_mixin import ProteinViewerStyleMixin
 from .qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
@@ -68,6 +69,7 @@ class ProteinViewerDialog(
     ProteinViewerOverlayJobMixin,
     ProteinViewerStyleMixin,
     ProteinViewerSequenceMixin,
+    ProteinViewerPharmacophoreMixin,
     QDialog,
 ):
     """Standalone Protein → Viewer window (3D canvas + chain Manager)."""
@@ -101,6 +103,11 @@ class ProteinViewerDialog(
         self._pocket_surface_payload: dict | None = None
         self._pocket_surface_settings: dict = {}
         self._pocket_surface_dialog = None
+        self._pharmacophore = None
+        self._pharmacophore_path: str | None = None
+        self._pharmacophore_temp_path: str | None = None
+        self._pharmacophore_place = False
+        self._pharmacophore_dialog = None
         self._docking_box_payload: dict | None = None
         self._dock_pose_payload: dict | None = None
         self._dock_pose_mol = None
@@ -207,6 +214,38 @@ class ProteinViewerDialog(
         act_sequence = QAction("&Sequence", self, triggered=self.open_sequence_window)
         act_sequence.setToolTip("Show the editable amino-acid sequence and select residues in 3D.")
         menubar.addAction(act_sequence)
+        pharma_menu = menubar.addMenu("&Pharmacophore")
+        act_pharma_edit = QAction(
+            "&Edit Pharmacophore…", self, triggered=self.open_pharmacophore_dialog
+        )
+        act_pharma_edit.setToolTip(
+            "Place pharmacophore features in the canvas (type, radius) and save them for Gnina."
+        )
+        pharma_menu.addAction(act_pharma_edit)
+        self._act_pharma_place = QAction("&Place on Atom Click", self, checkable=True)
+        self._act_pharma_place.setToolTip(
+            "Click an atom in 3D to insert a feature at that coordinate. "
+            "Use Edit Pharmacophore for type, radius, and explicit XYZ."
+        )
+        self._act_pharma_place.toggled.connect(self._on_pharmacophore_place_toggled)
+        pharma_menu.addAction(self._act_pharma_place)
+        act_pharma_ligand = QAction(
+            "From &Ligand", self, triggered=self.add_pharmacophore_from_ligand
+        )
+        act_pharma_ligand.setToolTip(
+            "Add RDKit BaseFeatures (donors, acceptors, aromatic centroids, …) from the ligand."
+        )
+        pharma_menu.addAction(act_pharma_ligand)
+        pharma_menu.addSeparator()
+        pharma_menu.addAction(QAction("&Open…", self, triggered=self.open_pharmacophore_file))
+        pharma_menu.addAction(QAction("&Save…", self, triggered=self.save_pharmacophore_file))
+        pharma_menu.addAction(QAction("&Clear", self, triggered=self.clear_pharmacophore))
+        pharma_menu.addSeparator()
+        act_pharma_gnina = QAction(
+            "Send to &Gnina", self, triggered=self.send_pharmacophore_to_gnina
+        )
+        act_pharma_gnina.setToolTip("Fill Protein → Dock Ligand → Gnina with this pharmacophore.")
+        pharma_menu.addAction(act_pharma_gnina)
         prepare_menu = menubar.addMenu("&Prepare")
         act_fast_prepare = QAction("&Fast Prepare…", self, triggered=self.open_prepare_dialog)
         act_fast_prepare.setToolTip(
@@ -670,6 +709,7 @@ class ProteinViewerDialog(
             "pocketSurface": self._pocket_surface_overlay_payload(),
             "dockingBox": self._docking_box_overlay_payload(),
             "dockPose": self._dock_pose_overlay_payload(),
+            "pharmacophore": self._pharmacophore_overlay_payload(),
             "hbonds": self._hbond_payload_for_structure_push(),
             "hydrogens": self._hydrogen_mode(),
             "refit": bool(refit) and camera is None,

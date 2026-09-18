@@ -244,6 +244,15 @@ class AppMenuMixin:
             "Build ensembles with Open Babel Confab (systematic torsion search)."
         )
         generate_menu.addAction(act_sys_conf)
+        act_conforge = QAction(
+            "CONFORGE…",
+            self,
+            triggered=self.open_conforge_conformations,
+        )
+        act_conforge.setToolTip(
+            "Build ensembles with CONFORGE (CDPKit knowledge-based fragment and torsion sampling)."
+        )
+        generate_menu.addAction(act_conforge)
         conformations_menu.addSeparator()
         act_superpose = QAction("&Superpose…", self, triggered=self.open_superpose)
         act_superpose.setToolTip(

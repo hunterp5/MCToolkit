@@ -167,6 +167,22 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 homepage="https://openbabel.org",
             ),
             _t(
+                "conforge",
+                "CONFORGE (CDPKit)",
+                "Knowledge-based conformer ensembles (Tools → Conformations → Generate → CONFORGE).",
+                (
+                    (
+                        "Seidel, T.; Permann, C.; Wieder, O.; Kohlbacher, S. M.; Langer, T. "
+                        "High-Quality Conformer Generation with CONFORGE: Algorithm and "
+                        "Performance Assessment. J. Chem. Inf. Model. 2023, 63, 5549–5570.",
+                        "https://doi.org/10.1021/acs.jcim.3c00563",
+                    ),
+                ),
+                LIC_LGPL3,
+                homepage="https://cdpkit.org",
+                notes="Optional. Windows 3.11: CDPKit MSVC installer (confgen.exe). Linux/macOS: pip install cdpkit when a wheel exists.",
+            ),
+            _t(
                 "3dmol",
                 "3Dmol.js",
                 "In-app 2D/3D structure viewer (bundled `3Dmol-min.js`).",
@@ -398,6 +414,24 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 LIC_BSD3,
                 notes="Fingerprint code is RDKit (BSD 3-Clause); the pharmacophore definitions follow Gobbi & Poppinger.",
             ),
+            _t(
+                "rdkit_pharma3d",
+                "RDKit 3D pharmacophore features",
+                "Protein Viewer → Pharmacophore (From ligand) and Gnina pharmacophore maps.",
+                (
+                    (
+                        "Landrum, G. RDKit: Open-source cheminformatics. Zenodo.",
+                        "https://doi.org/10.5281/zenodo.591637",
+                    ),
+                ),
+                LIC_BSD3,
+                homepage="https://www.rdkit.org",
+                notes=(
+                    "Feature families from RDKit BaseFeatures.fdef (Donor, Acceptor, Aromatic, "
+                    "Hydrophobe, LumpedHydrophobe, PosIonizable, NegIonizable, ZnBinder). "
+                    "MolManager stores spheres as JSON and maps them to Gnina --user_grid."
+                ),
+            ),
         ),
     ),
     CitationSection(
@@ -423,6 +457,10 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 ),
                 LIC_APACHE2,
                 homepage="https://github.com/gnina/gnina",
+                notes=(
+                    "Pharmacophore constraints from Protein Viewer are applied as Gnina "
+                    "--user_grid AutoDock maps (--user_grid_lambda)."
+                ),
             ),
             _t(
                 "vina",

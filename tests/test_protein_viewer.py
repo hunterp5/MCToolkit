@@ -522,6 +522,10 @@ def test_build_protein_viewer_html_has_setters():
     assert 'sphere: {scale: 0.42, color: "orange"}' not in html
     assert 'v.setClickable({elem: ["H", "D", "T"], invert: true}' not in html
     assert "v.addStyle({model: atomModelId(at), serial: at.serial}, {hidden: true})" not in html
+    assert "molmanagerSetDockPose" in html
+    assert "molmanagerSetPharmacophore" in html
+    assert "applyPharmacophore" in html
+    assert "payload.pharmacophore" in html
 
 
 def test_protein_viewer_has_prepare_log(qapp):  # noqa: ARG001

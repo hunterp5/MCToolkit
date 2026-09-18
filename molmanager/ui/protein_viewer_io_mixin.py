@@ -806,6 +806,8 @@ class ProteinViewerIoMixin:
                 **self._pocket_surface_style(),
             },
             "dockingBox": self._docking_box_payload,
+            "pharmacophore": self._ensure_pharmacophore().to_dict(),
+            "pharmacophorePath": str(getattr(self, "_pharmacophore_path", None) or ""),
             "residueHighlight": list(self._residue_highlight or []),
         }
         splitters: dict[str, list[int]] = {}
@@ -961,6 +963,11 @@ class ProteinViewerIoMixin:
                     act.setChecked(True)
                     act.blockSignals(False)
                 self.viewer.set_docking_box(payload)
+        pharma = state.get("pharmacophore")
+        if pharma is not None:
+            apply_pharma = getattr(self, "apply_pharmacophore_state", None)
+            if callable(apply_pharma):
+                apply_pharma(pharma, path=str(state.get("pharmacophorePath") or ""))
         self._session_dirty = False
 
     def _restore_session_splitters(self, splitters: object) -> None:

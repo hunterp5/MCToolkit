@@ -664,10 +664,86 @@ def test_present_dock_results_stamps_crystal_ref(qapp, tmp_path):  # noqa: ARG00
     crystal.SetProp("_Name", "AXI")
     dlg._crystal_ref_mol = crystal
     dlg._validation_ligand_path = str(tmp_path / "holo_smina_ligand.sdf")
+    dlg._stamp_crystal_on_poses = True
     rec = tmp_path / "rec.pdbqt"
     rec.write_text("ATOM\n", encoding="utf-8")
     dlg.edit_receptor.setText(str(rec))
     dlg._present_dock_results(str(sdf))
     assert captured
     assert captured[0][0].GetProp(CRYSTAL_REF_PROP) == "AXI"
+    dlg.close()
+
+
+def test_present_dock_results_skips_crystal_ref_on_user_ligands(qapp, tmp_path):  # noqa: ARG001
+    from rdkit import Chem
+    from rdkit.Chem import SDWriter
+
+    from molmanager.dock_validation import CRYSTAL_REF_PROP
+
+    sdf = tmp_path / "docked.sdf"
+    mol = Chem.MolFromSmiles("CCN")
+    assert mol is not None
+    writer = SDWriter(str(sdf))
+    writer.write(mol)
+    writer.close()
+    captured: list = []
+
+    class _Host:
+        def open_dock_results_window(self, mols, *, title="", receptor_path=None, **_kwargs):
+            captured.append(list(mols))
+            return None
+
+    dlg = GninaDockDialog(None)
+    dlg._main_window = _Host()
+    crystal = Chem.MolFromSmiles("CCO")
+    assert crystal is not None
+    crystal.SetProp("_Name", "AXI")
+    dlg._crystal_ref_mol = crystal
+    dlg._validation_ligand_path = str(tmp_path / "holo_smina_ligand.sdf")
+    dlg._stamp_crystal_on_poses = False
+    rec = tmp_path / "rec.pdbqt"
+    rec.write_text("ATOM\n", encoding="utf-8")
+    dlg.edit_receptor.setText(str(rec))
+    dlg._present_dock_results(str(sdf))
+    assert captured
+    assert not captured[0][0].HasProp(CRYSTAL_REF_PROP)
+    dlg.close()
+
+
+def test_present_dock_results_keeps_crystal_ref_on_validation_entry_only(qapp, tmp_path):  # noqa: ARG001
+    from rdkit import Chem
+    from rdkit.Chem import SDWriter
+
+    from molmanager.dock_validation import CRYSTAL_REF_PROP, stamp_crystal_ref
+
+    user_sdf = tmp_path / "docked.sdf"
+    user = Chem.MolFromSmiles("CCN")
+    assert user is not None
+    writer = SDWriter(str(user_sdf))
+    writer.write(user)
+    writer.close()
+    crystal_pose = Chem.MolFromSmiles("CCO")
+    assert crystal_pose is not None
+    stamp_crystal_ref([crystal_pose], "AXI A 2000")
+    captured: list = []
+
+    class _Host:
+        def open_dock_results_window(self, mols, *, title="", receptor_path=None, **_kwargs):
+            captured.append(list(mols))
+            return None
+
+    dlg = GninaDockDialog(None)
+    dlg._main_window = _Host()
+    dlg._crystal_ref_mol = Chem.MolFromSmiles("CCO")
+    dlg._stamp_crystal_on_poses = False
+    dlg._validation_pose_mols = [crystal_pose]
+    rec = tmp_path / "rec.pdbqt"
+    rec.write_text("ATOM\n", encoding="utf-8")
+    dlg.edit_receptor.setText(str(rec))
+    dlg._present_dock_results(str(user_sdf))
+    assert captured
+    mols = captured[0]
+    assert len(mols) == 2
+    assert mols[0].GetProp(CRYSTAL_REF_PROP) == "AXI A 2000"
+    assert not mols[1].HasProp(CRYSTAL_REF_PROP)
     dlg.close()

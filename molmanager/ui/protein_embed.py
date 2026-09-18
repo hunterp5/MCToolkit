@@ -62,6 +62,7 @@ class ProteinEmbedView(QWidget):
         self._pending_hbonds: dict | None = None
         self._pending_docking_box: dict | None = None
         self._pending_dock_pose: dict | None = None
+        self._pending_pharmacophore: dict | None = None
         self._web = None
         self._bootstrapped = False
         self._bridge = _ProteinViewerBridge(self)
@@ -197,6 +198,14 @@ class ProteinEmbedView(QWidget):
             pose = self._pending_dock_pose
             self._pending_dock_pose = None
             self._run_js("molmanagerSetDockPose", pose)
+        if (
+            self._web_ready
+            and self._pending_pharmacophore is not None
+            and self._pending_payload is None
+        ):
+            pharma = self._pending_pharmacophore
+            self._pending_pharmacophore = None
+            self._run_js("molmanagerSetPharmacophore", pharma)
         if self._web_ready:
             self.schedule_resize_keep_view()
             QTimer.singleShot(200, self.resize_keep_view)
@@ -222,6 +231,7 @@ class ProteinEmbedView(QWidget):
                         "hbonds",
                         "dockingBox",
                         "dockPose",
+                        "pharmacophore",
                         "hydrogens",
                         "refit",
                     ):
@@ -264,6 +274,10 @@ class ProteinEmbedView(QWidget):
                 self._pending_dock_pose = payload
                 if self._pending_payload is not None:
                     self._pending_payload["dockPose"] = payload
+            elif fn_name == "molmanagerSetPharmacophore":
+                self._pending_pharmacophore = payload
+                if self._pending_payload is not None:
+                    self._pending_payload["pharmacophore"] = payload
             elif fn_name == "molmanagerSetView" and self._pending_payload is not None:
                 self._pending_payload["camera"] = payload
             return
@@ -322,6 +336,9 @@ class ProteinEmbedView(QWidget):
 
     def set_dock_pose(self, pose: dict | None) -> None:
         self._run_js("molmanagerSetDockPose", pose or {"active": False})
+
+    def set_pharmacophore(self, spec: dict | None) -> None:
+        self._run_js("molmanagerSetPharmacophore", spec or {"active": False})
 
     def set_camera(self, view) -> None:
         if view is None:

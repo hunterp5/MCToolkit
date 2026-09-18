@@ -96,6 +96,7 @@ from .biotransformer_worker import BiotransformerSignals, BiotransformerWorker
 from .protomer_generator import ProtomerGeneratorSignals, ProtomerGeneratorWorker
 from .protonate_worker import ProtonateSignals, ProtonateWorker
 from .pdbqt_generator import PdbqtGenSignals, PdbqtGenRequest, PdbqtGeneratorWorker
+from .conforge_worker import ConforgeConformerWorker
 from .openbabel_confab_worker import SystematicConformerWorker
 from .protein_msa import MafftAlignSignals, MafftAlignWorker
 from .fragment_decomposition import FragmentDecompositionWorker
@@ -178,6 +179,7 @@ __all__ = [
     "PdbqtGenRequest",
     "PdbqtGeneratorWorker",
     "SystematicConformerWorker",
+    "ConforgeConformerWorker",
     "MafftAlignSignals",
     "MafftAlignWorker",
     "describe_custom_calc_error",

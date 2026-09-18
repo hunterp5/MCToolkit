@@ -1196,6 +1196,9 @@ class ProteinViewerStyleMixin:
             data = json.loads(payload or "{}")
         except json.JSONDecodeError:
             return
+        hook = getattr(self, "_on_pharmacophore_atom_picked", None)
+        if callable(hook):
+            hook(data)
         model = data.get("model")
         try:
             model_i = int(model) if model is not None and str(model).strip() != "" else None

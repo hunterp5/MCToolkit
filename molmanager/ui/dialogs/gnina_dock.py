@@ -53,6 +53,7 @@ from PyQt5.QtWidgets import (
 from ...bundled_paths import default_external_executable, gnina_launch_env, resolve_user_executable
 from ...confs_codec import is_packed_ensemble_header
 from ...dock_io import AUTOBOX_LIGAND_FILTER
+from ...pharmacophore import PHARMACOPHORE_FILE_FILTER, gnina_user_grid_paths, load_pharmacophore
 from ...gnina_launch import (
     cuda_available,
     gnina_exit_127_message,
@@ -234,6 +235,7 @@ class GninaDockDialog(QDialog):
         self._pending_user_out = ""
         self._stamp_crystal_on_poses = False
         self._validation_ligand_path = ""
+        self._validation_pose_mols: list = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
@@ -315,6 +317,35 @@ class GninaDockDialog(QDialog):
         out_wrap = QWidget()
         out_wrap.setLayout(out_row)
         io_form.addRow("Output:", out_wrap)
+
+        self.edit_pharmacophore = QLineEdit()
+        self.edit_pharmacophore.setPlaceholderText("pharmacophore.json (optional)")
+        self.edit_pharmacophore.setToolTip(
+            "MolManager pharmacophore JSON from Protein Viewer → Pharmacophore. "
+            "Gnina has no native pharmacophore flag; features become an AutoDock "
+            "--user_grid map (attractive Gaussian wells; Exclusion is repulsive)."
+        )
+        self.spin_pharma_lambda = QDoubleSpinBox()
+        self.spin_pharma_lambda.setRange(0.05, 20.0)
+        self.spin_pharma_lambda.setDecimals(2)
+        self.spin_pharma_lambda.setSingleStep(0.1)
+        self.spin_pharma_lambda.setValue(1.0)
+        self.spin_pharma_lambda.setToolTip(
+            "Weight of the pharmacophore map in Gnina scoring (--user_grid_lambda)."
+        )
+        ph_row = QHBoxLayout()
+        ph_row.setContentsMargins(0, 0, 0, 0)
+        ph_row.setSpacing(4)
+        ph_row.addWidget(self.edit_pharmacophore, 1)
+        btn_pharma = QPushButton("Browse…")
+        btn_pharma.setFixedWidth(76)
+        btn_pharma.clicked.connect(self._browse_pharmacophore)
+        ph_row.addWidget(btn_pharma)
+        ph_row.addWidget(QLabel("λ:"))
+        ph_row.addWidget(self.spin_pharma_lambda)
+        ph_wrap = QWidget()
+        ph_wrap.setLayout(ph_row)
+        io_form.addRow("Pharmacophore:", ph_wrap)
         root.addWidget(io_gb)
 
         box_gb = QGroupBox("Search box (Å)")
@@ -669,6 +700,22 @@ class GninaDockDialog(QDialog):
         if path:
             self.edit_ligand.setText(path)
 
+    def _browse_pharmacophore(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Pharmacophore",
+            self.edit_pharmacophore.text(),
+            PHARMACOPHORE_FILE_FILTER,
+        )
+        if path:
+            self.edit_pharmacophore.setText(path)
+
+    def set_pharmacophore_path(self, path: str) -> None:
+        """Fill the pharmacophore field (Protein Viewer → Send to Gnina)."""
+        text = (path or "").strip()
+        if text:
+            self.edit_pharmacophore.setText(text)
+
     def _ligand_source_key(self) -> str:
         return str(self.combo_ligand_source.currentData() or "file")
 
@@ -962,10 +1009,37 @@ class GninaDockDialog(QDialog):
         if cpu > 0:
             argv.extend(["--cpu", str(cpu)])
         argv.extend(self._flex_argv(dock_ligand=first_lig, out_path=out_path))
+        argv.extend(self._pharmacophore_argv(out_path=out_path))
         extra = (self.edit_extra.text() or "").strip()
         if extra:
             argv.extend(shlex.split(extra))
         return argv
+
+    def _pharmacophore_argv(self, *, out_path: str) -> list[str]:
+        path = (self.edit_pharmacophore.text() or "").strip()
+        if not path:
+            return []
+        dest = Path(path)
+        if not dest.is_file():
+            raise ValueError(f"Pharmacophore file not found: {path}")
+        pharma = load_pharmacophore(dest)
+        if not pharma.enabled_features():
+            raise ValueError("Pharmacophore file has no enabled features.")
+        if self.autobox_cb.isChecked():
+            map_path = gnina_user_grid_paths(
+                pharma,
+                out_path=out_path,
+                padding=float(self.spin_autobox_add.value()),
+            )
+        else:
+            map_path = gnina_user_grid_paths(
+                pharma,
+                out_path=out_path,
+                center=(self.spin_cx.value(), self.spin_cy.value(), self.spin_cz.value()),
+                size=(self.spin_sx.value(), self.spin_sy.value(), self.spin_sz.value()),
+            )
+        lam = float(self.spin_pharma_lambda.value())
+        return ["--user_grid", str(map_path), "--user_grid_lambda", f"{lam:.3f}"]
 
     def _cnn_argv(self, *, no_gpu: bool | None = None) -> list[str]:
         scoring = str(self.combo_cnn_scoring.currentData() or "rescore")
@@ -1100,6 +1174,7 @@ class GninaDockDialog(QDialog):
         self._pending_user_out = ""
         self._stamp_crystal_on_poses = False
         self._validation_ligand_path = ""
+        self._validation_pose_mols = []
         tmp = self._batch_tmp
         self._batch_tmp = None
         if tmp is not None:
@@ -1150,14 +1225,18 @@ class GninaDockDialog(QDialog):
                 self.log.append(
                     f"[{stamp}][system] Internal validation: top pose crystal RMSD = {top:.3f} Å."
                 )
-        ref_path = (self._validation_ligand_path or "").strip()
-        if self._crystal_ref_mol is not None or ref_path:
-            stamp_crystal_ref(mols, crystal_ref_label(self._crystal_ref_mol, ref_path))
+        if self._stamp_crystal_on_poses:
+            ref_path = (self._validation_ligand_path or "").strip()
+            if self._crystal_ref_mol is not None or ref_path:
+                stamp_crystal_ref(mols, crystal_ref_label(self._crystal_ref_mol, ref_path))
         if is_sdf_path(path) and mols:
             try:
                 write_pose_mols_sdf(mols, path)
             except Exception:
                 pass
+        extra = [m for m in (self._validation_pose_mols or []) if m is not None]
+        if extra and not self._stamp_crystal_on_poses:
+            mols = extra + list(mols)
         opener = getattr(self._main_window, "open_dock_results_window", None)
         if not callable(opener) or not mols:
             return
@@ -1367,7 +1446,7 @@ class GninaDockDialog(QDialog):
 
     def _record_crystal_validation_rmsd(self) -> None:
         from ...dock_io import mols_from_dock_output
-        from ...dock_validation import stamp_crystal_rmsd
+        from ...dock_validation import crystal_ref_label, stamp_crystal_ref, stamp_crystal_rmsd
 
         path = (self._validation_out or "").strip()
         crystal = self._crystal_ref_mol
@@ -1380,6 +1459,8 @@ class GninaDockDialog(QDialog):
             self.log.append(f"[{stamp}][system] Could not read validation poses: {exc}")
             return
         top = stamp_crystal_rmsd(mols, crystal)
+        stamp_crystal_ref(mols, crystal_ref_label(crystal, self._validation_ligand_path or path))
+        self._validation_pose_mols = [m for m in mols if m is not None]
         if top is None:
             self.log.append(
                 f"[{stamp}][system] Internal validation finished; could not compute crystal RMSD."
@@ -1749,6 +1830,7 @@ class GninaDockDialog(QDialog):
         self._pending_user_ligand = None
         self._pending_user_out = ""
         self._validation_ligand_path = ""
+        self._validation_pose_mols = []
         stamp = time.strftime("%H:%M:%S")
         if self.gpu_cb.isChecked() and sys.platform != "darwin":
             if not cuda_available():

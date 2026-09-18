@@ -218,6 +218,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Build 3D ensembles (Tools → Conformations → Generate → Systematic).",
             ),
             _e(
+                "tools_gen_conformations_conforge",
+                "CONFORGE Conformations",
+                "CONFORGE Conformations",
+                "Build 3D ensembles (Tools → Conformations → Generate → CONFORGE).",
+            ),
+            _e(
                 "tools_superpose",
                 "Superpose",
                 "Superpose",
@@ -279,6 +285,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Protein Viewer",
                 "Protein Viewer",
                 "Load PDB/mmCIF structures, manage chains in 3D, prepare docking-ready receptors, and minimize complexes.",
+            ),
+            _e(
+                "protein_pharmacophore",
+                "Pharmacophore",
+                "Pharmacophore",
+                "Build 3D pharmacophore features in Protein Viewer and apply them in Gnina.",
             ),
             _e(
                 "protein_sequence",

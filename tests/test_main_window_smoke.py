@@ -131,9 +131,7 @@ def test_file_session_submenu_lists_session_actions(qapp):  # noqa: ARG001
     ]
 
 
-def test_save_selected_to_session_writes_subset_without_clearing_dirty(
-    qapp, monkeypatch, tmp_path
-):  # noqa: ARG001
+def test_save_selected_to_session_writes_subset_without_clearing_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
     from PyQt5.QtWidgets import QFileDialog
 
     from molmanager.session_codec import expand_session_document, loads_session_bytes
@@ -748,7 +746,11 @@ def test_tools_menu_nests_superpose_under_conformations(qapp):  # noqa: ARG001
     conf_labels = [a.text().replace("&", "") for a in conf.actions()]
     assert conf_labels == ["Generate", "", "Superpose…"]
     gen = next(a.menu() for a in conf.actions() if a.text().replace("&", "") == "Generate")
-    assert [a.text().replace("&", "") for a in gen.actions()] == ["Stochastic…", "Systematic…"]
+    assert [a.text().replace("&", "") for a in gen.actions()] == [
+        "Stochastic…",
+        "Systematic…",
+        "CONFORGE…",
+    ]
     w.close()
 
 
