@@ -479,7 +479,7 @@ class SessionRestoreMixin:
             cs.update(side)
         self._pending_session_som_browse = doc.get("som_browse")
         restore_ionization_sidecar(doc.get("ionization_sidecar"))
-        from ...analysis.mmp_analysis import restore_mmp_ledger_for_session
+        from ...analysis.mmp_session import restore_mmp_ledger_for_session
 
         restore_mmp_ledger_for_session(self, doc.get("mmp_ledger"))
         from ...docking.pose_file_io import restore_dock_results_for_session

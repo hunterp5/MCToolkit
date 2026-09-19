@@ -21,16 +21,16 @@ from rdkit import Chem
 from molmanager.analysis.mmp_analysis import (
     MmpPair,
     aggregate_transforms,
-    assemble_mmp_table_annotations,
     canonicalize_pair_direction,
     compute_mcs_smarts,
     find_matched_molecular_pairs,
-    highlight_atoms_for_pair,
     iter_core_sidechain_keys,
     pairs_for_summary,
     pairs_for_transform,
     parse_mmp_core_query,
 )
+from molmanager.analysis.mmp_depict import highlight_atoms_for_pair
+from molmanager.analysis.mmp_table import assemble_mmp_table_annotations
 
 
 def _rec(oid: int, smiles: str, activity: float):
@@ -357,7 +357,7 @@ def test_apply_transform_to_mol_two_cut():
 
 
 def test_mmp_ledger_session_payload_roundtrip():
-    from molmanager.analysis.mmp_analysis import (
+    from molmanager.analysis.mmp_session import (
         deserialize_mmp_ledger_payload,
         serialize_mmp_ledger_payload,
     )
@@ -380,3 +380,22 @@ def test_mmp_ledger_session_payload_roundtrip():
     assert restored[0] == pair
     assert serialize_mmp_ledger_payload([]) is None
     assert deserialize_mmp_ledger_payload(None) == ([], "")
+
+
+def test_mmp_core_module_does_not_own_session_table_or_depict() -> None:
+    from pathlib import Path
+
+    text = (
+        Path(__file__).resolve().parents[1] / "molmanager" / "analysis" / "mmp_analysis.py"
+    ).read_text(encoding="utf-8")
+    assert "def serialize_mmp_ledger_payload" not in text
+    assert "def assemble_mmp_table_annotations" not in text
+    assert "def highlight_atoms_for_pair" not in text
+
+
+def test_is_mmp_result_header() -> None:
+    from molmanager.analysis.mmp_table import is_mmp_result_header
+
+    assert is_mmp_result_header("MMP_Partners")
+    assert is_mmp_result_header("MMP_Delta_pIC50")
+    assert not is_mmp_result_header("MW")

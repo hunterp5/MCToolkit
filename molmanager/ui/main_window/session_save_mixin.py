@@ -331,7 +331,7 @@ class SessionSaveMixin:
 
     def _session_mmp_ledger_payload(self) -> dict | None:
         """Last MMP run for Transform Ledger reopen after session open."""
-        from ...analysis.mmp_analysis import serialize_mmp_ledger_payload
+        from ...analysis.mmp_session import serialize_mmp_ledger_payload
 
         return serialize_mmp_ledger_payload(
             getattr(self, "_mmp_last_pairs", None),

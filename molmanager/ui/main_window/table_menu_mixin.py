@@ -105,7 +105,7 @@ class TableMenuMixin:
             if col >= 2 and not self._table_model.is_pixmap_data_column(old_n):
                 color_act = menu.addAction("Color")
                 color_act.setObjectName("header_color")
-            from ...analysis.mmp_analysis import is_mmp_result_header
+            from ...analysis.mmp_table import is_mmp_result_header
 
             if is_mmp_result_header(old_n):
                 ledger_act = menu.addAction("Transform Ledger")
@@ -397,7 +397,7 @@ class TableMenuMixin:
 
         mmp_ledger_act = None
         if 0 <= col < len(self.headers):
-            from ...analysis.mmp_analysis import is_mmp_result_header
+            from ...analysis.mmp_table import is_mmp_result_header
 
             if is_mmp_result_header(self.headers[col]):
                 menu.addSeparator()

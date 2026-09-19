@@ -103,7 +103,7 @@ class MmpMixin:
         if pairs is None:
             return
 
-        from ...analysis.mmp_analysis import assemble_mmp_table_annotations
+        from ...analysis.mmp_table import assemble_mmp_table_annotations
 
         rows, headers = assemble_mmp_table_annotations(pairs, activity_column=activity_column)
         if rows:

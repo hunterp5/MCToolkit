@@ -26,12 +26,9 @@ from PyQt5.QtWidgets import QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidg
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from ...analysis.mmp_analysis import (
-    MmpPair,
-    assemble_mmp_table_annotations,
-    canonicalize_pair_direction,
-    highlight_atoms_for_pair,
-)
+from ...analysis.mmp_analysis import MmpPair, canonicalize_pair_direction
+from ...analysis.mmp_depict import highlight_atoms_for_pair
+from ...analysis.mmp_table import assemble_mmp_table_annotations
 from .chrome import configure_browser_mol_drawer, style_browser_emphasis_label
 from .pair_browser import PairBrowserDialog
 

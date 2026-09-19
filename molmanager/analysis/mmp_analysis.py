@@ -14,12 +14,10 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Matched molecular pair (MMP) analysis via RDKit ``rdMMPA.FragmentMol``.
+"""Matched molecular pair (MMP) core: fragment, pair, and apply transforms.
 
-Implements the Hussain / Rea single- (and optional multi-) cut indexing scheme:
-molecules that share the same constant core but differ in the variable
-sidechain(s) form matched molecular pairs. Activity differences are computed
-when numeric activity values are supplied.
+Session payloads live in ``mmp_session``, table write-back in ``mmp_table``,
+and pair-atom highlights in ``mmp_depict``.
 """
 
 from __future__ import annotations
@@ -28,7 +26,6 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from statistics import fmean, median
-from typing import Any
 
 from rdkit import Chem
 from rdkit.Chem import rdFMCS, rdMMPA
@@ -695,192 +692,3 @@ def find_matched_molecular_pairs(
         max_activity_difference=max_activity_difference,
         cancel_check=cancel_check,
     )
-
-
-def is_mmp_result_header(header: str) -> bool:
-    """True for table columns written by MMP analysis (partners / transforms / deltas)."""
-    h = (header or "").strip()
-    if not h:
-        return False
-    if h in ("MMP_Partners", "MMP_Transforms"):
-        return True
-    return h.startswith("MMP_Delta_")
-
-
-def serialize_mmp_ledger_payload(
-    pairs: Sequence[MmpPair] | None,
-    *,
-    activity_column: str = "",
-) -> dict[str, Any] | None:
-    """Session sidecar for Transform Ledger reopen (pairs + activity column)."""
-    if not pairs:
-        return None
-    return {
-        "activity_column": str(activity_column or ""),
-        "pairs": [
-            {
-                "oid_a": int(p.oid_a),
-                "oid_b": int(p.oid_b),
-                "smiles_a": str(p.smiles_a or ""),
-                "smiles_b": str(p.smiles_b or ""),
-                "activity_a": float(p.activity_a),
-                "activity_b": float(p.activity_b),
-                "delta_activity": float(p.delta_activity),
-                "transform": str(p.transform or ""),
-                "core": str(p.core or ""),
-                "sidechain_a": str(p.sidechain_a or ""),
-                "sidechain_b": str(p.sidechain_b or ""),
-            }
-            for p in pairs
-        ],
-    }
-
-
-def deserialize_mmp_ledger_payload(
-    raw: Any,
-) -> tuple[list[MmpPair], str]:
-    """Parse ``serialize_mmp_ledger_payload`` output; returns ``(pairs, activity_column)``."""
-    if not isinstance(raw, dict):
-        return [], ""
-    activity_column = str(raw.get("activity_column") or "")
-    items = raw.get("pairs")
-    if not isinstance(items, list):
-        return [], activity_column
-    pairs: list[MmpPair] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        try:
-            pairs.append(
-                MmpPair(
-                    oid_a=int(item["oid_a"]),
-                    oid_b=int(item["oid_b"]),
-                    smiles_a=str(item.get("smiles_a") or ""),
-                    smiles_b=str(item.get("smiles_b") or ""),
-                    activity_a=float(item["activity_a"]),
-                    activity_b=float(item["activity_b"]),
-                    delta_activity=float(item["delta_activity"]),
-                    transform=str(item.get("transform") or ""),
-                    core=str(item.get("core") or ""),
-                    sidechain_a=str(item.get("sidechain_a") or ""),
-                    sidechain_b=str(item.get("sidechain_b") or ""),
-                )
-            )
-        except (KeyError, TypeError, ValueError):
-            continue
-    return pairs, activity_column
-
-
-def restore_mmp_ledger_for_session(app: Any, payload: Any = None) -> int:
-    """Restore last MMP run into ``app`` so Transform Ledger can reopen after Open Session."""
-    pairs, activity_column = deserialize_mmp_ledger_payload(payload)
-    try:
-        app._mmp_last_pairs = list(pairs)
-        app._mmp_last_activity_column = str(activity_column or "")
-    except Exception:
-        return 0
-    dlg = getattr(app, "_mmp_ledger_dialog", None)
-    if dlg is not None and pairs:
-        try:
-            dlg.set_pairs(pairs, activity_column=activity_column)
-        except Exception:
-            pass
-    elif dlg is not None and not pairs:
-        try:
-            dlg.close()
-        except Exception:
-            pass
-    return len(pairs)
-
-
-def assemble_mmp_table_annotations(
-    pairs: list[MmpPair],
-    *,
-    activity_column: str,
-) -> tuple[list[tuple[int, dict[str, str]]], list[str]]:
-    """
-    Build per-molecule annotation columns for write-back to the main table.
-
-    Columns: ``MMP_Partners``, ``MMP_Transforms``, ``MMP_Delta_<activity>``.
-    Multiple pairs for one OID are joined with ``; `` (sorted by |Δ| desc).
-    """
-    delta_header = f"MMP_Delta_{activity_column}" if activity_column else "MMP_Delta"
-    headers = ["MMP_Partners", "MMP_Transforms", delta_header]
-    by_oid: dict[int, list[tuple[float, str, str, str]]] = defaultdict(list)
-
-    for p in pairs:
-        # From A's perspective: A -> B
-        by_oid[p.oid_a].append(
-            (abs(p.delta_activity), str(p.oid_b), p.transform, _fmt_delta(p.delta_activity))
-        )
-        # From B's perspective: reverse transform and sign
-        rev = f"{p.sidechain_b}>>{p.sidechain_a}"
-        by_oid[p.oid_b].append(
-            (abs(p.delta_activity), str(p.oid_a), rev, _fmt_delta(-p.delta_activity))
-        )
-
-    rows: list[tuple[int, dict[str, str]]] = []
-    for oid, items in by_oid.items():
-        items.sort(key=lambda t: (-t[0], t[1], t[2]))
-        partners = "; ".join(t[1] for t in items)
-        transforms = "; ".join(t[2] for t in items)
-        deltas = "; ".join(t[3] for t in items)
-        rows.append(
-            (
-                oid,
-                {
-                    "MMP_Partners": partners,
-                    "MMP_Transforms": transforms,
-                    delta_header: deltas,
-                },
-            )
-        )
-    rows.sort(key=lambda r: r[0])
-    return rows, headers
-
-
-def _fmt_delta(value: float) -> str:
-    text = f"{value:.4g}"
-    if text.startswith("-") or text == "0":
-        return text
-    return f"+{text}"
-
-
-def highlight_atoms_for_pair(
-    mol_a: Chem.Mol,
-    mol_b: Chem.Mol,
-) -> tuple[list[int], list[int]]:
-    """
-    Return atom indices to highlight on each molecule (variable / non-MCS atoms).
-
-    Falls back to empty lists when MCS cannot be found.
-    """
-    if mol_a is None or mol_b is None:
-        return [], []
-    try:
-        res = rdFMCS.FindMCS(
-            [mol_a, mol_b],
-            timeout=1,
-            matchValences=True,
-            ringMatchesRingOnly=True,
-            completeRingsOnly=False,
-        )
-    except Exception:
-        return [], []
-    if res is None or res.canceled or res.numAtoms < 1 or not res.smartsString:
-        return [], []
-    try:
-        query = Chem.MolFromSmarts(res.smartsString)
-    except Exception:
-        return [], []
-    if query is None:
-        return [], []
-
-    def _variable_atoms(mol: Chem.Mol) -> list[int]:
-        matches = mol.GetSubstructMatches(query)
-        if not matches:
-            return []
-        common = set(matches[0])
-        return [int(a.GetIdx()) for a in mol.GetAtoms() if int(a.GetIdx()) not in common]
-
-    return _variable_atoms(mol_a), _variable_atoms(mol_b)
