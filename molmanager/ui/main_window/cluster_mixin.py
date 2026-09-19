@@ -8,13 +8,13 @@
 #
 # MolManager is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Cluster dialog and cluster worker signal handlers (kept out of :class:`ChemistryMixin`)."""
+"""Cluster dialog and cluster worker signal handlers."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from contextlib import suppress
 from PyQt5.QtCore import Qt
 
 from ..analysis_job_support import ensure_table_ready_for_tool, report_cancellable_job_failure
+from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 
 class ClusterMixin:
@@ -31,28 +32,22 @@ class ClusterMixin:
             return
         from ..dialogs import ClusterDialog
 
-        dlg = getattr(self, "_cluster_dialog", None)
-        if dlg is not None:
-            try:
-                dlg._refresh_structure_sources()
-                self._sync_dialog_only_selected_scope(dlg)
-                dlg.show()
-                dlg.raise_()
-                dlg.activateWindow()
-                return
-            except RuntimeError:
-                self._cluster_dialog = None
-        d = ClusterDialog(self)
-        self._cluster_dialog = d
-        self._prepare_tool_dialog(d)
-        d.setAttribute(Qt.WA_DeleteOnClose, True)
-        d.destroyed.connect(self._on_cluster_dialog_destroyed)
-        d.show()
-        d.raise_()
-        d.activateWindow()
+        def _factory():
+            d = ClusterDialog(self)
+            self._prepare_tool_dialog(d)
+            d.setAttribute(Qt.WA_DeleteOnClose, True)
+            return d
 
-    def _on_cluster_dialog_destroyed(self) -> None:
-        self._cluster_dialog = None
+        def _on_reused(dlg) -> None:
+            dlg._refresh_structure_sources()
+            self._sync_dialog_only_selected_scope(dlg)
+
+        reuse_or_show_modeless_singleton(
+            self,
+            "_cluster_dialog",
+            _factory,
+            on_reused_visible=_on_reused,
+        )
 
     def on_cluster_failed(self, message: str) -> None:
         def _reenable_run() -> None:

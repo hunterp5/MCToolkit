@@ -38,6 +38,24 @@ logger = logging.getLogger(__name__)
 
 _SKLEARN_CLUSTER_METHODS = frozenset({"kmeans", "agglomerative", "dbscan"})
 
+# Combo labels (and explore-table short names) for each worker method key.
+CLUSTER_METHOD_LABELS: tuple[tuple[str, str], ...] = (
+    ("kmeans", "K-Means"),
+    ("agglomerative", "Agglomerative"),
+    ("dbscan", "DBSCAN (cosine)"),
+    ("butina", "Butina (Tanimoto distance)"),
+    ("sphere_exclusion", "Sphere exclusion (RDKit Leader)"),
+    ("jarvis_patrick", "Jarvis-Patrick"),
+)
+CLUSTER_METHOD_SHORT_LABELS: dict[str, str] = {
+    "kmeans": "K-Means",
+    "agglomerative": "Agglomerative",
+    "dbscan": "DBSCAN",
+    "butina": "Butina",
+    "sphere_exclusion": "Sphere exclusion",
+    "jarvis_patrick": "Jarvis-Patrick",
+}
+
 
 def _bitvect_to_numpy(fp) -> np.ndarray:
     n = int(fp.GetNumBits())

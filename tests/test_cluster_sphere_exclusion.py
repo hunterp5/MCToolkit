@@ -60,3 +60,18 @@ def test_butina_and_jarvis_patrick_do_not_need_dense_matrix():
     jp = cluster_jarvis_patrick(fps, nn_count=2, common_neighbors=1)
     assert jp is not None
     assert jp.shape[0] == 4
+
+
+def test_cluster_method_combo_uses_worker_keys(qapp):
+    from molmanager.ui.dialogs.cluster import ClusterDialog
+    from molmanager.workers.cluster_worker import CLUSTER_METHOD_LABELS
+
+    dlg = ClusterDialog(None)
+    try:
+        keys = [dlg.method_combo.itemData(i) for i in range(dlg.method_combo.count())]
+        assert keys == [k for k, _ in CLUSTER_METHOD_LABELS]
+        dlg.method_combo.setCurrentIndex(keys.index("jarvis_patrick"))
+        assert dlg.method_combo.currentData() == "jarvis_patrick"
+        assert dlg._opt_stack.currentIndex() == dlg._method_pages["jarvis_patrick"]
+    finally:
+        dlg.close()

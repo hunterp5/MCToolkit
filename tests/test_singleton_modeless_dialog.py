@@ -172,13 +172,17 @@ def test_destroyed_callback_skips_deleted_qobject_host(qapp) -> None:
     qapp.processEvents()
 
 
-def test_data_menu_mixins_do_not_hand_roll_singleton_lifecycles() -> None:
+def test_tool_mixins_do_not_hand_roll_singleton_lifecycles() -> None:
     """A hand-rolled ``destroyed`` handler clears the attribute for any dialog instance.
 
     That orphans a replacement window once the superseded one is finally destroyed, which
     the shared helper avoids by ignoring signals from a dialog it no longer tracks.
     """
-    for name in ("dimension_reduction_mixin.py", "medchem_space_mixin.py"):
+    for name in (
+        "dimension_reduction_mixin.py",
+        "medchem_space_mixin.py",
+        "cluster_mixin.py",
+    ):
         text = (_MAIN_WINDOW / name).read_text(encoding="utf-8")
         assert "reuse_or_show_modeless_singleton" in text, f"{name} bypasses the shared helper"
         assert "destroyed.connect" not in text, f"{name} wires destroyed by hand"

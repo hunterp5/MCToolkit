@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
+"""Fingerprint clustering dialog (Tools → Fingerprints → Cluster)."""
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -42,6 +44,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ...workers import ClusterExploreWorker, ClusterWorker, SIMILARITY_FP_TYPE_LABELS
+from ...workers.cluster_worker import CLUSTER_METHOD_LABELS, CLUSTER_METHOD_SHORT_LABELS
 from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
@@ -53,12 +56,24 @@ class ClusterDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
+        self._init_cluster_state(parent)
+        self._build_cluster_ui()
+        self._wire_cluster_ui()
+        self._on_method_changed(self.method_combo.currentIndex())
+        self._refresh_structure_sources()
+        self.adjustSize()
+
+    def _init_cluster_state(self, parent) -> None:
         self.setWindowTitle("Cluster")
         self.setMinimumWidth(520)
         self.resize(560, 640)
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
         self._have_selection = n_sel > 0
+        self._initial_selected_row_count = n_sel
+        self._active_cluster_job_id: str | None = None
 
+    def _build_cluster_ui(self) -> None:
+        n_sel = self._initial_selected_row_count
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(4)
@@ -91,7 +106,6 @@ class ClusterDialog(QDialog):
         self.exploratory_cb.setToolTip(
             "Runs a bounded grid of methods and settings; review metrics, then apply a trial to add a cluster column."
         )
-        self.exploratory_cb.stateChanged.connect(self._on_exploratory_toggled)
         root.addWidget(self.exploratory_cb)
 
         self._explore_panel = QWidget()
@@ -143,21 +157,13 @@ class ClusterDialog(QDialog):
         alg_row.setSpacing(6)
         alg_row.addWidget(QLabel("Method:"))
         self.method_combo = QComboBox()
-        self.method_combo.addItems(
-            [
-                "K-Means",
-                "Agglomerative",
-                "DBSCAN (cosine)",
-                "Butina (Tanimoto distance)",
-                "Sphere exclusion (RDKit Leader)",
-                "Jarvis-Patrick",
-            ]
-        )
-        self.method_combo.currentIndexChanged.connect(self._on_method_changed)
+        for key, label in CLUSTER_METHOD_LABELS:
+            self.method_combo.addItem(label, key)
         alg_row.addWidget(self.method_combo, 1)
         sm_lyt.addLayout(alg_row)
 
         self._opt_stack = QStackedWidget()
+        self._method_pages: dict[str, int] = {}
         km = QWidget()
         km_lyt = QFormLayout(km)
         self.kmeans_k = QSpinBox()
@@ -165,7 +171,7 @@ class ClusterDialog(QDialog):
         self.kmeans_k.setValue(8)
         self.kmeans_k.setToolTip("Number of clusters (K-Means).")
         km_lyt.addRow("Clusters (k):", self.kmeans_k)
-        self._opt_stack.addWidget(km)
+        self._method_pages["kmeans"] = self._opt_stack.addWidget(km)
 
         ag = QWidget()
         ag_lyt = QFormLayout(ag)
@@ -180,7 +186,7 @@ class ClusterDialog(QDialog):
             "Linkage for hierarchical clustering (Euclidean on bit vectors)."
         )
         ag_lyt.addRow("Linkage:", self.linkage_combo)
-        self._opt_stack.addWidget(ag)
+        self._method_pages["agglomerative"] = self._opt_stack.addWidget(ag)
 
         db = QWidget()
         db_lyt = QFormLayout(db)
@@ -190,7 +196,7 @@ class ClusterDialog(QDialog):
         self.dbscan_eps.setSingleStep(0.05)
         self.dbscan_eps.setValue(0.35)
         self.dbscan_eps.setToolTip(
-            "Neighborhood radius (cosine distance). Smaller â†’ more clusters / noise."
+            "Neighborhood radius (cosine distance). Smaller → more clusters / noise."
         )
         db_lyt.addRow("eps:", self.dbscan_eps)
         self.dbscan_min_samples = QSpinBox()
@@ -198,7 +204,7 @@ class ClusterDialog(QDialog):
         self.dbscan_min_samples.setValue(5)
         self.dbscan_min_samples.setToolTip("Minimum neighbors to form a dense region.")
         db_lyt.addRow("min_samples:", self.dbscan_min_samples)
-        self._opt_stack.addWidget(db)
+        self._method_pages["dbscan"] = self._opt_stack.addWidget(db)
 
         bu = QWidget()
         bu_lyt = QFormLayout(bu)
@@ -208,12 +214,12 @@ class ClusterDialog(QDialog):
         self.butina_cutoff.setSingleStep(0.02)
         self.butina_cutoff.setValue(0.25)
         self.butina_cutoff.setToolTip(
-            "Maximum Tanimoto distance (1 âˆ’ similarity) for two compounds to be treated as neighbors in Butina."
+            "Maximum Tanimoto distance (1 − similarity) for two compounds to be treated as neighbors in Butina."
         )
         bu_lyt.addRow("Distance cutoff:", self.butina_cutoff)
         self.butina_reorder_cb = QCheckBox("Reordering (slower, often fewer clusters)")
         bu_lyt.addRow(self.butina_reorder_cb)
-        self._opt_stack.addWidget(bu)
+        self._method_pages["butina"] = self._opt_stack.addWidget(bu)
 
         se = QWidget()
         se_lyt = QFormLayout(se)
@@ -227,7 +233,7 @@ class ClusterDialog(QDialog):
             "Each compound is assigned to its nearest centroid."
         )
         se_lyt.addRow("Distance cutoff:", self.sphere_cutoff)
-        self._opt_stack.addWidget(se)
+        self._method_pages["sphere_exclusion"] = self._opt_stack.addWidget(se)
 
         jp = QWidget()
         jp_lyt = QFormLayout(jp)
@@ -242,10 +248,10 @@ class ClusterDialog(QDialog):
         self.jp_common.setRange(1, 127)
         self.jp_common.setValue(8)
         self.jp_common.setToolTip(
-            "Minimum shared neighbors required to link two compounds (Jarvisâ€“Patrick). Must be < J."
+            "Minimum shared neighbors required to link two compounds (Jarvis–Patrick). Must be < J."
         )
         jp_lyt.addRow("Shared neighbors (P):", self.jp_common)
-        self._opt_stack.addWidget(jp)
+        self._method_pages["jarvis_patrick"] = self._opt_stack.addWidget(jp)
 
         sm_lyt.addWidget(self._opt_stack)
         root.addWidget(self._single_method_widget)
@@ -258,30 +264,28 @@ class ClusterDialog(QDialog):
         self.explore_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.explore_table.setMaximumHeight(220)
         self.explore_table.setVisible(False)
-        self.explore_table.itemDoubleClicked.connect(self._on_explore_item_double_clicked)
         root.addWidget(self.explore_table)
 
         btn_row = QHBoxLayout()
         self.run_btn = QPushButton("Run clustering")
-        self.run_btn.clicked.connect(self._on_run)
         btn_row.addWidget(self.run_btn)
         self.apply_explore_btn = QPushButton("Apply selected trial")
         self.apply_explore_btn.setToolTip(
             "Add a column using the method/settings from the selected results row."
         )
-        self.apply_explore_btn.clicked.connect(self._on_apply_explore_trial)
         self.apply_explore_btn.setEnabled(False)
         self.apply_explore_btn.setVisible(False)
         btn_row.addWidget(self.apply_explore_btn)
         btn_row.addStretch()
         root.addLayout(btn_row)
 
+    def _wire_cluster_ui(self) -> None:
+        self.exploratory_cb.stateChanged.connect(self._on_exploratory_toggled)
+        self.method_combo.currentIndexChanged.connect(self._on_method_changed)
+        self.explore_table.itemDoubleClicked.connect(self._on_explore_item_double_clicked)
+        self.run_btn.clicked.connect(self._on_run)
+        self.apply_explore_btn.clicked.connect(self._on_apply_explore_trial)
         self.explore_table.itemSelectionChanged.connect(self._sync_apply_explore_enabled)
-
-        self._on_method_changed(self.method_combo.currentIndex())
-        self._refresh_structure_sources()
-        self.adjustSize()
-        self._active_cluster_job_id: str | None = None
         make_window_minimizable(self)
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -301,8 +305,9 @@ class ClusterDialog(QDialog):
         self._active_cluster_job_id = None
         self.enable_run_after_job()
 
-    def _on_method_changed(self, idx: int) -> None:
-        self._opt_stack.setCurrentIndex(int(idx))
+    def _on_method_changed(self, _idx: int = 0) -> None:
+        key = str(self.method_combo.currentData() or "")
+        self._opt_stack.setCurrentIndex(self._method_pages.get(key, 0))
 
     def _on_exploratory_toggled(self, state: int) -> None:
         ex = state == int(Qt.Checked)
@@ -328,14 +333,7 @@ class ClusterDialog(QDialog):
             self.explore_table.insertRow(r)
             method = row.get("method") or ""
             params = row.get("params") if isinstance(row.get("params"), dict) else {}
-            method_label = {
-                "kmeans": "K-Means",
-                "agglomerative": "Agglomerative",
-                "dbscan": "DBSCAN",
-                "butina": "Butina",
-                "sphere_exclusion": "Sphere exclusion",
-                "jarvis_patrick": "Jarvis-Patrick",
-            }.get(str(method), str(method))
+            method_label = CLUSTER_METHOD_SHORT_LABELS.get(str(method), str(method))
             key_item = QTableWidgetItem(method_label)
             key_item.setData(Qt.UserRole, {"method": method, "params": params})
             self.explore_table.setItem(r, 0, key_item)
@@ -490,32 +488,27 @@ class ClusterDialog(QDialog):
             )
             return
 
-        idx = self.method_combo.currentIndex()
-        if idx == 0:
-            method = "kmeans"
+        method = str(self.method_combo.currentData() or "")
+        if method == "kmeans":
             params = {"n_clusters": int(self.kmeans_k.value())}
-        elif idx == 1:
-            method = "agglomerative"
+        elif method == "agglomerative":
             params = {
                 "n_clusters": int(self.agglom_k.value()),
                 "linkage": self.linkage_combo.currentText().strip().lower(),
             }
-        elif idx == 2:
-            method = "dbscan"
+        elif method == "dbscan":
             params = {
                 "eps": float(self.dbscan_eps.value()),
                 "min_samples": int(self.dbscan_min_samples.value()),
             }
-        elif idx == 3:
-            method = "butina"
+        elif method == "butina":
             params = {
                 "cutoff": float(self.butina_cutoff.value()),
                 "reordering": bool(self.butina_reorder_cb.isChecked()),
             }
-        elif idx == 4:
-            method = "sphere_exclusion"
+        elif method == "sphere_exclusion":
             params = {"cutoff": float(self.sphere_cutoff.value())}
-        else:
+        elif method == "jarvis_patrick":
             j_nn = int(self.jp_nn.value())
             p_c = int(self.jp_common.value())
             if p_c >= j_nn:
@@ -525,8 +518,10 @@ class ClusterDialog(QDialog):
                     "Jarvis-Patrick requires shared neighbors (P) strictly less than nearest neighbors (J).",
                 )
                 return
-            method = "jarvis_patrick"
             params = {"nn_count": j_nn, "common_neighbors": p_c}
+        else:
+            QMessageBox.warning(self, "Cluster", "Select a clustering method.")
+            return
 
         col_name = self._unique_cluster_column()
         self._enqueue_cluster_worker(rows, fp_choice, method, params, col_name)
