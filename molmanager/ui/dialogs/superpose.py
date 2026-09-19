@@ -32,6 +32,11 @@ from PyQt5.QtWidgets import (
 )
 
 from ...workers import SuperposeParams, SuperposeStructuresParams
+from ...workers.superpose_types import (
+    SUPERPOSE_ALIGN_ON_LABELS,
+    SUPERPOSE_GEOMETRY_LABELS,
+    SUPERPOSE_TARGET_LABELS,
+)
 from ..qt_widget_utils import make_window_minimizable
 from .conformer_output import citation_footer_label, conformer_options_group
 from .scope import selection_scope_checked
@@ -44,6 +49,18 @@ def _set_combo_item_enabled(combo: QComboBox, index: int, enabled: bool) -> None
         row = item(index)
         if row is not None:
             row.setEnabled(enabled)
+
+
+def _fill_combo(combo: QComboBox, labels: tuple[tuple[str, str], ...]) -> None:
+    for key, label in labels:
+        combo.addItem(label, key)
+
+
+def _set_combo_current_data(combo: QComboBox, data) -> None:
+    for i in range(combo.count()):
+        if combo.itemData(i) == data:
+            combo.setCurrentIndex(i)
+            return
 
 
 class SuperposeDialog(QDialog):
@@ -59,20 +76,33 @@ class SuperposeDialog(QDialog):
         parent=None,
     ):
         super().__init__(parent)
+        self._init_superpose_state(selected_row_count, source_columns, has_confs, default_target)
+        self._build_superpose_ui()
+        self._wire_superpose_ui()
+
+    def _init_superpose_state(
+        self,
+        selected_row_count: int,
+        source_columns: list[str] | None,
+        has_confs: bool,
+        default_target: str,
+    ) -> None:
         self.setWindowTitle("Superpose")
         self.setMinimumWidth(420)
         self.resize(460, 0)
+        self._selected_row_count = int(selected_row_count)
         self._have_selection = selected_row_count > 0
         self._has_confs = bool(has_confs)
         sources = [c for c in (source_columns or ["Structure"]) if c]
-        if not sources:
-            sources = ["Structure"]
+        self._source_columns = sources or ["Structure"]
         target = (default_target or "structures").strip().lower()
-        if target not in {"conformers", "structures"}:
+        if target not in {key for key, _ in SUPERPOSE_TARGET_LABELS}:
             target = "structures"
         if not self._has_confs:
             target = "structures"
+        self._default_target = target
 
+    def _build_superpose_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 8)
         root.setSpacing(8)
@@ -82,23 +112,24 @@ class SuperposeDialog(QDialog):
         form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
         self.target_combo = QComboBox()
-        self.target_combo.addItem("Conformers in each row", "conformers")
-        self.target_combo.addItem("Structures across rows", "structures")
+        _fill_combo(self.target_combo, SUPERPOSE_TARGET_LABELS)
         self.target_combo.setToolTip(
             "Conformers overlay the packed confs ensemble on each row. "
             "Structures overlay every molecule in scope onto the first row (table order)."
         )
         if not self._has_confs:
-            _set_combo_item_enabled(self.target_combo, 0, False)
+            for i, (key, _label) in enumerate(SUPERPOSE_TARGET_LABELS):
+                if key == "conformers":
+                    _set_combo_item_enabled(self.target_combo, i, False)
+                    break
             self.target_combo.setToolTip(
                 "Add a confs column first (Tools → Conformations) to superpose ensembles."
             )
-        self.target_combo.setCurrentIndex(0 if target == "conformers" else 1)
+        _set_combo_current_data(self.target_combo, self._default_target)
         form.addRow("Align:", self.target_combo)
 
         self.geom_combo = QComboBox()
-        self.geom_combo.addItem("3D spatial", "3d")
-        self.geom_combo.addItem("2D topological", "2d")
+        _fill_combo(self.geom_combo, SUPERPOSE_GEOMETRY_LABELS)
         self.geom_combo.setToolTip(
             "3D spatial: rigid AlignMol overlay (O3A when no atom map). "
             "2D topological: regenerate drawings on a shared core "
@@ -107,7 +138,7 @@ class SuperposeDialog(QDialog):
         form.addRow("Geometry:", self.geom_combo)
 
         self.src_combo = QComboBox()
-        self.src_combo.addItems(sources)
+        self.src_combo.addItems(self._source_columns)
         self.src_combo.setToolTip(
             "Where to read coordinates for structure overlay. Prefer confs when present; "
             "Structure uses the in-memory molecule (embeds 3D when Geometry is 3D spatial)."
@@ -124,10 +155,7 @@ class SuperposeDialog(QDialog):
         form.addRow("Reference index:", self.ref_sb)
 
         self.align_on_combo = QComboBox()
-        self.align_on_combo.addItem("Whole molecule", "")
-        self.align_on_combo.addItem("Largest ring system", "largest_ring")
-        self.align_on_combo.addItem("Most central ring", "central_ring")
-        self.align_on_combo.addItem("Custom pattern", "pattern")
+        _fill_combo(self.align_on_combo, SUPERPOSE_ALIGN_ON_LABELS)
         self.align_on_combo.setToolTip(
             "Largest ring system uses the fused SSSR set with the most atoms. "
             "Most central ring is the SSSR ring nearest the molecule centroid "
@@ -191,9 +219,9 @@ class SuperposeDialog(QDialog):
         self._only_selected_scope_prefix = "Selected Rows Only"
         if self._have_selection:
             self.only_selected_cb.setText(
-                f"{self._only_selected_scope_prefix} ({selected_row_count} row(s))"
+                f"{self._only_selected_scope_prefix} ({self._selected_row_count} row(s))"
             )
-            if target == "structures":
+            if self._default_target == "structures":
                 self.only_selected_cb.setChecked(True)
         else:
             self.only_selected_cb.setEnabled(False)
@@ -215,11 +243,12 @@ class SuperposeDialog(QDialog):
         box.accepted.connect(self.accept)
         box.rejected.connect(self.reject)
         root.addWidget(box)
-        make_window_minimizable(self)
 
+    def _wire_superpose_ui(self) -> None:
         self.target_combo.currentIndexChanged.connect(self._sync_mode)
         self.geom_combo.currentIndexChanged.connect(self._sync_mode)
         self.align_on_combo.currentIndexChanged.connect(self._sync_mode)
+        make_window_minimizable(self)
         self._sync_mode()
 
     def _sync_mode(self) -> None:

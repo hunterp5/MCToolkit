@@ -24,6 +24,11 @@ pytest.importorskip("PyQt5.QtWidgets")
 
 from molmanager.ui.dialogs.mol_tools import SuperposeDialog
 from molmanager.workers import SuperposeParams, SuperposeStructuresParams
+from molmanager.workers.superpose_types import (
+    SUPERPOSE_ALIGN_ON_LABELS,
+    SUPERPOSE_GEOMETRY_LABELS,
+    SUPERPOSE_TARGET_LABELS,
+)
 
 
 def _set_combo_data(combo, data) -> None:
@@ -58,6 +63,15 @@ def test_superpose_dialog_unifies_modes(qapp):  # noqa: ARG001
     assert sp.geometry == "2d"
     assert sp.use_mcs is True
     assert sp.use_o3a is True
+    assert [d.target_combo.itemData(i) for i in range(d.target_combo.count())] == [
+        k for k, _ in SUPERPOSE_TARGET_LABELS
+    ]
+    assert [d.geom_combo.itemData(i) for i in range(d.geom_combo.count())] == [
+        k for k, _ in SUPERPOSE_GEOMETRY_LABELS
+    ]
+    assert [d.align_on_combo.itemData(i) for i in range(d.align_on_combo.count())] == [
+        k for k, _ in SUPERPOSE_ALIGN_ON_LABELS
+    ]
     d.close()
 
 

@@ -20,6 +20,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# Combo keys and labels for SuperposeDialog. Worker params use the keys, not the text.
+SUPERPOSE_TARGET_LABELS: tuple[tuple[str, str], ...] = (
+    ("conformers", "Conformers in each row"),
+    ("structures", "Structures across rows"),
+)
+SUPERPOSE_GEOMETRY_LABELS: tuple[tuple[str, str], ...] = (
+    ("3d", "3D spatial"),
+    ("2d", "2D topological"),
+)
+SUPERPOSE_ALIGN_ON_LABELS: tuple[tuple[str, str], ...] = (
+    ("", "Whole molecule"),
+    ("largest_ring", "Largest ring system"),
+    ("central_ring", "Most central ring"),
+    ("pattern", "Custom pattern"),
+)
+
 
 @dataclass(frozen=True)
 class SuperposeParams:
