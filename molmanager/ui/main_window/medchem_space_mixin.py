@@ -21,6 +21,8 @@ from __future__ import annotations
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMessageBox
 
+from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
+
 
 class MedChemSpaceMixin:
     def open_boiled_egg_plot(self) -> None:
@@ -56,24 +58,21 @@ class MedChemSpaceMixin:
             return
         from ..dialogs.medchem_space import MedChemSpaceDialog
 
-        dlg = getattr(self, attr, None)
-        if dlg is not None:
-            try:
-                self._sync_dialog_only_selected_scope(dlg)
-                dlg.show()
-                dlg.raise_()
-                dlg.activateWindow()
-                return
-            except RuntimeError:
-                setattr(self, attr, None)
-        d = MedChemSpaceDialog(self, plot_kind=plot_kind, window_title=title)
-        setattr(self, attr, d)
-        self._prepare_tool_dialog(d)
-        d.setAttribute(Qt.WA_DeleteOnClose, True)
-        d.destroyed.connect(destroyed)
-        d.show()
-        d.raise_()
-        d.activateWindow()
+        def _factory():
+            d = MedChemSpaceDialog(self, plot_kind=plot_kind, window_title=title)
+            self._prepare_tool_dialog(d)
+            d.setAttribute(Qt.WA_DeleteOnClose, True)
+            return d
+
+        dlg = reuse_or_show_modeless_singleton(
+            self,
+            attr,
+            _factory,
+            destroyed,
+            on_reused_visible=self._sync_dialog_only_selected_scope,
+        )
+        dlg.raise_()
+        dlg.activateWindow()
 
     def _on_boiled_egg_dialog_destroyed(self) -> None:
         self._boiled_egg_dialog = None

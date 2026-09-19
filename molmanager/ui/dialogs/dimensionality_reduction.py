@@ -367,7 +367,7 @@ class SOMVisualizationDialog(DimensionReductionDialog):
         super().__init__(parent, panel=panel or SOMPlotPanel(parent))
 
 
-_DIMRED_FLOATING_DIALOGS = {
+DIMRED_FLOATING_DIALOGS = {
     "pca": PCADialog,
     "tsne": TSNEVisualizationDialog,
     "umap": UMAPVisualizationDialog,

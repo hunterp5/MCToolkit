@@ -298,9 +298,9 @@ class DimensionReductionPanel(DockableResultPlotPanel):
 
     def create_floating_dialog(self, parent_app: ChemistryWorkspaceWindow) -> QDialog:
         """Re-open this panel in a floating window after undocking from the main table."""
-        from .dimensionality_reduction import _DIMRED_FLOATING_DIALOGS
+        from .dimensionality_reduction import DIMRED_FLOATING_DIALOGS
 
-        return _DIMRED_FLOATING_DIALOGS[self._method](parent_app, panel=self)
+        return DIMRED_FLOATING_DIALOGS[self._method](parent_app, panel=self)
 
     def _run_button_label(self) -> str:
         labels = {

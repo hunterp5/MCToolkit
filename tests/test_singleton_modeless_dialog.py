@@ -18,10 +18,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget
 
 from molmanager.ui.singleton_modeless_dialog import reuse_or_show_modeless_singleton
+
+_MAIN_WINDOW = Path(__file__).resolve().parents[1] / "molmanager" / "ui" / "main_window"
 
 
 def test_reuse_or_show_modeless_singleton_can_create_without_showing(qapp):  # noqa: ARG001
@@ -124,6 +128,49 @@ def test_destroyed_callback_skips_deleted_qobject_host(qapp) -> None:
     host.deleteLater()
     qapp.processEvents()
     qapp.processEvents()
+
+
+def test_data_menu_mixins_do_not_hand_roll_singleton_lifecycles() -> None:
+    """A hand-rolled ``destroyed`` handler clears the attribute for any dialog instance.
+
+    That orphans a replacement window once the superseded one is finally destroyed, which
+    the shared helper avoids by ignoring signals from a dialog it no longer tracks.
+    """
+    for name in ("dimension_reduction_mixin.py", "medchem_space_mixin.py"):
+        text = (_MAIN_WINDOW / name).read_text(encoding="utf-8")
+        assert "reuse_or_show_modeless_singleton" in text, f"{name} bypasses the shared helper"
+        assert "destroyed.connect" not in text, f"{name} wires destroyed by hand"
+
+
+def test_dimension_reduction_menu_kinds_are_all_registered() -> None:
+    """Each embedding action resolves its dialog class, attribute, and handler from the kind.
+
+    An unregistered method would fall through to the "unknown embedding method" warning
+    instead of opening, so the menu and the registry have to agree.
+    """
+    from molmanager.ui.dialogs.dimensionality_reduction import DIMRED_FLOATING_DIALOGS
+    from molmanager.ui.main_window.menu_spec import MAIN_WINDOW_MENUS, find_submenu
+
+    dimred = find_submenu(find_submenu(MAIN_WINDOW_MENUS, "Data").items, "Dimensionality Reduction")
+    kinds = [
+        item.slot.removeprefix("open_").removesuffix("_dialog")
+        for item in dimred.items
+        if item.slot
+    ]
+    assert kinds == ["pca", "tsne", "umap", "som"]
+    assert set(kinds) == set(DIMRED_FLOATING_DIALOGS)
+
+
+def test_dimension_reduction_singleton_attrs_match_session_bookkeeping() -> None:
+    """The mixin derives ``_<kind>_dialog``; session and plot bookkeeping list those literally."""
+    from molmanager.ui.dialogs.dimensionality_reduction import DIMRED_FLOATING_DIALOGS
+
+    derived = {f"_{kind}_dialog" for kind in DIMRED_FLOATING_DIALOGS}
+    assert derived == {"_pca_dialog", "_tsne_dialog", "_umap_dialog", "_som_dialog"}
+    for name in ("session_plots_mixin.py", "plot_tools_mixin.py"):
+        text = (_MAIN_WINDOW / name).read_text(encoding="utf-8")
+        for attr in sorted(derived):
+            assert f'"{attr}"' in text, f"{name} no longer tracks {attr}"
 
 
 def test_qobject_is_deleted_for_live_and_missing() -> None:

@@ -18,8 +18,13 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+from functools import partial
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMessageBox
+
+from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 
 class DimensionReductionMixin:
@@ -43,51 +48,38 @@ class DimensionReductionMixin:
                 "Open a file or add rows so the table has numeric data to analyze.",
             )
             return
-        if kind == "pca":
-            from ..dialogs.dimensionality_reduction import PCADialog
+        from ..dialogs.dimensionality_reduction import DIMRED_FLOATING_DIALOGS
 
-            attr = "_pca_dialog"
-            factory = lambda: PCADialog(self)
-            destroyed = self._on_pca_dialog_destroyed
-        elif kind == "tsne":
-            from ..dialogs.dimensionality_reduction import TSNEVisualizationDialog
-
-            attr = "_tsne_dialog"
-            factory = lambda: TSNEVisualizationDialog(self)
-            destroyed = self._on_tsne_dialog_destroyed
-        elif kind == "umap":
-            from ..dialogs.dimensionality_reduction import UMAPVisualizationDialog
-
-            attr = "_umap_dialog"
-            factory = lambda: UMAPVisualizationDialog(self)
-            destroyed = self._on_umap_dialog_destroyed
-        elif kind == "som":
-            from ..dialogs.dimensionality_reduction import SOMVisualizationDialog
-
-            attr = "_som_dialog"
-            factory = lambda: SOMVisualizationDialog(self)
-            destroyed = self._on_som_dialog_destroyed
-        else:
+        dialog_cls = DIMRED_FLOATING_DIALOGS.get(kind)
+        if dialog_cls is None:
             QMessageBox.warning(
                 self, "Dimensionality Reduction", f"Unknown embedding method: {kind!r}"
             )
             return
+        attr = f"_{kind}_dialog"
 
-        dlg = getattr(self, attr, None)
-        if dlg is not None:
-            try:
+        def _factory():
+            d = dialog_cls(self)
+            self._prepare_tool_dialog(d)
+            d.setAttribute(Qt.WA_DeleteOnClose, True)
+            return d
+
+        previous = getattr(self, attr, None)
+        dlg = reuse_or_show_modeless_singleton(
+            self,
+            attr,
+            _factory,
+            partial(self._clear_dimension_reduction_dialog, attr),
+            show=False,
+        )
+        if dlg is previous:
+            with suppress(RuntimeError, AttributeError):
                 getattr(dlg, "_panel", dlg)._reload_columns()
-                self._sync_dialog_only_selected_scope(dlg)
-                self._present_dimension_reduction_dialog(dlg)
-                return
-            except (RuntimeError, AttributeError):
-                setattr(self, attr, None)
-        d = factory()
-        setattr(self, attr, d)
-        self._prepare_tool_dialog(d)
-        d.setAttribute(Qt.WA_DeleteOnClose, True)
-        d.destroyed.connect(destroyed)
-        self._present_dimension_reduction_dialog(d)
+            self._sync_dialog_only_selected_scope(dlg)
+        self._present_dimension_reduction_dialog(dlg)
+
+    def _clear_dimension_reduction_dialog(self, attr: str) -> None:
+        setattr(self, attr, None)
 
     def _present_dimension_reduction_dialog(self, dlg) -> None:
         """Show Plot Options until a figure exists; then raise the plot window."""
@@ -99,15 +91,3 @@ class DimensionReductionMixin:
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
-
-    def _on_pca_dialog_destroyed(self) -> None:
-        self._pca_dialog = None
-
-    def _on_tsne_dialog_destroyed(self) -> None:
-        self._tsne_dialog = None
-
-    def _on_umap_dialog_destroyed(self) -> None:
-        self._umap_dialog = None
-
-    def _on_som_dialog_destroyed(self) -> None:
-        self._som_dialog = None
