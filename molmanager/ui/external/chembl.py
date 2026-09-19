@@ -24,9 +24,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt5.QtCore import QObject, QRunnable, Qt, pyqtSignal
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QObject, QRunnable, Qt, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QDialog,
@@ -40,7 +40,6 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QPushButton,
     QRadioButton,
-    QShortcut,
     QSpinBox,
     QTabWidget,
     QTextEdit,
@@ -259,8 +258,8 @@ def _fetch_targets(target_ids: list[str], *, limit: int) -> list[dict[str, Any]]
 
 
 class _QuerySignals(QObject):
-    progress = pyqtSignal(int, int, str)
-    finished = pyqtSignal(list, list, str, str)  # results, logs, activities_tsv, targets_tsv
+    progress = Signal(int, int, str)
+    finished = Signal(list, list, str, str)  # results, logs, activities_tsv, targets_tsv
 
 
 class _ChEMBLBatchWorker(QRunnable):
@@ -805,7 +804,7 @@ class ChEMBLDialog(QDialog):
         dlg = SketcherDialog(self.parent_app if self.parent_app is not None else self)
         dlg.setModal(True)
         dlg.setWindowModality(Qt.ApplicationModal)
-        if dlg.exec_() != QDialog.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             # Even on cancel/close, user may have drawn something; try to capture it.
             pass
         try:

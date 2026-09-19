@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 from .constants import SKETCH_MEDIAN_BOND_PX
 
 if TYPE_CHECKING:
-    from PyQt5.QtGui import QFont
+    from PySide6.QtGui import QFont
 
 # Preferred bond angles (radians). IUPAC treats listed degree values as ≈±10°.
 ANGLE_LINEAR_DEG = 180.0
@@ -100,8 +100,8 @@ def iupac_sketch_style(median_bond_px: float = SKETCH_MEDIAN_BOND_PX) -> IupacSk
     font = iupac_structure_font(base.label_font_pt)
     stroke = max(1.0, base.label_font_pt * 0.15)
     try:
-        from PyQt5.QtGui import QFontMetrics
-        from PyQt5.QtWidgets import QApplication
+        from PySide6.QtGui import QFontMetrics
+        from PySide6.QtWidgets import QApplication
 
         if QApplication.instance() is not None:
             fm = QFontMetrics(font)
@@ -239,7 +239,7 @@ def iupac_structure_font(
     Plain (roman) sans-serif; annotations may use italic. Avoid heavy black weights
     for routine atom labels.
     """
-    from PyQt5.QtGui import QFont
+    from PySide6.QtGui import QFont
 
     pt = max(5, int(point_size))
     font = QFont(IUPAC_LABEL_FONT_FAMILIES[0], pt)

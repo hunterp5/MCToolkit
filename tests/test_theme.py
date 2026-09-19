@@ -39,7 +39,7 @@ from molmanager.ui.theme import (
 
 def _isolate_theme_settings(tmp_path, monkeypatch) -> None:
     """Point theme QSettings at a temp INI so tests do not touch the real profile."""
-    from PyQt5.QtCore import QSettings
+    from PySide6.QtCore import QSettings
 
     ini = str(tmp_path / "molmanager_theme_test.ini")
     monkeypatch.setattr(
@@ -85,7 +85,7 @@ def test_filter_card_stylesheet_uses_palette_roles():
 
 def test_apply_application_theme_sets_current(qapp, tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
 
     from molmanager.ui.theme import apply_application_theme
 
@@ -111,7 +111,7 @@ def test_status_bar_font_pt_is_one_point_below_app():
 
 
 def test_table_text_alignment_save_load_and_flags(tmp_path, monkeypatch):
-    from PyQt5.QtCore import Qt
+    from PySide6.QtCore import Qt
 
     _isolate_theme_settings(tmp_path, monkeypatch)
     from molmanager.ui.theme import (
@@ -160,8 +160,8 @@ def test_status_bar_visible_save_and_load(tmp_path, monkeypatch):
 
 def test_custom_palette_save_load_and_apply(qapp, tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
-    from PyQt5.QtGui import QPalette
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtGui import QPalette
+    from PySide6.QtWidgets import QApplication
 
     from molmanager.ui.theme import (
         apply_application_theme,
@@ -206,7 +206,7 @@ def test_named_custom_themes_save_switch_delete(tmp_path, monkeypatch):
 
 def test_both_themes_use_fusion_without_global_stylesheet(qapp, tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
 
     from molmanager.ui.theme import apply_application_theme
 
@@ -228,7 +228,7 @@ def test_groovy_palette_is_randomized():
 
     a = palette_for_theme(THEME_GROOVY, rng=random.Random(1))
     b = palette_for_theme(THEME_GROOVY, rng=random.Random(2))
-    from PyQt5.QtGui import QPalette
+    from PySide6.QtGui import QPalette
 
     assert a.color(QPalette.Window) != b.color(QPalette.Window) or a.color(
         QPalette.Highlight
@@ -236,7 +236,7 @@ def test_groovy_palette_is_randomized():
 
 
 def test_refresh_open_windows_theme_calls_hook(qapp):
-    from PyQt5.QtWidgets import QApplication, QDialog
+    from PySide6.QtWidgets import QApplication, QDialog
 
     from molmanager.ui.theme import apply_application_theme, refresh_open_windows_theme
 
@@ -258,10 +258,36 @@ def test_refresh_open_windows_theme_calls_hook(qapp):
     dlg.close()
 
 
+def test_theme_menu_actions_apply_light_and_dark(qapp, tmp_path, monkeypatch):
+    """PySide6 QAction.triggered(bool) must still switch Light/Dark palettes."""
+    _isolate_theme_settings(tmp_path, monkeypatch)
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QGuiApplication, QPalette
+    from PySide6.QtWidgets import QApplication
+
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+
+    w = ChemistryWorkspaceWindow()
+    w._act_theme_dark.trigger()
+    assert current_theme_name() == THEME_DARK
+    dark = QApplication.instance().palette().color(QPalette.Window)
+    scheme = getattr(Qt, "ColorScheme", None)
+    hints = QGuiApplication.styleHints()
+    if scheme is not None and hints.colorScheme() != scheme.Unknown:
+        assert hints.colorScheme() == scheme.Dark
+    w._act_theme_light.trigger()
+    assert current_theme_name() == THEME_LIGHT
+    light = QApplication.instance().palette().color(QPalette.Window)
+    assert light != dark
+    if scheme is not None and hints.colorScheme() != scheme.Unknown:
+        assert hints.colorScheme() == scheme.Light
+    w.deleteLater()
+
+
 def test_application_theme_updates_table_header_palette(qapp, tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
-    from PyQt5.QtGui import QPalette
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtGui import QPalette
+    from PySide6.QtWidgets import QApplication
 
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.theme import apply_application_theme

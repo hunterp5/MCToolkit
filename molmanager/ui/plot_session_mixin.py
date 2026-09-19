@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from PyQt5.QtWidgets import QComboBox
+from PySide6.QtWidgets import QComboBox
 
 from ..plotting.plot_axes import PLOT_SESSION_KIND
 from ..plotting.plot_radar import SPOKE_NONE

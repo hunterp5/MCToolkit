@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from qt_helpers import qt_submenu
+
 from rdkit import Chem
 
 from molmanager.ui.main_window import ChemistryWorkspaceWindow
@@ -50,8 +52,8 @@ def test_clear_all_resets_table_and_ingest_flags(qapp):  # noqa: ARG001
 
 
 def test_exit_save_prompt_skipped_when_clean(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtGui import QCloseEvent
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtGui import QCloseEvent
+    from PySide6.QtWidgets import QMessageBox
 
     w = ChemistryWorkspaceWindow()
     w._suppress_exit_session_prompt = False
@@ -71,8 +73,8 @@ def test_exit_save_prompt_skipped_when_clean(qapp, monkeypatch):  # noqa: ARG001
 
 
 def test_exit_save_prompt_shown_when_dirty(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtGui import QCloseEvent
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtGui import QCloseEvent
+    from PySide6.QtWidgets import QMessageBox
 
     w = ChemistryWorkspaceWindow()
     w._suppress_exit_session_prompt = False
@@ -95,7 +97,7 @@ def test_exit_save_prompt_shown_when_dirty(qapp, monkeypatch):  # noqa: ARG001
 
 
 def test_save_session_clears_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
-    from PyQt5.QtWidgets import QFileDialog
+    from PySide6.QtWidgets import QFileDialog
 
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
@@ -113,14 +115,12 @@ def test_save_session_clears_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
 def test_file_session_submenu_lists_session_actions(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
-    file_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "File")
+    file_menu = qt_submenu(mb, "File")
     file_labels = [a.text().replace("&", "") for a in file_menu.actions() if a.text().strip()]
     assert "Session" in file_labels
     assert "Open Session…" not in file_labels
     assert "Save Session…" not in file_labels
-    session_menu = next(
-        a.menu() for a in file_menu.actions() if a.text().replace("&", "") == "Session"
-    )
+    session_menu = qt_submenu(file_menu, "Session")
     session_labels = [a.text().replace("&", "") for a in session_menu.actions() if a.text().strip()]
     assert session_labels == [
         "Open Session…",
@@ -132,7 +132,7 @@ def test_file_session_submenu_lists_session_actions(qapp):  # noqa: ARG001
 
 
 def test_save_selected_to_session_writes_subset_without_clearing_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
-    from PyQt5.QtWidgets import QFileDialog
+    from PySide6.QtWidgets import QFileDialog
 
     from molmanager.table.session_codec import expand_session_document, loads_session_bytes
 
@@ -153,7 +153,7 @@ def test_save_selected_to_session_writes_subset_without_clearing_dirty(qapp, mon
 
 
 def test_save_selected_to_session_requires_selection(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QFileDialog, QMessageBox
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
 
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
@@ -394,8 +394,8 @@ def test_selected_oids_override_preferred(qapp):  # noqa: ARG001
 
 
 def test_column_header_click_keeps_table_scroll(qapp):  # noqa: ARG001
-    from PyQt5.QtCore import QPoint, Qt
-    from PyQt5.QtTest import QTest
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
@@ -432,7 +432,7 @@ def test_column_header_click_keeps_table_scroll(qapp):  # noqa: ARG001
 
 
 def test_delete_selection_kind_rows_columns_cells(qapp):  # noqa: ARG001
-    from PyQt5.QtCore import QItemSelectionModel
+    from PySide6.QtCore import QItemSelectionModel
 
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
@@ -462,8 +462,8 @@ def test_delete_selection_kind_rows_columns_cells(qapp):  # noqa: ARG001
 
 
 def test_delete_selection_clears_cells_after_confirm(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtCore import QItemSelectionModel
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtCore import QItemSelectionModel
+    from PySide6.QtWidgets import QMessageBox
 
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
     w = ChemistryWorkspaceWindow()
@@ -477,7 +477,7 @@ def test_delete_selection_clears_cells_after_confirm(qapp, monkeypatch):  # noqa
 
 
 def test_delete_selection_deletes_column_after_confirm(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
     w = ChemistryWorkspaceWindow()
@@ -489,7 +489,7 @@ def test_delete_selection_deletes_column_after_confirm(qapp, monkeypatch):  # no
 
 
 def test_delete_selection_both_can_choose_columns(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
     w = ChemistryWorkspaceWindow()
@@ -503,7 +503,7 @@ def test_delete_selection_both_can_choose_columns(qapp, monkeypatch):  # noqa: A
 
 
 def test_delete_selection_both_can_choose_rows(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
     w = ChemistryWorkspaceWindow()
@@ -537,7 +537,7 @@ def test_structure_header_menu_offers_duplicate_not_rename(qapp):  # noqa: ARG00
     assert "header_duplicate" in names
     assert "header_rename" not in names
     assert "header_delete" not in names
-    select_menu = next(a.menu() for a in menu.actions() if a.text() == "Select")
+    select_menu = qt_submenu(menu, "Select")
     select_names = [a.objectName() for a in select_menu.actions() if a.objectName()]
     assert "header_select_all" in select_names
     assert "header_select_all_visible" not in select_names
@@ -632,7 +632,7 @@ def test_docking_from_table_only_uses_split_view(qapp):  # noqa: ARG001
 
 
 def test_close_docked_plot_closes_without_prompt(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QLabel, QMessageBox
+    from PySide6.QtWidgets import QLabel, QMessageBox
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
@@ -655,7 +655,7 @@ def test_close_docked_plot_closes_without_prompt(qapp, monkeypatch):  # noqa: AR
 
 
 def test_close_plot_pane_prompts_when_occupied(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QLabel, QMessageBox
+    from PySide6.QtWidgets import QLabel, QMessageBox
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
@@ -682,7 +682,7 @@ def test_close_plot_pane_prompts_when_occupied(qapp, monkeypatch):  # noqa: ARG0
 
 
 def test_close_empty_plot_pane_skips_prompt(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE
 
@@ -711,7 +711,7 @@ def test_clear_all_re_enables_menubar_after_ingest(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     mb = w.menuBar()
-    file_menu = next(a.menu() for a in mb.actions() if a.menu() is not None)
+    file_menu = qt_submenu(mb)
     w._set_ingest_loading(True)
     assert not file_menu.isEnabled()
 
@@ -775,15 +775,15 @@ def test_pka_prediction_writes_pi_only_when_requested(qapp):  # noqa: ARG001
 def test_tools_menu_nests_superpose_under_conformations(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
-    tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    tools = qt_submenu(mb, "Tools")
     labels = [a.text().replace("&", "") for a in tools.actions()]
     assert "Generate Conformations" not in labels
     assert "Conformations" in labels
     assert not any(lbl.startswith("Superpose") for lbl in labels)
-    conf = next(a.menu() for a in tools.actions() if a.text().replace("&", "") == "Conformations")
+    conf = qt_submenu(tools, "Conformations")
     conf_labels = [a.text().replace("&", "") for a in conf.actions()]
     assert conf_labels == ["Generate", "", "Superpose…", "Screen Pharmacophore…"]
-    gen = next(a.menu() for a in conf.actions() if a.text().replace("&", "") == "Generate")
+    gen = qt_submenu(conf, "Generate")
     assert [a.text().replace("&", "") for a in gen.actions()] == [
         "Stochastic…",
         "Systematic…",
@@ -795,10 +795,8 @@ def test_tools_menu_nests_superpose_under_conformations(qapp):  # noqa: ARG001
 def test_prepare_structures_nests_explicit_hydrogens(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
-    tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
-    prepare = next(
-        a.menu() for a in tools.actions() if a.text().replace("&", "") == "Prepare Structures"
-    )
+    tools = qt_submenu(mb, "Tools")
+    prepare = qt_submenu(tools, "Prepare Structures")
     labels = [a.text().replace("&", "") for a in prepare.actions()]
     assert "Add Explicit Hydrogens…" not in labels
     assert "Remove Explicit Hydrogens…" not in labels
@@ -806,14 +804,10 @@ def test_prepare_structures_nests_explicit_hydrogens(qapp):  # noqa: ARG001
     assert "Protonate" in labels
     assert "Protonate Structures" not in labels
     assert labels.index("Protonate") == labels.index("Disconnect Largest Fragments…") + 1
-    protonate = next(
-        a.menu() for a in prepare.actions() if a.text().replace("&", "") == "Protonate"
-    )
+    protonate = qt_submenu(prepare, "Protonate")
     p_labels = [a.text().replace("&", "") for a in protonate.actions()]
     assert p_labels == ["Protonate…", "Generate Protomers…", "Neutralize…"]
-    hydrogens = next(
-        a.menu() for a in prepare.actions() if a.text().replace("&", "") == "Explicit Hydrogens"
-    )
+    hydrogens = qt_submenu(prepare, "Explicit Hydrogens")
     h_labels = [a.text().replace("&", "") for a in hydrogens.actions()]
     assert h_labels == ["Add…", "Remove…"]
     w.close()
@@ -822,20 +816,18 @@ def test_prepare_structures_nests_explicit_hydrogens(qapp):  # noqa: ARG001
 def test_tools_menu_nests_reaction_tools(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
-    tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    tools = qt_submenu(mb, "Tools")
     labels = [a.text().replace("&", "") for a in tools.actions()]
     assert "R-Group Decomposition" not in labels
     assert "Reaction Based Enumeration…" not in labels
     assert "Reaction" in labels
-    reaction = next(a.menu() for a in tools.actions() if a.text().replace("&", "") == "Reaction")
+    reaction = qt_submenu(tools, "Reaction")
     rxn_labels = [a.text().replace("&", "") for a in reaction.actions()]
     assert "R-Group Decomposition" in rxn_labels
     assert "Extract…" in rxn_labels
     assert "Reaction Based Enumeration…" in rxn_labels
     assert rxn_labels.index("Extract…") < rxn_labels.index("R-Group Decomposition")
-    decomp = next(
-        a.menu() for a in reaction.actions() if a.text().replace("&", "") == "R-Group Decomposition"
-    )
+    decomp = qt_submenu(reaction, "R-Group Decomposition")
     decomp_labels = [a.text().replace("&", "") for a in decomp.actions()]
     assert "Core-Based Decomposition…" in decomp_labels
     w.close()
@@ -844,13 +836,13 @@ def test_tools_menu_nests_reaction_tools(qapp):  # noqa: ARG001
 def test_data_menu_nests_analyze_and_split_under_table(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
-    data = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Data")
+    data = qt_submenu(mb, "Data")
     labels = [a.text().replace("&", "") for a in data.actions()]
     assert labels[0] == "Table"
     assert "Statistics…" not in labels
     assert "Analyze Table…" not in labels
     assert "Split Column…" not in labels
-    table = next(a.menu() for a in data.actions() if a.text().replace("&", "") == "Table")
+    table = qt_submenu(data, "Table")
     table_labels = [a.text().replace("&", "") for a in table.actions() if not a.isSeparator()]
     assert table_labels[:2] == ["Add Row…", "Add Column…"]
     assert table_labels[2:] == ["Statistics…", "Split Column…", "Join Columns…"]
@@ -878,11 +870,11 @@ def test_add_blank_row_and_column_on_empty_table(qapp):  # noqa: ARG001
 def test_data_menu_nests_medchem_with_dimensionality_reduction(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
-    tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    tools = qt_submenu(mb, "Tools")
     tools_labels = [a.text().replace("&", "") for a in tools.actions()]
     assert "Dimensionality Reduction" not in tools_labels
     assert "MedChem" not in tools_labels
-    data = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Data")
+    data = qt_submenu(mb, "Data")
     data_labels = [a.text().replace("&", "") for a in data.actions()]
     assert "MedChem" in data_labels
     assert "Dimensionality Reduction" in data_labels
@@ -893,14 +885,12 @@ def test_data_menu_nests_medchem_with_dimensionality_reduction(qapp):  # noqa: A
     assert "UMAP Visualization…" not in data_labels
     assert "Self-Organizing Map…" not in data_labels
     assert data_labels.index("Dimensionality Reduction") == data_labels.index("MedChem") + 1
-    medchem = next(a.menu() for a in data.actions() if a.text().replace("&", "") == "MedChem")
+    medchem = qt_submenu(data, "MedChem")
     assert [a.text().replace("&", "") for a in medchem.actions()] == [
         "BOILED-Egg plot…",
         "Golden Triangle plot…",
     ]
-    dimred = next(
-        a.menu() for a in data.actions() if a.text().replace("&", "") == "Dimensionality Reduction"
-    )
+    dimred = qt_submenu(data, "Dimensionality Reduction")
     assert [a.text().replace("&", "") for a in dimred.actions()] == [
         "Principal Component Analysis…",
         "t-SNE Visualization…",

@@ -28,7 +28,7 @@ import threading
 import time
 from dataclasses import dataclass
 
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+from PySide6.QtCore import QObject, QRunnable, Signal
 from rdkit import Chem
 
 from molmanager.ionization.unipka_ensembles import populations_from_states, unipka_import_error
@@ -57,8 +57,8 @@ def estimate_protomer_populations_from_states(
 
 
 class ProtomerGeneratorSignals(QObject):
-    finished = pyqtSignal(list)  # list[tuple[int | None, str, float]]  source_oid, smiles, pct
-    failed = pyqtSignal(str)
+    finished = Signal(list)  # list[tuple[int | None, str, float]]  source_oid, smiles, pct
+    failed = Signal(str)
 
 
 class ProtomerGeneratorWorker(QRunnable):

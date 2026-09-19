@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDialog,
@@ -96,14 +96,14 @@ def _coord_spin(value: float, *, lo: float = -999.0, hi: float = 999.0) -> QDoub
 class ProteinPharmacophoreDialog(QDialog):
     """Edit pharmacophore spheres; click an atom, then Add to insert a feature."""
 
-    add_at_coords = pyqtSignal(str, str, float, float, float, float)
-    feature_changed = pyqtSignal(int, object)
-    feature_removed = pyqtSignal(int)
-    from_ligand_clicked = pyqtSignal()
-    open_clicked = pyqtSignal()
-    save_clicked = pyqtSignal()
-    clear_clicked = pyqtSignal()
-    send_gnina_clicked = pyqtSignal()
+    add_at_coords = Signal(str, str, float, float, float, float)
+    feature_changed = Signal(int, object)
+    feature_removed = Signal(int)
+    from_ligand_clicked = Signal()
+    open_clicked = Signal()
+    save_clicked = Signal()
+    clear_clicked = Signal()
+    send_gnina_clicked = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)

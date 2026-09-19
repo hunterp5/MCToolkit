@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 
 from ..table.column_color_compute import ColumnColorRule, color_rgb_for_value
 from ..table.column_score_color import (

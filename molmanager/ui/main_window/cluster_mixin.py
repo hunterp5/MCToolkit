@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 from ..analysis_job_support import ensure_table_ready_for_tool, report_cancellable_job_failure
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton

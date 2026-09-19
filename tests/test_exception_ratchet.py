@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RATCHET_PATH = ROOT / "ruff.exception-ratchet.toml"
 ALLOWED_CODES = frozenset({"BLE001", "S110", "SIM105"})
 # Frozen when the ratchet landed. Lower this when the allowlist shrinks; never raise it.
-EXCEPTION_RATCHET_MAX_FILES = 225
+EXCEPTION_RATCHET_MAX_FILES = 224
 
 _MAX_RE = re.compile(r"^# ratchet-max-files = (\d+)\s*$", re.MULTILINE)
 _ENTRY_RE = re.compile(r'^"([^"]+)" = \[([^\]]+)\]\s*$', re.MULTILINE)

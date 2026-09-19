@@ -21,8 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
-from PyQt5.QtCore import QEvent, QRect, Qt, QTimer
-from PyQt5.QtGui import (
+from PySide6.QtCore import QEvent, QRect, Qt, QTimer
+from PySide6.QtGui import (
     QColor,
     QImage,
     QLinearGradient,
@@ -30,7 +30,7 @@ from PyQt5.QtGui import (
     QPen,
     QPixmap,
 )
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QHBoxLayout,
@@ -498,7 +498,7 @@ class SomBrowserWidget(QWidget):
             BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT // 2,
         )
         self._struct_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._struct_label.setMargin(0)
+        self._struct_label.setContentsMargins(0, 0, 0, 0)
         self._struct_label.setIndent(0)
         style_browser_structure_label(self._struct_label)
         self._preview_host = QWidget(self)

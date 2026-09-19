@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem
 
 from ..platform_support.tool_progress import ToolProgressState, report_tool_progress

@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import math
 
-from PyQt5.QtCore import QPointF, QRectF, Qt
-from PyQt5.QtGui import (
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import (
     QBrush,
     QColor,
     QFont,
@@ -347,7 +347,7 @@ def mode_lasso_icon(size: int = _ICON_SIZE) -> QIcon:
 def mode_text_icon(size: int = _ICON_SIZE) -> QIcon:
     def paint(p: QPainter, s: float) -> None:
         # Capital "A" with underline — text / label edit tool.
-        from PyQt5.QtGui import QFont, QFontMetrics
+        from PySide6.QtGui import QFont, QFontMetrics
 
         font = QFont("Helvetica", max(10, int(s * 0.55)))
         font.setBold(True)

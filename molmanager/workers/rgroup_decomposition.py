@@ -22,7 +22,7 @@ import logging
 import threading
 from typing import Any
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem
 from rdkit.Chem import rdRGroupDecomposition
 

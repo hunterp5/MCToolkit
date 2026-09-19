@@ -21,7 +21,7 @@ from __future__ import annotations
 import threading
 from contextlib import suppress
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 
 from ..chem.reaction_enumeration import (
     ReactionEnumerationJobResult,

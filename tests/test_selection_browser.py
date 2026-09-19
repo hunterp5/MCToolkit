@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QSizePolicy
+from PySide6.QtWidgets import QSizePolicy
 from rdkit import Chem
 
 from molmanager.ui.main_window import ChemistryWorkspaceWindow

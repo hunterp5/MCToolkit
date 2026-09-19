@@ -42,7 +42,7 @@ def test_random_molecule_browser_widget_is_workspace_dockable():
 
 
 def test_random_molecule_browser_table_and_arrows(qapp):  # noqa: ARG001
-    pytest.importorskip("PyQt5.QtWidgets")
+    pytest.importorskip("PySide6.QtWidgets")
     hits = [_hit("CHEMBL1", "CCO"), _hit("CHEMBL2", "CCN"), _hit("CHEMBL3", "CCC")]
     w = RandomMoleculeBrowserWidget(None)
     w.set_hits(hits, unique_only=True)
@@ -68,7 +68,7 @@ def test_random_molecule_browser_table_and_arrows(qapp):  # noqa: ARG001
 
 
 def test_random_molecule_browser_dialog_hosts_panel(qapp):  # noqa: ARG001
-    pytest.importorskip("PyQt5.QtWidgets")
+    pytest.importorskip("PySide6.QtWidgets")
     dlg = RandomMoleculeBrowserDialog(None)
     dlg.set_hits([_hit("CHEMBL1", "CCO")], unique_only=False)
     assert dlg.windowTitle() == "Random Molecule Browser"

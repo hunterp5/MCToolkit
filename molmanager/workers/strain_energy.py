@@ -27,7 +27,7 @@ import threading
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem
 from rdkit.Chem import AllChem
 

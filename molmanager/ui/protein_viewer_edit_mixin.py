@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from PyQt5.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
 from ..protein.structure_components import (
     _atom_key4,

@@ -18,9 +18,9 @@
 
 from contextlib import suppress
 
-from PyQt5.QtCore import QEvent, QMimeData, QPoint, Qt
-from PyQt5.QtGui import QDrag
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent, QMimeData, QPoint, Qt
+from PySide6.QtGui import QDrag
+from PySide6.QtWidgets import (
     QAbstractButton,
     QAbstractItemView,
     QAbstractSlider,
@@ -113,7 +113,7 @@ def style_filter_card_remove_button(btn: QPushButton) -> None:
 
 def _fc_configure_column_combo(cb: QComboBox) -> None:
     """Keep the combo within the filter panel; long names scroll in the dropdown."""
-    cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
+    cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
     cb.setMinimumContentsLength(8)
     cb.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
     cb.setMinimumWidth(0)
@@ -204,7 +204,7 @@ class _FilterCardDragMixin:
         drag = QDrag(self)
         drag.setMimeData(mime)
         try:
-            drag.exec_(Qt.MoveAction)
+            drag.exec(Qt.MoveAction)
         finally:
             polish_widget_property(self, "fcDragging", False)
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 import threading
 from concurrent.futures import FIRST_COMPLETED, BrokenExecutor, ProcessPoolExecutor, wait
 
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+from PySide6.QtCore import QObject, QRunnable, Signal
 
 from .process_pool_utils import (
     register_process_pool,
@@ -42,8 +42,8 @@ _OPENMM_VERSION_HINT = (
 
 
 class ProteinMinimizeSignals(QObject):
-    finished = pyqtSignal(str)
-    failed = pyqtSignal(str)
+    finished = Signal(str)
+    failed = Signal(str)
 
 
 class ProteinMinimizeWorker(QRunnable):

@@ -20,8 +20,17 @@ from __future__ import annotations
 
 import math
 
-from PyQt5.QtCore import QPoint, QPointF, Qt
-from PyQt5.QtGui import QBrush, QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QPolygonF
+from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QFontMetrics,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPolygonF,
+)
 
 from .chem import sketch_lone_pair_count, sketch_oxidation_state
 from .sketch_rdkit_paint import render_sketch_mol_to_pixmap, sketch_rdkit_paint_cache_key

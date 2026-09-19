@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 
 from ..table.filter_compute import fetch_matching_oids
 from ..platform_support.tool_progress import ToolProgressState, report_tool_progress

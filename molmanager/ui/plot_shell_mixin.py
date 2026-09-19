@@ -22,7 +22,7 @@ import json
 import time
 import webbrowser
 
-from PyQt5.QtCore import QTimer, QUrl
+from PySide6.QtCore import QTimer, QUrl
 from plotly import graph_objects as go
 
 from ..plotting.plot_axes import (

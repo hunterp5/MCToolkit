@@ -93,7 +93,7 @@ def cell_text_for_oid(app: Any, oid: int, header: str) -> str:
     except Exception:
         return ""
     try:
-        cell_fn = getattr(app, "_table_cell_text", None)
+        cell_fn = getattr(app, "cell_text", None) or getattr(app, "_table_cell_text", None)
         if callable(cell_fn):
             return (cell_fn(row, col) or "").strip()
         return (model.cell_text(row, col) or "").strip()

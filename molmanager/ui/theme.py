@@ -22,9 +22,9 @@ import colorsys
 import json
 import random
 
-from PyQt5.QtCore import QSettings, Qt
-from PyQt5.QtGui import QColor, QFont, QPalette
-from PyQt5.QtWidgets import QApplication, QWidget
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QPalette
+from PySide6.QtWidgets import QApplication, QWidget
 
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
@@ -53,6 +53,9 @@ _RUNTIME_TABLE_ALIGN_V = DEFAULT_TABLE_ALIGN_V
 _CURRENT_THEME = THEME_LIGHT
 # Last point size passed to ``apply_application_font_pt`` (survives Fusion polish).
 _CURRENT_APP_FONT_PT: int | None = None
+# Fusion light standardPalette(), snapshotted with ColorScheme.Light so Dark apply
+# does not depend on the OS scheme (Qt 6) or mutate it mid-apply.
+_FUSION_LIGHT_PALETTE: QPalette | None = None
 
 _FC_CTRL_H = 20
 
@@ -256,6 +259,40 @@ def ensure_fusion_style(app: QApplication | None = None) -> bool:
         return False
     app.setStyle("Fusion")
     return True
+
+
+def _qt_color_scheme_for_theme(theme: str) -> object | None:
+    """Qt 6 Fusion follows the OS scheme unless we pin Light/Dark/Unknown."""
+    scheme = getattr(Qt, "ColorScheme", None)
+    if scheme is None:
+        return None
+    name = _normalize_theme_name(theme)
+    if name == THEME_DARK:
+        return scheme.Dark
+    if name == THEME_LIGHT:
+        return scheme.Light
+    return scheme.Unknown
+
+
+def _set_qt_color_scheme(scheme: object | None) -> None:
+    if scheme is None:
+        return
+    hints = QGuiApplication.styleHints()
+    setter = getattr(hints, "setColorScheme", None)
+    if setter is not None:
+        setter(scheme)
+
+
+def _finish_palette(p: QPalette) -> QPalette:
+    """Fill Qt 6 roles Fusion reads so Light/Dark match the PyQt5 palettes."""
+    highlight = p.color(QPalette.Highlight)
+    accent = getattr(QPalette, "Accent", None)
+    if accent is not None:
+        p.setColor(accent, highlight)
+    placeholder = getattr(QPalette, "PlaceholderText", None)
+    if placeholder is not None:
+        p.setColor(placeholder, p.color(QPalette.Mid))
+    return p
 
 
 def bootstrap_application_gui(app: QApplication | None = None) -> None:
@@ -489,7 +526,7 @@ def _custom_palette(colors: dict[str, str] | None = None) -> QPalette:
     p.setColor(QPalette.Disabled, QPalette.Text, disabled)
     p.setColor(QPalette.Disabled, QPalette.ButtonText, disabled)
     p.setColor(QPalette.Disabled, QPalette.WindowText, disabled)
-    return p
+    return _finish_palette(p)
 
 
 def polish_widget_property(widget: QWidget, prop: str, value: object) -> None:
@@ -657,17 +694,35 @@ def filter_card_stylesheet(theme: str | None = None) -> str:
 
 def _light_palette() -> QPalette:
     """Fusion default palette (light mode)."""
-    app = QApplication.instance()
-    if app is not None:
-        style = app.style()
-        if style is not None:
-            return style.standardPalette()
-    from PyQt5.QtWidgets import QStyleFactory
+    global _FUSION_LIGHT_PALETTE
+    if _FUSION_LIGHT_PALETTE is not None:
+        return QPalette(_FUSION_LIGHT_PALETTE)
+    # Qt 6 Fusion's standardPalette() follows the OS scheme; pin Light so this
+    # stays the same Fusion light chrome the PyQt5 app used.
+    light_scheme = _qt_color_scheme_for_theme(THEME_LIGHT)
+    hints = QGuiApplication.styleHints()
+    getter = getattr(hints, "colorScheme", None)
+    previous = getter() if getter is not None else None
+    _set_qt_color_scheme(light_scheme)
+    try:
+        app = QApplication.instance()
+        pal = None
+        if app is not None:
+            style = app.style()
+            if style is not None:
+                pal = style.standardPalette()
+        if pal is None:
+            from PySide6.QtWidgets import QStyleFactory
 
-    fusion = QStyleFactory.create("Fusion")
-    if fusion is not None:
-        return fusion.standardPalette()
-    return QPalette()
+            fusion = QStyleFactory.create("Fusion")
+            if fusion is not None:
+                pal = fusion.standardPalette()
+        if pal is None:
+            pal = QPalette()
+        _FUSION_LIGHT_PALETTE = _finish_palette(QPalette(pal))
+        return QPalette(_FUSION_LIGHT_PALETTE)
+    finally:
+        _set_qt_color_scheme(previous)
 
 
 def _dark_palette() -> QPalette:
@@ -700,7 +755,7 @@ def _dark_palette() -> QPalette:
     p.setColor(QPalette.Shadow, QColor(15, 15, 15))
     p.setColor(QPalette.Disabled, QPalette.Text, disabled)
     p.setColor(QPalette.Disabled, QPalette.ButtonText, disabled)
-    return p
+    return _finish_palette(p)
 
 
 def _hsv_qcolor(h: float, s: float, v: float) -> QColor:
@@ -761,7 +816,7 @@ def _groovy_palette(rng: random.Random | None = None) -> QPalette:
     p.setColor(QPalette.Disabled, QPalette.Text, disabled)
     p.setColor(QPalette.Disabled, QPalette.ButtonText, disabled)
     p.setColor(QPalette.Disabled, QPalette.WindowText, disabled)
-    return p
+    return _finish_palette(p)
 
 
 def palette_for_theme(theme: str, *, rng: random.Random | None = None) -> QPalette:
@@ -822,6 +877,9 @@ def apply_application_theme(app: QApplication | None, theme: str) -> str:
         else _font_pt_from_app(app)
     )
     ensure_fusion_style(app)
+    # Snapshot Fusion light before pinning Dark/Unknown so accent copy stays stable.
+    _light_palette()
+    _set_qt_color_scheme(_qt_color_scheme_for_theme(theme))
     apply_application_font_pt(intended_pt)
     app.setPalette(palette_for_theme(theme))
     # No global stylesheet — Fusion draws from the palette so modes share chrome layout.

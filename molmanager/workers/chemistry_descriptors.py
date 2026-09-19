@@ -35,7 +35,7 @@ from .process_pool_utils import (
     shutdown_process_pool_executor,
 )
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem
 from rdkit.Chem import Descriptors, QED, rdMolDescriptors
 

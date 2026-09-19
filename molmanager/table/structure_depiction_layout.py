@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QSettings
+from PySide6.QtCore import QSettings
 
 # Default RDKit draw → QPixmap size for 2D structure images.
 DEFAULT_STRUCTURE_DEPICT_WIDTH = 210

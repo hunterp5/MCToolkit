@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog
 
 
 def selection_scope_checked(dialog: QDialog) -> bool:

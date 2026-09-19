@@ -28,7 +28,7 @@ from .process_pool_utils import (
     shutdown_process_pool_executor,
 )
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem
 
 from ..table.structure_depiction_layout import structure_depict_height, structure_depict_width
@@ -220,7 +220,7 @@ class Render2DBatchHeldJob(QRunnable):
         if done_ev is not None:
             done_ev.clear()
         try:
-            from PyQt5.QtCore import QMetaObject, Qt
+            from PySide6.QtCore import QMetaObject, Qt
 
             self._app._render2d_queue_payload = self._payload
             self._app._render2d_queue_cancel_event = self._cancel_event

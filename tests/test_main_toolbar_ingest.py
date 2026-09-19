@@ -18,7 +18,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
+from qt_helpers import qt_submenu
+
+from PySide6.QtCore import Qt
 
 from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
@@ -26,7 +28,7 @@ from molmanager.ui.main_window import ChemistryWorkspaceWindow
 def test_main_toolbar_disabled_while_ingest_loading(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
-    file_menu = next(a.menu() for a in mb.actions() if a.menu() is not None)
+    file_menu = qt_submenu(mb)
 
     assert file_menu.isEnabled()
     assert w._btn_workspace_layout.isEnabled()
@@ -36,7 +38,7 @@ def test_main_toolbar_disabled_while_ingest_loading(qapp):  # noqa: ARG001
     w._set_ingest_loading(True)
     assert not file_menu.isEnabled()
     assert not w._btn_workspace_layout.isEnabled()
-    assert not w._btn_processes.isEnabled()
+    assert w._btn_processes.isEnabled()
     assert not w._help_menu.isEnabled()
     assert not w._act_user_guide.isEnabled()
     assert not w._act_citations.isEnabled()

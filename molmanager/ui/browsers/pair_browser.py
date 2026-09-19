@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -293,7 +293,7 @@ class PairBrowserDialog(QDialog):
         except Exception:
             return ""
         try:
-            text = (app._table_cell_text(row, col) or "").strip()
+            text = (app.cell_text(row, col) or "").strip()
             if not text:
                 text = (app._table_model.backing_value_for_row_header(row, header) or "").strip()
             return text

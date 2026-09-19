@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QDialog, QMessageBox
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QDialog, QMessageBox
 
 from .cards import (
     CategoryFilterCard,
@@ -101,7 +101,7 @@ class FilterCardsMixin:
         if not self.headers:
             return
         dlg = AddFilterDialog(self)
-        if dlg.exec_() != QDialog.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             return
         kind = dlg.selected_kind()
         if kind == "substructure":

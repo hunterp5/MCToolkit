@@ -16,8 +16,8 @@
 
 """Small reusable widgets; filter cards live in :mod:`MolManager.ui.filters.cards`."""
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QTableWidgetItem
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QTableWidgetItem
 
 from ..chem.molecule_conversion import safe_float
 

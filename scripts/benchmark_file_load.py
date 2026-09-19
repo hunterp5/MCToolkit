@@ -35,8 +35,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PyQt5.QtCore import QTimer  # noqa: E402
-from PyQt5.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtCore import QTimer  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
 
 def main() -> None:
@@ -202,7 +202,7 @@ def main() -> None:
     QTimer.singleShot(int(args.max_s * 1000), app.quit)
     QTimer.singleShot(0, lambda: win.load_file(args.path))
 
-    app.exec_()
+    app.exec()
 
     wall = state["t_done"] if state["done"] else (time.perf_counter() - t_start)
     big = [s for s in stalls if s[1] >= 100.0]

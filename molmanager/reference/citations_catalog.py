@@ -805,32 +805,32 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
         "GUI, numerics, and ML runtime",
         (
             _t(
-                "pyqt",
-                "PyQt5 / Qt",
+                "pyside6",
+                "PySide6 / Qt",
                 "Desktop UI (tables, dialogs, menus).",
                 (
                     (
-                        "The Qt Company. Qt documentation.",
-                        "https://doc.qt.io",
+                        "The Qt Company. Qt for Python.",
+                        "https://doc.qt.io/qtforpython/",
                     ),
                 ),
-                LIC_GPL3,
-                homepage="https://www.riverbankcomputing.com/software/pyqt/",
-                notes="PyQt5 is GPL v3, or a commercial Riverbank license. Qt itself has LGPL/GPL/commercial options.",
+                LIC_LGPL3,
+                homepage="https://doc.qt.io/qtforpython/",
+                notes="PySide6 (Qt for Python) is LGPL v3. Qt itself has LGPL/GPL/commercial options.",
             ),
             _t(
-                "pyqtwebengine",
-                "PyQtWebEngine (Chromium)",
+                "qtwebengine",
+                "Qt WebEngine (Chromium)",
                 "3Dmol viewer, Plotly, and other embedded HTML views.",
                 (
                     (
                         "The Qt Company. Qt WebEngine.",
-                        "https://doc.qt.io/qt-5/qtwebengine-index.html",
+                        "https://doc.qt.io/qt-6/qtwebengine-index.html",
                     ),
                 ),
-                LIC_GPL3,
-                homepage="https://www.riverbankcomputing.com/software/pyqt/",
-                notes="WebEngine bundles Chromium under BSD-style and other licenses; see Qt WebEngine third-party notices.",
+                LIC_LGPL3,
+                homepage="https://doc.qt.io/qt-6/qtwebengine-index.html",
+                notes="Ships with PySide6. WebEngine bundles Chromium under BSD-style and other licenses; see Qt WebEngine third-party notices.",
             ),
             _t(
                 "numpy",

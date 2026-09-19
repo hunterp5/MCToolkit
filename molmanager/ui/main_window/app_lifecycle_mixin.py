@@ -14,18 +14,20 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Session dirty tracking, SQLite mirror, close/shutdown for ChemistryWorkspaceWindow."""
+"""Session dirty tracking, SQLite mirror, close/shutdown, and status-bar chrome."""
 
 from __future__ import annotations
 
 import logging
 import time
 
-from PyQt5.QtGui import QCloseEvent
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
 
 from ..compound_table_model import CompoundTableModel
 from ...platform_support.exception_policy import log_swallowed_exception
+from ...platform_support.memory_usage import format_process_memory_status
 
 logger = logging.getLogger(__name__)
 
@@ -329,3 +331,103 @@ class AppLifecycleMixin:
                 closer()
             except Exception:
                 log_swallowed_exception(logger, "extra_pixmap_store.close failed during quit")
+
+    def _workspace_loading_overlay_visible(self) -> bool:
+        """True while file/session load is covering the workspace."""
+        if bool(getattr(self, "_ingest_loading", False)):
+            return True
+        stack = getattr(self, "_table_stack", None)
+        try:
+            return stack is not None and int(stack.currentIndex()) == 0
+        except RuntimeError:
+            return False
+
+    def _session_overlay_owns_loading_detail(self) -> bool:
+        """True while session restore is writing the loading page (not tool progress)."""
+        if getattr(self, "_session_waiting_for_render", False):
+            return False
+        if getattr(self, "_session_awaiting_ready", False):
+            return True
+        if getattr(self, "_session_finalize_ctx", None) is not None:
+            return True
+        if getattr(self, "_session_restore_ctx", None) is not None:
+            return True
+        if getattr(self, "_csv_session_ctx", None) is not None:
+            return True
+        return False
+
+    def _sync_status_chrome_for_workspace(self) -> None:
+        """Hide status/memory on the loading page; restore the user's status-bar setting after."""
+        apply_bar = getattr(self, "_apply_status_bar_visible", None)
+        if not callable(apply_bar):
+            return
+        act = getattr(self, "_act_status_bar", None)
+        if act is not None:
+            want = bool(act.isChecked())
+        else:
+            from ..theme import load_status_bar_visible
+
+            want = bool(load_status_bar_visible())
+        apply_bar(want, persist=False)
+
+    def _set_workspace_stack_index(self, index: int) -> None:
+        stack = getattr(self, "_table_stack", None)
+        if stack is None:
+            return
+        stack.setCurrentIndex(int(index))
+        self._sync_status_chrome_for_workspace()
+
+    def _status_memory_should_poll(self) -> bool:
+        """True unless the status-bar host was explicitly hidden.
+
+        ``isVisible()`` is False until the top-level window is shown, so it
+        cannot be used during ``__init__`` to decide whether polling starts.
+        """
+        if self._workspace_loading_overlay_visible():
+            return False
+        host = getattr(self, "_status_host", None)
+        return host is None or not host.isHidden()
+
+    def _init_status_memory_tracker(self, cfg) -> None:
+        self._memory_status_timer = QTimer(self)
+        self._memory_status_timer.timeout.connect(self._refresh_status_memory_label)
+        label = getattr(self, "_memory_status_label", None)
+        if cfg.status_memory_enabled:
+            if label is not None:
+                label.show()
+            self._memory_status_timer.setInterval(int(cfg.status_memory_poll_ms))
+            if self._status_memory_should_poll():
+                self._memory_status_timer.start()
+            self._refresh_status_memory_label()
+        elif label is not None:
+            label.hide()
+
+    def _refresh_status_memory_label(self) -> None:
+        label = getattr(self, "_memory_status_label", None)
+        if label is None or label.isHidden():
+            return
+        text = format_process_memory_status()
+        if text is None:
+            label.setText("")
+            label.setToolTip("Process memory unavailable on this platform.")
+            return
+        label.setText(text)
+
+    def _status_work_is_active(self) -> bool:
+        """True when the status line should keep showing in-progress work."""
+        if bool(getattr(self, "_ingest_loading", False)):
+            return True
+        if bool(getattr(self, "_export_busy", False)):
+            return True
+        render2d_active = getattr(self, "render2d_batch_active", None)
+        if callable(render2d_active) and render2d_active():
+            return True
+        if self._background_job_ui_active():
+            return True
+        state = getattr(self, "_tool_progress_state", None)
+        if state is not None:
+            _msg, _done, _total, active = state.snapshot()
+            if active:
+                return True
+        jobs = getattr(self, "_background_jobs", None)
+        return bool(jobs)

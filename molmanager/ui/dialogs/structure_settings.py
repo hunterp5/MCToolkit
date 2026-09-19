@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
@@ -44,7 +44,7 @@ from ..qt_widget_utils import make_window_minimizable
 class StructureSettingsDialog(QDialog):
     """Pick 2D structure depiction width and height (px)."""
 
-    size_previewed = pyqtSignal(int, int)
+    size_previewed = Signal(int, int)
 
     def __init__(self, current_width: int, current_height: int, parent=None) -> None:
         super().__init__(parent)

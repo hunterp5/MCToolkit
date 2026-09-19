@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import threading
 
-from PyQt5.QtCore import QObject
+from PySide6.QtCore import QObject
 
 from molmanager.workers.qsar_worker import QSARSignals, QSARPredictWorker, QSARTrainWorker
 

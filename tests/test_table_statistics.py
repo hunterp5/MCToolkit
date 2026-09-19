@@ -46,6 +46,7 @@ _STATS_SRC = Path(__file__).resolve().parents[1] / "molmanager" / "analysis" / "
 def test_table_statistics_source_does_not_import_qt() -> None:
     text = _STATS_SRC.read_text(encoding="utf-8")
     assert "PyQt5" not in text
+    assert "PySide6" not in text
     assert "QtWidgets" not in text
     assert "QDialog" not in text
 

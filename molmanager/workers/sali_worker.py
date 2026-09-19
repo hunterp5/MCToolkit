@@ -22,7 +22,7 @@ import logging
 import threading
 import time
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem, DataStructs
 
 from ..chem.rdkit_fingerprints import fingerprint_bitvect_for_row, fingerprint_bitvect_for_ui_choice

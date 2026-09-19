@@ -18,7 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QMenuBar, QWidget
+from qt_helpers import qt_submenu
+from PySide6.QtWidgets import QMenuBar, QWidget
 from rdkit import Chem
 
 from molmanager.ui.sketcher.constants import (
@@ -112,7 +113,7 @@ def test_physical_properties_view_action(qapp) -> None:  # noqa: ARG001
     dlg = SketcherDialog(QWidget())
     bars = dlg.findChildren(QMenuBar)
     assert bars
-    menus = {a.text(): a.menu() for a in bars[0].actions() if a.menu()}
+    menus = {title: qt_submenu(bars[0], title.replace("&", "")) for title in ("View", "Settings")}
     assert "Physical Properties" in [a.text() for a in menus["View"].actions() if a.text()]
     assert "Customize Elements" in [a.text() for a in menus["Settings"].actions() if a.text()]
     dlg._open_physical_properties()

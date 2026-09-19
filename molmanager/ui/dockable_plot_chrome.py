@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from contextlib import suppress
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QPushButton, QVBoxLayout, QWidget
 
 from .dockable_plot_constants import _DOCK_TEXT_CHROME_ATTRS
 from .dockable_plot_glyphs import (

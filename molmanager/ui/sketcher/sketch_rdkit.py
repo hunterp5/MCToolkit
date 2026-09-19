@@ -21,8 +21,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from PyQt5.QtCore import QPoint, QTimer
-from PyQt5.QtWidgets import QMessageBox
+from PySide6.QtCore import QPoint, QTimer
+from PySide6.QtWidgets import QMessageBox
 
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdCIPLabeler, rdDepictor
@@ -30,6 +30,18 @@ from rdkit.Chem.rdchem import BondDir, Conformer
 from rdkit.Geometry import Point2D, Point3D
 
 from ...chem.molecule_conversion import mol_to_canonical_smiles
+
+from ...chem.sketch_mol import (
+    atom_in_macrocycle,
+    capture_tetrahedral_chiral_tags,
+    clear_bond_dirs,
+    conformer_is_3d,
+    has_wedgeable_stereo_substituent,
+    kekulize_for_sketch_orders,
+    mol_net_formal_charge,
+    restore_tetrahedral_chiral_tags,
+    stereocenter_indices_needing_explicit_h,
+)
 
 from .bonds import (
     BOND_STEREO_DATIVE,
@@ -69,18 +81,11 @@ class SketchWidgetRdkitMixin:
 
     @staticmethod
     def _mol_net_formal_charge(mol: Chem.Mol) -> int:
-        return sum(mol.GetAtomWithIdx(i).GetFormalCharge() for i in range(mol.GetNumAtoms()))
+        return mol_net_formal_charge(mol)
 
     @staticmethod
     def _conformer_is_3d(conf, *, z_eps: float = 1e-3) -> bool:
-        try:
-            n = conf.GetNumAtoms()
-        except Exception:
-            return False
-        for i in range(n):
-            if abs(float(conf.GetAtomPosition(i).z)) > z_eps:
-                return True
-        return False
+        return conformer_is_3d(conf, z_eps=z_eps)
 
     def _structure_has_usable_2d(self, mol: Chem.Mol) -> bool:
         """True when *mol* has a 2D conformer suitable for table-style depiction."""
@@ -93,28 +98,15 @@ class SketchWidgetRdkitMixin:
 
     @staticmethod
     def _capture_tetrahedral_chiral_tags(mol: Chem.Mol) -> dict[int, Any]:
-        tags: dict[int, Any] = {}
-        for atom in mol.GetAtoms():
-            ct = atom.GetChiralTag()
-            if ct != Chem.ChiralType.CHI_UNSPECIFIED:
-                tags[int(atom.GetIdx())] = ct
-        return tags
+        return capture_tetrahedral_chiral_tags(mol)
 
     @staticmethod
     def _restore_tetrahedral_chiral_tags(mol: Chem.Mol, tags: dict[int, Any]) -> None:
-        for idx, ct in tags.items():
-            try:
-                mol.GetAtomWithIdx(int(idx)).SetChiralTag(ct)
-            except Exception:
-                pass
+        restore_tetrahedral_chiral_tags(mol, tags)
 
     @staticmethod
     def _clear_bond_dirs(mol: Chem.Mol) -> None:
-        for bond in mol.GetBonds():
-            try:
-                bond.SetBondDir(BondDir.NONE)
-            except Exception:
-                pass
+        clear_bond_dirs(mol)
 
     def _assign_tetrahedral_cip(self, mol: Chem.Mol) -> dict[int, str]:
         """
@@ -634,121 +626,22 @@ class SketchWidgetRdkitMixin:
     @staticmethod
     def _atom_in_macrocycle(mol: Chem.Mol, idx: int, *, min_size: int = 9) -> bool:
         """True when *idx* belongs to a simple cycle of at least *min_size* atoms."""
-        try:
-            ri = mol.GetRingInfo()
-            if ri.NumRings() == 0:
-                Chem.GetSymmSSSR(mol)
-                ri = mol.GetRingInfo()
-            for ring in ri.AtomRings():
-                if len(ring) >= min_size and int(idx) in ring:
-                    return True
-        except Exception:
-            return False
-        return False
+        return atom_in_macrocycle(mol, idx, min_size=min_size)
 
     @staticmethod
     def _has_wedgeable_stereo_substituent(mol: Chem.Mol, idx: int) -> bool:
-        """
-        ST-1.2 / ST-1.3 / ST-0.5: a ligand other than H can carry wedge/hash.
-
-        Prefer non-stereogenic neighbors. For ring centers, only exocyclic bonds
-        count so ring bonds can stay plain (ST-1.3).
-        """
-        try:
-            atom = mol.GetAtomWithIdx(int(idx))
-        except Exception:
-            return False
-        in_ring = False
-        try:
-            in_ring = bool(atom.IsInRing())
-        except Exception:
-            in_ring = False
-        for nb in atom.GetNeighbors():
-            if nb.GetAtomicNum() == 1:
-                continue
-            bond = mol.GetBondBetweenAtoms(int(idx), int(nb.GetIdx()))
-            if bond is None:
-                continue
-            bt = bond.GetBondType()
-            if bt not in (Chem.BondType.SINGLE, Chem.BondType.UNSPECIFIED):
-                continue
-            if in_ring and bond.IsInRing():
-                continue
-            if nb.GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED:
-                continue
-            return True
-        return False
+        """ST-1.2 / ST-1.3 / ST-0.5: a ligand other than H can carry wedge/hash."""
+        return has_wedgeable_stereo_substituent(mol, idx)
 
     @staticmethod
     def _macrocycle_has_wedgeable_substituent(mol: Chem.Mol, idx: int) -> bool:
         """Backward-compatible alias for :meth:`_has_wedgeable_stereo_substituent`."""
-        return SketchWidgetRdkitMixin._has_wedgeable_stereo_substituent(mol, idx)
+        return has_wedgeable_stereo_substituent(mol, idx)
 
     @staticmethod
     def _stereocenter_indices_needing_explicit_h(mol: Chem.Mol) -> list[int]:
-        """
-        Tetrahedral centers that need an explicit stereo-H (ST-1.2).
-
-        Omit H whenever another substituent can take the wedge/hash. Draw H only
-        when no suitable ligand exists (e.g. ring-only ligands + H).
-        """
-        need: set[int] = set()
-        try:
-            mol.UpdatePropertyCache(strict=False)
-        except Exception:
-            pass
-        try:
-            if mol.GetRingInfo().NumRings() == 0:
-                Chem.GetSymmSSSR(mol)
-        except Exception:
-            pass
-
-        def _needs_stereo_h(atom: Chem.Atom) -> bool:
-            try:
-                if any(nb.GetAtomicNum() == 1 for nb in atom.GetNeighbors()):
-                    return False
-                # RDKit may report GetNumImplicitHs()==0 while GetTotalNumHs()>0 for @H centers.
-                if int(atom.GetTotalNumHs()) <= 0:
-                    return False
-                idx = int(atom.GetIdx())
-                if SketchWidgetRdkitMixin._has_wedgeable_stereo_substituent(mol, idx):
-                    return False
-                return True
-            except Exception:
-                return False
-
-        for atom in mol.GetAtoms():
-            try:
-                if atom.GetChiralTag() == Chem.ChiralType.CHI_UNSPECIFIED:
-                    continue
-                if _needs_stereo_h(atom):
-                    need.add(int(atom.GetIdx()))
-            except Exception:
-                continue
-        for legacy in (False, True):
-            try:
-                for cen in Chem.FindMolChiralCenters(
-                    mol,
-                    includeUnassigned=True,
-                    includeCIP=True,
-                    useLegacyImplementation=legacy,
-                ):
-                    idx = int(cen[0])
-                    if _needs_stereo_h(mol.GetAtomWithIdx(idx)):
-                        need.add(idx)
-            except Exception:
-                pass
-        try:
-            for si in Chem.FindPotentialStereo(mol):
-                type_name = str(getattr(si, "type", "") or "")
-                if "Tetrahedral" not in type_name and "Atom_Tetrahedral" not in type_name:
-                    continue
-                idx = int(si.centeredOn)
-                if _needs_stereo_h(mol.GetAtomWithIdx(idx)):
-                    need.add(idx)
-        except Exception:
-            pass
-        return sorted(need)
+        """Tetrahedral centers that need an explicit stereo-H (ST-1.2)."""
+        return stereocenter_indices_needing_explicit_h(mol)
 
     def _add_stereochemical_hydrogens(self, mol: Chem.Mol) -> Chem.Mol:
         """
@@ -812,33 +705,8 @@ class SketchWidgetRdkitMixin:
 
     @staticmethod
     def _kekulize_for_sketch_orders(mol: Chem.Mol) -> None:
-        """
-        Localize aromatic bonds to single/double for sketcher bond orders.
-
-        Sanitize / AddHs re-aromatize after an earlier Kekulize; call this immediately
-        before copying RDKit bonds into sketch ``order`` values.
-        """
-        if mol is None or mol.GetNumAtoms() == 0:
-            return
-        try:
-            Chem.Kekulize(mol, clearAromaticFlags=True)
-            return
-        except Exception:
-            pass
-        # Some charged / edge-case rings fail in-place; try on a copy and copy types back.
-        try:
-            tmp = Chem.Mol(mol)
-            Chem.Kekulize(tmp, clearAromaticFlags=True)
-        except Exception:
-            return
-        try:
-            for b_src, b_dst in zip(tmp.GetBonds(), mol.GetBonds()):
-                b_dst.SetBondType(b_src.GetBondType())
-                b_dst.SetIsAromatic(False)
-            for a_src, a_dst in zip(tmp.GetAtoms(), mol.GetAtoms()):
-                a_dst.SetIsAromatic(False)
-        except Exception:
-            pass
+        """Localize aromatic bonds to single/double for sketcher bond orders."""
+        kekulize_for_sketch_orders(mol)
 
     def load_from_rdkit_mol(
         self, mol: Chem.Mol, center: QPoint | None = None, preserve_existing_2d: bool = False

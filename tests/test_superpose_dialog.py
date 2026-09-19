@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
 from molmanager.ui.dialogs.mol_tools import SuperposeDialog
 from molmanager.workers import SuperposeParams, SuperposeStructuresParams
@@ -106,8 +106,8 @@ def test_superpose_dialog_ring_and_pattern_params(qapp):  # noqa: ARG001
 
 
 def test_open_superpose_keeps_table_selectable(qapp):  # noqa: ARG001
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtWidgets import QAbstractItemView
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QAbstractItemView
 
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
 

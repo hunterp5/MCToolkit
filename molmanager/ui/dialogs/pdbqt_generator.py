@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFileDialog,
@@ -36,6 +36,7 @@ from PyQt5.QtWidgets import (
 
 from rdkit import Chem
 
+from ...platform_support.session_log import record_ui_log
 from ...workers.pdbqt_generator import PdbqtGenRequest, PdbqtGenSignals, PdbqtGeneratorWorker
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 
@@ -209,6 +210,7 @@ class PdbqtGeneratorDialog(QDialog):
         if not t:
             return
         self.log.append(t)
+        record_ui_log(t, name="molmanager.ui.pdbqt")
 
     def _selected_rows_mols(self, src: str) -> list[tuple[int, Chem.Mol]]:
         app = self.parent_app

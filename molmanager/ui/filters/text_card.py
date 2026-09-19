@@ -16,8 +16,8 @@
 
 """Text / regex filter card."""
 
-from PyQt5.QtCore import QTimer, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QTimer, Signal
+from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QLineEdit,
@@ -40,8 +40,8 @@ from .card_chrome import (
 class TextFilterCard(_FilterCardDragMixin, _FilterCardEnableInvertMixin, QFrame):
     """Filter rows by text in a chosen column (partial or exact, case optional)."""
 
-    changed = pyqtSignal()
-    removed = pyqtSignal(object)
+    changed = Signal()
+    removed = Signal(object)
 
     def __init__(self, columns: list[str], app):
         super().__init__()

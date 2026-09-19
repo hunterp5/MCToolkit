@@ -22,8 +22,8 @@ import threading
 
 import numpy as np
 import pandas as pd
-from PyQt5 import sip
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+import shiboken6
+from PySide6.QtCore import QObject, QRunnable, Signal
 
 from ..analysis.dimensionality_reduction import (
     DimensionReductionResult,
@@ -45,7 +45,7 @@ def _safe_emit(obj, emitter_name: str, *args) -> None:
     if obj is None:
         return
     try:
-        if sip.isdeleted(obj):
+        if not shiboken6.isValid(obj):
             return
     except Exception:
         return
@@ -56,8 +56,8 @@ def _safe_emit(obj, emitter_name: str, *args) -> None:
 
 
 class DimensionReductionSignals(QObject):
-    finished = pyqtSignal(object)
-    failed = pyqtSignal(str)
+    finished = Signal(object)
+    failed = Signal(str)
 
 
 class DimensionReductionWorker(QRunnable):

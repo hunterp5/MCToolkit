@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from contextlib import suppress
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QMessageBox
 
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 

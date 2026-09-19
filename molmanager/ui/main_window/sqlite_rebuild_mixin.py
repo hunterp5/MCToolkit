@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from contextlib import nullcontext
 
-from PyQt5.QtCore import QTimer
+from PySide6.QtCore import QTimer
 
 from ...platform_support.config import load_config
 from ...storage import SqliteTableStore

@@ -16,8 +16,8 @@
 
 """Numeric range filter card."""
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -40,8 +40,8 @@ from .range_slider import RangeSlider
 
 
 class FilterCard(_FilterCardDragMixin, _FilterCardEnableInvertMixin, QFrame):
-    changed = pyqtSignal()
-    removed = pyqtSignal(object)
+    changed = Signal()
+    removed = Signal(object)
 
     def __init__(self, props, app, initial_property: str | None = None):
         super().__init__()

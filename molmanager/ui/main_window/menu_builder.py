@@ -21,7 +21,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from PyQt5.QtWidgets import QAction, QMenu, QMenuBar
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QMenu, QMenuBar
 
 from .menu_spec import (
     KIND_ACTION,
@@ -44,6 +45,9 @@ def install_menu_specs(window: Any, menubar: QMenuBar, specs: Sequence[MenuItem]
             raise ValueError(f"top-level menu item must be a submenu or settings, got {item.kind}")
         menu = menubar.addMenu(item.title)
         _install_into_menu(window, menu, item)
+    # PySide6 drops QAction wrappers from addMenu unless Python holds them;
+    # collecting the wrapper deletes the C++ QMenu (including window._help_menu).
+    window._qt_kept_menubar_actions = list(menubar.actions())
 
 
 def _install_into_menu(window: Any, menu: QMenu, spec: MenuItem) -> None:
@@ -58,6 +62,13 @@ def _install_into_menu(window: Any, menu: QMenu, spec: MenuItem) -> None:
             menu.addSeparator()
         elif item.kind == KIND_SUBMENU:
             child = menu.addMenu(item.title)
+            acts = menu.actions()
+            if acts:
+                kept = getattr(window, "_qt_kept_menu_actions", None)
+                if kept is None:
+                    kept = []
+                    window._qt_kept_menu_actions = kept
+                kept.append(acts[-1])
             _install_into_menu(window, child, item)
         elif item.kind == KIND_UNDO:
             act = window._bind_hotkey(item.hotkey, window._undo_stack.createUndoAction(window))

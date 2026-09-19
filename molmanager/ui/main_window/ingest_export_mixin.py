@@ -20,8 +20,8 @@ import re
 import threading
 from contextlib import nullcontext
 
-from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from ...platform_support.config import load_config
 from ...table.table_file_formats import TABLE_OPEN_FILTER, TABLE_SAVE_FILTER

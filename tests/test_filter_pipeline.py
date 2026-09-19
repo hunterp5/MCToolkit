@@ -289,7 +289,7 @@ def test_substructure_async_multi_card_handoff(qapp, monkeypatch):  # noqa: ARG0
 
 
 def test_reorder_filter_card_updates_list_and_layout(qapp):  # noqa: ARG001
-    from PyQt5.QtWidgets import QVBoxLayout
+    from PySide6.QtWidgets import QVBoxLayout
 
     from molmanager.ui.filters.cards import FilterCardsHost, filter_card_drop_index
 

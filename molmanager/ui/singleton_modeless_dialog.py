@@ -23,7 +23,7 @@ import weakref
 from collections.abc import Callable
 from typing import Any
 
-from PyQt5.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget
 
 from .qt_widget_utils import qobject_is_deleted
 
@@ -60,9 +60,9 @@ def reuse_or_show_modeless_singleton(
     dlg = getattr(host, attr_name, None)
     if dlg is not None:
         try:
-            from PyQt5 import sip
+            import shiboken6
 
-            if sip.isdeleted(dlg):
+            if not shiboken6.isValid(dlg):
                 setattr(host, attr_name, None)
                 dlg = None
         except Exception:

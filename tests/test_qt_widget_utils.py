@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QEvent, QObject, QPoint, QPointF, Qt
-from PyQt5.QtGui import QWheelEvent
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, Qt
+from PySide6.QtGui import QWheelEvent
+from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QDoubleSpinBox,
@@ -91,6 +91,16 @@ def test_append_viewer_log_forwards_when_present():
     assert seen == ["line"]
 
 
+def test_append_viewer_log_records_session_log_without_viewer():
+    from molmanager.platform_support.session_log import session_log_buffer
+
+    session_log_buffer().clear()
+    append_viewer_log(None, "no viewer")
+    entries, _seq, _gen = session_log_buffer().snapshot()
+    assert [e.message for e in entries] == ["no viewer"]
+    assert entries[0].source == "ui"
+
+
 def test_unfocused_spin_and_combo_do_not_eat_wheel(qapp):
     scroll, spin, combo = _scroll_host(qapp)
     received: list[QObject] = []
@@ -132,7 +142,7 @@ def test_focused_spin_still_accepts_wheel(qapp):
 
 
 def test_unipka_cuda_hint_shows_once(qapp, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMessageBox, QWidget
+    from PySide6.QtWidgets import QMessageBox, QWidget
 
     from molmanager.ui.pka_gpu_hint import maybe_remind_unipka_cuda_wheel
 

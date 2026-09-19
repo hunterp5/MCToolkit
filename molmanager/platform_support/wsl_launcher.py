@@ -40,7 +40,7 @@ _CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 def _settings_value() -> str:
     try:
-        from PyQt5.QtCore import QSettings
+        from PySide6.QtCore import QSettings
     except ImportError:
         return ""
     raw = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SETTINGS_KEY_WSL, "")
@@ -48,7 +48,7 @@ def _settings_value() -> str:
 
 
 def _set_settings_value(path: str) -> None:
-    from PyQt5.QtCore import QSettings
+    from PySide6.QtCore import QSettings
 
     QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_WSL, str(path or "").strip())
 

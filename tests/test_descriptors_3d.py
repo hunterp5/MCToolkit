@@ -224,7 +224,7 @@ def test_packed_confs_from_ingest_structure_column(qapp):  # noqa: ARG001
 
 
 def test_property_dialog_3d_tab(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QLabel
+    from PySide6.QtWidgets import QLabel
 
     from molmanager.ui.dialogs.properties import PropertyDialog
 

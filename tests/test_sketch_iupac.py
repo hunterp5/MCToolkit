@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint
-from PyQt5.QtWidgets import QWidget
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QWidget
 
 from molmanager.ui.sketcher.bonds import (
     BOND_STEREO_HASH,
@@ -272,7 +272,7 @@ def test_iupac_stereo_descriptor_labels(qapp) -> None:  # noqa: ARG001
     c._stereo_label_node_ids = {0}
     c._alkene_ez_by_bond_index = {0: "E"}
     # Painting helpers must accept standard CIP codes without error.
-    from PyQt5.QtGui import QImage, QPainter
+    from PySide6.QtGui import QImage, QPainter
 
     img = QImage(240, 200, QImage.Format_ARGB32)
     img.fill(0)
@@ -404,7 +404,7 @@ def test_structure_issue_report_levels(qapp) -> None:  # noqa: ARG001
     style = c._acs_style()
     font_pt = style.label_font_pt
     # Reproduce clearance math: dist must exceed double_bond_offset.
-    from PyQt5.QtGui import QFontMetrics
+    from PySide6.QtGui import QFontMetrics
     from molmanager.ui.sketcher.iupac_style import iupac_structure_font
 
     pt = max(7, int(round(float(font_pt) * 0.72)))
@@ -413,7 +413,7 @@ def test_structure_issue_report_levels(qapp) -> None:  # noqa: ARG001
     text_clear = max(float(fm.height()) * 0.55, float(pt) * 0.65)
     dist = clear_bond + text_clear + 3.0
     assert dist > float(style.double_bond_offset_px) + float(fm.height()) * 0.4
-    from PyQt5.QtGui import QImage, QPainter
+    from PySide6.QtGui import QImage, QPainter
 
     img = QImage(220, 160, QImage.Format_ARGB32)
     img.fill(0)
@@ -424,7 +424,7 @@ def test_structure_issue_report_levels(qapp) -> None:  # noqa: ARG001
 
 
 def test_iupac_structure_font_plain_roman() -> None:
-    from PyQt5.QtGui import QFont
+    from PySide6.QtGui import QFont
     from molmanager.ui.sketcher.iupac_style import iupac_structure_font
 
     f = iupac_structure_font(12)
@@ -501,7 +501,7 @@ def test_cleanup_selected_requires_two_atoms(qapp) -> None:  # noqa: ARG001
     w.select_mode = True
     w.selected_nodes = [0]
     assert w.cleanup_layout_2d_selected() is False
-    from PyQt5.QtWidgets import QMenu
+    from PySide6.QtWidgets import QMenu
 
     menu = QMenu()
     w._add_cleanup_selected_action(menu)
@@ -525,7 +525,7 @@ def test_iupac_orientation_heteroatom_right() -> None:
 
 
 def test_near_collinear_skipped_for_sulfur_and_phosphorus() -> None:
-    from PyQt5.QtCore import QPoint
+    from PySide6.QtCore import QPoint
 
     from molmanager.ui.sketcher.bonds import _bond_make
     from molmanager.ui.sketcher.iupac_validate import validate_iupac_sketch

@@ -33,7 +33,7 @@ _MENU_SPEC = (
 
 def test_menu_spec_source_does_not_import_qt():
     text = _MENU_SPEC.read_text(encoding="utf-8")
-    assert "PyQt5" not in text
+    assert "PySide6" not in text
     assert "QtWidgets" not in text
 
 

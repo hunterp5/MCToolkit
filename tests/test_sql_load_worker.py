@@ -21,7 +21,7 @@ from __future__ import annotations
 import sqlite3
 import threading
 
-from PyQt5.QtCore import QObject
+from PySide6.QtCore import QObject
 
 from molmanager.platform_support.tool_progress import ToolProgressState
 from molmanager.workers.sql_load_worker import SqlLoadParseResult, SqlLoadSignals, SqlLoadWorker

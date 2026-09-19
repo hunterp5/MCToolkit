@@ -92,7 +92,7 @@ def bind_mixin_methods(
 ) -> None:
     """Legacy bridge: copy mixin callables onto *collaborator* with *app* as ``self``.
 
-    Existing progress / write / session / WorkspaceTools adapters still use this so
+    Existing session / ingest / WorkspaceTools adapters still use this so
     historical mixin bodies keep a window-shaped ``self``. **Do not use for new
     collaborator code** — implement methods on the collaborator and read the kernel
     via ``self._app``.

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
 from molmanager.table.structure_depiction_layout import (
     DEFAULT_STRUCTURE_DEPICT_HEIGHT,

@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -80,8 +80,8 @@ def add_openmm_platform_combo(combo: QComboBox) -> QComboBox:
 class ProteinPrepareDialog(ProteinStructureSourceMixin, QDialog):
     """Options for Protein Viewer → Tools → Prepare → Fast Prepare."""
 
-    prepared = pyqtSignal(str)
-    smina_prepared = pyqtSignal(object)
+    prepared = Signal(str)
+    smina_prepared = Signal(object)
     _source_output_tag = "prepared"
     _source_tmp_prefix = "molmanager_prepare_in_"
     _source_tool_title = "Fast Prepare"
@@ -863,7 +863,7 @@ class ProteinPrepareDialog(ProteinStructureSourceMixin, QDialog):
                 ),
             )
             return
-        from PyQt5.QtCore import QThreadPool
+        from PySide6.QtCore import QThreadPool
 
         QThreadPool.globalInstance().start(ProteinPrepareWorker(req, signals=self._signals))
 

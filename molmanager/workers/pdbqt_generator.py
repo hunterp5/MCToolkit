@@ -24,7 +24,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+from PySide6.QtCore import QObject, QRunnable, Signal
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
@@ -74,9 +74,9 @@ class PdbqtGenRequest:
 
 
 class PdbqtGenSignals(QObject):
-    finished = pyqtSignal(str, str)  # receptor_pdbqt_path, ligand_pdbqt_path (empty if skipped)
-    failed = pyqtSignal(str)
-    logged = pyqtSignal(str)
+    finished = Signal(str, str)  # receptor_pdbqt_path, ligand_pdbqt_path (empty if skipped)
+    failed = Signal(str)
+    logged = Signal(str)
 
 
 def _read_sdf_molecules(path: Path) -> list[Chem.Mol]:

@@ -93,7 +93,7 @@ def test_missing_topic_html():
 
 
 def test_open_user_guide_dialog_by_id(qapp):  # noqa: ARG001
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     host = QWidget()
     open_user_guide_dialog(host, guide_id="tools_gnina")
@@ -113,7 +113,7 @@ def test_user_guide_dialog_does_not_cycle_with_its_host(qapp):  # noqa: ARG001
     """See the same guard in test_citations_catalog: a cycle here crashes Qt on collect."""
     import weakref
 
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     host = QWidget()
     open_user_guide_dialog(host, guide_id="overview")

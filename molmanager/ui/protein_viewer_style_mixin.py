@@ -23,8 +23,8 @@ import json
 import logging
 from dataclasses import replace
 
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QAction, QActionGroup, QColorDialog, QMessageBox
+from PySide6.QtGui import QColor, QAction, QActionGroup
+from PySide6.QtWidgets import QColorDialog, QMessageBox
 
 from ..protein.hydrogen_bonds import (
     HBOND_KIND_COMPLEX,

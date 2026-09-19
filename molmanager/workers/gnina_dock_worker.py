@@ -22,7 +22,7 @@ import os
 import time
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, QProcess, QProcessEnvironment, QTimer
+from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer
 
 from ..platform_support.bundled_paths import gnina_launch_env
 from ..docking.pose_file_io import (

@@ -23,7 +23,7 @@ import threading
 from collections.abc import Sequence
 
 import numpy as np
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem
 from rdkit import DataStructs
 from rdkit.ML.Cluster import Butina

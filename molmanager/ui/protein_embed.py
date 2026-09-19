@@ -25,7 +25,7 @@ import logging
 import shutil
 from pathlib import Path
 
-from PyQt5.QtCore import (
+from PySide6.QtCore import (
     QEvent,
     QEventLoop,
     QObject,
@@ -33,11 +33,11 @@ from PyQt5.QtCore import (
     QTimer,
     QUrl,
     Qt,
-    pyqtSignal,
-    pyqtSlot,
+    Signal,
+    Slot,
 )
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtGui import QKeySequence
+from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from ..platform_support.qt_webengine_flags import webengine_views_supported
 from ..workers.process_pool_utils import application_is_shutting_down
@@ -48,24 +48,24 @@ logger = logging.getLogger(__name__)
 
 
 class _ProteinViewerBridge(QObject):
-    atom_picked = pyqtSignal(str)
-    delete_requested = pyqtSignal()
-    undo_requested = pyqtSignal()
-    redo_requested = pyqtSignal()
+    atom_picked = Signal(str)
+    delete_requested = Signal()
+    undo_requested = Signal()
+    redo_requested = Signal()
 
-    @pyqtSlot(str)
+    @Slot(str)
     def atomPicked(self, payload: str) -> None:
         self.atom_picked.emit(payload)
 
-    @pyqtSlot()
+    @Slot()
     def deleteRequested(self) -> None:
         self.delete_requested.emit()
 
-    @pyqtSlot()
+    @Slot()
     def undoRequested(self) -> None:
         self.undo_requested.emit()
 
-    @pyqtSlot()
+    @Slot()
     def redoRequested(self) -> None:
         self.redo_requested.emit()
 
@@ -73,11 +73,11 @@ class _ProteinViewerBridge(QObject):
 class ProteinEmbedView(QWidget):
     """WebEngine host for the protein 3Dmol canvas."""
 
-    atom_picked = pyqtSignal(str)
-    delete_requested = pyqtSignal()
-    undo_requested = pyqtSignal()
-    redo_requested = pyqtSignal()
-    web_ready = pyqtSignal()
+    atom_picked = Signal(str)
+    delete_requested = Signal()
+    undo_requested = Signal()
+    redo_requested = Signal()
+    web_ready = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -147,8 +147,9 @@ class ProteinEmbedView(QWidget):
             return
         self._bootstrapped = True
         try:
-            from PyQt5.QtWebChannel import QWebChannel
-            from PyQt5.QtWebEngineWidgets import QWebEngineSettings, QWebEngineView
+            from PySide6.QtWebChannel import QWebChannel
+            from PySide6.QtWebEngineCore import QWebEngineSettings
+            from PySide6.QtWebEngineWidgets import QWebEngineView
 
             web = QWebEngineView(self)
             web.setFocusPolicy(Qt.StrongFocus)
@@ -187,7 +188,7 @@ class ProteinEmbedView(QWidget):
         except Exception as e:
             logger.warning("Protein 3D view unavailable: %s", e, exc_info=True)
             self._status.setText(
-                "3D view unavailable.\nInstall matching PyQtWebEngine and restart with "
+                "3D view unavailable.\nInstall matching PySide6 and restart with "
                 "`python -m molmanager`."
             )
 
@@ -434,5 +435,5 @@ class ProteinEmbedView(QWidget):
             logger.debug("Protein viewer getView failed", exc_info=True)
             return None
         QTimer.singleShot(max(1, int(timeout_ms)), loop.quit)
-        loop.exec_()
+        loop.exec()
         return box["value"] if box["done"] else None

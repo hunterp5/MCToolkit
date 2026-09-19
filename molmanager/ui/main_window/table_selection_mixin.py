@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QEventLoop, QItemSelection, QItemSelectionModel, Qt, QTimer
-from PyQt5.QtWidgets import QAbstractItemView, QApplication
+from PySide6.QtCore import QEventLoop, QItemSelection, QItemSelectionModel, Qt, QTimer
+from PySide6.QtWidgets import QAbstractItemView, QApplication
 from rdkit import Chem
 
 from ...platform_support.config import load_config

@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtWidgets import QHBoxLayout, QLayout, QSizePolicy, QWidget
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtWidgets import QHBoxLayout, QLayout, QSizePolicy, QWidget
 
 from .dockable_plot_chrome import apply_plot_chrome_glyphs
 from .dockable_plot_constants import (
@@ -337,18 +337,18 @@ def embed_in_plot_pane(widget: QWidget | None) -> None:
         return
     state = getattr(widget, _PANE_EMBED_ATTR, None)
     if state is None:
-        layout_constraints: list[tuple[QLayout, int]] = []
+        layout_constraints: list[tuple[QLayout, object]] = []
         for layout in _iter_widget_layouts(widget):
             try:
-                constraint = int(layout.sizeConstraint())
+                constraint = layout.sizeConstraint()
             except RuntimeError:
                 continue
-            if constraint == int(QLayout.SetMinimumSize):
+            if constraint == QLayout.SetMinimumSize:
                 layout_constraints.append((layout, constraint))
         state = {
             "min": QSize(widget.minimumSize()),
             "max": QSize(widget.maximumSize()),
-            "policy": QSizePolicy(widget.sizePolicy()),
+            "policy": widget.sizePolicy(),
             "layouts": layout_constraints,
         }
         setattr(widget, _PANE_EMBED_ATTR, state)

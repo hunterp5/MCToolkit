@@ -264,7 +264,7 @@ def test_fetch_rejects_bad_count():
 
 
 def test_random_molecule_dialog_source_field(qapp):  # noqa: ARG001
-    pytest.importorskip("PyQt5.QtWidgets")
+    pytest.importorskip("PySide6.QtWidgets")
     from molmanager.ui.dialogs.random_molecule import RandomMoleculeDialog
 
     dlg = RandomMoleculeDialog(None)

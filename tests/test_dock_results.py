@@ -18,9 +18,11 @@
 
 from __future__ import annotations
 
+from qt_helpers import qt_submenu
+
 import pytest
 
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
 
 def _live_pose_panel(parent, win):
@@ -69,7 +71,7 @@ def test_dock_menu_includes_smina(qapp):  # noqa: ARG001
     assert not any(t.startswith("Smina") for t in labels)
     viewer_act = next(a for a in dock_actions if a.text().replace("&", "") == "Pose Browser")
     assert viewer_act.isEnabled() is False
-    tools = next(a.menu() for a in w.menuBar().actions() if a.text().replace("&", "") == "Tools")
+    tools = qt_submenu(w.menuBar(), "Tools")
     assert not any(a.text().replace("&", "") == "Dock" for a in tools.actions())
     predict = None
     for act in tools.actions():
@@ -137,7 +139,7 @@ def test_predict_viewers_enable_when_table_has_results(qapp):  # noqa: ARG001
 
 
 def test_open_dock_results_window_lists_smina_fields(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QSizePolicy
+    from PySide6.QtWidgets import QSizePolicy
     from rdkit import Chem
     from rdkit.Geometry import Point3D
 
@@ -209,7 +211,7 @@ def test_open_dock_results_window_lists_smina_fields(qapp, tmp_path, monkeypatch
 
 
 def test_dock_viewer_reopens_closed_results_window(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
     from rdkit import Chem
     from rdkit.Geometry import Point3D
 
@@ -348,7 +350,7 @@ def test_pose_browser_nav_steps_ligand_groups(qapp, tmp_path, monkeypatch):  # n
 
 
 def test_pose_browser_table_has_horizontal_scrollbar(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtCore import Qt
+    from PySide6.QtCore import Qt
 
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
     from molmanager.ui.main_window import ChemistryWorkspaceWindow

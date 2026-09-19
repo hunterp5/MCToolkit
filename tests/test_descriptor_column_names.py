@@ -18,23 +18,25 @@
 
 from __future__ import annotations
 
-from molmanager.ui.main_window.column_write_mixin import ColumnWriteMixin
+from molmanager.ui.table_write_service import TableWriteService
 
 
-class _Host(ColumnWriteMixin):
+class _Host:
     def __init__(self, headers: list[str]) -> None:
         self.headers = list(headers)
 
 
 def test_unique_table_column_names_skips_existing() -> None:
-    host = _Host(["ID_HIDDEN", "Structure", "LogP", "LogP (1)"])
-    names = host._unique_table_column_names(["LogP", "TPSA"])
+    names = TableWriteService(
+        _Host(["ID_HIDDEN", "Structure", "LogP", "LogP (1)"])
+    )._unique_table_column_names(["LogP", "TPSA"])
     assert names == ["LogP (2)", "TPSA"]
 
 
 def test_unique_table_column_names_dedupes_batch() -> None:
-    host = _Host(["ID_HIDDEN", "Structure"])
-    names = host._unique_table_column_names(["Score", "Score", "Other"])
+    names = TableWriteService(_Host(["ID_HIDDEN", "Structure"]))._unique_table_column_names(
+        ["Score", "Score", "Other"]
+    )
     assert names == ["Score", "Score (1)", "Other"]
 
 
@@ -114,8 +116,8 @@ def test_on_calc_finished_chunks_large_write(qapp, monkeypatch):  # noqa: ARG001
     w._table_model.append_rows_batch([(i, {}) for i in range(4)])
     w.mols = {}
     w.next_oid = 4
-    monkeypatch.setattr(w, "_calc_writeback_async_min_rows", lambda: 2)
-    monkeypatch.setattr(w, "_calc_writeback_chunk_rows", lambda: 2)
+    monkeypatch.setattr(w.table_write, "_calc_writeback_async_min_rows", lambda: 2)
+    monkeypatch.setattr(w.table_write, "_calc_writeback_chunk_rows", lambda: 2)
     completed: list[list[str]] = []
     written = w.on_calc_finished(
         [(i, {"LogP": str(i)}) for i in range(4)],

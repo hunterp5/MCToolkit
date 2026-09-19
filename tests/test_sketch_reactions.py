@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint
-from PyQt5.QtWidgets import QLabel, QWidget
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QLabel, QWidget
 
 from molmanager.table.structure_depiction_layout import reaction_depict_size
 from molmanager.chem.reaction_file_io import (

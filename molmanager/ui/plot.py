@@ -42,9 +42,9 @@ __all__ = [
 import tempfile
 from pathlib import Path
 
-from PyQt5.QtCore import QEvent, Qt, QTimer
-from PyQt5.QtWebChannel import QWebChannel
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtWebChannel import QWebChannel
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QGroupBox,

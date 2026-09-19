@@ -131,7 +131,7 @@ def test_clear_selection_button_is_glyph(qapp):  # noqa: ARG001
 
 
 def test_pane_title_chrome_is_readable(qapp):  # noqa: ARG001
-    from PyQt5.QtWidgets import QLineEdit, QPushButton
+    from PySide6.QtWidgets import QLineEdit, QPushButton
 
     from molmanager.ui.dockable_plot import (
         _FOOTER_TEXT_FONT_PX,
@@ -154,7 +154,7 @@ def test_pane_title_chrome_is_readable(qapp):  # noqa: ARG001
 
 
 def test_browser_nav_buttons_use_skip_glyphs(qapp):  # noqa: ARG001
-    from PyQt5.QtWidgets import QCheckBox, QHBoxLayout, QLayout, QPushButton, QSizePolicy, QWidget
+    from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLayout, QPushButton, QSizePolicy, QWidget
 
     from molmanager.ui.dockable_plot import add_centered_browser_nav, style_browser_nav_buttons
     from molmanager.ui.dockable_plot_constants import (
@@ -208,7 +208,7 @@ def test_browser_nav_buttons_use_skip_glyphs(qapp):  # noqa: ARG001
 
 
 def test_pane_nav_arrow_glyph_is_vector(qapp):  # noqa: ARG001
-    from PyQt5.QtWidgets import QPushButton
+    from PySide6.QtWidgets import QPushButton
 
     from molmanager.ui.dockable_plot import (
         _GLYPH_BTN_SIZE,
@@ -227,7 +227,7 @@ def test_pane_nav_arrow_glyph_is_vector(qapp):  # noqa: ARG001
 
 
 def test_floating_title_edit_installed_when_undocked(qapp):  # noqa: ARG001
-    from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
     from molmanager.ui.dockable_plot import position_floating_title_edit, sync_docked_footer_bar
 
@@ -259,7 +259,7 @@ def test_floating_title_edit_installed_when_undocked(qapp):  # noqa: ARG001
 
 
 def test_browser_skips_floating_title_edit(qapp):  # noqa: ARG001
-    from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
     from molmanager.ui.dockable_plot import sync_docked_footer_bar
 

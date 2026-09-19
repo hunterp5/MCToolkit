@@ -24,8 +24,8 @@ import logging
 import shutil
 from pathlib import Path
 
-from PyQt5.QtCore import QTemporaryDir, QTimer, QUrl, Qt
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QTemporaryDir, QTimer, QUrl, Qt
+from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
     QHBoxLayout,
@@ -162,7 +162,8 @@ class Molecule3DViewerWidget(Mol3DConfMixin, Mol3DChromeMixin, QWidget):
         try:
             if not webengine_views_supported():
                 raise RuntimeError("WebEngine is unavailable on this platform plugin")
-            from PyQt5.QtWebEngineWidgets import QWebEngineSettings, QWebEngineView
+            from PySide6.QtWebEngineCore import QWebEngineSettings
+            from PySide6.QtWebEngineWidgets import QWebEngineView
 
             web = QWebEngineView(self)
             web.setContextMenuPolicy(Qt.NoContextMenu)
@@ -219,7 +220,7 @@ class Molecule3DViewerWidget(Mol3DConfMixin, Mol3DChromeMixin, QWidget):
                 "The embedded viewer could not start.\n\n"
                 f"{err}\n\n"
                 "Typical fixes:\n"
-                "• Install PyQtWebEngine with the same major.minor version as PyQt5 (e.g. both 5.15.x).\n"
+                '• Reinstall PySide6 so Qt WebEngine is present (pip install -U "PySide6>=6.8,<6.9").\n'
                 "• Start molmanager with `python -m molmanager` so QtWebEngine loads before the GUI initializes.\n\n"
                 "Close this window when you are done."
             )

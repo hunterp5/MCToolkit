@@ -1,6 +1,6 @@
 # Existing silent-exception sites for BLE001, S110, and SIM105.
 # Shrink this list when a file is cleaned; never add files.
-# ratchet-max-files = 225
+# ratchet-max-files = 224
 
 [lint.per-file-ignores]
 "molmanager/analysis/activity_cliff_analysis.py" = ["BLE001"]
@@ -13,11 +13,16 @@
 "molmanager/chem/fragment_decomposition.py" = ["BLE001"]
 "molmanager/chem/fragment_disconnect.py" = ["BLE001", "S110"]
 "molmanager/chem/fragment_recomposition_filters.py" = ["BLE001"]
+"molmanager/chem/alkene_stereo.py" = ["BLE001"]
+"molmanager/chem/contracted_labels.py" = ["BLE001", "S110"]
 "molmanager/chem/molecule_conversion.py" = ["BLE001", "S110"]
 "molmanager/chem/rdkit_fingerprints.py" = ["BLE001"]
 "molmanager/chem/reaction_extract.py" = ["BLE001"]
 "molmanager/chem/reaction_file_io.py" = ["BLE001"]
 "molmanager/chem/smarts_macropatterns.py" = ["BLE001"]
+"molmanager/chem/sketch_atoms.py" = ["BLE001", "S110"]
+"molmanager/chem/sketch_mol.py" = ["BLE001", "S110", "SIM105"]
+"molmanager/chem/sketch_physical_properties.py" = ["BLE001"]
 "molmanager/chem/structure_2d_depiction.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/chem/structure_hydrogens.py" = ["BLE001"]
 "molmanager/chem/structure_neutralize.py" = ["BLE001"]
@@ -99,7 +104,6 @@
 "molmanager/ui/filters/numeric_card.py" = ["BLE001"]
 "molmanager/ui/filters/substructure_card.py" = ["BLE001"]
 "molmanager/ui/main_window/app_lifecycle_mixin.py" = ["BLE001", "SIM105"]
-"molmanager/ui/main_window/column_write_mixin.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/main_window/conformer_writeback.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/main_window/conformers_tools_mixin.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/main_window/dock_tools_mixin.py" = ["BLE001", "S110", "SIM105"]
@@ -153,11 +157,7 @@
 "molmanager/ui/qt_widget_utils.py" = ["BLE001"]
 "molmanager/ui/sali_map.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/singleton_modeless_dialog.py" = ["BLE001", "S110"]
-"molmanager/ui/sketcher/alkene_stereo.py" = ["BLE001"]
-"molmanager/ui/sketcher/chem.py" = ["BLE001", "S110"]
-"molmanager/ui/sketcher/contracted_labels.py" = ["BLE001", "S110"]
 "molmanager/ui/sketcher/dialog.py" = ["BLE001", "S110", "SIM105"]
-"molmanager/ui/sketcher/element_colors.py" = ["BLE001"]
 "molmanager/ui/sketcher/iupac_orient.py" = ["BLE001"]
 "molmanager/ui/sketcher/iupac_style.py" = ["BLE001", "S110"]
 "molmanager/ui/sketcher/physical_properties.py" = ["BLE001"]
@@ -166,7 +166,6 @@
 "molmanager/ui/sketcher/widget.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/sketcher/widget_events.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/sketcher/widget_painting.py" = ["BLE001"]
-"molmanager/ui/sketcher/wildcards.py" = ["BLE001"]
 "molmanager/ui/tool_dialog_scope.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/workers/biotransformer_worker.py" = ["BLE001", "SIM105"]
 "molmanager/workers/bulk_similarity.py" = ["BLE001"]

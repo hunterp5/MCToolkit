@@ -21,9 +21,9 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from PyQt5.QtCore import Qt, QThreadPool
-from PyQt5.QtGui import QCloseEvent
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, QThreadPool
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
     QDialogButtonBox,
@@ -266,7 +266,7 @@ class ProteinSequenceMsaDialog(QDialog):
 
     def _paste_fasta(self) -> None:
         dlg = _PasteFastaDialog(self)
-        if dlg.exec_() != QDialog.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             return
         records = parse_fasta(dlg.text())
         if not records:

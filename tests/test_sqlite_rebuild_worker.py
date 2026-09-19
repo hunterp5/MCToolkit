@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt5.QtCore import QThreadPool
+from PySide6.QtCore import QThreadPool
 
 from molmanager.storage import SqliteTableStore
 from molmanager.workers import SqliteRebuildSignals, SqliteRebuildWorker
@@ -91,7 +91,7 @@ def test_schedule_sqlite_rebuild_writes_off_gui(qapp, tmp_path):  # noqa: ARG001
     """GUI exports cell text; worker writes/indexes the mirror."""
     import time
 
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
 
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
 

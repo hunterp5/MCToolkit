@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint
-from PyQt5.QtWidgets import QApplication, QMenu, QWidget
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
 from molmanager.ui.sketcher.bonds import _bond_make
 from molmanager.ui.sketcher.customize_elements import default_toolbar_element_symbols

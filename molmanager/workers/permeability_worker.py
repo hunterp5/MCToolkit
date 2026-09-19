@@ -22,8 +22,8 @@ import logging
 import threading
 import time
 
-from PyQt5 import sip
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+import shiboken6
+from PySide6.QtCore import QObject, QRunnable, Signal
 
 from ..predictions.permeability_prediction import (
     format_permeability_row,
@@ -39,7 +39,7 @@ def _safe_emit(obj, emitter_name: str, *args) -> None:
     if obj is None:
         return
     try:
-        if sip.isdeleted(obj):
+        if not shiboken6.isValid(obj):
             return
     except Exception:
         return
@@ -52,8 +52,8 @@ def _safe_emit(obj, emitter_name: str, *args) -> None:
 class PermeabilityPredictorSignals(QObject):
     """Emits from :class:`PermeabilityPredictorWorker` (owned on the GUI thread)."""
 
-    finished = pyqtSignal(list)  # list[tuple[int, dict[str, str]]]
-    failed = pyqtSignal(str)
+    finished = Signal(list)  # list[tuple[int, dict[str, str]]]
+    failed = Signal(str)
 
 
 class PermeabilityPredictorWorker(QRunnable):

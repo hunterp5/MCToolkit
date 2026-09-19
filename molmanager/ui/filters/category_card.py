@@ -16,8 +16,8 @@
 
 """Categorical value filter card."""
 
-from PyQt5.QtCore import QTimer, Qt, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QFrame,
@@ -42,8 +42,8 @@ from .card_chrome import (
 class CategoryFilterCard(_FilterCardDragMixin, _FilterCardEnableInvertMixin, QFrame):
     """Filter rows by membership in selected distinct values of a column."""
 
-    changed = pyqtSignal()
-    removed = pyqtSignal(object)
+    changed = Signal()
+    removed = Signal(object)
     _BLANK = "\u0000blank\u0000"
 
     def __init__(self, columns: list[str], app):

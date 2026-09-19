@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import QCheckBox, QComboBox, QGroupBox, QVBoxLayout, QWidget
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QCheckBox, QComboBox, QGroupBox, QVBoxLayout, QWidget
 
 from .plot_hover import default_hover_column_preferences, hover_column_choices
 
@@ -29,8 +29,8 @@ from .plot_hover import default_hover_column_preferences, hover_column_choices
 class PlotOnHoverControls(QGroupBox):
     """Plotter-style On Hover settings reused by analysis plot option dialogs."""
 
-    changed = pyqtSignal()
-    persist_changed = pyqtSignal()
+    changed = Signal()
+    persist_changed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("On Hover", parent)

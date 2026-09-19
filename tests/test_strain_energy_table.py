@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QTableWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QTableWidget
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
@@ -77,7 +77,7 @@ def test_strain_energy_viewer_shows_conformer_table(qapp) -> None:  # noqa: ARG0
     assert viewer._strain_table is not None
     assert viewer._strain_table.rowCount() == 3
     assert viewer._conf_nav_host is not None
-    from PyQt5.QtWidgets import QHBoxLayout
+    from PySide6.QtWidgets import QHBoxLayout
 
     assert isinstance(viewer._conf_nav_host.layout(), QHBoxLayout)
     assert viewer._btn_conf_back.parent() is viewer._conf_nav_host
@@ -96,14 +96,14 @@ def test_strain_energy_viewer_shows_conformer_table(qapp) -> None:  # noqa: ARG0
     assert not viewer._cb_superpose.isChecked()
     assert getattr(viewer, "_radio_conf_one", None) is None
     assert getattr(viewer, "_conf_label", None) is None
-    from PyQt5.QtWidgets import QAbstractItemView
+    from PySide6.QtWidgets import QAbstractItemView
 
     assert viewer._strain_table.selectionMode() == QAbstractItemView.ExtendedSelection
     assert viewer._cb_only_selected_confs is not None
     assert viewer._cb_only_selected_confs.text() == "Selected Conformers"
     table = viewer._strain_table
     table.selectRow(0)
-    from PyQt5.QtCore import QItemSelectionModel
+    from PySide6.QtCore import QItemSelectionModel
 
     sm = table.selectionModel()
     assert sm is not None
@@ -163,7 +163,7 @@ def test_conf_legend_only_when_selected_conformers_checked(qapp) -> None:  # noq
     table = viewer._strain_table
     assert table is not None
     table.selectRow(0)
-    from PyQt5.QtCore import QItemSelectionModel
+    from PySide6.QtCore import QItemSelectionModel
 
     sm = table.selectionModel()
     assert sm is not None

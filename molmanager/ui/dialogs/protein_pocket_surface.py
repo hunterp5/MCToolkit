@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -107,8 +107,8 @@ def normalize_pocket_surface_settings(raw: dict | None) -> dict:
 class ProteinPocketSurfaceDialog(QDialog):
     """Options for Protein Viewer → Render → Pocket Surface."""
 
-    settings_changed = pyqtSignal(dict)
-    show_toggled = pyqtSignal(bool)
+    settings_changed = Signal(dict)
+    show_toggled = Signal(bool)
 
     def __init__(self, viewer, parent=None) -> None:
         super().__init__(parent or viewer)

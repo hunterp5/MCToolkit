@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import time
 
-from PyQt5.QtCore import QTimer
+from PySide6.QtCore import QTimer
 
 from ...platform_support.config import load_config
 from .cards import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard

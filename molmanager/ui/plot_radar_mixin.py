@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
 from ..plotting.plot_radar import SPOKE_NONE, resolve_entry_row_oid
 

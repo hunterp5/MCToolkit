@@ -24,7 +24,7 @@ import threading
 import time
 from dataclasses import dataclass
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem, DataStructs
 
 from ..platform_support.tool_progress import ToolProgressState, report_tool_progress

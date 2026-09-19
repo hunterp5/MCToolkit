@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QWidget
 
 from molmanager.ui.singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
@@ -52,8 +52,8 @@ def test_reuse_or_show_modeless_singleton_can_create_without_showing(qapp):  # n
 
 
 def test_helper_clears_attr_when_on_destroyed_is_omitted(qapp) -> None:
-    from PyQt5 import sip
-    from PyQt5.QtWidgets import QDialog
+    import shiboken6
+    from PySide6.QtWidgets import QDialog
 
     host = QWidget()
     host._dlg = None
@@ -63,7 +63,7 @@ def test_helper_clears_attr_when_on_destroyed_is_omitted(qapp) -> None:
 
     w = reuse_or_show_modeless_singleton(host, "_dlg", factory)
     assert host._dlg is w
-    sip.delete(w)
+    shiboken6.delete(w)
     qapp.processEvents()
     assert host._dlg is None
     host.deleteLater()
@@ -81,7 +81,7 @@ def test_teardown_slot_does_not_keep_the_host_alive(qapp) -> None:  # noqa: ARG0
     """
     import weakref
 
-    from PyQt5.QtWidgets import QDialog
+    from PySide6.QtWidgets import QDialog
 
     host = QWidget()
     host._dlg = None
@@ -96,7 +96,7 @@ def test_teardown_slot_survives_a_collected_cycle(qapp) -> None:
     """Freeing host and dialog together through the collector must not abort the process."""
     import gc
 
-    from PyQt5.QtWidgets import QDialog
+    from PySide6.QtWidgets import QDialog
 
     host = QWidget()
     host._dlg = None
@@ -109,8 +109,8 @@ def test_teardown_slot_survives_a_collected_cycle(qapp) -> None:
 
 
 def test_optional_on_destroyed_runs_after_attr_is_cleared(qapp) -> None:
-    from PyQt5 import sip
-    from PyQt5.QtWidgets import QDialog
+    import shiboken6
+    from PySide6.QtWidgets import QDialog
 
     host = QWidget()
     host._dlg = None
@@ -123,7 +123,7 @@ def test_optional_on_destroyed_runs_after_attr_is_cleared(qapp) -> None:
         seen.append(getattr(host, "_dlg", "missing"))
 
     w = reuse_or_show_modeless_singleton(host, "_dlg", factory, extra)
-    sip.delete(w)
+    shiboken6.delete(w)
     qapp.processEvents()
     assert host._dlg is None
     assert seen == [None]
@@ -193,7 +193,7 @@ def test_destroyed_callback_does_not_clear_replaced_singleton(qapp) -> None:
 
 def test_destroyed_callback_skips_deleted_qobject_host(qapp) -> None:
     """Quit must not call QObject methods on a host that Qt already destroyed."""
-    from PyQt5.QtWidgets import QDialog
+    from PySide6.QtWidgets import QDialog
 
     host = QWidget()
     host._dlg = None

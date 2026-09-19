@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QEvent, QObject, Qt, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -255,7 +255,7 @@ def sync_floating_title_chrome(widget: QWidget | None, *, floating: bool) -> Non
 class PlotTitlesControls(QGroupBox):
     """Titles section for Plot Options: figure title and axis names."""
 
-    changed = pyqtSignal()
+    changed = Signal()
 
     def __init__(self, parent: QWidget | None = None, *, include_z: bool = False):
         super().__init__("Titles", parent)

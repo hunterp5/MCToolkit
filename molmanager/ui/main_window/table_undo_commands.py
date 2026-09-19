@@ -21,9 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QUndoCommand
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QPixmap, QUndoCommand
 from rdkit import Chem
 
 from ...platform_support.config import load_config

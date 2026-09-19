@@ -427,7 +427,7 @@ def _first_biotransformer_jar(directory: Path) -> Path | None:
 def configured_biotransformer_jar_text() -> str:
     """User-picked JAR path from QSettings (empty when unset)."""
     try:
-        from PyQt5.QtCore import QSettings
+        from PySide6.QtCore import QSettings
     except ImportError:
         return ""
     raw = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SETTINGS_KEY_BIOTRANSFORMER_JAR, "")
@@ -436,7 +436,7 @@ def configured_biotransformer_jar_text() -> str:
 
 def set_configured_biotransformer_jar(path: str | Path | None) -> None:
     """Persist a user-picked BioTransformer JAR, or clear the setting when ``path`` is empty."""
-    from PyQt5.QtCore import QSettings
+    from PySide6.QtCore import QSettings
 
     settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
     text = str(path or "").strip()

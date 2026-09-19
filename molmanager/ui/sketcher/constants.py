@@ -16,82 +16,25 @@
 
 """Sketcher shared constants: elements, clipboard prefix, ring templates, geometry scale."""
 
-from rdkit.Chem.rdchem import BondDir
-
-# Wedge/hash in mol blocks: RDKit uses BEGINDASH for hash; some versions also expose BEGINHASH.
-BOND_DIR_HASH = getattr(BondDir, "BEGINHASH", BondDir.BEGINDASH)
-
-CLIPBOARD_PREFIX = "MOLMANAGER_SKETCHCLIP:v1:"
-
-WILDCARD_ELEMENT = "*"
-DEFAULT_WILDCARD_ELEMENTS = ["C", "N", "O"]
-
-SKETCH_ELEMENT_SYMBOLS: tuple[str, ...] = (
-    "H",
-    "D",
-    "T",
-    "C",
-    "N",
-    "O",
-    "F",
-    "P",
-    "S",
-    "Cl",
-    "Br",
-    "I",
-    "B",
-    "Si",
-    "Se",
-    "Li",
-    "Na",
-    "K",
-    "Rb",
-    "Cs",
-    "Mg",
-    "Ca",
-    "Sr",
-    "Ba",
-    "Al",
-    "Ti",
-    "V",
-    "Cr",
-    "Mn",
-    "Fe",
-    "Co",
-    "Ni",
-    "Cu",
-    "Zn",
-    "Ga",
-    "Ge",
-    "As",
-    "Mo",
-    "Ru",
-    "Rh",
-    "Pd",
-    "Ag",
-    "Cd",
-    "Sn",
-    "Sb",
-    "Te",
-    "W",
-    "Re",
-    "Os",
-    "Ir",
-    "Pt",
-    "Au",
-    "Hg",
-    "Tl",
-    "Pb",
-    "Bi",
-    "Gd",
-    "Lu",
-    "Eu",
-    "Sm",
+from ...chem.sketch_bond_dir import BOND_DIR_HASH
+from ...chem.sketch_symbols import (
+    DEFAULT_WILDCARD_ELEMENTS,
+    ELEMENT_UPPER_MAP,
+    SKETCH_ELEMENT_SYMBOLS,
+    WILDCARD_ELEMENT,
+    WILDCARD_ELEMENT_CHOICES,
 )
 
-WILDCARD_ELEMENT_CHOICES = SKETCH_ELEMENT_SYMBOLS
+__all__ = [
+    "BOND_DIR_HASH",
+    "DEFAULT_WILDCARD_ELEMENTS",
+    "ELEMENT_UPPER_MAP",
+    "SKETCH_ELEMENT_SYMBOLS",
+    "WILDCARD_ELEMENT",
+    "WILDCARD_ELEMENT_CHOICES",
+]
 
-ELEMENT_UPPER_MAP: dict[str, str] = {s.upper(): s for s in SKETCH_ELEMENT_SYMBOLS}
+CLIPBOARD_PREFIX = "MOLMANAGER_SKETCHCLIP:v1:"
 
 # Full informal PT families for every sketchable symbol (customize + left-panel grouping).
 ELEMENT_FAMILY_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (

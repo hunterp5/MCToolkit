@@ -18,10 +18,16 @@ from __future__ import annotations
 
 import re
 
-from PyQt5.QtCore import QEvent, QPoint, QSize, Qt, QTimer
-from PyQt5.QtGui import QCursor, QFont, QIcon, QKeySequence
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer
+from PySide6.QtGui import (
+    QCursor,
+    QFont,
+    QIcon,
+    QKeySequence,
     QAction,
+    QShortcut,
+)
+from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QDialog,
@@ -35,7 +41,6 @@ from PyQt5.QtWidgets import (
     QMenuBar,
     QMessageBox,
     QPushButton,
-    QShortcut,
     QSizePolicy,
     QSplitter,
     QVBoxLayout,
@@ -751,7 +756,7 @@ class SketcherDialog(QDialog):
         )
         menu.addAction(self._act_canvas_cleanup_selected)
         menu.addAction(self._act_canvas_add_hs)
-        menu.exec_(global_pos)
+        menu.exec(global_pos)
 
     def _on_view_zoom_in(self) -> None:
         self.canvas.zoom_about_viewport_center(1.15, True)
@@ -1181,7 +1186,7 @@ class SketcherDialog(QDialog):
         """Settings → Customize Elements: add/remove left-panel element buttons."""
         current = getattr(self, "_visible_element_symbols", None) or load_toolbar_element_symbols()
         dlg = CustomizeElementsDialog(self, selected=current)
-        if dlg.exec_() != QDialog.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             return
         symbols = dlg.selected_symbols()
         save_toolbar_element_symbols(symbols)
@@ -1638,7 +1643,7 @@ class SketcherDialog(QDialog):
             x = x1 - hint.width()
         if x < x0:
             x = x0
-        menu.exec_(QPoint(x, y))
+        menu.exec(QPoint(x, y))
 
     def _shortcut_group(self) -> None:
         if not self.canvas.select_mode:

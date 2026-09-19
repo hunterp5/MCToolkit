@@ -22,8 +22,8 @@ Leftover window MRO adapter over ``analysis_job_support``. New tools should go o
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QMessageBox
 
 from ..analysis_job_support import (
     ensure_activity_analysis_ready,

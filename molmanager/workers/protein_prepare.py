@@ -24,7 +24,7 @@ import threading
 from concurrent.futures import FIRST_COMPLETED, BrokenExecutor, ProcessPoolExecutor, wait
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+from PySide6.QtCore import QObject, QRunnable, Signal
 
 from .process_pool_utils import (
     register_process_pool,
@@ -46,9 +46,9 @@ _OPENMM_VERSION_HINT = (
 
 
 class ProteinPrepareSignals(QObject):
-    finished = pyqtSignal(object)
-    failed = pyqtSignal(str)
-    progress = pyqtSignal(str)
+    finished = Signal(object)
+    failed = Signal(str)
+    progress = Signal(str)
 
 
 def drain_prepare_log_file(path: str | Path | None, seen: list[int], emit) -> None:

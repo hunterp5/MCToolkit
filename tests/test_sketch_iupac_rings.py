@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import math
 
-from PyQt5.QtCore import QPoint
-from PyQt5.QtWidgets import QWidget
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QWidget
 
 from molmanager.ui.sketcher.bonds import _bond_make
 from molmanager.ui.sketcher.dialog import SketcherDialog
@@ -184,7 +184,7 @@ def test_large_rings_not_circular() -> None:
 
 
 def test_macrocycle_uses_local_painter_not_rdkit(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtCore import QPoint
+    from PySide6.QtCore import QPoint
 
     from molmanager.ui.sketcher.widget import SketchWidget
 
@@ -321,7 +321,7 @@ def test_load_draws_stereo_h_when_ring_only_ligands(qapp) -> None:  # noqa: ARG0
 
 
 def test_stereo_with_wedge_not_unspecified_caution(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtCore import QPoint
+    from PySide6.QtCore import QPoint
 
     from molmanager.ui.sketcher.bonds import BOND_STEREO_WEDGE
     from molmanager.ui.sketcher.widget import SketchWidget

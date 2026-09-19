@@ -19,7 +19,7 @@
 A workflow module decides; it never presents. Three rules keep this layer useful:
 
 1. Take plain data or a narrow protocol. Never accept the main window / ``AppKernel``.
-2. Return a result object. Never raise a dialog, touch a widget, or import ``PyQt5``.
+2. Return a result object. Never raise a dialog, touch a widget, or import ``PySide6``.
 3. Let the UI adapter read widgets, call the workflow, and render the result.
 
 The distinction from ``molmanager/services/``: a service computes a value from its

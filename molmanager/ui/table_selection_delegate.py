@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QAbstractProxyModel, QModelIndex, Qt
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QApplication, QStyle, QStyleOptionViewItem, QStyledItemDelegate
+from PySide6.QtCore import QAbstractProxyModel, QModelIndex, Qt
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionViewItem, QStyledItemDelegate
 
 from .compound_table_model import CompoundTableModel
 

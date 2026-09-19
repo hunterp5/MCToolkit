@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
@@ -197,7 +197,7 @@ class DiverseSubsetDialog(QDialog):
             oid = int(m.row_oid(r))
             if oid not in oid_set:
                 continue
-            out[oid] = app._table_cell_text(r, hidx) or ""
+            out[oid] = app.cell_text(r, hidx) or ""
         return out
 
     def _prepare_structure_inputs(

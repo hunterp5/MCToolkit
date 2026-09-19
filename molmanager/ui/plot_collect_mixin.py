@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
 from ..analysis.medchem_space import snapshot_scope_row_indices
 from ..plotting.plot_series_collect import collect_histogram_values, collect_scatter_points

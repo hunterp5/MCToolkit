@@ -22,8 +22,8 @@ import time
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -67,7 +67,7 @@ if TYPE_CHECKING:
     from ..main_window import ChemistryWorkspaceWindow
 
 try:
-    from PyQt5.QtWebEngineWidgets import QWebEngineView  # noqa: F401
+    from PySide6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
 
     _HAS_WEB = True
 except ImportError:
@@ -122,7 +122,7 @@ class MedChemPlotPanel(DockableResultPlotPanel):
         else:
             self._plot_view = None
             self._plot_placeholder = QLabel(
-                "Install PyQtWebEngine to show the interactive plot in this window."
+                "Install PySide6 to show the interactive plot in this window."
             )
             self._plot_placeholder.setWordWrap(True)
             self._plot_placeholder.setAlignment(Qt.AlignCenter)

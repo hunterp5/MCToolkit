@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QKeyEvent, QTextCursor, QTextOption
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont, QKeyEvent, QTextCursor, QTextOption
+from PySide6.QtWidgets import (
     QDialog,
     QLabel,
     QMenu,
@@ -49,10 +49,10 @@ _MUTATE_AMINO_ACIDS = tuple(
 class _ChainSequenceEdit(QPlainTextEdit):
     """One-letter sequence display; right-click Mutate, Delete removes residues."""
 
-    sequence_committed = pyqtSignal(str)
-    residue_range_changed = pyqtSignal(int, int)
-    focus_requested = pyqtSignal()
-    mutate_requested = pyqtSignal(str)
+    sequence_committed = Signal(str)
+    residue_range_changed = Signal(int, int)
+    focus_requested = Signal()
+    mutate_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -144,7 +144,7 @@ class _ChainSequenceEdit(QPlainTextEdit):
             return
         self._select_clicked_residue(pos)
         menu = self._make_context_menu()
-        menu.exec_(self.viewport().mapToGlobal(pos))
+        menu.exec(self.viewport().mapToGlobal(pos))
 
     def set_sequence(self, sequence: str, *, select_start: int = -1, select_end: int = -1) -> None:
         self._applying = True
@@ -183,10 +183,10 @@ class _ChainSequenceEdit(QPlainTextEdit):
 class ProteinSequenceDialog(QDialog):
     """Modeless sequence viewer/editor for polymer chains in the Protein Viewer."""
 
-    residue_selection_changed = pyqtSignal(list)
-    residues_mutated = pyqtSignal(list)
-    residues_deleted = pyqtSignal(list)
-    focus_residues_requested = pyqtSignal(list)
+    residue_selection_changed = Signal(list)
+    residues_mutated = Signal(list)
+    residues_deleted = Signal(list)
+    focus_residues_requested = Signal(list)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)

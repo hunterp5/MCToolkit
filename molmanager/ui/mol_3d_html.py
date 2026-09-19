@@ -153,7 +153,7 @@ def _log_webengine_js_console(level, message, line, source) -> None:
         logger.debug("3D viewer (benign): %s", msg)
         return
     try:
-        from PyQt5.QtWebEngineWidgets import QWebEnginePage
+        from PySide6.QtWebEngineCore import QWebEnginePage
     except Exception:
         logger.debug("3D viewer JS: %s", msg)
         return
@@ -179,7 +179,7 @@ def _wire_webengine_console_logger(web) -> None:
         # windowing surface (QT_QPA_PLATFORM=offscreen), so leave Qt's default page there.
         if not webengine_views_supported():
             return
-        from PyQt5.QtWebEngineWidgets import QWebEnginePage
+        from PySide6.QtWebEngineCore import QWebEnginePage
 
         cls = getattr(_wire_webengine_console_logger, "_page_cls", None)
         if cls is None:

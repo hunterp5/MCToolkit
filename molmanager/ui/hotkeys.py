@@ -21,9 +21,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from PyQt5.QtCore import QSettings
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import QAction
+from PySide6.QtCore import QSettings
+from PySide6.QtGui import QKeySequence, QAction
 
 _SETTINGS_ORG = "MolManager"
 _SETTINGS_APP = "MolManager"
@@ -142,7 +141,7 @@ def effective_shortcuts(action_id: str, overrides: dict[str, list[str]] | None =
 
 
 def apply_shortcuts_to_action(action: QAction, shortcuts: list[str]) -> None:
-    from PyQt5.QtCore import Qt
+    from PySide6.QtCore import Qt
 
     if shortcuts:
         action.setShortcuts([QKeySequence(s) for s in shortcuts])

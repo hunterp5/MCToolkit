@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from qt_helpers import qt_submenu
+
 import types
 from typing import Protocol
 
@@ -37,7 +39,6 @@ from molmanager.ui.gui_settings_mixin import GuiSettingsMixin
 from molmanager.ui.main_window.activity_cliff_mixin import ActivityCliffMixin
 from molmanager.ui.main_window.app_lifecycle_mixin import AppLifecycleMixin
 from molmanager.ui.main_window.app_menu_mixin import AppMenuMixin
-from molmanager.ui.main_window.column_write_mixin import ColumnWriteMixin
 from molmanager.ui.main_window.conformers_tools_mixin import ConformersToolsMixin
 from molmanager.ui.main_window.descriptors_tools_mixin import DescriptorsToolsMixin
 from molmanager.ui.main_window.dock_tools_mixin import DockToolsMixin
@@ -57,6 +58,7 @@ from molmanager.ui.main_window.table_menu_mixin import TableMenuMixin
 from molmanager.ui.main_window.table_search_mixin import TableSearchMixin
 from molmanager.ui.main_window.table_ui_mixin import TableUIMixin
 from molmanager.ui.main_window.viewer_openers_mixin import ViewerOpenersMixin
+from molmanager.ui.table_write_service import TableWriteHost, TableWriteService
 from molmanager.ui.tool_dialog_scope import ToolScopeHost
 
 # Frozen allowlist: adding a ChemistryWorkspaceWindow mixin base must fail this set.
@@ -243,7 +245,7 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
     assert w.table_write._unique_table_column_names(["LogP"]) == ["LogP"]
     unsatisfied = {
         role.__name__: sorted(n for n in _protocol_members(role) if not hasattr(w, n))
-        for role in (*_kernel_roles(), ToolScopeHost)
+        for role in (*_kernel_roles(), ToolScopeHost, TableWriteHost)
     }
     assert not {k: v for k, v in unsatisfied.items() if v}, unsatisfied
     w.close()
@@ -281,7 +283,7 @@ def test_qsar_menu_action_opens_with_triggered_bool(qapp) -> None:  # noqa: ARG0
         w.open_qsar_dialog(False)
         assert w._qsar_dialog is not None
         mb = w.menuBar()
-        data = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Data")
+        data = qt_submenu(mb, "Data")
         act = next(a for a in data.actions() if a.text().replace("&", "").startswith("QSAR"))
         act.trigger()
         assert w._qsar_dialog is not None
@@ -293,6 +295,5 @@ def test_qsar_menu_action_opens_with_triggered_bool(qapp) -> None:  # noqa: ARG0
 
 
 def test_column_write_host_unique_names() -> None:
-    host = type("H", (ColumnWriteMixin,), {})()
-    host.headers = ["ID_HIDDEN", "Structure", "LogP"]
-    assert host._unique_table_column_names(["LogP"]) == ["LogP (1)"]
+    host = types.SimpleNamespace(headers=["ID_HIDDEN", "Structure", "LogP"])
+    assert TableWriteService(host)._unique_table_column_names(["LogP"]) == ["LogP (1)"]

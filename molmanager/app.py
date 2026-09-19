@@ -22,8 +22,8 @@ from .platform_support.qt_webengine_flags import configure_qtwebengine_quiet_log
 
 configure_qtwebengine_quiet_logs()
 
-from PyQt5.QtCore import QTimer  # noqa: E402
-from PyQt5.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtCore import QTimer  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +43,11 @@ def _preload_qt_webengine() -> None:
     """Import QtWebEngine *before* ``QApplication`` — required for Chromium/QtWebEngineProcess on Windows."""
     configure_qtwebengine_quiet_logs()
     try:
-        import PyQt5.QtWebEngineWidgets  # noqa: F401 — side effect: registers WebEngine with Qt
+        import PySide6.QtWebEngineWidgets  # noqa: F401 — side effect: registers WebEngine with Qt
     except Exception as e:
         logger.warning(
             "QtWebEngine could not be loaded (%s: %s). The in-app 3D viewer will fall back to the system browser "
-            "unless PyQtWebEngine is installed and matches your PyQt5 version.",
+            "unless the PySide6 WebEngine extra is installed.",
             type(e).__name__,
             e,
         )
@@ -126,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
                 logger.warning("Startup file load failed (%s): %s", path, e, exc_info=True)
 
         QTimer.singleShot(0, _do_open)
-    code = app.exec_()
+    code = app.exec()
     try:
         from .workers.process_pool_utils import reap_after_gui_exit
 

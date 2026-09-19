@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QPainter
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPainter
+from PySide6.QtWidgets import (
     QButtonGroup,
     QDialog,
     QDialogButtonBox,
@@ -85,9 +85,9 @@ class _TableAlignButton(QToolButton):
 class FontSettingsDialog(QDialog):
     """Pick application-wide and table font sizes; emits preview signals while adjusting."""
 
-    app_font_size_previewed = pyqtSignal(int)
-    table_font_size_previewed = pyqtSignal(int)
-    table_align_previewed = pyqtSignal(str, str)
+    app_font_size_previewed = Signal(int)
+    table_font_size_previewed = Signal(int)
+    table_align_previewed = Signal(str, str)
 
     def __init__(
         self,

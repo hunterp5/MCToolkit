@@ -22,7 +22,7 @@ import logging
 import threading
 import time
 
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+from PySide6.QtCore import QObject, QRunnable, Signal
 from rdkit import Chem
 
 from molmanager.ionization.unipka_ensembles import (
@@ -47,8 +47,8 @@ def protomer_percent_column_name(ph: float) -> str:
 
 
 class ProtonateSignals(QObject):
-    finished = pyqtSignal(list)  # list[tuple[int, str, float, str]] oid, smiles, pct, pKa
-    failed = pyqtSignal(str)
+    finished = Signal(list)  # list[tuple[int, str, float, str]] oid, smiles, pct, pKa
+    failed = Signal(str)
 
 
 def _dominant_smiles_from_microstates(states, pH: float) -> tuple[str, float] | None:

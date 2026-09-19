@@ -36,8 +36,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PyQt5.QtCore import QTimer  # noqa: E402
-from PyQt5.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtCore import QTimer  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
 
 def main() -> None:
@@ -63,7 +63,7 @@ def main() -> None:
     if not args.no_webengine:
         configure_qtwebengine_quiet_logs()
         with contextlib.suppress(ImportError):
-            import PyQt5.QtWebEngineWidgets  # noqa: F401
+            import PySide6.QtWebEngineWidgets  # noqa: F401
 
     from molmanager.ui.main_window.chemistry_workspace_window import ChemistryWorkspaceWindow
 
@@ -236,7 +236,7 @@ def main() -> None:
     QTimer.singleShot(int(args.max_s * 1000), app.quit)
     QTimer.singleShot(0, lambda: win.apply_saved_session_from_file(args.path))
 
-    app.exec_()
+    app.exec()
 
     wall = state["t_done"] if state["done"] else (time.perf_counter() - t_start)
     big = [s for s in stalls if s[1] >= 100.0]

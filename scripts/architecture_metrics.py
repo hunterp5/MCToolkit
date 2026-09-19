@@ -45,6 +45,10 @@ BASELINE_PATH = ROOT / "architecture-ratchet.json"
 
 SKIP_DIR_NAMES = frozenset({"__pycache__", "static"})
 
+# Bindings that count as "the UI imported Qt". Keep retired names so a stray
+# PyQt5 import cannot slip back in without tripping the ratchet.
+QT_IMPORT_ROOTS = frozenset({"PySide6", "PyQt5", "PyQt6", "PySide2", "shiboken6"})
+
 # The composition root wires the Qt window to everything else, so it imports molmanager.ui
 # by definition. Every other module outside molmanager/ui/ must not.
 ENTRY_POINTS = frozenset({"molmanager/app.py"})
@@ -293,7 +297,7 @@ def collect() -> Metrics:
             if not isinstance(node, (ast.Import, ast.ImportFrom)):
                 continue
             roots = _root_module(node)
-            imports_qt = imports_qt or bool({"PyQt5", "PyQtWebEngine"} & roots)
+            imports_qt = imports_qt or bool(QT_IMPORT_ROOTS & roots)
             imports_rdkit = imports_rdkit or "rdkit" in roots
             imports_ui = imports_ui or _imports_ui(node)
 
@@ -341,7 +345,7 @@ def _test_shape() -> tuple[int, int]:
     """Count test modules, and how many of them need Qt to run.
 
     A module needs Qt when it imports Qt or ``molmanager.ui``, or takes the ``qapp``
-    fixture. Mentioning ``PyQt5`` in a string does not count.
+    fixture. Mentioning ``PySide6`` in a string does not count.
     """
     total = 0
     gui = 0
@@ -353,7 +357,7 @@ def _test_shape() -> tuple[int, int]:
         needs_qt = False
         for node in ast.walk(tree):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
-                needs_qt = needs_qt or bool({"PyQt5", "PyQtWebEngine"} & _root_module(node))
+                needs_qt = needs_qt or bool(QT_IMPORT_ROOTS & _root_module(node))
                 needs_qt = needs_qt or _imports_ui(node)
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 args = node.args

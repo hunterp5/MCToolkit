@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 from molmanager.ui.dialogs.workspace_layout_picker import (
     LayoutPreviewTile,

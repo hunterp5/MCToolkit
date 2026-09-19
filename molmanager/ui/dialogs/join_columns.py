@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -171,10 +171,10 @@ class JoinColumnsDialog(QDialog):
 
             a = m.backing_value_for_row_header(r, left) or ""
             if not a:
-                a = app._table_cell_text(r, li) or ""
+                a = app.cell_text(r, li) or ""
             b = m.backing_value_for_row_header(r, right) or ""
             if not b:
-                b = app._table_cell_text(r, ri) or ""
+                b = app.cell_text(r, ri) or ""
             if a.strip() or b.strip():
                 return a, b
         return ("", "")

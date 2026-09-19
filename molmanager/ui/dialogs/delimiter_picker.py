@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Generic, TypeVar
 
-from PyQt5.QtWidgets import QComboBox, QFormLayout, QLineEdit
+from PySide6.QtWidgets import QComboBox, QFormLayout, QLineEdit
 
 _ModeT = TypeVar("_ModeT", bound=str)
 

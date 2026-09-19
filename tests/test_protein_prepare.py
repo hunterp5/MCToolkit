@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from qt_helpers import qt_submenu
+
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -1263,7 +1265,7 @@ def test_prepare_water_keys_from_manager_selection(qapp, tmp_path):  # noqa: ARG
 
 
 def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QGroupBox, QMenuBar, QMessageBox, QTextEdit
+    from PySide6.QtWidgets import QGroupBox, QMenuBar, QMessageBox, QTextEdit
 
     from molmanager.ui.protein_prepare_dialog import ProteinPrepareDialog
     from molmanager.ui.protein_viewer import ProteinViewerDialog
@@ -1272,17 +1274,15 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     mb = dlg.findChild(QMenuBar)
     labels = [a.text().replace("&", "") for a in mb.actions()]
     assert "Tools" in labels
-    tools_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
-    prepare_menu = next(
-        a.menu() for a in tools_menu.actions() if a.text().replace("&", "") == "Prepare"
-    )
+    tools_menu = qt_submenu(mb, "Tools")
+    prepare_menu = qt_submenu(tools_menu, "Prepare")
     prepare_labels = [a.text().replace("&", "") for a in prepare_menu.actions()]
     assert any(label.startswith("Fast Prepare") for label in prepare_labels)
     assert any(label.startswith("PDBFixer") for label in prepare_labels)
     assert any("pdb2pqr" in label for label in prepare_labels)
     assert any(label.startswith("Minimize") for label in prepare_labels)
     assert any(label.startswith("Dock File") for label in prepare_labels)
-    render_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Render")
+    render_menu = qt_submenu(mb, "Render")
     render_labels = [a.text().replace("&", "") for a in render_menu.actions()]
     assert "Docking Box" in render_labels
 
@@ -1731,7 +1731,7 @@ def test_prepare_dialog_cif_bonds_count_as_ligand_template(qapp, tmp_path):  # n
 
 
 def test_prepare_dialog_requires_smiles_for_holo_protonation(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     from molmanager.ui.protein_prepare_dialog import ProteinPrepareDialog
     from molmanager.ui.protein_viewer import ProteinViewerDialog
@@ -1988,7 +1988,7 @@ def test_prepare_tool_dialogs_close_after_finished(qapp, tmp_path, monkeypatch):
 def test_dock_file_dialog_defaults_and_auto_open_smina(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from types import SimpleNamespace
 
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     from molmanager.docking.search_box import DockingBox
     from molmanager.ui.dialogs.protein_dock_file import ProteinDockFileDialog

@@ -23,7 +23,7 @@ import re
 import threading
 import time
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 
 from ..platform_support.exception_policy import log_swallowed_exception
 from ..table.calculator_expressions import eval_custom_calc_expression

@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import QEvent, QItemSelectionModel, QSize, Qt, QTimer
-from PyQt5.QtGui import QBrush, QFont, QIcon, QImage, QPixmap
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent, QItemSelectionModel, QSize, Qt, QTimer
+from PySide6.QtGui import QBrush, QFont, QIcon, QImage, QPixmap
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QComboBox,
@@ -810,7 +810,7 @@ class SelectionBrowserWidget(QWidget):
             item.setIcon(QIcon(scaled))
             item.setText("")
         else:
-            cell_fn = getattr(app, "_table_cell_text", None)
+            cell_fn = getattr(app, "cell_text", None) or getattr(app, "_table_cell_text", None)
             text = ""
             if callable(cell_fn):
                 text = (cell_fn(logical_row, col) or "").strip()

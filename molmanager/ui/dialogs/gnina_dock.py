@@ -24,9 +24,9 @@ import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
-from PyQt5.QtCore import QProcess, Qt
-from PyQt5.QtGui import QCloseEvent, QKeySequence
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QProcess, Qt
+from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
+from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
@@ -40,7 +40,6 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QShortcut,
     QSpinBox,
     QStackedWidget,
     QVBoxLayout,

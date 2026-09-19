@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QItemSelectionModel, QTimer
-from PyQt5.QtWidgets import QAbstractItemView
+from PySide6.QtCore import QItemSelectionModel, QTimer
+from PySide6.QtWidgets import QAbstractItemView
 
 from .table_selection import item_selection_for_view_rows
 

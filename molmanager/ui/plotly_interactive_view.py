@@ -25,9 +25,9 @@ import webbrowser
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QObject, QTimer, QUrl, pyqtSlot
-from PyQt5.QtWebChannel import QWebChannel
-from PyQt5.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtCore import QObject, QTimer, QUrl, Slot
+from PySide6.QtWebChannel import QWebChannel
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 from plotly import graph_objects as go
 
 from .plot_hover import hover_cards_payload, resolve_default_hover_columns
@@ -54,25 +54,25 @@ class _PlotBridge(QObject):
         super().__init__(view)
         self._view = view
 
-    @pyqtSlot(int, bool)
+    @Slot(int, bool)
     def pointClicked(self, point_index: int, additive: bool = False) -> None:  # noqa: N802
         self._view._on_plot_point_clicked(int(point_index), additive=bool(additive))
 
-    @pyqtSlot(str, bool)
+    @Slot(str, bool)
     def pointsSelected(self, points_json: str, additive: bool = False) -> None:  # noqa: N802
         self._view._on_plot_points_selected(points_json, additive=bool(additive))
 
-    @pyqtSlot(int)
+    @Slot(int)
     def radarTraceClicked(self, trace_index: int) -> None:  # noqa: N802
         handler = getattr(self._view, "_on_radar_trace_clicked", None)
         if callable(handler):
             handler(int(trace_index))
 
-    @pyqtSlot(int, result=str)
+    @Slot(int, result=str)
     def hoverCardJson(self, point_index: int) -> str:  # noqa: N802
         return self._view._hover_card_json_for_point(int(point_index))
 
-    @pyqtSlot(str, result=str)
+    @Slot(str, result=str)
     def hoverCardsJson(self, indices_json: str) -> str:  # noqa: N802
         return self._view._hover_card_json_for_points(indices_json)
 

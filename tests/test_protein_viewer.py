@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from qt_helpers import qt_submenu
+
 from pathlib import Path
 
 from molmanager.protein.structure_components import (
@@ -734,7 +736,7 @@ def test_atom_pick_selects_individual_atom(qapp, tmp_path):  # noqa: ARG001
 
 
 def test_edit_structure_two_atom_pick_and_atom_delete(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMenuBar, QMessageBox
+    from PySide6.QtWidgets import QMenuBar, QMessageBox
 
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
@@ -743,7 +745,7 @@ def test_edit_structure_two_atom_pick_and_atom_delete(qapp, tmp_path, monkeypatc
     dlg = ProteinViewerDialog()
     dlg.load_structure_path(path)
     mb = dlg.findChild(QMenuBar)
-    edit_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Edit")
+    edit_menu = qt_submenu(mb, "Edit")
     edit_labels = [a.text().replace("&", "") for a in edit_menu.actions() if a.text().strip()]
     assert edit_labels == [
         "Undo",
@@ -784,7 +786,7 @@ def test_edit_structure_two_atom_pick_and_atom_delete(qapp, tmp_path, monkeypatc
 
 
 def test_delete_selected_residue_ligand_and_undo(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
@@ -900,9 +902,7 @@ def test_protein_menu_opens_viewer(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     labels = [a.text().replace("&", "") for a in w.menuBar().actions()]
     assert "Protein" in labels
-    protein_menu = next(
-        a.menu() for a in w.menuBar().actions() if a.text().replace("&", "") == "Protein"
-    )
+    protein_menu = qt_submenu(w.menuBar(), "Protein")
     viewer_labels = [a.text().replace("&", "") for a in protein_menu.actions()]
     assert "Viewer" in viewer_labels
     assert any(lab.startswith("Sequence") for lab in viewer_labels)
@@ -934,7 +934,7 @@ def test_log_reaches_window_bottom_with_manager(qapp):  # noqa: ARG001
 
 
 def test_manager_hide_select_delete(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     from molmanager.ui.protein_viewer import _ID_ROLE, ProteinViewerDialog
 
@@ -1017,7 +1017,7 @@ def test_manager_hide_select_delete(qapp, tmp_path, monkeypatch):  # noqa: ARG00
 
 
 def test_manager_delete_undo_redo(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMenuBar, QMessageBox
+    from PySide6.QtWidgets import QMenuBar, QMessageBox
 
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
@@ -1028,7 +1028,7 @@ def test_manager_delete_undo_redo(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     mb = dlg.findChild(QMenuBar)
     labels = [a.text().replace("&", "") for a in mb.actions()]
     assert labels[:4] == ["File", "Edit", "Tools", "Render"]
-    edit_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Edit")
+    edit_menu = qt_submenu(mb, "Edit")
     edit_labels = [a.text().replace("&", "") for a in edit_menu.actions() if a.text().strip()]
     assert edit_labels == [
         "Undo",
@@ -1062,8 +1062,8 @@ def test_manager_delete_undo_redo(qapp, tmp_path, monkeypatch):  # noqa: ARG001
 
 
 def test_manager_context_menu_duplicate(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtCore import QPoint, Qt
-    from PyQt5.QtWidgets import QMenu
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtWidgets import QMenu
 
     from molmanager.ui.protein_viewer import _ID_ROLE, ProteinViewerDialog
 
@@ -1244,9 +1244,9 @@ def test_unscoped_component_id():
 
 
 def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtTest import QTest
-    from PyQt5.QtWidgets import QMenuBar
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QMenuBar
 
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
@@ -1262,7 +1262,7 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     assert labels[:4] == ["File", "Edit", "Tools", "Render"]
     assert labels[4] == "Select"
     assert "Sequence" not in labels
-    tools_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    tools_menu = qt_submenu(mb, "Tools")
     tools_labels = [a.text().replace("&", "") for a in tools_menu.actions() if a.text().strip()]
     assert tools_labels[:2] == ["Prepare", "Pharmacophore"]
     corner = mb.cornerWidget(Qt.TopRightCorner)
@@ -1270,27 +1270,21 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     assert dlg._btn_sequence is not None
     assert dlg._btn_sequence.text() == "Sequence"
     assert dlg._btn_sequence.parent() is corner
-    select_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Select")
+    select_menu = qt_submenu(mb, "Select")
     select_labels = [a.text().replace("&", "") for a in select_menu.actions() if a.text().strip()]
     assert select_labels[:4] == ["Hide", "Show", "Focus", "Invert Selection"]
     assert "Delete" in select_labels
     assert "Clear Selection" in select_labels
     assert "Render" in select_labels
     assert "Color" in select_labels
-    select_render = next(
-        a.menu() for a in select_menu.actions() if a.text().replace("&", "") == "Render"
-    )
-    select_color = next(
-        a.menu() for a in select_menu.actions() if a.text().replace("&", "") == "Color"
-    )
+    select_render = qt_submenu(select_menu, "Render")
+    select_color = qt_submenu(select_menu, "Color")
     assert "Cartoon" in [a.text().replace("&", "") for a in select_render.actions()]
     select_render_labels = [a.text().replace("&", "") for a in select_render.actions()]
     assert "Spheres" not in select_render_labels
     assert "Wireframe" not in select_render_labels
     assert "Hydrogens" in select_render_labels
-    select_h = next(
-        a.menu() for a in select_render.actions() if a.text().replace("&", "") == "Hydrogens"
-    )
+    select_h = qt_submenu(select_render, "Hydrogens")
     assert [a.text().replace("&", "") for a in select_h.actions()] == ["All", "Polar", "None"]
     select_h_all = next(a for a in select_h.actions() if a.text().replace("&", "") == "All")
     select_h_polar = next(a for a in select_h.actions() if a.text().replace("&", "") == "Polar")
@@ -1303,7 +1297,7 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     assert dlg._hydrogen_mode() == "polar"
     assert select_h_polar.isChecked()
     assert "Custom…" in [a.text().replace("&", "") for a in select_color.actions()]
-    render_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Render")
+    render_menu = qt_submenu(mb, "Render")
     render_labels = [a.text().replace("&", "") for a in render_menu.actions() if a.text().strip()]
     assert "Protein" in render_labels
     assert "Ligand" in render_labels
@@ -1311,12 +1305,8 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     assert "Pocket" not in render_labels
     assert "All Atoms" in render_labels
     assert render_labels.index("Focus Pocket") == render_labels.index("Reset Camera") - 1
-    protein_menu = next(
-        a.menu() for a in render_menu.actions() if a.text().replace("&", "") == "Protein"
-    )
-    ligand_menu = next(
-        a.menu() for a in render_menu.actions() if a.text().replace("&", "") == "Ligand"
-    )
+    protein_menu = qt_submenu(render_menu, "Protein")
+    ligand_menu = qt_submenu(render_menu, "Ligand")
     protein_styles = [a.text().replace("&", "") for a in protein_menu.actions() if a.text().strip()]
     ligand_styles = [a.text().replace("&", "") for a in ligand_menu.actions() if a.text().strip()]
     assert "Cartoon" in protein_styles
@@ -1328,12 +1318,8 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     assert "Ball and stick" in ligand_styles
     assert "Sticks" in ligand_styles
     assert "Color" in protein_styles
-    protein_color_menu = next(
-        a.menu() for a in protein_menu.actions() if a.text().replace("&", "") == "Color"
-    )
-    ligand_color_menu = next(
-        a.menu() for a in ligand_menu.actions() if a.text().replace("&", "") == "Color"
-    )
+    protein_color_menu = qt_submenu(protein_menu, "Color")
+    ligand_color_menu = qt_submenu(ligand_menu, "Color")
     color_labels = [a.text().replace("&", "") for a in protein_color_menu.actions()]
     assert color_labels == [a.text().replace("&", "") for a in ligand_color_menu.actions()]
     assert "Default" in color_labels
@@ -1366,9 +1352,7 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     assert editor is not None
     assert editor.isReadOnly()
     ligand_menu = editor._make_context_menu()
-    ligand_mutate = next(
-        a.menu() for a in ligand_menu.actions() if a.text().replace("&", "") == "Mutate"
-    )
+    ligand_mutate = qt_submenu(ligand_menu, "Mutate")
     assert not ligand_mutate.isEnabled()
     seq.select_residue("A", "1", "")
     original = editor.toPlainText()
@@ -1376,7 +1360,7 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     assert editor.toPlainText() == original
     assert not captured
     menu = editor._make_context_menu()
-    mutate_menu = next(a.menu() for a in menu.actions() if a.text().replace("&", "") == "Mutate")
+    mutate_menu = qt_submenu(menu, "Mutate")
     assert mutate_menu is not None
     assert mutate_menu.isEnabled()
     labels = [a.text().replace("&", "") for a in mutate_menu.actions()]
@@ -1511,7 +1495,7 @@ def test_normalize_pocket_surface_settings():
 
 
 def test_pocket_surface_menu_toggle(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     from molmanager.ui.dialogs.protein_pocket_surface import ProteinPocketSurfaceDialog
     from molmanager.ui.protein_viewer import ProteinViewerDialog
@@ -1845,7 +1829,7 @@ def test_second_structure_appends_without_replacing_canvas(qapp, tmp_path, monke
 
 
 def test_delete_extra_structures_stops_overlay_work(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
@@ -1897,7 +1881,7 @@ def test_4agc_cif_axitinib_has_carbonyl_double():
 
 
 def test_save_structure_writes_active_slot(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QFileDialog, QMenuBar
+    from PySide6.QtWidgets import QFileDialog, QMenuBar
 
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
@@ -1907,7 +1891,7 @@ def test_save_structure_writes_active_slot(qapp, tmp_path, monkeypatch):  # noqa
     dlg = ProteinViewerDialog()
     dlg.load_structure_path(src)
     mb = dlg.findChild(QMenuBar)
-    file_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "File")
+    file_menu = qt_submenu(mb, "File")
     labels = [a.text().replace("&", "") for a in file_menu.actions()]
     assert "Save Structure…" in labels
     assert "Save to Session" in labels
@@ -1973,8 +1957,8 @@ def test_save_to_session_is_required_for_cms(qapp, tmp_path):  # noqa: ARG001
 
 
 def test_close_without_save_to_session_discards_live_viewer(qapp, tmp_path, monkeypatch):
-    from PyQt5.QtGui import QCloseEvent
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtGui import QCloseEvent
+    from PySide6.QtWidgets import QMessageBox
 
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
@@ -2006,8 +1990,8 @@ def test_close_without_save_to_session_discards_live_viewer(qapp, tmp_path, monk
 
 
 def test_close_save_to_session_commits_live_viewer(qapp, tmp_path, monkeypatch):
-    from PyQt5.QtGui import QCloseEvent
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtGui import QCloseEvent
+    from PySide6.QtWidgets import QMessageBox
 
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
@@ -2027,8 +2011,8 @@ def test_close_save_to_session_commits_live_viewer(qapp, tmp_path, monkeypatch):
 
 
 def test_close_cancel_keeps_protein_viewer_open(qapp, tmp_path, monkeypatch):
-    from PyQt5.QtGui import QCloseEvent
-    from PyQt5.QtWidgets import QMessageBox
+    from PySide6.QtGui import QCloseEvent
+    from PySide6.QtWidgets import QMessageBox
 
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
 

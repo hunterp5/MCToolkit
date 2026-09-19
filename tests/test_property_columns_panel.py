@@ -109,7 +109,7 @@ def test_view_conformers_omits_property_column_pickers(qapp) -> None:  # noqa: A
     assert viewer._strain_table is None
     assert viewer._conf_nav_host is not None
     assert viewer._cb_only_selected_confs is None
-    from PyQt5.QtWidgets import QHBoxLayout
+    from PySide6.QtWidgets import QHBoxLayout
 
     assert isinstance(viewer._conf_nav_host.layout(), QHBoxLayout)
     assert viewer._btn_conf_back.parent() is viewer._conf_nav_host
@@ -120,7 +120,7 @@ def test_view_conformers_omits_property_column_pickers(qapp) -> None:  # noqa: A
 
 
 def test_3d_viewer_property_timer_survives_widget_delete(qapp) -> None:
-    from PyQt5 import sip
+    import shiboken6
 
     from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget, prepare_mol_3d
     from molmanager.ui.qt_widget_utils import qobject_is_deleted
@@ -134,7 +134,7 @@ def test_3d_viewer_property_timer_survives_widget_delete(qapp) -> None:
     w.mols[0] = mol
     viewer = Molecule3DViewerWidget(mol, w, window_title="View in 3D", source_oid=0)
     assert viewer._prop_refresh_wired is True
-    sip.delete(viewer)
+    shiboken6.delete(viewer)
     assert qobject_is_deleted(viewer)
     w._table_model.dataChanged.emit(
         w._table_model.index(0, 0),

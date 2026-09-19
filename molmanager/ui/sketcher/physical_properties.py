@@ -20,29 +20,22 @@ from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from PyQt5.QtCore import QObject, QRunnable, Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QCloseEvent
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QObject, QRunnable, Qt, QTimer, Signal
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
     QLabel,
     QVBoxLayout,
 )
-from rdkit import Chem
-from rdkit.Chem import Crippen, Descriptors, QED
-
-from molmanager.descriptors.medchem_descriptors import (
-    ab_mps_score,
-    cns_mpo_score,
-    lipinski_violations,
-    ro5_pass,
-)
-from molmanager.ionization.unipka_ensembles import (
-    logd74_from_microstates,
-    pka_values_from_states,
+from molmanager.chem.sketch_physical_properties import (
+    SketchPhysicalProperties,
+    compute_ionization_properties as _compute_ionization_properties,
+    compute_rdkit_physical_properties,
+    compute_sketch_physical_properties as _compute_sketch_physical_properties,
+    copy_mol,
 )
 from molmanager.ui.qt_widget_utils import make_window_minimizable
 from molmanager.ui.threadpool_access import start_runnable_on_app_pool
@@ -57,125 +50,31 @@ _IONIZATION_ERROR_TEXT = "Error"
 _PKA_CALC_FAILED = "pKa calculation failed"
 
 
-@dataclass(frozen=True)
-class SketchPhysicalProperties:
-    """Computed properties for one sketched (or RDKit) molecule."""
-
-    mw: float | None = None
-    tpsa: float | None = None
-    logp: float | None = None
-    logd: float | None = None
-    pka_values: tuple[float, ...] | None = None
-    pka_approx: bool = False
-    ab_mps: float | None = None
-    cns_mpo: float | None = None
-    qed: float | None = None
-    ro5_pass: str | None = None
-    ro5_violations: int | None = None
-    error: str | None = None
-
-
-def _sanitize_copy(mol: Chem.Mol) -> Chem.Mol | None:
-    try:
-        out = Chem.Mol(mol)
-        Chem.SanitizeMol(out)
-    except Exception:
-        return None
-    return out
-
-
-def compute_rdkit_physical_properties(mol: Chem.Mol | None) -> SketchPhysicalProperties:
-    """Fast RDKit-only properties; ionization / MPO fields left empty."""
-    if mol is None or mol.GetNumAtoms() == 0:
-        return SketchPhysicalProperties(error="empty")
-    safe = _sanitize_copy(mol)
-    if safe is None:
-        return SketchPhysicalProperties(error="invalid")
-    try:
-        return SketchPhysicalProperties(
-            mw=float(Descriptors.MolWt(safe)),
-            tpsa=float(Descriptors.TPSA(safe)),
-            logp=float(Crippen.MolLogP(safe)),
-            qed=float(QED.qed(safe)),
-            ro5_pass=ro5_pass(safe),
-            ro5_violations=int(lipinski_violations(safe)),
-        )
-    except Exception as exc:
-        return SketchPhysicalProperties(error=str(exc) or "invalid")
-
-
 def compute_ionization_properties(
-    mol: Chem.Mol,
+    mol: Any,
     *,
     cancel_event: threading.Event | None = None,
     states: list | None = None,
 ) -> dict[str, Any]:
-    """
-    Return LogD / pKa / AB-MPS / CNS MPO from a Uni-pKa ionization ensemble.
-
-    Raises ``ValueError`` when pKa cannot be calculated (callers should show
-    ``Error`` for pKa and pKa-dependent descriptors).
-
-    Keys: ``logd``, ``pka_values``, ``pka_approx``, ``ab_mps``, ``cns_mpo``.
-    """
-    safe = _sanitize_copy(mol)
-    if safe is None:
-        raise ValueError("invalid molecule")
-    if states is None:
-        states = predict_microstates_for_sketch(safe, cancel_event=cancel_event)
-    if cancel_event is not None and cancel_event.is_set():
-        raise ValueError("cancelled")
-    if not states:
-        raise ValueError(_PKA_CALC_FAILED)
-    clogp = float(Crippen.MolLogP(safe))
-    pkas = tuple(sorted(pka_values_from_states(states)))
-    if not pkas:
-        raise ValueError(_PKA_CALC_FAILED)
-    logd = float(logd74_from_microstates(states, clogp))
-    return {
-        "logd": logd,
-        "pka_values": pkas,
-        "pka_approx": False,
-        "ab_mps": float(ab_mps_score(safe, states)),
-        "cns_mpo": float(cns_mpo_score(safe, states)),
-    }
+    """Return LogD / pKa / AB-MPS / CNS MPO from a Uni-pKa ionization ensemble."""
+    return _compute_ionization_properties(
+        mol,
+        cancel_event=cancel_event,
+        states=states,
+        predict_states=predict_microstates_for_sketch,
+    )
 
 
 def compute_sketch_physical_properties(
-    mol: Chem.Mol | None,
+    mol: Any,
     *,
     with_ionization: bool = True,
 ) -> SketchPhysicalProperties:
     """Full property bundle for tests and one-shot callers."""
-    base = compute_rdkit_physical_properties(mol)
-    if base.error or base.mw is None or mol is None:
-        return base
-    if not with_ionization:
-        return base
-    try:
-        ion = compute_ionization_properties(mol)
-    except Exception as exc:
-        return SketchPhysicalProperties(
-            mw=base.mw,
-            tpsa=base.tpsa,
-            logp=base.logp,
-            qed=base.qed,
-            ro5_pass=base.ro5_pass,
-            ro5_violations=base.ro5_violations,
-            error=str(exc) or _PKA_CALC_FAILED,
-        )
-    return SketchPhysicalProperties(
-        mw=base.mw,
-        tpsa=base.tpsa,
-        logp=base.logp,
-        logd=float(ion["logd"]),
-        pka_values=tuple(ion["pka_values"]),
-        pka_approx=bool(ion["pka_approx"]),
-        ab_mps=float(ion["ab_mps"]),
-        cns_mpo=float(ion["cns_mpo"]),
-        qed=base.qed,
-        ro5_pass=base.ro5_pass,
-        ro5_violations=base.ro5_violations,
+    return _compute_sketch_physical_properties(
+        mol,
+        with_ionization=with_ionization,
+        predict_states=predict_microstates_for_sketch,
     )
 
 
@@ -197,14 +96,14 @@ def _fmt_pka(values: tuple[float, ...] | None, *, approx: bool, pending: bool) -
 
 
 class _IonizationSignals(QObject):
-    finished = pyqtSignal(int, object)  # generation, result dict
-    failed = pyqtSignal(int, str)
+    finished = Signal(int, object)  # generation, result dict
+    failed = Signal(int, str)
 
 
 class _IonizationWorker(QRunnable):
     def __init__(
         self,
-        mol: Chem.Mol,
+        mol: Any,
         generation: int,
         signals: _IonizationSignals,
         cancel_event: threading.Event,
@@ -249,7 +148,7 @@ class SketchPhysicalPropertiesDialog(QDialog):
         self._generation = 0
         self._active_generation = 0
         self._ion_busy = False
-        self._pending_mol: Chem.Mol | None = None
+        self._pending_mol: Any = None
         self._pending_generation = 0
         self._cancel_event = threading.Event()
         self._ion_signals = _IonizationSignals(self)
@@ -372,14 +271,14 @@ class SketchPhysicalPropertiesDialog(QDialog):
         self._set_ionization_pending()
 
         try:
-            mol_copy = Chem.Mol(mol)
+            mol_copy = copy_mol(mol)
         except Exception:
             self._set_ionization_error("invalid molecule")
             return
 
         self._start_or_coalesce_ionization(mol_copy, gen)
 
-    def _start_or_coalesce_ionization(self, mol: Chem.Mol, generation: int) -> None:
+    def _start_or_coalesce_ionization(self, mol: Any, generation: int) -> None:
         if self._ion_busy:
             self._pending_mol = mol
             self._pending_generation = generation

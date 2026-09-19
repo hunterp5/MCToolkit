@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import threading
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem
 
 from ..conformers.conforge_generation import (

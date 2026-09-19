@@ -26,7 +26,7 @@ import sys
 import tempfile
 import time
 
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from ...conformers.conformer_column_codec import serialize_confs_sidecar
 from ...ionization.microstate_cache import serialize_ionization_sidecar

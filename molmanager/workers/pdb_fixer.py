@@ -21,7 +21,7 @@ from __future__ import annotations
 import threading
 from concurrent.futures import FIRST_COMPLETED, BrokenExecutor, ProcessPoolExecutor, wait
 
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+from PySide6.QtCore import QObject, QRunnable, Signal
 
 from .pdb_fixer_runtime import PdbFixerRequest, mp_prepare_pdb_for_docking, prepare_pdb_for_docking
 from .process_pool_utils import (
@@ -38,8 +38,8 @@ _OPENMM_VERSION_HINT = (
 
 
 class PdbFixerSignals(QObject):
-    finished = pyqtSignal(str)  # output PDB path
-    failed = pyqtSignal(str)
+    finished = Signal(str)  # output PDB path
+    failed = Signal(str)
 
 
 class PdbFixerWorker(QRunnable):

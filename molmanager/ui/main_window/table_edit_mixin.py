@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication, QMessageBox
 from rdkit import Chem
 
 from ...platform_support.config import load_config
@@ -233,7 +233,7 @@ class TableEditMixin:
         multi_btn = box.addButton("Multiple cells", QMessageBox.ActionRole)
         box.addButton(QMessageBox.Cancel)
         box.setDefaultButton(multi_btn)
-        box.exec_()
+        box.exec()
         clicked = box.clickedButton()
         if clicked is single_btn:
             return "single"
@@ -438,7 +438,7 @@ class TableEditMixin:
         )
         box.addButton(QMessageBox.Cancel)
         box.setDefaultButton(box.button(QMessageBox.Cancel))
-        box.exec_()
+        box.exec()
         clicked = box.clickedButton()
         if clicked is rows_btn:
             return "rows"

@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import QEvent
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent
+from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,

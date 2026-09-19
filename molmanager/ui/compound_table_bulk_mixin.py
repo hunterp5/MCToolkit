@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QModelIndex, Qt
-from PyQt5.QtGui import QPixmap
+from PySide6.QtCore import QModelIndex, Qt
+from PySide6.QtGui import QPixmap
 
 
 class CompoundTableBulkMixin:

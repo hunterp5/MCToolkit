@@ -21,8 +21,8 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QHBoxLayout,
@@ -41,7 +41,7 @@ from .qt_widget_utils import make_window_minimizable
 from .result_plot_panel import DockableResultPlotPanel
 
 try:
-    from PyQt5.QtWebEngineWidgets import QWebEngineView  # noqa: F401
+    from PySide6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
 
     _HAS_WEB = True
 except Exception:
@@ -299,7 +299,7 @@ class ActivityCliffMapDialog(QDialog):
 class _CliffPlotView(PlotlyInteractiveView):
     """Plotly view that notifies the cliff dialog when a point is activated."""
 
-    pointActivated = pyqtSignal(int)
+    pointActivated = Signal(int)
 
     def _on_plot_point_clicked(self, point_index: int, *, additive: bool = False) -> None:
         super()._on_plot_point_clicked(point_index, additive=additive)

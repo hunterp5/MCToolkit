@@ -22,8 +22,8 @@ import logging
 import sys
 import time
 
-from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ...platform_support.config import load_config
 from ...conformers.conformer_column_codec import deserialize_confs_sidecar

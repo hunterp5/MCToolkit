@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QThreadPool
+from PySide6.QtCore import QThreadPool
 
 from molmanager.workers import SubstructureFilterSignals, SubstructureFilterWorker
 

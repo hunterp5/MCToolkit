@@ -28,15 +28,15 @@ from molmanager.workflows.tool_readiness import (
 
 
 def test_workflow_layer_does_not_pull_in_qt():
-    """The point of the layer: importing a decision must not load PyQt5."""
+    """The point of the layer: importing a decision must not load PySide6."""
     for name in list(sys.modules):
         if name.startswith("molmanager.workflows"):
             del sys.modules[name]
-    qt_already_loaded = "PyQt5.QtWidgets" in sys.modules
+    qt_already_loaded = "PySide6.QtWidgets" in sys.modules
     import molmanager.workflows.tool_readiness  # noqa: F401
 
     if not qt_already_loaded:
-        assert "PyQt5.QtWidgets" not in sys.modules
+        assert "PySide6.QtWidgets" not in sys.modules
 
 
 def test_empty_table_blocks_on_no_table():

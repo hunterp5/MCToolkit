@@ -44,20 +44,27 @@ def _destroy_leftover_widgets() -> None:
     friends walk every live widget, so one half-destroyed leftover corrupts an unrelated test.
     """
     yield
-    from PyQt5 import sip
-    from PyQt5.QtCore import QEvent
-    from PyQt5.QtWidgets import QApplication
+    import shiboken6
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication
 
     app = QApplication.instance()
     if app is None:
         return
-    # Drain first. Callbacks already queued with ``QTimer.singleShot(0, ...)`` capture the window
-    # and assume it outlives them, so deleting before they run turns them into use-after-free.
-    for _ in range(3):
-        app.processEvents()
+    # Do not drain with processEvents first: PySide6 can native-crash in queued slots
+    # that outlive a closing window. deleteLater + DeferredDelete is enough to drop
+    # leftover top-levels before the next test constructs widgets.
     for widget in list(app.topLevelWidgets()):
-        if not sip.isdeleted(widget):
-            widget.deleteLater()
+        if not shiboken6.isValid(widget):
+            continue
+        for attr in (
+            "_suppress_exit_session_prompt",
+            "_dock_results_force_close",
+            "_suppress_close_prompt",
+        ):
+            if hasattr(widget, attr):
+                setattr(widget, attr, True)
+        widget.deleteLater()
     QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
@@ -65,7 +72,7 @@ def _destroy_leftover_widgets() -> None:
 def qapp():
     """Single QApplication for the test session."""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
 
     app = QApplication.instance()
     if app is None:

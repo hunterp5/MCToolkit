@@ -22,8 +22,8 @@ import logging
 from dataclasses import asdict
 from typing import Any
 
-from PyQt5.QtCore import QObject, Qt, QRunnable, QThreadPool, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QObject, Qt, QRunnable, QThreadPool, Signal
+from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -43,7 +43,7 @@ from .result_plot_panel import DockableResultPlotPanel
 logger = logging.getLogger(__name__)
 
 try:
-    from PyQt5.QtWebEngineWidgets import QWebEngineView  # noqa: F401
+    from PySide6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
 
     _HAS_WEB = True
 except Exception:
@@ -51,8 +51,8 @@ except Exception:
 
 
 class _LayoutSignals(QObject):
-    finished = pyqtSignal(int, object)  # generation, MmpNetworkGraph
-    failed = pyqtSignal(int, str)
+    finished = Signal(int, object)  # generation, MmpNetworkGraph
+    failed = Signal(int, str)
 
 
 class _LayoutWorker(QRunnable):
@@ -378,7 +378,7 @@ class MmpNeighborhoodMapDialog(QDialog):
 class _NetworkPlotView(PlotlyInteractiveView):
     """Plotly view that notifies when a network node is activated."""
 
-    pointActivated = pyqtSignal(int)
+    pointActivated = Signal(int)
 
     def _on_plot_point_clicked(self, point_index: int, *, additive: bool = False) -> None:
         super()._on_plot_point_clicked(point_index, additive=additive)

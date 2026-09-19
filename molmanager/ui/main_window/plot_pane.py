@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QEvent, QObject, Qt, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtWidgets import (
     QApplication,
     QFrame,
     QHBoxLayout,
@@ -63,8 +63,8 @@ class _PaneActivateFilter(QObject):
 class PlotPane(QFrame):
     """Host for one or more docked plot widgets, with pager chrome when stacked."""
 
-    activated = pyqtSignal(object)  # PlotPane
-    close_requested = pyqtSignal(object)  # PlotPane
+    activated = Signal(object)  # PlotPane
+    close_requested = Signal(object)  # PlotPane
 
     def __init__(self, pane_id: str, parent: QWidget | None = None):
         super().__init__(parent)

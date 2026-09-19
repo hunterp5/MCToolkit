@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import time
 
-from PyQt5.QtCore import QTimer
+from PySide6.QtCore import QTimer
 
 from rdkit import Chem
 

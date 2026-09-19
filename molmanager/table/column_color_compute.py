@@ -21,7 +21,7 @@ from __future__ import annotations
 import zlib
 from dataclasses import dataclass
 
-from PyQt5.QtGui import QColor
+from PySide6.QtGui import QColor
 
 from ..chem.molecule_conversion import safe_float
 

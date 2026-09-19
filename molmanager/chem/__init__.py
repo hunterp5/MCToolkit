@@ -14,4 +14,4 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Core molecule handling: conversion, SMARTS, fingerprints, fragments, reactions."""
+"""Core molecule handling: conversion, SMARTS, fingerprints, fragments, reactions, sketch chemistry."""

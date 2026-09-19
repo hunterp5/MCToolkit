@@ -24,16 +24,19 @@ import logging
 import sys
 from datetime import datetime
 
-from PyQt5.QtCore import QEventLoop, Qt, QTimer
-from PyQt5.QtGui import QCloseEvent, QKeySequence
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEventLoop, Qt, QTimer
+from PySide6.QtGui import (
+    QCloseEvent,
+    QKeySequence,
     QAction,
+    QShortcut,
+)
+from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QHBoxLayout,
     QLabel,
     QMenuBar,
-    QShortcut,
     QSizePolicy,
     QSplitter,
     QStackedWidget,
@@ -43,6 +46,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from ..platform_support.session_log import record_ui_log
 from ..protein.structure_components import PolymerChain, cif_viewer_bond_tables
 from .protein_chain_manager import ProteinChainManager
 from .protein_embed import ProteinEmbedView
@@ -646,12 +650,13 @@ class ProteinViewerDialog(
             self.end_canvas_load()
 
     def append_log(self, text: str) -> None:
-        """Append a timestamped line to the viewer log."""
+        """Append a timestamped line to the viewer log and the session Log window."""
         t = (text or "").rstrip()
         if not t:
             return
         stamp = datetime.now().strftime("%H:%M:%S")
         self.log.append(f"[{stamp}] {t}")
+        record_ui_log(t, name="molmanager.ui.protein_viewer")
 
     def _reset_camera(self) -> None:
         styles_changed = self._restore_loaded_render_styles()

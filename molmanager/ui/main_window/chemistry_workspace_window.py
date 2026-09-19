@@ -18,9 +18,9 @@ import logging
 import sys
 import threading
 
-from PyQt5.QtCore import QThreadPool, QTimer, Qt, pyqtSlot
-from PyQt5.QtGui import QCloseEvent
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QThreadPool, QTimer, Qt, Slot
+from PySide6.QtGui import QCloseEvent, QUndoStack
+from PySide6.QtWidgets import (
     QApplication,
     QFrame,
     QHBoxLayout,
@@ -30,12 +30,13 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
-    QUndoStack,
     QVBoxLayout,
     QWidget,
 )
 
 from ...platform_support.config import load_config
+from ...platform_support.session_log import ensure_session_log_handler
+from ..app_log_dialog import StatusLogLabel
 from ...table.session_codec import SESSION_VERSION_CURRENT
 
 logger = logging.getLogger(__name__)
@@ -75,9 +76,7 @@ from ..workspace_tools import WorkspaceTools
 from .activity_cliff_mixin import ActivityCliffMixin
 from .app_lifecycle_mixin import AppLifecycleMixin
 from .app_menu_mixin import AppMenuMixin
-from .app_progress_mixin import AppProgressMixin
 from .cluster_mixin import ClusterMixin
-from .column_write_mixin import ColumnWriteMixin
 from .conformers_tools_mixin import ConformersToolsMixin
 from .descriptors_tools_mixin import DescriptorsToolsMixin
 from .dimension_reduction_mixin import DimensionReductionMixin
@@ -403,6 +402,7 @@ class ChemistryWorkspaceWindow(
         self._plot_replot_timer.setSingleShot(True)
         self._plot_replot_timer.timeout.connect(self._replot_active_plots)
         self._processes_dialog = None
+        ensure_session_log_handler()
         self._perf = PerformanceTracker(
             enabled=cfg.perf_metrics_enabled,
             log_every=cfg.perf_log_every,
@@ -428,7 +428,7 @@ class ChemistryWorkspaceWindow(
         """True while Tools → Render 2D batch is running (sorting frozen, etc.)."""
         return self._render2d_batch_active
 
-    @pyqtSlot()
+    @Slot()
     def _begin_render2d_batch_from_queue(self) -> None:
         """GUI-thread entry for :class:`Render2DBatchHeldJob` (see ``_render2d_queue_payload``)."""
         payload = getattr(self, "_render2d_queue_payload", None)
@@ -651,7 +651,7 @@ class ChemistryWorkspaceWindow(
         status_row = QHBoxLayout()
         status_row.setContentsMargins(8, 6, 8, 6)
         status_row.setSpacing(8)
-        self.status_label = QLabel("Ready")
+        self.status_label = StatusLogLabel("Ready")
         self.status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._memory_status_label = QLabel("")
         self._memory_status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -680,11 +680,9 @@ class ChemistryWorkspaceWindow(
             self.on_cell_double_click(index.row(), index.column())
 
 
-install_window_forwards(
-    ChemistryWorkspaceWindow, "progress", (AppProgressMixin, ProgressController)
-)
+install_window_forwards(ChemistryWorkspaceWindow, "progress", (ProgressController,))
 install_window_forwards(ChemistryWorkspaceWindow, "tool_scope", (ToolDialogScope,))
-install_window_forwards(ChemistryWorkspaceWindow, "table_write", (ColumnWriteMixin,))
+install_window_forwards(ChemistryWorkspaceWindow, "table_write", (TableWriteService,))
 install_window_forwards(
     ChemistryWorkspaceWindow,
     "table_session",

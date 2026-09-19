@@ -25,6 +25,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from .config import load_config
+from .session_log import ensure_session_log_handler
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
@@ -116,6 +117,7 @@ def configure_app_logging() -> Path | None:
     else:
         _active_log_file = None
 
+    ensure_session_log_handler()
     for handler in root.handlers:
         handler.setLevel(level)
     return log_path
@@ -154,7 +156,7 @@ def install_crash_excepthook(*, log_path: Path | None = None) -> None:
         except Exception:
             pass
         try:
-            from PyQt5.QtWidgets import QApplication, QMessageBox
+            from PySide6.QtWidgets import QApplication, QMessageBox
 
             app = QApplication.instance()
             if app is not None:

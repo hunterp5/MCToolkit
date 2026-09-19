@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import logging
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
     QApplication,
     QDialog,
 )
@@ -55,6 +55,37 @@ class TableUIMixin(
     TableSearchMixin,
     FilterPanelMixin,
 ):
+    def _on_written_columns(
+        self,
+        headers: list[str],
+        *,
+        refresh_filters: bool = False,
+        defer_bounds: bool = False,
+    ) -> None:
+        """Refresh filter cards, plot axes, and search combos after result columns land.
+
+        ``TableWriteService`` updates the model bounds itself. This is the chrome half
+        that cannot live on the collaborator: the cards and combos are built later.
+        """
+        if defer_bounds:
+            self.schedule_calculate_global_bounds()
+            return
+        if refresh_filters:
+            from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
+
+            cols = self._filterable_data_column_names()
+            for f in self.filters:
+                if isinstance(f, FilterCard):
+                    f.update_prop_list(list(self.global_bounds.keys()))
+                elif isinstance(f, (TextFilterCard, CategoryFilterCard)):
+                    f.update_prop_list(cols)
+        refresh_axes = getattr(self, "_refresh_active_plot_axis_columns", None)
+        if callable(refresh_axes):
+            refresh_axes()
+        refresh_search = getattr(self, "_refresh_table_search_column_combos", None)
+        if callable(refresh_search):
+            refresh_search()
+
     def _open_column_color_dialog(self, col: int) -> None:
         if col < 2 or col >= len(self.headers):
             return
@@ -71,7 +102,7 @@ class TableUIMixin(
             current_mode=self._table_model.column_color_mode(header_name),
             current_spec=self._table_model.column_color_rule_spec(header_name),
         )
-        if dlg.exec_() != QDialog.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             return
         cfg = dlg.result_config()
         mode = cfg.get("mode", "off")
@@ -164,6 +195,10 @@ class TableUIMixin(
         if col == 1:
             return ""
         return (self._table_model.cell_text(row, col) or "").strip()
+
+    def cell_text(self, row: int, col: int) -> str:
+        """Public :class:`~molmanager.table.cell_reader.TableCellReader` entry."""
+        return self._table_cell_text(row, col)
 
     def _selected_smiles_strings(self) -> list[str]:
         """SMILES for PubChem/ChEMBL: canonical SMILES from any resolvable chemistry in each selected row."""

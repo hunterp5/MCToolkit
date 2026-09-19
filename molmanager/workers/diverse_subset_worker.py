@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import numpy as np
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem
 from rdkit import DataStructs
 from rdkit.SimDivFilters.rdSimDivPickers import LeaderPicker, MaxMinPicker

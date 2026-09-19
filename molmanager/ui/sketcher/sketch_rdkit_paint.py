@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from PyQt5.QtGui import QImage, QPixmap, QTransform
+from PySide6.QtGui import QImage, QPixmap, QTransform
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 

@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QImage, QPainter, QPixmap
-from PyQt5.QtWidgets import QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QImage, QPainter, QPixmap
+from PySide6.QtWidgets import QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 

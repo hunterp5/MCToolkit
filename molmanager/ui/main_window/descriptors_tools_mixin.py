@@ -15,12 +15,12 @@
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Descriptor calculation dialogs (writeback is ``TableWriteService`` / ``ColumnWriteMixin``)."""
+"""Descriptor calculation dialogs (writeback is ``TableWriteService``)."""
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
     QMessageBox,
 )
 

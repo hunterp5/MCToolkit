@@ -20,10 +20,10 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
-from PyQt5.QtCore import QItemSelectionModel
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtCore import QItemSelectionModel
+from PySide6.QtWidgets import QApplication
 
 from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.table_clipboard import format_tsv_grid, parse_tsv_grid, tsv_grid_is_block
@@ -140,7 +140,7 @@ def test_paste_block_skips_invalid_structure_cells(qapp) -> None:  # noqa: ARG00
 
 
 def test_structure_copy_submenu_formats(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QMenu
+    from PySide6.QtWidgets import QMenu
     from rdkit import Chem
 
     from molmanager.ui.main_window.table_menu_mixin import TableMenuMixin

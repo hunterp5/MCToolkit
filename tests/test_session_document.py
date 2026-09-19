@@ -21,8 +21,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from rdkit import Chem
 
 from molmanager.ui.main_window import ChemistryWorkspaceWindow
@@ -755,7 +755,7 @@ def test_session_roundtrip_restores_table_layout(qapp, monkeypatch) -> None:  # 
 
 
 def test_session_roundtrip_restores_docked_plotter(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
@@ -820,7 +820,7 @@ def test_session_roundtrip_restores_docked_plotter(qapp, monkeypatch) -> None:  
 
 
 def test_session_roundtrip_keeps_side_by_side_layout(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE, LAYOUT_TABLE_STACK
 
@@ -887,7 +887,7 @@ def test_session_roundtrip_keeps_side_by_side_layout(qapp, monkeypatch) -> None:
 
 
 def test_session_roundtrip_keeps_split_view_not_stacked(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
 
@@ -934,7 +934,7 @@ def test_session_roundtrip_keeps_split_view_not_stacked(qapp, monkeypatch) -> No
 
 
 def test_session_save_after_closing_stacked_pane_is_split_view(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
 
@@ -1026,7 +1026,7 @@ def test_session_roundtrip_restores_workspace_splitter(qapp, monkeypatch) -> Non
 
 
 def test_session_open_clears_previous_docked_plots(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
@@ -1075,7 +1075,7 @@ def test_session_open_clears_previous_docked_plots(qapp, monkeypatch) -> None:  
 
 
 def test_session_roundtrip_preserves_pane_title_and_active_page(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
@@ -1139,7 +1139,7 @@ def test_session_roundtrip_preserves_pane_title_and_active_page(qapp, monkeypatc
 
 
 def test_session_roundtrip_restores_floating_plots(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QDialog, QWidget
+    from PySide6.QtWidgets import QDialog, QWidget
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE, LAYOUT_TABLE_STACK
 
@@ -1206,7 +1206,7 @@ def test_session_roundtrip_restores_floating_plots(qapp, monkeypatch) -> None:  
 
 
 def test_session_restore_dispatches_analysis_plot_kind(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 

@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtGui import QPixmap
+from PySide6.QtGui import QPixmap
 
 from molmanager.storage.extra_pixmap_store import ExtraPixmapStore
 from molmanager.ui.compound_table_model import CompoundTableModel

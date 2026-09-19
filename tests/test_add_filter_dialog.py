@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog
 from rdkit import Chem
 
 from molmanager.ui.dialogs.add_filter import FILTER_TYPE_CHOICES, AddFilterDialog

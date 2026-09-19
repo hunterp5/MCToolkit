@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint
-from PyQt5.QtGui import QColor, QImage, QPainter
+from PySide6.QtCore import QPoint
+from PySide6.QtGui import QColor, QImage, QPainter
 
 from molmanager.ui.sketcher.acs_style import acs_sketch_style
 from molmanager.ui.sketcher.bonds import _bond_make

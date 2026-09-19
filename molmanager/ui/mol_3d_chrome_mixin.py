@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QEvent
-from PyQt5.QtWidgets import QHBoxLayout, QLayout, QSizePolicy, QWidget
+from PySide6.QtCore import QEvent
+from PySide6.QtWidgets import QHBoxLayout, QLayout, QSizePolicy, QWidget
 
 from .dockable_plot import show_plot_options_dialog
 

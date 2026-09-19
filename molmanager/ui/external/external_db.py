@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from ...platform_support.config import load_config
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QFileDialog,

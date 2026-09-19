@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from qt_helpers import qt_submenu
+
 from pathlib import Path
 from unittest.mock import patch
 
@@ -138,17 +140,15 @@ def test_minimize_gaff_requires_ligand_chemistry(mock_ligands, tmp_path):
 
 
 def test_minimize_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from PyQt5.QtWidgets import QMenuBar, QMessageBox, QTextEdit
+    from PySide6.QtWidgets import QMenuBar, QMessageBox, QTextEdit
 
     from molmanager.ui.dialogs.protein_minimize import ProteinMinimizeDialog
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
     dlg = ProteinViewerDialog()
     mb = dlg.findChild(QMenuBar)
-    tools_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
-    prepare_menu = next(
-        a.menu() for a in tools_menu.actions() if a.text().replace("&", "") == "Prepare"
-    )
+    tools_menu = qt_submenu(mb, "Tools")
+    prepare_menu = qt_submenu(tools_menu, "Prepare")
     prepare_labels = [a.text().replace("&", "") for a in prepare_menu.actions()]
     assert any(label.startswith("Minimize") for label in prepare_labels)
 

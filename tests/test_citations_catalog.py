@@ -82,7 +82,7 @@ def test_citation_html_renders_license_link() -> None:
 
 
 def test_open_citations_dialog_reuses_window(qapp):  # noqa: ARG001
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     host = QWidget()
     open_citations_dialog(host, tool_id="gnina")
@@ -103,7 +103,7 @@ def test_citations_dialog_does_not_cycle_with_its_host(qapp):  # noqa: ARG001
     """
     import weakref
 
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     host = QWidget()
     open_citations_dialog(host, tool_id="gnina")

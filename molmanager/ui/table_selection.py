@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QItemSelection
+from PySide6.QtCore import QItemSelection
 
 
 def merge_sorted_row_indices(rows: list[int]) -> list[tuple[int, int]]:

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QDoubleSpinBox,
@@ -35,6 +35,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from ...platform_support.session_log import record_ui_log
 from ...workers.pdb_fixer import PdbFixerRequest, PdbFixerSignals, PdbFixerWorker
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 
@@ -191,6 +192,7 @@ class PdbFixerDialog(QDialog):
         if not t:
             return
         self.log.append(t)
+        record_ui_log(t, name="molmanager.ui.pdb_fixer")
 
     def _populate_open_prepare_paths(self, output_pdb: str) -> None:
         app = self.parent_app

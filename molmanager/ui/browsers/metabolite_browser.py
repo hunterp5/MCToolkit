@@ -21,9 +21,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
-from PyQt5.QtCore import QEvent, Qt, QTimer
-from PyQt5.QtGui import QColor, QFont, QImage, QPainter, QPixmap
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPixmap
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QHBoxLayout,
@@ -276,7 +276,7 @@ class MetaboliteBrowserWidget(QWidget):
         preview_ly.setSpacing(0)
         self._struct_label = QLabel(self._preview_host)
         self._struct_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._struct_label.setMargin(0)
+        self._struct_label.setContentsMargins(0, 0, 0, 0)
         self._struct_label.setIndent(0)
         style_browser_structure_label(self._struct_label)
         preview_ly.addWidget(self._struct_label, 1)

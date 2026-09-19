@@ -21,8 +21,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QMessageBox
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QMessageBox
 
 logger = logging.getLogger(__name__)
 
@@ -319,9 +319,9 @@ class PlotDockHost:
         for pane in mgr.plot_panes():
             for w in list(pane.plot_widgets()):
                 try:
-                    from PyQt5 import sip
+                    import shiboken6
 
-                    if sip.isdeleted(w):
+                    if not shiboken6.isValid(w):
                         pane.remove_plot_widget(w)
                 except Exception:
                     pass

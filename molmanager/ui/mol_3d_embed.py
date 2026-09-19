@@ -23,8 +23,8 @@ import logging
 import shutil
 from pathlib import Path
 
-from PyQt5.QtCore import Qt, QTemporaryDir, QTimer, QUrl
-from PyQt5.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, QTemporaryDir, QTimer, QUrl
+from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from rdkit import Chem
 
@@ -103,7 +103,8 @@ class Molecule3DEmbedView(QWidget):
             return
         self._bootstrapped = True
         try:
-            from PyQt5.QtWebEngineWidgets import QWebEngineSettings, QWebEngineView
+            from PySide6.QtWebEngineCore import QWebEngineSettings
+            from PySide6.QtWebEngineWidgets import QWebEngineView
 
             web = QWebEngineView(self)
             web.setContextMenuPolicy(Qt.NoContextMenu)
@@ -135,7 +136,7 @@ class Molecule3DEmbedView(QWidget):
         except Exception as e:
             logger.warning("Sketcher 3D embed unavailable: %s", e, exc_info=True)
             self._status.setText(
-                "3D preview unavailable.\nInstall matching PyQtWebEngine and restart with "
+                "3D preview unavailable.\nInstall matching PySide6 and restart with "
                 "`python -m molmanager`."
             )
 

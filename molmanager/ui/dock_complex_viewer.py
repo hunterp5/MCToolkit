@@ -24,8 +24,8 @@ import logging
 import shutil
 from pathlib import Path
 
-from PyQt5.QtCore import QTemporaryDir, QTimer, QUrl, Qt
-from PyQt5.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtCore import QTemporaryDir, QTimer, QUrl, Qt
+from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from rdkit import Chem
 
@@ -530,7 +530,8 @@ class DockComplexEmbedView(QWidget):
             return
         self._bootstrapped = True
         try:
-            from PyQt5.QtWebEngineWidgets import QWebEngineSettings, QWebEngineView
+            from PySide6.QtWebEngineCore import QWebEngineSettings
+            from PySide6.QtWebEngineWidgets import QWebEngineView
 
             web = QWebEngineView(self)
             web.setContextMenuPolicy(Qt.NoContextMenu)
@@ -560,7 +561,7 @@ class DockComplexEmbedView(QWidget):
         except Exception as e:
             logger.warning("Dock complex 3D view unavailable: %s", e, exc_info=True)
             self._status.setText(
-                "3D view unavailable.\nInstall matching PyQtWebEngine and restart with "
+                "3D view unavailable.\nInstall matching PySide6 and restart with "
                 "`python -m molmanager`."
             )
 

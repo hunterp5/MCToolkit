@@ -24,8 +24,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QMessageBox, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
 
 from .app_roles import TableSelection
 
@@ -82,9 +82,9 @@ class ToolDialogScope:
 
         def teardown(*_args):
             try:
-                from PyQt5 import sip
+                import shiboken6
 
-                if sm is not None and not sip.isdeleted(sm):
+                if sm is not None and shiboken6.isValid(sm):
                     sm.selectionChanged.disconnect(on_sel_changed)
             except (TypeError, RuntimeError):
                 pass
@@ -105,9 +105,9 @@ class ToolDialogScope:
         if cb is None:
             return
         try:
-            from PyQt5 import sip
+            import shiboken6
 
-            if sip.isdeleted(cb):
+            if not shiboken6.isValid(cb):
                 return
         except Exception:
             pass
@@ -130,9 +130,9 @@ class ToolDialogScope:
         alive: list = []
         for target in list(self._scope_sync_targets):
             try:
-                from PyQt5 import sip
+                import shiboken6
 
-                if sip.isdeleted(target):
+                if not shiboken6.isValid(target):
                     continue
             except Exception:
                 pass

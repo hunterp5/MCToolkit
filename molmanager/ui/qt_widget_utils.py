@@ -14,15 +14,15 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Small Qt widget helpers shared across dialogs (keep dependency-free beyond PyQt5)."""
+"""Small Qt widget helpers shared across dialogs (keep dependency-free beyond PySide6)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import QEvent, QObject, Qt
-from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
     QAbstractScrollArea,
     QAbstractSpinBox,
     QApplication,
@@ -39,9 +39,9 @@ def qobject_is_deleted(obj: Any) -> bool:
     if obj is None:
         return True
     try:
-        from PyQt5 import sip
+        import shiboken6
 
-        if isinstance(obj, QObject) and sip.isdeleted(obj):
+        if isinstance(obj, QObject) and not shiboken6.isValid(obj):
             return True
     except Exception:
         return True
@@ -61,10 +61,20 @@ def apply_monospace_to_text_edit(w: QTextEdit) -> None:
 
 
 def append_viewer_log(viewer, text: str) -> None:
-    """Forward a progress line to Protein Viewer ``append_log`` when present."""
+    """Forward a progress line to Protein Viewer ``append_log`` when present.
+
+    When the viewer is missing, the line still goes to the session Log window.
+    """
+    t = (text or "").rstrip()
+    if not t:
+        return
     append = getattr(viewer, "append_log", None)
     if callable(append):
         append(text)
+        return
+    from ..platform_support.session_log import record_ui_log
+
+    record_ui_log(t, name="molmanager.ui.tools")
 
 
 def make_window_minimizable(widget: QWidget) -> None:

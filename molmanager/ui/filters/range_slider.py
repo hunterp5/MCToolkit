@@ -18,18 +18,18 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent
-from PyQt5.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent
+from PySide6.QtWidgets import QSizePolicy, QWidget
 
 
 class RangeSlider(QWidget):
     """Single groove with two knobs for inclusive min/max integer values."""
 
-    lowerValueChanged = pyqtSignal(int)
-    upperValueChanged = pyqtSignal(int)
-    rangeChanged = pyqtSignal(int, int)
-    sliderReleased = pyqtSignal()
+    lowerValueChanged = Signal(int)
+    upperValueChanged = Signal(int)
+    rangeChanged = Signal(int, int)
+    sliderReleased = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -105,7 +105,7 @@ class RangeSlider(QWidget):
         return max(1, self._maximum - self._minimum)
 
     def _groove_rect(self):
-        from PyQt5.QtCore import QRect
+        from PySide6.QtCore import QRect
 
         m = self._handle_r + 1
         y = self.height() // 2 - 1
@@ -153,7 +153,7 @@ class RangeSlider(QWidget):
         x0 = self._x_for_value(self._lower)
         x1 = self._x_for_value(self._upper)
         if x1 > x0:
-            from PyQt5.QtCore import QRect
+            from PySide6.QtCore import QRect
 
             sel = QRect(x0, groove.top(), max(1, x1 - x0), groove.height())
             p.setBrush(pal.highlight())

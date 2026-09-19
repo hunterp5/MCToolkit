@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -49,7 +49,7 @@ from .protein_source_picker import ProteinStructureSourceMixin
 class ProteinPdb2pqrDialog(ProteinStructureSourceMixin, QDialog):
     """Options for Protein Viewer → Tools → Prepare → pdb2pqr."""
 
-    prepared = pyqtSignal(str)
+    prepared = Signal(str)
     _source_output_tag = "protonated"
     _source_tmp_prefix = "molmanager_pdb2pqr_in_"
     _source_tool_title = "pdb2pqr"
@@ -362,7 +362,7 @@ class ProteinPdb2pqrDialog(ProteinStructureSourceMixin, QDialog):
                 ),
             )
             return
-        from PyQt5.QtCore import QThreadPool
+        from PySide6.QtCore import QThreadPool
 
         QThreadPool.globalInstance().start(ProteinPrepareWorker(req, signals=self._signals))
 

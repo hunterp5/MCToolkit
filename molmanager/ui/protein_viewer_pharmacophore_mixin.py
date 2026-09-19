@@ -23,7 +23,7 @@ import logging
 import tempfile
 from pathlib import Path
 
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from ..protein.pharmacophore import (
     PHARMACOPHORE_FILE_FILTER,

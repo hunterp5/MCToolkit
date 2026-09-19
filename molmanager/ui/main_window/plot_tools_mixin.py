@@ -163,9 +163,9 @@ class PlotToolsMixin:
             add_from(dlg)
         for dlg in list(getattr(self, "_floating_result_dialogs", [])):
             try:
-                from PyQt5 import sip
+                import shiboken6
 
-                if sip.isdeleted(dlg):
+                if not shiboken6.isValid(dlg):
                     continue
             except Exception:
                 pass
@@ -402,9 +402,9 @@ class PlotToolsMixin:
         alive: list = []
         for existing in self._floating_result_dialogs:
             try:
-                from PyQt5 import sip
+                import shiboken6
 
-                if sip.isdeleted(existing):
+                if not shiboken6.isValid(existing):
                     continue
             except Exception:
                 pass

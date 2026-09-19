@@ -25,7 +25,7 @@ import time
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from typing import Any
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem
 
 from ..protein.pharmacophore import pharmacophore_from_dict

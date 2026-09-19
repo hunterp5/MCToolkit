@@ -22,9 +22,9 @@ import weakref
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QPalette
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QPalette
+from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QHBoxLayout,
@@ -41,7 +41,7 @@ from ..reference.help_markdown import (
 from .qt_widget_utils import make_window_minimizable
 
 if TYPE_CHECKING:
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
 
 @dataclass(frozen=True)
@@ -80,7 +80,13 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "processes",
                 "Processes",
                 "Processes",
-                "Running and queued background jobs; cancel and clear.",
+                "Running and queued background jobs, plus the session log.",
+            ),
+            _e(
+                "log",
+                "Log",
+                "Log",
+                "Session-wide tool output, status history, and application logging in Processes.",
             ),
             _e(
                 "settings",

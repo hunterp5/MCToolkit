@@ -22,8 +22,8 @@ import logging
 import threading
 from dataclasses import dataclass
 
-from PyQt5 import sip
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+import shiboken6
+from PySide6.QtCore import QObject, QRunnable, Signal
 from rdkit import Chem
 
 from ..predictions.som_prediction import (
@@ -64,7 +64,7 @@ def _safe_emit(obj, emitter_name: str, *args) -> None:
     if obj is None:
         return
     try:
-        if sip.isdeleted(obj):
+        if not shiboken6.isValid(obj):
             return
     except Exception:
         return
@@ -95,8 +95,8 @@ def _completed_row_count(
 class SomPredictorSignals(QObject):
     """Emits from :class:`SomPredictorWorker` (owned on the GUI thread)."""
 
-    finished = pyqtSignal(list)
-    failed = pyqtSignal(str)
+    finished = Signal(list)
+    failed = Signal(str)
 
 
 class SomPredictorWorker(QRunnable):

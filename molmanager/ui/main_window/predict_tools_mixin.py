@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import re
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QMessageBox
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QMessageBox
 
 from ..analysis_job_support import (
     enqueue_process_queue_job,
@@ -203,9 +203,9 @@ class PredictToolsMixin:
 
     def _host_unavailable(self) -> bool:
         try:
-            from PyQt5 import sip
+            import shiboken6
 
-            if sip.isdeleted(self):
+            if not shiboken6.isValid(self):
                 return True
         except Exception:
             return True
@@ -298,9 +298,9 @@ class PredictToolsMixin:
         if dlg is None:
             return
         try:
-            from PyQt5 import sip
+            import shiboken6
 
-            if sip.isdeleted(dlg) or getattr(dlg, "_panel", None) is None:
+            if not shiboken6.isValid(dlg) or getattr(dlg, "_panel", None) is None:
                 self._som_browser_dialog = None
                 try:
                     dlg.close()
@@ -419,7 +419,7 @@ class PredictToolsMixin:
 
     def export_som_map_for_oid(self, oid: int, header: str) -> None:
         """Save the SOM Map cell image for one table row."""
-        from PyQt5.QtWidgets import QFileDialog
+        from PySide6.QtWidgets import QFileDialog
 
         pm = self._table_model.column_pixmap_copy(int(oid), header)
         if pm is None or pm.isNull():
@@ -556,9 +556,9 @@ class PredictToolsMixin:
         if dlg is None:
             return
         try:
-            from PyQt5 import sip
+            import shiboken6
 
-            if sip.isdeleted(dlg) or getattr(dlg, "_panel", None) is None:
+            if not shiboken6.isValid(dlg) or getattr(dlg, "_panel", None) is None:
                 self._metabolite_browser_dialog = None
                 try:
                     dlg.close()

@@ -64,7 +64,7 @@ def schedule_qtwebengine_prewarm(*, delay_ms: int = 0) -> None:
     """Start Chromium after the first GUI paint so later 3D views do not stall."""
     if "pytest" in sys.modules:
         return
-    from PyQt5.QtCore import QTimer
+    from PySide6.QtCore import QTimer
 
     QTimer.singleShot(max(0, int(delay_ms)), prewarm_qtwebengine)
 
@@ -75,9 +75,9 @@ def prewarm_qtwebengine() -> None:
     if _PREWARM_VIEW is not None or "pytest" in sys.modules:
         return
     try:
-        from PyQt5.QtCore import Qt
-        from PyQt5.QtWebEngineWidgets import QWebEngineView
-        from PyQt5.QtWidgets import QApplication
+        from PySide6.QtCore import Qt
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+        from PySide6.QtWidgets import QApplication
 
         app = QApplication.instance()
         if app is None:

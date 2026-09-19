@@ -21,9 +21,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtGui import QColor, QImage, QPainter, QPixmap
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractScrollArea,
     QDialog,

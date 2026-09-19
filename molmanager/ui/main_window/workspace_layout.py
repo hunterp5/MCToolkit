@@ -18,11 +18,12 @@
 
 from __future__ import annotations
 
+import warnings
 from contextlib import suppress
 from typing import Callable
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtWidgets import (
     QSizePolicy,
     QSplitter,
     QVBoxLayout,
@@ -75,8 +76,8 @@ def _equalize_splitter(splitter: QSplitter) -> None:
 class WorkspaceLayoutManager(QWidget):
     """Owns the content splitter tree: table region + plot panes."""
 
-    layout_changed = pyqtSignal(str)
-    pane_close_requested = pyqtSignal(object)  # PlotPane
+    layout_changed = Signal(str)
+    pane_close_requested = Signal(object)  # PlotPane
 
     def __init__(self, table_area: QWidget, parent: QWidget | None = None):
         super().__init__(parent)
@@ -394,10 +395,12 @@ class WorkspaceLayoutManager(QWidget):
         self.pane_close_requested.emit(pane)
 
     def _wire_pane(self, pane: PlotPane) -> None:
-        with suppress(TypeError):
-            pane.activated.disconnect(self._on_pane_activated)
-        with suppress(TypeError):
-            pane.close_requested.disconnect(self._on_pane_close_requested)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            with suppress(TypeError, RuntimeError):
+                pane.activated.disconnect(self._on_pane_activated)
+            with suppress(TypeError, RuntimeError):
+                pane.close_requested.disconnect(self._on_pane_close_requested)
         pane.activated.connect(self._on_pane_activated)
         pane.close_requested.connect(self._on_pane_close_requested)
 

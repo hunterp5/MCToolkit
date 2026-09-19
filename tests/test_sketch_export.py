@@ -18,7 +18,7 @@
 
 import math
 
-from PyQt5.QtCore import QPoint
+from PySide6.QtCore import QPoint
 from rdkit import Chem
 
 from molmanager.chem.smarts_macropatterns import mol_from_smarts

@@ -20,9 +20,16 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from PyQt5.QtCore import QEvent, Qt, QTimer
-from PyQt5.QtGui import QColor, QImage, QKeySequence, QPainter, QPixmap
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtGui import (
+    QColor,
+    QImage,
+    QKeySequence,
+    QPainter,
+    QPixmap,
+    QShortcut,
+)
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QHBoxLayout,
@@ -30,7 +37,6 @@ from PyQt5.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
-    QShortcut,
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,

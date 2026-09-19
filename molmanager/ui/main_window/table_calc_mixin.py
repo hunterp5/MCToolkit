@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QMessageBox
 
 from ...platform_support.config import load_config
 from ...chem.molecule_conversion import safe_float
@@ -189,7 +189,7 @@ class TableCalcMixin:
 
         if count is None:
             dlg = AddTableRowsDialog(self)
-            if dlg.exec_() != QDialog.Accepted:
+            if dlg.exec() != QDialog.Accepted:
                 return
             count = dlg.row_count()
         n = max(1, min(MAX_ADD_ROWS, int(count)))
@@ -203,7 +203,7 @@ class TableCalcMixin:
 
         if name is None and count is None:
             dlg = AddTableColumnsDialog(self)
-            if dlg.exec_() != QDialog.Accepted:
+            if dlg.exec() != QDialog.Accepted:
                 return
             name = dlg.column_name()
             count = dlg.column_count()
@@ -447,7 +447,7 @@ class TableCalcMixin:
     def _on_diverse_subset_finished(
         self, picked_oids: list, column_rows: list, n_cached: int, n_computed: int
     ) -> None:
-        from PyQt5.QtCore import QTimer
+        from PySide6.QtCore import QTimer
 
         self._finish_tool_progress("Diverse subset")
         ctx = getattr(self, "_diverse_subset_run_ctx", None) or {}

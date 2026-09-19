@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QRectF, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QFont, QPainter, QPen
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtWidgets import (
     QDialog,
     QGridLayout,
     QSizePolicy,
@@ -37,7 +37,7 @@ _TILE_H = 150
 class LayoutPreviewTile(QWidget):
     """Clickable schematic for one workspace layout preset."""
 
-    chosen = pyqtSignal(str)
+    chosen = Signal(str)
 
     def __init__(
         self,
@@ -198,7 +198,7 @@ class LayoutPreviewTile(QWidget):
 class WorkspaceLayoutPickerDialog(QDialog):
     """Window of clickable layout schematics; choosing one closes the dialog."""
 
-    layout_chosen = pyqtSignal(str)
+    layout_chosen = Signal(str)
 
     def __init__(self, parent: QWidget | None = None, *, current_layout_id: str | None = None):
         super().__init__(parent)

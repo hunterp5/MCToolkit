@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QObject, pyqtSlot
+from PySide6.QtCore import QObject, Slot
 
 if TYPE_CHECKING:
     from .plot import PlotWidget
@@ -33,34 +33,34 @@ class PlotBridge(QObject):
         super().__init__(plot_widget)
         self._plot_widget = plot_widget
 
-    @pyqtSlot(int, bool)
+    @Slot(int, bool)
     def pointClicked(self, point_index: int, additive: bool = False) -> None:  # noqa: N802
         self._plot_widget._on_plot_point_clicked(int(point_index), additive=bool(additive))
 
-    @pyqtSlot(str, bool)
+    @Slot(str, bool)
     def pointsSelected(self, points_json: str, additive: bool = False) -> None:  # noqa: N802
         self._plot_widget._on_plot_points_selected(points_json, additive=bool(additive))
 
-    @pyqtSlot(str, bool)
+    @Slot(str, bool)
     def histogramPointsSelected(self, indices_json: str, additive: bool = False) -> None:  # noqa: N802
         self._plot_widget._on_histogram_points_selected(indices_json, additive=bool(additive))
 
-    @pyqtSlot(int)
+    @Slot(int)
     def histogramBinClicked(self, bin_index: int) -> None:  # noqa: N802
         self._plot_widget._on_histogram_bin_clicked(int(bin_index))
 
-    @pyqtSlot(float, float)
+    @Slot(float, float)
     def heatmapCellClicked(self, x_value: float, y_value: float) -> None:  # noqa: N802
         self._plot_widget._on_heatmap_cell_clicked(float(x_value), float(y_value))
 
-    @pyqtSlot(int)
+    @Slot(int)
     def radarTraceClicked(self, trace_index: int) -> None:  # noqa: N802
         self._plot_widget._on_radar_trace_clicked(int(trace_index))
 
-    @pyqtSlot(int, result=str)
+    @Slot(int, result=str)
     def hoverCardJson(self, point_index: int) -> str:  # noqa: N802
         return self._plot_widget._hover_card_json_for_point(int(point_index))
 
-    @pyqtSlot(str, result=str)
+    @Slot(str, result=str)
     def hoverCardsJson(self, indices_json: str) -> str:  # noqa: N802
         return self._plot_widget._hover_card_json_for_points(indices_json)

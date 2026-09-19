@@ -25,8 +25,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QMessageBox
 from rdkit import Chem
 
 from ..services.activity_records import build_oid_mol_activity_records, parse_activity_float
@@ -52,7 +52,7 @@ def activity_value_for_table_oid(
     row = app.logical_row_for_oid(oid)
     if row < 0:
         return None
-    raw = (app._table_cell_text(row, activity_col_index) or "").strip()
+    raw = (app.cell_text(row, activity_col_index) or "").strip()
     if not raw:
         raw = (app._table_model.backing_value_for_row_header(row, activity_column) or "").strip()
     return parse_activity_float(raw)

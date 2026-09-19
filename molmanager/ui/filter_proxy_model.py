@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QAbstractProxyModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractProxyModel, QModelIndex, Qt
 
 
 class FilterProxyModel(QAbstractProxyModel):

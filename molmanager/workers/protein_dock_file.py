@@ -23,7 +23,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+from PySide6.QtCore import QObject, QRunnable, Signal
 
 from .protein_prepare_constants import ResidueKey
 from .protein_prepare_smina import ProteinPrepareResult, write_dock_file_artifacts
@@ -45,9 +45,9 @@ class DockFileRequest:
 
 
 class DockFileSignals(QObject):
-    finished = pyqtSignal(object)
-    failed = pyqtSignal(str)
-    progress = pyqtSignal(str)
+    finished = Signal(object)
+    failed = Signal(str)
+    progress = Signal(str)
 
 
 def run_dock_file(req: DockFileRequest) -> ProteinPrepareResult:

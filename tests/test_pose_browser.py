@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
 
 def _ethanol_pose(affinity: str, x: float):
@@ -378,7 +378,7 @@ def test_pose_browser_not_workspace_dockable():
 
 
 def test_protein_chain_manager_docks_widget(qapp):  # noqa: ARG001
-    from PyQt5.QtWidgets import QLabel
+    from PySide6.QtWidgets import QLabel
 
     from molmanager.ui.protein_chain_manager import ProteinChainManager
 

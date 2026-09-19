@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QLabel, QSizePolicy, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
 from ..platform_support.qt_webengine_flags import webengine_views_supported
 
@@ -40,7 +40,7 @@ def build_plot_web_view(parent: QWidget, *, minimum_height: int) -> QWidget | No
     """
     if not webengine_views_supported():
         return None
-    from PyQt5.QtWebEngineWidgets import QWebEngineView
+    from PySide6.QtWebEngineWidgets import QWebEngineView
 
     web = QWebEngineView(parent)
     web.setMinimumHeight(minimum_height)

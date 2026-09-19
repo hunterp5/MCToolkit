@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint
+from PySide6.QtCore import QPoint
 from rdkit import Chem
 from rdkit.Chem.rdchem import Conformer
 from rdkit.Chem.Draw import rdMolDraw2D
@@ -148,7 +148,7 @@ def test_render_sketch_bond_width_stable_as_atoms_removed(qapp) -> None:  # noqa
 
 def test_thiotepa_sketcher_paints_heteroatom_labels(qapp) -> None:  # noqa: ARG001
     """RDKit bond pixmap alone drops P/N/S glyphs; ACS overlays must restore them."""
-    from PyQt5.QtGui import QColor, QImage, QPainter
+    from PySide6.QtGui import QColor, QImage, QPainter
 
     from molmanager.ui.sketcher.widget import SketchWidget
 

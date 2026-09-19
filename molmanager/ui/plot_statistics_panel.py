@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QLabel, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QTextEdit, QVBoxLayout, QWidget
 
 from .qt_widget_utils import apply_monospace_to_text_edit
 

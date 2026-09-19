@@ -27,7 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt5.QtCore import QMetaObject, QObject, QRunnable, Qt, QThreadPool, pyqtSignal, pyqtSlot
+from PySide6.QtCore import QMetaObject, QObject, QRunnable, Qt, QThreadPool, Signal, Slot
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +49,9 @@ class ProcessQueueManager(QObject):
     Jobs are built with ``factory(cancel_event)`` so cooperative cancellation can be wired per task.
     """
 
-    snapshot_changed = pyqtSignal()
-    thread_finished = pyqtSignal(str)
-    fast_thread_finished = pyqtSignal(str)
+    snapshot_changed = Signal()
+    thread_finished = Signal(str)
+    fast_thread_finished = Signal(str)
 
     def __init__(self, app: Any) -> None:
         super().__init__(app)
@@ -240,21 +240,21 @@ class ProcessQueueManager(QObject):
                 )
         return {"running": running, "queued": queued, "fast_running": fast_running}
 
-    @pyqtSlot()
+    @Slot()
     def _enter_app_background_ui(self) -> None:
         """GUI-thread: slow the progress poll while a queued job holds a pool thread."""
         fn = getattr(self._app, "_enter_background_job_ui", None)
         if callable(fn):
             fn()
 
-    @pyqtSlot()
+    @Slot()
     def _exit_app_background_ui(self) -> None:
         """GUI-thread: restore the progress poll interval after the queued job returns."""
         fn = getattr(self._app, "_exit_background_job_ui", None)
         if callable(fn):
             fn()
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_job_thread_finished(self, job_id: str) -> None:
         if self._current_job_id != job_id:
             return
@@ -293,7 +293,7 @@ class ProcessQueueManager(QObject):
         self.snapshot_changed.emit()
         self._threadpool().start(_QueueJobRunner(self, job.job_id, inner))
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_fast_job_thread_finished(self, job_id: str) -> None:
         self._fast_running.pop(job_id, None)
         self.snapshot_changed.emit()

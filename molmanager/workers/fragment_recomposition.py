@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import threading
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 
 from ..chem.fragment_decomposition import RecompositionMethod, recompose_fragments
 from .signals import WorkerSignals, emit_partial_results_if_cancelled

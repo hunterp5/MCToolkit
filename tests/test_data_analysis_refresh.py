@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
 import pandas as pd
 
@@ -205,6 +205,7 @@ def test_table_dataframe_source_does_not_import_statistics_ui() -> None:
     path = Path(__file__).resolve().parents[1] / "molmanager" / "ui" / "table_dataframe.py"
     text = path.read_text(encoding="utf-8")
     assert "PyQt5" not in text
+    assert "PySide6" not in text
     assert "QDialog" not in text
     assert "DataAnalysisDialog" not in text
     for rel in (

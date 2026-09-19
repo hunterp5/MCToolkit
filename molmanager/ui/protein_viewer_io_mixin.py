@@ -23,8 +23,8 @@ import logging
 from dataclasses import replace
 from pathlib import Path
 
-from PyQt5.QtCore import QByteArray
-from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+from PySide6.QtCore import QByteArray
+from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
 from ..protein.structure_components import (
     LoadedStructure,

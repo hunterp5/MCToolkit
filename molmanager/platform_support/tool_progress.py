@@ -27,7 +27,7 @@ class ToolProgressState:
     """
     Updated from worker threads; read from a QTimer on the main window.
 
-    Avoids relying on ``pyqtSignal`` delivery while the GIL is held by descriptor work.
+    Avoids relying on ``Signal`` delivery while the GIL is held by descriptor work.
     """
 
     def __init__(self) -> None:

@@ -22,8 +22,8 @@ import logging
 import time
 from contextlib import nullcontext
 
-from PyQt5.QtCore import QEventLoop, QTimer
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtCore import QEventLoop, QTimer
+from PySide6.QtWidgets import QApplication
 
 from rdkit import Chem
 

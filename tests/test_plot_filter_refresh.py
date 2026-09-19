@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from PyQt5.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget
 
 from molmanager.analysis.dimensionality_reduction import (
     DimensionReductionResult,

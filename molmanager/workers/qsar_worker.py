@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import threading
 
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+from PySide6.QtCore import QObject, QRunnable, Signal
 
 from ..platform_support.exception_policy import log_swallowed_exception
 from ..analysis.qsar_models import fit_qsar_model, predict_qsar_rows
@@ -38,9 +38,9 @@ def _emit_qsar_cancelled(signals: QSARSignals) -> None:
 
 
 class QSARSignals(QObject):
-    train_finished = pyqtSignal(object)
-    predict_finished = pyqtSignal(list)
-    failed = pyqtSignal(str)
+    train_finished = Signal(object)
+    predict_finished = Signal(list)
+    failed = Signal(str)
 
 
 class QSARTrainWorker(QRunnable):

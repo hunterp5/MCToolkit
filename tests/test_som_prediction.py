@@ -231,7 +231,7 @@ def test_render_som_map_png_highlights() -> None:
 
 
 def _dark_ink_span(png: bytes) -> tuple[int, int]:
-    from PyQt5.QtGui import QImage
+    from PySide6.QtGui import QImage
 
     img = QImage.fromData(png)
     min_x, min_y = img.width(), img.height()

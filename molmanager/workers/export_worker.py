@@ -20,7 +20,7 @@ import csv
 import logging
 import threading
 
-from PyQt5.QtCore import QRunnable
+from PySide6.QtCore import QRunnable
 from rdkit import Chem
 
 from ..table.table_file_formats import write_openbabel_mols, write_xlsx_table

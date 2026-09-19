@@ -1,6 +1,6 @@
 # MolManager
 
-MolManager is a desktop application for working with chemical structures in a spreadsheet-style table. You can open SDF, SMILES, and CSV files; draw structures; calculate descriptors; cluster compounds; dock ligands; and more. It is built with **Python**, **PyQt5**, and **RDKit**.
+MolManager is a desktop application for working with chemical structures in a spreadsheet-style table. You can open SDF, SMILES, and CSV files; draw structures; calculate descriptors; cluster compounds; dock ligands; and more. It is built with **Python**, **PySide6**, and **RDKit**.
 
 This guide walks you through installation from scratch. It assumes you are new to Python and the command line. Follow the steps in order for your operating system.
 
@@ -410,14 +410,14 @@ If wheels still fail on your system, use **conda** for RDKit and pip for the res
 ```bash
 conda create -n molmanager python=3.11
 conda activate molmanager
-conda install -c conda-forge "rdkit>=2025.09.1" pyqt
+conda install -c conda-forge "rdkit>=2025.09.1" pyside6
 pip install -r requirements.txt
 pip install -e .
 ```
 
-### PyQtWebEngine fails to install
+### Embedded 3D viewer fails to start
 
-The app can still run; **Browser** 3Dmol previews may open in your system browser instead of an embedded viewer. On Linux you may need system packages (for example `libegl1` on Debian/Ubuntu).
+The app can still run; **Browser** 3Dmol previews may open in your system browser instead of an embedded viewer. On Linux you may need system packages (for example `libegl1` on Debian/Ubuntu). Reinstall PySide6 if Qt WebEngine is missing.
 
 ### “No module named molmanager”
 

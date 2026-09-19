@@ -21,8 +21,8 @@ from __future__ import annotations
 from contextlib import nullcontext
 from dataclasses import dataclass
 
-from PyQt5.QtCore import QItemSelectionModel, QTimer, Qt
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QItemSelectionModel, QTimer, Qt
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QComboBox,

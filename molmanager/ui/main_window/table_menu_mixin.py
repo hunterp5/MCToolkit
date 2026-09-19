@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QApplication, QInputDialog, QMenu
+from PySide6.QtWidgets import QApplication, QInputDialog, QMenu
 
 from ...table.column_log_transform import (
     column_can_apply_log10,
@@ -185,7 +185,7 @@ class TableMenuMixin:
         if menu is None:
             return
         old_n = self.headers[col]
-        action = menu.exec_(self.table.horizontalHeader().mapToGlobal(pos))
+        action = menu.exec(self.table.horizontalHeader().mapToGlobal(pos))
         if action is None:
             return
         name = action.objectName()
@@ -327,7 +327,7 @@ class TableMenuMixin:
         menu = QMenu(self)
         dup_act = menu.addAction("Duplicate Row")
         del_act = menu.addAction("Delete Row")
-        action = menu.exec_(self.table.verticalHeader().mapToGlobal(pos))
+        action = menu.exec(self.table.verticalHeader().mapToGlobal(pos))
         if action == dup_act:
             cmd = UndoInsertRowCommand(self, row)
             if cmd.is_valid():
@@ -426,7 +426,7 @@ class TableMenuMixin:
                     "Open the MMP Transform Ledger for this session's MMP results."
                 )
 
-        action = menu.exec_(self.table.viewport().mapToGlobal(pos))
+        action = menu.exec(self.table.viewport().mapToGlobal(pos))
         if browse_act is not None and action == browse_act and oid is not None:
             opener = getattr(self, "open_som_browser_for_oid", None)
             if callable(opener):

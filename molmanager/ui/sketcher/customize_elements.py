@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from PyQt5.QtCore import QSettings, Qt
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QDialogButtonBox,

@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtGui import QColor
+from PySide6.QtGui import QColor
 
 # Floor when no docked content is present (empty host / buttons only).
 PLOT_PANEL_BASE_MINIMUM_WIDTH = 420

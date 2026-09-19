@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint, Qt
-from PyQt5.QtGui import QKeyEvent, QKeySequence
-from PyQt5.QtWidgets import QAction, QMenuBar, QWidget
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QKeyEvent, QKeySequence, QAction
+from PySide6.QtWidgets import QMenuBar, QWidget
 
 from molmanager.ui.sketcher.bonds import _bond_make
 from molmanager.ui.sketcher.dialog import SketcherDialog
@@ -133,7 +133,9 @@ def test_sketcher_edit_menu_has_copy_paste_delete(qapp) -> None:  # noqa: ARG001
     assert dlg._act_edit_delete.shortcut() == QKeySequence.Delete
     mb = dlg.findChild(QMenuBar)
     assert mb is not None
-    edit = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Edit")
+    edit_action = next(a for a in mb.actions() if a.text().replace("&", "") == "Edit")
+    edit = edit_action.menu()
+    assert edit is not None
     labels = [a.text().replace("&", "") for a in edit.actions() if not a.isSeparator()]
     assert labels[:5] == ["Undo", "Redo", "Copy", "Paste", "Delete Selection"]
     dlg.close()

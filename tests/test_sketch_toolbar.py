@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget
 
 from molmanager.ui.sketcher.bonds import BOND_STEREO_PLAIN, BOND_STEREO_WEDGE
 from molmanager.ui.sketcher.constants import SKETCH_RING_TEMPLATES, TOOLBAR_ELEMENT_GROUPS

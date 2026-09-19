@@ -21,8 +21,8 @@ from __future__ import annotations
 import base64
 import json
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QMessageBox, QVBoxLayout, QWidget
 
 from rdkit import Chem
 

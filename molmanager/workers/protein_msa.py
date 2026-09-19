@@ -20,14 +20,14 @@ from __future__ import annotations
 
 import threading
 
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+from PySide6.QtCore import QObject, QRunnable, Signal
 
 from ..protein.protein_msa import FastaRecord, run_mafft_alignment
 
 
 class MafftAlignSignals(QObject):
-    finished = pyqtSignal(list)
-    failed = pyqtSignal(str)
+    finished = Signal(list)
+    failed = Signal(str)
 
 
 class MafftAlignWorker(QRunnable):

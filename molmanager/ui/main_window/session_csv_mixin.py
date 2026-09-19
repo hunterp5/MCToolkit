@@ -21,8 +21,8 @@ from __future__ import annotations
 import logging
 import sys
 
-from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtWidgets import QMessageBox
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtWidgets import QMessageBox
 
 from ...storage import load_mols_from_parse_result
 from ..strings import LOADING_DETAIL_SESSION

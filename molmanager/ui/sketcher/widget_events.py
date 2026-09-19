@@ -21,8 +21,13 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from PyQt5.QtCore import QPoint, QRect, Qt
-from PyQt5.QtWidgets import QAction, QMenu, QMessageBox, QWidget
+from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import (
+    QMenu,
+    QMessageBox,
+    QWidget,
+)
 
 from .bonds import _bond_make, _bond_unpack
 from .constants import DEFAULT_WILDCARD_ELEMENTS, SKETCH_MEDIAN_BOND_PX, WILDCARD_ELEMENT
@@ -279,7 +284,7 @@ class SketchWidgetEventsMixin:
                 self._add_cleanup_selected_action(menu, hit_ids={hit["id"]})
                 self._add_copy_selected_smiles_action(menu, hit_ids={hit["id"]})
                 self._add_group_action_if_applicable(menu)
-                menu.exec_(self.mapToGlobal(pt))
+                menu.exec(self.mapToGlobal(pt))
             else:
                 bi, _ = self._hit_bond(pt)
                 if bi is not None:
@@ -334,7 +339,7 @@ class SketchWidgetEventsMixin:
                     self._add_selection_transform_actions(menu, hit_ids={a_idx, b_idx})
                     self._add_cleanup_selected_action(menu, hit_ids={a_idx, b_idx})
                     self._add_group_action_if_applicable(menu)
-                    menu.exec_(self.mapToGlobal(pt))
+                    menu.exec(self.mapToGlobal(pt))
                 else:
                     dlg = self._sketcher_dialog_if()
                     if dlg is not None:

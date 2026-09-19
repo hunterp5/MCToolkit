@@ -18,8 +18,18 @@
 
 from __future__ import annotations
 
-from PyQt5.QtGui import QFont, QPalette
-from PyQt5.QtWidgets import QAction, QActionGroup, QApplication, QDialog, QFrame, QMenu
+from PySide6.QtGui import (
+    QFont,
+    QPalette,
+    QAction,
+    QActionGroup,
+)
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFrame,
+    QMenu,
+)
 
 from .hotkeys import apply_hotkey_to_action
 from .theme import (
@@ -72,10 +82,11 @@ class GuiSettingsMixin:
         self._theme_action_group.addAction(self._act_theme_light)
         self._theme_action_group.addAction(self._act_theme_dark)
         self._theme_action_group.addAction(self._act_theme_groovy)
-        self._act_theme_light.triggered.connect(lambda: self._set_gui_theme(THEME_LIGHT))
-        self._act_theme_dark.triggered.connect(lambda: self._set_gui_theme(THEME_DARK))
+        # PySide6 QAction.triggered passes the checked flag; 0-arg lambdas never run.
+        self._act_theme_light.triggered.connect(lambda *_a: self._set_gui_theme(THEME_LIGHT))
+        self._act_theme_dark.triggered.connect(lambda *_a: self._set_gui_theme(THEME_DARK))
         # Always re-apply so choosing Groovy again (after another mode) rolls a new palette.
-        self._act_theme_groovy.triggered.connect(lambda: self._set_gui_theme(THEME_GROOVY))
+        self._act_theme_groovy.triggered.connect(lambda *_a: self._set_gui_theme(THEME_GROOVY))
         self._custom_theme_actions: dict[str, QAction] = {}
         self._gui_menu: QMenu | None = None
         self._act_customize_colors = QAction(
@@ -102,7 +113,7 @@ class GuiSettingsMixin:
         from .dialogs.hotkeys_dialog import HotkeysDialog
 
         dlg = HotkeysDialog(self)
-        if dlg.exec_() != QDialog.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             return
         self._apply_all_hotkeys()
         if hasattr(self, "status_label"):
@@ -112,7 +123,7 @@ class GuiSettingsMixin:
         from .dialogs.wsl_settings import WslSettingsDialog
 
         dlg = WslSettingsDialog(self)
-        if dlg.exec_() != QDialog.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             return
         path = dlg.selected_path() or "default"
         if hasattr(self, "status_label"):
@@ -130,7 +141,7 @@ class GuiSettingsMixin:
         dlg = StructureSettingsDialog(prev_w, prev_h, self)
         if hasattr(self, "apply_structure_table_layout"):
             dlg.size_previewed.connect(self._preview_structure_depict_size)
-        if dlg.exec_() == QDialog.Accepted:
+        if dlg.exec() == QDialog.Accepted:
             self._apply_structure_depict_size(
                 dlg.selected_width(), dlg.selected_height(), persist=True
             )
@@ -168,7 +179,7 @@ class GuiSettingsMixin:
         dlg.app_font_size_previewed.connect(self._preview_app_font)
         dlg.table_font_size_previewed.connect(self._preview_table_font)
         dlg.table_align_previewed.connect(self._preview_table_align)
-        if dlg.exec_() == QDialog.Accepted:
+        if dlg.exec() == QDialog.Accepted:
             self._set_app_font_pt(dlg.selected_app_point_size())
             self._set_table_font_pt(dlg.selected_table_point_size())
             self._set_table_text_alignment(*dlg.selected_table_alignment())
@@ -279,7 +290,7 @@ class GuiSettingsMixin:
         from .dialogs.custom_theme import CustomThemeDialog
 
         dlg = CustomThemeDialog(self)
-        accepted = dlg.exec_() == QDialog.Accepted
+        accepted = dlg.exec() == QDialog.Accepted
         deleted = dlg.deleted_theme_name()
         saved = dlg.saved_theme_name() if accepted else None
 
@@ -381,10 +392,8 @@ class GuiSettingsMixin:
 
     def _sync_menubar_chrome_font(self) -> None:
         """Keep the menubar, Layout, and Processes on the application font."""
-        has_chrome = any(
-            getattr(self, name, None) is not None
-            for name in ("_btn_workspace_layout", "_btn_processes")
-        )
+        chrome_names = ("_btn_workspace_layout", "_btn_processes")
+        has_chrome = any(getattr(self, name, None) is not None for name in chrome_names)
         if has_chrome:
             mb = self.menuBar()
             pt = int(getattr(self, "_app_font_pt", 0) or default_app_font_pt())
@@ -392,7 +401,7 @@ class GuiSettingsMixin:
             font = QFont(app.font()) if app is not None else QFont(mb.font())
             font.setPointSize(pt)
             mb.setFont(font)
-            for name in ("_btn_workspace_layout", "_btn_processes"):
+            for name in chrome_names:
                 btn = getattr(self, name, None)
                 if btn is not None:
                     btn.setFont(font)
@@ -419,7 +428,7 @@ class GuiSettingsMixin:
 
     def _apply_table_text_alignment(self) -> None:
         """Refresh table cells after the text alignment setting changes."""
-        from PyQt5.QtCore import Qt
+        from PySide6.QtCore import Qt
 
         model = getattr(self, "_table_model", None)
         table = getattr(self, "table", None)

@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
     QDialog,
@@ -57,7 +57,7 @@ _PREPARE_FMTS = _PREPARE_SOURCE_FMTS
 class ProteinDockFileDialog(ProteinStructureSourceMixin, QDialog):
     """Options for Protein Viewer → Tools → Prepare → Dock File."""
 
-    smina_prepared = pyqtSignal(object)
+    smina_prepared = Signal(object)
     _source_output_tag = "smina"
     _source_output_suffix = ".pdbqt"
     _source_tmp_prefix = "molmanager_dock_file_in_"
@@ -352,7 +352,7 @@ class ProteinDockFileDialog(ProteinStructureSourceMixin, QDialog):
                 ),
             )
             return
-        from PyQt5.QtCore import QThreadPool
+        from PySide6.QtCore import QThreadPool
 
         QThreadPool.globalInstance().start(DockFileWorker(req, signals=self._signals))
 

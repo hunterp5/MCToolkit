@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QLabel, QVBoxLayout
 
 KEEP_STRUCTURES_AS_LOADED = "[Keep structures as loaded]"
 
@@ -84,7 +84,7 @@ class StructureSourcePickerDialog(QDialog):
         if len(columns) < 2:
             return None, True
         dlg = cls(parent, columns)
-        if dlg.exec_() != QDialog.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             return None, False
         text = dlg._combo.currentText().strip()
         if not text or text == KEEP_STRUCTURES_AS_LOADED:

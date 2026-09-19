@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+from PySide6.QtCore import QObject, QRunnable, Signal
 
 from ..protein.hydrogen_bonds import HBOND_KIND_COMPLEX
 from ..protein.protein_interactions import (
@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 
 
 class InteractionOverlaySignals(QObject):
-    finished = pyqtSignal(int, object)
-    failed = pyqtSignal(int, str)
+    finished = Signal(int, object)
+    failed = Signal(int, str)
 
 
 class InteractionOverlayWorker(QRunnable):

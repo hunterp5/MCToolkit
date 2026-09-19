@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 
-from PyQt5.QtCore import QByteArray
+from PySide6.QtCore import QByteArray
 
 from ..qt_widget_utils import qobject_is_deleted
 
@@ -135,9 +135,9 @@ class SessionPlotsMixin:
             if dlg is None:
                 return
             try:
-                from PyQt5 import sip
+                import shiboken6
 
-                if sip.isdeleted(dlg):
+                if not shiboken6.isValid(dlg):
                     return
             except Exception:
                 pass

@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
-from PyQt5.QtWidgets import QCheckBox, QGroupBox
+from PySide6.QtWidgets import QCheckBox, QGroupBox
 
 from molmanager.ui.dialogs.mol_tools import GenerateConformationsDialog
 from molmanager.workers.conformer_generation import (

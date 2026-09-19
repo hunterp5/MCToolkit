@@ -110,16 +110,16 @@ def test_baseline_is_not_stale(metrics: am.Metrics, baseline: dict) -> None:
 
 
 def test_decision_layers_import_no_qt_at_runtime() -> None:
-    """Importing a workflow must not load PyQt5 (generalizes test_tool_readiness)."""
+    """Importing a workflow must not load PySide6 (generalizes test_tool_readiness)."""
     import importlib
 
     for name in list(sys.modules):
         if name.startswith("molmanager.workflows"):
             del sys.modules[name]
-    qt_already_loaded = "PyQt5.QtWidgets" in sys.modules
+    qt_already_loaded = "PySide6.QtWidgets" in sys.modules
     package = ROOT / "molmanager" / "workflows"
     for path in sorted(package.glob("*.py")):
         module = f"molmanager.workflows.{path.stem}" if path.stem != "__init__" else None
         importlib.import_module(module or "molmanager.workflows")
     if not qt_already_loaded:
-        assert "PyQt5.QtWidgets" not in sys.modules, "a workflow pulled in Qt"
+        assert "PySide6.QtWidgets" not in sys.modules, "a workflow pulled in Qt"

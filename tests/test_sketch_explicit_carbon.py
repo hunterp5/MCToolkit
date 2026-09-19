@@ -18,8 +18,10 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint
-from PyQt5.QtWidgets import QMenuBar, QWidget
+from qt_helpers import qt_submenu
+
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QMenuBar, QWidget
 
 from molmanager.ui.sketcher.bonds import _bond_make
 from molmanager.ui.sketcher.dialog import SketcherDialog
@@ -30,7 +32,7 @@ def test_file_menu_save_sketch_label(qapp) -> None:  # noqa: ARG001
     dlg = SketcherDialog(QWidget())
     mb = dlg.findChild(QMenuBar)
     assert mb is not None
-    file_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "File")
+    file_menu = qt_submenu(mb, "File")
     texts = [a.text().replace("&", "") for a in file_menu.actions()]
     assert any(t.startswith("Save Sketch") for t in texts)
     assert not any("Export sketch" in t for t in texts)

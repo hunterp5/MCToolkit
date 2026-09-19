@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 from ..analysis_job_support import (
     ensure_activity_analysis_ready,

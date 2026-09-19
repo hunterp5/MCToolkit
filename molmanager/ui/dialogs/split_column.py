@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -188,7 +188,7 @@ class SplitColumnDialog(QDialog):
                 continue
             raw = m.backing_value_for_row_header(r, col) or ""
             if not raw:
-                raw = app._table_cell_text(r, ci) or ""
+                raw = app.cell_text(r, ci) or ""
             texts.append(raw)
             if len(texts) >= 400:
                 break

@@ -17,7 +17,7 @@
 """Tests for plot axis column list helpers."""
 
 import pytest
-from PyQt5.QtWidgets import QApplication, QComboBox
+from PySide6.QtWidgets import QApplication, QComboBox
 
 from molmanager.ui.plot import AXIS_NONE, PlotWidget, normalize_axis_name
 
@@ -40,7 +40,7 @@ def test_set_axis_combo_items_preserves_selection(qapp):
 
 
 def test_on_table_data_changed_ignores_structure_paint(qapp):  # noqa: ARG001
-    from PyQt5.QtCore import Qt
+    from PySide6.QtCore import Qt
 
     from molmanager.ui.compound_table_model import CompoundTableModel
 

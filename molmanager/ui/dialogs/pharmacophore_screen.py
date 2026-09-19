@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,

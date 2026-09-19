@@ -37,11 +37,11 @@ from molmanager.platform_support.qt_webengine_flags import configure_qtwebengine
 
 configure_qtwebengine_quiet_logs()
 try:
-    import PyQt5.QtWebEngineWidgets  # noqa: F401
+    import PySide6.QtWebEngineWidgets  # noqa: F401
 except Exception:
     pass
 
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 from molmanager.protein.hydrogen_bonds import detect_hydrogen_bonds
 from molmanager.protein.protein_interactions import (

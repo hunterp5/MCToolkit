@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QObject
+from PySide6.QtCore import QObject
 
 from .app_kernel import AppKernel, bind_mixin_methods
 from .main_window.ingest_load_mixin import IngestLoadMixin

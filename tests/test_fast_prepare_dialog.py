@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
 from molmanager.ui.dialogs.mol_tools import FastPrepareDialog
 from molmanager.ui.dialogs.fast_prepare import FastPrepareDialogConfig

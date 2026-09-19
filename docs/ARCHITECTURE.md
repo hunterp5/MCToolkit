@@ -1,6 +1,6 @@
 # MolManager architecture
 
-Desktop chemistry table manager: **PyQt5** UI, **RDKit** structures, optional **PyTorch** tools (pKa, permeability).
+Desktop chemistry table manager: **PySide6** UI, **RDKit** structures, optional **PyTorch** tools (pKa, permeability).
 
 ## High-level layout
 
@@ -58,7 +58,7 @@ subpackage reads as its table of contents.
 |---------|----------|
 | `platform_support/` | Process, config, and runtime concerns: `config.py`, `app_logging.py`, `bundled_paths.py`, `wsl_launcher.py`, `qt_webengine_flags.py`, `rdkit_runtime_setup.py`, `memory_guards.py`, `memory_usage.py`, `performance_tracking.py`, `exception_policy.py`, `tool_progress.py` |
 | `reference/` | In-app reference content: `help_markdown.py`, `citations_catalog.py`, `method_citations.py`, `descriptor_tooltips.py` |
-| `chem/` | Core molecule handling: `molecule_conversion.py`, `smarts_macropatterns.py`, `rdkit_fingerprints.py`, `fingerprint_cache.py`, `fragment_*.py`, `reaction_*.py`, `structure_2d_depiction.py`, `structure_hydrogens.py`, `structure_neutralize.py`, `structure_source_headers.py` |
+| `chem/` | Core molecule handling: `molecule_conversion.py`, `smarts_macropatterns.py`, `rdkit_fingerprints.py`, `fingerprint_cache.py`, `fragment_*.py`, `reaction_*.py`, `structure_2d_depiction.py`, `structure_hydrogens.py`, `structure_neutralize.py`, `structure_source_headers.py`, sketcher chemistry (`sketch_atoms.py`, `sketch_mol.py`, `alkene_stereo.py`, `contracted_labels.py`, `element_colors.py`) |
 | `descriptors/` | `catalog.py`, `descriptors_3d.py`, `medchem_descriptors.py`, `descriptor_cache_reuse.py`, `ml_feature_matrix.py` |
 | `conformers/` | Generation and encoding: `conforge_generation.py`, `openbabel_confab.py`, `conformer_column_codec.py`, `ensemble_binary_codec.py`, `conformer_output.py` |
 | `ionization/` | `unipka_ensembles.py`, `unipka_enumerator.py`, `microstate_cache.py` |
@@ -68,7 +68,7 @@ subpackage reads as its table of contents.
 | `sources/` | External compound providers: `chembl_random_compounds.py`, `pubchem_names.py`, `surechembl_api.py`, `random_molecule_sources.py` |
 | `analysis/` | `mmp_analysis.py` (pair/transform core), `mmp_session.py`, `mmp_table.py`, `mmp_depict.py`, `mmp_neighborhood_analysis.py`, `activity_cliff_analysis.py`, `sali_analysis.py`, `qsar_models.py`, `mpo_scoring.py`, `medchem_space.py`, `dimensionality_reduction.py`, `table_statistics.py` |
 | `plotting/` | Chart computation, no Qt widgets: `plot_axes.py`, `plot_series_collect.py`, `plot_marker_color.py`, `plot_heatmap.py`, `plot_labels.py`, `plot_radar.py`, `plot_statistics_fits.py`, `plotly_legend.py` |
-| `table/` | Table data operations and documents: `column_*.py`, `calculator_expressions.py`, `filter_compute.py`, `random_number_columns.py`, `text_file_ingest.py`, `table_file_formats.py`, `session_codec.py`, `structure_depiction_layout.py` |
+| `table/` | Table data operations and documents: `column_*.py`, `calculator_expressions.py`, `filter_compute.py`, `random_number_columns.py`, `text_file_ingest.py`, `table_file_formats.py`, `session_codec.py`, `structure_depiction_layout.py`, `cell_reader.py` (`TableCellReader`) |
 | `storage/` | `MolStore`, `SqliteTableStore`, `extra_pixmap_store.py`, `structure_render_store.py` |
 | `services/` | Pure helpers shared by UI and workers (no Qt, no `molmanager.ui` imports) |
 | `workflows/` | What the app should do next, decided without the UI (see *Workflow layer*) |
@@ -88,7 +88,7 @@ whole `ChemistryWorkspaceWindow`. `workflows/` holds the decision half.
 Three rules define the layer:
 
 1. A workflow takes plain data or a narrow protocol. It never accepts the window or `AppKernel`.
-2. A workflow returns a result object. It never raises a dialog, touches a widget, or imports `PyQt5`.
+2. A workflow returns a result object. It never raises a dialog, touches a widget, or imports `PySide6`.
 3. The UI adapter reads widgets into arguments, calls the workflow, and renders the result.
 
 `workflows/tool_readiness.py` is the reference implementation. `plan_activity_analysis` decides from
@@ -116,19 +116,18 @@ values measured when the ratchet landed and may only go **down**
 
 | Counter | Frozen at | What it measures |
 |---------|-----------|------------------|
-| `window_typed_params` | 80 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
-| `modules_taking_the_window` | 30 | Modules with at least one such parameter |
-| `private_cross_module_access` | 91 | `app._x` / `self._app._x` where `_x` is **not** declared in any `ui/` protocol |
-| `deferred_intra_package_imports` | 590 | First-party imports nested in function bodies, i.e. import cycles |
-| `mixin_modules` | 75 | `*_mixin.py` files |
-| `bind_mixin_methods_sites` | 6 | Legacy binds where a collaborator runs mixin bodies with the window as `self` |
-| `rdkit_in_ui_modules` | 52 | Qt modules importing RDKit — chemistry living in the UI |
+| `window_typed_params` | 78 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
+| `modules_taking_the_window` | 28 | Modules with at least one such parameter |
+| `private_cross_module_access` | 78 | `app._x` / `self._app._x` where `_x` is **not** declared in any `ui/` protocol |
+| `deferred_intra_package_imports` | 589 | First-party imports nested in function bodies, i.e. import cycles |
+| `mixin_modules` | 73 | `*_mixin.py` files |
+| `bind_mixin_methods_sites` | 4 | Legacy binds where a collaborator runs mixin bodies with the window as `self` |
+| `rdkit_in_ui_modules` | 40 | Qt modules importing RDKit — chemistry living in the UI |
 | `app_kernel_members` | 31 | `AppKernel` surface, roles included |
 
 `private_cross_module_access` deliberately ignores members declared in a role or host protocol.
 Otherwise converting a mixin body would raise it every time — a hidden `self._x` becomes a visible
-`self._app._x` without any new coupling. What it still counts is undeclared reach, currently 91 uses
-of 50 distinct names, led by `_table_cell_text`.
+`self._app._x` without any new coupling. What it still counts is undeclared reach.
 
 Declaring rather than reaching is the sanctioned move, and `protocols_over_member_cap` is what
 keeps it from becoming a loophole: no protocol under `ui/` may declare more than 8 members. That
@@ -138,7 +137,7 @@ coupling rather than reduce it.
 
 Invariants that must stay 0: `domain_modules_importing_ui` (`molmanager/app.py` is the
 composition root and exempt), `qt_in_decision_layers`, `ui_in_decision_layers`,
-`protocols_over_member_cap`. The `ui/` share of the package (64.4%) may not drift up by more than
+`protocols_over_member_cap`. The `ui/` share of the package (63.2%) may not drift up by more than
 0.5 points.
 
 The target these counters move toward:
@@ -147,15 +146,18 @@ The target these counters move toward:
 2. **Decisions** (`services/` + `workflows/`) — services compute a value, workflows branch on
    what the app should do next.
 3. **Orchestration** (`workers/`, plus collaborators once they no longer need the window) —
-   owns sequencing and threading, knows nothing about widgets.
+   owns sequencing and threading, knows nothing about widgets. Converted collaborators that still
+   own Qt (`ProgressController`, `TableWriteService`, `ToolDialogScope`, …) stay in `ui/` so
+   `qt_in_decision_layers` stays 0.
 4. **`ui/`** — widgets, dialogs, layout, and thin adapters that read widget state into calls on
    rings 2–3 and render the results.
 
 Two rules make that real, and both are what the counters track. **Per-capability protocols
 instead of one kernel:** anything accepting all 31 kernel members can reach the whole window, so
 collaborators should take the roles in `ui/app_roles.py` instead (see "Kernel roles" below).
-**One table-reader interface:** domain code must not loop `app._table_cell_text`, which is what
-currently forces row-walking logic to stay in `ui/`.
+**One table-reader interface:** domain code must not loop `app._table_cell_text`. The window
+implements `molmanager.table.cell_reader.TableCellReader` (`cell_text`); dialogs and services
+read cells through that.
 
 ## Main window (`molmanager/ui/main_window/`)
 
@@ -169,7 +171,7 @@ window as one-line forwards so dialogs and tests keep calling `app.on_calc_finis
 |--------------|--------|------|
 | `ProgressController` | `ui/progress_controller.py` | Polled tool progress: poll timer, background-job depth, partial-results notice, status text |
 | `ToolDialogScope` | `ui/tool_dialog_scope.py` | Modeless tool dialogs, selected-rows-only scope, empty-selection abort |
-| `TableWriteService` | `ui/table_write_service.py` | `on_calc_finished`, unique column names, `_ensure_columns` |
+| `TableWriteService` | `ui/table_write_service.py` | Column writeback: unique names, inserts, chunked `on_calc_finished` |
 | `TableSession` | `ui/table_session.py` | Selection, chemistry-column lookup, sticky visible-row cache |
 | `TableBuildPipeline` | `ui/table_build_pipeline.py` | Ingest chunks, SQLite rebuild, Render 2D batch/results (`QObject` child) |
 | `SessionController` | `ui/session_controller.py` | `.cms` save/restore, table layout, session plots, legacy CSV |
@@ -177,6 +179,7 @@ window as one-line forwards so dialogs and tests keep calling `app.on_calc_finis
 | `PlotDockHost` | `ui/plot_dock_host.py` | Dock/undock plot panes |
 | `ProcessQueueManager` | `ui/process_queue.py` | Serial heavy tools |
 | `BackgroundActivityHub` | `ui/background_activity.py` | Processes dialog |
+| `SessionLogBuffer` | `platform_support/session_log.py` | In-memory session log (Processes dialog) |
 
 ### Kernel roles (`molmanager/ui/app_roles.py`)
 
@@ -232,21 +235,23 @@ A mixin is shared behavior used by **more than one** class. Almost all MolManage
 - Add empty composite mixins (`ChemistryMixin`-style).
 - Treat mixin MRO order as architecture. `QMainWindow` precedes remaining mixins, so Qt virtuals such as `closeEvent` must be declared on the shell (delegating into `AppLifecycleMixin`). Mixin implementations that need the C++ base should call `QMainWindow.closeEvent` explicitly rather than `super()`.
 
-`bind_mixin_methods` is a **legacy bridge**: it copies mixin functions onto a collaborator but still invokes them with the window as `self`. Six collaborators still use it; convert bodies to `self._app` when touching that code.
+`bind_mixin_methods` is a **legacy bridge**: it copies mixin functions onto a collaborator but still invokes them with the window as `self`. Four collaborators still use it; convert bodies to `self._app` when touching that code.
 
-`ToolDialogScope` shows the conversion, and it is four steps: move the mixin bodies onto the
+`ToolDialogScope` and `TableWriteService` show the conversion, and it is four steps: move the mixin bodies onto the
 collaborator rewriting window `self` to `self._app`, move mixin-owned state out of the window
 `__init__` and into the collaborator, declare a host protocol for what is left, then point
 `install_window_forwards` at the collaborator class instead of the deleted mixin. Call sites do not
 change, because they go through those forwards.
 
 A mixin may not convert whole. `AppProgressMixin` held two jobs: the polled tool-progress state
-machine, and the status-bar chrome the window itself builds (loading overlay, memory label,
-status-bar visibility). Only the first fits an 8-member contract — the chrome drives widgets that
-do not exist yet when `ProgressController` is constructed — so the state machine moved onto the
-collaborator with `ProgressHost`, and the chrome half stays on the mixin and the legacy bridge.
-Splitting by what fits the cap is the intended way to make partial progress; forwards let both
-halves answer on the window, so callers never see the seam.
+machine, and the status-bar chrome the window itself builds. Only the first fits an 8-member
+contract, so the state machine moved onto `ProgressController` with `ProgressHost` and the chrome
+half moved onto `AppLifecycleMixin` (already on the window MRO) so the collaborator no longer
+needs `bind_mixin_methods`. `ColumnWriteMixin` split the same way: writeback
+moved onto `TableWriteService` with `TableWriteHost`, and filter/plot/search chrome stayed on
+`TableUIMixin._on_written_columns` because those widgets do not exist yet when the collaborator is
+constructed. Splitting by what fits the cap is the intended way to make partial progress; forwards
+let both halves answer on the window, so callers never see the seam.
 
 New tools go through `ui/analysis_job_support.py` (which uses `tool_dialog_scope`) and kernel
 methods — do not add mixin bases to `ChemistryWorkspaceWindow`.
@@ -293,7 +298,7 @@ Tool mixins that remain on the window (fragments, MMP/SALI, dock, predict) are t
 | `_render_threadpool` | 2D structure rendering |
 | `_background_jobs` + `BackgroundActivityHub` | **Processes** dialog rows for non-queue work |
 
-Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom `status_label`.
+Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom `status_label`. Status start/finish lines, tool `append_log` output, and Python logging also go to the **Processes** dialog log pane (`SessionLogBuffer` / `SessionLogPanel`).
 
 ## Plots and table sync
 

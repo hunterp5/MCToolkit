@@ -17,9 +17,8 @@
 """Tool-progress owner for the main window.
 
 The polled progress state machine lives here and owns its timer, depth counter, and the
-last text it wrote. The window keeps the status-bar chrome it builds (stack overlay, memory
-label, status-bar visibility); ``AppProgressMixin`` still supplies that half through the
-legacy bridge.
+last text it wrote. Status-bar chrome (stack overlay, memory label, visibility) lives on
+the window via ``AppLifecycleMixin``.
 """
 
 from __future__ import annotations
@@ -27,12 +26,10 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import Any, Protocol
 
-from PyQt5.QtCore import QTimer
+from PySide6.QtCore import QTimer
 
 from ..platform_support.config import load_config
 from ..platform_support.tool_progress import format_tool_progress_text
-from .app_kernel import bind_mixin_methods
-from .main_window.app_progress_mixin import AppProgressMixin
 from .strings import STATUS_READY
 
 
@@ -51,15 +48,10 @@ class ProgressHost(Protocol):
 
 
 class ProgressController:
-    """Owns the polled tool-progress state machine and the text it puts on the status line.
-
-    ``AppProgressMixin`` still supplies the window's status-bar chrome through
-    ``bind_mixin_methods``; everything below is a real method reading ``self._app``.
-    """
+    """Owns the polled tool-progress state machine and the text it puts on the status line."""
 
     def __init__(self, app: ProgressHost) -> None:
         self._app = app
-        bind_mixin_methods(self, app, AppProgressMixin)
         self._active_label = ""
         self._last_status_text = ""
         self._background_job_ui_depth = 0

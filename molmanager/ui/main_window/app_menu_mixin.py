@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import sys
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
     QHBoxLayout,
     QToolButton,
     QWidget,
@@ -64,7 +64,8 @@ class AppMenuMixin:
         btn_proc = QToolButton(corner)
         btn_proc.setText("Processes")
         btn_proc.setToolTip(
-            "View queued background jobs (conformers, descriptors, import, export, …)."
+            "View running and queued jobs, and the session log "
+            "(tool output, status history, warnings)."
         )
         btn_proc.setToolButtonStyle(Qt.ToolButtonTextOnly)
         btn_proc.setAutoRaise(True)
@@ -82,12 +83,18 @@ class AppMenuMixin:
         self._sync_status_chrome_for_workspace()
 
     def _sync_main_toolbar_for_table_ready(self) -> None:
-        """Disable menubar, Layout, and Processes while ``_ingest_loading``."""
+        """Disable menubar and Layout while ``_ingest_loading``.
+
+        Processes stays enabled so a long load can still be inspected in the log.
+        """
         if getattr(self, "_dock_results_mode", False):
             return
         enabled = not bool(getattr(self, "_ingest_loading", False))
-        mb = self.menuBar()
-        for action in mb.actions():
+        kept = getattr(self, "_qt_kept_menubar_actions", None)
+        if kept is None:
+            kept = list(self.menuBar().actions())
+            self._qt_kept_menubar_actions = kept
+        for action in kept:
             menu = action.menu()
             if menu is not None:
                 menu.setEnabled(enabled)
@@ -102,12 +109,9 @@ class AppMenuMixin:
                 action.setEnabled(False)
             else:
                 action.setEnabled(enabled)
-        for btn in (
-            getattr(self, "_btn_workspace_layout", None),
-            getattr(self, "_btn_processes", None),
-        ):
-            if btn is not None:
-                btn.setEnabled(enabled)
+        btn = getattr(self, "_btn_workspace_layout", None)
+        if btn is not None:
+            btn.setEnabled(enabled)
 
     def open_protein_viewer(self):
         """Open the Protein Viewer window (3Dmol.js + chain Manager)."""
@@ -217,7 +221,7 @@ class AppMenuMixin:
         current = mgr.layout_id if mgr is not None else None
         dlg = WorkspaceLayoutPickerDialog(self, current_layout_id=current)
         dlg.layout_chosen.connect(self.apply_workspace_layout)
-        dlg.exec_()
+        dlg.exec()
 
     def apply_workspace_layout(self, layout_id: str) -> None:
         """Apply a workspace layout preset and undock plots that no longer fit."""

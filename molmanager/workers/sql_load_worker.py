@@ -23,8 +23,8 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-from PyQt5 import sip
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+import shiboken6
+from PySide6.QtCore import QObject, QRunnable, Signal
 from rdkit import Chem
 
 from ..platform_support.exception_policy import log_swallowed_exception
@@ -37,7 +37,7 @@ def _safe_emit(obj: QObject | None, emitter_name: str, *args) -> None:
     if obj is None:
         return
     try:
-        if sip.isdeleted(obj):
+        if not shiboken6.isValid(obj):
             return
     except Exception:
         return
@@ -104,9 +104,9 @@ class SqlLoadParseResult:
 class SqlLoadSignals(QObject):
     """Signals for SQL load workers (owned on the GUI thread)."""
 
-    chunk = pyqtSignal(object)
-    finished = pyqtSignal(object)
-    failed = pyqtSignal(str)
+    chunk = Signal(object)
+    finished = Signal(object)
+    failed = Signal(str)
 
 
 class SqlLoadWorker(QRunnable):

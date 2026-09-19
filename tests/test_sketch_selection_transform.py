@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint
+from PySide6.QtCore import QPoint
 
 from molmanager.ui.sketcher.bonds import _bond_make
 from molmanager.ui.sketcher.widget import SketchWidget

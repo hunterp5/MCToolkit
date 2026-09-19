@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
+from PySide6.QtWidgets import QMessageBox, QWidget
 
 from ..ionization.unipka_ensembles import cpu_torch_with_nvidia_gpu, cuda_pka_install_hint
 

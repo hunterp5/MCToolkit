@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPointF, QRectF, QSize, Qt
-from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
-from PyQt5.QtWidgets import QLineEdit, QPushButton, QSizePolicy
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt
+from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
+from PySide6.QtWidgets import QLineEdit, QPushButton, QSizePolicy
 
 from .dockable_plot_constants import (
     _BROWSER_NAV_BTN_HEIGHT,

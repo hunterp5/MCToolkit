@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 
-from PyQt5.QtCore import QByteArray
+from PySide6.QtCore import QByteArray
 
 
 class SessionTableLayoutMixin:

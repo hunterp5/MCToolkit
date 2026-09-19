@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from contextlib import suppress
 
-from PyQt5.QtCore import QRect, QSize, Qt, QTimer
-from PyQt5.QtGui import QColor, QFont, QFontMetrics, QPalette, QPixmap
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QRect, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPalette, QPixmap
+from PySide6.QtWidgets import (
     QAbstractButton,
     QAbstractItemView,
     QApplication,
@@ -31,7 +31,7 @@ from PyQt5.QtWidgets import (
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QTableView,
-    QWIDGETSIZE_MAX,
+    QWidget,
 )
 
 from ..table.structure_depiction_layout import (
@@ -40,6 +40,9 @@ from ..table.structure_depiction_layout import (
     structure_depict_width,
     structure_row_default_height,
 )
+
+# Qt's QWIDGETSIZE_MAX macro is not exported by PySide6.
+QWIDGETSIZE_MAX = (1 << 24) - 1
 
 # Must match CompoundTableModel.STRUCTURE_COL
 _STRUCTURE_COL = 1
@@ -101,7 +104,8 @@ def apply_header_font(header: QHeaderView | None, font: QFont) -> None:
     else:
         header.setFixedWidth(extent)
     header.updateGeometry()
-    header.update()
+    # QHeaderView.update(int) shadows QWidget.update() in PySide6.
+    QWidget.update(header)
     if vp is not None:
         vp.update()
 
@@ -124,7 +128,7 @@ def apply_table_header_theme(header: QHeaderView | None, pal: QPalette) -> None:
         if vp is not None:
             style.unpolish(vp)
             style.polish(vp)
-    header.update()
+    QWidget.update(header)
     if vp is not None:
         vp.update()
 

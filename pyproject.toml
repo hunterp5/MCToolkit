@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "molmanager"
 version = "0.1.0"
-description = "Desktop chemistry table manager (PyQt5 + RDKit)"
+description = "Desktop chemistry table manager (PySide6 + RDKit)"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 license = { file = "LICENSE" }
@@ -14,8 +14,7 @@ classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
 ]
 dependencies = [
-    "PyQt5>=5.15",
-    "PyQtWebEngine>=5.15",
+    "PySide6>=6.8,<6.9",  # Qt 6.8 LTS; 6.11+ wheels fail on Windows 10 ICU
     "plotly>=5.0,<6",
     "numpy>=1.24,<2",  # PyTorch 2.5 / UMAP; RDKit 2025.9+ is fine with NumPy 2
     "pandas>=2.0",

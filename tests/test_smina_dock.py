@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
 from molmanager.ui.gnina_dock import GninaDockDialog
 
@@ -312,7 +312,7 @@ def test_write_smina_config_repeats_ligand(tmp_path):
 
 
 def test_smina_skips_sidecar_sdf_when_unchecked(qapp, tmp_path):  # noqa: ARG001
-    from PyQt5.QtCore import QProcess
+    from PySide6.QtCore import QProcess
 
     pdbqt = tmp_path / "out.pdbqt"
     pdbqt.write_text("MODEL 1\n" + _CARBONYL_PDBQT + "ENDMDL\n", encoding="utf-8")
@@ -754,7 +754,7 @@ def test_present_dock_results_keeps_crystal_ref_on_validation_entry_only(qapp, t
 def test_gnina_log_goes_to_protein_viewer(qapp):  # noqa: ARG001
     from types import SimpleNamespace
 
-    from PyQt5.QtWidgets import QGroupBox
+    from PySide6.QtWidgets import QGroupBox
 
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 

@@ -21,8 +21,8 @@ from __future__ import annotations
 
 from contextlib import suppress
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
@@ -59,15 +59,15 @@ from .protein_viewer_models import (
 class ProteinChainManager(QWidget):
     """Right-hand chain list with stacked dock pages and a plot-pane pager."""
 
-    visibility_changed = pyqtSignal(str, bool)
-    selection_changed = pyqtSignal(list)
-    focus_requested = pyqtSignal()
-    delete_requested = pyqtSignal()
-    duplicate_requested = pyqtSignal()
-    add_to_group_requested = pyqtSignal(str)
-    remove_from_group_requested = pyqtSignal(str)
-    rename_group_requested = pyqtSignal(str)
-    delete_group_requested = pyqtSignal(str)
+    visibility_changed = Signal(str, bool)
+    selection_changed = Signal(list)
+    focus_requested = Signal()
+    delete_requested = Signal()
+    duplicate_requested = Signal()
+    add_to_group_requested = Signal(str)
+    remove_from_group_requested = Signal(str)
+    rename_group_requested = Signal(str)
+    delete_group_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -579,4 +579,4 @@ class ProteinChainManager(QWidget):
             self.tree.clearSelection()
             item.setSelected(True)
         menu = self._make_context_menu(item)
-        menu.exec_(self.tree.viewport().mapToGlobal(pos))
+        menu.exec(self.tree.viewport().mapToGlobal(pos))

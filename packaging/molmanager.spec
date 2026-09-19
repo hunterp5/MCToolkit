@@ -22,7 +22,7 @@ a = Analysis(
         "rdkit.Chem",
         "rdkit.Chem.Draw",
         "rdkit.Chem.Draw.rdMolDraw2D",
-        "PyQt5.QtWebEngineWidgets",
+        "PySide6.QtWebEngineWidgets",
     ],
     hookspath=[],
     hooksconfig={},

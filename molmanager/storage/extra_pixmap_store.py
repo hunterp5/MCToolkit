@@ -21,8 +21,8 @@ from __future__ import annotations
 from collections import OrderedDict
 from pathlib import Path
 
-from PyQt5.QtCore import QBuffer, QByteArray, QIODevice
-from PyQt5.QtGui import QImage, QPixmap
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+from PySide6.QtGui import QImage, QPixmap
 
 from .temp_sqlite import close_owned_sqlite, open_owned_sqlite
 

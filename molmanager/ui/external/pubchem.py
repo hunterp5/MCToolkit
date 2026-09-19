@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PyQt5.QtCore import QObject, QRunnable, Qt, pyqtSignal
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QObject, QRunnable, Qt, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QDialog,
@@ -36,7 +36,6 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QPushButton,
     QRadioButton,
-    QShortcut,
     QSpinBox,
     QTextEdit,
     QVBoxLayout,
@@ -93,8 +92,8 @@ def _compound_table_smiles(comp, fallback: str) -> str:
 
 
 class _QuerySignals(QObject):
-    progress = pyqtSignal(int, int, str)  # done, total, current_smiles
-    finished = pyqtSignal(list, list)  # results, logs (strings)
+    progress = Signal(int, int, str)  # done, total, current_smiles
+    finished = Signal(list, list)  # results, logs (strings)
 
 
 class _PubChemBatchWorker(QRunnable):
@@ -495,7 +494,7 @@ class PubChemDialog(QDialog):
         dlg = SketcherDialog(self.parent_app if self.parent_app is not None else self)
         dlg.setModal(True)
         dlg.setWindowModality(Qt.ApplicationModal)
-        if dlg.exec_() != QDialog.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             # Even on cancel/close, user may have drawn something; try to capture it.
             pass
 

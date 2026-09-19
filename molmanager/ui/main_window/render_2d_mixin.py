@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import threading
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QMessageBox
 
 from rdkit import Chem
 
@@ -225,7 +225,7 @@ class Render2DMixin:
                 restore_ws()
             finish_ws = getattr(self, "_finish_deferred_session_workspace_restore", None)
             if callable(finish_ws):
-                from PyQt5.QtCore import QTimer
+                from PySide6.QtCore import QTimer
 
                 QTimer.singleShot(0, finish_ws)
         try:

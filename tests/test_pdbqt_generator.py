@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("rdkit")
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
 from rdkit import Chem
 from rdkit.Chem import AllChem

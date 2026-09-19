@@ -19,8 +19,8 @@
 from __future__ import annotations
 
 import pytest
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QPixmap
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QPixmap
 
 from molmanager.ui.compound_table_model import CompoundTableModel
 from molmanager.ui.theme import set_table_text_alignment
@@ -387,7 +387,7 @@ def test_data_cells_are_not_inline_editable(model: CompoundTableModel):
 
 
 def test_compound_table_view_disables_inline_edit_triggers(qapp):  # noqa: ARG001
-    from PyQt5.QtWidgets import QAbstractItemView
+    from PySide6.QtWidgets import QAbstractItemView
 
     from molmanager.ui.compound_table_model import CompoundTableView
 
@@ -397,9 +397,9 @@ def test_compound_table_view_disables_inline_edit_triggers(qapp):  # noqa: ARG00
 
 
 def test_compound_table_view_pixel_scrolls_and_keeps_edge_grip(qapp):
-    from PyQt5.QtCore import QEvent, QPoint, Qt
-    from PyQt5.QtGui import QMouseEvent
-    from PyQt5.QtWidgets import QAbstractItemView, QApplication
+    from PySide6.QtCore import QEvent, QPoint, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QAbstractItemView, QApplication
 
     from molmanager.ui.compound_table_model import (
         CompoundTableHeaderView,
@@ -490,7 +490,7 @@ def test_header_drag_scroll_step_grows_toward_viewport_edge(qapp):  # noqa: ARG0
 
 
 def test_header_drag_autoscrolls_quickly_at_viewport_edge(qapp):
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
 
     from molmanager.ui.compound_table_model import CompoundTableModel, CompoundTableView
 
@@ -534,7 +534,7 @@ def test_table_header_stylesheet_uses_palette_roles(qapp):  # noqa: ARG001
 
 
 def test_compound_table_headers_follow_application_palette(qapp):
-    from PyQt5.QtGui import QColor, QPalette
+    from PySide6.QtGui import QColor, QPalette
 
     from molmanager.ui.compound_table_view import CompoundTableView
 
@@ -562,7 +562,7 @@ def test_compound_table_headers_follow_application_palette(qapp):
 
 
 def test_compound_table_headers_resize_with_table_font(qapp):  # noqa: ARG001
-    from PyQt5.QtGui import QFont
+    from PySide6.QtGui import QFont
 
     from molmanager.ui.compound_table_view import CompoundTableView
 

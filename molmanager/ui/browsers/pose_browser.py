@@ -22,9 +22,9 @@ from typing import Any
 
 from pathlib import Path
 
-from PyQt5.QtCore import QEvent, Qt, QTimer
-from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractScrollArea,
     QCheckBox,

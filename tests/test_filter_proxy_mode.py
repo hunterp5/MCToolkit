@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 from molmanager.ui.compound_table_model import CompoundTableModel
 from molmanager.ui.filter_proxy_model import FilterProxyModel

@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QObject, QRunnable, Signal
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -84,9 +84,9 @@ def _bounds_from_spins(lo: QSpinBox, hi: QSpinBox) -> IntBounds:
 
 
 class _RandomMoleculeSignals(QObject):
-    progress = pyqtSignal(int, int, str)  # have, want, source_label
-    finished = pyqtSignal(list, str)  # list[RandomSourceMolecule], log
-    failed = pyqtSignal(str)
+    progress = Signal(int, int, str)  # have, want, source_label
+    finished = Signal(list, str)  # list[RandomSourceMolecule], log
+    failed = Signal(str)
 
 
 class _RandomMoleculeWorker(QRunnable):

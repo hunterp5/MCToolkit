@@ -22,8 +22,8 @@ import logging
 import threading
 from dataclasses import dataclass
 
-from PyQt5 import sip
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+import shiboken6
+from PySide6.QtCore import QObject, QRunnable, Signal
 from rdkit import Chem
 
 from ..predictions.biotransformer_metabolites import (
@@ -63,7 +63,7 @@ def _safe_emit(obj, emitter_name: str, *args) -> None:
     if obj is None:
         return
     try:
-        if sip.isdeleted(obj):
+        if not shiboken6.isValid(obj):
             return
     except Exception:
         return
@@ -105,8 +105,8 @@ def metabolite_hit_payload(hit: MetaboliteHit) -> dict[str, object]:
 class BiotransformerSignals(QObject):
     """Emits from :class:`BiotransformerWorker` (owned on the GUI thread)."""
 
-    finished = pyqtSignal(list)
-    failed = pyqtSignal(str)
+    finished = Signal(list)
+    failed = Signal(str)
 
 
 class BiotransformerWorker(QRunnable):

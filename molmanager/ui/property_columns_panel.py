@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,
     QHBoxLayout,
@@ -224,7 +224,7 @@ class PropertyColumnsPanel(QWidget):
         except Exception:
             return ""
         try:
-            cell_fn = getattr(app, "_table_cell_text", None)
+            cell_fn = getattr(app, "cell_text", None) or getattr(app, "_table_cell_text", None)
             text = ""
             if callable(cell_fn):
                 text = (cell_fn(row, col) or "").strip()

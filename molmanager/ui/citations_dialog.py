@@ -21,9 +21,9 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QPalette
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QPalette
+from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QHBoxLayout,
@@ -42,7 +42,7 @@ from .qt_widget_utils import make_window_minimizable
 from .user_guides import _guide_style_sheet
 
 if TYPE_CHECKING:
-    from PyQt5.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
 
 def _first_tool_id() -> str:

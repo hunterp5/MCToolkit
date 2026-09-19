@@ -21,9 +21,9 @@ from __future__ import annotations
 
 def run_table_model_demo() -> int:
     """Small window demonstrating the model + view + sort + pixmap update."""
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtGui import QColor, QPainter, QPixmap
-    from PyQt5.QtWidgets import (
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor, QPainter, QPixmap
+    from PySide6.QtWidgets import (
         QApplication,
         QLabel,
         QMainWindow,
@@ -75,7 +75,7 @@ def run_table_model_demo() -> int:
     w.setCentralWidget(cw)
     w.resize(900, 520)
     w.show()
-    return app.exec_()
+    return app.exec()
 
 
 if __name__ == "__main__":

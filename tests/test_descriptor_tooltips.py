@@ -52,7 +52,7 @@ def test_every_descriptor_checkbox_has_a_tooltip(qapp) -> None:  # noqa: ARG001
 
 
 def test_property_dialog_has_no_inline_citation_labels(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QLabel
+    from PySide6.QtWidgets import QLabel
 
     dlg = PropertyDialog(["Structure", "SMILES"], selected_row_count=0)
     cites = [lbl for lbl in dlg.findChildren(QLabel) if lbl.openExternalLinks()]

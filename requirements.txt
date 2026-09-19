@@ -11,9 +11,9 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 
 # --- Desktop app and chemistry core ---
-PyQt5>=5.15
-# Embedded 3Dmol structure preview in Browser; without it, the app falls back.
-PyQtWebEngine>=5.15
+# Qt WebEngine (embedded 3D / Plotly) ships with the PySide6 wheels.
+# Qt 6.8 LTS. 6.11+ wheels fail to import on Windows 10 (System32 ICU 64 vs Qt's ICU 78).
+PySide6>=6.8,<6.9
 # Keep Plotly in the v5 line for broader Qt WebEngine compatibility.
 plotly>=5.0,<6
 # Stay on NumPy 1.x: PyTorch 2.5.1 and umap-learn/numba are still more reliable on

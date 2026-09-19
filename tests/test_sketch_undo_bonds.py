@@ -18,8 +18,10 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint
-from PyQt5.QtWidgets import QWidget
+from qt_helpers import qt_submenu
+
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QWidget
 
 from molmanager.ui.sketcher.bonds import (
     BOND_STEREO_DATIVE,
@@ -111,7 +113,7 @@ def test_undo_attached_template_is_atomic(qapp) -> None:  # noqa: ARG001
 
 
 def test_file_menu_undo_redo_actions(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QMenuBar
+    from PySide6.QtWidgets import QMenuBar
 
     dlg = SketcherDialog(QWidget())
     w = dlg.canvas
@@ -128,7 +130,7 @@ def test_file_menu_undo_redo_actions(qapp) -> None:  # noqa: ARG001
     menus = [a.text().replace("&", "") for a in mb.actions()]
     assert "Edit" in menus
     assert "File" in menus
-    tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    tools = qt_submenu(mb, "Tools")
     tool_texts = [a.text().replace("&", "") for a in tools.actions()]
     assert "Elements" not in tool_texts
     dlg.close()

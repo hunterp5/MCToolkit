@@ -21,8 +21,8 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
     QDialog,
     QLabel,
     QPushButton,
@@ -38,7 +38,7 @@ from .result_plot_panel import DockableResultPlotPanel
 from .sali_plot import build_sali_figure
 
 try:
-    from PyQt5.QtWebEngineWidgets import QWebEngineView  # noqa: F401
+    from PySide6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
 
     _HAS_WEB = True
 except Exception:
@@ -296,7 +296,7 @@ class SaliMapDialog(QDialog):
 class _SaliPlotView(PlotlyInteractiveView):
     """Plotly view that notifies when a SALI point is activated."""
 
-    pointActivated = pyqtSignal(int)
+    pointActivated = Signal(int)
 
     def _on_plot_point_clicked(self, point_index: int, *, additive: bool = False) -> None:
         super()._on_plot_point_clicked(point_index, additive=additive)

@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import time
 
-from PyQt5.QtCore import QEventLoop, QTimer
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtCore import QEventLoop, QTimer
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QApplication
 
 from ...platform_support.config import load_config
 from ...table.structure_depiction_layout import (

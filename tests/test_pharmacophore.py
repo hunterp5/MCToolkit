@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from qt_helpers import qt_submenu
+
 from pathlib import Path
 
 import pytest
@@ -123,7 +125,7 @@ def test_autodock_map_well_is_attractive_at_feature(tmp_path: Path):
 
 
 def test_gnina_argv_omits_user_grid(tmp_path: Path, qapp):  # noqa: ARG001
-    pytest.importorskip("PyQt5.QtWidgets")
+    pytest.importorskip("PySide6.QtWidgets")
     from rdkit.Geometry import Point3D
 
     from molmanager.ui.gnina_dock import GninaDockDialog
@@ -181,18 +183,16 @@ def test_gnina_user_grid_paths_uses_feature_box(tmp_path: Path):
 
 
 def test_protein_viewer_pharmacophore_menu(qapp):  # noqa: ARG001
-    pytest.importorskip("PyQt5.QtWidgets")
-    from PyQt5.QtWidgets import QMenuBar
+    pytest.importorskip("PySide6.QtWidgets")
+    from PySide6.QtWidgets import QMenuBar
 
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
     dlg = ProteinViewerDialog(None)
     mb = dlg.findChild(QMenuBar)
     assert mb is not None
-    tools_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
-    pharma_menu = next(
-        a.menu() for a in tools_menu.actions() if a.text().replace("&", "") == "Pharmacophore"
-    )
+    tools_menu = qt_submenu(mb, "Tools")
+    pharma_menu = qt_submenu(tools_menu, "Pharmacophore")
     labels = [a.text().replace("&", "") for a in pharma_menu.actions() if a.text().strip()]
     assert labels == ["Editor", "Screen Table…", "Open…"]
     dlg._on_pharmacophore_atom_picked({"x": 1.5, "y": 2.5, "z": 3.5})
@@ -231,7 +231,7 @@ def test_protein_viewer_pharmacophore_menu(qapp):  # noqa: ARG001
 
 
 def test_pharmacophore_editor_row_ids_and_on_column(qapp):  # noqa: ARG001
-    from PyQt5.QtCore import Qt
+    from PySide6.QtCore import Qt
 
     from molmanager.ui.dialogs.protein_pharmacophore import ProteinPharmacophoreDialog
 
@@ -384,7 +384,7 @@ def test_output_column_names():
 
 
 def test_pharmacophore_screen_dialog_constructible(qapp):  # noqa: ARG001
-    pytest.importorskip("PyQt5.QtWidgets")
+    pytest.importorskip("PySide6.QtWidgets")
     from molmanager.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
 
     dlg = PharmacophoreScreenDialog(None)
@@ -396,7 +396,7 @@ def test_pharmacophore_screen_dialog_constructible(qapp):  # noqa: ARG001
 
 
 def test_pharmacophore_screen_dialog_closes_when_run_starts(qapp, tmp_path, monkeypatch):
-    pytest.importorskip("PyQt5.QtWidgets")
+    pytest.importorskip("PySide6.QtWidgets")
     from molmanager.conformers.conformer_column_codec import pack_confs_cell
     from molmanager.protein.pharmacophore import save_pharmacophore
     from molmanager.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
@@ -422,7 +422,7 @@ def test_pharmacophore_screen_dialog_closes_when_run_starts(qapp, tmp_path, monk
 
 
 def test_pharmacophore_screen_selects_hits_in_table(qapp):  # noqa: ARG001
-    pytest.importorskip("PyQt5.QtWidgets")
+    pytest.importorskip("PySide6.QtWidgets")
     from molmanager.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
 

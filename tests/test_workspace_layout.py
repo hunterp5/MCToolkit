@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PyQt5.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
-from PyQt5.QtWidgets import QApplication, QLabel, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from molmanager.ui.main_window.workspace_layout import (
     DEFAULT_LAYOUT_ID,
@@ -289,7 +289,7 @@ def test_release_one_page_keeps_the_other(qapp):
 
 
 def test_plot_pane_header_adopts_dock_chrome_buttons(qapp):
-    from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
     mgr = _manager(qapp)
     pane = mgr.plot_panes()[0]
@@ -351,8 +351,8 @@ def test_plot_pane_header_adopts_dock_chrome_buttons(qapp):
 
 
 def test_plot_pane_title_double_click_renames(qapp):
-    from PyQt5.QtCore import QEvent, QPoint, Qt
-    from PyQt5.QtGui import QMouseEvent
+    from PySide6.QtCore import QEvent, QPoint, Qt
+    from PySide6.QtGui import QMouseEvent
 
     mgr = _manager(qapp)
     pane = mgr.plot_panes()[0]
@@ -475,7 +475,7 @@ def test_apply_layout_preserves_pane_stacks(qapp):
 
 
 def test_dock_fits_wide_widget_to_existing_splitter_sizes(qapp):
-    from PyQt5.QtWidgets import QLayout, QVBoxLayout
+    from PySide6.QtWidgets import QLayout, QVBoxLayout
 
     from molmanager.ui.dockable_plot import embed_in_plot_pane, unembed_from_plot_pane
 

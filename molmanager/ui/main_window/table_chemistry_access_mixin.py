@@ -279,7 +279,7 @@ class TableChemistryAccessMixin:
 
         Periodically pumps the event loop so large tables stay responsive while gathering inputs.
         """
-        from PyQt5.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         allowed = self._selected_oids_set() if only_selected else None
         col = None if src == "Structure" else self.headers.index(src)

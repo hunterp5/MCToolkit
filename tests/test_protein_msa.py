@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from qt_helpers import qt_submenu
+
 from pathlib import Path
 
 from molmanager.platform_support import bundled_paths
@@ -138,9 +140,7 @@ def test_protein_menu_has_viewer_and_sequence(qapp):  # noqa: ARG001
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
-    protein_menu = next(
-        a.menu() for a in w.menuBar().actions() if a.text().replace("&", "") == "Protein"
-    )
+    protein_menu = qt_submenu(w.menuBar(), "Protein")
     labels = [a.text().replace("&", "") for a in protein_menu.actions()]
     assert "Viewer" in labels
     assert any(lab.startswith("Sequence") for lab in labels)

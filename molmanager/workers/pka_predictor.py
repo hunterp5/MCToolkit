@@ -34,8 +34,8 @@ import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, wait
 
-from PyQt5 import sip
-from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
+import shiboken6
+from PySide6.QtCore import QObject, QRunnable, Signal
 from rdkit import Chem
 
 from molmanager.ionization.unipka_ensembles import (
@@ -100,7 +100,7 @@ def _safe_emit(obj, emitter_name: str, *args) -> None:
     if obj is None:
         return
     try:
-        if sip.isdeleted(obj):
+        if not shiboken6.isValid(obj):
             return
     except Exception:
         return
@@ -219,8 +219,8 @@ def _mp_compute_pka_chunk(
 class PKaPredictorSignals(QObject):
     """Emits from :class:`PKaPredictorWorker` back to the dialog (owned on the GUI thread)."""
 
-    finished = pyqtSignal(list, bool)  # list[tuple[int | None, str, str]] oid, pKa, pI; include_pi
-    failed = pyqtSignal(str)
+    finished = Signal(list, bool)  # list[tuple[int | None, str, str]] oid, pKa, pI; include_pi
+    failed = Signal(str)
 
 
 class PKaPredictorWorker(QRunnable):

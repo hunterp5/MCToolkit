@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 from ..protein.structure_components import StructureComponent
 

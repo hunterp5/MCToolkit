@@ -21,7 +21,7 @@ from __future__ import annotations
 import threading
 import time
 
-from PyQt5.QtCore import QObject, QRunnable
+from PySide6.QtCore import QObject, QRunnable
 
 from molmanager.ui.process_queue import ProcessQueueManager
 

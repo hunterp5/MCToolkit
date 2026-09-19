@@ -21,14 +21,13 @@ from __future__ import annotations
 import json
 import logging
 
-from PyQt5.QtCore import QItemSelectionModel, Qt
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QItemSelectionModel, Qt
+from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QHeaderView,
     QPushButton,
-    QShortcut,
     QSizePolicy,
     QTableWidget,
     QHBoxLayout,

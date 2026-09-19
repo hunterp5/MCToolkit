@@ -16,8 +16,8 @@
 
 """Substructure SMARTS filter card."""
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QLineEdit,
@@ -35,8 +35,8 @@ from .card_chrome import (
 
 
 class SubstructureFilterCard(_FilterCardDragMixin, _FilterCardEnableInvertMixin, QFrame):
-    changed = pyqtSignal()
-    removed = pyqtSignal(object)
+    changed = Signal()
+    removed = Signal(object)
 
     def __init__(self, structure_sources: list[str] | None = None):
         super().__init__()

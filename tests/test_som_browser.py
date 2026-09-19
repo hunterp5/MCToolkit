@@ -213,8 +213,8 @@ def test_som_browser_preview_fits_label(qapp) -> None:  # noqa: ARG001
 
 
 def test_som_color_scale_widget_paints(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtGui import QPixmap
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPixmap
 
     w = SomColorScaleWidget()
     w.resize(68, 200)
@@ -252,7 +252,7 @@ def test_som_browser_shows_phase_column(qapp) -> None:  # noqa: ARG001
 
 
 def test_som_browser_atom_table_sorts_numerically(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtCore import Qt
+    from PySide6.QtCore import Qt
 
     recs = [
         SomBrowseRecord(
@@ -379,8 +379,8 @@ def test_som_browser_dialog_set_records_without_panel(qapp) -> None:  # noqa: AR
 
 
 def test_som_browser_nav_shortcuts_are_widget_scoped(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtWidgets import QShortcut
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QShortcut
 
     w = SomBrowserWidget(None)
     scs = w.findChildren(QShortcut)
@@ -390,7 +390,7 @@ def test_som_browser_nav_shortcuts_are_widget_scoped(qapp) -> None:  # noqa: ARG
 
 
 def test_discard_host_dialog_after_dock_clears_attr(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtWidgets import QDialog
+    from PySide6.QtWidgets import QDialog
 
     from molmanager.ui.dockable_plot import discard_host_dialog_after_dock
 
@@ -408,9 +408,9 @@ def test_discard_host_dialog_after_dock_clears_attr(qapp) -> None:  # noqa: ARG0
 
 
 def test_pixmap_column_size_hint_matches_image(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtGui import QPixmap
-    from PyQt5.QtWidgets import QStyleOptionViewItem
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPixmap
+    from PySide6.QtWidgets import QStyleOptionViewItem
 
     from molmanager.ui.compound_table_model import CompoundTableModel
     from molmanager.ui.table_selection_delegate import RowHighlightDelegate
@@ -431,9 +431,9 @@ def test_pixmap_column_size_hint_matches_image(qapp) -> None:  # noqa: ARG001
 
 
 def test_empty_som_map_cells_skip_pixmap_background(qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtGui import QPixmap
-    from PyQt5.QtWidgets import QStyleOptionViewItem
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPixmap
+    from PySide6.QtWidgets import QStyleOptionViewItem
 
     from molmanager.table.structure_depiction_layout import structure_depict_height
     from molmanager.ui.compound_table_model import CompoundTableModel
@@ -468,8 +468,8 @@ def test_som_map_export_filename() -> None:
 
 
 def test_save_som_map_pixmap(tmp_path, qapp) -> None:  # noqa: ARG001
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtGui import QPixmap
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPixmap
 
     from molmanager.ui.main_window.tools_sql_predict_mixin import save_som_map_pixmap
 

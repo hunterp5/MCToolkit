@@ -20,16 +20,16 @@ import json
 import math
 from typing import TYPE_CHECKING, Any
 
-from PyQt5.QtCore import QLineF, QPoint, QPointF, QRect, Qt, pyqtSignal
-from PyQt5.QtGui import (
+from PySide6.QtCore import QLineF, QPoint, QPointF, QRect, Qt, Signal
+from PySide6.QtGui import (
     QCursor,
     QPainter,
 )
 
 if TYPE_CHECKING:
-    from PyQt5.QtGui import QPainterPath
-from PyQt5.QtWidgets import (
-    QAction,
+    from PySide6.QtGui import QPainterPath
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QDialogButtonBox,
@@ -108,7 +108,7 @@ class SketchWidget(
     bond orders vs RDKit-based caps—see ``docs/VALENCE_BONDS_AND_AROMATICITY.md``.
     """
 
-    sketchChanged = pyqtSignal()
+    sketchChanged = Signal()
 
     def _sketcher_dialog_if(self):
         """Nearest ``SketcherDialog`` ancestor (canvas may sit under a splitter)."""
@@ -357,7 +357,7 @@ class SketchWidget(
         self.selected_bond_indices = buds
 
     def _lasso_path_model(self) -> QPainterPath:
-        from PyQt5.QtGui import QPainterPath
+        from PySide6.QtGui import QPainterPath
 
         path = QPainterPath()
         pts = getattr(self, "_lasso_points", None) or []
@@ -374,7 +374,7 @@ class SketchWidget(
 
     def _sync_selected_bonds_from_lasso_path(self, path) -> None:
         """Lasso: bonds whose segment samples fall inside the freeform path."""
-        from PyQt5.QtCore import QPointF
+        from PySide6.QtCore import QPointF
 
         if path is None or path.isEmpty():
             self.selected_bond_indices = set()
@@ -400,7 +400,7 @@ class SketchWidget(
 
     def _apply_lasso_selection_from_points(self) -> None:
         """Update atom/bond selection from the in-progress widget-space lasso polyline."""
-        from PyQt5.QtCore import QPointF
+        from PySide6.QtCore import QPointF
 
         path = self._lasso_path_model()
         if len(getattr(self, "_lasso_points", []) or []) < 3 or path.isEmpty():
@@ -1806,7 +1806,7 @@ class SketchWidget(
 
     def _edit_wildcard_dialog(self, hit: dict[str, Any]) -> None:
         d = WildcardElementsDialog(_normalize_wildcard_elements(hit), self)
-        if d.exec_() != QDialog.Accepted:
+        if d.exec() != QDialog.Accepted:
             return
         sel = d.selected_elements()
         if not sel:
@@ -2446,7 +2446,7 @@ class SketchWidget(
         root = QVBoxLayout(dlg)
         root.addLayout(form)
         root.addWidget(buttons)
-        if dlg.exec_() != QDialog.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             return
         # rotate_selection is counterclockwise; clockwise is the opposite sense.
         degrees = float(ccw.value()) - float(cw.value())

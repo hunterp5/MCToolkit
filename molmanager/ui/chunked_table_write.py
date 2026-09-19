@@ -29,7 +29,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 
-from PyQt5.QtCore import QTimer
+from PySide6.QtCore import QTimer
 
 __all__ = ["ChunkedTableWriter", "repaints_suspended"]
 

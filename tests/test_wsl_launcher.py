@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from qt_helpers import qt_submenu
+
 from pathlib import Path
 
 import pytest
@@ -65,7 +67,7 @@ def test_default_wsl_executable_non_windows(monkeypatch) -> None:
 
 
 def test_wsl_settings_dialog_saves_path(qapp, monkeypatch, tmp_path):  # noqa: ARG001
-    from PyQt5.QtWidgets import QPushButton
+    from PySide6.QtWidgets import QPushButton
 
     from molmanager.ui.dialogs.wsl_settings import WslSettingsDialog
 
@@ -89,14 +91,14 @@ def test_settings_menu_has_wsl(qapp) -> None:  # noqa: ARG001
 
     w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
-    settings = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Settings")
+    settings = qt_submenu(mb, "Settings")
     labels = [a.text().replace("&", "") for a in settings.actions() if not a.isSeparator()]
     assert "WSL…" in labels
     assert labels[-1] == "WSL…"
     assert "Status Bar" not in labels
     assert "Structure…" not in labels
     assert "2D Render…" in labels
-    gui = next(a.menu() for a in settings.actions() if a.text().replace("&", "") == "GUI")
+    gui = qt_submenu(settings, "GUI")
     gui_labels = [a.text().replace("&", "") for a in gui.actions() if not a.isSeparator()]
     assert "Status Bar" in gui_labels
     assert gui_labels[-1] == "Status Bar"

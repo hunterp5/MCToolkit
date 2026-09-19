@@ -16,9 +16,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QDialogButtonBox,
@@ -73,7 +73,7 @@ _KEYPAD_COLS = 4
 class CalculatorDialog(QDialog):
     """Build a numeric table column with a keypad-style expression editor."""
 
-    apply_requested = pyqtSignal()
+    apply_requested = Signal()
 
     def __init__(self, numeric_columns, selected_row_count: int = 0, parent=None):
         super().__init__(parent)

@@ -22,8 +22,8 @@ import io
 from typing import TYPE_CHECKING
 
 import pandas as pd
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QHBoxLayout,
@@ -292,7 +292,7 @@ class DataAnalysisDialog(QDialog):
         )
 
     def _copy_summary(self) -> None:
-        from PyQt5.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         QApplication.clipboard().setText(self.summary_text.toPlainText())
 

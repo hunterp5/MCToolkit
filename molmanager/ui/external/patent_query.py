@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PyQt5.QtCore import QObject, QRunnable, Qt, pyqtSignal
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QObject, QRunnable, Qt, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QDoubleSpinBox,
@@ -33,7 +33,6 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QShortcut,
     QSpinBox,
     QTextEdit,
     QVBoxLayout,
@@ -51,8 +50,8 @@ class PatentSearchHit:
 
 
 class _PatentSearchSignals(QObject):
-    finished = pyqtSignal(list, str)  # list[PatentSearchHit], log text
-    failed = pyqtSignal(str)
+    finished = Signal(list, str)  # list[PatentSearchHit], log text
+    failed = Signal(str)
 
 
 class _PatentSearchWorker(QRunnable):
@@ -216,7 +215,7 @@ class PatentQueryDialog(QDialog):
         dlg = SketcherDialog(self.parent_app if self.parent_app is not None else self)
         dlg.setModal(True)
         dlg.setWindowModality(Qt.ApplicationModal)
-        dlg.exec_()
+        dlg.exec()
         try:
             parts = dlg.canvas.fragment_smiles_parts()
         except Exception:

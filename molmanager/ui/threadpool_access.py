@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import QRunnable, QThreadPool
+from PySide6.QtCore import QRunnable, QThreadPool
 
 
 def threadpool_for_app(app: Any) -> QThreadPool:

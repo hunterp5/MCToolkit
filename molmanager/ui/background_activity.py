@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 from ..platform_support.tool_progress import format_tool_progress_text
 
@@ -32,7 +32,7 @@ class BackgroundActivityHub(QObject):
     explicit ``notify_changed()`` for activity outside the queue (e.g. Render 2D, Gnina).
     """
 
-    changed = pyqtSignal()
+    changed = Signal()
 
     def __init__(self, app: Any, parent: QObject | None = None):
         super().__init__(parent or app)

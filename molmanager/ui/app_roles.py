@@ -31,8 +31,9 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from PyQt5.QtCore import QThreadPool, QTimer
-from PyQt5.QtWidgets import QTableView, QUndoStack
+from PySide6.QtCore import QThreadPool, QTimer
+from PySide6.QtGui import QUndoStack
+from PySide6.QtWidgets import QTableView
 
 
 class ProgressChrome(Protocol):

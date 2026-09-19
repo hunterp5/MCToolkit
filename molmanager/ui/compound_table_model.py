@@ -30,8 +30,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from PyQt5.QtCore import QAbstractItemModel, QAbstractTableModel, QModelIndex, QSize, Qt
-from PyQt5.QtGui import QColor, QPixmap
+from PySide6.QtCore import QAbstractItemModel, QAbstractTableModel, QModelIndex, QSize, Qt
+from PySide6.QtGui import QColor, QPixmap
 
 from ..table.column_color_compute import ColumnColorRule
 from ..storage.extra_pixmap_store import ExtraPixmapStore
