@@ -47,11 +47,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from rdkit import Chem
-
-from ...table.structure_depiction_layout import reaction_depict_size
+from ...chem.molecule_conversion import copy_mol, is_rdkit_mol, mol_from_smarts, mol_from_smiles
 from ...chem.reaction_file_io import RXN_SMARTS_HEADER
 from ...chem.structure_2d_depiction import ReactionDrawSpec
+from ...table.structure_depiction_layout import reaction_depict_size
 from ...workers import ExportWorker
 
 from ..mol_viewer_3d import Molecule3DEmbedView
@@ -157,13 +156,13 @@ class SketcherDialog(QDialog):
     def __init__(
         self,
         parent=None,
-        initial_mol: Chem.Mol | None = None,
+        initial_mol: object | None = None,
         *,
         element_symbols: list[str] | None = None,
     ):
         super().__init__(parent)
         self.parent_app = parent
-        if initial_mol is not None and not isinstance(initial_mol, Chem.Mol):
+        if initial_mol is not None and not is_rdkit_mol(initial_mol):
             initial_mol = None
         self._initial_mol = initial_mol
         self._element_symbols_override = element_symbols
@@ -1260,7 +1259,7 @@ class SketcherDialog(QDialog):
         if not smi:
             QMessageBox.warning(self, "Save Sketch", "No valid structure to save from the sketch.")
             return
-        mol = Chem.MolFromSmiles(smi) or Chem.MolFromSmarts(smi)
+        mol = mol_from_smiles(smi) or mol_from_smarts(smi)
         if mol is None:
             QMessageBox.warning(
                 self,
@@ -1468,7 +1467,7 @@ class SketcherDialog(QDialog):
             smi = (smi or "").strip()
             if not smi:
                 continue
-            mol = Chem.MolFromSmiles(smi) or Chem.MolFromSmarts(smi)
+            mol = mol_from_smiles(smi) or mol_from_smarts(smi)
             if mol is None:
                 continue
             oid = app.next_oid
@@ -1795,19 +1794,18 @@ class SketcherDialog(QDialog):
     def _apply_initial_mol(self) -> None:
         mol = self._initial_mol
         self._initial_mol = None
-        if mol is None or not isinstance(mol, Chem.Mol):
+        if mol is None or not is_rdkit_mol(mol):
             return
         self.load_structure_from_mol(mol, confirm_if_nonempty=False)
 
     def load_structure_from_mol(
-        self, mol: Chem.Mol | None, confirm_if_nonempty: bool = True
+        self, mol: object | None, confirm_if_nonempty: bool = True
     ) -> None:
         """Load an RDKit molecule into the canvas (optionally confirm if the sketch is non-empty)."""
-        if mol is None or not isinstance(mol, Chem.Mol):
+        if mol is None or not is_rdkit_mol(mol):
             return
-        try:
-            m = Chem.Mol(mol)
-        except Exception:
+        m = copy_mol(mol)
+        if m is None:
             QMessageBox.warning(self, "Sketcher", "Could not copy this structure for editing.")
             return
         if confirm_if_nonempty and self.canvas.to_smiles().strip():

@@ -26,7 +26,7 @@ Adds new rows to the current table; does not require a pre-existing selection. N
 
 ## Workflow
 
-1. Choose **Source**.
+1. Open **Tools → Utilities → Random → Molecule**. Choose **Source**.
 2. Set how many molecules to add.
 3. Optionally set seed, property filters, and skip-existing.
 4. **Fetch from …**. A Browser opens with 2D structures and a SMILES table; use the arrow keys to step through hits, then **Add to table**.

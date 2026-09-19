@@ -35,7 +35,7 @@ LIC_PYTORCH = ("BSD-style (PyTorch)", "https://github.com/pytorch/pytorch/blob/m
 
 @dataclass(frozen=True)
 class ToolCitation:
-    """One external library, service, or method used by MCtoolkit."""
+    """One external library, service, or method used by MCToolkit."""
 
     tool_id: str
     name: str
@@ -259,7 +259,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 ),
                 LIC_MIT,
                 homepage="https://github.com/Xundrug/MolGpKa",
-                notes="See molmanager/resources/unipka/NOTICE.md. These files are third-party data, not MCtoolkit GPL source.",
+                notes="See molmanager/resources/unipka/NOTICE.md. These files are third-party data, not MCToolkit GPL source.",
             ),
             _t(
                 "fame3r",
@@ -298,7 +298,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     "GNU LGPL v3. Place the JAR plus database/ and supportfiles/ next to it "
                     "(or set MOLMANAGER_BIOTRANSFORMER_JAR). Commercial redistribution of "
                     "BioTransformer resources requires permission from the authors. Java must "
-                    "be on PATH. Environmental microbial predictions are not offered in MCtoolkit."
+                    "be on PATH. Environmental microbial predictions are not offered in MCToolkit."
                 ),
             ),
             _t(
@@ -342,7 +342,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 ),
                 LIC_GPL3,
                 homepage="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3368654/",
-                notes="Score implemented in MCtoolkit (this GPL program) using RDKit descriptors plus Uni-pKa ionization.",
+                notes="Score implemented in MCToolkit (this GPL program) using RDKit descriptors plus Uni-pKa ionization.",
             ),
             _t(
                 "esol",
@@ -356,7 +356,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Published ESOL model, implemented in MCtoolkit (this GPL program).",
+                notes="Published ESOL model, implemented in MCToolkit (this GPL program).",
             ),
             _t(
                 "qed",
@@ -399,7 +399,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Implemented in MCtoolkit; ionization from Uni-pKa. Values ≤ 14 are often associated with higher oral/PK success in bRo5 space.",
+                notes="Implemented in MCToolkit; ionization from Uni-pKa. Values ≤ 14 are often associated with higher oral/PK success in bRo5 space.",
             ),
             _t(
                 "pharm2d_gobbi",
@@ -464,7 +464,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 LIC_APACHE2,
                 homepage="https://github.com/gnina/gnina",
                 notes=(
-                    "After docking, MCtoolkit keeps poses whose RDKit feature sites occupy "
+                    "After docking, MCToolkit keeps poses whose RDKit feature sites occupy "
                     "the Protein Viewer pharmacophore spheres (protein coordinates). Gnina "
                     "--user_grid occupancy maps are not used."
                 ),
@@ -614,7 +614,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 homepage="https://github.com/chemosim-lab/ProLIF",
                 notes=(
                     "Optional docking extra (`pip install prolif`). Intramolecular protein and "
-                    "ligand hydrogen bonds still use MCtoolkit's geometric detector. "
+                    "ligand hydrogen bonds still use MCToolkit's geometric detector. "
                     "Protein–ligand H-bonds fall back to that detector when ProLIF is missing "
                     "or hydrogens are absent. Pose Browser overlays recompute ProLIF against "
                     "the receptor only (cached protein molecule; crystal ligand ignored)."
@@ -647,7 +647,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "umap",
                 "UMAP (umap-learn)",
-                "Data → Dimensionality Reduction → UMAP Visualization.",
+                "Data → DimRed Plots → UMAP Visualization.",
                 (
                     (
                         "McInnes, L.; Healy, J.; Melville, J. UMAP: Uniform Manifold Approximation "
@@ -666,7 +666,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "som",
                 "Self-organizing map (Kohonen)",
-                "Data → Dimensionality Reduction → Self-Organizing Map (NumPy implementation in MCtoolkit).",
+                "Data → DimRed Plots → Self-Organizing Map (NumPy implementation in MCToolkit).",
                 (
                     (
                         "Kohonen, T. Self-Organized Formation of Topologically Correct Feature Maps. "
@@ -675,7 +675,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Algorithm citation; the MCtoolkit SOM code is part of this GPL program.",
+                notes="Algorithm citation; the MCToolkit SOM code is part of this GPL program.",
             ),
             _t(
                 "plotly",
@@ -693,7 +693,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "boiled_egg",
                 "BOILED-Egg",
-                "Data → MedChem → BOILED-Egg plot (TPSA vs WLOGP regions).",
+                "Data → MedChem Plots → BOILED-Egg plot (TPSA vs WLOGP regions).",
                 (
                     (
                         "Daina, A.; Zoete, V. A BOILED-Egg To Predict Gastrointestinal Absorption "
@@ -702,12 +702,12 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Region boundaries from the publication SI; descriptors via RDKit. Plot implemented in MCtoolkit.",
+                notes="Region boundaries from the publication SI; descriptors via RDKit. Plot implemented in MCToolkit.",
             ),
             _t(
                 "golden_triangle",
                 "Golden Triangle",
-                "Data → MedChem → Golden Triangle plot (LogP vs MW).",
+                "Data → MedChem Plots → Golden Triangle plot (LogP vs MW).",
                 (
                     (
                         "Johnson, T. W.; Dress, K. R.; Edwards, M. Using the Golden Triangle to "
@@ -716,7 +716,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Plot implemented in MCtoolkit (LogP −2 to 5, MW 200–450 Da, apex near 1.5 / 450).",
+                notes="Plot implemented in MCToolkit (LogP −2 to 5, MW 200–450 Da, apex near 1.5 / 450).",
             ),
             _t(
                 "sali",
@@ -730,7 +730,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="SALI = |Δactivity| / (1 − similarity). Implemented in MCtoolkit using RDKit fingerprints.",
+                notes="SALI = |Δactivity| / (1 − similarity). Implemented in MCToolkit using RDKit fingerprints.",
             ),
         ),
     ),
@@ -740,7 +740,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "pubchem",
                 "PubChem / PubChemPy",
-                "External → Query PubChem; Tools → Random → Molecule; Calculate Descriptors → Name (Common Name, Synonyms).",
+                "External → Query PubChem; Tools → Utilities → Random → Molecule; Calculate Descriptors → Name (Common Name, Synonyms).",
                 (
                     (
                         "Kim, S.; et al. PubChem 2023 update. Nucleic Acids Res. 2023, 51, D1373–D1380.",
@@ -754,7 +754,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "chembl",
                 "ChEMBL",
-                "External → Query ChEMBL (`chembl_webresource_client`); Tools → Random → Molecule.",
+                "External → Query ChEMBL (`chembl_webresource_client`); Tools → Utilities → Random → Molecule.",
                 (
                     (
                         "Zdrazil, B.; et al. The ChEMBL Database in 2023. Nucleic Acids Res. 2024, 52, D1180–D1192.",
@@ -768,7 +768,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "zinc",
                 "ZINC",
-                "Tools → Random → Molecule (ZINC source).",
+                "Tools → Utilities → Random → Molecule (ZINC source).",
                 (
                     (
                         "Tingle, B. I.; Tang, K. G.; Castanon, M.; et al. ZINC-22—A Free Multi-Billion-Scale "

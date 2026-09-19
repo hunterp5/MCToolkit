@@ -21,37 +21,35 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
-from rdkit import Chem
-
-from ...platform_support.config import load_config
-from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
-from ...chem.molecule_conversion import mol_from_binary_blob
+from ..platform_support.config import load_config
+from ..table.structure_depiction_layout import structure_depict_height, structure_depict_width
+from ..chem.molecule_conversion import mol_from_binary_blob
 
 
-class FastPrepareToolsMixin:
+class FastPrepareTools:
     def run_fast_prepare(self) -> None:
-        if not self.headers or not self.mols:
+        if not self._app.headers or not self._app.mols:
             return
-        from ..dialogs import FastPrepareDialog
+        from .dialogs import FastPrepareDialog
 
-        candidates = self.chemistry_tool_structure_sources()
-        n_sel = len(self._selected_logical_rows())
-        dlg = FastPrepareDialog(candidates, self.headers, n_sel, self)
-        self._prepare_tool_dialog(dlg)
+        candidates = self._app.chemistry_tool_structure_sources()
+        n_sel = len(self._app._selected_logical_rows())
+        dlg = FastPrepareDialog(candidates, self._app.headers, n_sel, self._app)
+        self._app._prepare_tool_dialog(dlg)
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
         dlg.accepted.connect(lambda *_, d=dlg: self._on_fast_prepare_dialog_accepted(d))
         dlg.show()
 
     def _on_fast_prepare_dialog_accepted(self, dlg) -> None:
         cfg = dlg.config()
-        allowed = self._selected_oids_set() if cfg.only_selected else None
-        if self._abort_if_only_selected_but_empty(cfg.only_selected, allowed, "Fast Prepare"):
+        allowed = self._app._selected_oids_set() if cfg.only_selected else None
+        if self._app._abort_if_only_selected_but_empty(cfg.only_selected, allowed, "Fast Prepare"):
             return
         prepare_col = cfg.source_column if cfg.update_target else cfg.largest_column
-        self._fast_prepare_source = prepare_col
-        self._fast_prepare_allowed_oids = allowed
-        self._fast_prepare_fragments_col = cfg.fragments_column
-        self._fast_prepare_update_target = cfg.update_target
+        self._app._fast_prepare_source = prepare_col
+        self._app._fast_prepare_allowed_oids = allowed
+        self._app._fast_prepare_fragments_col = cfg.fragments_column
+        self._app._fast_prepare_update_target = cfg.update_target
         self._enqueue_fast_prepare(
             cfg.source_column,
             prepare_col,
@@ -68,17 +66,18 @@ class FastPrepareToolsMixin:
         if prepare_col == "Structure":
             return False
         return not (
-            prepare_col in self.headers and self._table_model.is_pixmap_data_column(prepare_col)
+            prepare_col in self._app.headers
+            and self._app._table_model.is_pixmap_data_column(prepare_col)
         )
 
     def _enqueue_fast_prepare(
         self, src: str, prepare_col: str, *, only_selected: bool, neutralize: bool = False
     ) -> None:
         """Queue the fused disconnect (and optional neutralize) pass over the rows in scope."""
-        from ...workers.fast_prepare import FastPrepareParams, FastPrepareWorker
+        from ..workers.fast_prepare import FastPrepareParams, FastPrepareWorker
 
-        allowed = self._selected_oids_set() if only_selected else None
-        oids_walk = self._all_oids_in_table_order()
+        allowed = self._app._selected_oids_set() if only_selected else None
+        oids_walk = self._app._all_oids_in_table_order()
         if allowed is not None:
             oids_walk = [o for o in oids_walk if o in allowed]
 
@@ -87,26 +86,26 @@ class FastPrepareToolsMixin:
         is_smiles = src != "Structure"
         data: list[tuple] = []
         if is_smiles:
-            col = self.headers.index(src)
+            col = self._app.headers.index(src)
             for oid in oids_walk:
-                row = self.logical_row_for_oid(oid)
+                row = self._app.logical_row_for_oid(oid)
                 if row == -1:
                     continue
-                data.append((oid, self._table_cell_text(row, col)))
+                data.append((oid, self._app._table_cell_text(row, col)))
         else:
             for oid in oids_walk:
-                mol = self.mols.get(oid)
+                mol = self._app.mols.get(oid)
                 if mol is None:
                     continue
                 data.append((oid, mol, self._disconnect_source_text_for_oid(oid, src)))
 
         if not data:
             QMessageBox.information(
-                self,
+                self._app,
                 "Fast Prepare",
                 "No rows match the current scope and structure field.",
             )
-            self.status_label.setText("Ready.")
+            self._app.status_label.setText("Ready.")
             return
 
         # Canonical SMILES is only needed when the output column stores text; computing it in the
@@ -120,10 +119,10 @@ class FastPrepareToolsMixin:
             batch_size=int(cfg.fast_prepare_batch_size),
             process_pool_min_rows=int(cfg.fast_prepare_process_pool_min_rows),
         )
-        self._begin_tool_progress("Fast prepare", len(data))
-        self.process_queue.enqueue(
+        self._app._begin_tool_progress("Fast prepare", len(data))
+        self._app.process_queue.enqueue(
             "Fast prepare: prepare structures",
-            lambda ev, d=data, p=params, s=self.signals, ps=self._tool_progress_state: (
+            lambda ev, d=data, p=params, s=self._app.signals, ps=self._app._tool_progress_state: (
                 FastPrepareWorker(d, p, s, cancel_event=ev, progress_state=ps)
             ),
         )
@@ -134,23 +133,23 @@ class FastPrepareToolsMixin:
         One writeback per row: the old two-job chain wrote the disconnected parent and then
         immediately overwrote it with the neutralized molecule.
         """
-        self.table.setSortingEnabled(False)
-        prepare_col = getattr(self, "_fast_prepare_source", "Structure")
-        fragments_col = getattr(self, "_fast_prepare_fragments_col", "Fragments")
-        update_target = getattr(self, "_fast_prepare_update_target", True)
-        allowed_oids = getattr(self, "_fast_prepare_allowed_oids", None)
-        self._fast_prepare_source = "Structure"
-        self._fast_prepare_allowed_oids = None
-        self._fast_prepare_fragments_col = "Fragments"
-        self._fast_prepare_update_target = True
+        self._app.table.setSortingEnabled(False)
+        prepare_col = getattr(self._app, "_fast_prepare_source", "Structure")
+        fragments_col = getattr(self._app, "_fast_prepare_fragments_col", "Fragments")
+        update_target = getattr(self._app, "_fast_prepare_update_target", True)
+        allowed_oids = getattr(self._app, "_fast_prepare_allowed_oids", None)
+        self._app._fast_prepare_source = "Structure"
+        self._app._fast_prepare_allowed_oids = None
+        self._app._fast_prepare_fragments_col = "Fragments"
+        self._app._fast_prepare_update_target = True
 
         self._ensure_disconnect_output_column(fragments_col)
         if not update_target:
             self._ensure_disconnect_output_column(prepare_col)
 
         target_is_text = self._fast_prepare_target_is_text(prepare_col)
-        write_fragments = fragments_col in self.headers
-        smiles_h = self._canonical_smiles_header_for_updates()
+        write_fragments = fragments_col in self._app.headers
+        smiles_h = self._app._canonical_smiles_header_for_updates()
         sync_smiles_col = smiles_h is not None and smiles_h == prepare_col and target_is_text
 
         for oid, blob, fragments, smiles in results:
@@ -158,28 +157,28 @@ class FastPrepareToolsMixin:
             if mol is None:
                 continue
             if target_is_text:
-                self._table_model.set_cell_text(oid, prepare_col, smiles)
+                self._app._table_model.set_cell_text(oid, prepare_col, smiles)
                 if sync_smiles_col:
-                    self._table_model.set_cell_text(oid, smiles_h, smiles)
+                    self._app._table_model.set_cell_text(oid, smiles_h, smiles)
             else:
-                self.mols[oid] = mol
+                self._app.mols[oid] = mol
                 if prepare_col == "Structure":
-                    self._table_model.set_structure_pixmap(oid, None)
+                    self._app._table_model.set_structure_pixmap(oid, None)
                 else:
-                    self._table_model.set_column_pixmap(oid, prepare_col, None)
+                    self._app._table_model.set_column_pixmap(oid, prepare_col, None)
             if write_fragments:
-                self._table_model.set_cell_text(oid, fragments_col, fragments)
+                self._app._table_model.set_cell_text(oid, fragments_col, fragments)
 
-        self.schedule_calculate_global_bounds()
-        self._clear_tool_progress()
+        self._app.schedule_calculate_global_bounds()
+        self._app._clear_tool_progress()
 
-        if results and not getattr(self, "_render2d_batch_active", False):
-            renders, row_by_oid = self._build_render2d_tasks_in_table_order(
+        if results and not getattr(self._app, "_render2d_batch_active", False):
+            renders, row_by_oid = self._app._build_render2d_tasks_in_table_order(
                 prepare_col, structure_depict_width(), structure_depict_height(), allowed_oids
             )
             if renders:
-                self.status_label.setText("Fast prepare: rendering 2D…")
-                self._start_render_2d_batch(
+                self._app.status_label.setText("Fast prepare: rendering 2D…")
+                self._app._start_render_2d_batch(
                     renders,
                     row_by_oid,
                     prepare_col,
@@ -187,9 +186,11 @@ class FastPrepareToolsMixin:
                     queue_title_prefix="Fast prepare: ",
                 )
                 return
-        self.status_label.setText(self._consume_partial_results_notice() or "Fast prepare done.")
+        self._app.status_label.setText(
+            self._app._consume_partial_results_notice() or "Fast prepare done."
+        )
 
     @staticmethod
-    def _fast_prepare_mol_from_blob(blob) -> Chem.Mol | None:
+    def _fast_prepare_mol_from_blob(blob) -> object | None:
         """Rebuild a molecule from the worker's binary payload."""
         return mol_from_binary_blob(blob)  # type: ignore[return-value]

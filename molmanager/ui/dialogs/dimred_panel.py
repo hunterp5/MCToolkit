@@ -40,7 +40,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from rdkit import Chem
 
 from ..dockable_plot import hide_plot_options_dialog
 from ...analysis.dimensionality_reduction import (
@@ -591,7 +590,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
                 cols.append(item.text())
         return cols
 
-    def _collect_table_mols(self, src: str, only_selected: bool) -> list[tuple[int, Chem.Mol]]:
+    def _collect_table_mols(self, src: str, only_selected: bool) -> list[tuple[int, object]]:
         """Fingerprint mols for Run: all table rows; table filters only hide points at draw time."""
         app = self.parent_app
         assert app is not None

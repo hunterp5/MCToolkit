@@ -135,7 +135,9 @@ class TableCalcMixin:
             )
             return
         rows = [(int(oid), {col: text}) for oid, text in zip(oids, values)]
-        written = self.on_calc_finished(rows, [col], progress_label=TOOL_RANDOM_NUMBER)
+        written = self.on_calc_finished(
+            rows, [col], progress_label=TOOL_RANDOM_NUMBER, immediate=True
+        )
         final_col = written[0] if written else col
         self.status_label.setText(
             f'{TOOL_RANDOM_NUMBER}: column "{final_col}" updated ({len(rows)} row(s)).'

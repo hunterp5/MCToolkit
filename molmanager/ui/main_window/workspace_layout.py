@@ -51,6 +51,15 @@ LAYOUT_PRESETS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _detach_hidden(widget: QWidget) -> None:
+    """Unparent ``widget`` without flashing it as a top-level window."""
+    try:
+        widget.hide()
+        widget.setParent(None)
+    except RuntimeError:
+        return
+
+
 def _equalize_splitter(splitter: QSplitter) -> None:
     """Give each splitter child the same share of the current span."""
     try:
@@ -87,6 +96,8 @@ class WorkspaceLayoutManager(QWidget):
         self._preferred_pane_id: str | None = None
         self._splitters: list[QSplitter] = []
         self._equalize_token = 0
+        self._layout_freeze_depth = 0
+        self._layout_freeze_parent: QWidget | None = None
         self._root_ly = QVBoxLayout(self)
         self._root_ly.setContentsMargins(0, 0, 0, 0)
         self._root_ly.setSpacing(0)
@@ -265,6 +276,23 @@ class WorkspaceLayoutManager(QWidget):
         if layout_id not in {p[0] for p in LAYOUT_PRESETS}:
             layout_id = DEFAULT_LAYOUT_ID
 
+        self._begin_layout_freeze()
+        try:
+            return self._apply_layout_now(
+                layout_id,
+                preserve_plots=preserve_plots,
+                on_extra_plot=on_extra_plot,
+            )
+        finally:
+            self._end_layout_freeze()
+
+    def _apply_layout_now(
+        self,
+        layout_id: str,
+        *,
+        preserve_plots: bool,
+        on_extra_plot: Callable[[QWidget], None] | None,
+    ) -> list[QWidget]:
         kept_stacks: list[tuple[list[QWidget], int]] = []
         if preserve_plots:
             for pane in self._panes:
@@ -272,18 +300,22 @@ class WorkspaceLayoutManager(QWidget):
                 if widgets:
                     kept_stacks.append((widgets, pane.page_index()))
 
-        # Detach table and plots before destroying the tree.
-        self._table_area.setParent(None)
+        old_root = self._workspace_root
+        if old_root is not None:
+            old_root.hide()
+
+        # Hide before unparenting so Qt does not promote them to top-level windows.
+        _detach_hidden(self._table_area)
         for widgets, _idx in kept_stacks:
             for w in widgets:
-                w.setParent(None)
+                _detach_hidden(w)
         for p in self._panes:
             p.set_plot_widget(None)
 
-        if self._workspace_root is not None:
-            self._root_ly.removeWidget(self._workspace_root)
-            self._workspace_root.setParent(None)
-            self._workspace_root.deleteLater()
+        if old_root is not None:
+            self._root_ly.removeWidget(old_root)
+            old_root.setParent(None)
+            old_root.deleteLater()
             self._workspace_root = None
 
         self._splitters.clear()
@@ -308,6 +340,7 @@ class WorkspaceLayoutManager(QWidget):
 
         self._workspace_root = root
         self._root_ly.addWidget(root, 1)
+        self._table_area.show()
         if self._layout_id == LAYOUT_QUADRANTS:
             self.equalize_quadrant_splitters()
             self._schedule_equal_quadrants()
@@ -316,6 +349,9 @@ class WorkspaceLayoutManager(QWidget):
         for i, (widgets, idx) in enumerate(kept_stacks):
             if i < len(self._panes):
                 self._panes[i].set_plot_widgets(widgets, current=idx)
+                for widget in widgets:
+                    with suppress(RuntimeError):
+                        widget.show()
             else:
                 extras.extend(widgets)
                 if on_extra_plot is not None:
@@ -330,6 +366,34 @@ class WorkspaceLayoutManager(QWidget):
         self.layout_changed.emit(self._layout_id)
         return extras
 
+    def _begin_layout_freeze(self) -> None:
+        """Suppress intermediate paints while the splitter tree is rebuilt."""
+        depth = int(getattr(self, "_layout_freeze_depth", 0))
+        if depth == 0:
+            self.setUpdatesEnabled(False)
+            parent = self.parentWidget()
+            if parent is not None and not parent.isWindow():
+                parent.setUpdatesEnabled(False)
+                self._layout_freeze_parent = parent
+            else:
+                self._layout_freeze_parent = None
+        self._layout_freeze_depth = depth + 1
+
+    def _end_layout_freeze(self) -> None:
+        depth = max(0, int(getattr(self, "_layout_freeze_depth", 0)) - 1)
+        self._layout_freeze_depth = depth
+        if depth:
+            return
+        parent = getattr(self, "_layout_freeze_parent", None)
+        self._layout_freeze_parent = None
+        with suppress(RuntimeError):
+            self.setUpdatesEnabled(True)
+        if parent is not None:
+            with suppress(RuntimeError):
+                parent.setUpdatesEnabled(True)
+        with suppress(RuntimeError):
+            self.update()
+
     def _splitter_containing(self, widget: QWidget) -> QSplitter | None:
         for splitter in self._splitters:
             for i in range(splitter.count()):
@@ -341,12 +405,21 @@ class WorkspaceLayoutManager(QWidget):
         """Remove a plot pane from the splitter tree (plots must already be detached)."""
         if pane not in self._panes:
             return False
+        self._begin_layout_freeze()
+        try:
+            return self._remove_pane_now(pane)
+        finally:
+            self._end_layout_freeze()
+
+    def _remove_pane_now(self, pane: PlotPane) -> bool:
+        if pane not in self._panes:
+            return False
         if len(self._panes) <= 1:
             pane.set_plot_widgets([])
             self._panes.remove(pane)
             if self._preferred_pane_id == pane.pane_id:
                 self._preferred_pane_id = None
-            pane.setParent(None)
+            _detach_hidden(pane)
             pane.deleteLater()
             self.apply_layout(LAYOUT_TABLE_ONLY, preserve_plots=False)
             return True
@@ -371,7 +444,7 @@ class WorkspaceLayoutManager(QWidget):
 
         pane.set_plot_widgets([])
         self._panes.remove(pane)
-        pane.setParent(None)
+        _detach_hidden(pane)
         pane.deleteLater()
 
         remaining = splitter.count()

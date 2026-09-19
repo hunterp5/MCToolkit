@@ -24,8 +24,7 @@ import json
 import logging
 from pathlib import Path
 
-from rdkit import Chem
-
+from ..chem.molecule_conversion import mol_to_molblock
 from ..platform_support.qt_webengine_flags import webengine_views_supported
 
 logger = logging.getLogger(__name__)
@@ -569,8 +568,8 @@ def build_3dmol_html(mol_b64: str) -> str:
     )
 
 
-def _mol_block_b64(mol: Chem.Mol) -> str:
-    block = Chem.MolToMolBlock(mol)
+def _mol_block_b64(mol: object) -> str:
+    block = mol_to_molblock(mol)
     return base64.b64encode(block.encode("utf-8")).decode("ascii")
 
 

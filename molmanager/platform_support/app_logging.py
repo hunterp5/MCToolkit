@@ -44,7 +44,7 @@ def active_log_file() -> Path | None:
 
 
 def default_log_dir() -> Path:
-    """Platform user-data directory for MCtoolkit log files."""
+    """Platform user-data directory for MCToolkit log files."""
     override = (os.environ.get("MOLMANAGER_LOG_DIR") or "").strip()
     if override:
         return Path(override).expanduser()

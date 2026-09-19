@@ -22,27 +22,30 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
 
-class QsarMixin:
+class QsarTools:
+    def __init__(self, app) -> None:
+        self._app = app
+
     def open_qsar_dialog(self) -> None:
-        if not self.headers or self._table_model.rowCount() == 0:
+        if not self._app.headers or self._app._table_model.rowCount() == 0:
             QMessageBox.information(
-                self,
+                self._app,
                 "QSAR",
                 "Open a file or add rows with activity and descriptor data first.",
             )
             return
-        from ..dialogs.qsar import QSARDialog
-        from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
+        from .dialogs.qsar import QSARDialog
+        from .singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
         def _factory():
-            d = QSARDialog(self)
-            self._prepare_tool_dialog(d)
+            d = QSARDialog(self._app)
+            self._app._prepare_tool_dialog(d)
             d.setAttribute(Qt.WA_DeleteOnClose, True)
             return d
 
         reuse_or_show_modeless_singleton(
-            self,
+            self._app,
             "_qsar_dialog",
             _factory,
-            on_reused_visible=lambda dlg: self._sync_dialog_only_selected_scope(dlg),
+            on_reused_visible=lambda dlg: self._app._sync_dialog_only_selected_scope(dlg),
         )

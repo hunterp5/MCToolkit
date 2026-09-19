@@ -217,6 +217,7 @@ class TableWriteService:
         finish_progress: bool = True,
         progress_label: str | None = None,
         on_complete: Callable[[list[str]], None] | None = None,
+        immediate: bool = False,
     ) -> list[str]:
         """Write tool results into the table, adding columns as needed.
 
@@ -225,7 +226,9 @@ class TableWriteService:
         Uni-pKa metadata columns are updated in place when they already exist.
         ``pI`` is only written when Predict pKa is run with isoelectric point enabled.
         Returns the final header list written. Large result sets are applied in
-        GUI-budgeted chunks; ``on_complete`` runs after values (and coloring) land.
+        GUI-budgeted chunks unless *immediate* is set (cheap in-memory table
+        transforms such as Split/Join/Random). ``on_complete`` runs after values
+        (and coloring) land.
         """
         app = self._app
         progress = app.progress
@@ -268,7 +271,7 @@ class TableWriteService:
             (int(oid), {h: str(row_d.get(h, "N/A")) for h in calc_h}) for oid, row_d in res
         ]
         async_min = self._calc_writeback_async_min_rows()
-        if bulk_rows and len(bulk_rows) >= async_min:
+        if not immediate and bulk_rows and len(bulk_rows) >= async_min:
             begin = getattr(progress, "_begin_tool_progress", None)
             if callable(begin):
                 begin("Writing results", len(bulk_rows))

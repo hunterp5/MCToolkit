@@ -19,17 +19,17 @@
 from __future__ import annotations
 
 from ..table_build_render import TableBuildRender
-from .fast_prepare_tools_mixin import FastPrepareToolsMixin
-from .protonate_tools_mixin import ProtonateToolsMixin
-from .structure_edit_mixin import StructureEditMixin
-from .structure_writeback_mixin import StructureWritebackMixin
+from ..workspace_fast_prepare import FastPrepareTools
+from ..workspace_protonate import ProtonateTools
+from ..workspace_structure_edit import StructureEditTools
+from ..workspace_structure_writeback import StructureWritebackTools
 
 
 class PrepareStructuresMixin(
-    ProtonateToolsMixin,
-    FastPrepareToolsMixin,
-    StructureEditMixin,
+    ProtonateTools,
+    FastPrepareTools,
+    StructureEditTools,
     TableBuildRender,
-    StructureWritebackMixin,
+    StructureWritebackTools,
 ):
     """Compat grouping only. Render 2D is ``TableBuildPipeline``; prep tools are ``WorkspaceTools``."""

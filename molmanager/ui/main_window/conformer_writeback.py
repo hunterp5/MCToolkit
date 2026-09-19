@@ -18,8 +18,12 @@
 
 from __future__ import annotations
 
-from rdkit import Chem
-
+from ...chem.molecule_conversion import (
+    copy_mol,
+    is_rdkit_mol,
+    mol_from_molblock,
+    mol_to_canonical_smiles,
+)
 from ...conformers.conformer_output import iter_single_conformer_mols
 from ...conformers.conformer_column_codec import (
     demote_v1_cell_to_sidecar,
@@ -28,12 +32,11 @@ from ...conformers.conformer_column_codec import (
 )
 from ...services.column_labels import COLUMN_PARENT_OID
 from ...storage import EnsembleStore, ensure_confs_sidecar, ensemble_mol_for
-from ...chem.molecule_conversion import mol_to_canonical_smiles
 
 
 def append_generated_conformers_as_rows(app, results: list) -> int:
     """Append one table row per generated conformer; keep 3D coordinates in ``app.mols``."""
-    records: list[tuple[str, dict[str, str], Chem.Mol]] = []
+    records: list[tuple[str, dict[str, str], object]] = []
     for item in results:
         if len(item) < 2:
             continue
@@ -61,7 +64,7 @@ def append_generated_conformers_as_rows(app, results: list) -> int:
         field_names.update(fields.keys())
     app._ensure_columns(["SMILES"] + sorted(field_names))
     batch_rows: list[tuple[int, dict[str, str]]] = []
-    new_mols: list[tuple[int, Chem.Mol]] = []
+    new_mols: list[tuple[int, object]] = []
     for smiles, fields, mol in records:
         oid = app.next_oid
         app.next_oid += 1
@@ -147,7 +150,7 @@ def export_conformer_viewer_to_table(
             return ""
 
     batch_rows: list[tuple[int, dict[str, str]]] = []
-    new_mols: list[tuple[int, Chem.Mol]] = []
+    new_mols: list[tuple[int, object]] = []
     confs_pairs: list[tuple[int, str]] = []
     field_names: set[str] = set()
 
@@ -159,15 +162,15 @@ def export_conformer_viewer_to_table(
             mol_block = base64.b64decode(enc.encode("ascii")).decode("utf-8")
         except Exception:
             continue
-        mol3d = Chem.MolFromMolBlock(mol_block, sanitize=True, removeHs=False)
+        mol3d = mol_from_molblock(mol_block, sanitize=True, remove_hs=False)
         if mol3d is None:
-            mol3d = Chem.MolFromMolBlock(mol_block, sanitize=False, removeHs=False)
+            mol3d = mol_from_molblock(mol_block, sanitize=False, remove_hs=False)
         if mol3d is None:
             continue
         # Structure column keeps a 2D depiction; packed confs holds the 3D coordinates.
         depict = prepare_mol_2d(mol3d)
         if depict is None:
-            depict = Chem.Mol(mol3d)
+            depict = copy_mol(mol3d) or mol3d
 
         smi = mol_to_canonical_smiles(depict) or mol_to_canonical_smiles(mol3d) or ""
         meta = {
@@ -256,7 +259,7 @@ def write_packed_ensemble_cells(app, column: str, pairs: list[tuple[int, str]]) 
 def write_ensemble_worker_results(app, column: str, results: list) -> None:
     """Write worker tuples ``(oid, mol, meta_or_packed_cell)`` into *column* + ensemble store."""
     packed: list[tuple[int, str]] = []
-    mol_rows: list[tuple[int, Chem.Mol | None, dict]] = []
+    mol_rows: list[tuple[int, object | None, dict]] = []
     for item in results:
         if not item or len(item) < 2:
             continue
@@ -264,10 +267,10 @@ def write_ensemble_worker_results(app, column: str, results: list) -> None:
         mol = item[1]
         payload = item[2] if len(item) > 2 else None
         if isinstance(payload, dict):
-            mol_rows.append((oid, mol if isinstance(mol, Chem.Mol) else None, payload))
+            mol_rows.append((oid, mol if is_rdkit_mol(mol) else None, payload))
         elif isinstance(payload, str) and payload.strip():
             packed.append((oid, payload))
-        elif isinstance(mol, Chem.Mol):
+        elif is_rdkit_mol(mol):
             mol_rows.append((oid, mol, {"ok": True}))
     if packed:
         write_packed_ensemble_cells(app, column, packed)
@@ -284,7 +287,7 @@ def write_ensemble_worker_results(app, column: str, results: list) -> None:
 
 def mol_for_ensemble_column(
     app, oid: int, column: str, *, min_conformers: int = 1
-) -> Chem.Mol | None:
+) -> object | None:
     """Load a 3D ensemble for *oid*/*column* from the disk store, with packed-cell fallback."""
     from ...conformers.conformer_column_codec import mol_from_packed_confs_cell
 
@@ -326,7 +329,7 @@ def mol_for_ensemble_column(
     return mol_from_packed_confs_cell(full, min_conformers=min_conformers)
 
 
-def mol_3d_for_structure_superpose(app, oid: int, src: str) -> Chem.Mol | None:
+def mol_3d_for_structure_superpose(app, oid: int, src: str) -> object | None:
     """Best-effort 3D mol for structure superposition from *src* (Structure / confs / …)."""
     from ...conformers.conformer_column_codec import mol_has_3d_coordinates
     from ..mol_viewer_3d import prepare_mol_3d
@@ -345,7 +348,7 @@ def mol_3d_for_structure_superpose(app, oid: int, src: str) -> Chem.Mol | None:
     if m is None:
         return None
     if mol_has_3d_coordinates(m):
-        return Chem.Mol(m)
+        return copy_mol(m) or m
     for col in ("confs", "superpose"):
         if col not in app.headers:
             continue
@@ -357,7 +360,7 @@ def mol_3d_for_structure_superpose(app, oid: int, src: str) -> Chem.Mol | None:
 
 def mol_for_structure_superpose(
     app, oid: int, src: str, *, geometry: str = "3d"
-) -> Chem.Mol | None:
+) -> object | None:
     """Molecule for structure superposition; 2D does not require 3D coordinates."""
     geom = str(geometry or "3d").strip().lower()
     if not geom.startswith("2"):
@@ -376,4 +379,4 @@ def mol_for_structure_superpose(
         m = app._mol_for_structure_row(r)
     if m is None:
         return None
-    return Chem.Mol(m)
+    return copy_mol(m) or m

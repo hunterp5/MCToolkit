@@ -105,6 +105,7 @@ class ProteinEmbedView(QWidget):
         self._resize_timer.setSingleShot(True)
         self._resize_timer.setInterval(50)
         self._resize_timer.timeout.connect(self.resize_keep_view)
+        self._quiet_resize_ms = 0
         self._status = QLabel("Open a PDB, mmCIF, or other structure file.", self)
         self._status.setAlignment(Qt.AlignCenter)
         self._status.setWordWrap(True)
@@ -126,9 +127,13 @@ class ProteinEmbedView(QWidget):
             self.schedule_resize_keep_view()
 
     def schedule_resize_keep_view(self) -> None:
+        interval = max(50, int(getattr(self, "_quiet_resize_ms", 0) or 0))
+        self._resize_timer.setInterval(interval)
         self._resize_timer.start()
 
     def resize_keep_view(self) -> None:
+        self._quiet_resize_ms = 0
+        self._resize_timer.setInterval(50)
         if self._web is None or not self._web_ready:
             return
         try:
@@ -355,10 +360,12 @@ class ProteinEmbedView(QWidget):
             logger.debug("Protein viewer %s failed", fn_name, exc_info=True)
 
     def set_payload(self, payload: dict) -> None:
+        self._quiet_resize_ms = 180
         self._run_js("molmanagerSetProteinPayload", payload)
 
     def add_models(self, payload: dict) -> None:
         """Add models to the current canvas without re-parsing already loaded files."""
+        self._quiet_resize_ms = 180
         self._run_js("molmanagerAddProteinModels", payload)
 
     def apply_component_states(self, components: list[dict]) -> None:

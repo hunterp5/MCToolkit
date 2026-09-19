@@ -71,7 +71,7 @@ def test_catalog_includes_key_dois() -> None:
     assert "LGPL" in bt.license_name
     assert "gnu.org/licenses/lgpl-3.0" in bt.license_url
     assert "gnu.org/licenses/gpl-3.0" in tool_citation("molmanager").license_url  # type: ignore[union-attr]
-    assert tool_citation("molmanager").name == "MCtoolkit"  # type: ignore[union-attr]
+    assert tool_citation("molmanager").name == "MCToolkit"  # type: ignore[union-attr]
 
 
 def test_citation_html_renders_license_link() -> None:

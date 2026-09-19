@@ -100,6 +100,9 @@ def split_cell_text(text: str, delimiter: str) -> list[str]:
         return [stripped] if stripped else []
     if not raw.strip():
         return []
+    # Quoted CSV is only needed when a field may contain the delimiter.
+    if '"' not in raw:
+        return [part.strip() for part in raw.split(delimiter)]
     reader = csv.reader(io.StringIO(raw), delimiter=delimiter, skipinitialspace=True)
     try:
         row = next(reader)

@@ -23,11 +23,10 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QPixmap, QUndoCommand
-from rdkit import Chem
 
+from ...chem.molecule_conversion import copy_mol, mol_from_smiles, mol_to_canonical_smiles
 from ...platform_support.config import load_config
 from ...table.structure_depiction_layout import structure_column_minimum_width
-from ...chem.molecule_conversion import mol_to_canonical_smiles
 from ..compound_table_model import CompoundTableModel
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
 
@@ -58,7 +57,7 @@ class DeleteRowSnapshot:
     orig_row: int
     oid: int
     cells: dict[str, str]
-    mol_copy: Chem.Mol | None = None
+    mol_copy: object | None = None
     structure_pixmap: QPixmap | None = None
     structure_png: bytes | None = None
     extra_pixmaps: dict[str, QPixmap] = field(default_factory=dict)
@@ -158,12 +157,9 @@ class UndoDeleteRowsCommand(QUndoCommand):
         smi = str(snap.cells.get("SMILES") or "").strip()
         mol = None
         if smi:
-            try:
-                mol = Chem.MolFromSmiles(smi)
-            except Exception:
-                mol = None
+            mol = mol_from_smiles(smi)
         if mol is None and snap.mol_copy is not None:
-            mol = Chem.Mol(snap.mol_copy)
+            mol = copy_mol(snap.mol_copy) or snap.mol_copy
         if mol is not None:
             app.mols[snap.oid] = mol
             if snap.light and render_structure:
@@ -241,7 +237,7 @@ class UndoPasteCellCommand(QUndoCommand):
         self._clip = clip_text
         if col == CompoundTableModel.STRUCTURE_COL:
             pm = app.mols.get(oid)
-            self._prev_mol = Chem.Mol(pm) if pm is not None else None
+            self._prev_mol = copy_mol(pm)
             self._prev_pm = app._table_model.structure_pixmap_copy(oid)
             if "SMILES" in app.headers:
                 self._prev_smiles = app._table_model.value_for_header(row, "SMILES")
@@ -269,7 +265,7 @@ class UndoPasteCellCommand(QUndoCommand):
         oid = self._oid
         if self._col == CompoundTableModel.STRUCTURE_COL:
             if self._prev_mol is not None:
-                app.mols[oid] = Chem.Mol(self._prev_mol)
+                app.mols[oid] = copy_mol(self._prev_mol) or self._prev_mol
             else:
                 app.mols.pop(oid, None)
             if "SMILES" in app.headers:
@@ -294,7 +290,7 @@ class _PasteBlockCell:
     oid: int
     new_text: str
     prev_text: str = ""
-    prev_mol: Chem.Mol | None = None
+    prev_mol: object | None = None
     prev_pm: QPixmap | None = None
     prev_smiles: str = ""
     pixmap_header: str | None = None
@@ -312,7 +308,7 @@ class UndoPasteBlockCommand(QUndoCommand):
             cell = _PasteBlockCell(row=row, col=col, oid=oid, new_text=text)
             if col == CompoundTableModel.STRUCTURE_COL:
                 pm = app.mols.get(oid)
-                cell.prev_mol = Chem.Mol(pm) if pm is not None else None
+                cell.prev_mol = copy_mol(pm)
                 cell.prev_pm = app._table_model.structure_pixmap_copy(oid)
                 if "SMILES" in app.headers:
                     cell.prev_smiles = app._table_model.value_for_header(row, "SMILES")
@@ -345,7 +341,7 @@ class UndoPasteBlockCommand(QUndoCommand):
             oid = cell.oid
             if cell.col == CompoundTableModel.STRUCTURE_COL:
                 if cell.prev_mol is not None:
-                    app.mols[oid] = Chem.Mol(cell.prev_mol)
+                    app.mols[oid] = copy_mol(cell.prev_mol) or cell.prev_mol
                 else:
                     app.mols.pop(oid, None)
                 if "SMILES" in app.headers:
@@ -764,7 +760,7 @@ class UndoInsertRowCommand(QUndoCommand):
         self._app = app
         self._src_oid = -1
         self._cells: dict[str, str] = {}
-        self._mol_copy: Chem.Mol | None = None
+        self._mol_copy: object | None = None
         self._new_oid: int | None = None
         t0 = app._table_model.cell_text(src_row, 0)
         if not t0.isdigit():
@@ -772,7 +768,7 @@ class UndoInsertRowCommand(QUndoCommand):
         self._src_oid = int(t0)
         self._cells = dict(app._row_cells_dict(src_row))
         pm = app.mols.get(self._src_oid)
-        self._mol_copy = Chem.Mol(pm) if pm is not None else None
+        self._mol_copy = copy_mol(pm)
 
     def is_valid(self) -> bool:
         return self._src_oid >= 0
@@ -791,7 +787,7 @@ class UndoInsertRowCommand(QUndoCommand):
         app.table.setSortingEnabled(False)
         app._table_model.insert_row_at(insert_at, self._new_oid, dict(self._cells))
         if self._mol_copy is not None:
-            app.mols[self._new_oid] = Chem.Mol(self._mol_copy)
+            app.mols[self._new_oid] = copy_mol(self._mol_copy) or self._mol_copy
             app.start_render_worker(self._new_oid, app.mols[self._new_oid])
         app._confs_sidecar_copy_for_new_row(self._src_oid, self._new_oid)
         app.calculate_global_bounds()

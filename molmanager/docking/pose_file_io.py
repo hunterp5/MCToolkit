@@ -177,7 +177,7 @@ def merge_pdbqt_files(paths: list[Path], dest: Path) -> None:
 
 
 def pose_stage_from_pdbqt(pdbqt: str) -> str | None:
-    """``placement`` or ``minimized`` from an MCtoolkit pose-stage remark."""
+    """``placement`` or ``minimized`` from an MCToolkit pose-stage remark."""
     match = _POSE_STAGE_RE.search(pdbqt or "")
     if match is None:
         return None

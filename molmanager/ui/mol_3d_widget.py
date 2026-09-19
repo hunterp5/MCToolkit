@@ -38,8 +38,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from rdkit import Chem
-
 from ..app_identity import APP_DISPLAY_NAME
 from ..platform_support.qt_webengine_flags import webengine_views_supported
 from .dockable_plot import (
@@ -103,7 +101,7 @@ class Molecule3DViewerWidget(Mol3DConfMixin, Mol3DChromeMixin, QWidget):
 
     def __init__(
         self,
-        mol: Chem.Mol,
+        mol: object,
         parent_app: QWidget | None = None,
         *,
         window_title: str = "View in 3D",

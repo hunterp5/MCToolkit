@@ -12,14 +12,14 @@ Use whenever a tool starts a background worker, when the UI feels busy, when you
 
 ## Inputs / scope
 
-Applies to jobs launched from the current session. Scope of each job (all rows vs selected) was chosen in the tool dialog that started it. The in-memory log covers the current MCtoolkit process and is not saved with the session.
+Applies to jobs launched from the current session. Scope of each job (all rows vs selected) was chosen in the tool dialog that started it. The in-memory log covers the current MCToolkit process and is not saved with the session.
 
 ## Options
 
 - Job list showing running and queued work, including live **Progress** (the same counts shown in the status bar).
 - **Cancel** - stop the active or selected job when the worker supports cancellation.
 - **Clear queue** - drop pending jobs that have not started yet.
-- **Log** (below the table) - level filter, text search, copy, clear, and open the rotating log file. See **Log** for the full transcript options.
+- **Log** (below the table) - transcript of tool output and status history. Level, text search, and auto-scroll sit on the bottom row with **Cancel Job** and **Clear Queue**.
 
 ## Workflow
 

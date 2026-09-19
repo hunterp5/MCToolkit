@@ -18,7 +18,7 @@
 
 Qt 6's Windows plugin turns on DWM immersive dark mode (black title bars with
 minimize / maximize / close) from the OS color scheme. PyQt5 never set that
-            attribute, so MCtoolkit captions stayed the classic light Windows frame even
+            attribute, so MCToolkit captions stayed the classic light Windows frame even
 when Fusion was dark. Call ``configure_windows_native_caption_platform`` before
 ``QApplication`` and ``install_classic_native_captions`` after it exists.
 """

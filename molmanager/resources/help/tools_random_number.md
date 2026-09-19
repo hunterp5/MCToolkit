@@ -26,7 +26,7 @@ Rows in scope (all or **Selected Rows Only**); writes the named column.
 
 ## Workflow
 
-1. Name the column and pick a distribution.
+1. Open **Tools → Utilities → Random → Number**. Name the column and pick a distribution.
 2. Set range or mean/sd (and clipping if normal).
 3. Optionally set a seed for reproducibility.
 4. Apply to all or selected rows.

@@ -443,30 +443,34 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             tooltips_visible=True,
         ),
         SEPARATOR,
-        action(
-            "Calculator…",
-            "open_calculator",
-            hotkey="tools.calculator",
-            attr="_act_custom_calc",
-            tooltip="Add a numeric column from a math expression using existing column names (e.g. sqrt, log10, exp).",
-        ),
         submenu(
-            "&Random",
+            "&Utilities",
             action(
-                "Number…",
-                "open_random_number_dialog",
-                tooltip=(
-                    "Fill a column with random numbers (uniform, integer, or normal) "
-                    "for all or selected rows."
-                ),
+                "Calculator…",
+                "open_calculator",
+                hotkey="tools.calculator",
+                attr="_act_custom_calc",
+                tooltip="Add a numeric column from a math expression using existing column names (e.g. sqrt, log10, exp).",
             ),
-            action(
-                "Molecule…",
-                "open_random_molecule_dialog",
-                tooltip=(
-                    "Fetch random small molecules from ChEMBL, PubChem, or ZINC and add them "
-                    "to the table."
+            submenu(
+                "&Random",
+                action(
+                    "Number…",
+                    "open_random_number_dialog",
+                    tooltip=(
+                        "Fill a column with random numbers (uniform, integer, or normal) "
+                        "for all or selected rows."
+                    ),
                 ),
+                action(
+                    "Molecule…",
+                    "open_random_molecule_dialog",
+                    tooltip=(
+                        "Fetch random small molecules from ChEMBL, PubChem, or ZINC and add them "
+                        "to the table."
+                    ),
+                ),
+                tooltips_visible=True,
             ),
             tooltips_visible=True,
         ),
@@ -602,13 +606,13 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
         ),
         SEPARATOR,
         submenu(
-            "&MedChem",
+            "&MedChem Plots",
             action("BOILED-Egg plot…", "open_boiled_egg_plot"),
             action("Golden Triangle plot…", "open_golden_triangle_plot"),
             tooltips_visible=True,
         ),
         submenu(
-            "&Dimensionality Reduction",
+            "&DimRed Plots",
             action("Principal Component Analysis…", "open_pca_dialog"),
             action("t-SNE Visualization…", "open_tsne_dialog"),
             action("UMAP Visualization…", "open_umap_dialog"),
@@ -701,7 +705,7 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             hotkey="help.user_guides",
             attr="_act_user_guide",
             add_to_window=True,
-            tooltip="Open MCtoolkit help (F1).",
+            tooltip="Open MCToolkit help (F1).",
         ),
         action(
             "&Citations",
@@ -709,7 +713,7 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             hotkey="help.citations",
             attr="_act_citations",
             add_to_window=True,
-            tooltip="Open papers and licenses for tools used in MCtoolkit.",
+            tooltip="Open papers and licenses for tools used in MCToolkit.",
         ),
         attr="_help_menu",
     ),

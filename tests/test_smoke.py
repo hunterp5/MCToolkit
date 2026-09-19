@@ -134,7 +134,7 @@ def test_smina_dock_dialog_constructible(qapp):  # noqa: ARG001
 
 def test_chemistry_workspace_window_constructible(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
-    assert w.windowTitle() == "MCtoolkit"
+    assert w.windowTitle() == "MCToolkit"
     assert w._table_model is not None
     assert w._sqlite_store is not None
 

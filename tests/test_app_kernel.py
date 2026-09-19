@@ -171,36 +171,35 @@ def test_install_window_forwards_delegates_to_collaborator() -> None:
     assert w.collab.n == 1
 
 
-def test_lazy_mixin_host_binds_tuple_of_mixins() -> None:
-    from molmanager.ui.workspace_tools import _LazyMixinHost
+def test_lazy_collaborator_constructs_class_and_drops_triggered_bool() -> None:
+    from molmanager.ui.workspace_tools import _LazyCollaborator
 
-    class _A:
-        def a(self) -> str:
-            return f"{self.tag}a"
+    class Tools:
+        def __init__(self, app) -> None:
+            self._app = app
 
-    class _B:
-        def b(self) -> str:
-            return f"{self.tag}b"
+        def greet(self) -> str:
+            return f"{self._app.tag}hi"
 
     class _Kernel:
         tag = "k"
 
-    host = _LazyMixinHost(_Kernel(), lambda: (_A, _B))
-    assert host.a() == "ka"
-    assert host.b() == "kb"
+    host = _LazyCollaborator(_Kernel(), lambda: Tools)
+    assert host.greet() == "khi"
+    assert host.greet(False) == "khi"
 
 
 def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa: ARG001
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.main_window.chemistry_mixin import ChemistryMixin
-    from molmanager.ui.main_window.cluster_mixin import ClusterMixin
-    from molmanager.ui.main_window.fast_prepare_tools_mixin import FastPrepareToolsMixin
-    from molmanager.ui.main_window.mpo_mixin import MpoMixin
-    from molmanager.ui.main_window.protonate_tools_mixin import ProtonateToolsMixin
-    from molmanager.ui.main_window.qsar_mixin import QsarMixin
     from molmanager.ui.main_window.session_mixin import SessionMixin
-    from molmanager.ui.main_window.structure_edit_mixin import StructureEditMixin
-    from molmanager.ui.main_window.structure_writeback_mixin import StructureWritebackMixin
+    from molmanager.ui.workspace_cluster import ClusterTools
+    from molmanager.ui.workspace_fast_prepare import FastPrepareTools
+    from molmanager.ui.workspace_mpo import MpoTools
+    from molmanager.ui.workspace_protonate import ProtonateTools
+    from molmanager.ui.workspace_qsar import QsarTools
+    from molmanager.ui.workspace_structure_edit import StructureEditTools
+    from molmanager.ui.workspace_structure_writeback import StructureWritebackTools
 
     w = ChemistryWorkspaceWindow()
     assert w.progress is not None
@@ -214,13 +213,13 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
     off_mro = (
         ChemistryMixin,
         SessionMixin,
-        ClusterMixin,
-        QsarMixin,
-        MpoMixin,
-        ProtonateToolsMixin,
-        FastPrepareToolsMixin,
-        StructureEditMixin,
-        StructureWritebackMixin,
+        ClusterTools,
+        QsarTools,
+        MpoTools,
+        ProtonateTools,
+        FastPrepareTools,
+        StructureEditTools,
+        StructureWritebackTools,
     )
     for cls in off_mro:
         assert cls not in mro

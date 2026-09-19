@@ -15,7 +15,7 @@
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-MCtoolkit application package (import name ``molmanager``).
+MCToolkit application package (import name ``molmanager``).
 
 This package was extracted from the original single-file prototype
 (`physical_property_calculator.py`) into a small, runnable application layout.

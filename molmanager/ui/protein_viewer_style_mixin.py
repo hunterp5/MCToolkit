@@ -26,6 +26,7 @@ from dataclasses import replace
 from PySide6.QtGui import QColor, QAction, QActionGroup
 from PySide6.QtWidgets import QColorDialog, QMessageBox
 
+from ..chem.molecule_conversion import copy_mol
 from ..protein.hydrogen_bonds import (
     HBOND_KIND_COMPLEX,
     HBOND_KIND_LIGAND,
@@ -946,12 +947,7 @@ class ProteinViewerStyleMixin:
         live = {"active": True, "data": b64, "fmt": fmt or "sdf", "zoom": bool(zoom)}
         stored = dict(live)
         stored["zoom"] = False
-        from rdkit import Chem
-
-        try:
-            self._dock_pose_mol = Chem.Mol(mol)
-        except Exception:
-            self._dock_pose_mol = mol
+        self._dock_pose_mol = copy_mol(mol) or mol
         self._dock_pose_payload = stored
         self.viewer.set_dock_pose(live)
         if caption:

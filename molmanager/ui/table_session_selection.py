@@ -20,9 +20,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEventLoop, QItemSelection, QItemSelectionModel, Qt, QTimer
 from PySide6.QtWidgets import QAbstractItemView, QApplication
-from rdkit import Chem
-
-from ..chem.molecule_conversion import looks_like_mol_block
+from ..chem.molecule_conversion import looks_like_mol_block, mol_to_canonical_smiles
 from ..chem.structure_source_headers import is_tool_generated_structure_header
 from ..platform_support.config import load_config
 from ..services.table_selection import (
@@ -780,7 +778,7 @@ class TableSessionSelection:
         mol = self._app.mols.get(oid)
         if mol is not None:
             try:
-                raw = Chem.MolToSmiles(mol)
+                raw = mol_to_canonical_smiles(mol)
             except Exception:
                 raw = ""
             if raw:

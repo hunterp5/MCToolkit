@@ -24,7 +24,7 @@ from molmanager.ui.singleton_modeless_dialog import reuse_or_show_modeless_singl
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget
 
-_MAIN_WINDOW = Path(__file__).resolve().parents[1] / "molmanager" / "ui" / "main_window"
+_UI = Path(__file__).resolve().parents[1] / "molmanager" / "ui"
 
 
 def test_reuse_or_show_modeless_singleton_can_create_without_showing(qapp):  # noqa: ARG001
@@ -215,8 +215,8 @@ def test_data_menu_mixins_do_not_hand_roll_singleton_lifecycles() -> None:
     That orphans a replacement window once the superseded one is finally destroyed, which
     the shared helper avoids by ignoring signals from a dialog it no longer tracks.
     """
-    for name in ("dimension_reduction_mixin.py", "medchem_space_mixin.py"):
-        text = (_MAIN_WINDOW / name).read_text(encoding="utf-8")
+    for name in ("workspace_dimred.py", "workspace_medchem.py"):
+        text = (_UI / name).read_text(encoding="utf-8")
         assert "reuse_or_show_modeless_singleton" in text, f"{name} bypasses the shared helper"
         assert "destroyed.connect" not in text, f"{name} wires destroyed by hand"
 
@@ -230,7 +230,7 @@ def test_dimension_reduction_menu_kinds_are_all_registered() -> None:
     from molmanager.ui.dialogs.dimensionality_reduction import DIMRED_FLOATING_DIALOGS
     from molmanager.ui.main_window.menu_spec import MAIN_WINDOW_MENUS, find_submenu
 
-    dimred = find_submenu(find_submenu(MAIN_WINDOW_MENUS, "Data").items, "Dimensionality Reduction")
+    dimred = find_submenu(find_submenu(MAIN_WINDOW_MENUS, "Data").items, "DimRed Plots")
     kinds = [
         item.slot.removeprefix("open_").removesuffix("_dialog")
         for item in dimred.items

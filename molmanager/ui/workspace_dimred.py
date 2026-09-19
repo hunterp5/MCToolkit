@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""PCA, t-SNE, UMAP, and SOM dialogs (Data → Dimensionality Reduction)."""
+"""PCA, t-SNE, UMAP, and SOM dialogs (Data → DimRed Plots)."""
 
 from __future__ import annotations
 
@@ -23,10 +23,13 @@ from contextlib import suppress
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
-from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
+from .singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 
-class DimensionReductionMixin:
+class DimensionReductionTools:
+    def __init__(self, app) -> None:
+        self._app = app
+
     def open_pca_dialog(self) -> None:
         self._open_dimension_reduction_dialog("pca")
 
@@ -40,32 +43,32 @@ class DimensionReductionMixin:
         self._open_dimension_reduction_dialog("som")
 
     def _open_dimension_reduction_dialog(self, kind: str) -> None:
-        if not self.headers or self._table_model.rowCount() == 0:
+        if not self._app.headers or self._app._table_model.rowCount() == 0:
             QMessageBox.information(
-                self,
+                self._app,
                 "Dimensionality Reduction",
                 "Open a file or add rows so the table has numeric data to analyze.",
             )
             return
-        from ..dialogs.dimensionality_reduction import DIMRED_FLOATING_DIALOGS
+        from .dialogs.dimensionality_reduction import DIMRED_FLOATING_DIALOGS
 
         dialog_cls = DIMRED_FLOATING_DIALOGS.get(kind)
         if dialog_cls is None:
             QMessageBox.warning(
-                self, "Dimensionality Reduction", f"Unknown embedding method: {kind!r}"
+                self._app, "Dimensionality Reduction", f"Unknown embedding method: {kind!r}"
             )
             return
         attr = f"_{kind}_dialog"
 
         def _factory():
-            d = dialog_cls(self)
-            self._prepare_tool_dialog(d)
+            d = dialog_cls(self._app)
+            self._app._prepare_tool_dialog(d)
             d.setAttribute(Qt.WA_DeleteOnClose, True)
             return d
 
-        previous = getattr(self, attr, None)
+        previous = getattr(self._app, attr, None)
         dlg = reuse_or_show_modeless_singleton(
-            self,
+            self._app,
             attr,
             _factory,
             show=False,
@@ -73,7 +76,7 @@ class DimensionReductionMixin:
         if dlg is previous:
             with suppress(RuntimeError, AttributeError):
                 getattr(dlg, "_panel", dlg)._reload_columns()
-            self._sync_dialog_only_selected_scope(dlg)
+            self._app._sync_dialog_only_selected_scope(dlg)
         self._present_dimension_reduction_dialog(dlg)
 
     def _present_dimension_reduction_dialog(self, dlg) -> None:

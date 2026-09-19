@@ -43,8 +43,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from rdkit import Chem
-
+from ...chem.molecule_conversion import copy_mol
 from ...conformers.conformer_column_codec import is_packed_ensemble_header
 from ...table.structure_depiction_layout import BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH
 from ...docking.pose_file_io import (
@@ -103,7 +102,7 @@ def pose_browser_id(*, ligand: int, pose: int) -> str:
     return f"{max(1, int(ligand) + 1)}.{max(1, int(pose) + 1)}"
 
 
-def parent_oid_from_mol(mol: Chem.Mol | None) -> int | None:
+def parent_oid_from_mol(mol: object | None) -> int | None:
     """Return the table Parent OID stamped on a docked pose, if any."""
     if mol is None:
         return None
@@ -116,7 +115,7 @@ def parent_oid_from_mol(mol: Chem.Mol | None) -> int | None:
         return None
 
 
-def pose_status_caption(mol: Chem.Mol | None, index: int, total: int) -> str:
+def pose_status_caption(mol: object | None, index: int, total: int) -> str:
     """Status line for Protein Viewer overlay and the 3D pane."""
     parts = [f"Dock pose {index} of {total}" if total else "Dock pose"]
     if mol is None:
@@ -144,10 +143,10 @@ class PoseBrowserWidget(QWidget):
         self._app = parent_app
         self._window_title = "Pose Browser"
         self._run_title = "Pose Browser"
-        self._mols: list[Chem.Mol] = []
-        self._all_mols: list[Chem.Mol] = []
-        self._all_groups: list[list[Chem.Mol]] = []
-        self._groups: list[list[Chem.Mol]] = []
+        self._mols: list[object] = []
+        self._all_mols: list[object] = []
+        self._all_groups: list[list[object]] = []
+        self._groups: list[list[object]] = []
         self._group_idx = 0
         self._idx = 0
         self._headers: list[str] = []
@@ -473,18 +472,18 @@ class PoseBrowserWidget(QWidget):
         self._idx = max(0, min(int(index), len(group) - 1))
         self._update_ui()
 
-    def current_mol(self) -> Chem.Mol | None:
+    def current_mol(self) -> object | None:
         group = self._current_group()
         if not group or not (0 <= self._idx < len(group)):
             return None
         return group[self._idx]
 
-    def _current_group(self) -> list[Chem.Mol]:
+    def _current_group(self) -> list[object]:
         if not self._groups or not (0 <= self._group_idx < len(self._groups)):
             return []
         return self._groups[self._group_idx]
 
-    def _ligand_index_for_group(self, group: list[Chem.Mol]) -> int:
+    def _ligand_index_for_group(self, group: list[object]) -> int:
         for i, item in enumerate(self._all_groups):
             if item is group:
                 return i
@@ -510,7 +509,7 @@ class PoseBrowserWidget(QWidget):
                 continue
         return known
 
-    def _group_parent_oid(self, group: list[Chem.Mol] | None) -> int | None:
+    def _group_parent_oid(self, group: list[object] | None) -> int | None:
         for mol in group or []:
             oid = parent_oid_from_mol(mol)
             if oid is not None:
@@ -834,7 +833,7 @@ class PoseBrowserWidget(QWidget):
         if self._cb_only_selected.isChecked():
             self._apply_pose_scope(preserve_index=True)
 
-    def _all_mol_index(self, mol: Chem.Mol | None) -> int | None:
+    def _all_mol_index(self, mol: object | None) -> int | None:
         if mol is None:
             return None
         for i, item in enumerate(self._all_mols):
@@ -842,7 +841,7 @@ class PoseBrowserWidget(QWidget):
                 return i
         return None
 
-    def _target_table_oid(self, mol: Chem.Mol | None) -> int | None:
+    def _target_table_oid(self, mol: object | None) -> int | None:
         parent = parent_oid_from_mol(mol)
         if parent is not None:
             return parent
@@ -851,7 +850,7 @@ class PoseBrowserWidget(QWidget):
             return None
         return self._table_oids.get(idx)
 
-    def _append_pose_to_table(self, mol: Chem.Mol) -> int | None:
+    def _append_pose_to_table(self, mol: object) -> int | None:
         app = self._app
         if app is None:
             return None
@@ -868,10 +867,7 @@ class PoseBrowserWidget(QWidget):
         model = getattr(app, "_table_model", None)
         if not callable(ingest) or model is None:
             return None
-        try:
-            stored = Chem.Mol(mol)
-        except Exception:
-            stored = mol
+        stored = copy_mol(mol) or mol
         cells = ingest(oid, stored)
         model.append_rows_batch([(oid, cells)])
         render = getattr(app, "start_render_worker", None)

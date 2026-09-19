@@ -43,14 +43,13 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from rdkit import Chem
-
+from ...chem.molecule_conversion import mol_from_smiles
+from ...chem.structure_2d_depiction import render_molecule_png
+from ...sources.random_molecule_sources import RandomSourceMolecule
 from ...table.structure_depiction_layout import (
     BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
     BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
 )
-from ...sources.random_molecule_sources import RandomSourceMolecule
-from ...chem.structure_2d_depiction import render_molecule_png
 from ..dockable_plot import (
     discard_host_dialog_after_dock,
     make_add_to_main_button,
@@ -112,7 +111,7 @@ def add_random_source_hits_to_table(
 
 
 def _pixmap_from_smiles(smiles: str, width: int, height: int) -> QPixmap | None:
-    mol = Chem.MolFromSmiles(smiles or "")
+    mol = mol_from_smiles(smiles or "")
     if mol is None:
         return None
     try:

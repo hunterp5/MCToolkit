@@ -24,6 +24,8 @@ from molmanager.app_identity import (
     APP_DISPLAY_NAME,
     LEGACY_SETTINGS_APP,
     LEGACY_SETTINGS_ORG,
+    PREVIOUS_SETTINGS_APP,
+    PREVIOUS_SETTINGS_ORG,
     SESSION_INVALID_MESSAGE,
     SESSION_OPEN_FILTER,
     SESSION_SAVE_FILTER,
@@ -39,14 +41,16 @@ from molmanager.table.session_codec import session_format_ok
 
 
 def test_display_name_and_window_title() -> None:
-    assert APP_DISPLAY_NAME == "MCtoolkit"
-    assert window_title() == "MCtoolkit"
-    assert window_title("Help") == "MCtoolkit — Help"
+    assert APP_DISPLAY_NAME == "MCToolkit"
+    assert window_title() == "MCToolkit"
+    assert window_title("Help") == "MCToolkit — Help"
+    assert PREVIOUS_SETTINGS_ORG == "MCtoolkit"
+    assert PREVIOUS_SETTINGS_APP == "MCtoolkit"
 
 
 def test_http_user_agent_includes_display_name() -> None:
     agent = http_user_agent("FAME3R SOM")
-    assert agent.startswith("MCtoolkit/")
+    assert agent.startswith("MCToolkit/")
     assert "FAME3R SOM" in agent
 
 
@@ -58,10 +62,10 @@ def test_session_format_aliases_include_legacy_and_new_names() -> None:
 
 
 def test_session_dialog_filters_use_display_name() -> None:
-    assert SESSION_SAVE_FILTER.startswith("MCtoolkit Session")
-    assert "MCtoolkit Session" in SESSION_OPEN_FILTER
-    assert "MCtoolkit" in SESSION_INVALID_MESSAGE
-    assert SESSION_TEMP_DIR_NAME == "MCtoolkitSessions"
+    assert SESSION_SAVE_FILTER.startswith("MCToolkit Session")
+    assert "MCToolkit Session" in SESSION_OPEN_FILTER
+    assert "MCToolkit" in SESSION_INVALID_MESSAGE
+    assert SESSION_TEMP_DIR_NAME == "MCToolkitSessions"
 
 
 def test_qt_settings_migrates_legacy_keys(tmp_path, monkeypatch, qapp):  # noqa: ARG001

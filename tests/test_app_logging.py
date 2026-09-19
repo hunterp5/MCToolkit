@@ -80,4 +80,4 @@ def test_format_crash_message_includes_log_path(tmp_path: Path):
     msg = format_crash_message(ValueError, ValueError("boom"), tmp_path / "mctoolkit.log")
     assert "ValueError: boom" in msg
     assert "mctoolkit.log" in msg
-    assert "MCtoolkit" in msg
+    assert "MCToolkit" in msg

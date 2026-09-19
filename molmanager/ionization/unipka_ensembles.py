@@ -230,11 +230,11 @@ def cuda_pka_install_hint() -> str:
     return (
         "An NVIDIA GPU was found, but this Python has a CPU-only PyTorch, "
         "so Uni-pKa (Predict pKa, Protonate, LogD) runs on the CPU.\n\n"
-        "Close MCtoolkit and, in the same virtual environment, run:\n"
+        "Close MCToolkit and, in the same virtual environment, run:\n"
         "  Windows:      .\\scripts\\install_pytorch_pka.ps1\n"
         "  macOS/Linux:  bash scripts/install_pytorch_pka.sh\n\n"
         "Those scripts install the CUDA 12.4 wheel when nvidia-smi sees a GPU "
-        "(pass -Cpu / --cpu to keep the CPU wheel). Restart MCtoolkit afterward."
+        "(pass -Cpu / --cpu to keep the CPU wheel). Restart MCToolkit afterward."
     )
 
 
@@ -247,7 +247,7 @@ def warn_if_cuda_torch_missing() -> None:
     os.environ["MOLMANAGER_UNIPKA_GPU_HINT_EMITTED"] = "1"
     logger.warning(
         "NVIDIA GPU detected, but this PyTorch build is CPU-only. "
-        "Close MCtoolkit and run scripts\\install_pytorch_pka.ps1 "
+        "Close MCToolkit and run scripts\\install_pytorch_pka.ps1 "
         "(or bash scripts/install_pytorch_pka.sh); CUDA is selected automatically."
     )
 

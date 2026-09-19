@@ -12,7 +12,7 @@ Open **Processes** while a job is running, after a failure, or when you need to 
 
 ## Inputs / scope
 
-The in-memory log covers the current MCtoolkit process. It is not saved with the session. A rotating file log is still written under the user log directory when file logging is enabled.
+The in-memory log covers the current MCToolkit process. It is not saved with the session. A rotating file log is still written under the user log directory when file logging is enabled.
 
 ## Options
 

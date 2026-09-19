@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Tests for Tools → Random → Number generation helpers."""
+"""Tests for Tools → Utilities → Random → Number generation helpers."""
 
 import pytest
 

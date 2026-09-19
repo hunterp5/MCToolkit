@@ -12,7 +12,7 @@ after installing dependencies on Linux. That wrapper:
 
 Add an ignore entry only when:
 
-1. There is no fixed release yet, or upgrading breaks MCtoolkit, **and**
+1. There is no fixed release yet, or upgrading breaks MCToolkit, **and**
 2. The risk is accepted for our single-user desktop usage model.
 
 Document each ignored ID below.

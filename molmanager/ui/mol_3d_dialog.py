@@ -24,8 +24,7 @@ import json
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QMessageBox, QVBoxLayout, QWidget
 
-from rdkit import Chem
-
+from ..chem.molecule_conversion import copy_mol, is_rdkit_mol, mol_from_smiles
 from ..conformers.conformer_column_codec import conformer_mol_blocks_b64_json
 from .mol_3d_prepare import prepare_mol_2d, prepare_mol_3d
 from .mol_3d_widget import Molecule3DViewerWidget
@@ -37,7 +36,7 @@ class Molecule3DViewerDialog(QDialog):
 
     def __init__(
         self,
-        mol: Chem.Mol | None,
+        mol: object | None,
         parent: QWidget | None = None,
         *,
         window_title: str = "View in 3D",
@@ -105,14 +104,14 @@ class Molecule3DViewerDialog(QDialog):
 
 
 def open_molecule_3d_viewer(
-    mol: Chem.Mol,
+    mol: object,
     parent: QWidget | None = None,
     *,
     title: str = "View in 3D",
     source_oid: int | None = None,
 ) -> None:
     """Show *mol* in 3Dmol: multiple RDKit conformers use a conformer slider; otherwise embed once (ETKDG)."""
-    if mol is None or not isinstance(mol, Chem.Mol):
+    if mol is None or not is_rdkit_mol(mol):
         return
     try:
         nconf = int(mol.GetNumConformers())
@@ -120,7 +119,7 @@ def open_molecule_3d_viewer(
         nconf = 0
     if nconf > 1:
         try:
-            m = Chem.Mol(mol)
+            m = copy_mol(mol) or mol
         except Exception:
             m = mol
         payload = conformer_mol_blocks_b64_json(m)
@@ -203,7 +202,7 @@ def open_conformation_viewer_from_blocks_payload(
             ).decode("ascii")
         except Exception:
             strain_b64 = ""
-    dummy = Chem.MolFromSmiles("C")
+    dummy = mol_from_smiles("C")
     win_title = title if title else "View Conformers"
     if n > 1:
         win_title = f"{win_title} ({n} conformers)"
@@ -227,14 +226,14 @@ def open_conformation_viewer_from_blocks_payload(
 
 
 def open_molecule_2d_viewer(
-    mol: Chem.Mol,
+    mol: object,
     parent: QWidget | None = None,
     *,
     title: str = "View in 2D",
     source_oid: int | None = None,
 ) -> None:
     """Lay out *mol* in 2D and show it in 3Dmol with an orthographic (flat) projection."""
-    if mol is None or not isinstance(mol, Chem.Mol):
+    if mol is None or not is_rdkit_mol(mol):
         return
     m2d = prepare_mol_2d(mol)
     if m2d is None:

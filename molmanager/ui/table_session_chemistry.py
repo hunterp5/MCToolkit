@@ -18,8 +18,6 @@
 
 from __future__ import annotations
 
-from rdkit import Chem
-
 from ..chem.molecule_conversion import (
     looks_like_mol_block,
     mol_to_canonical_smiles,
@@ -118,7 +116,7 @@ class TableSessionChemistry:
     def _is_smiles_named_header(self, h: str) -> bool:
         return is_smiles_named_header(h)
 
-    def _fill_row_data_columns_from_mol(self, row_idx: int, mol: Chem.Mol | None) -> None:
+    def _fill_row_data_columns_from_mol(self, row_idx: int, mol: object | None) -> None:
         """Populate data columns (from col 2 onward) from RDKit mol properties — same source as RenderWorker props."""
         if not self._app.headers or row_idx < 0 or row_idx >= self._app._table_model.rowCount():
             return
@@ -126,11 +124,11 @@ class TableSessionChemistry:
         values = self._row_cells_from_mol(mol)
         self._app._table_model.set_cell_text_batch(oid, values)
 
-    def _row_cells_from_mol(self, mol: Chem.Mol | None) -> dict[str, str]:
+    def _row_cells_from_mol(self, mol: object | None) -> dict[str, str]:
         """Build row cell values for all data columns from one molecule."""
         return row_cells_from_mol(mol, self._app.headers[2:])
 
-    def _mol_for_structure_row(self, row: int) -> Chem.Mol | None:
+    def _mol_for_structure_row(self, row: int) -> object | None:
         """Best-effort RDKit mol: in-memory store, then any parseable chemistry in table columns."""
         if row < 0 or row >= self._app._table_model.rowCount():
             return None
@@ -204,7 +202,7 @@ class TableSessionChemistry:
             return raw
         return (self._app._table_model.cell_text(row, col) or "").strip()
 
-    def _mol_for_table_context_menu(self, row: int, col: int) -> Chem.Mol | None:
+    def _mol_for_table_context_menu(self, row: int, col: int) -> object | None:
         """Molecule for context-menu actions from the clicked column (not a different field)."""
         if not self._column_eligible_for_table_chemistry_menu(row, col):
             return None
@@ -216,7 +214,7 @@ class TableSessionChemistry:
         m = self._mol_from_structure_text(raw)
         return self._apply_structure_field_override(m) if m is not None else None
 
-    def _mol_from_structure_text(self, raw: str) -> Chem.Mol | None:
+    def _mol_from_structure_text(self, raw: str) -> object | None:
         return parse_molecule_from_cell_text(raw)
 
     def chemistry_tool_structure_sources(self) -> list[str]:
@@ -229,7 +227,7 @@ class TableSessionChemistry:
         *,
         only_selected: bool = False,
         only_visible: bool = False,
-    ) -> list[tuple[int, Chem.Mol]]:
+    ) -> list[tuple[int, object]]:
         """
         Iterate the table and return ``(oid, mol)`` pairs in scope for a chemistry tool.
 
@@ -246,7 +244,7 @@ class TableSessionChemistry:
             visible_rows = None if vis is None else set(vis)
         is_pixmap_src = src != "Structure" and self._app._table_model.is_pixmap_data_column(src)
 
-        def _resolve(r: int, oid: int) -> Chem.Mol | None:
+        def _resolve(r: int, oid: int) -> object | None:
             if src == "Structure":
                 return self._app.mols.get(oid) or self._mol_for_structure_row(r)
             if is_pixmap_src:
@@ -335,7 +333,7 @@ class TableSessionChemistry:
             on_row=_on_row,
         )
 
-    def _apply_structure_field_override(self, mol: Chem.Mol | None) -> Chem.Mol | None:
+    def _apply_structure_field_override(self, mol: object | None) -> object | None:
         field = getattr(self._app, "_structure_field_override", None)
         if not field or mol is None:
             return mol

@@ -340,3 +340,107 @@ def mol_from_binary_blob(blob) -> object | None:
         return Chem.Mol(bytes(blob))
     except Exception:
         return None
+
+
+def is_rdkit_mol(obj) -> bool:
+    """True when *obj* is a live RDKit molecule."""
+    if obj is None:
+        return False
+    from rdkit import Chem
+
+    return isinstance(obj, Chem.Mol)
+
+
+def copy_mol(mol) -> object | None:
+    """Independent RDKit copy of *mol*, or ``None`` when copying fails."""
+    if mol is None:
+        return None
+    from rdkit import Chem
+
+    try:
+        return Chem.Mol(mol)
+    except Exception:
+        return None
+
+
+def mol_from_smiles(text: str):
+    """Parse *text* as SMILES. Returns ``None`` when RDKit rejects it."""
+    smiles = (text or "").strip()
+    if not smiles:
+        return None
+    from rdkit import Chem
+
+    blocker = _rdkit_log_blocker()
+    try:
+        return Chem.MolFromSmiles(smiles)
+    except Exception:
+        return None
+    finally:
+        del blocker
+
+
+def mol_from_smarts(text: str):
+    """Parse *text* as SMARTS. Returns ``None`` when RDKit rejects it."""
+    smarts = (text or "").strip()
+    if not smarts:
+        return None
+    from rdkit import Chem
+
+    blocker = _rdkit_log_blocker()
+    try:
+        return Chem.MolFromSmarts(smarts)
+    except Exception:
+        return None
+    finally:
+        del blocker
+
+
+def mol_from_molblock(text: str, *, sanitize: bool = True, remove_hs: bool = False):
+    """Parse an MDL mol block. Returns ``None`` when RDKit rejects it."""
+    block = text or ""
+    if not str(block).strip():
+        return None
+    from rdkit import Chem
+
+    blocker = _rdkit_log_blocker()
+    try:
+        return Chem.MolFromMolBlock(block, sanitize=sanitize, removeHs=remove_hs)
+    except Exception:
+        return None
+    finally:
+        del blocker
+
+
+def mol_to_pdbblock(mol) -> str:
+    """PDB block for *mol*, or empty string if RDKit cannot write one."""
+    if mol is None:
+        return ""
+    from rdkit import Chem
+
+    blocker = _rdkit_log_blocker()
+    try:
+        block = Chem.MolToPDBBlock(mol) or ""
+        return block if block.strip() else ""
+    except Exception:
+        return ""
+    finally:
+        del blocker
+
+
+def mol_from_ligand_path(path) -> object | None:
+    """First molecule from an SDF/MOL ligand file. Returns ``None`` on failure."""
+    from pathlib import Path
+
+    rec = Path(path)
+    if not rec.is_file():
+        return None
+    from rdkit import Chem
+
+    suffix = rec.suffix.lower()
+    try:
+        if suffix in {".sdf", ".sd"}:
+            suppl = Chem.SDMolSupplier(str(rec), removeHs=False, sanitize=False)
+            return next((item for item in suppl if item is not None), None)
+        return Chem.MolFromMolFile(str(rec), removeHs=False, sanitize=False)
+    except Exception:
+        return None

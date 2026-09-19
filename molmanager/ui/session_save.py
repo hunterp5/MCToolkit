@@ -66,7 +66,7 @@ class SessionSave:
 
     def new_session(self) -> None:
         """Launch a new instance of the app with nothing loaded."""
-        # Keep ``python -m molmanager``; only the window chrome is MCtoolkit.
+        # Keep ``python -m molmanager``; only the window chrome is MCToolkit.
         try:
             subprocess.Popen([sys.executable, "-m", "molmanager"], close_fds=True)
         except Exception as e:

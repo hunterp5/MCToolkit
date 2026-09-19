@@ -50,4 +50,4 @@ CONFORGE generates from the connection table. 3D input is only needed if you che
 
 ## Tips and limits
 
-Install is optional. On Windows 3.11 use the CDPKit installer + `confgen.exe`; `pip install cdpkit` has no matching wheel and will try to compile (needs Boost). Energies shown after the run are vacuum MMFF totals computed in MCtoolkit, not protein-bound or quantum-chemical values. CONFORGE itself is not protein-aware. If a **confs** column already exists, new ensembles go to **confs (1)** (then **confs (2)**, …) so the previous column is kept.
+Install is optional. On Windows 3.11 use the CDPKit installer + `confgen.exe`; `pip install cdpkit` has no matching wheel and will try to compile (needs Boost). Energies shown after the run are vacuum MMFF totals computed in MCToolkit, not protein-bound or quantum-chemical values. CONFORGE itself is not protein-aware. If a **confs** column already exists, new ensembles go to **confs (1)** (then **confs (2)**, …) so the previous column is kept.

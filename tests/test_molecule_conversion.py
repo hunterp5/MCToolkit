@@ -21,8 +21,16 @@ from __future__ import annotations
 from rdkit import Chem
 
 from molmanager.chem.molecule_conversion import (
+    copy_mol,
+    is_rdkit_mol,
     looks_like_structure_cell_text,
+    mol_from_ligand_path,
+    mol_from_molblock,
+    mol_from_smarts,
+    mol_from_smiles,
     mol_structure_copy_texts,
+    mol_to_molblock,
+    mol_to_pdbblock,
     parse_molecule_from_cell_text,
     redact_sqlalchemy_url,
     safe_float,
@@ -110,3 +118,62 @@ def test_mol_structure_copy_texts_none():
         "molfile": "",
         "smarts": "",
     }
+
+
+def test_is_rdkit_mol_accepts_molecules_only():
+    mol = Chem.MolFromSmiles("CCO")
+    assert is_rdkit_mol(mol)
+    assert not is_rdkit_mol(None)
+    assert not is_rdkit_mol("CCO")
+
+
+def test_copy_mol_is_independent():
+    mol = Chem.MolFromSmiles("CCO")
+    mol.SetProp("tag", "orig")
+    clone = copy_mol(mol)
+    assert clone is not None
+    assert clone is not mol
+    clone.SetProp("tag", "copy")
+    assert mol.GetProp("tag") == "orig"
+    assert copy_mol(None) is None
+
+
+def test_mol_from_smiles_and_smarts():
+    assert Chem.MolToSmiles(mol_from_smiles("CCO"), canonical=True) == "CCO"
+    assert mol_from_smiles("") is None
+    assert mol_from_smiles("not-smiles") is None
+    q = mol_from_smarts("[OH]")
+    assert q is not None
+    assert q.GetNumAtoms() == 1
+    assert mol_from_smarts("") is None
+
+
+def test_mol_from_molblock_roundtrip():
+    src = Chem.MolFromSmiles("CCO")
+    block = Chem.MolToMolBlock(src)
+    parsed = mol_from_molblock(block)
+    assert parsed is not None
+    assert Chem.MolToSmiles(parsed, canonical=True) == "CCO"
+    assert mol_from_molblock("") is None
+    assert mol_to_molblock(src).strip()
+
+
+def test_mol_to_pdbblock_has_atoms():
+    mol = Chem.MolFromSmiles("CCO")
+    from rdkit.Chem import rdDepictor
+
+    rdDepictor.Compute2DCoords(mol)
+    block = mol_to_pdbblock(mol)
+    assert "ATOM" in block or "HETATM" in block
+
+
+def test_mol_from_ligand_path_sdf(tmp_path):
+    mol = Chem.MolFromSmiles("CCO")
+    sdf = tmp_path / "lig.sdf"
+    writer = Chem.SDWriter(str(sdf))
+    writer.write(mol)
+    writer.close()
+    loaded = mol_from_ligand_path(sdf)
+    assert loaded is not None
+    assert Chem.MolToSmiles(loaded, canonical=True) == "CCO"
+    assert mol_from_ligand_path(tmp_path / "missing.sdf") is None

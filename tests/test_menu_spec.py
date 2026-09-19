@@ -100,6 +100,19 @@ def test_prepare_structures_nests_protonate_and_hydrogens():
     assert menu_outline(hydrogens.items) == ["Add…", "Remove…"]
 
 
+def test_utilities_menu_outline():
+    tools = find_submenu(MAIN_WINDOW_MENUS, "Tools")
+    labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(tools.items)]
+    assert "Calculator…" not in labels
+    assert "Random" not in labels
+    assert "Utilities" in labels
+    utilities = find_submenu(tools.items, "Utilities")
+    assert menu_outline(utilities.items) == [
+        "Calculator…",
+        {"Random": ["Number…", "Molecule…"]},
+    ]
+
+
 def test_reaction_menu_outline():
     tools = find_submenu(MAIN_WINDOW_MENUS, "Tools")
     labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(tools.items)]
@@ -141,3 +154,22 @@ def test_data_menu_filter_and_search_group_is_last():
     assert labels[-3:] == ["", "Filter", "Search…"]
     filt = find_submenu(data.items, "Filter")
     assert menu_outline(filt.items)[0] == "Toggle Panel"
+
+
+def test_data_menu_plot_submenu_titles():
+    data = find_submenu(MAIN_WINDOW_MENUS, "Data")
+    labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(data.items)]
+    assert "MedChem" not in labels
+    assert "Dimensionality Reduction" not in labels
+    assert "MedChem Plots" in labels
+    assert "DimRed Plots" in labels
+    assert labels.index("DimRed Plots") == labels.index("MedChem Plots") + 1
+    medchem = find_submenu(data.items, "MedChem Plots")
+    assert menu_outline(medchem.items) == ["BOILED-Egg plot…", "Golden Triangle plot…"]
+    dimred = find_submenu(data.items, "DimRed Plots")
+    assert menu_outline(dimred.items) == [
+        "Principal Component Analysis…",
+        "t-SNE Visualization…",
+        "UMAP Visualization…",
+        "Self-Organizing Map…",
+    ]

@@ -85,32 +85,32 @@ from ..table_session import TableSession, TableSessionChemistry, TableSessionSel
 from ..table_write_service import TableWriteService
 from ..theme import bootstrap_application_gui
 from ..tool_dialog_scope import ToolDialogScope
+from ..workspace_cluster import ClusterTools
+from ..workspace_dimred import DimensionReductionTools
+from ..workspace_fast_prepare import FastPrepareTools
+from ..workspace_medchem import MedChemSpaceTools
+from ..workspace_mpo import MpoTools
+from ..workspace_protonate import ProtonateTools
+from ..workspace_qsar import QsarTools
+from ..workspace_structure_edit import StructureEditTools
+from ..workspace_structure_writeback import StructureWritebackTools
 from ..workspace_tools import WorkspaceTools
 from .activity_cliff_mixin import ActivityCliffMixin
 from .app_lifecycle_mixin import AppLifecycleMixin
 from .app_menu_mixin import AppMenuMixin
-from .cluster_mixin import ClusterMixin
 from .conformers_tools_mixin import ConformersToolsMixin
 from .descriptors_tools_mixin import DescriptorsToolsMixin
-from .dimension_reduction_mixin import DimensionReductionMixin
 from .dock_tools_mixin import DockToolsMixin
 from .external_records_mixin import ExternalRecordsMixin
-from .fast_prepare_tools_mixin import FastPrepareToolsMixin
 from .fragment_tools_mixin import FragmentToolsMixin
 from .ingest_export_mixin import IngestExportMixin
-from .medchem_space_mixin import MedChemSpaceMixin
 from .mmp_mixin import MmpMixin
 from .mmp_neighborhood_mixin import MmpNeighborhoodMixin
-from .mpo_mixin import MpoMixin
 from .plot_tools_mixin import PlotToolsMixin
 from .predict_tools_mixin import PredictToolsMixin
-from .protonate_tools_mixin import ProtonateToolsMixin
-from .qsar_mixin import QsarMixin
 from .reaction_tools_mixin import ReactionToolsMixin
 from .sali_mixin import SaliMixin
 from .sql_load_mixin import SqlLoadMixin
-from .structure_edit_mixin import StructureEditMixin
-from .structure_writeback_mixin import StructureWritebackMixin
 from .table_calc_mixin import TableCalcMixin
 from .table_ui_mixin import TableUIMixin
 from .viewer_openers_mixin import ViewerOpenersMixin
@@ -706,22 +706,22 @@ install_window_forwards(
         SessionCsv,
     ),
 )
-install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.cluster", (ClusterMixin,))
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.cluster", (ClusterTools,))
 install_window_forwards(
-    ChemistryWorkspaceWindow, "workspace_tools.dimension_reduction", (DimensionReductionMixin,)
+    ChemistryWorkspaceWindow, "workspace_tools.dimension_reduction", (DimensionReductionTools,)
 )
 install_window_forwards(
-    ChemistryWorkspaceWindow, "workspace_tools.medchem_space", (MedChemSpaceMixin,)
+    ChemistryWorkspaceWindow, "workspace_tools.medchem_space", (MedChemSpaceTools,)
 )
-install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.qsar", (QsarMixin,))
-install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.mpo", (MpoMixin,))
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.qsar", (QsarTools,))
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.mpo", (MpoTools,))
 install_window_forwards(
     ChemistryWorkspaceWindow,
     "workspace_tools.structure_prep",
     (
-        ProtonateToolsMixin,
-        FastPrepareToolsMixin,
-        StructureEditMixin,
-        StructureWritebackMixin,
+        ProtonateTools,
+        FastPrepareTools,
+        StructureEditTools,
+        StructureWritebackTools,
     ),
 )

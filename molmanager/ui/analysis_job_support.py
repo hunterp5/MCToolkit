@@ -27,7 +27,6 @@ from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QMessageBox
-from rdkit import Chem
 
 from ..services.activity_records import build_oid_mol_activity_records, parse_activity_float
 from ..workflows.tool_readiness import ToolBlocker, plan_activity_analysis, plan_table_readiness
@@ -124,7 +123,7 @@ def prepare_scoped_structure_mols(
     min_mols: int = 1,
     empty_message: str | None = None,
     too_few_message: str | None = None,
-) -> list[tuple[int, Chem.Mol]] | None:
+) -> list[tuple[int, object]] | None:
     """Validate scope and collect ``(oid, mol)`` pairs for structure-only jobs.
 
     Returns ``None`` after informing the user when the job should not start.
@@ -158,7 +157,7 @@ def prepare_scoped_activity_mol_records(
     activity_column: str,
     only_selected: bool,
     min_records: int = 2,
-) -> list[tuple[int, Chem.Mol, float]] | None:
+) -> list[tuple[int, object, float]] | None:
     """Validate scope + activity column and build MMP/SALI worker records.
 
     Returns ``None`` after informing the user when the job should not start.

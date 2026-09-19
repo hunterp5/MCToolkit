@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Tests for Tools → Random → Molecule (ChEMBL sampling helpers)."""
+"""Tests for Tools → Utilities → Random → Molecule (ChEMBL sampling helpers)."""
 
 from __future__ import annotations
 

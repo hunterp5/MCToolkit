@@ -1,6 +1,6 @@
 # SQL Database
 
-SQL Database loads query results from a configured SQL connection into the MCtoolkit table for further chemistry work.
+SQL Database loads query results from a configured SQL connection into the MCToolkit table for further chemistry work.
 
 ## Goal
 
@@ -26,7 +26,7 @@ Requires a reachable database and a valid SQL query returning tabular columns; s
 1. Configure connection details.
 2. Write and run a SQL query limited to what you need.
 3. Load results into the table.
-4. Assign structure sources and proceed with MCtoolkit tools.
+4. Assign structure sources and proceed with MCToolkit tools.
 
 ## Use cases
 

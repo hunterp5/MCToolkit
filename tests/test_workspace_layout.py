@@ -474,6 +474,78 @@ def test_apply_layout_preserves_pane_stacks(qapp):
     assert panes[1].plot_widgets() == [c]
 
 
+class _ParentProbe(QWidget):
+    """Record whether unparenting happened while the widget was still visible."""
+
+    def __init__(self):
+        super().__init__()
+        self.unparented_while_visible = False
+
+    def setParent(self, parent, *args, **kwargs):  # noqa: N802 — Qt API
+        if parent is None and self.isVisible() and not self.isHidden():
+            self.unparented_while_visible = True
+        super().setParent(parent, *args, **kwargs)
+
+
+def test_apply_layout_hides_table_before_unparent(qapp):
+    table = _ParentProbe()
+    mgr = WorkspaceLayoutManager(table)
+    mgr.resize(640, 480)
+    mgr.show()
+    table.show()
+    qapp.processEvents()
+    table.unparented_while_visible = False
+    mgr.apply_layout(LAYOUT_TABLE_STACK, preserve_plots=False)
+    qapp.processEvents()
+    assert table.unparented_while_visible is False
+    assert table.parent() is not None
+    assert not table.isWindow()
+    assert table.isVisible()
+
+
+def test_apply_layout_hides_plots_before_unparent(qapp):
+    mgr = _manager(qapp)
+    plot = _ParentProbe()
+    mgr.dock_into_pane(mgr.plot_panes()[0], plot)
+    mgr.resize(640, 480)
+    mgr.show()
+    plot.show()
+    qapp.processEvents()
+    plot.unparented_while_visible = False
+    mgr.apply_layout(LAYOUT_TABLE_SIDE, preserve_plots=True)
+    qapp.processEvents()
+    assert plot.unparented_while_visible is False
+    assert plot.parent() is not None
+    assert plot.isVisible()
+
+
+def test_remove_pane_keeps_table_parented(qapp):
+    table = QWidget()
+    mgr = WorkspaceLayoutManager(table)
+    mgr.apply_layout(LAYOUT_TABLE_STACK, preserve_plots=False)
+    mgr.resize(640, 480)
+    mgr.show()
+    qapp.processEvents()
+    pane = mgr.plot_panes()[1]
+    assert mgr.remove_pane(pane) is True
+    qapp.processEvents()
+    assert table.parent() is not None
+    assert not table.isWindow()
+    assert mgr.layout_id == LAYOUT_TABLE_SINGLE
+
+
+def test_layout_freeze_restores_updates(qapp):
+    mgr = _manager(qapp)
+    parent = QWidget()
+    mgr.setParent(parent)
+    parent.show()
+    qapp.processEvents()
+    mgr.apply_layout(LAYOUT_TABLE_SIDE, preserve_plots=False)
+    assert mgr.updatesEnabled() is True
+    assert parent.updatesEnabled() is True
+    assert mgr._layout_freeze_depth == 0
+
+
 def test_dock_fits_wide_widget_to_existing_splitter_sizes(qapp):
     from PySide6.QtWidgets import QLayout, QVBoxLayout
 

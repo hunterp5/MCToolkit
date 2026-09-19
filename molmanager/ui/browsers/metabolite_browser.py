@@ -36,8 +36,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from rdkit import Chem
 
+from ...chem.molecule_conversion import mol_from_smiles
+from ...chem.structure_2d_depiction import render_molecule_png
 from ...predictions.biotransformer_metabolites import (
     BIOTRANSFORMER_CANCELLED,
     METABOLITE_COUNT_COLUMN,
@@ -50,7 +51,6 @@ from ...table.structure_depiction_layout import (
     BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
     BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
 )
-from ...chem.structure_2d_depiction import render_molecule_png
 from ..dockable_plot import (
     discard_host_dialog_after_dock,
     make_add_to_main_button,
@@ -226,7 +226,7 @@ def records_from_table(app: Any) -> list[MetaboliteBrowseRecord]:
 
 
 def _pixmap_from_smiles(smiles: str, width: int, height: int) -> QPixmap | None:
-    mol = Chem.MolFromSmiles(smiles or "")
+    mol = mol_from_smiles(smiles or "")
     if mol is None:
         return None
     try:

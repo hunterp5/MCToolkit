@@ -20,10 +20,9 @@ from __future__ import annotations
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
-from rdkit import Chem
 
+from ...chem.molecule_conversion import copy_mol, looks_like_mol_block, mol_to_canonical_smiles
 from ...platform_support.config import load_config
-from ...chem.molecule_conversion import looks_like_mol_block, mol_to_canonical_smiles
 from ..compound_table_model import CompoundTableModel
 from ..table_clipboard import format_tsv_grid, parse_tsv_grid, tsv_grid_is_block
 from .table_undo_commands import (
@@ -619,7 +618,7 @@ class TableEditMixin:
                 snapshots.append(DeleteRowSnapshot(orig_row=j, oid=oid, cells=cells, light=True))
             else:
                 pm = self.mols.get(oid)
-                mol_copy = Chem.Mol(pm) if pm is not None else None
+                mol_copy = copy_mol(pm)
                 png = model.structure_png_bytes(oid)
                 spm = None if png else model.structure_pixmap_copy(oid)
                 extra = model.extra_column_pixmaps_copy(oid) if total_delete <= 1 else {}

@@ -106,7 +106,7 @@ def test_save_session_clears_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
     monkeypatch.setattr(
         QFileDialog,
         "getSaveFileName",
-        lambda *args, **kwargs: (str(out), "MCtoolkit Session (*.cms)"),
+        lambda *args, **kwargs: (str(out), "MCToolkit Session (*.cms)"),
     )
     assert w.save_session_as() is True
     assert not w._session_has_unsaved_changes()
@@ -144,7 +144,7 @@ def test_save_selected_to_session_writes_subset_without_clearing_dirty(qapp, mon
     monkeypatch.setattr(
         QFileDialog,
         "getSaveFileName",
-        lambda *args, **kwargs: (str(out), "MCtoolkit Session (*.cms)"),
+        lambda *args, **kwargs: (str(out), "MCToolkit Session (*.cms)"),
     )
     assert w.save_selected_to_session() is True
     assert w._session_has_unsaved_changes()
@@ -960,17 +960,21 @@ def test_data_menu_nests_medchem_with_dimensionality_reduction(qapp):  # noqa: A
     tools_labels = [a.text().replace("&", "") for a in tools.actions()]
     assert "Dimensionality Reduction" not in tools_labels
     assert "MedChem" not in tools_labels
+    assert "MedChem Plots" not in tools_labels
+    assert "DimRed Plots" not in tools_labels
     data = qt_submenu(mb, "Data")
     data_labels = [a.text().replace("&", "") for a in data.actions()]
-    assert "MedChem" in data_labels
-    assert "Dimensionality Reduction" in data_labels
+    assert "MedChem Plots" in data_labels
+    assert "DimRed Plots" in data_labels
+    assert "MedChem" not in data_labels
+    assert "Dimensionality Reduction" not in data_labels
     assert "BOILED-Egg plot…" not in data_labels
     assert "Golden Triangle plot…" not in data_labels
     assert "Principal Component Analysis…" not in data_labels
     assert "t-SNE Visualization…" not in data_labels
     assert "UMAP Visualization…" not in data_labels
     assert "Self-Organizing Map…" not in data_labels
-    assert data_labels.index("Dimensionality Reduction") == data_labels.index("MedChem") + 1
+    assert data_labels.index("DimRed Plots") == data_labels.index("MedChem Plots") + 1
     assert data_labels[-2:] == ["Filter", "Search…"]
     assert "Filter" not in tools_labels
     assert "Search…" not in tools_labels
@@ -978,12 +982,12 @@ def test_data_menu_nests_medchem_with_dimensionality_reduction(qapp):  # noqa: A
     assert [a.text().replace("&", "") for a in filt.actions() if not a.isSeparator()][0] == (
         "Toggle Panel"
     )
-    medchem = qt_submenu(data, "MedChem")
+    medchem = qt_submenu(data, "MedChem Plots")
     assert [a.text().replace("&", "") for a in medchem.actions()] == [
         "BOILED-Egg plot…",
         "Golden Triangle plot…",
     ]
-    dimred = qt_submenu(data, "Dimensionality Reduction")
+    dimred = qt_submenu(data, "DimRed Plots")
     assert [a.text().replace("&", "") for a in dimred.actions()] == [
         "Principal Component Analysis…",
         "t-SNE Visualization…",

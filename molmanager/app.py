@@ -57,7 +57,7 @@ def _preload_qt_webengine() -> None:
 
 
 def _argv_for_qt(argv: list[str]) -> tuple[list[str], str | None, str | None]:
-    """Remove MCtoolkit-only flags so ``QApplication`` does not see unknown options."""
+    """Remove MCToolkit-only flags so ``QApplication`` does not see unknown options."""
     out: list[str] = [argv[0]] if argv else []
     load_session: str | None = None
     open_file: str | None = None

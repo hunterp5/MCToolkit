@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, Qt
+from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -71,6 +71,21 @@ def _scroll_host(qapp: QApplication) -> tuple[QScrollArea, QDoubleSpinBox, QComb
     return scroll, spin, combo
 
 
+def _click(widget: QWidget) -> None:
+    pos = QPointF(widget.rect().center())
+    global_pos = QPointF(widget.mapToGlobal(widget.rect().center()))
+    press = QMouseEvent(
+        QEvent.MouseButtonPress,
+        pos,
+        global_pos,
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
+    )
+    QApplication.sendEvent(widget, press)
+    widget.setFocus(Qt.MouseFocusReason)
+
+
 def test_install_unfocused_wheel_passthrough_is_idempotent(qapp):
     first = install_unfocused_wheel_passthrough(qapp)
     second = install_unfocused_wheel_passthrough(qapp)
@@ -103,39 +118,78 @@ def test_append_viewer_log_records_session_log_without_viewer():
 
 def test_unfocused_spin_and_combo_do_not_eat_wheel(qapp):
     scroll, spin, combo = _scroll_host(qapp)
-    received: list[QObject] = []
-
-    class _Counter(QObject):
-        def eventFilter(self, obj, event):  # noqa: N802
-            if event.type() == QEvent.Wheel:
-                received.append(obj)
-            return False
-
-    counter = _Counter(scroll)
-    scroll.viewport().installEventFilter(counter)
     spin.clearFocus()
     combo.clearFocus()
     qapp.processEvents()
+    bar = scroll.verticalScrollBar()
+    bar.setValue(0)
 
-    QApplication.sendEvent(spin, _wheel_event(spin))
+    QApplication.sendEvent(spin, _wheel_event(spin, delta=-120))
     qapp.processEvents()
     assert spin.value() == 7.4
-    assert scroll.viewport() in received
+    assert bar.value() > 0
 
-    received.clear()
-    QApplication.sendEvent(combo, _wheel_event(combo))
+    bar.setValue(0)
+    QApplication.sendEvent(combo, _wheel_event(combo, delta=-120))
     qapp.processEvents()
     assert combo.currentText() == "one"
-    assert scroll.viewport() in received
+    assert bar.value() > 0
     scroll.close()
 
 
-def test_focused_spin_still_accepts_wheel(qapp):
+def test_unfocused_spin_line_edit_does_not_eat_wheel(qapp):
+    scroll, spin, _combo = _scroll_host(qapp)
+    edit = spin.lineEdit()
+    assert edit is not None
+    spin.clearFocus()
+    edit.clearFocus()
+    qapp.processEvents()
+    bar = scroll.verticalScrollBar()
+    bar.setValue(0)
+
+    QApplication.sendEvent(edit, _wheel_event(edit, delta=-120))
+    qapp.processEvents()
+    assert spin.value() == 7.4
+    assert bar.value() > 0
+    scroll.close()
+
+
+def test_auto_focused_spin_does_not_eat_wheel(qapp):
     scroll, spin, _combo = _scroll_host(qapp)
     spin.setFocus(Qt.OtherFocusReason)
     qapp.processEvents()
-    assert spin.hasFocus()
+    bar = scroll.verticalScrollBar()
+    bar.setValue(0)
+
+    QApplication.sendEvent(spin, _wheel_event(spin, delta=-120))
+    qapp.processEvents()
+    assert spin.value() == 7.4
+    assert bar.value() > 0
+    scroll.close()
+
+
+def test_clicked_spin_still_accepts_wheel(qapp):
+    scroll, spin, _combo = _scroll_host(qapp)
+    _click(spin)
+    qapp.processEvents()
+    bar = scroll.verticalScrollBar()
+    bar.setValue(0)
+
     QApplication.sendEvent(spin, _wheel_event(spin))
+    qapp.processEvents()
+    assert spin.value() == 8.4
+    assert bar.value() == 0
+    scroll.close()
+
+
+def test_clicked_spin_line_edit_accepts_wheel(qapp):
+    scroll, spin, _combo = _scroll_host(qapp)
+    edit = spin.lineEdit()
+    assert edit is not None
+    _click(edit)
+    qapp.processEvents()
+
+    QApplication.sendEvent(edit, _wheel_event(edit))
     qapp.processEvents()
     assert spin.value() == 8.4
     scroll.close()

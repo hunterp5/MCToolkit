@@ -24,8 +24,8 @@ from contextlib import nullcontext
 
 from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtWidgets import QApplication
-from rdkit import Chem
 
+from ..chem.molecule_conversion import mol_from_binary_blob
 from ..conformers.conformer_column_codec import (
     is_packed_ensemble_header,
     make_sidecar_cell,
@@ -220,19 +220,16 @@ class TableBuildIngest:
         return item, None
 
     @staticmethod
-    def _coerce_ingest_mol(item) -> Chem.Mol | None:
+    def _coerce_ingest_mol(item) -> object | None:
         """Rebuild a live RDKit mol from an ingest blob (worker sends binary to avoid UI freezes)."""
         if isinstance(item, (bytes, bytearray)):
-            try:
-                return Chem.Mol(bytes(item))
-            except Exception:
-                return None
+            return mol_from_binary_blob(item)
         return item
 
     def _ingest_store_mol(
         self,
         oid: int,
-        mol: Chem.Mol,
+        mol: object,
         precomputed_cells: dict[str, str] | None = None,
         *,
         source_blob: bytes | None = None,
@@ -286,7 +283,7 @@ class TableBuildIngest:
     def _ingest_remember_mol(
         self,
         oid: int,
-        mol: Chem.Mol | None,
+        mol: object | None,
         source_blob: bytes | None,
         cells: dict[str, str],
         batch: list | None,

@@ -65,14 +65,21 @@ class StatusLogLabel(QLabel):
 class SessionLogPanel(QWidget):
     """Live transcript of tool output, status history, and application logging."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        embed_filters: bool = True,
+    ) -> None:
         super().__init__(parent)
         ensure_session_log_handler()
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        filters = QHBoxLayout()
+        self._filter_bar = QWidget(self if embed_filters else None)
+        filters = QHBoxLayout(self._filter_bar)
+        filters.setContentsMargins(0, 0, 0, 0)
         filters.addWidget(QLabel("Level:"))
         self._level = QComboBox()
         for label, value in _LEVEL_CHOICES:
@@ -87,12 +94,14 @@ class SessionLogPanel(QWidget):
         self._search = QLineEdit()
         self._search.setPlaceholderText("Filter text…")
         self._search.setClearButtonEnabled(True)
+        self._search.setMinimumWidth(160)
         filters.addWidget(self._search, 1)
 
         self._auto_scroll = QCheckBox("Auto-scroll")
         self._auto_scroll.setChecked(True)
         filters.addWidget(self._auto_scroll)
-        root.addLayout(filters)
+        if embed_filters:
+            root.addWidget(self._filter_bar)
 
         self._view = QPlainTextEdit()
         self._view.setReadOnly(True)
@@ -113,6 +122,10 @@ class SessionLogPanel(QWidget):
         self._timer.timeout.connect(self._pull_new)
 
         self._reload()
+
+    def filter_bar(self) -> QWidget:
+        """Level, search, and auto-scroll controls (may live outside this panel)."""
+        return self._filter_bar
 
     def showEvent(self, event) -> None:  # noqa: N802 — Qt API name
         super().showEvent(event)

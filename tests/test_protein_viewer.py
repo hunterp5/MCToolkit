@@ -573,6 +573,12 @@ def test_build_protein_viewer_html_has_setters():
     assert "wireframe: true" in html
     assert "linewidth: 2" in html
     assert "payload.pharmacophore" in html
+    assert "scheduleAtomDecorate" in html
+    assert "refreshShapeOverlays" in html
+    assert "deferDecorate" in html
+    assert "heavyIndex[residueHeavyKey(at)]" in html
+    assert "molmanagerPickingBound" in html
+    assert "molmanagerDecorateGen" in html
 
 
 def test_protein_viewer_has_prepare_log(qapp):  # noqa: ARG001
@@ -624,6 +630,20 @@ def test_protein_viewer_canvas_load_overlay_nests(qapp):  # noqa: ARG001
     dlg.end_canvas_load()
     assert dlg.canvas_loading_visible() is False
     dlg.close()
+
+
+def test_protein_embed_set_payload_quiets_resize(qapp):  # noqa: ARG001
+    from molmanager.ui.protein_embed import ProteinEmbedView
+
+    view = ProteinEmbedView()
+    view.set_payload({"models": []})
+    assert view._quiet_resize_ms == 180
+    view.schedule_resize_keep_view()
+    assert view._resize_timer.interval() == 180
+    view.resize_keep_view()
+    assert view._quiet_resize_ms == 0
+    assert view._resize_timer.interval() == 50
+    view.deleteLater()
 
 
 def test_open_protein_viewer_shows_before_session_restore(qapp, tmp_path, monkeypatch):

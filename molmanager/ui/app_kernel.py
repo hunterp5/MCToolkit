@@ -21,7 +21,7 @@ kernel (stores, table, pools, timers) and must not copy row data. See
 ``docs/ARCHITECTURE.md``.
 
 ``bind_mixin_methods`` is a **legacy** MRO workaround (mixin body, window ``self``).
-New collaborator methods should use ``self._app`` instead of binding another mixin.
+No collaborator uses it; new methods should read the kernel via ``self._app``.
 """
 
 from __future__ import annotations
@@ -92,8 +92,7 @@ def bind_mixin_methods(
 ) -> None:
     """Legacy bridge: copy mixin callables onto *collaborator* with *app* as ``self``.
 
-    Existing session / ingest / WorkspaceTools adapters still use this so
-    historical mixin bodies keep a window-shaped ``self``. **Do not use for new
+    Historical mixin bodies kept a window-shaped ``self``. **Do not use for new
     collaborator code** — implement methods on the collaborator and read the kernel
     via ``self._app``.
     """

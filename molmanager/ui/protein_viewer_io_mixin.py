@@ -27,6 +27,7 @@ from PySide6.QtCore import QByteArray
 from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
 from ..app_identity import APP_DISPLAY_NAME
+from ..chem.molecule_conversion import mol_from_ligand_path
 from ..protein.structure_components import (
     LoadedStructure,
     component_id_for_atom,
@@ -648,17 +649,7 @@ class ProteinViewerIoMixin:
             before = len(self._slots)
             self.add_structure_path(rec, refit=refit)
             return len(self._slots) > before
-        from rdkit import Chem
-
-        mol = None
-        try:
-            if suffix in {".sdf", ".sd"}:
-                suppl = Chem.SDMolSupplier(str(rec), removeHs=False, sanitize=False)
-                mol = next((item for item in suppl if item is not None), None)
-            else:
-                mol = Chem.MolFromMolFile(str(rec), removeHs=False, sanitize=False)
-        except Exception:
-            mol = None
+        mol = mol_from_ligand_path(rec)
         if mol is None:
             return False
         return self.add_ligand_mol(

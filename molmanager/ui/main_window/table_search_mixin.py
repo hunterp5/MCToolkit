@@ -31,8 +31,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from rdkit import Chem
-
+from ...chem.molecule_conversion import mol_from_smiles
 from ...platform_support.config import load_config
 from ...workers import SubstructureFilterWorker
 from ..search_panel import SearchCriterionRow
@@ -284,7 +283,7 @@ class TableSearchMixin:
         )
         QTimer.singleShot(0, self._sync_filter_panel_scroll_content)
 
-    def _search_query_pattern_mol(self, text: str) -> Chem.Mol | None:
+    def _search_query_pattern_mol(self, text: str) -> object | None:
         """Parse one query string as a substructure pattern (SMARTS first, then SMILES)."""
         from ...chem.smarts_macropatterns import mol_from_smarts
 
@@ -298,7 +297,7 @@ class TableSearchMixin:
         except Exception:
             pass
         try:
-            return Chem.MolFromSmiles(text)
+            return mol_from_smiles(text)
         except Exception:
             return None
 
@@ -370,11 +369,11 @@ class TableSearchMixin:
 
     def _compile_search_substructure_groups(
         self, term_groups: list[list[str]]
-    ) -> list[list[tuple[Chem.Mol, bool]]] | None:
+    ) -> list[list[tuple[object, bool]]] | None:
         """Compile search SMARTS groups; ``None`` if a term cannot be parsed."""
-        or_patterns: list[list[tuple[Chem.Mol, bool]]] = []
+        or_patterns: list[list[tuple[object, bool]]] = []
         for and_terms in term_groups:
-            and_patterns: list[tuple[Chem.Mol, bool]] = []
+            and_patterns: list[tuple[object, bool]] = []
             for t in and_terms:
                 pat_text, negated = parse_substructure_term(t)
                 if not pat_text:

@@ -4,7 +4,7 @@ Save File writes the table (all rows or the current selection) to common chemist
 
 ## Goal
 
-Produce a portable file of structures and properties without leaving MCtoolkit's current analysis state behind.
+Produce a portable file of structures and properties without leaving MCToolkit's current analysis state behind.
 
 ## When to use
 

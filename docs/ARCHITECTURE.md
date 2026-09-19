@@ -1,4 +1,4 @@
-# MCtoolkit architecture
+# MCToolkit architecture
 
 Desktop chemistry table manager: **PySide6** UI, **RDKit** structures, optional **PyTorch** tools (pKa, permeability).
 
@@ -116,13 +116,13 @@ values measured when the ratchet landed and may only go **down**
 
 | Counter | Frozen at | What it measures |
 |---------|-----------|------------------|
-| `window_typed_params` | 76 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
-| `modules_taking_the_window` | 26 | Modules with at least one such parameter |
-| `private_cross_module_access` | 49 | `app._x` / `self._app._x` where `_x` is **not** declared in any `ui/` protocol |
+| `window_typed_params` | 74 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
+| `modules_taking_the_window` | 25 | Modules with at least one such parameter |
+| `private_cross_module_access` | 46 | `app._x` / `self._app._x` where `_x` is **not** declared in any `ui/` protocol |
 | `deferred_intra_package_imports` | 588 | First-party imports nested in function bodies, i.e. import cycles |
-| `mixin_modules` | 61 | `*_mixin.py` files |
-| `bind_mixin_methods_sites` | 1 | Legacy binds where a collaborator runs mixin bodies with the window as `self` |
-| `rdkit_in_ui_modules` | 38 | Qt modules importing RDKit — chemistry living in the UI |
+| `mixin_modules` | 52 | `*_mixin.py` files |
+| `bind_mixin_methods_sites` | 0 | Legacy binds where a collaborator runs mixin bodies with the window as `self` |
+| `rdkit_in_ui_modules` | 7 | Qt modules importing RDKit — chemistry living in the UI |
 | `app_kernel_members` | 31 | `AppKernel` surface, roles included |
 
 `private_cross_module_access` deliberately ignores members declared in a role or host protocol.
@@ -175,7 +175,7 @@ window as one-line forwards so dialogs and tests keep calling `app.on_calc_finis
 | `TableSession` | `ui/table_session.py` | Selection, chemistry-column lookup, sticky visible-row cache (`TableSessionSelection` / `TableSessionChemistry`) |
 | `TableBuildPipeline` | `ui/table_build_pipeline.py` | Ingest chunks, SQLite rebuild, Render 2D batch/results (`QObject` child) |
 | `SessionController` | `ui/session_controller.py` | `.cms` save/restore, table layout, session plots, legacy CSV |
-| `WorkspaceTools` | `ui/workspace_tools.py` | Lazy cluster / dimred / QSAR / MPO / medchem / structure-prep adapters |
+| `WorkspaceTools` | `ui/workspace_tools.py` | Lazy cluster / dimred / QSAR / MPO / medchem / structure-prep collaborators |
 | `PlotDockHost` | `ui/plot_dock_host.py` | Dock/undock plot panes |
 | `ProcessQueueManager` | `ui/process_queue.py` | Serial heavy tools |
 | `BackgroundActivityHub` | `ui/background_activity.py` | Processes dialog |
@@ -212,7 +212,7 @@ turns that tree into Qt widgets. Add tools to the spec; do not grow `AppMenuMixi
 
 ## Mixins vs composition
 
-A mixin is shared behavior used by **more than one** class. Almost all MCtoolkit
+A mixin is shared behavior used by **more than one** class. Almost all MCToolkit
 `*_mixin.py` modules fail that test: they are method bags for a single host
 (`ChemistryWorkspaceWindow`, `PlotWidget`, `CompoundTableModel`, `ProteinViewerDialog`,
 `Molecule3DViewerWidget`). State is created on the host `__init__`.
@@ -226,7 +226,7 @@ A mixin is shared behavior used by **more than one** class. Almost all MCtoolkit
 - File-split large Qt classes when one file would be unwieldy.
 - Extract a collaborator when there is a stable boundary (progress, column writeback, session IO, ingest/render).
 - Put new tools on `WorkspaceTools` (lazy) or as module functions plus `install_window_forwards`.
-- Write **new** collaborator methods on the collaborator using `self._app` (`AppKernel`). Do not call `bind_mixin_methods` for new code.
+- Write **new** collaborator methods on the collaborator using `self._app`. Do not call `bind_mixin_methods` for new code.
 - Keep public names on the window so dialogs/tests keep calling `app.on_calc_finished`.
 
 **Do not**
@@ -235,9 +235,9 @@ A mixin is shared behavior used by **more than one** class. Almost all MCtoolkit
 - Add empty composite mixins (`ChemistryMixin`-style).
 - Treat mixin MRO order as architecture. `QMainWindow` precedes remaining mixins, so Qt virtuals such as `closeEvent` must be declared on the shell (delegating into `AppLifecycleMixin`). Mixin implementations that need the C++ base should call `QMainWindow.closeEvent` explicitly rather than `super()`.
 
-`bind_mixin_methods` is a **legacy bridge**: it copies mixin functions onto a collaborator but still invokes them with the window as `self`. One collaborator still uses it (`WorkspaceTools`); convert bodies to `self._app` when touching that code.
+`bind_mixin_methods` is a **legacy bridge**: it copies mixin functions onto a collaborator but still invokes them with the window as `self`. No collaborator uses it; convert leftover mixin bodies to `self._app` when touching that code.
 
-`ToolDialogScope`, `TableWriteService`, `TableSession`, `TableBuildPipeline`, and `SessionController` show the conversion, and it is four steps: move the mixin bodies onto the
+`ToolDialogScope`, `TableWriteService`, `TableSession`, `TableBuildPipeline`, `SessionController`, and `WorkspaceTools` show the conversion, and it is four steps: move the mixin bodies onto the
 collaborator rewriting window `self` to `self._app`, move mixin-owned state out of the window
 `__init__` and into the collaborator, declare a host protocol for what is left, then point
 `install_window_forwards` at the collaborator class instead of the deleted mixin. Call sites do not

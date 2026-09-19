@@ -25,9 +25,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
-from rdkit import Chem
-
 import logging
+
+from ...chem.molecule_conversion import is_rdkit_mol, mol_to_molblock
 
 from ...conformers.conformer_output import write_conformer_results_to_sdf
 from ...conformers.conformer_column_codec import (
@@ -118,12 +118,12 @@ class ConformersToolsMixin:
 
     def _collect_mols_for_conformer_tools(
         self, *, only_selected: bool
-    ) -> list[tuple[int, Chem.Mol]]:
+    ) -> list[tuple[int, object]]:
         allowed = self._selected_oids_set() if only_selected else None
         oids_list = self._all_oids_in_table_order()
         if allowed is not None:
             oids_list = [o for o in oids_list if o in allowed]
-        data: list[tuple[int, Chem.Mol]] = []
+        data: list[tuple[int, object]] = []
         for o in oids_list:
             r = self.logical_row_for_oid(o)
             m = self.mols.get(o) if r >= 0 else None
@@ -510,7 +510,7 @@ class ConformersToolsMixin:
                 "use View Conformers on other rows."
             )
 
-    def _mol_3d_for_structure_superpose(self, oid: int, src: str) -> Chem.Mol | None:
+    def _mol_3d_for_structure_superpose(self, oid: int, src: str) -> object | None:
         """Best-effort 3D mol for structure superposition from *src* (Structure / confs / …)."""
         from .conformer_writeback import mol_3d_for_structure_superpose
 
@@ -518,7 +518,7 @@ class ConformersToolsMixin:
 
     def _mol_for_structure_superpose(
         self, oid: int, src: str, *, geometry: str = "3d"
-    ) -> Chem.Mol | None:
+    ) -> object | None:
         """Molecule for structure superposition; 2D does not require 3D coordinates."""
         from .conformer_writeback import mol_for_structure_superpose
 
@@ -542,7 +542,7 @@ class ConformersToolsMixin:
         src = d.source_column()
         params = d.structure_params()
         geom = str(getattr(params, "geometry", "3d") or "3d")
-        probes: list[tuple[int, Chem.Mol]] = []
+        probes: list[tuple[int, object]] = []
         for o in oids_list:
             m = self._mol_for_structure_superpose(int(o), src, geometry=geom)
             if m is None:
@@ -589,7 +589,7 @@ class ConformersToolsMixin:
         except Exception:
             pass
         ok_n = 0
-        viewer_mols: list[Chem.Mol] = []
+        viewer_mols: list[object] = []
         superpose_col = "superpose"
         try:
             superpose_col = self._next_packed_ensemble_column("superpose")
@@ -624,7 +624,7 @@ class ConformersToolsMixin:
             blocks: list[str] = []
             for m in viewer_mols:
                 try:
-                    block = Chem.MolToMolBlock(m)
+                    block = mol_to_molblock(m)
                     blocks.append(base64.b64encode(block.encode("utf-8")).decode("ascii"))
                 except Exception:
                     continue
@@ -668,8 +668,8 @@ class ConformersToolsMixin:
         confs_column: str,
         oid: int | None,
         initial_superpose: bool = False,
-        mol: Chem.Mol | None = None,
-        mols: list[Chem.Mol] | None = None,
+        mol: object | None = None,
+        mols: list[object] | None = None,
         strain_params: object | None = None,
     ) -> None:
         from ...workers import (
@@ -766,7 +766,7 @@ class ConformersToolsMixin:
                 confs_column=confs_column,
                 oid=oid,
                 initial_superpose=initial_superpose,
-                mol=mol if isinstance(mol, Chem.Mol) else None,
+                mol=mol if is_rdkit_mol(mol) else None,
                 strain_params=getattr(self, "_pending_strain_params", None),
             )
             opened = True

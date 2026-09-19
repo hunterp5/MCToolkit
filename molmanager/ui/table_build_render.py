@@ -22,8 +22,7 @@ import threading
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
-from rdkit import Chem
-
+from ..chem.molecule_conversion import is_rdkit_mol
 from ..chem.reaction_file_io import looks_like_reaction_smarts, parse_reaction_smarts
 from ..chem.structure_2d_depiction import ReactionDrawSpec
 from ..platform_support.config import load_config
@@ -508,10 +507,10 @@ class TableBuildRender:
             return ReactionDrawSpec(raw)
         return self._app._mol_from_structure_text(raw)
 
-    def _mol_for_render2d_source(self, row: int, src: str) -> Chem.Mol | None:
+    def _mol_for_render2d_source(self, row: int, src: str) -> object | None:
         """Molecule to draw for one row from the chosen source column."""
         payload = self._depict_payload_for_render2d_source(row, src)
-        if isinstance(payload, Chem.Mol):
+        if is_rdkit_mol(payload):
             return payload
         return None
 
@@ -547,7 +546,7 @@ class TableBuildRender:
                 f"No structure could be read from column “{src}” for this row.",
             )
             return
-        if src == "Structure" and isinstance(payload, Chem.Mol):
+        if src == "Structure" and is_rdkit_mol(payload):
             self._app.mols[oid] = payload
         pixmap_mode = src != "Structure" and self._app._table_model.is_pixmap_data_column(src)
         base_w, base_h = structure_depict_width(), structure_depict_height()

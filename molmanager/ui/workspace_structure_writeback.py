@@ -18,13 +18,11 @@
 
 from __future__ import annotations
 
-from rdkit import Chem
-
-from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
-from ...chem.molecule_conversion import mol_to_canonical_smiles
+from ..table.structure_depiction_layout import structure_depict_height, structure_depict_width
+from ..chem.molecule_conversion import mol_to_canonical_smiles
 
 
-class StructureWritebackMixin:
+class StructureWritebackTools:
     def _write_mol_to_source_column(
         self,
         oid: int,
@@ -36,21 +34,21 @@ class StructureWritebackMixin:
     ) -> None:
         """Write one molecule into Structure, a depiction column, or a SMILES column."""
         if src == "Structure":
-            self.mols[oid] = mol
-            self._table_model.set_structure_pixmap(oid, None)
-        elif src in self.headers:
-            if self._table_model.is_pixmap_data_column(src):
+            self._app.mols[oid] = mol
+            self._app._table_model.set_structure_pixmap(oid, None)
+        elif src in self._app.headers:
+            if self._app._table_model.is_pixmap_data_column(src):
                 try:
                     smi = mol_to_canonical_smiles(mol)
                 except Exception:
                     smi = ""
                 if smi:
-                    self._table_model.set_backing_text(oid, src, smi)
-                self._table_model.set_column_pixmap(oid, src, None)
+                    self._app._table_model.set_backing_text(oid, src, smi)
+                self._app._table_model.set_column_pixmap(oid, src, None)
             else:
-                self._table_model.set_cell_text(oid, src, mol_to_canonical_smiles(mol))
+                self._app._table_model.set_cell_text(oid, src, mol_to_canonical_smiles(mol))
         if update_smiles_col and smiles_h:
-            self._table_model.set_cell_text(oid, smiles_h, mol_to_canonical_smiles(mol))
+            self._app._table_model.set_cell_text(oid, smiles_h, mol_to_canonical_smiles(mol))
 
     def _start_mol_tool_render2d(self, results, src: str) -> bool:
         """Queue 2D redraws for ``(oid, mol)`` pairs. Return True when a batch started."""
@@ -60,19 +58,21 @@ class StructureWritebackMixin:
         for oid, mol in results:
             if mol is None:
                 continue
-            row = self.logical_row_for_oid(oid)
+            row = self._app.logical_row_for_oid(oid)
             if row < 0:
                 continue
             rw, rh = (
                 (structure_depict_width() * 2, structure_depict_height() * 2)
-                if oid in self.zoomed_ids
+                if oid in self._app.zoomed_ids
                 else (base_w, base_h)
             )
             renders.append((oid, mol, rw, rh))
             row_by_oid[oid] = row
         if not renders:
             return False
-        self._start_render_2d_batch(renders, row_by_oid, src, column_pixmap_mode=src != "Structure")
+        self._app._start_render_2d_batch(
+            renders, row_by_oid, src, column_pixmap_mode=src != "Structure"
+        )
         return True
 
     def _apply_mol_tool_results(
@@ -85,9 +85,9 @@ class StructureWritebackMixin:
     ) -> None:
         """Write mol-tool results into the source column, then optionally render 2D."""
         render_target = src == "Structure" or (
-            src in self.headers and self._table_model.is_pixmap_data_column(src)
+            src in self._app.headers and self._app._table_model.is_pixmap_data_column(src)
         )
-        smiles_h = self._canonical_smiles_header_for_updates()
+        smiles_h = self._app._canonical_smiles_header_for_updates()
         update_smiles_col = smiles_h is not None and src == smiles_h
 
         for oid, mol in results:
@@ -97,75 +97,77 @@ class StructureWritebackMixin:
                 oid, mol, src, smiles_h=smiles_h, update_smiles_col=update_smiles_col
             )
 
-        self.schedule_calculate_global_bounds()
-        self._clear_tool_progress()
+        self._app.schedule_calculate_global_bounds()
+        self._app._clear_tool_progress()
         if (
             results
             and render_target
             and not no_render_2d
-            and not getattr(self, "_render2d_batch_active", False)
+            and not getattr(self._app, "_render2d_batch_active", False)
         ):
             if self._start_mol_tool_render2d(results, src):
                 return
-        self.status_label.setText(self._consume_partial_results_notice() or done_label)
+        self._app.status_label.setText(self._app._consume_partial_results_notice() or done_label)
 
-    def _mol_for_structure_tool_oid(self, oid: int, src: str) -> Chem.Mol | None:
+    def _mol_for_structure_tool_oid(self, oid: int, src: str) -> object | None:
         """Molecule for a prepare-structures tool row and source column."""
-        row = self.logical_row_for_oid(oid)
+        row = self._app.logical_row_for_oid(oid)
         if row < 0:
             return None
         if src == "Structure":
-            mol = self.mols.get(oid)
+            mol = self._app.mols.get(oid)
             if mol is not None:
                 return mol
-            return self._mol_for_structure_row(row)
-        if src not in self.headers:
+            return self._app._mol_for_structure_row(row)
+        if src not in self._app.headers:
             return None
-        col = self.headers.index(src)
+        col = self._app.headers.index(src)
         raw = ""
-        if self._table_model.is_pixmap_data_column(src):
-            raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
+        if self._app._table_model.is_pixmap_data_column(src):
+            raw = (self._app._table_model.backing_value_for_row_header(row, src) or "").strip()
         else:
-            raw = (self._table_cell_text(row, col) or "").strip()
+            raw = (self._app._table_cell_text(row, col) or "").strip()
             if not raw:
-                raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
+                raw = (self._app._table_model.backing_value_for_row_header(row, src) or "").strip()
         if not raw:
             return None
-        return self._mol_from_structure_text(raw)
+        return self._app._mol_from_structure_text(raw)
 
     def _disconnect_source_text_for_oid(self, oid: int, src: str) -> str | None:
         """Original cell text for the disconnect target column (for multi-component SMILES)."""
-        row = self.logical_row_for_oid(oid)
+        row = self._app.logical_row_for_oid(oid)
         if row < 0:
             return None
         if src == "Structure":
-            raw = (self._table_model.backing_value_for_row_header(row, "Structure") or "").strip()
+            raw = (
+                self._app._table_model.backing_value_for_row_header(row, "Structure") or ""
+            ).strip()
             if raw:
                 return raw
-            smiles_h = self._canonical_smiles_header_for_updates()
+            smiles_h = self._app._canonical_smiles_header_for_updates()
             if smiles_h is not None:
                 return (
-                    self._table_cell_text(row, self.headers.index(smiles_h)) or ""
+                    self._app._table_cell_text(row, self._app.headers.index(smiles_h)) or ""
                 ).strip() or None
             return None
-        if src in self.headers and self._table_model.is_pixmap_data_column(src):
-            raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
+        if src in self._app.headers and self._app._table_model.is_pixmap_data_column(src):
+            raw = (self._app._table_model.backing_value_for_row_header(row, src) or "").strip()
             return raw or None
-        col = self.headers.index(src)
-        raw = (self._table_cell_text(row, col) or "").strip()
+        col = self._app.headers.index(src)
+        raw = (self._app._table_cell_text(row, col) or "").strip()
         if not raw:
-            raw = (self._table_model.backing_value_for_row_header(row, src) or "").strip()
+            raw = (self._app._table_model.backing_value_for_row_header(row, src) or "").strip()
         return raw or None
 
     def _ensure_disconnect_output_column(self, header_name: str) -> None:
         """Insert a data column if the disconnect dialog named one that is not present yet."""
-        if not header_name or header_name in self.headers:
+        if not header_name or header_name in self._app.headers:
             return
-        if header_name == "Fragments" and "Salt" in self.headers:
-            idx_old = self.headers.index("Salt")
-            self.headers[idx_old] = "Fragments"
-            self._table_model.rename_header_at(idx_old, "Fragments")
+        if header_name == "Fragments" and "Salt" in self._app.headers:
+            idx_old = self._app.headers.index("Salt")
+            self._app.headers[idx_old] = "Fragments"
+            self._app._table_model.rename_header_at(idx_old, "Fragments")
             return
-        nc = self._table_model.columnCount()
-        self.headers.append(header_name)
-        self._table_model.insert_column_at(nc, header_name, None)
+        nc = self._app._table_model.columnCount()
+        self._app.headers.append(header_name)
+        self._app._table_model.insert_column_at(nc, header_name, None)

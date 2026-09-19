@@ -26,8 +26,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTemporaryDir, QTimer, QUrl
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
-from rdkit import Chem
-
+from ..chem.molecule_conversion import copy_mol
 from ..platform_support.qt_webengine_flags import webengine_views_supported
 from .mol_3d_html import (
     _BUNDLED_3DMOL,
@@ -170,7 +169,7 @@ class Molecule3DEmbedView(QWidget):
         """Clear the displayed model."""
         self._run_set_mol_b64("")
 
-    def set_molecule(self, mol: Chem.Mol | None, *, rebuild_3d: bool = True) -> None:
+    def set_molecule(self, mol: object | None, *, rebuild_3d: bool = True) -> None:
         """Display *mol*, or clear when *mol* is empty/invalid.
 
         When ``flat`` is set on this view, a 2D layout is shown in 3Dmol (orthographic).
@@ -187,7 +186,7 @@ class Molecule3DEmbedView(QWidget):
             if not rebuild_3d:
                 try:
                     if mol.GetNumConformers() >= 1 and mol.GetConformer().Is3D():
-                        prepared = Chem.Mol(mol)
+                        prepared = copy_mol(mol)
                 except Exception:
                     prepared = None
             if prepared is None:

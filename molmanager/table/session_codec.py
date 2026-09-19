@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Encode/decode MCtoolkit ``.cms`` session documents (compact v2 + gzip)."""
+"""Encode/decode MCToolkit ``.cms`` session documents (compact v2 + gzip)."""
 
 from __future__ import annotations
 

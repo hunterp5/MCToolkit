@@ -23,50 +23,48 @@ import logging
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
-from rdkit import Chem
-
-from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
+from ..table.structure_depiction_layout import structure_depict_height, structure_depict_width
 
 logger = logging.getLogger(__name__)
 
 
-class ProtonateToolsMixin:
+class ProtonateTools:
     def run_protonate(self) -> None:
         """Generate dominant protomer into a new column and optionally render it."""
-        if not self.headers or self._table_model.rowCount() == 0:
+        if not self._app.headers or self._app._table_model.rowCount() == 0:
             return
-        from ..dialogs import ProtonateDialog
-        from ..pka_gpu_hint import maybe_remind_unipka_cuda_wheel
+        from .dialogs import ProtonateDialog
+        from .pka_gpu_hint import maybe_remind_unipka_cuda_wheel
 
-        maybe_remind_unipka_cuda_wheel(self)
-        candidates = self.chemistry_tool_structure_sources()
-        n_sel = len(self._selected_logical_rows())
-        dlg = ProtonateDialog(candidates, n_sel, self)
-        self._prepare_tool_dialog(dlg)
+        maybe_remind_unipka_cuda_wheel(self._app)
+        candidates = self._app.chemistry_tool_structure_sources()
+        n_sel = len(self._app._selected_logical_rows())
+        dlg = ProtonateDialog(candidates, n_sel, self._app)
+        self._app._prepare_tool_dialog(dlg)
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
         dlg.accepted.connect(lambda *_, d=dlg: self._on_protonate_dialog_accepted(d))
         dlg.show()
 
     def _ensure_protonate_signals(self):
-        sig = getattr(self, "_protonate_signals", None)
+        sig = getattr(self._app, "_protonate_signals", None)
         if sig is not None:
             return sig
-        from ...workers.protonate_worker import ProtonateSignals
+        from ..workers.protonate_worker import ProtonateSignals
 
-        sig = ProtonateSignals(self)
+        sig = ProtonateSignals(self._app)
         sig.finished.connect(self._on_protonate_finished, Qt.QueuedConnection)
         sig.failed.connect(self._on_protonate_failed, Qt.QueuedConnection)
-        self._protonate_signals = sig
+        self._app._protonate_signals = sig
         return sig
 
     def _on_protonate_dialog_accepted(self, dlg) -> None:
         src, ph, out_col, only_selected, render_2d = dlg.config()
-        allowed = self._selected_oids_set() if only_selected else None
-        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Protonate"):
+        allowed = self._app._selected_oids_set() if only_selected else None
+        if self._app._abort_if_only_selected_but_empty(only_selected, allowed, "Protonate"):
             return
 
-        data: list[tuple[int, Chem.Mol | None]] = []
-        oids_walk = self._all_oids_in_table_order()
+        data: list[tuple[int, object | None]] = []
+        oids_walk = self._app._all_oids_in_table_order()
         if allowed is not None:
             oids_walk = [o for o in oids_walk if o in allowed]
         for oid in oids_walk:
@@ -76,14 +74,14 @@ class ProtonateToolsMixin:
         data = [(oid, mol) for oid, mol in data if mol is not None]
         if not data:
             QMessageBox.information(
-                self,
+                self._app,
                 "Protonate",
                 "No rows match the current scope and structure field.",
             )
-            self.status_label.setText("Ready.")
+            self._app.status_label.setText("Ready.")
             return
 
-        self._protonate_run_ctx = {
+        self._app._protonate_run_ctx = {
             "out_col": out_col,
             "ph": float(ph),
             "render_2d": bool(render_2d),
@@ -92,13 +90,13 @@ class ProtonateToolsMixin:
 
         sig = self._ensure_protonate_signals()
         n = len(data)
-        prog = self._tool_progress_state
-        self._begin_tool_progress("Protonate", n)
-        from ...workers.protonate_worker import ProtonateWorker
+        prog = self._app._tool_progress_state
+        self._app._begin_tool_progress("Protonate", n)
+        from ..workers.protonate_worker import ProtonateWorker
 
-        self.process_queue.enqueue(
+        self._app.process_queue.enqueue(
             f"Protonate ({n} molecules)",
-            lambda ev, r=data, ph=ph, s=sig, st=prog, ws=self.signals: ProtonateWorker(
+            lambda ev, r=data, ph=ph, s=sig, st=prog, ws=self._app.signals: ProtonateWorker(
                 r,
                 ph,
                 signals=s,
@@ -110,19 +108,19 @@ class ProtonateToolsMixin:
         )
 
     def _on_protonate_finished(self, rows: list) -> None:
-        from ...workers.protonate_worker import protomer_percent_column_name
+        from ..workers.protonate_worker import protomer_percent_column_name
 
-        ctx = getattr(self, "_protonate_run_ctx", {}) or {}
+        ctx = getattr(self._app, "_protonate_run_ctx", {}) or {}
         out_col = str(ctx.get("out_col") or "Protonated")
         pct_col = protomer_percent_column_name(float(ctx.get("ph", 7.4)))
         render_2d = bool(ctx.get("render_2d"))
         allowed = ctx.get("allowed_oids") or None
-        self._protonate_run_ctx = None
+        self._app._protonate_run_ctx = None
 
         if not rows:
-            self._finish_tool_progress("Protonate")
-            self.status_label.setText(
-                self._consume_partial_results_notice() or "Protonate: no results."
+            self._app._finish_tool_progress("Protonate")
+            self._app.status_label.setText(
+                self._app._consume_partial_results_notice() or "Protonate: no results."
             )
             return
 
@@ -139,7 +137,7 @@ class ProtonateToolsMixin:
                     },
                 )
             )
-        written = self.on_calc_finished(
+        written = self._app.on_calc_finished(
             res,
             [out_col, pct_col, "pKa"],
             progress_label="Protonate",
@@ -161,11 +159,11 @@ class ProtonateToolsMixin:
         out_col = written[0]
         try:
             base_w, base_h = structure_depict_width(), structure_depict_height()
-            renders, row_by_oid = self._build_render2d_tasks_in_table_order(
+            renders, row_by_oid = self._app._build_render2d_tasks_in_table_order(
                 out_col, base_w, base_h, allowed
             )
             if renders:
-                self._start_render_2d_batch(
+                self._app._start_render_2d_batch(
                     renders,
                     row_by_oid,
                     out_col,
@@ -176,8 +174,10 @@ class ProtonateToolsMixin:
             logger.exception("Protonate: render 2D scheduling failed")
 
     def _on_protonate_failed(self, msg: str) -> None:
-        self._finish_tool_progress("Protonate")
+        self._app._finish_tool_progress("Protonate")
         if msg == "Cancelled.":
-            self.status_label.setText(self._consume_partial_results_notice() or "Cancelled.")
+            self._app.status_label.setText(
+                self._app._consume_partial_results_notice() or "Cancelled."
+            )
         else:
-            self.status_label.setText(f"Protonate failed: {msg or 'Computation failed.'}")
+            self._app.status_label.setText(f"Protonate failed: {msg or 'Computation failed.'}")

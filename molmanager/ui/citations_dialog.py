@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Help → Citations: papers and licenses for tools used in MCtoolkit."""
+"""Help → Citations: papers and licenses for tools used in MCToolkit."""
 
 from __future__ import annotations
 

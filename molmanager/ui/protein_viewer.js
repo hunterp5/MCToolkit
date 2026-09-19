@@ -394,10 +394,7 @@ function molmanagerInitView() {
       var atoms;
       try { atoms = v.selectedAtoms({}); } catch (eA) { return; }
       if (!atoms || !atoms.length) return;
-      var heavies = [];
-      for (var i = 0; i < atoms.length; i++) {
-        if (atoms[i] && !isHydrogenAtom(atoms[i])) heavies.push(atoms[i]);
-      }
+      var heavyIndex = indexResidueHeavies(atoms);
       var lim = 1.5 * 1.5;
       for (var j = 0; j < atoms.length; j++) {
         var at = atoms[j];
@@ -414,12 +411,9 @@ function molmanagerInitView() {
         if (bonded) continue;
         var parent = null;
         var best = lim + 1;
+        var heavies = heavyIndex[residueHeavyKey(at)] || [];
         for (var h = 0; h < heavies.length; h++) {
           var hv = heavies[h];
-          if (atomModelId(hv) !== atomModelId(at)) continue;
-          if ((hv.chain || "") !== (at.chain || "")) continue;
-          if (String(hv.resi == null ? "" : hv.resi) !== String(at.resi == null ? "" : at.resi)) continue;
-          if ((hv.icode || "") !== (at.icode || "")) continue;
           var dx = hv.x - at.x, dy = hv.y - at.y, dz = hv.z - at.z;
           var d2 = dx * dx + dy * dy + dz * dz;
           if (d2 <= lim && d2 < best) {
@@ -430,9 +424,7 @@ function molmanagerInitView() {
         if (parent) setBond(at, parent, 1);
       }
     }
-    function applyAll(v) {
-      v = v || window.molmanagerViewer;
-      if (!v) return;
+    function applyModelStyles(v) {
       try { v.removeAllSurfaces(); } catch (eS) {}
       try { v.removeAllLabels(); } catch (eL) {}
       try { v.setStyle({}, {}); } catch (eH) {}
@@ -442,15 +434,49 @@ function molmanagerInitView() {
       applyResidueHighlight(v);
       applyPocketOverlay(v);
       applyPocketSurface(v);
+      applyDockPose(v);
+    }
+    function decorateAtoms(v) {
       normalizeHydrogenElements(v);
       attachHydrogensToHeavies(v);
       applyHydrogenVisibility(v);
       applyClickTargets(v);
+      bindPicking(v);
+    }
+    function applyShapeOverlays(v) {
       applyHydrogenBonds(v);
       applyDockingBox(v);
-      applyDockPose(v);
       applyPharmacophore(v);
-      bindPicking(v);
+    }
+    function refreshShapeOverlays(v) {
+      v = v || window.molmanagerViewer;
+      if (!v) return;
+      try { v.removeAllShapes(); } catch (eSh) {}
+      applyShapeOverlays(v);
+      try { v.render(); } catch (eR) {}
+    }
+    function scheduleAtomDecorate(v) {
+      window.molmanagerDecorateGen = (window.molmanagerDecorateGen || 0) + 1;
+      var gen = window.molmanagerDecorateGen;
+      var run = function () {
+        if (gen !== window.molmanagerDecorateGen) return;
+        decorateAtoms(v);
+        try { v.render(); } catch (eR) {}
+      };
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(function () { setTimeout(run, 0); });
+      } else {
+        setTimeout(run, 0);
+      }
+    }
+    function applyAll(v, opts) {
+      v = v || window.molmanagerViewer;
+      if (!v) return;
+      opts = opts || {};
+      applyModelStyles(v);
+      if (!opts.deferDecorate) decorateAtoms(v);
+      applyShapeOverlays(v);
+      if (opts.deferDecorate) scheduleAtomDecorate(v);
     }
     function atomModelId(at) {
       if (at && at.model && typeof at.model.id === "number") return at.model.id;
@@ -957,6 +983,8 @@ function molmanagerInitView() {
     }
     function bindPicking(v) {
       try {
+        if (window.molmanagerPickingBound) return;
+        window.molmanagerPickingBound = true;
         v.setClickable({}, true, function (atom) {
           if (!atom || atomLooksHidden(atom)) return;
           var ligId = ligandComponentId(atom);
@@ -992,19 +1020,9 @@ function molmanagerInitView() {
             window.proteinBridge.atomPicked(payload);
           }
         });
-      } catch (eClick) {}
-      try {
-        var atoms = v.selectedAtoms({});
-        for (var i = 0; i < atoms.length; i++) {
-          if (atomLooksHidden(atoms[i])) atoms[i].clickable = false;
-        }
-        var comps = window.molmanagerComponents || [];
-        for (var c = 0; c < comps.length; c++) {
-          if (comps[c] && comps[c].visible) continue;
-          var hiddenAtoms = v.selectedAtoms(selOf(comps[c]));
-          for (var h = 0; h < hiddenAtoms.length; h++) hiddenAtoms[h].clickable = false;
-        }
-      } catch (eA) {}
+      } catch (eClick) {
+        window.molmanagerPickingBound = false;
+      }
     }
     function connectBridge() {
       try {
@@ -1080,13 +1098,12 @@ function molmanagerInitView() {
         if (md.cifBonds) {
           try { applyCifBondOrders(v, md.cifBonds, modelId); } catch (eBonds) {}
         }
-        try { attachHydrogensToHeavies(v); } catch (eHbond) {}
         added++;
       }
       return added;
     }
     function finishPayloadView(v, payload) {
-      applyAll(v);
+      applyAll(v, {deferDecorate: true});
       if (payload.camera) {
         try { v.setView(payload.camera); } catch (eCam) {}
         try { v.render(); } catch (eRend) {}
@@ -1197,14 +1214,12 @@ function molmanagerInitView() {
     window.molmanagerSetHbonds = function (spec) {
       window.molmanagerHbonds = spec || null;
       if (!window.molmanagerViewer) return;
-      applyAll(window.molmanagerViewer);
-      keepViewResize(window.molmanagerViewer);
+      refreshShapeOverlays(window.molmanagerViewer);
     };
     window.molmanagerSetDockingBox = function (box) {
       window.molmanagerDockingBox = box || null;
       if (!window.molmanagerViewer) return;
-      applyAll(window.molmanagerViewer);
-      keepViewResize(window.molmanagerViewer);
+      refreshShapeOverlays(window.molmanagerViewer);
     };
     window.molmanagerSetDockPose = function (pose) {
       window.molmanagerDockPose = pose || null;
@@ -1218,8 +1233,7 @@ function molmanagerInitView() {
     window.molmanagerSetPharmacophore = function (spec) {
       window.molmanagerPharmacophore = spec || null;
       if (!window.molmanagerViewer) return;
-      applyAll(window.molmanagerViewer);
-      keepViewResize(window.molmanagerViewer);
+      refreshShapeOverlays(window.molmanagerViewer);
     };
     window.molmanagerMutateResidues = function (items) {
       var v = window.molmanagerViewer;

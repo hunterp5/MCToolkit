@@ -389,6 +389,7 @@ class PlotDockHost:
             self._notify_docked_plot_closing(plot_widget)
             self._release_plot_widget_from_panel_host(plot_widget)
             try:
+                plot_widget.hide()
                 plot_widget.setParent(None)
                 plot_widget.deleteLater()
             except RuntimeError:

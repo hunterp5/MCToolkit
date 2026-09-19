@@ -71,7 +71,7 @@ class ProcessesDialog(QDialog):
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         jobs_ly.addWidget(self._table, 1)
 
-        self._log = SessionLogPanel()
+        self._log = SessionLogPanel(embed_filters=False)
         splitter.addWidget(jobs)
         splitter.addWidget(self._log)
         splitter.setChildrenCollapsible(False)
@@ -92,7 +92,7 @@ class ProcessesDialog(QDialog):
         )
         row.addWidget(self._btn_cancel)
         row.addWidget(self._btn_clear)
-        row.addStretch()
+        row.addWidget(self._log.filter_bar(), 1)
         root.addLayout(row)
 
         self._btn_cancel.clicked.connect(self._on_cancel)

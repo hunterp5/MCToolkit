@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""In-app User Manual for MCtoolkit (TOC + Markdown topic loader)."""
+"""In-app User Manual for MCToolkit (TOC + Markdown topic loader)."""
 
 from __future__ import annotations
 
@@ -208,7 +208,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "tools_calculator",
                 "Calculator",
                 "Calculator",
-                "New numeric column from a math expression.",
+                "New numeric column from a math expression (Tools → Utilities → Calculator).",
             ),
             _e(
                 "tools_sketcher",
@@ -379,13 +379,13 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "tools_random_number",
                 "Random Number",
                 "Random Number",
-                "Fill a column with random numbers.",
+                "Fill a column with random numbers (Tools → Utilities → Random → Number).",
             ),
             _e(
                 "tools_random_molecule",
                 "Random Molecule",
                 "Random Molecule",
-                "Fetch random molecules from ChEMBL, PubChem, or ZINC.",
+                "Fetch random molecules from ChEMBL, PubChem, or ZINC (Tools → Utilities → Random → Molecule).",
             ),
         ),
     ),
@@ -414,37 +414,37 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "data_pca",
                 "PCA",
                 "PCA",
-                "Data → Dimensionality Reduction → Principal Component Analysis.",
+                "Data → DimRed Plots → Principal Component Analysis.",
             ),
             _e(
                 "data_tsne",
                 "t-SNE",
                 "t-SNE",
-                "Data → Dimensionality Reduction → t-SNE Visualization.",
+                "Data → DimRed Plots → t-SNE Visualization.",
             ),
             _e(
                 "data_umap",
                 "UMAP",
                 "UMAP",
-                "Data → Dimensionality Reduction → UMAP Visualization.",
+                "Data → DimRed Plots → UMAP Visualization.",
             ),
             _e(
                 "data_som",
                 "SOM",
                 "Self-Organizing Map",
-                "Data → Dimensionality Reduction → Self-Organizing Map.",
+                "Data → DimRed Plots → Self-Organizing Map.",
             ),
             _e(
                 "data_boiled_egg",
                 "BOILED-Egg",
                 "BOILED-Egg",
-                "Data → MedChem → BOILED-Egg plot.",
+                "Data → MedChem Plots → BOILED-Egg plot.",
             ),
             _e(
                 "data_golden_triangle",
                 "Golden Triangle",
                 "Golden Triangle",
-                "Data → MedChem → Golden Triangle plot.",
+                "Data → MedChem Plots → Golden Triangle plot.",
             ),
             _e(
                 "data_sali",

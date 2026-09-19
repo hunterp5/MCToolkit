@@ -27,8 +27,7 @@ from pathlib import Path
 from PySide6.QtCore import QTemporaryDir, QTimer, QUrl, Qt
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
-from rdkit import Chem
-
+from ..chem.molecule_conversion import mol_to_molblock, mol_to_pdbblock
 from ..platform_support.qt_webengine_flags import webengine_views_supported
 from .mol_viewer_3d import (
     _BUNDLED_3DMOL,
@@ -122,7 +121,7 @@ def load_receptor_display_text(path: str | Path | None) -> str:
     return pdbqt_to_pdb_text(raw) or raw
 
 
-def ligand_display_payload(mol: Chem.Mol | None) -> tuple[str, str]:
+def ligand_display_payload(mol: object | None) -> tuple[str, str]:
     """Return ``(base64, 3Dmol format)`` for a docked pose without re-embedding."""
     if mol is None:
         return "", "sdf"
@@ -132,13 +131,13 @@ def ligand_display_payload(mol: Chem.Mol | None) -> tuple[str, str]:
     except Exception:
         return "", "sdf"
     try:
-        block = Chem.MolToMolBlock(mol)
+        block = mol_to_molblock(mol)
         if block and block.strip():
             return base64.b64encode(block.encode("utf-8")).decode("ascii"), "sdf"
     except Exception:
         logger.debug("Dock pose MolBlock failed", exc_info=True)
     try:
-        block = Chem.MolToPDBBlock(mol)
+        block = mol_to_pdbblock(mol)
         if block and block.strip():
             return base64.b64encode(block.encode("utf-8")).decode("ascii"), "pdb"
     except Exception:
@@ -147,7 +146,7 @@ def ligand_display_payload(mol: Chem.Mol | None) -> tuple[str, str]:
 
 
 def ligand_mol_to_pdb_text(
-    mol: Chem.Mol | None,
+    mol: object | None,
     *,
     resn: str = "LIG",
     chain: str = "Z",
@@ -210,7 +209,7 @@ def ligand_mol_to_pdb_text(
     return _pdb_from_atoms(atoms)
 
 
-def pose_manager_slot_name(mol: Chem.Mol | None, index: int, *, prefix: str = "Pose") -> str:
+def pose_manager_slot_name(mol: object | None, index: int, *, prefix: str = "Pose") -> str:
     """Manager file name for a docked pose (``Pose 3.pdb``)."""
     label = f"{prefix} {max(1, int(index))}"
     if mol is not None:
@@ -665,7 +664,7 @@ class DockComplexEmbedView(QWidget):
         self._fitted = False
         self._push(refit=True)
 
-    def set_ligand_mol(self, mol: Chem.Mol | None) -> None:
+    def set_ligand_mol(self, mol: object | None) -> None:
         """Show *mol* using its existing docked coordinates (no ETKDG re-embed)."""
         b64, fmt = ligand_display_payload(mol)
         same = b64 == self._lig_b64 and fmt == self._lig_fmt

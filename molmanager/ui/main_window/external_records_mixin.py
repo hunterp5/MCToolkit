@@ -22,8 +22,7 @@ import time
 
 from PySide6.QtCore import QTimer
 
-from rdkit import Chem
-
+from ...chem.molecule_conversion import mol_from_smiles
 from ...platform_support.config import load_config
 from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
@@ -84,7 +83,7 @@ class ExternalRecordsMixin:
                 row_cells[h] = str(fields.get(h, "") or "")
         self._table_model.append_row(oid, row_cells)
 
-        mol = Chem.MolFromSmiles(smiles)
+        mol = mol_from_smiles(smiles)
         if mol is not None:
             self.mols[oid] = mol
             self.start_render_worker(oid, mol)
@@ -160,13 +159,13 @@ class ExternalRecordsMixin:
             self.table.setUpdatesEnabled(False)
         except Exception:
             pass
-        new_mols: list[tuple[int, Chem.Mol]] = []
+        new_mols: list[tuple[int, object]] = []
         if render_structures:
             for oid, row_cells in prepared:
                 smi = (row_cells.get("SMILES", "") or "").strip()
                 if not smi:
                     continue
-                mol = Chem.MolFromSmiles(smi)
+                mol = mol_from_smiles(smi)
                 if mol is not None:
                     new_mols.append((oid, mol))
         cfg = load_config()

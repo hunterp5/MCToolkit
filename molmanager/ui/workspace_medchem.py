@@ -21,10 +21,13 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
-from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
+from .singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 
-class MedChemSpaceMixin:
+class MedChemSpaceTools:
+    def __init__(self, app) -> None:
+        self._app = app
+
     def open_boiled_egg_plot(self) -> None:
         self._open_medchem_space_dialog(
             plot_kind="boiled_egg",
@@ -46,26 +49,26 @@ class MedChemSpaceMixin:
         title: str,
         attr: str,
     ) -> None:
-        if not self.headers or self._table_model.rowCount() == 0:
+        if not self._app.headers or self._app._table_model.rowCount() == 0:
             QMessageBox.information(
-                self,
+                self._app,
                 "Data",
                 "Open a file or add rows with structures to plot medicinal chemistry space.",
             )
             return
-        from ..dialogs.medchem_space import MedChemSpaceDialog
+        from .dialogs.medchem_space import MedChemSpaceDialog
 
         def _factory():
-            d = MedChemSpaceDialog(self, plot_kind=plot_kind, window_title=title)
-            self._prepare_tool_dialog(d)
+            d = MedChemSpaceDialog(self._app, plot_kind=plot_kind, window_title=title)
+            self._app._prepare_tool_dialog(d)
             d.setAttribute(Qt.WA_DeleteOnClose, True)
             return d
 
         dlg = reuse_or_show_modeless_singleton(
-            self,
+            self._app,
             attr,
             _factory,
-            on_reused_visible=self._sync_dialog_only_selected_scope,
+            on_reused_visible=self._app._sync_dialog_only_selected_scope,
         )
         dlg.raise_()
         dlg.activateWindow()

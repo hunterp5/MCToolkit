@@ -97,7 +97,7 @@ class PharmacophoreScreenDialog(QDialog):
         self.edit_pharmacophore = QLineEdit()
         self.edit_pharmacophore.setPlaceholderText("pharmacophore.json")
         self.edit_pharmacophore.setToolTip(
-            "MCtoolkit pharmacophore JSON from Protein Viewer. Exclusion volumes are "
+            "MCToolkit pharmacophore JSON from Protein Viewer. Exclusion volumes are "
             "ignored; matching uses RDKit feature types and pairwise distances so table "
             "ensembles need not share the protein coordinate frame."
         )

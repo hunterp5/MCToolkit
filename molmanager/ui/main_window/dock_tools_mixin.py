@@ -23,8 +23,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
-from rdkit import Chem
-
+from ...chem.molecule_conversion import copy_mol, mol_to_canonical_smiles
 from ...conformers.conformer_column_codec import pack_mols_as_confs_cell
 from ...docking.pose_file_io import (
     dock_poses_pack_meta,
@@ -34,7 +33,6 @@ from ...docking.pose_file_io import (
     stamp_pose_parent_oids,
 )
 from ...services.column_labels import COLUMN_PARENT_OID
-from ...chem.molecule_conversion import mol_to_canonical_smiles
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 
@@ -44,10 +42,9 @@ def _copy_dock_pose_mols(mols: list) -> list:
     for mol in mols or []:
         if mol is None:
             continue
-        try:
-            out.append(Chem.Mol(mol))
-        except Exception:
-            continue
+        copied = copy_mol(mol)
+        if copied is not None:
+            out.append(copied)
     return out
 
 
@@ -505,10 +502,7 @@ class DockToolsMixin:
             self.next_oid = oid + 1
         except Exception:
             return None
-        try:
-            stored = Chem.Mol(first)
-        except Exception:
-            stored = first
+        stored = copy_mol(first) or first
         from ..mol_viewer_3d import prepare_mol_2d
 
         depict = prepare_mol_2d(stored)

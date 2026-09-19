@@ -21,8 +21,9 @@ from __future__ import annotations
 import logging
 import sys
 
-from PySide6.QtCore import QObject, QRunnable, Signal
+from PySide6.QtCore import QObject, QRunnable, QTimer, Signal
 
+from ..chem.molecule_conversion import copy_mol
 from ..protein.hydrogen_bonds import HBOND_KIND_COMPLEX
 from ..protein.protein_interactions import (
     compute_dock_pose_overlays,
@@ -231,6 +232,20 @@ class ProteinViewerOverlayJobMixin:
             cache.pop(sid, None)
 
     def _schedule_interaction_overlay_job(self) -> None:
+        """Queue overlay compute after the canvas has a chance to paint."""
+        if "pytest" in sys.modules:
+            self._start_interaction_overlay_job()
+            return
+        timer = getattr(self, "_overlay_delay_timer", None)
+        if timer is None:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.setInterval(400)
+            timer.timeout.connect(self._start_interaction_overlay_job)
+            self._overlay_delay_timer = timer
+        timer.start()
+
+    def _start_interaction_overlay_job(self) -> None:
         want_h = bool(self._hbond_kinds_enabled())
         want_p = bool(
             self._prolif_families_enabled() or HBOND_KIND_COMPLEX in self._hbond_kinds_enabled()
@@ -335,12 +350,7 @@ class ProteinViewerOverlayJobMixin:
             return
         if not any(row.spec.kind == "polymer" for row in slot.rows):
             return
-        from rdkit import Chem
-
-        try:
-            lig = Chem.Mol(mol)
-        except Exception:
-            lig = mol
+        lig = copy_mol(mol) or mol
         gen = int(getattr(self, "_dock_pose_overlay_gen", 0))
         signals = getattr(self, "_dock_pose_overlay_signals", None)
         if signals is None:
@@ -388,7 +398,7 @@ class ProteinViewerOverlayJobMixin:
             inflight.clear()
         self._overlay_worker_running = False
         self._overlay_reschedule = False
-        self._schedule_interaction_overlay_job()
+        self._start_interaction_overlay_job()
 
     def _on_interaction_overlay_finished(self, generation: int, payload) -> None:
         pending = getattr(self, "_overlay_pending_sids", None)

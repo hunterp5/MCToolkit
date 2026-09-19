@@ -20,8 +20,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QMessageBox
 
-from rdkit import Chem
-
+from ...chem.molecule_conversion import is_rdkit_mol
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 
@@ -65,7 +64,7 @@ class ViewerOpenersMixin:
 
     def open_sketcher(self, mol=None):
         # QAction.triggered passes False; never treat that as a molecule.
-        if mol is not None and not isinstance(mol, Chem.Mol):
+        if mol is not None and not is_rdkit_mol(mol):
             mol = None
         from ..sketcher import SketcherDialog
 
@@ -81,14 +80,14 @@ class ViewerOpenersMixin:
         )
 
     def open_molecule_3d(self, mol=None, *, source_oid=None):
-        if mol is not None and not isinstance(mol, Chem.Mol):
+        if mol is not None and not is_rdkit_mol(mol):
             mol = None
         if mol is None and source_oid is None:
             return
         self.open_selection_browser(focus_oid=source_oid, preview_mode="3dmol_3d")
 
     def open_molecule_2d(self, mol=None, *, source_oid=None):
-        if mol is not None and not isinstance(mol, Chem.Mol):
+        if mol is not None and not is_rdkit_mol(mol):
             mol = None
         if mol is None and source_oid is None:
             return

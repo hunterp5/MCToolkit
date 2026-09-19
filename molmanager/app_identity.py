@@ -26,17 +26,19 @@ from typing import Any
 
 from PySide6.QtCore import QSettings
 
-APP_DISPLAY_NAME = "MCtoolkit"
-APP_ORGANIZATION = "MCtoolkit"
-SETTINGS_ORG = "MCtoolkit"
-SETTINGS_APP = "MCtoolkit"
+APP_DISPLAY_NAME = "MCToolkit"
+APP_ORGANIZATION = "MCToolkit"
+SETTINGS_ORG = "MCToolkit"
+SETTINGS_APP = "MCToolkit"
 LEGACY_SETTINGS_ORG = "MolManager"
 LEGACY_SETTINGS_APP = "MolManager"
+PREVIOUS_SETTINGS_ORG = "MCtoolkit"
+PREVIOUS_SETTINGS_APP = "MCtoolkit"
 PYTHON_PACKAGE = "molmanager"
-LOG_DIR_NAME = "MCtoolkit"
+LOG_DIR_NAME = "MCToolkit"
 LOG_DIR_SLUG = "mctoolkit"
 LOG_FILE_NAME = "mctoolkit.log"
-SESSION_TEMP_DIR_NAME = "MCtoolkitSessions"
+SESSION_TEMP_DIR_NAME = "MCToolkitSessions"
 SESSION_SAVE_FILTER = f"{APP_DISPLAY_NAME} Session (*.cms);;JSON (*.json)"
 SESSION_OPEN_FILTER = (
     f"{APP_DISPLAY_NAME} Session (*.cms *.json);;Legacy session CSV (*.csv);;All files (*.*)"
@@ -71,7 +73,7 @@ def reset_settings_migration_for_tests() -> None:
 
 
 def qt_settings() -> QSettings:
-    """QSettings for the current app identity, migrating MolManager keys once."""
+    """QSettings for the current app identity, migrating older org/app keys once."""
     settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
     _migrate_legacy_qt_settings(settings)
     return settings
@@ -88,17 +90,24 @@ def apply_qt_application_identity(app: Any) -> None:
 
 
 def _migrate_legacy_qt_settings(settings: QSettings) -> None:
-    """Copy MolManager QSettings into MCtoolkit when the new store is empty."""
+    """Copy older QSettings stores into MCToolkit when the new store is empty."""
     global _settings_migrated
     if _settings_migrated:
         return
     _settings_migrated = True
     if settings.allKeys():
         return
-    legacy = QSettings(LEGACY_SETTINGS_ORG, LEGACY_SETTINGS_APP)
-    keys = legacy.allKeys()
-    if not keys:
+    for org, app in (
+        (PREVIOUS_SETTINGS_ORG, PREVIOUS_SETTINGS_APP),
+        (LEGACY_SETTINGS_ORG, LEGACY_SETTINGS_APP),
+    ):
+        if org == SETTINGS_ORG and app == SETTINGS_APP:
+            continue
+        legacy = QSettings(org, app)
+        keys = legacy.allKeys()
+        if not keys:
+            continue
+        for key in keys:
+            settings.setValue(key, legacy.value(key))
+        settings.sync()
         return
-    for key in keys:
-        settings.setValue(key, legacy.value(key))
-    settings.sync()

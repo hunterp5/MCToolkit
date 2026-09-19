@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Tests for Tools → Random → Molecule source sampling (no network)."""
+"""Tests for Tools → Utilities → Random → Molecule source sampling (no network)."""
 
 from __future__ import annotations
 

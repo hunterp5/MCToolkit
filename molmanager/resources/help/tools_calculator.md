@@ -25,7 +25,7 @@ Numeric columns in the table; expression applies to all rows or **Selected Rows 
 
 ## Workflow
 
-1. Open **Calculator** and set the output **Column name**.
+1. Open **Tools → Utilities → Calculator** and set the output **Column name**.
 2. Build an expression via keypad and column variable buttons.
 3. Choose scope (**Selected Rows Only** or all).
 4. **Apply to Table** and spot-check results.

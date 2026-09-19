@@ -14,73 +14,183 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Lazy leaf-tool adapters (cluster, dimred, QSAR, MPO, medchem, structure-prep).
+"""Lazy leaf-tool collaborators (cluster, dimred, QSAR, MPO, medchem, structure-prep).
 
-Importing this module does not import the tool mixins or their dialogs.
-First use of a property loads that mixin and binds it to the kernel.
+Importing this module does not import the tool bodies or their dialogs.
+First use of a property constructs that collaborator with the window as ``self._app``.
 
 New tools belong here (or as module functions + ``install_window_forwards``),
-not as ``ChemistryWorkspaceWindow`` bases. ``bind_mixin_methods`` on these
-hosts is the existing adapter pattern; new methods on a real collaborator
-should use ``self._app`` instead.
+not as ``ChemistryWorkspaceWindow`` bases.
 """
 
 from __future__ import annotations
 
-from typing import Any
+import types
+from collections.abc import Callable
+from typing import Any, Protocol
 
-from .app_kernel import AppKernel, bind_mixin_methods
+from .app_roles import JobScheduler, ProgressChrome, SessionState, TableData, TableSelection
 
 
-class _LazyMixinHost:
-    """Bind one or more mixin classes onto the kernel the first time they are needed."""
+class WorkspaceToolDialogOps(Protocol):
+    """Dialog scope, selection, and writeback the leaf tools still call on the window."""
 
-    def __init__(self, app: AppKernel, import_mixin) -> None:
+    def _prepare_tool_dialog(self, dialog: Any) -> None: ...
+    def _sync_dialog_only_selected_scope(self, dlg: Any) -> None: ...
+    def _abort_if_only_selected_but_empty(
+        self, only_selected: bool, allowed: set | frozenset | None, title: str
+    ) -> bool: ...
+    def _selected_logical_rows(self) -> list: ...
+    def _all_oids_in_table_order(self) -> list[int]: ...
+    def logical_row_for_oid(self, oid: int) -> int: ...
+    def chemistry_tool_structure_sources(self) -> list[str]: ...
+    def on_calc_finished(self, *args: Any, **kwargs: Any) -> Any: ...
+
+
+class WorkspaceToolMolOps(Protocol):
+    """Progress chrome and mol/render helpers structure-prep still reaches through the facade."""
+
+    def _consume_partial_results_notice(self) -> str | None: ...
+    def _clear_tool_progress(self, *, status_message: str | None = None) -> None: ...
+    def _table_cell_text(self, row: int, col: int) -> str: ...
+    def _canonical_smiles_header_for_updates(self) -> str | None: ...
+    def _start_render_2d_batch(self, *args: Any, **kwargs: Any) -> None: ...
+    def _build_render2d_tasks_in_table_order(self, *args: Any, **kwargs: Any) -> Any: ...
+    def _mol_for_structure_row(self, row: int) -> Any: ...
+    def _mol_from_structure_text(self, raw: str) -> Any: ...
+
+
+class WorkspaceProtonateState(Protocol):
+    """In-flight protomer job handle and writeback context."""
+
+    _protonate_signals: Any
+    _protonate_run_ctx: Any
+
+
+class WorkspaceFastPrepareState(Protocol):
+    """Fast Prepare output column and scope remembered until the worker finishes."""
+
+    _fast_prepare_source: str
+    _fast_prepare_allowed_oids: Any
+    _fast_prepare_fragments_col: str
+    _fast_prepare_update_target: bool
+
+
+class WorkspaceDisconnectState(Protocol):
+    """Disconnect-fragments column names and render flag for the queued job."""
+
+    _disconnect_source: str
+    _disconnect_update_target: bool
+    _disconnect_largest_col: Any
+    _disconnect_fragments_col: str
+    _disconnect_no_render_2d: bool
+
+
+class WorkspaceHydrogenState(Protocol):
+    """Add/remove explicit-H source column and render flag for the queued job."""
+
+    _add_explicit_hydrogens_source: str
+    _add_explicit_hydrogens_no_render_2d: bool
+    _remove_explicit_hydrogens_source: str
+    _remove_explicit_hydrogens_no_render_2d: bool
+
+
+class WorkspaceNeutralizeState(Protocol):
+    """Neutralize source column and render flag for the queued job."""
+
+    _neutralize_source: str
+    _neutralize_no_render_2d: bool
+
+
+class WorkspaceToolsHost(
+    TableData,
+    TableSelection,
+    ProgressChrome,
+    SessionState,
+    JobScheduler,
+    WorkspaceToolDialogOps,
+    WorkspaceToolMolOps,
+    WorkspaceProtonateState,
+    WorkspaceFastPrepareState,
+    WorkspaceDisconnectState,
+    WorkspaceHydrogenState,
+    WorkspaceNeutralizeState,
+    Protocol,
+):
+    """What lazy workspace tools need from the window.
+
+    Kernel table/progress/session/job members stay on the window, as do the
+    in-flight structure-prep job flags. Dialog singleton handles are reached
+    with getattr so session restore and lifecycle teardown keep seeing them
+    on the facade.
+    """
+
+    def calculate_global_bounds(self, *args: Any, **kwargs: Any) -> None: ...
+
+
+def _drop_extra_positional(fn: Callable) -> Callable:
+    """Drop Qt ``triggered(bool)`` extras the way ``wrap_mixin_callable`` did.
+
+    Menu actions call window forwards, which call into the lazy collaborator.
+    Leaf openers still declare no extra args.
+    """
+    code = getattr(getattr(fn, "__func__", fn), "__code__", None)
+    accepts_varargs = bool(getattr(code, "co_flags", 0) & 0x04)
+    max_pos = None
+    if code is not None and not accepts_varargs:
+        max_pos = max(0, int(code.co_argcount) - 1)
+
+    def call(*args: Any, **kwargs: Any):
+        if max_pos is not None and len(args) > max_pos:
+            args = args[:max_pos]
+        return fn(*args, **kwargs)
+
+    call.__name__ = getattr(fn, "__name__", "call")
+    call.__doc__ = fn.__doc__
+    call.__wrapped__ = fn  # type: ignore[attr-defined]
+    return call
+
+
+class _LazyCollaborator:
+    """Construct one collaborator class the first time a method is needed."""
+
+    def __init__(self, app: WorkspaceToolsHost, import_cls) -> None:
         self._app = app
-        self._import_mixin = import_mixin
+        self._import_cls = import_cls
         self._bound: Any = None
 
     def _ensure(self) -> Any:
         if self._bound is None:
-            loaded = self._import_mixin()
-            mixin_classes = loaded if isinstance(loaded, tuple) else (loaded,)
-            label = "_".join(cls.__name__ for cls in mixin_classes)
-            host = type(f"{label}Adapter", (), {})()
-            host._app = self._app
-            bind_mixin_methods(host, self._app, *mixin_classes)
-            self._bound = host
+            self._bound = self._import_cls()(self._app)
         return self._bound
 
     def __getattr__(self, name: str):
-        return getattr(self._ensure(), name)
+        attr = getattr(self._ensure(), name)
+        if isinstance(attr, types.MethodType):
+            return _drop_extra_positional(attr)
+        return attr
 
 
 class WorkspaceTools:
     """On-demand tool adapters so the window class need not inherit leaf mixins."""
 
-    def __init__(self, app: AppKernel) -> None:
+    def __init__(self, app: WorkspaceToolsHost) -> None:
         self._app = app
-        self.cluster = _LazyMixinHost(
-            app, lambda: _load("molmanager.ui.main_window.cluster_mixin", "ClusterMixin")
+        self.cluster = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_cluster", "ClusterTools")
         )
-        self.dimension_reduction = _LazyMixinHost(
+        self.dimension_reduction = _LazyCollaborator(
             app,
-            lambda: _load(
-                "molmanager.ui.main_window.dimension_reduction_mixin",
-                "DimensionReductionMixin",
-            ),
+            lambda: _load("molmanager.ui.workspace_dimred", "DimensionReductionTools"),
         )
-        self.medchem_space = _LazyMixinHost(
-            app,
-            lambda: _load("molmanager.ui.main_window.medchem_space_mixin", "MedChemSpaceMixin"),
+        self.medchem_space = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_medchem", "MedChemSpaceTools")
         )
-        self.qsar = _LazyMixinHost(
-            app, lambda: _load("molmanager.ui.main_window.qsar_mixin", "QsarMixin")
+        self.qsar = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_qsar", "QsarTools")
         )
-        self.mpo = _LazyMixinHost(
-            app, lambda: _load("molmanager.ui.main_window.mpo_mixin", "MpoMixin")
-        )
-        self.structure_prep = _LazyMixinHost(app, _load_structure_prep)
+        self.mpo = _LazyCollaborator(app, lambda: _load("molmanager.ui.workspace_mpo", "MpoTools"))
+        self.structure_prep = _LazyCollaborator(app, _load_structure_prep)
 
 
 def _load(module: str, name: str):
@@ -90,12 +200,17 @@ def _load(module: str, name: str):
 
 
 def _load_structure_prep():
-    return (
-        _load("molmanager.ui.main_window.protonate_tools_mixin", "ProtonateToolsMixin"),
-        _load("molmanager.ui.main_window.fast_prepare_tools_mixin", "FastPrepareToolsMixin"),
-        _load("molmanager.ui.main_window.structure_edit_mixin", "StructureEditMixin"),
-        _load(
-            "molmanager.ui.main_window.structure_writeback_mixin",
-            "StructureWritebackMixin",
-        ),
+    ProtonateTools = _load("molmanager.ui.workspace_protonate", "ProtonateTools")
+    FastPrepareTools = _load("molmanager.ui.workspace_fast_prepare", "FastPrepareTools")
+    StructureEditTools = _load("molmanager.ui.workspace_structure_edit", "StructureEditTools")
+    StructureWritebackTools = _load(
+        "molmanager.ui.workspace_structure_writeback", "StructureWritebackTools"
     )
+
+    class StructurePrepTools(
+        ProtonateTools, FastPrepareTools, StructureEditTools, StructureWritebackTools
+    ):
+        def __init__(self, app: WorkspaceToolsHost) -> None:
+            self._app = app
+
+    return StructurePrepTools
