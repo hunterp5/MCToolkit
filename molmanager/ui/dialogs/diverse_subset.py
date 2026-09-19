@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
+"""Tools → Fingerprints → Diverse Subset."""
+
 from __future__ import annotations
 
 from PyQt5.QtWidgets import (
@@ -30,12 +32,13 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...chem.rdkit_fingerprints import SIMILARITY_FP_TYPE_LABELS, descriptor_onbits_column_name
 from ...platform_support.config import load_config
 from ...platform_support.memory_guards import check_diverse_subset_workload
-from ...chem.rdkit_fingerprints import descriptor_onbits_column_name
-from ...workers import (
+from ...workers.diverse_subset_worker import (
+    DIVERSE_SUBSET_MODE_LABELS,
+    DiverseSubsetRequest,
     DiverseSubsetWorker,
-    SIMILARITY_FP_TYPE_LABELS,
 )
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
@@ -45,12 +48,6 @@ _MOLS_COVERAGE_THRESHOLD = 0.9
 
 _DEFAULT_COLUMN = "Diverse subset rank"
 
-_MODE_LABELS: tuple[tuple[str, str], ...] = (
-    ("Auto (exact when small, Fast when large)", "auto"),
-    ("Exact MaxMin", "exact"),
-    ("Fast (staged prefilter + MaxMin)", "fast"),
-)
-
 
 class DiverseSubsetDialog(QDialog):
     """Pick a maximally diverse compound subset using fingerprint MaxMin (Tanimoto distance)."""
@@ -58,14 +55,23 @@ class DiverseSubsetDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
+        self._init_diverse_subset_state(parent)
+        self._build_diverse_subset_ui()
+        self._wire_diverse_subset_ui()
+
+    def _init_diverse_subset_state(self, parent) -> None:
         self.setWindowTitle("Diverse Subset")
         self.setMinimumWidth(460)
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
         self._have_selection = n_sel > 0
+        self._selected_row_count = n_sel
+        self._table_row_count = parent._table_model.rowCount() if parent else 1
         self._scope_oids: list[int] = []
         self._pending_column_name = ""
         self._onbits_column: str | None = None
 
+    def _build_diverse_subset_ui(self) -> None:
+        n_sel = self._selected_row_count
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(6)
@@ -75,7 +81,6 @@ class DiverseSubsetDialog(QDialog):
         root.addLayout(form)
 
         self.src_combo = QComboBox()
-        self._refresh_structure_sources()
         form.addRow("Structure source:", self.src_combo)
 
         self.fp_combo = QComboBox()
@@ -83,8 +88,8 @@ class DiverseSubsetDialog(QDialog):
         form.addRow("Fingerprint:", self.fp_combo)
 
         self.mode_combo = QComboBox()
-        for label, _key in _MODE_LABELS:
-            self.mode_combo.addItem(label)
+        for key, label in DIVERSE_SUBSET_MODE_LABELS:
+            self.mode_combo.addItem(label, key)
         self.mode_combo.setToolTip(
             "Exact MaxMin on the full pool. Fast prefilters (Leader / subsample) then "
             "MaxMin on a candidate pool — better for BindingDB-scale tables. Auto picks "
@@ -94,7 +99,7 @@ class DiverseSubsetDialog(QDialog):
 
         self.subset_size_spin = QSpinBox()
         self.subset_size_spin.setRange(1, 1_000_000)
-        n_rows = parent._table_model.rowCount() if parent else 1
+        n_rows = self._table_row_count
         self.subset_size_spin.setValue(min(50, max(1, n_rows)))
         self.subset_size_spin.setToolTip(
             "Number of compounds to keep in the diverse subset (MaxMin on Tanimoto distance)."
@@ -127,18 +132,17 @@ class DiverseSubsetDialog(QDialog):
 
         btn_row = QHBoxLayout()
         self.run_btn = QPushButton("Pick Diverse Subset")
-        self.run_btn.clicked.connect(self.run)
         btn_row.addWidget(self.run_btn)
         btn_row.addStretch()
         root.addLayout(btn_row)
 
+    def _wire_diverse_subset_ui(self) -> None:
+        self.run_btn.clicked.connect(self.run)
+        self._refresh_structure_sources()
         make_window_minimizable(self)
 
     def _selected_mode_key(self) -> str:
-        idx = int(self.mode_combo.currentIndex())
-        if 0 <= idx < len(_MODE_LABELS):
-            return _MODE_LABELS[idx][1]
-        return "auto"
+        return str(self.mode_combo.currentData() or "auto")
 
     def _refresh_structure_sources(self) -> None:
         self.src_combo.clear()
@@ -329,24 +333,21 @@ class DiverseSubsetDialog(QDialog):
         prog = app._tool_progress_state
         sig = app._ensure_diverse_subset_signals()
         app._begin_tool_progress("Diverse subset", n_est)
+        req = DiverseSubsetRequest(
+            fp_choice=fp_choice,
+            subset_size=k,
+            oids=list(oids),
+            structure_source=src,
+            mols_by_oid=mols_by_oid,
+            structure_texts=structure_texts,
+            onbits_by_oid=onbits_by_oid,
+            use_onbits_column=use_onbits_col,
+            mode=mode,
+        )
         app.process_queue.enqueue(
             f"Diverse subset ({n_est} rows, pick {k}, {mode})",
-            lambda ev, o=list(oids), c=fp_choice, kk=k, s=sig, st=prog, ob=onbits_by_oid, uo=use_onbits_col, src_col=src, md=mode, mb=mols_by_oid, tx=structure_texts: (
-                DiverseSubsetWorker(
-                    None,
-                    c,
-                    kk,
-                    s,
-                    oids=o,
-                    structure_source=src_col,
-                    mols_by_oid=mb,
-                    structure_texts=tx,
-                    onbits_by_oid=ob,
-                    use_onbits_column=uo,
-                    mode=md,
-                    cancel_event=ev,
-                    progress_state=st,
-                )
+            lambda ev, r=req, s=sig, st=prog: DiverseSubsetWorker(
+                r, s, cancel_event=ev, progress_state=st
             ),
         )
         self.close()

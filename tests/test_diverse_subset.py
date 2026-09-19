@@ -27,7 +27,9 @@ from molmanager.chem.fingerprint_cache import clear as clear_fp_cache
 from molmanager.chem.fingerprint_cache import get as cache_get
 from molmanager.chem.fingerprint_cache import store_from_mol
 from molmanager.workers.diverse_subset_worker import (
+    DIVERSE_SUBSET_MODE_LABELS,
     DiverseSubsetPoolRow,
+    DiverseSubsetRequest,
     DiverseSubsetWorker,
     build_diverse_subset_pool,
     materialize_pool_fingerprints,
@@ -188,7 +190,11 @@ def test_diverse_subset_worker_cancel():
     sig = _CaptureSignals()
     ev = threading.Event()
     ev.set()
-    worker = DiverseSubsetWorker(rows, "Morgan (r=2, n=2048)", 4, sig, cancel_event=ev)
+    worker = DiverseSubsetWorker(
+        DiverseSubsetRequest(rows=rows, fp_choice="Morgan (r=2, n=2048)", subset_size=4),
+        sig,
+        cancel_event=ev,
+    )
     worker.run()
     assert sig.err == "Cancelled."
     assert sig.picked == []
@@ -223,7 +229,12 @@ def test_diverse_subset_worker_picks_k():
         assert m is not None
         rows.append((i, m))
     sig = _CaptureSignals()
-    worker = DiverseSubsetWorker(rows, "Morgan (r=2, n=2048)", 4, sig, mode="exact")
+    worker = DiverseSubsetWorker(
+        DiverseSubsetRequest(
+            rows=rows, fp_choice="Morgan (r=2, n=2048)", subset_size=4, mode="exact"
+        ),
+        sig,
+    )
     worker.run()
     assert sig.err is None
     assert len(sig.picked) == 4
@@ -264,14 +275,15 @@ def test_diverse_subset_worker_resolves_oids_via_app():
         mols[i] = m
     sig = _CaptureSignals()
     worker = DiverseSubsetWorker(
-        None,
-        "Morgan (r=2, n=2048)",
-        2,
+        DiverseSubsetRequest(
+            fp_choice="Morgan (r=2, n=2048)",
+            subset_size=2,
+            oids=list(mols.keys()),
+            structure_source="Structure",
+            mode="exact",
+        ),
         sig,
-        oids=list(mols.keys()),
-        structure_source="Structure",
         app=_App(mols),
-        mode="exact",
     )
     worker.run()
     assert sig.err is None
@@ -287,13 +299,14 @@ def test_diverse_subset_worker_resolves_mols_by_oid_snapshot():
         mols[i] = m
     sig = _CaptureSignals()
     worker = DiverseSubsetWorker(
-        None,
-        "Morgan (r=2, n=2048)",
-        2,
+        DiverseSubsetRequest(
+            fp_choice="Morgan (r=2, n=2048)",
+            subset_size=2,
+            oids=list(mols.keys()),
+            mols_by_oid=mols,
+            mode="exact",
+        ),
         sig,
-        oids=list(mols.keys()),
-        mols_by_oid=mols,
-        mode="exact",
     )
     worker.run()
     assert sig.err is None
@@ -305,14 +318,28 @@ def test_diverse_subset_worker_resolves_structure_texts():
     texts = [(i, s) for i, s in enumerate(smis)]
     sig = _CaptureSignals()
     worker = DiverseSubsetWorker(
-        None,
-        "Morgan (r=2, n=2048)",
-        2,
+        DiverseSubsetRequest(
+            fp_choice="Morgan (r=2, n=2048)",
+            subset_size=2,
+            oids=[i for i, _ in texts],
+            structure_texts=texts,
+            mode="exact",
+        ),
         sig,
-        oids=[i for i, _ in texts],
-        structure_texts=texts,
-        mode="exact",
     )
     worker.run()
     assert sig.err is None
     assert len(sig.picked) == 2
+
+
+def test_diverse_subset_dialog_mode_uses_item_data(qapp):  # noqa: ARG001
+    from molmanager.ui.dialogs.diverse_subset import DiverseSubsetDialog
+
+    dlg = DiverseSubsetDialog(None)
+    try:
+        keys = [dlg.mode_combo.itemData(i) for i in range(dlg.mode_combo.count())]
+        assert keys == [k for k, _ in DIVERSE_SUBSET_MODE_LABELS]
+        dlg.mode_combo.setCurrentIndex(keys.index("fast"))
+        assert dlg._selected_mode_key() == "fast"
+    finally:
+        dlg.close()

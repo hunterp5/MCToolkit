@@ -57,6 +57,27 @@ _PROCESS_POOL_MIN_ROWS = 64
 _LEADER_PREFILTER_MAX_ROWS = 25_000
 
 DiverseMode = Literal["exact", "fast", "auto"]
+DIVERSE_SUBSET_MODE_LABELS: tuple[tuple[str, str], ...] = (
+    ("auto", "Auto (exact when small, Fast when large)"),
+    ("exact", "Exact MaxMin"),
+    ("fast", "Fast (staged prefilter + MaxMin)"),
+)
+
+
+@dataclass(frozen=True)
+class DiverseSubsetRequest:
+    """Pool payloads and MaxMin options for :class:`DiverseSubsetWorker`."""
+
+    fp_choice: str
+    subset_size: int
+    rows: list[tuple[int, Chem.Mol]] | None = None
+    oids: list[int] | None = None
+    structure_source: str = "Structure"
+    mols_by_oid: dict[int, Chem.Mol] | None = None
+    structure_texts: list[tuple[int, str]] | None = None
+    onbits_by_oid: dict[int, str] | None = None
+    use_onbits_column: bool = False
+    mode: str = "auto"
 
 
 class _Cancelled(Exception):
@@ -593,36 +614,27 @@ class DiverseSubsetWorker(QRunnable):
 
     def __init__(
         self,
-        rows: list[tuple[int, Chem.Mol]] | None,
-        fp_choice: str,
-        subset_size: int,
+        request: DiverseSubsetRequest,
         signals: DiverseSubsetSignals,
         *,
-        oids: list[int] | None = None,
-        structure_source: str = "Structure",
         app: Any | None = None,
-        mols_by_oid: dict[int, Chem.Mol] | None = None,
-        structure_texts: list[tuple[int, str]] | None = None,
-        onbits_by_oid: dict[int, str] | None = None,
-        use_onbits_column: bool = False,
-        mode: str = "auto",
         cancel_event: threading.Event | None = None,
         progress_state=None,
     ):
         super().__init__()
-        self.rows = rows
-        self.oids = [int(o) for o in (oids or [])]
-        self.structure_source = structure_source or "Structure"
+        self.rows = request.rows
+        self.oids = [int(o) for o in (request.oids or [])]
+        self.structure_source = request.structure_source or "Structure"
         # Prefer mols_by_oid / structure_texts snapshots — never touch Qt from this thread.
         self.app = app
-        self.mols_by_oid = mols_by_oid
-        self.structure_texts = structure_texts
-        self.fp_choice = fp_choice
-        self.subset_size = max(0, int(subset_size))
+        self.mols_by_oid = request.mols_by_oid
+        self.structure_texts = request.structure_texts
+        self.fp_choice = request.fp_choice
+        self.subset_size = max(0, int(request.subset_size))
         self.signals = signals
-        self.onbits_by_oid = onbits_by_oid
-        self.use_onbits_column = bool(use_onbits_column)
-        self.mode = (mode or "auto").strip().lower()
+        self.onbits_by_oid = request.onbits_by_oid
+        self.use_onbits_column = bool(request.use_onbits_column)
+        self.mode = (request.mode or "auto").strip().lower()
         self.cancel_event = cancel_event
         self.progress_state = progress_state
 
