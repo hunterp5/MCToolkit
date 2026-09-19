@@ -153,7 +153,7 @@ def test_lookup_names_skips_network_when_cancelled() -> None:
 
 
 def test_calc_worker_fills_pubchem_name_columns(monkeypatch) -> None:
-    from molmanager.workers.chemistry_tools import CalcWorker
+    from molmanager.workers.chemistry_tools import CalcDescriptorsRequest, CalcWorker
     from molmanager.workers.signals import WorkerSignals
 
     sigs = WorkerSignals()
@@ -170,11 +170,13 @@ def test_calc_worker_fills_pubchem_name_columns(monkeypatch) -> None:
         fake_lookup,
     )
     worker = CalcWorker(
-        data=[(1, "CCO"), (2, "CCO")],
-        disp_headers=["Common Name", "Synonyms"],
-        int_fns=["COMMON_NAME", "SYNONYMS"],
-        is_smiles=True,
-        signals=sigs,
+        CalcDescriptorsRequest(
+            data=[(1, "CCO"), (2, "CCO")],
+            disp_headers=["Common Name", "Synonyms"],
+            int_fns=["COMMON_NAME", "SYNONYMS"],
+            is_smiles=True,
+        ),
+        sigs,
     )
     worker.run()
     rows = {oid: data for oid, data in out["rows"]}  # type: ignore[union-attr]
@@ -185,7 +187,7 @@ def test_calc_worker_fills_pubchem_name_columns(monkeypatch) -> None:
 
 
 def test_calc_worker_name_lookup_with_local_descriptor(monkeypatch) -> None:
-    from molmanager.workers.chemistry_tools import CalcWorker
+    from molmanager.workers.chemistry_tools import CalcDescriptorsRequest, CalcWorker
     from molmanager.workers.signals import WorkerSignals
 
     sigs = WorkerSignals()
@@ -197,11 +199,13 @@ def test_calc_worker_name_lookup_with_local_descriptor(monkeypatch) -> None:
         lambda mols, **_k: [CompoundNames(common_name="ethanol") for _ in mols],
     )
     worker = CalcWorker(
-        data=[(7, "CCO")],
-        disp_headers=["Mol Weight", "Common Name"],
-        int_fns=["MolWt", "COMMON_NAME"],
-        is_smiles=True,
-        signals=sigs,
+        CalcDescriptorsRequest(
+            data=[(7, "CCO")],
+            disp_headers=["Mol Weight", "Common Name"],
+            int_fns=["MolWt", "COMMON_NAME"],
+            is_smiles=True,
+        ),
+        sigs,
     )
     worker.run()
     oid, row = out["rows"][0]  # type: ignore[index]

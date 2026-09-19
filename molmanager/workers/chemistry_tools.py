@@ -44,10 +44,15 @@ from .chemistry_conformers import (
     strain_overlay_for_mol,
     strain_overlay_for_mols,
 )
-from .chemistry_descriptors import CalcWorker, descriptor_callable_for_int_fn
+from .chemistry_descriptors import (
+    CalcDescriptorsRequest,
+    CalcWorker,
+    descriptor_callable_for_int_fn,
+)
 from ..conformers.conformer_column_codec import format_confs_table_cell, pack_confs_cell
 
 __all__ = [
+    "CalcDescriptorsRequest",
     "CalcWorker",
     "CustomCalcWorker",
     "ConformerGenParams",

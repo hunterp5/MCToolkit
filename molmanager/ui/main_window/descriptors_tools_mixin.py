@@ -24,9 +24,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
 )
 
-from ...workers import (
-    CalcWorker,
-)
+from ...workers.chemistry_descriptors import CalcDescriptorsRequest, CalcWorker
 
 
 class DescriptorsToolsMixin:
@@ -87,27 +85,22 @@ class DescriptorsToolsMixin:
         ps = self._tool_progress_state
         self._begin_tool_progress("Calculate descriptors", len(data))
 
-        def _make_calc_worker(
-            ev,
-            d=data,
-            dh=calc_headers,
-            fn=fns,
-            sm=is_s,
-            c=packed_confs,
-            cols=confs_cols,
-            db=ensemble_db,
-        ):
+        req = CalcDescriptorsRequest(
+            data=data,
+            disp_headers=calc_headers,
+            int_fns=fns,
+            is_smiles=is_s,
+            confs_by_idx=packed_confs,
+            confs_col_by_idx=confs_cols,
+            ensemble_db=ensemble_db,
+        )
+
+        def _make_calc_worker(ev, request=req):
             return CalcWorker(
-                d,
-                dh,
-                fn,
-                sm,
+                request,
                 self.signals,
                 cancel_event=ev,
                 progress_state=ps,
-                confs_by_idx=c,
-                confs_col_by_idx=cols,
-                ensemble_db=db,
             )
 
         self.process_queue.enqueue(
@@ -153,7 +146,3 @@ class DescriptorsToolsMixin:
                     packed[int(oid)] = full
                     break
         return packed, cols, db
-
-    def _packed_confs_cells_for_descriptor_job(self, oids, src: str) -> dict[int, str]:
-        packed, _cols, _db = self._ensemble_inputs_for_descriptor_job(oids, src)
-        return packed

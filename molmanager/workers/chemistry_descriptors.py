@@ -27,6 +27,7 @@ import os
 import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
+from dataclasses import dataclass
 
 from .process_pool_utils import (
     register_process_pool,
@@ -432,33 +433,39 @@ def _calc_descriptor_row_task(args):
     )
 
 
+@dataclass(frozen=True)
+class CalcDescriptorsRequest:
+    """Row payloads and selected descriptors for :class:`CalcWorker`."""
+
+    data: list
+    disp_headers: list
+    int_fns: list
+    is_smiles: bool = False
+    confs_by_idx: dict | None = None
+    confs_col_by_idx: dict | None = None
+    ensemble_db: str | None = None
+
+
 class CalcWorker(QRunnable):
     def __init__(
         self,
-        data,
-        disp_headers,
-        int_fns,
-        is_smiles,
+        request: CalcDescriptorsRequest,
         signals,
+        *,
         cancel_event: threading.Event | None = None,
         progress_state=None,
-        confs_by_idx: dict | None = None,
-        confs_col_by_idx: dict | None = None,
-        ensemble_db: str | None = None,
     ):
         super().__init__()
-        self.data, self.disp_headers, self.int_fns, self.is_smiles, self.signals = (
-            data,
-            disp_headers,
-            int_fns,
-            is_smiles,
-            signals,
-        )
+        self.data = request.data
+        self.disp_headers = request.disp_headers
+        self.int_fns = request.int_fns
+        self.is_smiles = request.is_smiles
+        self.signals = signals
         self.cancel_event = cancel_event
         self.progress_state = progress_state
-        self.confs_by_idx = confs_by_idx or {}
-        self.confs_col_by_idx = confs_col_by_idx or {}
-        self.ensemble_db = ensemble_db
+        self.confs_by_idx = request.confs_by_idx or {}
+        self.confs_col_by_idx = request.confs_col_by_idx or {}
+        self.ensemble_db = request.ensemble_db
 
     def run(self):
         smarts_cache = {}

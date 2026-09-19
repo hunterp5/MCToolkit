@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from molmanager.workers.chemistry_tools import CalcWorker
+from molmanager.workers.chemistry_tools import CalcDescriptorsRequest, CalcWorker
 from molmanager.workers.signals import WorkerSignals
 
 
@@ -62,11 +62,13 @@ def test_calc_worker_emits_partial_results_when_cancelled_during_ionization():
         ),
     ):
         worker = CalcWorker(
-            data=data,
-            disp_headers=disp_headers,
-            int_fns=["LogD 7.4"],
-            is_smiles=True,
-            signals=sigs,
+            CalcDescriptorsRequest(
+                data=data,
+                disp_headers=disp_headers,
+                int_fns=["LogD 7.4"],
+                is_smiles=True,
+            ),
+            sigs,
             cancel_event=_AlwaysCancelled(),
         )
         worker.run()
