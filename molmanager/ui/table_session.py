@@ -18,18 +18,37 @@
 
 from __future__ import annotations
 
-from .app_kernel import AppKernel, bind_mixin_methods
-from .main_window.table_chemistry_access_mixin import TableChemistryAccessMixin
-from .main_window.table_selection_mixin import TableSelectionMixin
+from typing import Any, Protocol
+
+from .app_roles import ProgressChrome, TableData, TableSelection
+from .table_session_chemistry import TableSessionChemistry
+from .table_session_selection import TableSessionSelection
 
 
-class TableSession:
-    """Table selection + molecule access. Owns ``_visible_source_rows_cache`` via the kernel.
+class TableSessionHost(TableData, TableSelection, ProgressChrome, Protocol):
+    """What table selection and chemistry lookup need from the window.
 
-    Legacy ``bind_mixin_methods`` still supplies the mixin body. New methods: ``self._app``.
+    Kernel selection caches stay on the window (``plot_table_sync`` and filters
+    read them there). Chunked-selection job state lives on ``TableSession``.
+    Plot/dock leftovers that do not fit this contract are reached with getattr.
     """
 
-    def __init__(self, app: AppKernel) -> None:
+    _in_programmatic_table_selection: bool
+    _column_selection_anchor: int | None
+    _plot_table_select_pending: Any
+    _structure_field_override: Any
+
+    def cell_text(self, row: int, col: int) -> str: ...
+    def canonical_structure_key_from_smiles(self, smiles: str) -> str | None: ...
+    def calculate_global_bounds(self) -> None: ...
+    def apply_filters(self) -> None: ...
+
+
+class TableSession(TableSessionSelection, TableSessionChemistry):
+    """Table selection + molecule access. Kernel caches stay on the window."""
+
+    def __init__(self, app: TableSessionHost) -> None:
         self._app = app
-        bind_mixin_methods(self, app, TableSelectionMixin, TableChemistryAccessMixin)
+        self._table_selection_job_gen = 0
+        self._table_selection_ctx = None
         self._invalidate_visible_source_rows_cache()

@@ -116,13 +116,13 @@ values measured when the ratchet landed and may only go **down**
 
 | Counter | Frozen at | What it measures |
 |---------|-----------|------------------|
-| `window_typed_params` | 78 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
-| `modules_taking_the_window` | 28 | Modules with at least one such parameter |
-| `private_cross_module_access` | 78 | `app._x` / `self._app._x` where `_x` is **not** declared in any `ui/` protocol |
+| `window_typed_params` | 77 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
+| `modules_taking_the_window` | 27 | Modules with at least one such parameter |
+| `private_cross_module_access` | 73 | `app._x` / `self._app._x` where `_x` is **not** declared in any `ui/` protocol |
 | `deferred_intra_package_imports` | 589 | First-party imports nested in function bodies, i.e. import cycles |
-| `mixin_modules` | 73 | `*_mixin.py` files |
-| `bind_mixin_methods_sites` | 4 | Legacy binds where a collaborator runs mixin bodies with the window as `self` |
-| `rdkit_in_ui_modules` | 40 | Qt modules importing RDKit — chemistry living in the UI |
+| `mixin_modules` | 71 | `*_mixin.py` files |
+| `bind_mixin_methods_sites` | 3 | Legacy binds where a collaborator runs mixin bodies with the window as `self` |
+| `rdkit_in_ui_modules` | 39 | Qt modules importing RDKit — chemistry living in the UI |
 | `app_kernel_members` | 31 | `AppKernel` surface, roles included |
 
 `private_cross_module_access` deliberately ignores members declared in a role or host protocol.
@@ -137,7 +137,7 @@ coupling rather than reduce it.
 
 Invariants that must stay 0: `domain_modules_importing_ui` (`molmanager/app.py` is the
 composition root and exempt), `qt_in_decision_layers`, `ui_in_decision_layers`,
-`protocols_over_member_cap`. The `ui/` share of the package (63.2%) may not drift up by more than
+`protocols_over_member_cap`. The `ui/` share of the package (63.0%) may not drift up by more than
 0.5 points.
 
 The target these counters move toward:
@@ -147,7 +147,7 @@ The target these counters move toward:
    what the app should do next.
 3. **Orchestration** (`workers/`, plus collaborators once they no longer need the window) —
    owns sequencing and threading, knows nothing about widgets. Converted collaborators that still
-   own Qt (`ProgressController`, `TableWriteService`, `ToolDialogScope`, …) stay in `ui/` so
+   own Qt (`ProgressController`, `TableWriteService`, `ToolDialogScope`, `TableSession`, …) stay in `ui/` so
    `qt_in_decision_layers` stays 0.
 4. **`ui/`** — widgets, dialogs, layout, and thin adapters that read widget state into calls on
    rings 2–3 and render the results.
@@ -172,7 +172,7 @@ window as one-line forwards so dialogs and tests keep calling `app.on_calc_finis
 | `ProgressController` | `ui/progress_controller.py` | Polled tool progress: poll timer, background-job depth, partial-results notice, status text |
 | `ToolDialogScope` | `ui/tool_dialog_scope.py` | Modeless tool dialogs, selected-rows-only scope, empty-selection abort |
 | `TableWriteService` | `ui/table_write_service.py` | Column writeback: unique names, inserts, chunked `on_calc_finished` |
-| `TableSession` | `ui/table_session.py` | Selection, chemistry-column lookup, sticky visible-row cache |
+| `TableSession` | `ui/table_session.py` | Selection, chemistry-column lookup, sticky visible-row cache (`TableSessionSelection` / `TableSessionChemistry`) |
 | `TableBuildPipeline` | `ui/table_build_pipeline.py` | Ingest chunks, SQLite rebuild, Render 2D batch/results (`QObject` child) |
 | `SessionController` | `ui/session_controller.py` | `.cms` save/restore, table layout, session plots, legacy CSV |
 | `WorkspaceTools` | `ui/workspace_tools.py` | Lazy cluster / dimred / QSAR / MPO / medchem / structure-prep adapters |
@@ -235,9 +235,9 @@ A mixin is shared behavior used by **more than one** class. Almost all MolManage
 - Add empty composite mixins (`ChemistryMixin`-style).
 - Treat mixin MRO order as architecture. `QMainWindow` precedes remaining mixins, so Qt virtuals such as `closeEvent` must be declared on the shell (delegating into `AppLifecycleMixin`). Mixin implementations that need the C++ base should call `QMainWindow.closeEvent` explicitly rather than `super()`.
 
-`bind_mixin_methods` is a **legacy bridge**: it copies mixin functions onto a collaborator but still invokes them with the window as `self`. Four collaborators still use it; convert bodies to `self._app` when touching that code.
+`bind_mixin_methods` is a **legacy bridge**: it copies mixin functions onto a collaborator but still invokes them with the window as `self`. Three collaborators still use it (`TableBuildPipeline`, `SessionController`, `WorkspaceTools`); convert bodies to `self._app` when touching that code.
 
-`ToolDialogScope` and `TableWriteService` show the conversion, and it is four steps: move the mixin bodies onto the
+`ToolDialogScope`, `TableWriteService`, and `TableSession` show the conversion, and it is four steps: move the mixin bodies onto the
 collaborator rewriting window `self` to `self._app`, move mixin-owned state out of the window
 `__init__` and into the collaborator, declare a host protocol for what is left, then point
 `install_window_forwards` at the collaborator class instead of the deleted mixin. Call sites do not
@@ -286,7 +286,7 @@ Tool mixins that remain on the window (fragments, MMP/SALI, dock, predict) are t
 - **Helpers:** `services/numeric_bounds.py` (filter slider min/max scans);
   `column_color_compute.py` (gradient / categorical RGB).
 - **Filtered view:** `FilterProxyModel` hides rows by OID set (`set_visible_oids`), not per-row `setRowHidden`.
-- **Selection:** Qt selection + `_selected_oids_override` for large selections (tools/plots use `_selected_oids_set()`); logic lives in `TableSession` (`TableSelectionMixin` body).
+- **Selection:** Qt selection + `_selected_oids_override` for large selections (tools/plots use `_selected_oids_set()`); logic lives in `TableSession` (`TableSessionSelection` / `TableSessionChemistry`).
 - **SQLite mirror:** `SqliteTableStore` powers text/numeric filter pushdown and column search at 100k+ rows. Rebuilt in chunks on the GUI thread, then `SqliteRebuildWorker` builds the DB file.
 
 ## Background work
@@ -387,7 +387,7 @@ Fingerprint session cache is an LRU capped by `fingerprint_cache_max_entries`
 
 Ligand 3D viewer: `ui/mol_viewer_3d.py` re-exports. HTML/JS assembly is
 `ui/mol_3d_html.py` (shared `assemble_3dmol_shell_page`), RDKit 2D/3D prep is
-`ui/mol_3d_prepare.py`, Qt widgets are `ui/mol_3d_widget.py` (conformer nav + dock chrome mixins), and the floating
+`chem/mol_3d_prepare.py` (re-exported from `ui/mol_3d_prepare.py`), Qt widgets are `ui/mol_3d_widget.py` (conformer nav + dock chrome mixins), and the floating
 dialog/openers are `ui/mol_3d_dialog.py`. The sketcher embed is `ui/mol_3d_embed.py`;
 strain-energy table fill is `ui/mol_3d_strain.py`. Protein viewer: `ui/protein_viewer.py`
 re-exports; HTML is `ui/protein_viewer_html.py` (init script: `ui/protein_viewer.js`), canvas is `ui/protein_embed.py`,

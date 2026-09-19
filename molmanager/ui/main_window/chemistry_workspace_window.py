@@ -69,7 +69,7 @@ from ..session_controller import SessionController
 from ..table_build_pipeline import TableBuildPipeline
 from ..table_selection_delegate import RowHighlightDelegate
 from ..process_queue import ProcessQueueManager
-from ..table_session import TableSession
+from ..table_session import TableSession, TableSessionChemistry, TableSessionSelection
 from ..table_write_service import TableWriteService
 from ..tool_dialog_scope import ToolDialogScope
 from ..workspace_tools import WorkspaceTools
@@ -109,8 +109,6 @@ from .structure_edit_mixin import StructureEditMixin
 from .structure_layout_mixin import StructureLayoutMixin
 from .structure_writeback_mixin import StructureWritebackMixin
 from .table_calc_mixin import TableCalcMixin
-from .table_chemistry_access_mixin import TableChemistryAccessMixin
-from .table_selection_mixin import TableSelectionMixin
 from .table_ui_mixin import TableUIMixin
 from .viewer_openers_mixin import ViewerOpenersMixin
 from ..gui_settings_mixin import GuiSettingsMixin
@@ -335,8 +333,6 @@ class ChemistryWorkspaceWindow(
         self._cached_plot_selected_oids: frozenset[int] | None = None
         self._selected_oids_override: frozenset[int] | None = None
         self._in_programmatic_table_selection = False
-        self._table_selection_job_gen = 0
-        self._table_selection_ctx = None
         self._column_selection_anchor: int | None = None
         self._plot_table_sync_timer = QTimer(self)
         self._plot_table_sync_timer.setSingleShot(True)
@@ -686,7 +682,7 @@ install_window_forwards(ChemistryWorkspaceWindow, "table_write", (TableWriteServ
 install_window_forwards(
     ChemistryWorkspaceWindow,
     "table_session",
-    (TableSelectionMixin, TableChemistryAccessMixin),
+    (TableSessionSelection, TableSessionChemistry),
 )
 install_window_forwards(
     ChemistryWorkspaceWindow,
