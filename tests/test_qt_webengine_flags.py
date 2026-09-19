@@ -18,7 +18,12 @@
 
 from __future__ import annotations
 
-from molmanager.platform_support.qt_webengine_flags import configure_qtwebengine_quiet_logs
+import pytest
+
+from molmanager.platform_support.qt_webengine_flags import (
+    configure_qtwebengine_quiet_logs,
+    webengine_views_supported,
+)
 from molmanager.ui.mol_viewer_3d import _js_console_is_benign
 
 
@@ -42,6 +47,39 @@ def test_schedule_qtwebengine_prewarm_skips_pytest():
     qt_webengine_flags.schedule_qtwebengine_prewarm()
     qt_webengine_flags.prewarm_qtwebengine()
     assert qt_webengine_flags._PREWARM_VIEW is None
+
+
+@pytest.mark.parametrize(
+    ("plugin", "supported"),
+    [
+        ("offscreen", False),
+        ("minimal", False),
+        ("vnc", False),
+        ("offscreen:enable_fonts", False),
+        ("windows", True),
+        ("xcb", True),
+        ("", True),
+    ],
+)
+def test_webengine_views_supported_per_platform_plugin(monkeypatch, plugin, supported):
+    """Constructing a WebEngine page aborts the process on surface-less plugins."""
+    monkeypatch.setenv("QT_QPA_PLATFORM", plugin)
+    assert webengine_views_supported() is supported
+
+
+def test_viewer_skips_webengine_under_offscreen(qapp, monkeypatch):  # noqa: ARG001
+    """The 3D viewer must fall back instead of building a page the platform cannot host."""
+    from rdkit import Chem
+
+    from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget, prepare_mol_2d
+
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    mol = prepare_mol_2d(Chem.MolFromSmiles("CCO"))
+    viewer = Molecule3DViewerWidget(mol, None, window_title="View in 2D", flat=True)
+    try:
+        assert viewer._standalone_web is None
+    finally:
+        viewer.deleteLater()
 
 
 def test_js_console_filters_shared_image_gpu_noise():

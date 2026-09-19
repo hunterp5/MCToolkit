@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import weakref
 from typing import TYPE_CHECKING
 
 from PyQt5.QtCore import Qt
@@ -136,7 +137,17 @@ def open_citations_dialog(parent: QWidget | None, tool_id: str | None = None) ->
 
     if host is not None:
         host._citations_dialog = dlg
-        dlg.destroyed.connect(lambda: setattr(host, "_citations_dialog", None))
+        # Hold the host weakly: a strong capture here makes host and dialog a reference
+        # cycle, and the cyclic collector frees them in an order that can delete the Qt
+        # parent before the child wrapper, crashing the interpreter.
+        host_ref = weakref.ref(host)
+
+        def forget_dialog(*_args: object) -> None:
+            owner = host_ref()
+            if owner is not None:
+                owner._citations_dialog = None
+
+        dlg.destroyed.connect(forget_dialog)
 
     _show_citations_dialog(dlg, topic)
     dlg.show()

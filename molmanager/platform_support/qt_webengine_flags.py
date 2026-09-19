@@ -28,6 +28,21 @@ _QTWEBENGINE_CHROMIUM_FLAGS_ENV = "QTWEBENGINE_CHROMIUM_FLAGS"
 _QUIET_LOG_LEVEL_FLAG = "--log-level=3"
 _PREWARM_VIEW = None
 
+# Chromium needs a real windowing surface. These platform plugins provide none.
+_PLATFORMS_WITHOUT_WEBENGINE = frozenset({"offscreen", "minimal", "vnc"})
+
+
+def webengine_views_supported() -> bool:
+    """Whether a ``QWebEngineView`` can be constructed on the current platform plugin.
+
+    Under ``QT_QPA_PLATFORM=offscreen`` (headless tests, CI) constructing one **aborts the
+    process** instead of raising, so every lazy WebEngine bootstrap must ask first and take
+    its no-web fallback. Without this the behavior depends on whether some earlier import
+    pulled in ``QtWebEngineWidgets`` before ``QApplication`` existed.
+    """
+    plugin = (os.environ.get("QT_QPA_PLATFORM") or "").strip().lower()
+    return plugin.split(":")[0] not in _PLATFORMS_WITHOUT_WEBENGINE
+
 
 def configure_qtwebengine_quiet_logs() -> str:
     """

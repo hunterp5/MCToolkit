@@ -39,6 +39,8 @@ from PyQt5.QtCore import (
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
+from ..platform_support.qt_webengine_flags import webengine_views_supported
+from ..workers.process_pool_utils import application_is_shutting_down
 from .mol_3d_html import _BUNDLED_3DMOL, _wire_webengine_console_logger, bundled_3dmol_available
 from .protein_viewer_html import build_protein_viewer_html
 
@@ -138,6 +140,10 @@ class ProteinEmbedView(QWidget):
 
     def _ensure_web(self) -> None:
         if self._bootstrapped:
+            return
+        # Shutdown drains the event loop, so a queued show event can land here after the
+        # window started closing. Building a WebEngine view at that point crashes Chromium.
+        if application_is_shutting_down() or not webengine_views_supported():
             return
         self._bootstrapped = True
         try:

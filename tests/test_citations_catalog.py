@@ -95,6 +95,24 @@ def test_open_citations_dialog_reuses_window(qapp):  # noqa: ARG001
     dlg.close()
 
 
+def test_citations_dialog_does_not_cycle_with_its_host(qapp):  # noqa: ARG001
+    """Host and dialog must be freed by refcounting, not the cyclic collector.
+
+    A strong capture in the ``destroyed`` slot makes the pair a cycle, and collecting it
+    deletes the Qt parent before the child wrapper, which crashes the interpreter.
+    """
+    import weakref
+
+    from PyQt5.QtWidgets import QWidget
+
+    host = QWidget()
+    open_citations_dialog(host, tool_id="gnina")
+    host._citations_dialog.close()
+    host_ref = weakref.ref(host)
+    del host
+    assert host_ref() is None
+
+
 def test_user_guide_hotkey_registered() -> None:
     assert default_shortcuts("help.user_guides") == ["F1"]
     assert default_shortcuts("help.citations") == []

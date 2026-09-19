@@ -62,6 +62,17 @@ CI gates on `ruff check` (correctness / undefined-name rules plus unused imports
 - File logging is on by default (`molmanager/platform_support/app_logging.py`); override with `MOLMANAGER_LOG_DIR`,
   disable with `MOLMANAGER_LOG_TO_FILE=0`. Uncaught exceptions show a crash dialog with the log path.
 
+### Architecture ratchet
+
+- Coupling counters are frozen in [`architecture-ratchet.json`](../architecture-ratchet.json) and gated by
+  `tests/test_architecture_ratchet.py` plus CI. They may only go **down**.
+- Report: `python scripts/architecture_metrics.py`. Blame a metric:
+  `python scripts/architecture_metrics.py --offenders rdkit_in_ui_modules`.
+- After a cleanup lands, re-freeze: `python scripts/architecture_metrics.py --write-baseline`.
+- If a counter grows, the fix is to put the decision in `molmanager/workflows/` or the
+  computation in `molmanager/services/` rather than the Qt layer. See
+  [ARCHITECTURE.md](ARCHITECTURE.md#target-architecture-and-the-ratchet).
+
 ### Git commits
 
 - Prefer concise commit messages focused on **why**.
@@ -87,6 +98,24 @@ python -m ruff format --check molmanager tests scripts
 ```
 
 CI (`.github/workflows/ci.yml`) runs on **Ubuntu, macOS, and Windows**: lint/header checks, pytest, Linux perf gate, and a dependency audit that **fails on CRITICAL/HIGH/malware** findings (see [dependency-audit-exceptions.md](dependency-audit-exceptions.md)).
+
+### Qt WebEngine is disabled under `offscreen`
+
+Chromium needs a real windowing surface. Constructing a `QWebEngineView` or a
+`QWebEnginePage` under `QT_QPA_PLATFORM=offscreen` **aborts the process** instead of raising,
+so every lazy WebEngine bootstrap checks
+`platform_support.qt_webengine_flags.webengine_views_supported()` first and takes its no-web
+fallback.
+
+Consequences when writing tests:
+
+- Under the default headless run, 3D/protein/dock viewers build **without** a web view. Tests
+  must assert against the fallback (e.g. `_standalone_web is None`), not the web path.
+- Do not "fix" a viewer test by pre-importing `QtWebEngineWidgets`. Before this guard, whether
+  a view was built depended on whether some earlier module imported WebEngine before
+  `QApplication` existed, which made crashes appear in unrelated later tests.
+- Real coverage of the web paths needs a display: run locally without `QT_QPA_PLATFORM`, or on
+  Linux under `xvfb-run`.
 
 ## Dependency audit exceptions
 

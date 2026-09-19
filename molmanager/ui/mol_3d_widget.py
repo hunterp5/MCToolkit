@@ -40,6 +40,7 @@ from PyQt5.QtWidgets import (
 
 from rdkit import Chem
 
+from ..platform_support.qt_webengine_flags import webengine_views_supported
 from .dockable_plot import (
     PLOT_BODY_MARGINS,
     PLOT_BODY_SPACING,
@@ -159,6 +160,8 @@ class Molecule3DViewerWidget(Mol3DConfMixin, Mol3DChromeMixin, QWidget):
 
         web = None
         try:
+            if not webengine_views_supported():
+                raise RuntimeError("WebEngine is unavailable on this platform plugin")
             from PyQt5.QtWebEngineWidgets import QWebEngineSettings, QWebEngineView
 
             web = QWebEngineView(self)

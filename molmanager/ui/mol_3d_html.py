@@ -26,6 +26,8 @@ from pathlib import Path
 
 from rdkit import Chem
 
+from ..platform_support.qt_webengine_flags import webengine_views_supported
+
 logger = logging.getLogger(__name__)
 
 _BUNDLED_3DMOL = Path(__file__).resolve().parent / "static" / "3Dmol-min.js"
@@ -173,6 +175,10 @@ def _wire_webengine_console_logger(web) -> None:
     ``configure_qtwebengine_quiet_logs`` before WebEngine starts.
     """
     try:
+        # Constructing a page subclass aborts the process on platform plugins without a
+        # windowing surface (QT_QPA_PLATFORM=offscreen), so leave Qt's default page there.
+        if not webengine_views_supported():
+            return
         from PyQt5.QtWebEngineWidgets import QWebEnginePage
 
         cls = getattr(_wire_webengine_console_logger, "_page_cls", None)

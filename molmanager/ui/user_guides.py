@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import weakref
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -613,7 +614,16 @@ def open_user_guide_dialog(parent: QWidget | None, guide_id: str | None = "overv
 
     if host is not None:
         host._user_guide_dialog = dlg
-        dlg.destroyed.connect(lambda: setattr(host, "_user_guide_dialog", None))
+        # Weak: see the same slot in citations_dialog.py. A strong capture makes host and
+        # dialog a reference cycle that the cyclic collector frees in a crashing order.
+        host_ref = weakref.ref(host)
+
+        def forget_dialog(*_args: object) -> None:
+            owner = host_ref()
+            if owner is not None:
+                owner._user_guide_dialog = None
+
+        dlg.destroyed.connect(forget_dialog)
 
     _show_guide_dialog(dlg, topic)
     dlg.show()

@@ -28,6 +28,7 @@ from PyQt5.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from rdkit import Chem
 
+from ..platform_support.qt_webengine_flags import webengine_views_supported
 from .mol_3d_html import (
     _BUNDLED_3DMOL,
     _cdn_embed_fallback_html,
@@ -96,6 +97,8 @@ class Molecule3DEmbedView(QWidget):
 
     def _ensure_web(self) -> None:
         if self._bootstrapped:
+            return
+        if not webengine_views_supported():
             return
         self._bootstrapped = True
         try:

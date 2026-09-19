@@ -29,6 +29,7 @@ from PyQt5.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from rdkit import Chem
 
+from ..platform_support.qt_webengine_flags import webengine_views_supported
 from .mol_viewer_3d import (
     _BUNDLED_3DMOL,
     _RESET_STRUCTURE_JS,
@@ -524,6 +525,8 @@ class DockComplexEmbedView(QWidget):
             if not self.isVisible():
                 return
         except RuntimeError:
+            return
+        if not webengine_views_supported():
             return
         self._bootstrapped = True
         try:

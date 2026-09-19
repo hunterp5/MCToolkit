@@ -107,3 +107,17 @@ def test_open_user_guide_dialog_by_id(qapp):  # noqa: ARG001
     assert host._user_guide_dialog is dlg
     assert "Overview" in dlg.windowTitle()
     dlg.close()
+
+
+def test_user_guide_dialog_does_not_cycle_with_its_host(qapp):  # noqa: ARG001
+    """See the same guard in test_citations_catalog: a cycle here crashes Qt on collect."""
+    import weakref
+
+    from PyQt5.QtWidgets import QWidget
+
+    host = QWidget()
+    open_user_guide_dialog(host, guide_id="overview")
+    host._user_guide_dialog.close()
+    host_ref = weakref.ref(host)
+    del host
+    assert host_ref() is None
