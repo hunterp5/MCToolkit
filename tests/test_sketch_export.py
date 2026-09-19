@@ -21,9 +21,12 @@ import math
 from PyQt5.QtCore import QPoint
 from rdkit import Chem
 
-from molmanager.smarts_patterns import mol_from_smarts
+from molmanager.chem.smarts_macropatterns import mol_from_smarts
 from molmanager.ui.sketcher.bonds import _bond_make
-from molmanager.ui.sketcher.chem import _rdkit_atom_from_sketch_node, _sketch_element_from_rdkit_atom
+from molmanager.ui.sketcher.chem import (
+    _rdkit_atom_from_sketch_node,
+    _sketch_element_from_rdkit_atom,
+)
 from molmanager.ui.sketcher.constants import DEFAULT_WILDCARD_ELEMENTS, WILDCARD_ELEMENT
 from molmanager.ui.sketcher.widget import SketchWidget
 from molmanager.ui.sketcher.wildcards import _wildcard_query_smarts
@@ -174,11 +177,7 @@ def _sketch_cip_labels(w: SketchWidget) -> dict[int, str]:
     mol, sk2rd = out
     cip = w._assign_tetrahedral_cip(mol)
     rd2sk = {rd: sk for sk, rd in sk2rd.items()}
-    return {
-        rd2sk[rd]: label
-        for rd, label in cip.items()
-        if rd in rd2sk and label in ("R", "S")
-    }
+    return {rd2sk[rd]: label for rd, label in cip.items() if rd in rd2sk and label in ("R", "S")}
 
 
 def test_add_remove_hydrogens_preserves_tetrahedral_stereo(qapp) -> None:  # noqa: ARG001
@@ -225,9 +224,7 @@ def test_explicit_hydrogens_use_iupac_bond_angles(qapp) -> None:  # noqa: ARG001
     assert len(h_nodes) == 3
     parent = next(n for n in w.nodes if n["id"] == c1)
     px, py = float(parent["pos"].x()), float(parent["pos"].y())
-    angles = sorted(
-        math.atan2(float(n["pos"].y()) - py, float(n["pos"].x()) - px) for n in h_nodes
-    )
+    angles = sorted(math.atan2(float(n["pos"].y()) - py, float(n["pos"].x()) - px) for n in h_nodes)
     # Include the existing C–C neighbor angle when measuring gaps among all four ligands.
     all_ang = sorted(
         angles

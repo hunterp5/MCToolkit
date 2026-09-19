@@ -25,10 +25,10 @@ import time
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
-from ...config import load_config
-from ...confs_codec import deserialize_confs_sidecar
-from ...microstate_cache import restore_ionization_sidecar
-from ...session_codec import (
+from ...platform_support.config import load_config
+from ...conformers.conformer_column_codec import deserialize_confs_sidecar
+from ...ionization.microstate_cache import restore_ionization_sidecar
+from ...table.session_codec import (
     SESSION_ENSEMBLES_KEY,
     expand_session_document,
     parse_session_global_bounds,
@@ -479,10 +479,10 @@ class SessionRestoreMixin:
             cs.update(side)
         self._pending_session_som_browse = doc.get("som_browse")
         restore_ionization_sidecar(doc.get("ionization_sidecar"))
-        from ...mmp_analysis import restore_mmp_ledger_for_session
+        from ...analysis.mmp_analysis import restore_mmp_ledger_for_session
 
         restore_mmp_ledger_for_session(self, doc.get("mmp_ledger"))
-        from ...dock_io import restore_dock_results_for_session
+        from ...docking.pose_file_io import restore_dock_results_for_session
 
         restore_dock_results_for_session(self, doc.get("dock_results"))
         self._pending_session_table_layout = doc.get("table_layout")

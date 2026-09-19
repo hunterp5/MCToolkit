@@ -29,7 +29,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...wsl import (
+from ...platform_support.wsl_launcher import (
     default_wsl_executable,
     load_wsl_executable,
     resolve_wsl_executable,

@@ -26,7 +26,7 @@ from PyQt5.QtWidgets import QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidg
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from ...mmp_analysis import (
+from ...analysis.mmp_analysis import (
     MmpPair,
     assemble_mmp_table_annotations,
     canonicalize_pair_direction,

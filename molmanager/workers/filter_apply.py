@@ -23,8 +23,8 @@ from typing import Any
 
 from PyQt5.QtCore import QRunnable
 
-from ..filter_compute import fetch_matching_oids
-from ..tool_progress import ToolProgressState, report_tool_progress
+from ..table.filter_compute import fetch_matching_oids
+from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
 from .signals import FilterApplySignals
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,7 @@ class FilterApplyWorker(QRunnable):
 
     def run(self) -> None:
         try:
+
             def _progress(done: int, total: int) -> None:
                 report_tool_progress(
                     message="Applying filters…",

@@ -19,7 +19,7 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QTableWidgetItem
 
-from ..utils import safe_float
+from ..chem.molecule_conversion import safe_float
 
 from .filters.cards import (
     CategoryFilterCard,

@@ -33,7 +33,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from molmanager.qt_webengine import configure_qtwebengine_quiet_logs
+from molmanager.platform_support.qt_webengine_flags import configure_qtwebengine_quiet_logs
 
 configure_qtwebengine_quiet_logs()
 try:
@@ -43,16 +43,19 @@ except Exception:
 
 from PyQt5.QtWidgets import QApplication
 
-from molmanager.hydrogen_bonds import detect_hydrogen_bonds
-from molmanager.protein_interactions import (
+from molmanager.protein.hydrogen_bonds import detect_hydrogen_bonds
+from molmanager.protein.protein_interactions import (
     compute_viewer_interaction_overlays,
     detect_prolif_interactions,
     prolif_available,
 )
-from molmanager.session_codec import expand_session_document, loads_session_bytes
-from molmanager.structure_atoms import parse_structure_atoms, pocket_view_plan
-from molmanager.structure_cif import _parse_cif_loops, cif_viewer_bond_tables
-from molmanager.structure_inventory import parse_polymer_sequences, parse_structure_components
+from molmanager.table.session_codec import expand_session_document, loads_session_bytes
+from molmanager.protein.structure_atoms import parse_structure_atoms, pocket_view_plan
+from molmanager.protein.structure_cif import _parse_cif_loops, cif_viewer_bond_tables
+from molmanager.protein.structure_inventory import (
+    parse_polymer_sequences,
+    parse_structure_components,
+)
 from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.protein_embed import ProteinEmbedView
 from molmanager.ui.protein_viewer import ProteinViewerDialog
@@ -115,7 +118,9 @@ def _bench_parse(text: str, fmt: str, rows: list, repeats: int) -> None:
     times, hbonds = _ms(lambda: detect_hydrogen_bonds(text, fmt), n=1, warmup=False)
     _print_ms("detect_hydrogen_bonds", times, extra=f"n={len(hbonds or ())}")
     lig = _ligand_keys(rows)
-    times, plan = _ms(lambda: pocket_view_plan(text, fmt, ligand_keys=lig or None), n=1, warmup=False)
+    times, plan = _ms(
+        lambda: pocket_view_plan(text, fmt, ligand_keys=lig or None), n=1, warmup=False
+    )
     _print_ms("pocket_view_plan", times, extra="ok" if plan else "none")
     if prolif_available():
         times, contacts = _ms(lambda: detect_prolif_interactions(text, fmt), n=1, warmup=False)
@@ -211,8 +216,7 @@ def main() -> None:
     text = str(structs[0].get("text") or "")
     fmt = str(structs[0].get("fmt") or "pdb")
     print(
-        f"  first structure                 {structs[0].get('name')}  "
-        f"{fmt}  {len(text):,} chars",
+        f"  first structure                 {structs[0].get('name')}  {fmt}  {len(text):,} chars",
         flush=True,
     )
     print(f"  hbonds                          {pv.get('hbonds')}", flush=True)

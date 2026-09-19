@@ -22,7 +22,7 @@ import threading
 
 from rdkit import Chem
 
-from molmanager.tool_progress import ToolProgressState
+from molmanager.platform_support.tool_progress import ToolProgressState
 from molmanager.workers.fingerprint_similarity import FPSimilarityWorker
 from molmanager.workers.signals import FPSimilaritySignals
 

@@ -27,8 +27,8 @@ from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
-from ..exception_policy import log_swallowed_exception
-from ..tool_progress import ToolProgressState, report_tool_progress
+from ..platform_support.exception_policy import log_swallowed_exception
+from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
 
 logger = logging.getLogger(__name__)
 

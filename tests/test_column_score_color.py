@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from PyQt5.QtCore import Qt
 
-from molmanager.column_score_color import favorable_score_color_spec
+from molmanager.table.column_score_color import favorable_score_color_spec
 from molmanager.ui.compound_table_model import CompoundTableModel
 
 

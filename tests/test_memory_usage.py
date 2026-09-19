@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from molmanager.memory_usage import (
+from molmanager.platform_support.memory_usage import (
     current_process_rss_bytes,
     format_memory_bytes,
     format_process_memory_status,

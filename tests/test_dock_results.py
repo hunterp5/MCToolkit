@@ -116,8 +116,8 @@ def test_dock_menu_includes_smina(qapp):  # noqa: ARG001
 
 
 def test_predict_viewers_enable_when_table_has_results(qapp):  # noqa: ARG001
-    from molmanager.biotransformer import METABOLITE_SMILES_COLUMN
-    from molmanager.som_prediction import SOM_MAP_COLUMN
+    from molmanager.predictions.biotransformer_metabolites import METABOLITE_SMILES_COLUMN
+    from molmanager.predictions.som_prediction import SOM_MAP_COLUMN
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()

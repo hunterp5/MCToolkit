@@ -26,7 +26,7 @@ from PyQt5.QtWidgets import QDialog, QMessageBox, QVBoxLayout, QWidget
 
 from rdkit import Chem
 
-from ..confs_codec import conformer_mol_blocks_b64_json
+from ..conformers.conformer_column_codec import conformer_mol_blocks_b64_json
 from .mol_3d_prepare import prepare_mol_2d, prepare_mol_3d
 from .mol_3d_widget import Molecule3DViewerWidget
 from .qt_widget_utils import make_window_minimizable

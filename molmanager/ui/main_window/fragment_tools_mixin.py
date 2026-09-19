@@ -32,7 +32,7 @@ from ..strings import (
     TOOL_RECAP_DECOMP,
     TOOL_RECAP_RECOMP,
 )
-from ...display_constants import structure_depict_height, structure_depict_width
+from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
 from ...workers import (
     FragmentDecompositionWorker,
     FragmentRecompositionWorker,
@@ -269,7 +269,7 @@ class FragmentToolsMixin:
         *,
         only_selected: bool,
     ) -> list[str]:
-        from ...fragment_decomposition import fragment_columns_for_prefix
+        from ...chem.fragment_decomposition import fragment_columns_for_prefix
 
         cols = fragment_columns_for_prefix(self.headers, prefix)
         if not cols:
@@ -294,7 +294,7 @@ class FragmentToolsMixin:
 
     def _on_fragment_recomposition_dialog_accepted(self, d) -> None:
         p = d.params()
-        from ...memory_guards import check_product_enumeration
+        from ...platform_support.memory_guards import check_product_enumeration
 
         guard = check_product_enumeration(p.max_products)
         if not guard.ok:

@@ -50,7 +50,7 @@ _CIF_SEQUENCE_LOOP_PREFIXES = (
 
 
 def _norm_key(chain: str, resi: str, icode: str) -> ResidueKey:
-    from ..structure_components import _norm_chain
+    from ..protein.structure_components import _norm_chain
 
     return (_norm_chain(chain), str(resi or "").strip() or "0", str(icode or "").strip())
 
@@ -74,7 +74,7 @@ def _dist_sq(a, b) -> float:
 
 def apply_highest_occupancy_altlocs(text: str, fmt: str) -> tuple[str, tuple[str, ...]]:
     """Keep the highest-occupancy altloc for each atom; flag disordered residues."""
-    from ..structure_components import (
+    from ..protein.structure_components import (
         atoms_to_mmcif,
         attach_cif_chem_comp,
         parse_cif_chem_comp_atoms,
@@ -126,7 +126,7 @@ def apply_highest_occupancy_altlocs(text: str, fmt: str) -> tuple[str, tuple[str
 
 def _attach_cif_polymer_sequence(dest: str, source: str) -> str:
     """Copy SEQRES-equivalent mmCIF loops onto an atom-only rewrite."""
-    from ..structure_cif import _cif_quote, _parse_cif_loops
+    from ..protein.structure_cif import _cif_quote, _parse_cif_loops
 
     chunks: list[str] = []
     for tags, rows in _parse_cif_loops(source or ""):
@@ -145,7 +145,7 @@ def _attach_cif_polymer_sequence(dest: str, source: str) -> str:
 
 
 def _rewrite_pdb_altlocs(text: str, chosen) -> str:
-    from ..structure_components import _pdb_residue_key
+    from ..protein.structure_components import _pdb_residue_key
 
     winners: set[tuple[str, str, str, str, str]] = set()
     for atom in chosen:
@@ -180,7 +180,7 @@ def bridging_water_keys(
     max_bfactor: float = 80.0,
 ) -> tuple[ResidueKey, ...]:
     """Waters whose oxygen is close to a ligand heavy atom, with decent occupancy."""
-    from ..structure_components import WATER_RESIDUES, parse_structure_atoms
+    from ..protein.structure_components import WATER_RESIDUES, parse_structure_atoms
 
     if not ligand_keys:
         return ()
@@ -213,7 +213,7 @@ def occupancy_warning_remarks(
     cutoff: float = _POCKET_TITRATION_CUTOFF,
 ) -> tuple[str, ...]:
     """Pocket residues that still have occupancy < 1 after altloc selection."""
-    from ..structure_components import parse_structure_atoms
+    from ..protein.structure_components import parse_structure_atoms
 
     atoms = parse_structure_atoms(text or "", fmt)
     if not atoms or not ligand_keys:
@@ -244,7 +244,7 @@ def pocket_titration_remarks(
     cutoff: float = _POCKET_TITRATION_CUTOFF,
 ) -> tuple[str, ...]:
     """AMBER names of titratable residues within *cutoff* Å of the ligand."""
-    from ..structure_components import AMINO_ACIDS, parse_structure_atoms
+    from ..protein.structure_components import AMINO_ACIDS, parse_structure_atoms
 
     if not ligand_keys:
         return ()
@@ -306,7 +306,12 @@ def drop_long_missing_gaps(fixer, max_len: int) -> int:
 
 def het_role(resn: str, kind: str = "") -> str:
     """Classify a residue as polymer, water, metal, cofactor, additive, or ligand."""
-    from ..structure_components import AMINO_ACIDS, METAL_RESIDUES, NUCLEIC_ACIDS, WATER_RESIDUES
+    from ..protein.structure_components import (
+        AMINO_ACIDS,
+        METAL_RESIDUES,
+        NUCLEIC_ACIDS,
+        WATER_RESIDUES,
+    )
     from .protein_prepare_constants import COFACTOR_RESIDUES, CRYSTAL_ADDITIVE_RESIDUES
 
     name = (resn or "").strip().upper()
@@ -391,7 +396,7 @@ _SEQRES_TEMPLATE_NAMES = {
 
 
 def _template_resn(resn: str) -> str:
-    from ..structure_components import AMINO_ACIDS, NUCLEIC_ACIDS
+    from ..protein.structure_components import AMINO_ACIDS, NUCLEIC_ACIDS
 
     key = (resn or "").strip().upper()
     key = _SEQRES_TEMPLATE_NAMES.get(key, key)
@@ -407,7 +412,7 @@ def apply_sequence_missing_residues(fixer, text: str, fmt: str) -> int:
     Crystal numbering with large gaps (kinase inserts, tagged N-termini) fails that
     test and leaves ``missingResidues`` empty. Walk the construct sequence instead.
     """
-    from ..structure_components import AMINO_ACIDS, NUCLEIC_ACIDS, polymer_sequence_entries
+    from ..protein.structure_components import AMINO_ACIDS, NUCLEIC_ACIDS, polymer_sequence_entries
 
     entries = polymer_sequence_entries(text or "", fmt)
     if not entries:
@@ -477,7 +482,7 @@ def restrain_atom(
     atom, *, scheme: str, original_keys: set[ResidueKey], ligand_keys: set[ResidueKey]
 ) -> bool:
     """Whether *atom* should be harmonically restrained during Prepare minimization."""
-    from ..structure_components import AMINO_ACIDS, NUCLEIC_ACIDS
+    from ..protein.structure_components import AMINO_ACIDS, NUCLEIC_ACIDS
 
     scheme_l = (scheme or "backbone").lower()
     residue = atom.residue

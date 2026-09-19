@@ -25,14 +25,14 @@ from pathlib import Path
 
 from rdkit import Chem
 
-from ..dock_io import write_protein_setup
-from ..docking_box import (
+from ..docking.pose_file_io import write_protein_setup
+from ..docking.search_box import (
     DEFAULT_BOX_PADDING_A,
     DockingBox,
     box_from_points,
     smina_artifact_paths,
 )
-from ..structure_components import _pdb_from_atoms, parse_structure_atoms
+from ..protein.structure_components import _pdb_from_atoms, parse_structure_atoms
 from .protein_prepare_constants import ResidueKey
 from .protein_prepare_io import _norm_key, residue_kind_map
 
@@ -204,7 +204,7 @@ def load_box_ligand_file(
         if xyz:
             return xyz, _pdb_block_from_mols(mols), mols
     text = src.read_text(encoding="utf-8", errors="replace")
-    from ..structure_inventory import sniff_structure_format
+    from ..protein.structure_inventory import sniff_structure_format
 
     fmt = sniff_structure_format(src, text)
     if fmt == "pdbqt":
@@ -250,7 +250,7 @@ def _emit_box_files(
 
 def ligand_keys_from_structure(text: str, fmt: str) -> set[ResidueKey]:
     """Residue keys for every ligand component in a PDB/mmCIF string."""
-    from ..structure_components import parse_structure_components
+    from ..protein.structure_components import parse_structure_components
 
     keys: set[ResidueKey] = set()
     try:

@@ -21,8 +21,8 @@ from __future__ import annotations
 from PyQt5.QtCore import QPoint
 from PyQt5.QtWidgets import QLabel, QWidget
 
-from molmanager.display_constants import reaction_depict_size
-from molmanager.rxn_io import (
+from molmanager.table.structure_depiction_layout import reaction_depict_size
+from molmanager.chem.reaction_file_io import (
     RXN_NAME_HEADER,
     RXN_PRODUCTS_HEADER,
     RXN_REACTANTS_HEADER,
@@ -30,7 +30,7 @@ from molmanager.rxn_io import (
     looks_like_reaction_smarts,
     parse_reaction_smarts,
 )
-from molmanager.structure_draw import ReactionDrawSpec
+from molmanager.chem.structure_2d_depiction import ReactionDrawSpec
 from molmanager.ui.compound_table_model import CompoundTableModel
 from molmanager.ui.compound_table_view import CompoundTableView
 from molmanager.ui.sketcher.bonds import _bond_make

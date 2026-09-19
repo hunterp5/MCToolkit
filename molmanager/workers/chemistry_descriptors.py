@@ -18,8 +18,8 @@
 Fingerprint columns use RDKit implementations. The **2D pharmacophore (Gobbi)** on-bits column uses
 ``rdkit.Chem.Pharm2D`` with ``Gobbi_Pharm2D`` (Gobbi & Poppinger, *Perspect. Drug Discov. Des.* 1998).
 Drug-likeness columns that invoke ``medchem_descriptors`` / Uni-pKa cite
-``molmanager.science_citations`` and the worker module docstrings there.
-**Common Name** and **Synonyms** query PubChem (Title / compound synonyms) via ``name_lookup``.
+``molmanager.reference.method_citations`` and the worker module docstrings there.
+**Common Name** and **Synonyms** query PubChem (Title / compound synonyms) via ``pubchem_names``.
 """
 
 import logging
@@ -52,9 +52,9 @@ else:
         return int(sum(fp))
 
 
-from ..config import load_config
-from ..descriptors_3d import DESCRIPTOR_3D_FNS, int_fns_need_3d, mol_for_3d_descriptors
-from ..medchem_descriptors import (
+from ..platform_support.config import load_config
+from ..descriptors.descriptors_3d import DESCRIPTOR_3D_FNS, int_fns_need_3d, mol_for_3d_descriptors
+from ..descriptors.medchem_descriptors import (
     ab_mps_score,
     cns_mpo_score,
     esol_logS_intrinsic,
@@ -66,15 +66,15 @@ from ..medchem_descriptors import (
     mol_net_formal_charge,
     ro5_pass,
 )
-from ..name_lookup import (
+from ..sources.pubchem_names import (
     lookup_names_for_mols,
     names_cell_value,
     split_name_lookup_descriptors,
 )
-from ..ionization import int_fns_need_ionization, microstates_for_mol
+from ..ionization.unipka_ensembles import int_fns_need_ionization, microstates_for_mol
 from .ionization_parallel import build_microstates_cache_for_rows
-from ..utils import mol_to_canonical_smiles, parse_molecule_from_cell_text
-from ..rdkit_fingerprints import (
+from ..chem.molecule_conversion import mol_to_canonical_smiles, parse_molecule_from_cell_text
+from ..chem.rdkit_fingerprints import (
     fingerprint_onbits_for_descriptor,
     fingerprint_onbits_for_internal_key,
     int_fns_include_fingerprints,
@@ -158,7 +158,7 @@ def _calc_descriptor_row_values(
             except Exception:
                 row_data[d_n] = "N/A"
     if pka_cache_used:
-        from molmanager.ionization import format_pka_values, pka_values_from_states
+        from molmanager.ionization.unipka_ensembles import format_pka_values, pka_values_from_states
 
         row_data["pKa"] = format_pka_values(pka_values_from_states(pka_states))
     return int(idx), row_data
@@ -187,7 +187,7 @@ def _attach_name_lookup_columns(
     if not lookup_cancelled:
 
         def _on_prog(done: int, total: int) -> None:
-            from ..tool_progress import report_tool_progress
+            from ..platform_support.tool_progress import report_tool_progress
 
             report_tool_progress(
                 message="Looking up names…",
@@ -470,7 +470,7 @@ class CalcWorker(QRunnable):
 
         def _emit_prep_progress(done_count: int, *, force: bool = False) -> None:
             nonlocal prep_last_emit
-            from ..tool_progress import report_tool_progress
+            from ..platform_support.tool_progress import report_tool_progress
 
             now = time.monotonic()
             if force or done_count >= nrows or (now - prep_last_emit) >= 0.2:
@@ -529,7 +529,7 @@ class CalcWorker(QRunnable):
         def _emit_progress(done_count: int, *, force: bool = False) -> None:
             """Update shared progress state every row; throttle cross-thread signal emissions."""
             nonlocal prog_last_emit, prog_last_done
-            from ..tool_progress import report_tool_progress
+            from ..platform_support.tool_progress import report_tool_progress
 
             now = time.monotonic()
             step = _descriptor_progress_emit_step(tot)
@@ -564,7 +564,7 @@ class CalcWorker(QRunnable):
                 progress_total=tot,
             )
             pka_cache_used = True
-            from ..tool_progress import report_tool_progress
+            from ..platform_support.tool_progress import report_tool_progress
 
             report_tool_progress(
                 message="Calculate descriptors",

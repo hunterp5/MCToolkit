@@ -23,7 +23,7 @@ from types import SimpleNamespace
 import pytest
 from rdkit import Chem
 
-from molmanager.column_split import (
+from molmanager.table.column_split import (
     SplitColumnParams,
     apply_keep_mode,
     detect_delimiter,

@@ -44,7 +44,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...qsar import (
+from ...analysis.qsar_models import (
     CLASSIFICATION_MODELS,
     REGRESSION_MODELS,
     QSARFitResult,

@@ -35,8 +35,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...bundled_paths import default_external_executable
-from ...openbabel_confab import SystematicConfParams, ensure_openbabel_confab_ready
+from ...platform_support.bundled_paths import default_external_executable
+from ...conformers.openbabel_confab import SystematicConfParams, ensure_openbabel_confab_ready
 from ..qt_widget_utils import make_window_minimizable
 from .conformer_output import (
     ConformerOutputOptions,

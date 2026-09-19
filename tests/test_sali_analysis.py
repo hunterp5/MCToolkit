@@ -16,7 +16,7 @@
 
 """Tests for Structure–Activity Landscape Index helpers."""
 
-from molmanager.sali_analysis import build_sali_points, sali_index
+from molmanager.analysis.sali_analysis import build_sali_points, sali_index
 from molmanager.ui.sali_plot import build_sali_figure
 
 

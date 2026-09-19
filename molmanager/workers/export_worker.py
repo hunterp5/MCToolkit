@@ -23,8 +23,8 @@ import threading
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..table_file_formats import write_openbabel_mols, write_xlsx_table
-from ..utils import mol_to_canonical_smiles
+from ..table.table_file_formats import write_openbabel_mols, write_xlsx_table
+from ..chem.molecule_conversion import mol_to_canonical_smiles
 
 logger = logging.getLogger(__name__)
 

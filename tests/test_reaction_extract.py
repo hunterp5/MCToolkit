@@ -22,13 +22,13 @@ from types import SimpleNamespace
 
 from rdkit import Chem
 
-from molmanager.reaction_extract import (
+from molmanager.chem.reaction_extract import (
     extract_reaction_column_values,
     extract_reaction_sides,
     preferred_reaction_source_column,
     split_side_components,
 )
-from molmanager.rxn_io import RXN_SMARTS_HEADER
+from molmanager.chem.reaction_file_io import RXN_SMARTS_HEADER
 from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.strings import TOOL_REACTION_EXTRACT
 

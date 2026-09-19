@@ -26,9 +26,9 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QUndoCommand
 from rdkit import Chem
 
-from ...config import load_config
-from ...display_constants import structure_column_minimum_width
-from ...utils import mol_to_canonical_smiles
+from ...platform_support.config import load_config
+from ...table.structure_depiction_layout import structure_column_minimum_width
+from ...chem.molecule_conversion import mol_to_canonical_smiles
 from ..compound_table_model import CompoundTableModel
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
 
@@ -367,9 +367,7 @@ class UndoPasteBlockCommand(QUndoCommand):
 class UndoCellTextChangeCommand(QUndoCommand):
     """Undo/redo for context-menu Edit Value or Clear Value on a text data cell."""
 
-    def __init__(
-        self, app: AppKernel, oid: int, header: str, old_text: str, new_text: str
-    ) -> None:
+    def __init__(self, app: AppKernel, oid: int, header: str, old_text: str, new_text: str) -> None:
         label = "Clear cell" if new_text == "" else "Edit cell"
         super().__init__(label)
         self._app = app

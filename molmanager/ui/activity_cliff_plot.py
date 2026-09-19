@@ -24,8 +24,8 @@ from typing import Any
 
 from plotly import graph_objects as go
 
-from ..activity_cliff_analysis import ActivityCliffPoint
-from ..plot_color import (
+from ..analysis.activity_cliff_analysis import ActivityCliffPoint
+from ..plotting.plot_marker_color import (
     DEFAULT_MARKER_SIZE_MAX_PX,
     DEFAULT_MARKER_SIZE_MIN_PX,
     attach_marker_size_legend,

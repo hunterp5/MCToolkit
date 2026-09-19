@@ -22,7 +22,10 @@ from pathlib import Path
 
 from rdkit import Chem
 
-from molmanager.conformer_output import iter_single_conformer_mols, write_conformer_results_to_sdf
+from molmanager.conformers.conformer_output import (
+    iter_single_conformer_mols,
+    write_conformer_results_to_sdf,
+)
 from molmanager.workers import ConformerGenParams, pack_confs_cell, run_conformer_generation
 
 
@@ -45,7 +48,9 @@ def test_iter_single_conformer_mols_splits_ensemble():
 
 def test_write_conformer_results_to_sdf(tmp_path: Path):
     mol = Chem.MolFromSmiles("C")
-    params = ConformerGenParams.single_lowest_energy(force_field="UFF", random_seed=5, max_iterations=50)
+    params = ConformerGenParams.single_lowest_energy(
+        force_field="UFF", random_seed=5, max_iterations=50
+    )
     out, meta = run_conformer_generation(mol, params)
     assert out is not None
     cell = pack_confs_cell(meta, out)

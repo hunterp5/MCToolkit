@@ -34,7 +34,11 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...random_numbers import DistributionName, RandomNumberParams, generate_random_values
+from ...table.random_number_columns import (
+    DistributionName,
+    RandomNumberParams,
+    generate_random_values,
+)
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_RANDOM_NUMBER
 from .scope import selection_scope_checked

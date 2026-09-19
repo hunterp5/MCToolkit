@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import QTableWidget
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.confs_codec import conformer_mol_blocks_b64_json
+from molmanager.conformers.conformer_column_codec import conformer_mol_blocks_b64_json
 from molmanager.ui.mol_viewer_3d import (
     Molecule3DViewerWidget,
     conf_legend_entries,

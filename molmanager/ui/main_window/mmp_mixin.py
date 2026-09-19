@@ -60,7 +60,7 @@ class MmpMixin:
         p = d.params()
         only_selected = d.only_selected_rows()
         if p.core_smarts:
-            from ...mmp_analysis import parse_mmp_core_query
+            from ...analysis.mmp_analysis import parse_mmp_core_query
 
             if parse_mmp_core_query(p.core_smarts) is None:
                 QMessageBox.information(
@@ -103,11 +103,9 @@ class MmpMixin:
         if pairs is None:
             return
 
-        from ...mmp_analysis import assemble_mmp_table_annotations
+        from ...analysis.mmp_analysis import assemble_mmp_table_annotations
 
-        rows, headers = assemble_mmp_table_annotations(
-            pairs, activity_column=activity_column
-        )
+        rows, headers = assemble_mmp_table_annotations(pairs, activity_column=activity_column)
         if rows:
             self.on_calc_finished(rows, headers, finish_progress=False)
 
@@ -120,9 +118,7 @@ class MmpMixin:
         self.status_label.setText(f"MMP: {len(pairs)} pair(s).")
 
     def on_mmp_failed(self, message: str) -> None:
-        report_analysis_failure(
-            self, TOOL_MMP, message, fallback="MMP analysis failed."
-        )
+        report_analysis_failure(self, TOOL_MMP, message, fallback="MMP analysis failed.")
 
     def open_mmp_transform_ledger_for_last_run(self) -> None:
         """Re-open the Transform Ledger for the most recent MMP analysis."""

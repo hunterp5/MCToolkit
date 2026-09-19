@@ -30,8 +30,8 @@ import time
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
-from molmanager.ionization import populations_from_states, unipka_import_error
-from ..config import load_config
+from molmanager.ionization.unipka_ensembles import populations_from_states, unipka_import_error
+from ..platform_support.config import load_config
 from .ionization_parallel import build_microstates_cache_by_key
 from .pka_predictor import _quieter_unipka_loggers, _safe_emit
 from .process_pool_utils import should_terminate_process_pool
@@ -92,7 +92,7 @@ class ProtomerGeneratorWorker(QRunnable):
             prog_last = 0.0
             cancelled = False
 
-            from ..tool_progress import report_tool_progress
+            from ..platform_support.tool_progress import report_tool_progress
 
             throttle = [0, 0.0]
 

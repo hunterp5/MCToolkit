@@ -25,7 +25,7 @@ from pathlib import Path
 
 from PyQt5.QtCore import Qt
 
-from ..structure_components import StructureComponent
+from ..protein.structure_components import StructureComponent
 
 COMPONENT_STYLE_CHOICES = (
     ("cartoon", "Cartoon"),

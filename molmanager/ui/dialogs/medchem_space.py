@@ -37,10 +37,10 @@ from PyQt5.QtWidgets import (
 )
 
 from ..dockable_plot import handle_floating_plot_close_event, style_plot_footer_text_button
-from ...config import load_config
-from ...plot_color import color_values_are_numeric, normalize_size_column
-from ...utils import mol_to_canonical_smiles
-from ...medchem_space import (
+from ...platform_support.config import load_config
+from ...plotting.plot_marker_color import color_values_are_numeric, normalize_size_column
+from ...chem.molecule_conversion import mol_to_canonical_smiles
+from ...analysis.medchem_space import (
     MedChemRowSnapshot,
     MedChemSpaceBuildResult,
     MedChemSpaceDataset,
@@ -832,7 +832,7 @@ class MedChemPlotPanel(DockableResultPlotPanel):
         if color_col == "(none)":
             color_col = None
         color_vals = self._color_values_for_oids(dataset.oids, color_col)
-        from ...plot_color import normalize_color_column
+        from ...plotting.plot_marker_color import normalize_color_column
 
         color_vals, color_col = normalize_color_column(color_vals, color_col)
         colorscale = self._current_colorscale()

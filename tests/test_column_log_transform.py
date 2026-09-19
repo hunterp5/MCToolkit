@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 
-from molmanager.column_log_transform import (
+from molmanager.table.column_log_transform import (
     column_can_apply_log10,
     column_can_apply_precision,
     format_number_precision,

@@ -22,7 +22,7 @@ import time
 
 from PyQt5.QtCore import QTimer
 
-from ...config import load_config
+from ...platform_support.config import load_config
 from .cards import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
 
 

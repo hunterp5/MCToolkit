@@ -24,14 +24,14 @@ from PyQt5.QtCore import QEventLoop, QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication
 
-from ...config import load_config
-from ...display_constants import (
+from ...platform_support.config import load_config
+from ...table.structure_depiction_layout import (
     STRUCTURE_COLUMN_HORIZONTAL_PADDING,
     structure_depict_height,
     structure_depict_width,
     structure_row_default_height,
 )
-from ...structure_render_store import StructureRenderStore
+from ...storage.structure_render_store import StructureRenderStore
 from ..structure_pixmap import pixmap_from_structure_render_png
 from ..strings import TOOL_RENDER_2D
 

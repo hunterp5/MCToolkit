@@ -21,7 +21,7 @@ from __future__ import annotations
 from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 
-from ..medchem_space import build_medchem_space_result
+from ..analysis.medchem_space import build_medchem_space_result
 
 
 def _safe_emit(obj, emitter_name: str, *args) -> None:
@@ -80,7 +80,7 @@ class MedChemSpaceWorker(QRunnable):
                 return
             _safe_emit(self.signals, "finished", result)
         except Exception as exc:
-            from ..medchem_space import MedChemSpaceCancelled
+            from ..analysis.medchem_space import MedChemSpaceCancelled
 
             if isinstance(exc, MedChemSpaceCancelled):
                 return

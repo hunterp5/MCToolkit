@@ -21,7 +21,7 @@ from __future__ import annotations
 from rdkit import Chem
 
 from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.utils import mol_to_canonical_smiles
+from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
 from molmanager.workers.fast_prepare import FastPrepareWorker
 
 SALTS = [
@@ -47,7 +47,9 @@ def _seeded_window() -> ChemistryWorkspaceWindow:
     return win
 
 
-def _run_fast_prepare_inline(win: ChemistryWorkspaceWindow, src: str, *, neutralize: bool = False) -> None:
+def _run_fast_prepare_inline(
+    win: ChemistryWorkspaceWindow, src: str, *, neutralize: bool = False
+) -> None:
     """Run the worker synchronously, then feed its results to the real GUI handler."""
     prepare_col = getattr(win, "_fast_prepare_source", src)
     need_smiles = win._fast_prepare_target_is_text(prepare_col)

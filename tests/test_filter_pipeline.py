@@ -21,7 +21,12 @@ from __future__ import annotations
 from rdkit import Chem
 
 from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.ui.widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
+from molmanager.ui.widgets import (
+    CategoryFilterCard,
+    FilterCard,
+    SubstructureFilterCard,
+    TextFilterCard,
+)
 
 
 def _setup_two_row_mw_table(w: ChemistryWorkspaceWindow) -> FilterCard:
@@ -251,6 +256,7 @@ def test_substructure_async_without_smiles_column_uses_mols(qapp, monkeypatch): 
     for r in range(1, 70):
         assert _src_row_visible(w, r) is False
 
+
 def test_substructure_async_multi_card_handoff(qapp, monkeypatch):  # noqa: ARG001
     """Two SMARTS cards at async scale must finish off-thread without GUI match_mol."""
     monkeypatch.setenv("MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS", "64")
@@ -340,4 +346,3 @@ def test_filter_card_default_titles_and_rename(qapp):  # noqa: ARG001
     s = FilterCard(["MW"], w, initial_property="MW")
     s.set_filter_title(next_default_filter_title([], FilterCard))
     assert s.filter_title() == "Slider"
-

@@ -22,7 +22,7 @@ import threading
 
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 
-from ..protein_msa import FastaRecord, run_mafft_alignment
+from ..protein.protein_msa import FastaRecord, run_mafft_alignment
 
 
 class MafftAlignSignals(QObject):

@@ -23,7 +23,7 @@ import logging
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..tool_progress import ToolProgressState, report_tool_progress
+from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
 from .signals import SubstructureFilterSignals
 
 logger = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ class SubstructureFilterWorker(QRunnable):
 
     def run(self):
         try:
-            from ..smarts_patterns import mol_from_smarts
+            from ..chem.smarts_macropatterns import mol_from_smarts
 
             results: list[tuple[str, str, frozenset[int]]] = []
             if self.group_queries:

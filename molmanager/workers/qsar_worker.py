@@ -23,9 +23,9 @@ import threading
 
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 
-from ..exception_policy import log_swallowed_exception
-from ..qsar import fit_qsar_model, predict_qsar_rows
-from ..tool_progress import ToolProgressState, report_tool_progress
+from ..platform_support.exception_policy import log_swallowed_exception
+from ..analysis.qsar_models import fit_qsar_model, predict_qsar_rows
+from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
 
 logger = logging.getLogger(__name__)
 

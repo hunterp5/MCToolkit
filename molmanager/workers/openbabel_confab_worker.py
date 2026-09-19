@@ -24,7 +24,7 @@ import threading
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..openbabel_confab import (
+from ..conformers.openbabel_confab import (
     SystematicConfParams,
     ensure_openbabel_confab_ready,
     run_systematic_conformer_generation,

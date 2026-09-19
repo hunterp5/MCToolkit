@@ -25,7 +25,7 @@ import time
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
-from ...config import load_config
+from ...platform_support.config import load_config
 from ...storage import load_mols_from_parse_result
 from ..qt_widget_utils import qobject_is_deleted
 from ..strings import LOADING_DETAIL_SESSION, loaded_session_status

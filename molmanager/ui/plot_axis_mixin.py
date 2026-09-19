@@ -27,7 +27,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ..plot_axes import (
+from ..plotting.plot_axes import (
     AXIS_NONE,
     PLOT_TYPE_BOX,
     PLOT_TYPE_HEATMAP,
@@ -40,7 +40,7 @@ from ..plot_axes import (
     normalize_axis_name,
     resolve_plot_mode,
 )
-from ..plot_collect import plotly_axis_range
+from ..plotting.plot_series_collect import plotly_axis_range
 
 
 class PlotAxisMixin:
@@ -283,4 +283,3 @@ class PlotAxisMixin:
             self._maybe_default_axis_range_edits("z", zname, self.zmin, self.zmax)
         self._update_color_controls()
         self._schedule_plot()
-

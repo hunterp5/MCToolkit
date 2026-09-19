@@ -21,7 +21,7 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.confs_codec import (
+from molmanager.conformers.conformer_column_codec import (
     conformer_mol_blocks_b64_json,
     mol_from_packed_confs_cell,
     rehydrate_v1_confs_cell,

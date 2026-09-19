@@ -63,8 +63,8 @@ _PHYSICOCHEMICAL_DESCRIPTOR_ORDER = (
     "TPSA",
 )
 
-from ...descriptor_tooltips import descriptor_checkbox_tooltip
-from ...descriptors_3d import DESCRIPTOR_3D_ITEMS
+from ...reference.descriptor_tooltips import descriptor_checkbox_tooltip
+from ...descriptors.descriptors_3d import DESCRIPTOR_3D_ITEMS
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -170,7 +170,7 @@ class PropertyDialog(QDialog):
             "3D": dict(DESCRIPTOR_3D_ITEMS),
         }
 
-        from ...rdkit_fingerprints import descriptor_fingerprint_categories
+        from ...chem.rdkit_fingerprints import descriptor_fingerprint_categories
 
         categories["Fingerprints"] = descriptor_fingerprint_categories()
 

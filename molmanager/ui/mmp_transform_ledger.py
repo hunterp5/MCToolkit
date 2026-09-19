@@ -42,7 +42,7 @@ from PyQt5.QtWidgets import (
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from ..mmp_analysis import (
+from ..analysis.mmp_analysis import (
     MmpPair,
     TransformSummary,
     aggregate_transforms,
@@ -113,7 +113,7 @@ class _LedgerStructureDelegate(QStyledItemDelegate):
 
 def _try_configure_drawer(drawer, width: int) -> None:
     try:
-        from ..structure_draw import configure_mol_drawer as cfg
+        from ..chem.structure_2d_depiction import configure_mol_drawer as cfg
 
         cfg(drawer, width)
     except Exception:
@@ -247,9 +247,7 @@ class MmpTransformLedgerDialog(QDialog):
         return pairs_involving_oid(self._pairs, self._reference_oid)
 
     def _rebuild_summaries(self) -> None:
-        self._summaries = aggregate_transforms(
-            self._pairs, reference_oid=self._reference_oid
-        )
+        self._summaries = aggregate_transforms(self._pairs, reference_oid=self._reference_oid)
         self._pairs_for_summaries = self._visible_pairs()
         n_pairs = len(self._pairs_for_summaries)
         self._populate_table()

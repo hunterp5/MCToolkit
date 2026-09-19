@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 from rdkit import Chem
 
-from molmanager.reaction_enumeration import (
+from molmanager.chem.reaction_enumeration import (
     enumerate_reaction,
     load_reactant_molecules,
     load_reactant_molecules_from_smiles_text,
@@ -91,7 +91,7 @@ def test_load_reactant_molecules_from_smiles_text() -> None:
 
 
 def test_load_reactant_pool_smiles_mode() -> None:
-    from molmanager.reaction_enumeration import load_reactant_pool
+    from molmanager.chem.reaction_enumeration import load_reactant_pool
 
     mols = load_reactant_pool(source="smiles", smiles_text="CCO\nCN")
     assert len(mols) == 2

@@ -24,7 +24,7 @@ pytest.importorskip("PyQt5.QtWidgets")
 
 from PyQt5.QtWidgets import QGroupBox
 
-from molmanager.bundled_paths import default_external_executable
+from molmanager.platform_support.bundled_paths import default_external_executable
 from molmanager.ui.dialogs.systematic_conformations import SystematicConformationsDialog
 
 

@@ -23,7 +23,7 @@ from types import SimpleNamespace
 import pytest
 from rdkit import Chem
 
-from molmanager.column_join import (
+from molmanager.table.column_join import (
     JoinColumnsParams,
     default_join_output_name,
     join_two_values,
@@ -95,7 +95,7 @@ def test_join_columns_writes_new_header(qapp) -> None:  # noqa: ARG001
 
 
 def test_join_dialog_defaults_second_column_and_skip_empty(qapp) -> None:  # noqa: ARG001
-    from molmanager.column_join import JOIN_DELIMITER_MODES
+    from molmanager.table.column_join import JOIN_DELIMITER_MODES
     from molmanager.ui.dialogs.join_columns import JoinColumnsDialog
 
     dlg = JoinColumnsDialog(["First", "Last"], 0)

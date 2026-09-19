@@ -24,11 +24,11 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMessageBox
 
 from ..strings import TOOL_REACTION_ENUMERATION, TOOL_REACTION_EXTRACT
-from ...reaction_extract import (
+from ...chem.reaction_extract import (
     extract_reaction_column_values,
     preferred_reaction_source_column,
 )
-from ...rxn_io import reaction_smarts_from_app_selection
+from ...chem.reaction_file_io import reaction_smarts_from_app_selection
 from ...workers import ReactionEnumerationWorker
 
 logger = logging.getLogger(__name__)
@@ -136,7 +136,7 @@ class ReactionToolsMixin:
 
     def _on_reaction_enumeration_dialog_accepted(self, d) -> None:
         p = d.params()
-        from ...memory_guards import check_product_enumeration
+        from ...platform_support.memory_guards import check_product_enumeration
 
         guard = check_product_enumeration(p.max_products)
         if not guard.ok:

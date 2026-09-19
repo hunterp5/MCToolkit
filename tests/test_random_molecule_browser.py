@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-from molmanager.random_molecule_sources import SOURCE_CHEMBL, RandomSourceMolecule
+from molmanager.sources.random_molecule_sources import SOURCE_CHEMBL, RandomSourceMolecule
 from molmanager.ui.dockable_plot import is_dockable_workspace_widget
 from molmanager.ui.random_molecule_browser import (
     RandomMoleculeBrowserDialog,

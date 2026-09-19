@@ -92,16 +92,16 @@ def _drop_residues(text: str, fmt: str, keys: set[ResidueKey]) -> str:
     if not keys:
         return text
     if _is_cif_fmt(fmt):
-        from ..structure_components import delete_cif_residues
+        from ..protein.structure_components import delete_cif_residues
 
         return delete_cif_residues(text, keys)
-    from ..structure_components import delete_pdb_residues
+    from ..protein.structure_components import delete_pdb_residues
 
     return delete_pdb_residues(text, keys)
 
 
 def _ca_keys_from_text(text: str, fmt: str) -> set[ResidueKey]:
-    from ..structure_components import parse_structure_atoms
+    from ..protein.structure_components import parse_structure_atoms
 
     keys: set[ResidueKey] = set()
     for atom in parse_structure_atoms(text or "", fmt):
@@ -111,7 +111,7 @@ def _ca_keys_from_text(text: str, fmt: str) -> set[ResidueKey]:
 
 
 def _minimize_protein_complex(req: ProteinMinimizeRequest) -> str:
-    from ..structure_components import sniff_structure_format
+    from ..protein.structure_components import sniff_structure_format
 
     _configure_openmm_runtime()
     in_path = Path(req.input_path).expanduser()

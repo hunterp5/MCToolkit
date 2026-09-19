@@ -374,7 +374,7 @@ def _rmsd_angstrom(ref_positions, new_positions, indices: list[int]) -> float | 
 def _pocket_heavy_indices(topology, positions, ligand_keys: set[ResidueKey], cutoff: float = 5.0):
     from openmm import unit
 
-    from ..structure_components import AMINO_ACIDS, NUCLEIC_ACIDS
+    from ..protein.structure_components import AMINO_ACIDS, NUCLEIC_ACIDS
 
     lig_xyz = []
     polymer_idx: list[int] = []
@@ -567,7 +567,7 @@ def _ligand_chem_tables(
         remaining = _ligand_residue_names(input_text, input_fmt, ligand_keys)
     if not remaining:
         return {}, {}
-    from ..structure_components import parse_cif_chem_comp_atoms, parse_cif_chem_comp_bonds
+    from ..protein.structure_components import parse_cif_chem_comp_atoms, parse_cif_chem_comp_bonds
 
     atoms: dict = {}
     bonds: dict = {}
@@ -591,8 +591,8 @@ def _ligand_chem_tables(
     _take(text, fmt, overwrite=True)
     _take(input_text, input_fmt, overwrite=True)
     if bonds:
-        from ..structure_atoms import parse_structure_atoms
-        from ..structure_cif import rebuild_hydrogen_chem_tables
+        from ..protein.structure_atoms import parse_structure_atoms
+        from ..protein.structure_cif import rebuild_hydrogen_chem_tables
 
         atoms, bonds = rebuild_hydrogen_chem_tables(parse_structure_atoms(text, fmt), atoms, bonds)
     return atoms, bonds

@@ -22,7 +22,7 @@ import pytest
 
 pytest.importorskip("PyQt5.QtWidgets")
 
-from molmanager.display_constants import (
+from molmanager.table.structure_depiction_layout import (
     DEFAULT_STRUCTURE_DEPICT_HEIGHT,
     DEFAULT_STRUCTURE_DEPICT_WIDTH,
     DEFAULT_STRUCTURE_ROW_DEFAULT_HEIGHT,
@@ -80,7 +80,7 @@ def test_structure_column_minimum_width_tracks_runtime_size() -> None:
 
 
 def test_reaction_depict_size_is_wider_same_height() -> None:
-    from molmanager.display_constants import (
+    from molmanager.table.structure_depiction_layout import (
         REACTION_DEPICT_WIDTH_MULTIPLIER,
         reaction_depict_size,
     )

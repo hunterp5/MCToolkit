@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from molmanager.session_codec import (
+from molmanager.table.session_codec import (
     compact_session_document,
     dumps_session_document,
     expand_session_document,
@@ -114,8 +114,8 @@ def test_gzip_dumps_loads_roundtrip():
 
 
 def test_compact_expand_preserves_structure_mols_and_bounds():
-    from molmanager.session_codec import encode_mol_blob_b64
-    from molmanager.utils import mol_graph_binary
+    from molmanager.table.session_codec import encode_mol_blob_b64
+    from molmanager.chem.molecule_conversion import mol_graph_binary
     from rdkit import Chem
 
     blob_b64 = encode_mol_blob_b64(mol_graph_binary(Chem.MolFromSmiles("CCO")))
@@ -159,7 +159,7 @@ def test_compact_omits_empty_structure_mols_and_bounds():
 
 
 def test_session_zip_roundtrip_keeps_ensembles():
-    from molmanager.session_codec import SESSION_ENSEMBLES_KEY
+    from molmanager.table.session_codec import SESSION_ENSEMBLES_KEY
 
     compact = compact_session_document(
         {

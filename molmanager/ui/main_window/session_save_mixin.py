@@ -28,10 +28,10 @@ import time
 
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
-from ...confs_codec import serialize_confs_sidecar
-from ...microstate_cache import serialize_ionization_sidecar
+from ...conformers.conformer_column_codec import serialize_confs_sidecar
+from ...ionization.microstate_cache import serialize_ionization_sidecar
 from ...services.filter_config import cfg_column
-from ...session_codec import (
+from ...table.session_codec import (
     compact_global_bounds,
     compact_session_document,
     dumps_session_document,
@@ -42,7 +42,7 @@ from ...session_codec import (
     session_format_ok,
     session_version_ok,
 )
-from ...utils import mol_graph_binary, mol_to_canonical_smiles
+from ...chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
 
 logger = logging.getLogger(__name__)
@@ -331,7 +331,7 @@ class SessionSaveMixin:
 
     def _session_mmp_ledger_payload(self) -> dict | None:
         """Last MMP run for Transform Ledger reopen after session open."""
-        from ...mmp_analysis import serialize_mmp_ledger_payload
+        from ...analysis.mmp_analysis import serialize_mmp_ledger_payload
 
         return serialize_mmp_ledger_payload(
             getattr(self, "_mmp_last_pairs", None),
@@ -340,7 +340,7 @@ class SessionSaveMixin:
 
     def _session_dock_results_payload(self, *, oids: set[int] | None = None) -> dict | None:
         """Last docking run for Pose Browser reopen after session open."""
-        from ...dock_io import serialize_dock_results_payload
+        from ...docking.pose_file_io import serialize_dock_results_payload
 
         return serialize_dock_results_payload(
             getattr(self, "_last_dock_results", None),

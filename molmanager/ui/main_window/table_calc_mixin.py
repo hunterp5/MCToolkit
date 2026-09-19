@@ -21,8 +21,8 @@ from __future__ import annotations
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QMessageBox
 
-from ...config import load_config
-from ...utils import safe_float
+from ...platform_support.config import load_config
+from ...chem.molecule_conversion import safe_float
 from ...workers import CustomCalcWorker
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 from ..strings import (
@@ -109,7 +109,7 @@ class TableCalcMixin:
         d.show()
 
     def _on_random_number_dialog_accepted(self, d) -> None:
-        from ...random_numbers import generate_random_values
+        from ...table.random_number_columns import generate_random_values
 
         p = d.params()
         col = p.column_name
@@ -249,7 +249,7 @@ class TableCalcMixin:
         d.show()
 
     def _on_split_column_dialog_accepted(self, d) -> None:
-        from ...column_split import (
+        from ...table.column_split import (
             MAX_SPLIT_COLUMNS,
             apply_keep_mode,
             output_column_names,
@@ -352,7 +352,7 @@ class TableCalcMixin:
         d.show()
 
     def _on_join_columns_dialog_accepted(self, d) -> None:
-        from ...column_join import join_two_values, resolve_join_delimiter
+        from ...table.column_join import join_two_values, resolve_join_delimiter
 
         p = d.params()
         left = p.left_column

@@ -25,7 +25,7 @@ from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
-from ..som_prediction import (
+from ..predictions.som_prediction import (
     NERDD_METABOLISM_SUBSETS,
     SOM_CANCELLED_ERROR,
     MetabolismSubset,
@@ -37,7 +37,7 @@ from ..som_prediction import (
     som_output_columns,
     uses_split_phase_jobs,
 )
-from ..utils import mol_to_canonical_smiles
+from ..chem.molecule_conversion import mol_to_canonical_smiles
 from .signals import emit_partial_results_if_cancelled
 from .structure_grouping import group_rows_by_structure, structure_key
 
@@ -116,7 +116,7 @@ class SomPredictorWorker(QRunnable):
         self.progress_state = progress_state
 
     def run(self) -> None:
-        from ..tool_progress import report_tool_progress
+        from ..platform_support.tool_progress import report_tool_progress
 
         cancel_ev = self.cancel_event
         include_fame = bool(self.fame_score)
@@ -162,11 +162,7 @@ class SomPredictorWorker(QRunnable):
                     return
                 done = n_empty + int(round(max(0.0, min(frac, 1.0)) * n_unique_rows))
                 waiting = done <= n_empty
-                label = (
-                    "Predict SOM: waiting on NERDD…"
-                    if waiting
-                    else message
-                )
+                label = "Predict SOM: waiting on NERDD…" if waiting else message
                 _emit_progress(label, waiting=waiting)
 
             def _cancelled_preds() -> list[SomMoleculePrediction]:

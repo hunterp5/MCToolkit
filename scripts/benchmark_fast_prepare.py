@@ -33,7 +33,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from molmanager.display_constants import (  # noqa: E402
+from molmanager.table.structure_depiction_layout import (  # noqa: E402
     STRUCTURE_DEPICT_HEIGHT,
     STRUCTURE_DEPICT_WIDTH,
 )
@@ -43,10 +43,10 @@ def _fused_batch(args):
     """Disconnect + neutralize + render one batch inside a child process."""
     from rdkit import Chem
 
-    from molmanager.fragment_disconnect import largest_fragment_and_rest
-    from molmanager.structure_draw import render_molecule_png
-    from molmanager.structure_neutralize import neutralize_mol
-    from molmanager.utils import mol_to_canonical_smiles
+    from molmanager.chem.fragment_disconnect import largest_fragment_and_rest
+    from molmanager.chem.structure_2d_depiction import render_molecule_png
+    from molmanager.chem.structure_neutralize import neutralize_mol
+    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
 
     blobs, w, h = args
     out = []
@@ -65,7 +65,7 @@ def _fused_batch(args):
 def _render_only_batch(args):
     from rdkit import Chem
 
-    from molmanager.structure_draw import render_molecule_png
+    from molmanager.chem.structure_2d_depiction import render_molecule_png
 
     blobs, w, h = args
     return [(oid, render_molecule_png(Chem.Mol(blob), w, h)) for oid, blob in blobs]
@@ -75,9 +75,9 @@ def _chem_only_batch(args):
     """Disconnect + neutralize + canonical SMILES for one batch (no rendering)."""
     from rdkit import Chem
 
-    from molmanager.fragment_disconnect import largest_fragment_and_rest
-    from molmanager.structure_neutralize import neutralize_mol
-    from molmanager.utils import mol_to_canonical_smiles
+    from molmanager.chem.fragment_disconnect import largest_fragment_and_rest
+    from molmanager.chem.structure_neutralize import neutralize_mol
+    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
 
     blobs = args[0]
     out = []
@@ -101,9 +101,9 @@ def main() -> None:
 
     from rdkit import Chem
 
-    from molmanager.fragment_disconnect import largest_fragment_and_rest
-    from molmanager.structure_neutralize import neutralize_mol
-    from molmanager.utils import mol_to_canonical_smiles
+    from molmanager.chem.fragment_disconnect import largest_fragment_and_rest
+    from molmanager.chem.structure_neutralize import neutralize_mol
+    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
 
     suppl = Chem.SDMolSupplier(args.path)
     mols = [m for m in suppl if m is not None]
@@ -130,9 +130,7 @@ def main() -> None:
     t_smi = time.perf_counter() - t0
 
     blobs = [(i, m.ToBinary()) for i, m in neutral]
-    batches = [
-        (blobs[s : s + args.batch], w, h) for s in range(0, len(blobs), args.batch)
-    ]
+    batches = [(blobs[s : s + args.batch], w, h) for s in range(0, len(blobs), args.batch)]
 
     t0 = time.perf_counter()
     ex = ProcessPoolExecutor(max_workers=workers)
@@ -171,9 +169,7 @@ def main() -> None:
     print(f"  TOTAL                        : {t_fused:6.2f}s   rows={got}")
 
     # --- Middle option: chemistry parallelized in a pool, render left on the existing pool.
-    chem_batches = [
-        (in_blobs[s : s + args.batch],) for s in range(0, len(in_blobs), args.batch)
-    ]
+    chem_batches = [(in_blobs[s : s + args.batch],) for s in range(0, len(in_blobs), args.batch)]
     t0 = time.perf_counter()
     ex = ProcessPoolExecutor(max_workers=workers)
     chem_out = []
@@ -185,9 +181,7 @@ def main() -> None:
     t_chem_pool = time.perf_counter() - t0
 
     rb = [(oid, blob) for oid, blob, _f, _s in chem_out if blob]
-    render_batches = [
-        (rb[s : s + args.batch], w, h) for s in range(0, len(rb), args.batch)
-    ]
+    render_batches = [(rb[s : s + args.batch], w, h) for s in range(0, len(rb), args.batch)]
     t0 = time.perf_counter()
     ex = ProcessPoolExecutor(max_workers=workers)
     try:
@@ -204,7 +198,9 @@ def main() -> None:
     print(f"  TOTAL                        : {middle:6.2f}s")
     print("=" * 68)
     if t_fused > 0:
-        print(f"fused-all    vs current: {current / t_fused:.2f}x  (saves {current - t_fused:.2f}s)")
+        print(
+            f"fused-all    vs current: {current / t_fused:.2f}x  (saves {current - t_fused:.2f}s)"
+        )
     if middle > 0:
         print(f"chem-in-pool vs current: {current / middle:.2f}x  (saves {current - middle:.2f}s)")
         print(f"fused-all buys a further {middle - t_fused:.2f}s over chem-in-pool")

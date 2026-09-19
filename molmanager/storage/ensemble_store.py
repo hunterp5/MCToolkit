@@ -27,7 +27,7 @@ from pathlib import Path
 
 from rdkit import Chem
 
-from ..ensemble_codec import (
+from ..conformers.ensemble_binary_codec import (
     blocks_b64_to_ensemble_blob,
     ensemble_blob_to_blocks_b64,
     pack_ensemble_mol,

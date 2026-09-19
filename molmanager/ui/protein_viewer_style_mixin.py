@@ -26,13 +26,13 @@ from dataclasses import replace
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QAction, QActionGroup, QColorDialog, QMessageBox
 
-from ..hydrogen_bonds import (
+from ..protein.hydrogen_bonds import (
     HBOND_KIND_COMPLEX,
     HBOND_KIND_LIGAND,
     HBOND_KIND_PROTEIN,
     detect_hydrogen_bonds,
 )
-from ..protein_interactions import (
+from ..protein.protein_interactions import (
     FAMILY_HALOGEN,
     FAMILY_HBOND,
     FAMILY_HYDROPHOBIC,
@@ -43,7 +43,7 @@ from ..protein_interactions import (
     prolif_available,
     residue_pair_key,
 )
-from ..structure_components import (
+from ..protein.structure_components import (
     component_id_for_atom,
     pocket_view_plan,
     polymer_residue_for_atom,

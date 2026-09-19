@@ -27,7 +27,7 @@ from contextlib import contextmanager
 
 from rdkit import Chem
 
-from ..config import load_config
+from ..platform_support.config import load_config
 from .process_pool_utils import (
     add_process_pool_shutdown_callback,
     register_process_pool,
@@ -53,7 +53,7 @@ _SHUTDOWN_HOOK_REGISTERED = False
 
 def unipka_cuda_available() -> bool:
     """CUDA wheel present and GPU not forced off. Does not initialize the CUDA runtime."""
-    from molmanager.ionization import pka_gpu_forced_off, torch_is_cuda_build
+    from molmanager.ionization.unipka_ensembles import pka_gpu_forced_off, torch_is_cuda_build
 
     if pka_gpu_forced_off():
         return False
@@ -278,7 +278,10 @@ def _mp_compute_microstates_chunk(
     tasks: list[tuple[str, bytes]],
 ) -> list[tuple[str, object | None]]:
     """Score a chunk of structures in one Uni-pKa free-energy call."""
-    from molmanager.ionization import pin_unipka_torch_threads, predict_ionization_ensembles
+    from molmanager.ionization.unipka_ensembles import (
+        pin_unipka_torch_threads,
+        predict_ionization_ensembles,
+    )
 
     pin_unipka_torch_threads()
     keys: list[str] = []
@@ -326,9 +329,9 @@ def predict_microstates_for_sketch(
     """
     import time
 
-    from molmanager.ionization import microstates_for_mol
-    from molmanager.microstate_cache import lookup as cache_lookup
-    from molmanager.microstate_cache import store as cache_store
+    from molmanager.ionization.unipka_ensembles import microstates_for_mol
+    from molmanager.ionization.microstate_cache import lookup as cache_lookup
+    from molmanager.ionization.microstate_cache import store as cache_store
 
     key = structure_key(mol)
     hit, cached = cache_lookup(key)
@@ -409,10 +412,13 @@ def build_microstates_cache_by_key(
     if not order:
         return {}
 
-    from molmanager.ionization import microstates_for_mol, warn_if_cuda_torch_missing
-    from molmanager.microstate_cache import lookup as cache_lookup
-    from molmanager.microstate_cache import store_many as cache_store_many
-    from ..tool_progress import report_tool_progress
+    from molmanager.ionization.unipka_ensembles import (
+        microstates_for_mol,
+        warn_if_cuda_torch_missing,
+    )
+    from molmanager.ionization.microstate_cache import lookup as cache_lookup
+    from molmanager.ionization.microstate_cache import store_many as cache_store_many
+    from ..platform_support.tool_progress import report_tool_progress
 
     warn_if_cuda_torch_missing()
 
@@ -456,7 +462,7 @@ def build_microstates_cache_by_key(
         logger.debug("ionization cache: %s unique structure(s), all session-cache hits", n_unique)
         return cache
 
-    from molmanager.ionization import warn_if_cuda_torch_missing
+    from molmanager.ionization.unipka_ensembles import warn_if_cuda_torch_missing
 
     warn_if_cuda_torch_missing()
 

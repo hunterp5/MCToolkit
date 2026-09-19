@@ -30,7 +30,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ..structure_components import (
+from ..protein.structure_components import (
     AA_ONE_TO_THREE,
     VALID_SEQUENCE_LETTERS,
     PolymerChain,

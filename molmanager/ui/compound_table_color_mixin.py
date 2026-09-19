@@ -21,8 +21,8 @@ from __future__ import annotations
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
-from ..column_color_compute import ColumnColorRule, color_rgb_for_value
-from ..column_score_color import (
+from ..table.column_color_compute import ColumnColorRule, color_rgb_for_value
+from ..table.column_score_color import (
     COLOR_ALPHA,
     COLOR_FAVORABLE_RGB,
     COLOR_MID_RGB,
@@ -244,7 +244,6 @@ class CompoundTableColorMixin:
             if rgb is not None:
                 cmap[row.oid] = rgb
         self._column_color_cache[header_name] = cmap
-
 
     def _color_rgb_for_value(self, rule: ColumnColorRule, raw_value: str) -> int | None:
         return color_rgb_for_value(rule, raw_value)

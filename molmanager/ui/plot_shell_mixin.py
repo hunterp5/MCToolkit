@@ -25,7 +25,7 @@ import webbrowser
 from PyQt5.QtCore import QTimer, QUrl
 from plotly import graph_objects as go
 
-from ..plot_axes import (
+from ..plotting.plot_axes import (
     PLOT_TYPE_BOX,
     PLOT_TYPE_HEATMAP,
     PLOT_TYPE_HISTOGRAM,
@@ -290,4 +290,3 @@ class PlotShellMixin:
         self._select_rows_for_point_indices(sel_sorted)
         self.parent_app.status_label.setText(f"Plot: selected {len(sel_sorted):,} point(s).")
         self._sync_plot_selection_visual()
-

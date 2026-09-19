@@ -22,9 +22,9 @@ import logging
 
 from PyQt5.QtCore import QTimer
 
-from ...config import load_config
-from ...memory_usage import format_process_memory_status
-from ...tool_progress import format_tool_progress_text
+from ...platform_support.config import load_config
+from ...platform_support.memory_usage import format_process_memory_status
+from ...platform_support.tool_progress import format_tool_progress_text
 from ..strings import STATUS_READY
 
 logger = logging.getLogger(__name__)

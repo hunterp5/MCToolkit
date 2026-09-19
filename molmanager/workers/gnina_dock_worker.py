@@ -24,14 +24,14 @@ from pathlib import Path
 
 from PyQt5.QtCore import QObject, QProcess, QProcessEnvironment, QTimer
 
-from ..bundled_paths import gnina_launch_env
-from ..dock_io import (
+from ..platform_support.bundled_paths import gnina_launch_env
+from ..docking.pose_file_io import (
     is_sdf_path,
     mols_from_dock_output,
     stamp_pose_ff_energies,
     write_pose_mols_sdf,
 )
-from ..dock_validation import (
+from ..docking.redock_validation import (
     crystal_ref_label,
     existing_crystal_ligand_path,
     load_crystal_mol,
@@ -39,8 +39,8 @@ from ..dock_validation import (
     stamp_crystal_ref,
     stamp_crystal_rmsd,
 )
-from .. import gnina_job
-from ..gnina_launch import gnina_exit_127_message, gnina_qprocess_spec, gnina_uses_wsl
+from ..docking import gnina_job
+from ..docking.gnina_launch import gnina_exit_127_message, gnina_qprocess_spec, gnina_uses_wsl
 
 
 def system_stamp(text: str) -> str:
@@ -487,7 +487,7 @@ class GninaDockWorker(QObject):
         h = self._host
         if not (ligand or "").strip():
             raise ValueError("Choose a ligand file (PDBQT or SDF).")
-        from ..dock_io import ligand_is_openbabel_format
+        from ..docking.pose_file_io import ligand_is_openbabel_format
 
         lig_path = h._resolve_path(ligand)
         if ligand_is_openbabel_format(lig_path):

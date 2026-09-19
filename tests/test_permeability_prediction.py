@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-from molmanager.permeability_prediction import (
+from molmanager.predictions.permeability_prediction import (
     PERMEABILITY_OUTPUT_COLUMNS,
     _linear_from_log10,
     _linear_values_from_log_predictions,

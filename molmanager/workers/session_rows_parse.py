@@ -28,7 +28,7 @@ from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
-from ..session_codec import decode_mol_blob_b64, row_structure_smiles
+from ..table.session_codec import decode_mol_blob_b64, row_structure_smiles
 
 _SERIAL_MOL_DECODE_MAX = 32
 _MAX_MOL_DECODE_WORKERS = 8

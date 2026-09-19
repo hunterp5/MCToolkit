@@ -47,9 +47,9 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...bundled_paths import default_external_executable, resolve_user_executable
-from ...dock_io import AUTOBOX_LIGAND_FILTER
-from ...gnina_job import (
+from ...platform_support.bundled_paths import default_external_executable, resolve_user_executable
+from ...docking.pose_file_io import AUTOBOX_LIGAND_FILTER
+from ...docking.gnina_job import (
     GninaJobSettings,
     apply_dock_pharmacophore_filter,
     effective_out_path,
@@ -66,14 +66,14 @@ from ...gnina_job import (
     same_input_path,
     write_smina_config,
 )
-from ...gnina_launch import (
+from ...docking.gnina_launch import (
     cuda_available,
     gnina_missing_message,
     gnina_uses_wsl,
     resolve_gnina_command,
 )
-from ...pharmacophore import PHARMACOPHORE_FILE_FILTER
-from ...pharmacophore_screen import DEFAULT_DOCK_SLACK_ANGSTROM
+from ...protein.pharmacophore import PHARMACOPHORE_FILE_FILTER
+from ...protein.pharmacophore_screen import DEFAULT_DOCK_SLACK_ANGSTROM
 from ...workers.gnina_dock_worker import GninaDockWorker, system_stamp
 from ..qt_widget_utils import append_viewer_log, make_window_minimizable
 
@@ -768,7 +768,7 @@ class GninaDockDialog(QDialog):
         self.chk_full_flex.setEnabled(on)
 
     def _flexdist_ligand_path(self, dock_ligand: str) -> str:
-        from ...gnina_job import flexdist_ligand_path
+        from ...docking.gnina_job import flexdist_ligand_path
 
         return flexdist_ligand_path(
             explicit=self.edit_flexdist_ligand.text(),
@@ -820,7 +820,7 @@ class GninaDockDialog(QDialog):
 
     def _flex_argv(self, *, dock_ligand: str, out_path: str) -> list[str]:
         """Gnina flexible-side-chain flags, or empty when the receptor is rigid."""
-        from ...gnina_job import build_flex_argv
+        from ...docking.gnina_job import build_flex_argv
 
         return build_flex_argv(self._job_settings(), dock_ligand=dock_ligand, out_path=out_path)
 
@@ -836,7 +836,7 @@ class GninaDockDialog(QDialog):
         Crystal ligand SDF/PDB from Dock File / Fast Prepare is kept for internal
         validation (redock + RMSD), not as the docking ligand field.
         """
-        from ...dock_validation import existing_crystal_ligand_path
+        from ...docking.redock_validation import existing_crystal_ligand_path
 
         receptor = ""
         getter = getattr(result, "receptor_pdbqt_path", None)
@@ -878,7 +878,7 @@ class GninaDockDialog(QDialog):
         self._sync_autobox()
 
     def _autobox_ligand_path(self, dock_ligand: str) -> str:
-        from ...gnina_job import autobox_ligand_path
+        from ...docking.gnina_job import autobox_ligand_path
 
         return autobox_ligand_path((self.edit_autobox_ligand.text() or "").strip(), dock_ligand)
 
@@ -935,7 +935,7 @@ class GninaDockDialog(QDialog):
         out: str | None = None,
         receptor: str | None = None,
     ) -> list[str]:
-        from ...gnina_job import build_gnina_argv
+        from ...docking.gnina_job import build_gnina_argv
 
         lig_src: str | Sequence[str] = (
             ligand if ligand is not None else (self.edit_ligand.text() or "")
@@ -965,12 +965,12 @@ class GninaDockDialog(QDialog):
         return kept
 
     def _cnn_argv(self, *, no_gpu: bool | None = None) -> list[str]:
-        from ...gnina_job import build_cnn_argv
+        from ...docking.gnina_job import build_cnn_argv
 
         return build_cnn_argv(self._job_settings(no_gpu=no_gpu))
 
     def _build_minimize_argv(self, ligand: str | Sequence[str], out: str) -> list[str]:
-        from ...gnina_job import build_minimize_argv
+        from ...docking.gnina_job import build_minimize_argv
 
         return build_minimize_argv(
             self._job_settings(),
@@ -1072,7 +1072,7 @@ class GninaDockDialog(QDialog):
         return resolve_work_path(path, self.edit_wd.text())
 
     def _is_openbabel_ligand(self, path: str) -> bool:
-        from ...dock_io import ligand_is_openbabel_format
+        from ...docking.pose_file_io import ligand_is_openbabel_format
 
         return ligand_is_openbabel_format(self._resolve_path(path))
 
@@ -1098,7 +1098,7 @@ class GninaDockDialog(QDialog):
 
     def _prepare_table_row_ligands(self) -> list[Path]:
         """Write selected-row ensembles to a temp SDF for one Gnina process."""
-        from ...dock_io import write_pose_mols_sdf
+        from ...docking.pose_file_io import write_pose_mols_sdf
 
         mols = self._mols_from_selected_rows()
         if not mols:
@@ -1189,7 +1189,7 @@ class GninaDockDialog(QDialog):
         return ligand_arg(lig_paths)
 
     def _sidecar_for_receptor(self, rec: str) -> str:
-        from ...gnina_job import sidecar_for_receptor
+        from ...docking.gnina_job import sidecar_for_receptor
 
         return sidecar_for_receptor(
             rec,
@@ -1217,7 +1217,7 @@ class GninaDockDialog(QDialog):
             QMessageBox.warning(self, "Dock", str(e))
             return
         if gnina_uses_wsl():
-            from ...wsl import wsl_available
+            from ...platform_support.wsl_launcher import wsl_available
 
             if not wsl_available():
                 QMessageBox.warning(

@@ -18,8 +18,8 @@
 
 from rdkit import Chem
 
-from molmanager.mmp_analysis import find_matched_molecular_pairs
-from molmanager.mmp_neighborhood_analysis import (
+from molmanager.analysis.mmp_analysis import find_matched_molecular_pairs
+from molmanager.analysis.mmp_neighborhood_analysis import (
     build_mmp_network_graph,
     build_network_edges,
     neighborhood_oids,
@@ -39,7 +39,7 @@ def test_spring_layout_and_neighborhood():
     assert set(pos) == {1, 2, 3}
     assert all(len(xy) == 2 for xy in pos.values())
 
-    from molmanager.mmp_neighborhood_analysis import MmpNetworkEdge
+    from molmanager.analysis.mmp_neighborhood_analysis import MmpNetworkEdge
 
     net_edges = [
         MmpNetworkEdge(1, 2, 1.0, 1.0, "a>>b", 0),
@@ -116,6 +116,11 @@ def test_build_mmp_network_from_pairs():
     assert fig.layout.xaxis.scaleanchor is None
     assert fig.layout.xaxis.range is not None
     assert fig.layout.yaxis.range is not None
-    assert abs(fig.layout.xaxis.range[1] - fig.layout.xaxis.range[0] - (
-        fig.layout.yaxis.range[1] - fig.layout.yaxis.range[0]
-    )) < 1e-9
+    assert (
+        abs(
+            fig.layout.xaxis.range[1]
+            - fig.layout.xaxis.range[0]
+            - (fig.layout.yaxis.range[1] - fig.layout.yaxis.range[0])
+        )
+        < 1e-9
+    )

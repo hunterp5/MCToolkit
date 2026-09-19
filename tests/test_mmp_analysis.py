@@ -18,7 +18,7 @@
 
 from rdkit import Chem
 
-from molmanager.mmp_analysis import (
+from molmanager.analysis.mmp_analysis import (
     MmpPair,
     aggregate_transforms,
     assemble_mmp_table_annotations,
@@ -261,12 +261,8 @@ def test_aggregate_transforms_win_rate_and_grouping():
 
 def test_aggregate_transforms_splits_by_core():
     pairs = [
-        _hand_pair(
-            oid_a=1, oid_b=2, side_a="O[*:1]", side_b="CO[*:1]", delta=1.0, core="c1ccccc1"
-        ),
-        _hand_pair(
-            oid_a=3, oid_b=4, side_a="O[*:1]", side_b="CO[*:1]", delta=2.0, core="c1ccncc1"
-        ),
+        _hand_pair(oid_a=1, oid_b=2, side_a="O[*:1]", side_b="CO[*:1]", delta=1.0, core="c1ccccc1"),
+        _hand_pair(oid_a=3, oid_b=4, side_a="O[*:1]", side_b="CO[*:1]", delta=2.0, core="c1ccncc1"),
     ]
     summaries = aggregate_transforms(pairs)
     assert len(summaries) == 2
@@ -278,7 +274,7 @@ def test_aggregate_transforms_splits_by_core():
 
 
 def test_aggregate_transforms_reference_oid():
-    from molmanager.mmp_analysis import (
+    from molmanager.analysis.mmp_analysis import (
         orient_pair_relative_to_reference,
         pairs_involving_oid,
         reference_oids_in_pairs,
@@ -329,7 +325,7 @@ def test_aggregate_transforms_from_real_pairs():
 
 
 def test_apply_transform_to_mol_phenol_anisole():
-    from molmanager.mmp_analysis import apply_transform_to_mol
+    from molmanager.analysis.mmp_analysis import apply_transform_to_mol
 
     phenol = Chem.MolFromSmiles("Oc1ccccc1")
     products = apply_transform_to_mol(phenol, "O[*:1]", "CO[*:1]")
@@ -350,12 +346,10 @@ def test_apply_transform_to_mol_phenol_anisole():
 
 
 def test_apply_transform_to_mol_two_cut():
-    from molmanager.mmp_analysis import apply_transform_to_mol
+    from molmanager.analysis.mmp_analysis import apply_transform_to_mol
 
     mol = Chem.MolFromSmiles("Nc1ccc(O)cc1")
-    products = apply_transform_to_mol(
-        mol, "N[*:1].O[*:2]", "CN[*:1].CO[*:2]", max_cuts=2
-    )
+    products = apply_transform_to_mol(mol, "N[*:1].O[*:2]", "CN[*:1].CO[*:2]", max_cuts=2)
     assert products
     assert any("N" in p and "O" in p for p in products)
     # Canonical expected product from molzip
@@ -363,7 +357,7 @@ def test_apply_transform_to_mol_two_cut():
 
 
 def test_mmp_ledger_session_payload_roundtrip():
-    from molmanager.mmp_analysis import (
+    from molmanager.analysis.mmp_analysis import (
         deserialize_mmp_ledger_payload,
         serialize_mmp_ledger_payload,
     )

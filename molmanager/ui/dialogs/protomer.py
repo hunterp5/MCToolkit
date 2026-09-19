@@ -35,7 +35,7 @@ from PyQt5.QtWidgets import (
 from rdkit import Chem
 
 from ...services.column_labels import COLUMN_PARENT_OID, COLUMN_PROTOMER_SOURCE_OID_LEGACY
-from ...utils import parse_molecule_from_cell_text
+from ...chem.molecule_conversion import parse_molecule_from_cell_text
 from ...workers import ProtomerGeneratorSignals, ProtomerGeneratorWorker
 from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
 from ..qt_widget_utils import make_window_minimizable
@@ -219,8 +219,8 @@ class ProtomerGeneratorDialog(QDialog):
     def _pka_for_source_oid(self, oid: int | None) -> str:
         if oid is None or self.parent_app is None:
             return "N/A"
-        from molmanager.ionization import format_pka_values, pka_values_from_states
-        from molmanager.microstate_cache import lookup as cache_lookup
+        from molmanager.ionization.unipka_ensembles import format_pka_values, pka_values_from_states
+        from molmanager.ionization.microstate_cache import lookup as cache_lookup
         from molmanager.services.structure_grouping import structure_key
 
         mol = self.parent_app.mols.get(int(oid))

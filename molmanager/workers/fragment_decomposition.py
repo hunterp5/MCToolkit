@@ -26,7 +26,7 @@ from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..fragment_decomposition import (
+from ..chem.fragment_decomposition import (
     DecompositionMethod,
     assemble_fragment_table_rows,
     decompose_fragments,
@@ -84,7 +84,7 @@ class FragmentDecompositionWorker(QRunnable):
         if ev is not None and ev.is_set():
             return
 
-        from ..tool_progress import report_tool_progress
+        from ..platform_support.tool_progress import report_tool_progress
 
         order, rep, oids_map = group_rows_by_structure(self.data)
         tot = max(sum(len(oids_map[k]) for k in order), 1)
@@ -110,7 +110,9 @@ class FragmentDecompositionWorker(QRunnable):
         results_by_key: dict[str, list[str]] = {}
 
         if use_mp:
-            tasks = [(k, rep[k].ToBinary() if rep.get(k) is not None else b"", method) for k in order]
+            tasks = [
+                (k, rep[k].ToBinary() if rep.get(k) is not None else b"", method) for k in order
+            ]
             proc_workers = min(max(2, (os.cpu_count() or 4) - 1), 8, n_unique)
             ex = register_process_pool(ProcessPoolExecutor(max_workers=proc_workers))
             try:
@@ -143,9 +145,7 @@ class FragmentDecompositionWorker(QRunnable):
                             throttle=throttle,
                         )
             finally:
-                shutdown_process_pool_executor(
-                    ex, kill_workers=should_terminate_process_pool(ev)
-                )
+                shutdown_process_pool_executor(ex, kill_workers=should_terminate_process_pool(ev))
         else:
             for key in order:
                 if ev is not None and ev.is_set():

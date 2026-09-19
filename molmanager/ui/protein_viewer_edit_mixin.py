@@ -23,7 +23,7 @@ from dataclasses import replace
 
 from PyQt5.QtWidgets import QMessageBox
 
-from ..structure_components import (
+from ..protein.structure_components import (
     _atom_key4,
     _residue_key3,
     add_cif_chem_bond,
@@ -192,7 +192,9 @@ class ProteinViewerEditMixin:
 
     def delete_residue_selections(self, sels: list[dict], *, confirm: bool = True) -> None:
         """Delete residue-level 3D / Sequence highlights from the structure file."""
-        residue_sels = [sel for sel in sels if isinstance(sel, dict) and not _highlight_is_atom(sel)]
+        residue_sels = [
+            sel for sel in sels if isinstance(sel, dict) and not _highlight_is_atom(sel)
+        ]
         if not residue_sels:
             return
         labels = []
@@ -248,9 +250,7 @@ class ProteinViewerEditMixin:
             self.viewer.delete_residues(js_sels)
         drop_keys = {key for keys in by_slot.values() for key in keys}
         remain = [
-            sel
-            for sel in (self._residue_highlight or [])
-            if _sel_residue_key(sel) not in drop_keys
+            sel for sel in (self._residue_highlight or []) if _sel_residue_key(sel) not in drop_keys
         ]
         self._set_residue_highlight(remain)
         self._set_atom_status("")

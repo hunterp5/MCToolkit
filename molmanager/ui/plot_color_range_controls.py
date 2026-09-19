@@ -21,7 +21,7 @@ from __future__ import annotations
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QSizePolicy, QWidget
 
-from ..plot_color import parse_color_range_bounds
+from ..plotting.plot_marker_color import parse_color_range_bounds
 
 # Min:/Max: labels + two 72px edits + spacing; keep Fixed so parent layouts cannot crush them.
 _COLOR_RANGE_CONTROLS_WIDTH = 220

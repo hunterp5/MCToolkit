@@ -129,7 +129,7 @@ END
 
 
 def test_run_linux_tool_wsl_login_shell(monkeypatch, tmp_path) -> None:
-    from molmanager.wsl import run_linux_tool
+    from molmanager.platform_support.wsl_launcher import run_linux_tool
 
     captured: dict = {}
 
@@ -144,8 +144,8 @@ def test_run_linux_tool_wsl_login_shell(monkeypatch, tmp_path) -> None:
 
         return _Proc()
 
-    monkeypatch.setattr("molmanager.wsl.sys.platform", "win32")
-    monkeypatch.setattr("molmanager.wsl.run_wsl", _run_wsl)
+    monkeypatch.setattr("molmanager.platform_support.wsl_launcher.sys.platform", "win32")
+    monkeypatch.setattr("molmanager.platform_support.wsl_launcher.run_wsl", _run_wsl)
     work = tmp_path / "amber"
     work.mkdir()
     proc = run_linux_tool(["antechamber", "-i", "lig.mol2"], work_dir=work, timeout=12.0)
@@ -166,7 +166,9 @@ def test_ambertools_available_false_when_which_fails(monkeypatch) -> None:
         stdout = ""
         stderr = ""
 
-    monkeypatch.setattr("molmanager.wsl.run_linux_tool", lambda *_a, **_k: _Proc())
+    monkeypatch.setattr(
+        "molmanager.platform_support.wsl_launcher.run_linux_tool", lambda *_a, **_k: _Proc()
+    )
     assert amber.ambertools_available() is False
 
 

@@ -33,7 +33,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...structure_components import sniff_structure_format, viewer_format_for
+from ...protein.structure_components import sniff_structure_format, viewer_format_for
 
 _PREPARE_SOURCE_FMTS = frozenset({"pdb", "pqr", "cif"})
 _PREPARE_SOURCE_FILTER = (
@@ -61,7 +61,7 @@ def _browse_path_row(edit: QLineEdit, on_browse) -> QWidget:
 
 def chain_ids_from_structure_text(text: str, fmt: str) -> tuple[str, ...]:
     """Unique chain IDs in a PDB/mmCIF string."""
-    from ...structure_components import parse_structure_components
+    from ...protein.structure_components import parse_structure_components
 
     seen: list[str] = []
     try:
@@ -79,7 +79,7 @@ def ligand_options_from_structure_text(
     text: str, fmt: str
 ) -> list[tuple[str, tuple[str, str, str], bool, str]]:
     """Ligand combo rows parsed from a PDB/mmCIF string."""
-    from ...structure_components import parse_structure_components
+    from ...protein.structure_components import parse_structure_components
 
     try:
         comps = parse_structure_components(text or "", fmt or "pdb")

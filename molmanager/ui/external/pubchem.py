@@ -42,8 +42,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...name_lookup import names_from_title_and_synonyms
-from ...utils import morgan_tanimoto_to_query
+from ...sources.pubchem_names import names_from_title_and_synonyms
+from ...chem.molecule_conversion import morgan_tanimoto_to_query
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 from ..strings import COLUMN_TANIMOTO_SIMILARITY
 from ..threadpool_access import start_runnable_on_app_pool

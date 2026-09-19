@@ -35,7 +35,7 @@ from PyQt5.QtWidgets import (
 
 from rdkit import Chem
 
-from ...biotransformer import (
+from ...predictions.biotransformer_metabolites import (
     DEFAULT_CYP_MODE,
     DEFAULT_MAX_METABOLITES,
     DEFAULT_NSTEPS,
@@ -43,13 +43,13 @@ from ...biotransformer import (
     install_ready_message,
     uses_cyp_mode,
 )
-from ...bundled_paths import (
+from ...platform_support.bundled_paths import (
     biotransformer_models_dir,
     resolve_biotransformer_jar,
     set_configured_biotransformer_jar,
 )
-from ...memory_guards import check_product_enumeration, clamp_max_products_ui
-from ...utils import parse_molecule_from_cell_text
+from ...platform_support.memory_guards import check_product_enumeration, clamp_max_products_ui
+from ...chem.molecule_conversion import parse_molecule_from_cell_text
 from ...workers import BiotransformerWorker
 from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
 from ..qt_widget_utils import make_window_minimizable
@@ -249,7 +249,7 @@ class BiotransformerDialog(QDialog):
         )
         if reply != QMessageBox.Yes:
             return
-        from ...biotransformer_install import install_biotransformer
+        from ...predictions.biotransformer_install import install_biotransformer
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:

@@ -21,8 +21,8 @@ import threading
 import pytest
 from rdkit import Chem
 
-from molmanager.fragment_decomposition import decompose_brics, recompose_fragments
-from molmanager.fragment_recomposition_filters import (
+from molmanager.chem.fragment_decomposition import decompose_brics, recompose_fragments
+from molmanager.chem.fragment_recomposition_filters import (
     filter_product_smiles,
     parse_recomposition_filter_text,
     product_passes_filters,
@@ -45,7 +45,9 @@ def test_parse_recomposition_filter_text_range_and_comparisons():
 def test_filter_product_smiles_by_molecular_weight():
     mol = Chem.MolFromSmiles("CC(=O)Oc1ccccc1C(=O)O")
     frags = decompose_brics(mol)
-    products, _skipped, _cancelled = recompose_fragments(frags, "brics", max_depth=2, max_products=50)
+    products, _skipped, _cancelled = recompose_fragments(
+        frags, "brics", max_depth=2, max_products=50
+    )
     assert products
 
     kept, filtered = filter_product_smiles(products, "MW <= 500")
@@ -62,7 +64,9 @@ def test_filter_product_smiles_by_molecular_weight():
 def test_filter_product_smiles_rejects_all_when_impossible():
     mol = Chem.MolFromSmiles("CC(=O)Oc1ccccc1C(=O)O")
     frags = decompose_brics(mol)
-    products, _skipped, _cancelled = recompose_fragments(frags, "brics", max_depth=2, max_products=50)
+    products, _skipped, _cancelled = recompose_fragments(
+        frags, "brics", max_depth=2, max_products=50
+    )
     kept, filtered = filter_product_smiles(products, "MW < 1")
     assert kept == []
     assert filtered == len(products)

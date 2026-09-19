@@ -26,7 +26,7 @@ from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..mmp_analysis import (
+from ..analysis.mmp_analysis import (
     CoreSideKey,
     MmpPair,
     filter_fragment_keys_by_core_query,
@@ -103,7 +103,7 @@ class MmpAnalysisWorker(QRunnable):
         if ev is not None and ev.is_set():
             return
 
-        from ..tool_progress import report_tool_progress
+        from ..platform_support.tool_progress import report_tool_progress
 
         tot = max(len(self.records), 1)
         throttle = [0, 0.0]
@@ -124,9 +124,7 @@ class MmpAnalysisWorker(QRunnable):
         try:
             core_query = parse_mmp_core_query(self.core_smarts)
             if self.core_smarts and core_query is None:
-                self._emit_failed(
-                    "Core / MCS pattern could not be parsed as SMARTS or SMILES."
-                )
+                self._emit_failed("Core / MCS pattern could not be parsed as SMARTS or SMILES.")
                 return
 
             activity_by_oid = {int(oid): float(act) for oid, _mol, act in self.records}
@@ -278,9 +276,7 @@ class MmpAnalysisWorker(QRunnable):
 
     def _emit_finished(self, pairs: list[MmpPair]) -> None:
         if self.purpose == "activity_cliff":
-            self.signals.activity_cliff_finished.emit(
-                pairs, self.activity_column, self.x_mode
-            )
+            self.signals.activity_cliff_finished.emit(pairs, self.activity_column, self.x_mode)
         elif self.purpose == "mmp_neighborhood":
             self.signals.mmp_neighborhood_finished.emit(pairs, self.activity_column)
         else:

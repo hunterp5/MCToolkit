@@ -44,9 +44,9 @@ from PyQt5.QtWidgets import (
 
 from rdkit import Chem
 
-from ...display_constants import reaction_depict_size
-from ...rxn_io import RXN_SMARTS_HEADER
-from ...structure_draw import ReactionDrawSpec
+from ...table.structure_depiction_layout import reaction_depict_size
+from ...chem.reaction_file_io import RXN_SMARTS_HEADER
+from ...chem.structure_2d_depiction import ReactionDrawSpec
 from ...workers import ExportWorker
 
 from ..mol_viewer_3d import Molecule3DEmbedView

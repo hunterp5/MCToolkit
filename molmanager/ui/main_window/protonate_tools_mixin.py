@@ -25,7 +25,7 @@ from PyQt5.QtWidgets import QMessageBox
 
 from rdkit import Chem
 
-from ...display_constants import structure_depict_height, structure_depict_width
+from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
 
 logger = logging.getLogger(__name__)
 

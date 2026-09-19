@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import QMessageBox
 
 from rdkit import Chem
 
-from ...utils import mol_to_canonical_smiles
+from ...chem.molecule_conversion import mol_to_canonical_smiles
 from ...workers import DisconnectFragmentsWorker
 
 

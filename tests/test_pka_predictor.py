@@ -21,7 +21,10 @@ from __future__ import annotations
 import pytest
 from rdkit import Chem
 
-from molmanager.ionization import PicklableIonizationEnsemble, PicklableIonizationMicrostate
+from molmanager.ionization.unipka_ensembles import (
+    PicklableIonizationEnsemble,
+    PicklableIonizationMicrostate,
+)
 from molmanager.workers.pka_predictor import (
     PKaPredictorSignals,
     PKaPredictorWorker,
@@ -40,7 +43,7 @@ def _ensemble(*pkas: float, smiles: str = "CCO") -> PicklableIonizationEnsemble:
 @pytest.fixture(autouse=True)
 def _force_sequential_pka_worker(monkeypatch) -> None:
     """Keep pKa worker tests on the in-process path (mocked scorer), not a process pool."""
-    from molmanager import microstate_cache as mc
+    from molmanager.ionization import microstate_cache as mc
 
     mc.clear()
     monkeypatch.setenv("MOLMANAGER_PKA_PROCESS_WORKERS", "1")
@@ -130,7 +133,7 @@ def test_pka_worker_deduplicates_identical_structures(monkeypatch) -> None:
 
 
 def test_pka_worker_reuses_session_cache(monkeypatch) -> None:
-    from molmanager import microstate_cache as mc
+    from molmanager.ionization import microstate_cache as mc
     from molmanager.workers.structure_grouping import structure_key
 
     mol = Chem.MolFromSmiles("CCO")

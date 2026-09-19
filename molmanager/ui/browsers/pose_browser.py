@@ -45,9 +45,9 @@ from PyQt5.QtWidgets import (
 )
 from rdkit import Chem
 
-from ...confs_codec import is_packed_ensemble_header
-from ...display_constants import BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH
-from ...dock_io import (
+from ...conformers.conformer_column_codec import is_packed_ensemble_header
+from ...table.structure_depiction_layout import BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH
+from ...docking.pose_file_io import (
     dock_result_headers,
     ordered_dock_pose_groups,
     pose_table_props,
@@ -55,7 +55,7 @@ from ...dock_io import (
     write_pose_mols_sdf,
 )
 from ...services.column_labels import COLUMN_PARENT_OID
-from ...utils import safe_float
+from ...chem.molecule_conversion import safe_float
 from ..dock_complex_viewer import RENDER_STYLE_CHOICES, DockComplexEmbedView
 from ..dockable_plot import (
     _GLYPH_BTN_SIZE,

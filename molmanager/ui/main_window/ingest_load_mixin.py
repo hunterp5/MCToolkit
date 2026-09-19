@@ -27,13 +27,13 @@ from PyQt5.QtWidgets import QApplication
 
 from rdkit import Chem
 
-from ...config import load_config
-from ...confs_codec import (
+from ...platform_support.config import load_config
+from ...conformers.conformer_column_codec import (
     is_packed_ensemble_header,
     make_sidecar_cell,
     mol_has_3d_coordinates,
 )
-from ...ingest_text import is_ingest_cell_batch
+from ...table.text_file_ingest import is_ingest_cell_batch
 from ...storage import ensure_confs_sidecar
 from ..strings import LOADING_DETAIL_AFTER_FILE_READ, STATUS_READY_RENDER_2D, TOOL_RENDER_2D
 
@@ -48,7 +48,7 @@ class IngestLoadMixin:
             self._merge_import_headers(incoming)
         else:
             self.headers = incoming
-        from ...import_structure import structure_source_picker_candidates
+        from ...chem.structure_source_headers import structure_source_picker_candidates
         from ..dialogs.structure_source import StructureSourcePickerDialog
 
         struct_cols = structure_source_picker_candidates(self.headers)

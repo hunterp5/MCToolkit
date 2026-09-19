@@ -32,16 +32,16 @@ from rdkit import Chem
 from rdkit import DataStructs
 from rdkit.SimDivFilters.rdSimDivPickers import LeaderPicker, MaxMinPicker
 
-from ..config import load_config
-from ..fingerprint_cache import get as cache_get
-from ..fingerprint_cache import store as cache_store
-from ..rdkit_fingerprints import (
+from ..platform_support.config import load_config
+from ..chem.fingerprint_cache import get as cache_get
+from ..chem.fingerprint_cache import store as cache_store
+from ..chem.rdkit_fingerprints import (
     fingerprint_bitvect_for_row,
     fingerprint_bitvect_for_ui_choice,
     fingerprint_is_gil_heavy,
     spec_for_label,
 )
-from ..tool_progress import report_tool_progress
+from ..platform_support.tool_progress import report_tool_progress
 from .process_pool_utils import (
     register_process_pool,
     should_terminate_process_pool,
@@ -209,8 +209,7 @@ def _leader_candidate_indices(
                     return _tanimoto_distance(fps[i], fps[j])
 
                 cents = [
-                    int(i)
-                    for i in lp.LazyPick(distFunc=dist, poolSize=n, threshold=float(thr))
+                    int(i) for i in lp.LazyPick(distFunc=dist, poolSize=n, threshold=float(thr))
                 ]
             except _Cancelled:
                 raise
@@ -254,9 +253,7 @@ def prefilter_candidate_indices(
     if n <= cap:
         return list(range(n))
     leader_limit = (
-        int(leader_max_rows)
-        if leader_max_rows is not None
-        else _LEADER_PREFILTER_MAX_ROWS
+        int(leader_max_rows) if leader_max_rows is not None else _LEADER_PREFILTER_MAX_ROWS
     )
     if n > max(cap, leader_limit):
         return _random_candidate_indices(n, cap, seed)
@@ -295,9 +292,7 @@ def staged_maxmin_diverse_pick(
         return maxmin_diverse_pick_bulk(
             fps, k, seed=seed, cancel_event=cancel_event, on_pick=on_pick
         )
-    cand = prefilter_candidate_indices(
-        fps, cap, seed=seed, cancel_event=cancel_event
-    )
+    cand = prefilter_candidate_indices(fps, cap, seed=seed, cancel_event=cancel_event)
     if len(cand) < k:
         cand = _random_candidate_indices(n, max(k, cap), seed)
     cand_fps = [fps[i] for i in cand]
@@ -314,8 +309,10 @@ def resolve_diverse_mode(mode: str, n: int, exact_max_rows: int | None = None) -
         m = "auto"
     if m != "auto":
         return m
-    cap = int(exact_max_rows) if exact_max_rows is not None else int(
-        load_config().diverse_subset_exact_max_rows
+    cap = (
+        int(exact_max_rows)
+        if exact_max_rows is not None
+        else int(load_config().diverse_subset_exact_max_rows)
     )
     return "exact" if int(n) <= max(1, cap) else "fast"
 
@@ -467,16 +464,12 @@ def materialize_pool_fingerprints(
 
     if mp_ok:
         batch_size = max(1, int(load_config().descriptor_process_pool_batch_size))
-        items = [
-            (i, row.mol.ToBinary() if row.mol is not None else b"") for i, row in missing
-        ]
+        items = [(i, row.mol.ToBinary() if row.mol is not None else b"") for i, row in missing]
         batches = [items[s : s + batch_size] for s in range(0, len(items), batch_size)]
         proc_workers = min(max(2, (os.cpu_count() or 4) - 1), 8)
         ex = register_process_pool(ProcessPoolExecutor(max_workers=proc_workers))
         try:
-            pending = {
-                ex.submit(_mp_fp_batch, (batch, fp_choice)): batch for batch in batches
-            }
+            pending = {ex.submit(_mp_fp_batch, (batch, fp_choice)): batch for batch in batches}
             while pending:
                 if should_terminate_process_pool(cancel_event):
                     raise _Cancelled()
@@ -527,9 +520,7 @@ def materialize_pool_fingerprints(
 
     bad = [pool[i].oid for i, fp in enumerate(fps) if fp is None]
     if bad:
-        raise ValueError(
-            f"Could not compute fingerprints for {len(bad)} row(s) in this scope."
-        )
+        raise ValueError(f"Could not compute fingerprints for {len(bad)} row(s) in this scope.")
     if on_fp_done is not None:
         on_fp_done(n, n)
     return fps, n_cached, n_computed
@@ -562,8 +553,10 @@ def run_diverse_subset_pick(
     )
     fp_base = n
     resolved = resolve_diverse_mode(mode, n)
-    cap = int(candidate_cap) if candidate_cap is not None else int(
-        load_config().diverse_subset_fast_candidate_cap
+    cap = (
+        int(candidate_cap)
+        if candidate_cap is not None
+        else int(load_config().diverse_subset_fast_candidate_cap)
     )
 
     def _on_pick(done: int) -> None:
@@ -660,7 +653,7 @@ class DiverseSubsetWorker(QRunnable):
                     seen.add(oi)
         texts = self.structure_texts
         if texts:
-            from ..utils import parse_molecule_from_cell_text
+            from ..chem.molecule_conversion import parse_molecule_from_cell_text
 
             for oid, raw in texts:
                 if self.cancel_event is not None and self.cancel_event.is_set():
@@ -737,7 +730,10 @@ class DiverseSubsetWorker(QRunnable):
 
             self._report(0, progress_total, force=True)
 
-            use_fp_mp = fingerprint_is_gil_heavy(self.fp_choice) or n >= _diverse_subset_fp_process_pool_min_rows()
+            use_fp_mp = (
+                fingerprint_is_gil_heavy(self.fp_choice)
+                or n >= _diverse_subset_fp_process_pool_min_rows()
+            )
 
             def _on_fp(done: int, _tot: int) -> None:
                 self._report(min(done, n), progress_total)

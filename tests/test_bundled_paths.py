@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from molmanager import bundled_paths
+from molmanager.platform_support import bundled_paths
 
 
 def test_default_external_executable_falls_back_to_name(monkeypatch, tmp_path):

@@ -34,8 +34,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...fragment_decomposition import detect_fragment_column_prefixes
-from ...fragment_recomposition_filters import (
+from ...chem.fragment_decomposition import detect_fragment_column_prefixes
+from ...chem.fragment_recomposition_filters import (
     parse_recomposition_filter_text,
     recomposition_filter_property_help,
 )
@@ -187,7 +187,7 @@ class FragmentRecompositionDialog(QDialog):
         form.addRow("Max coupling depth:", self.max_depth_sb)
 
         self.max_products_sb = QSpinBox()
-        from ...config import load_config
+        from ...platform_support.config import load_config
 
         max_prod_cap = int(load_config().memory_guard_enum_max_products)
         self.max_products_sb.setRange(10, max_prod_cap)

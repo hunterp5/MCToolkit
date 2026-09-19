@@ -30,9 +30,9 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...config import load_config
-from ...memory_guards import check_diverse_subset_workload
-from ...rdkit_fingerprints import descriptor_onbits_column_name
+from ...platform_support.config import load_config
+from ...platform_support.memory_guards import check_diverse_subset_workload
+from ...chem.rdkit_fingerprints import descriptor_onbits_column_name
 from ...workers import (
     DiverseSubsetWorker,
     SIMILARITY_FP_TYPE_LABELS,

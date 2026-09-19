@@ -22,8 +22,8 @@ from PyQt5.QtCore import QEventLoop, QItemSelection, QItemSelectionModel, Qt, QT
 from PyQt5.QtWidgets import QAbstractItemView, QApplication
 from rdkit import Chem
 
-from ...config import load_config
-from ...import_structure import is_tool_generated_structure_header
+from ...platform_support.config import load_config
+from ...chem.structure_source_headers import is_tool_generated_structure_header
 from ...services.table_selection import (
     cached_string_key,
     first_rows_for_distinct_keys,
@@ -33,7 +33,7 @@ from ...services.table_selection import (
     rows_where,
     structure_row_is_empty,
 )
-from ...utils import looks_like_mol_block
+from ...chem.molecule_conversion import looks_like_mol_block
 from ..table_selection import item_selection_for_view_rows, merge_sorted_row_indices
 
 # Sentinel: visible source-row cache is empty (distinct from cached ``None`` = all rows visible).

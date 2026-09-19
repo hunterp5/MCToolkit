@@ -32,7 +32,7 @@ from PyQt5.QtWidgets import (
     QWIDGETSIZE_MAX,
 )
 
-from ..display_constants import (
+from ..table.structure_depiction_layout import (
     structure_column_minimum_width,
     structure_depict_height,
     structure_depict_width,

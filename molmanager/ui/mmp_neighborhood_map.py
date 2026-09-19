@@ -32,8 +32,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..mmp_analysis import MmpPair, pairs_involving_oid
-from ..mmp_neighborhood_analysis import MmpNetworkGraph, build_mmp_network_graph
+from ..analysis.mmp_analysis import MmpPair, pairs_involving_oid
+from ..analysis.mmp_neighborhood_analysis import MmpNetworkGraph, build_mmp_network_graph
 from .dockable_plot import style_plot_footer_text_button
 from .mmp_neighborhood_plot import build_mmp_neighborhood_figure
 from .plotly_interactive_view import PlotlyInteractiveView

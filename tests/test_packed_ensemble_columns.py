@@ -21,7 +21,7 @@ from __future__ import annotations
 import base64
 import json
 
-from molmanager.confs_codec import is_packed_ensemble_header
+from molmanager.conformers.conformer_column_codec import is_packed_ensemble_header
 
 
 def test_is_packed_ensemble_header_matches_confs_superpose_poses():

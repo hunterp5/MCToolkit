@@ -34,7 +34,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...reaction_extract import (
+from ...chem.reaction_extract import (
     EXTRACT_MODES,
     ExtractMode,
     ReactionExtractParams,

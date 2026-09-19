@@ -56,7 +56,7 @@ def emit_tool_progress_throttled(
     force: bool = False,
 ) -> None:
     """Limit ``tool_progress`` emissions; always refresh ``ToolProgressState`` when provided."""
-    from ..tool_progress import report_tool_progress
+    from ..platform_support.tool_progress import report_tool_progress
 
     report_tool_progress(
         message=message,

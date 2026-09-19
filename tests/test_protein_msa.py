@@ -20,8 +20,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from molmanager import bundled_paths, protein_msa
-from molmanager.protein_msa import (
+from molmanager.platform_support import bundled_paths
+from molmanager.protein import protein_msa
+from molmanager.protein.protein_msa import (
     FastaRecord,
     aa_sequence_from_viewer,
     alignment_html,

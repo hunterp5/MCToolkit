@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.config import load_config
-from molmanager.rdkit_fingerprints import int_fns_include_fingerprints
+from molmanager.platform_support.config import load_config
+from molmanager.chem.rdkit_fingerprints import int_fns_include_fingerprints
 from molmanager.workers.chemistry_descriptors import (
     _descriptor_output_headers,
     _descriptor_process_pool_min_rows,
@@ -73,7 +73,10 @@ def test_descriptor_output_headers_appends_shared_pka_column() -> None:
 
 
 def test_calc_descriptor_row_values_adds_pka_from_ensemble() -> None:
-    from molmanager.ionization import PicklableIonizationEnsemble, PicklableIonizationMicrostate
+    from molmanager.ionization.unipka_ensembles import (
+        PicklableIonizationEnsemble,
+        PicklableIonizationMicrostate,
+    )
     from molmanager.workers.chemistry_descriptors import _calc_descriptor_row_values
 
     mol = Chem.MolFromSmiles("CCO")

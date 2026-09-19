@@ -18,8 +18,8 @@
 
 from __future__ import annotations
 
-from molmanager.descriptor_tooltips import descriptor_checkbox_tooltip
-from molmanager.rdkit_fingerprints import FINGERPRINT_SPECS
+from molmanager.reference.descriptor_tooltips import descriptor_checkbox_tooltip
+from molmanager.chem.rdkit_fingerprints import FINGERPRINT_SPECS
 from molmanager.ui.dialogs.properties import PropertyDialog
 
 

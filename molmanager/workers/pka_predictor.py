@@ -22,7 +22,7 @@ JACS Au 2024, 4, 1721. https://doi.org/10.1021/jacsau.4c00271
 Code: https://github.com/dptech-corp/Uni-pKa — runtime: unipkainfer.
 
 Enumeration uses MolGpKa-derived SMARTS (Pan et al., J. Chem. Inf. Model. 2021).
-Shorter copy-paste block: ``molmanager.science_citations.UNIPKA``.
+Shorter copy-paste block: ``molmanager.reference.method_citations.UNIPKA``.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
-from molmanager.ionization import (
+from molmanager.ionization.unipka_ensembles import (
     format_pka_and_pi,
     pin_unipka_torch_threads,
     predict_ionization_ensemble,
@@ -256,7 +256,7 @@ class PKaPredictorWorker(QRunnable):
                 _safe_emit(self.pka_signals, "failed", err)
                 return
 
-            from molmanager.ionization import warn_if_cuda_torch_missing
+            from molmanager.ionization.unipka_ensembles import warn_if_cuda_torch_missing
 
             warn_if_cuda_torch_missing()
 
@@ -272,8 +272,8 @@ class PKaPredictorWorker(QRunnable):
             )
             tot = max(n_work, 1)
 
-            from ..config import load_config
-            from molmanager.microstate_cache import lookup as cache_lookup
+            from ..platform_support.config import load_config
+            from molmanager.ionization.microstate_cache import lookup as cache_lookup
             from .ionization_parallel import (
                 chunk_structure_keys,
                 plan_ionization_process_workers,
@@ -283,7 +283,7 @@ class PKaPredictorWorker(QRunnable):
             cancelled = False
             prog_last = 0.0
 
-            from ..tool_progress import report_tool_progress
+            from ..platform_support.tool_progress import report_tool_progress
 
             throttle = [0, 0.0]
 
@@ -333,7 +333,7 @@ class PKaPredictorWorker(QRunnable):
                 return
 
             if use_mp:
-                from molmanager.microstate_cache import store as cache_store
+                from molmanager.ionization.microstate_cache import store as cache_store
                 from .ionization_parallel import (
                     _restore_unipka_mmff_thread_env,
                     _set_unipka_mmff_thread_env,
@@ -392,7 +392,7 @@ class PKaPredictorWorker(QRunnable):
                     for oid in oids_map.get(key, ()):
                         row_text[oid] = (txt, pi_txt)
             else:
-                from molmanager.microstate_cache import store as cache_store
+                from molmanager.ionization.microstate_cache import store as cache_store
 
                 pin_unipka_torch_threads()
                 for key in order:

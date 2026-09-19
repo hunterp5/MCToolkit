@@ -39,12 +39,12 @@ from PyQt5.QtWidgets import (
 )
 from rdkit import Chem
 
-from ...display_constants import (
+from ...table.structure_depiction_layout import (
     BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
     BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
 )
-from ...random_molecule_sources import RandomSourceMolecule
-from ...structure_draw import render_molecule_png
+from ...sources.random_molecule_sources import RandomSourceMolecule
+from ...chem.structure_2d_depiction import render_molecule_png
 from ..dockable_plot import (
     discard_host_dialog_after_dock,
     make_add_to_main_button,

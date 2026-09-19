@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from molmanager.pharmacophore import (
+from molmanager.protein.pharmacophore import (
     FORMAT_ID,
     Pharmacophore,
     PharmacophoreFeature,
@@ -272,7 +272,7 @@ def test_pharmacophore_help_topic():
 
 
 def test_screen_mol_matches_ethanol_self_pharmacophore():
-    from molmanager.pharmacophore_screen import screen_mol
+    from molmanager.protein.pharmacophore_screen import screen_mol
 
     mol = _ethanol_3d()
     feats = features_from_mol(mol)
@@ -288,7 +288,7 @@ def test_screen_mol_matches_ethanol_self_pharmacophore():
 
 
 def test_screen_mol_rejects_impossible_pair_distance():
-    from molmanager.pharmacophore_screen import screen_mol
+    from molmanager.protein.pharmacophore_screen import screen_mol
 
     mol = _ethanol_3d()
     query = Pharmacophore(
@@ -305,7 +305,7 @@ def test_screen_mol_rejects_impossible_pair_distance():
 
 
 def test_screen_mol_requires_feature_atom_when_set():
-    from molmanager.pharmacophore_screen import screen_mol
+    from molmanager.protein.pharmacophore_screen import screen_mol
 
     mol = _ethanol_3d()
     donor = next(f for f in features_from_mol(mol) if f.type == "Donor")
@@ -340,7 +340,7 @@ def test_screen_mol_requires_feature_atom_when_set():
 
 
 def test_screen_mol_skips_exclusion_volumes():
-    from molmanager.pharmacophore_screen import screening_features, screen_mol
+    from molmanager.protein.pharmacophore_screen import screening_features, screen_mol
 
     mol = _ethanol_3d()
     donor = next(f for f in features_from_mol(mol) if f.type == "Donor")
@@ -357,8 +357,11 @@ def test_screen_mol_skips_exclusion_volumes():
 
 
 def test_screen_packed_ensemble_cell():
-    from molmanager.confs_codec import mol_from_packed_confs_cell, pack_confs_cell
-    from molmanager.pharmacophore_screen import screen_mol
+    from molmanager.conformers.conformer_column_codec import (
+        mol_from_packed_confs_cell,
+        pack_confs_cell,
+    )
+    from molmanager.protein.pharmacophore_screen import screen_mol
 
     mol = _ethanol_3d()
     packed_text = pack_confs_cell({"n": 1}, mol)
@@ -370,7 +373,7 @@ def test_screen_packed_ensemble_cell():
 
 
 def test_output_column_names():
-    from molmanager.pharmacophore_screen import output_column_names
+    from molmanager.protein.pharmacophore_screen import output_column_names
 
     assert output_column_names("pharma") == (
         "pharmaMatch",
@@ -394,8 +397,8 @@ def test_pharmacophore_screen_dialog_constructible(qapp):  # noqa: ARG001
 
 def test_pharmacophore_screen_dialog_closes_when_run_starts(qapp, tmp_path, monkeypatch):
     pytest.importorskip("PyQt5.QtWidgets")
-    from molmanager.confs_codec import pack_confs_cell
-    from molmanager.pharmacophore import save_pharmacophore
+    from molmanager.conformers.conformer_column_codec import pack_confs_cell
+    from molmanager.protein.pharmacophore import save_pharmacophore
     from molmanager.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
@@ -485,7 +488,7 @@ def test_screen_one_worker_helper():
 def test_docked_pose_match_is_protein_frame():
     from rdkit.Geometry import Point3D
 
-    from molmanager.pharmacophore_screen import match_docked_pose, screen_mol
+    from molmanager.protein.pharmacophore_screen import match_docked_pose, screen_mol
 
     mol = _ethanol_3d()
     feats = features_from_mol(mol)
@@ -505,7 +508,7 @@ def test_docked_pose_match_is_protein_frame():
 
 
 def test_docked_pose_exclusion_rejects_heavy_atom():
-    from molmanager.pharmacophore_screen import match_docked_pose
+    from molmanager.protein.pharmacophore_screen import match_docked_pose
 
     mol = _ethanol_3d()
     conf = mol.GetConformer()
@@ -528,7 +531,7 @@ def test_docked_pose_exclusion_rejects_heavy_atom():
 
 
 def test_docked_pose_exclusion_respects_atom():
-    from molmanager.pharmacophore_screen import match_docked_pose
+    from molmanager.protein.pharmacophore_screen import match_docked_pose
 
     mol = _ethanol_3d()
     conf = mol.GetConformer()
@@ -567,7 +570,7 @@ def test_docked_pose_exclusion_respects_atom():
 def test_filter_docked_poses_keeps_only_matches():
     from rdkit.Geometry import Point3D
 
-    from molmanager.pharmacophore_screen import (
+    from molmanager.protein.pharmacophore_screen import (
         POSE_PHARMA_MATCH_PROP,
         filter_docked_poses,
         match_docked_pose,

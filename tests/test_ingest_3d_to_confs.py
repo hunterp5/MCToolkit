@@ -21,7 +21,7 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.confs_codec import (
+from molmanager.conformers.conformer_column_codec import (
     mol_has_3d_coordinates,
     mol_from_packed_confs_cell,
     rehydrate_v1_confs_cell,
@@ -74,7 +74,9 @@ def test_ingest_store_mol_demotes_3d_to_confs(qapp):  # noqa: ARG001
     sc = getattr(w, "_confs_blocks_sidecar", {})
     b64 = resolve_blocks_b64_for_viewer(light, "confs", oid, sc)
     assert b64 is not None
-    packed = mol_from_packed_confs_cell(rehydrate_v1_confs_cell(light, "confs", oid, sc), min_conformers=1)
+    packed = mol_from_packed_confs_cell(
+        rehydrate_v1_confs_cell(light, "confs", oid, sc), min_conformers=1
+    )
     assert packed is not None
     assert mol_has_3d_coordinates(packed)
 

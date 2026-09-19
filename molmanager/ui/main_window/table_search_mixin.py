@@ -33,7 +33,7 @@ from PyQt5.QtWidgets import (
 )
 from rdkit import Chem
 
-from ...config import load_config
+from ...platform_support.config import load_config
 from ...workers import SubstructureFilterWorker
 from ..search_panel import SearchCriterionRow
 from ..search_query import (
@@ -286,7 +286,7 @@ class TableSearchMixin:
 
     def _search_query_pattern_mol(self, text: str) -> Chem.Mol | None:
         """Parse one query string as a substructure pattern (SMARTS first, then SMILES)."""
-        from ...smarts_patterns import mol_from_smarts
+        from ...chem.smarts_macropatterns import mol_from_smarts
 
         text = (text or "").strip()
         if not text:

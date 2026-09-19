@@ -38,7 +38,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...random_molecule_sources import (
+from ...sources.random_molecule_sources import (
     FILTER_PROPERTY_SPECS,
     SOURCE_CHOICES,
     IntBounds,

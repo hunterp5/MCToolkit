@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.rdkit_fingerprints import fingerprint_bitvect_for_ui_choice
+from molmanager.chem.rdkit_fingerprints import fingerprint_bitvect_for_ui_choice
 from molmanager.workers.fingerprint_similarity import pairwise_fingerprint_similarity
 
 

@@ -128,7 +128,7 @@ class RGroupDecompositionWorker(QRunnable):
                 pass
             return
 
-        from ..tool_progress import report_tool_progress
+        from ..platform_support.tool_progress import report_tool_progress
 
         oids = [int(o) for o, _ in self.data]
         mols = [m for _, m in self.data]

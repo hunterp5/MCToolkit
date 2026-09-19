@@ -176,7 +176,7 @@ def test_normalize_flexres_and_flex_out_path():
 
 
 def test_smina_dialog_defaults_to_resolved_executable(qapp):  # noqa: ARG001
-    from molmanager.bundled_paths import default_external_executable
+    from molmanager.platform_support.bundled_paths import default_external_executable
 
     dlg = GninaDockDialog(None)
     assert dlg.edit_exe.text() == default_external_executable("gnina")
@@ -382,7 +382,7 @@ def test_smina_present_dock_results_opens_table(qapp, tmp_path):  # noqa: ARG001
 
 
 def test_apply_prepare_result_fills_numeric_box(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.docking_box import DockingBox
+    from molmanager.docking.search_box import DockingBox
     from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
 
     rec = tmp_path / "rec_receptor.pdbqt"
@@ -490,7 +490,7 @@ def test_gnina_selected_rows_writes_confs_sdf(qapp, tmp_path):  # noqa: ARG001
     from rdkit import Chem
     from rdkit.Chem import AllChem
 
-    from molmanager.confs_codec import pack_confs_cell
+    from molmanager.conformers.conformer_column_codec import pack_confs_cell
     from molmanager.ui.gnina_dock import GninaDockDialog
 
     mol = Chem.AddHs(Chem.MolFromSmiles("CCO"))
@@ -644,7 +644,7 @@ def test_present_dock_results_stamps_crystal_ref(qapp, tmp_path):  # noqa: ARG00
     from rdkit import Chem
     from rdkit.Chem import SDWriter
 
-    from molmanager.dock_validation import CRYSTAL_REF_PROP
+    from molmanager.docking.redock_validation import CRYSTAL_REF_PROP
 
     sdf = tmp_path / "docked.sdf"
     mol = Chem.MolFromSmiles("CCO")
@@ -680,7 +680,7 @@ def test_present_dock_results_skips_crystal_ref_on_user_ligands(qapp, tmp_path):
     from rdkit import Chem
     from rdkit.Chem import SDWriter
 
-    from molmanager.dock_validation import CRYSTAL_REF_PROP
+    from molmanager.docking.redock_validation import CRYSTAL_REF_PROP
 
     sdf = tmp_path / "docked.sdf"
     mol = Chem.MolFromSmiles("CCN")
@@ -716,7 +716,7 @@ def test_present_dock_results_keeps_crystal_ref_on_validation_entry_only(qapp, t
     from rdkit import Chem
     from rdkit.Chem import SDWriter
 
-    from molmanager.dock_validation import CRYSTAL_REF_PROP, stamp_crystal_ref
+    from molmanager.docking.redock_validation import CRYSTAL_REF_PROP, stamp_crystal_ref
 
     user_sdf = tmp_path / "docked.sdf"
     user = Chem.MolFromSmiles("CCN")

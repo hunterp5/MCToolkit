@@ -21,8 +21,8 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.confs_codec import pack_confs_cell
-from molmanager.descriptors_3d import (
+from molmanager.conformers.conformer_column_codec import pack_confs_cell
+from molmanager.descriptors.descriptors_3d import (
     DESCRIPTOR_3D_ITEMS,
     DESCRIPTOR_3D_KEYS,
     int_fns_need_3d,
@@ -183,7 +183,7 @@ def test_descriptor_callable_3d_requires_ctx_mol():
 
 
 def test_all_3d_keys_have_dialog_items_and_fns():
-    from molmanager.descriptors_3d import DESCRIPTOR_3D_FNS
+    from molmanager.descriptors.descriptors_3d import DESCRIPTOR_3D_FNS
 
     assert {k for _d, k in DESCRIPTOR_3D_ITEMS} == DESCRIPTOR_3D_KEYS
     assert set(DESCRIPTOR_3D_FNS) == DESCRIPTOR_3D_KEYS

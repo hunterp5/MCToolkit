@@ -21,8 +21,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from ..confs_codec import is_packed_ensemble_header
-from ..utils import safe_float
+from ..conformers.conformer_column_codec import is_packed_ensemble_header
+from ..chem.molecule_conversion import safe_float
 
 # Packed multi-conformer / alignment / dock-pose payloads — not numeric filter columns.
 NON_NUMERIC_BLOB_COLUMNS = frozenset({"confs", "superpose", "poses"})

@@ -30,7 +30,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ..plot_color import (
+from ..plotting.plot_marker_color import (
     PLOT_COLORSCALE_CHOICES,
     color_values_are_numeric,
     normalize_color_column,

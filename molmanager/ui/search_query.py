@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ..services.sqlite_text_match import sqlite_text_match_clause
-from ..utils import safe_float
+from ..chem.molecule_conversion import safe_float
 
 SearchOp = Literal[
     "contains",
@@ -372,9 +372,7 @@ def parse_search_term_groups(query: str) -> list[list[str]]:
     groups: list[list[str]] = []
     for part in or_parts:
         and_terms = [
-            t
-            for t in _split_top_level(part, _AND_SEPARATORS, flush_on=_OR_SEPARATORS)
-            if t.strip()
+            t for t in _split_top_level(part, _AND_SEPARATORS, flush_on=_OR_SEPARATORS) if t.strip()
         ]
         if and_terms:
             groups.append(and_terms)
@@ -393,10 +391,10 @@ def flatten_search_term_groups(groups: list[list[str]]) -> list[str]:
 
 def validate_search_text_query(query: str, *, partial: bool) -> str | None:
     """
-    Return an error message when a text-search term must be quoted, else ``None``.
+      Return an error message when a text-search term must be quoted, else ``None``.
 
-    String literals must use ``"..."`` or ``'...'`` so ``|``, ``,``, and ``&`` are not ambiguous.
-  Numeric comparisons, ``empty`` / ``not empty``, and quoted strings are allowed.
+      String literals must use ``"..."`` or ``'...'`` so ``|``, ``,``, and ``&`` are not ambiguous.
+    Numeric comparisons, ``empty`` / ``not empty``, and quoted strings are allowed.
     """
     q = (query or "").strip()
     if not q:
@@ -743,7 +741,10 @@ def sqlite_clause_for_condition(
 
     if cond.op == "not_contains":
         inner = sqlite_clause_for_condition(
-            header_quoted, SearchCondition("contains", cond.value), partial=partial, case_sensitive=case_sensitive
+            header_quoted,
+            SearchCondition("contains", cond.value),
+            partial=partial,
+            case_sensitive=case_sensitive,
         )
         if inner is None:
             return None

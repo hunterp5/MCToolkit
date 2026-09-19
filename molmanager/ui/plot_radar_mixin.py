@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from PyQt5.QtWidgets import QMessageBox
 
-from ..plot_radar import SPOKE_NONE, resolve_entry_row_oid
+from ..plotting.plot_radar import SPOKE_NONE, resolve_entry_row_oid
 
 
 class PlotRadarMixin:

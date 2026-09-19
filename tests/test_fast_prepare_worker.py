@@ -23,9 +23,9 @@ import threading
 import pytest
 from rdkit import Chem
 
-from molmanager.fragment_disconnect import largest_fragment_and_rest
-from molmanager.structure_neutralize import neutralize_mol
-from molmanager.utils import mol_to_canonical_smiles
+from molmanager.chem.fragment_disconnect import largest_fragment_and_rest
+from molmanager.chem.structure_neutralize import neutralize_mol
+from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
 from molmanager.workers.fast_prepare import (
     FastPrepareWorker,
     _mp_fast_prepare_batch,
@@ -57,9 +57,7 @@ def test_prepare_one_matches_old_two_stage_pipeline(smiles: str) -> None:
     mol = Chem.MolFromSmiles(smiles)
     assert mol is not None
     expected = _old_pipeline(mol, smiles)
-    got = _prepare_one(
-        mol.ToBinary(), smiles, is_text=False, need_smiles=True, neutralize=True
-    )
+    got = _prepare_one(mol.ToBinary(), smiles, is_text=False, need_smiles=True, neutralize=True)
     assert (expected is None) == (got is None)
     if expected is None:
         return
@@ -74,15 +72,15 @@ def test_prepare_one_from_cell_text_matches_mol_input() -> None:
     smiles = "CC(=O)Oc1ccccc1C(=O)[O-].[Na+]"
     from_text = _prepare_one(smiles, None, is_text=True, need_smiles=True, neutralize=True)
     mol = Chem.MolFromSmiles(smiles)
-    from_mol = _prepare_one(mol.ToBinary(), smiles, is_text=False, need_smiles=True, neutralize=True)
+    from_mol = _prepare_one(
+        mol.ToBinary(), smiles, is_text=False, need_smiles=True, neutralize=True
+    )
     assert from_text is not None and from_mol is not None
     assert from_text[1:] == from_mol[1:]
 
 
 def test_prepare_one_neutralizes_charge() -> None:
-    res = _prepare_one(
-        "C[NH+](C)C.[Cl-]", None, is_text=True, need_smiles=True, neutralize=True
-    )
+    res = _prepare_one("C[NH+](C)C.[Cl-]", None, is_text=True, need_smiles=True, neutralize=True)
     assert res is not None
     out = Chem.Mol(res[0])
     assert Chem.GetFormalCharge(out) == 0
@@ -90,9 +88,7 @@ def test_prepare_one_neutralizes_charge() -> None:
 
 
 def test_prepare_one_skips_neutralize_when_disabled() -> None:
-    res = _prepare_one(
-        "C[NH+](C)C.[Cl-]", None, is_text=True, need_smiles=True, neutralize=False
-    )
+    res = _prepare_one("C[NH+](C)C.[Cl-]", None, is_text=True, need_smiles=True, neutralize=False)
     assert res is not None
     out = Chem.Mol(res[0])
     assert Chem.GetFormalCharge(out) == 1

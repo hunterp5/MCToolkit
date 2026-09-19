@@ -21,7 +21,7 @@ from __future__ import annotations
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDoubleSpinBox, QHBoxLayout, QLabel, QSizePolicy, QWidget
 
-from ..plot_color import (
+from ..plotting.plot_marker_color import (
     DEFAULT_MARKER_SIZE_MAX_PX,
     DEFAULT_MARKER_SIZE_MIN_PX,
     clamp_marker_size_bounds,

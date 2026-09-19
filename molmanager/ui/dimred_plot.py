@@ -23,8 +23,8 @@ from typing import Any
 
 from plotly import graph_objects as go
 
-from ..dimensionality_reduction import DimensionReductionResult
-from ..plot_color import (
+from ..analysis.dimensionality_reduction import DimensionReductionResult
+from ..plotting.plot_marker_color import (
     DEFAULT_PLOT_COLORSCALE,
     DEFAULT_SELECTED_MARKER_SIZE_PX,
     attach_marker_size_legend,

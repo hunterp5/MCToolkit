@@ -40,7 +40,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...mpo_scoring import (
+from ...analysis.mpo_scoring import (
     CombineMethod,
     DesirabilityDirection,
     DesirabilityKind,

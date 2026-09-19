@@ -27,8 +27,8 @@ from dataclasses import dataclass
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem, DataStructs
 
-from ..tool_progress import ToolProgressState, report_tool_progress
-from ..rdkit_fingerprints import fingerprint_bitvect_for_row, fingerprint_bitvect_for_ui_choice
+from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
+from ..chem.rdkit_fingerprints import fingerprint_bitvect_for_row, fingerprint_bitvect_for_ui_choice
 from .fingerprint_similarity import SIMILARITY_METRIC_LABELS, pairwise_fingerprint_similarity
 from .signals import BulkSimilaritySignals
 
@@ -110,7 +110,9 @@ class BulkSimilarityWorker(QRunnable):
             self._report(n_in, n_in, force=True)
 
             if len(fps) < 2:
-                self.signals.failed.emit("Need at least two rows with valid fingerprints in this scope.")
+                self.signals.failed.emit(
+                    "Need at least two rows with valid fingerprints in this scope."
+                )
                 return
 
             tot_pairs = (len(fps) * (len(fps) - 1)) // 2
@@ -134,7 +136,9 @@ class BulkSimilarityWorker(QRunnable):
                 if metric == "Tanimoto":
                     sims = DataStructs.BulkTanimotoSimilarity(fps[i], fps[:i])
                 else:
-                    sims = [pairwise_fingerprint_similarity(fps[i], fps[j], metric) for j in range(i)]
+                    sims = [
+                        pairwise_fingerprint_similarity(fps[i], fps[j], metric) for j in range(i)
+                    ]
                 for j in range(i):
                     s = float(sims[j])
                     sum_sim += s
@@ -173,4 +177,3 @@ class BulkSimilarityWorker(QRunnable):
         except Exception as e:
             logger.exception("BulkSimilarityWorker failed")
             self.signals.failed.emit(str(e) or "Bulk similarity failed.")
-

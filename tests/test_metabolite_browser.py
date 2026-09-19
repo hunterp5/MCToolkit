@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from molmanager.display_constants import (
+from molmanager.table.structure_depiction_layout import (
     BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
     BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
 )

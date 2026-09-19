@@ -31,7 +31,7 @@ from PyQt5.QtWidgets import (
     QTextBrowser,
 )
 
-from ..citations_catalog import (
+from ..reference.citations_catalog import (
     CITATION_SECTIONS,
     iter_tool_citations,
     tool_citation,

@@ -32,7 +32,11 @@ from PyQt5.QtWidgets import (
     QTextBrowser,
 )
 
-from ..help_markdown import load_help_markdown, markdown_to_html_fragment, missing_topic_html
+from ..reference.help_markdown import (
+    load_help_markdown,
+    markdown_to_html_fragment,
+    missing_topic_html,
+)
 from .qt_widget_utils import make_window_minimizable
 
 if TYPE_CHECKING:

@@ -45,7 +45,7 @@ from .chemistry_conformers import (
     strain_overlay_for_mols,
 )
 from .chemistry_descriptors import CalcWorker, descriptor_callable_for_int_fn
-from ..confs_codec import format_confs_table_cell, pack_confs_cell
+from ..conformers.conformer_column_codec import format_confs_table_cell, pack_confs_cell
 
 __all__ = [
     "CalcWorker",

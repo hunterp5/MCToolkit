@@ -22,7 +22,7 @@ import json
 
 from plotly import graph_objects as go
 
-from ..plot_analysis import (
+from ..plotting.plot_statistics_fits import (
     FIT_NONE,
     FIT_TRUNCATED_GAUSSIAN,
     HISTOGRAM_ONLY_FITS,
@@ -31,7 +31,7 @@ from ..plot_analysis import (
     fit_histogram_curve,
     fit_xy_curve,
 )
-from ..plot_axes import (
+from ..plotting.plot_axes import (
     PLOT_TYPE_BOX,
     PLOT_TYPE_HEATMAP,
     PLOT_TYPE_HISTOGRAM,
@@ -40,7 +40,7 @@ from ..plot_axes import (
     PLOT_TYPE_SCATTER,
     PLOT_TYPE_VIOLIN,
 )
-from ..plot_color import (
+from ..plotting.plot_marker_color import (
     DEFAULT_MARKER_SIZE_PX,
     attach_marker_size_legend,
     color_values_are_numeric,
@@ -49,7 +49,7 @@ from ..plot_color import (
     resolve_plot_colorscale,
     scatter_marker_from_column_values,
 )
-from ..plot_labels import add_fit_formula_annotation, apply_plotly_label_overrides
+from ..plotting.plot_labels import add_fit_formula_annotation, apply_plotly_label_overrides
 from .plot_hover import hover_cards_payload
 
 

@@ -23,7 +23,7 @@ Numeric (and categorical where supported) columns for rows in scope; **Selected 
 - **Size by**, marker **Min size** / **Max size** (pixels).
 - **Fit** - None / Linear / Quadratic / Normal / Truncated Normal / Log-Normal (plus trunc bounds when relevant).
 - Radar: **Spokes**, **Entry** selectors.
-- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **×** when docked).
+- Footer: gear (**Plot Options**), **Clear Selection**, then Add/Send glyph and **Close Plot** (pane **Ã—** when docked).
 
 ## Workflow
 

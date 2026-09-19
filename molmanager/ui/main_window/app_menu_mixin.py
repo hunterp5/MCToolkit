@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...config import load_config
+from ...platform_support.config import load_config
 from ..citations_dialog import open_citations_dialog
 from ..user_guides import open_user_guide_dialog
 

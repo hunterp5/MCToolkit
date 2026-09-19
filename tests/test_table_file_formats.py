@@ -23,8 +23,8 @@ from pathlib import Path
 
 from rdkit import Chem
 
-from molmanager.ingest_text import find_smiles_column
-from molmanager.table_file_formats import (
+from molmanager.table.text_file_ingest import find_smiles_column
+from molmanager.table.table_file_formats import (
     TABLE_OPEN_FILTER,
     TABLE_SAVE_FILTER,
     iter_mol2_mols,

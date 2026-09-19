@@ -22,7 +22,7 @@ import json
 
 from plotly import graph_objects as go
 
-from ..plot_axes import (
+from ..plotting.plot_axes import (
     PLOT_TYPE_BOX,
     PLOT_TYPE_HEATMAP,
     PLOT_TYPE_HISTOGRAM,
@@ -34,16 +34,16 @@ from ..plot_axes import (
     oids_at_histogram_point_indices,
     oids_in_histogram_bin,
 )
-from ..plot_analysis import summarize_univariate, summarize_xy
-from ..plot_color import (
+from ..plotting.plot_statistics_fits import summarize_univariate, summarize_xy
+from ..plotting.plot_marker_color import (
     DEFAULT_MARKER_SIZE_3D_PX,
     DEFAULT_MARKER_SIZE_PX,
     DEFAULT_SELECTED_MARKER_SIZE_3D_PX,
     DEFAULT_SELECTED_MARKER_SIZE_PX,
     resolve_plot_colorscale,
 )
-from ..plot_heatmap import build_heatmap_figure, oids_in_heatmap_cell, summarize_heatmap
-from ..plot_radar import (
+from ..plotting.plot_heatmap import build_heatmap_figure, oids_in_heatmap_cell, summarize_heatmap
+from ..plotting.plot_radar import (
     MAX_RADAR_TRACES,
     MAX_RADAR_VARIABLES,
     MIN_RADAR_VARIABLES,
@@ -175,7 +175,7 @@ class PlotRenderMixin:
         selected_points = (
             sorted(self._selected_point_indices) if self._selected_point_indices else []
         )
-        from ..config import load_config
+        from ..platform_support.config import load_config
 
         overlay_max = int(load_config().plot_selection_overlay_max_points)
         # Large selections are applied after react via molmanagerSetSelection (avoids fat payloads).

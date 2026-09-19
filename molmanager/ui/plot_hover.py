@@ -22,7 +22,7 @@ import base64
 import html
 from typing import Any
 
-from ..structure_draw import render_molecule_png
+from ..chem.structure_2d_depiction import render_molecule_png
 
 HOVER_THUMB_WIDTH = 140
 HOVER_THUMB_HEIGHT = 116

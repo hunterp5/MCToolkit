@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PyQt5.QtWidgets import QApplication
 
-from molmanager.session_codec import (
+from molmanager.table.session_codec import (
     dumps_session_document,
     expand_session_document,
     loads_session_bytes,

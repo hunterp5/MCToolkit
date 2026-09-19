@@ -22,7 +22,7 @@ from typing import Any
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
-from ..tool_progress import format_tool_progress_text
+from ..platform_support.tool_progress import format_tool_progress_text
 
 
 class BackgroundActivityHub(QObject):

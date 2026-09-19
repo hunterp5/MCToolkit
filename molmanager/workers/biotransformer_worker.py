@@ -25,7 +25,7 @@ from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
-from ..biotransformer import (
+from ..predictions.biotransformer_metabolites import (
     BIOTRANSFORMER_CANCELLED,
     DEFAULT_CYP_MODE,
     DEFAULT_MAX_METABOLITES,
@@ -37,7 +37,7 @@ from ..biotransformer import (
     metabolite_output_columns,
     predict_metabolites_batch,
 )
-from ..utils import mol_to_canonical_smiles
+from ..chem.molecule_conversion import mol_to_canonical_smiles
 from .signals import emit_partial_results_if_cancelled
 from .structure_grouping import group_rows_by_structure, structure_key
 
@@ -126,7 +126,7 @@ class BiotransformerWorker(QRunnable):
         self.progress_state = progress_state
 
     def run(self) -> None:
-        from ..tool_progress import report_tool_progress
+        from ..platform_support.tool_progress import report_tool_progress
 
         cancel_ev = self.cancel_event
         columns = metabolite_output_columns()

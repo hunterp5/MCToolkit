@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from molmanager.som_prediction import (
+from molmanager.predictions.som_prediction import (
     SOM_CANCELLED_ERROR,
     SOM_MAP_COLUMN,
     SOM_P1_SITES_COLUMN,
@@ -435,7 +435,7 @@ def test_empty_som_map_cells_skip_pixmap_background(qapp) -> None:  # noqa: ARG0
     from PyQt5.QtGui import QPixmap
     from PyQt5.QtWidgets import QStyleOptionViewItem
 
-    from molmanager.display_constants import structure_depict_height
+    from molmanager.table.structure_depiction_layout import structure_depict_height
     from molmanager.ui.compound_table_model import CompoundTableModel
     from molmanager.ui.table_selection_delegate import RowHighlightDelegate
 

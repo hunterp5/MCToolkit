@@ -62,7 +62,7 @@ def test_pubchem_similarity_results_sort_key():
 
 
 def test_similarity_fp_type_labels_include_variants():
-    from molmanager.rdkit_fingerprints import SIMILARITY_FP_TYPE_LABELS
+    from molmanager.chem.rdkit_fingerprints import SIMILARITY_FP_TYPE_LABELS
 
     joined = "\n".join(SIMILARITY_FP_TYPE_LABELS)
     assert "Atom pair" in joined and "Topological" in joined
@@ -87,7 +87,7 @@ def test_fingerprint_bitvect_atom_pair_and_morgan_nbits():
 def test_parse_molecule_from_cell_text_accepts_smiles_and_inchi():
     from rdkit import Chem
 
-    from molmanager.utils import parse_molecule_from_cell_text
+    from molmanager.chem.molecule_conversion import parse_molecule_from_cell_text
 
     m1 = parse_molecule_from_cell_text("CCO")
     assert m1 is not None and m1.GetNumAtoms() == 3
@@ -327,7 +327,7 @@ def test_pixmap_structure_column_context_chemistry(qapp):  # noqa: ARG001
 def test_canonical_structure_keys_for_dedup(qapp):  # noqa: ARG001
     from rdkit import Chem
 
-    from molmanager.utils import morgan_tanimoto_to_query
+    from molmanager.chem.molecule_conversion import morgan_tanimoto_to_query
 
     assert morgan_tanimoto_to_query("CC", "CC") == 1.0
     t = morgan_tanimoto_to_query("CCO", "CC")

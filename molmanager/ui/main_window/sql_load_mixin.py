@@ -29,10 +29,10 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
 
-from ...config import load_config
+from ...platform_support.config import load_config
 from ...storage import load_mols_from_parse_result
 from ...services.sql_load_policy import engine_kwargs_for_sql_load, sql_looks_destructive
-from ...utils import redact_sqlalchemy_url
+from ...chem.molecule_conversion import redact_sqlalchemy_url
 from ...workers.sql_load_worker import SqlLoadParseResult, SqlLoadSignals, SqlLoadWorker
 from ..background_jobs import register_background_job, unregister_background_job
 from ..strings import (

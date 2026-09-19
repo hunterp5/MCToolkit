@@ -22,8 +22,8 @@ from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from rdkit import Chem
 
-from ...config import load_config
-from ...utils import looks_like_mol_block, mol_to_canonical_smiles
+from ...platform_support.config import load_config
+from ...chem.molecule_conversion import looks_like_mol_block, mol_to_canonical_smiles
 from ..compound_table_model import CompoundTableModel
 from ..table_clipboard import format_tsv_grid, parse_tsv_grid, tsv_grid_is_block
 from .table_undo_commands import (

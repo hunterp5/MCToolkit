@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from molmanager.gnina_job import (
+from molmanager.docking.gnina_job import (
     GninaJobSettings,
     build_cnn_argv,
     build_flex_argv,

@@ -31,7 +31,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...column_split import (
+from ...table.column_split import (
     DELIMITER_MODES,
     DelimiterMode,
     KeepMode,

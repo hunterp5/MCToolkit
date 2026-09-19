@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from molmanager.structure_components import (
+from molmanager.protein.structure_components import (
     add_cif_chem_bond,
     add_pdb_conect,
     cif_has_component_bonds,
@@ -197,7 +197,11 @@ def test_parse_mmcif_inventory():
 
 
 def test_mmcif_het_keeps_numeric_label_seq_id():
-    from molmanager.structure_components import atoms_to_mmcif, parse_structure_atoms, pdb_to_mmcif
+    from molmanager.protein.structure_components import (
+        atoms_to_mmcif,
+        parse_structure_atoms,
+        pdb_to_mmcif,
+    )
 
     cif = pdb_to_mmcif(_MINI_PDB, data_name="mini")
     assert "AXI A . 2000" not in cif
@@ -218,7 +222,7 @@ def test_parse_cif_chem_comp_double_bonds():
 
 
 def test_parse_cif_loops_reuses_same_text():
-    from molmanager.structure_cif import _parse_cif_loops
+    from molmanager.protein.structure_cif import _parse_cif_loops
 
     first = _parse_cif_loops(_MINI_CIF_BONDS)
     second = _parse_cif_loops(_MINI_CIF_BONDS)
@@ -1674,7 +1678,7 @@ END
 
 
 def test_interaction_menu_toggles_prolif_families(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.protein_interactions import FAMILY_HYDROPHOBIC
+    from molmanager.protein.protein_interactions import FAMILY_HYDROPHOBIC
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
     pdb = """\

@@ -35,12 +35,12 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...config import load_config
-from ...session_codec import SESSION_VERSION_CURRENT
+from ...platform_support.config import load_config
+from ...table.session_codec import SESSION_VERSION_CURRENT
 
 logger = logging.getLogger(__name__)
-from ...performance import PerformanceTracker
-from ...tool_progress import ToolProgressState
+from ...platform_support.performance_tracking import PerformanceTracker
+from ...platform_support.tool_progress import ToolProgressState
 from ...storage import EnsembleStore, MolStore, SqliteTableStore
 from ...workers import (
     FilterApplySignals,

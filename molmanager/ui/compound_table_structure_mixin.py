@@ -21,7 +21,7 @@ from __future__ import annotations
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 
-from ..structure_render_store import StructureRenderStore
+from ..storage.structure_render_store import StructureRenderStore
 
 
 class CompoundTableStructureMixin:
@@ -194,8 +194,8 @@ class CompoundTableStructureMixin:
         store = self._structure_png_store
         if png:
             if store is None:
-                from ..config import load_config
-                from ..structure_render_store import StructureRenderStore
+                from ..platform_support.config import load_config
+                from ..storage.structure_render_store import StructureRenderStore
 
                 cfg = load_config()
                 store = StructureRenderStore(

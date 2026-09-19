@@ -24,8 +24,8 @@ from PyQt5.QtCore import QTimer
 
 from rdkit import Chem
 
-from ...config import load_config
-from ...display_constants import structure_depict_height, structure_depict_width
+from ...platform_support.config import load_config
+from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 

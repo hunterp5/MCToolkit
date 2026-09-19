@@ -36,8 +36,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...bundled_paths import default_external_executable
-from ...conforge import (
+from ...platform_support.bundled_paths import default_external_executable
+from ...conformers.conforge_generation import (
     CONFORGE_MODES,
     CONFORGE_PRESETS,
     ConforgeParams,
@@ -45,7 +45,7 @@ from ...conforge import (
     normalize_conforge_mode,
     normalize_conforge_preset,
 )
-from ...science_citations import conforge_conformations_dialog_footer_html
+from ...reference.method_citations import conforge_conformations_dialog_footer_html
 from ..qt_widget_utils import make_window_minimizable
 from .conformer_output import (
     ConformerOutputOptions,

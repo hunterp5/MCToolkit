@@ -23,7 +23,7 @@ import logging
 from PyQt5.QtCore import QRunnable
 
 from ..storage.sqlite_table_store import SqliteTableStore
-from ..tool_progress import ToolProgressState, report_tool_progress
+from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
 from .signals import SqliteRebuildSignals
 
 logger = logging.getLogger(__name__)

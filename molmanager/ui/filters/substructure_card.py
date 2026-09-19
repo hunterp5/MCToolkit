@@ -69,7 +69,7 @@ class SubstructureFilterCard(_FilterCardDragMixin, _FilterCardEnableInvertMixin,
         self.changed.emit()
 
     def _compiled_query(self):
-        from ...smarts_patterns import mol_from_smarts
+        from ...chem.smarts_macropatterns import mol_from_smarts
 
         s = (self.smarts_edit.text() or "").strip()
         if not s:

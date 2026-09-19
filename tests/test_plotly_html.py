@@ -21,7 +21,7 @@ from pathlib import Path
 
 from plotly import graph_objects as go
 
-from molmanager.plot_color import scatter_marker_from_column_values
+from molmanager.plotting.plot_marker_color import scatter_marker_from_column_values
 from molmanager.ui.plotly_html import (
     figure_payload_json,
     legend_name_is_utility,

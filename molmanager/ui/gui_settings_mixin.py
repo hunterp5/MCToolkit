@@ -119,7 +119,10 @@ class GuiSettingsMixin:
             self.status_label.setText(f"WSL executable — {path}")
 
     def open_structure_settings_dialog(self) -> None:
-        from ..display_constants import structure_depict_height, structure_depict_width
+        from ..table.structure_depiction_layout import (
+            structure_depict_height,
+            structure_depict_width,
+        )
         from .dialogs.structure_settings import StructureSettingsDialog
 
         prev_w = structure_depict_width()
@@ -217,7 +220,7 @@ class GuiSettingsMixin:
         if timer is None:
             return
         if show:
-            from ..config import load_config
+            from ..platform_support.config import load_config
 
             cfg = load_config()
             if cfg.status_memory_enabled:

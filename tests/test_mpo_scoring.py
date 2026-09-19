@@ -22,7 +22,7 @@ import math
 
 import pytest
 
-from molmanager.mpo_scoring import (
+from molmanager.analysis.mpo_scoring import (
     DesirabilitySpec,
     combine_desirabilities,
     evaluate_desirability,
@@ -48,7 +48,9 @@ def test_linear_target():
     d = linear_desirability(5.0, direction="target", low=0.0, high=10.0, target=5.0)
     assert d == pytest.approx(1.0)
     assert linear_desirability(-1.0, direction="target", low=0.0, high=10.0, target=5.0) == 0.0
-    assert linear_desirability(2.5, direction="target", low=0.0, high=10.0, target=5.0) == pytest.approx(0.5)
+    assert linear_desirability(
+        2.5, direction="target", low=0.0, high=10.0, target=5.0
+    ) == pytest.approx(0.5)
 
 
 def test_gaussian_peak_and_width():
@@ -71,17 +73,25 @@ def test_combine_geometric_and_arithmetic():
     assert combine_desirabilities([1.0, 1.0], method="geometric") == pytest.approx(1.0)
     assert combine_desirabilities([1.0, 0.0], method="geometric") == 0.0
     assert combine_desirabilities([0.25, 1.0], method="geometric") == pytest.approx(0.5)
-    assert combine_desirabilities([0.0, 1.0], weights=[1.0, 1.0], method="arithmetic") == pytest.approx(0.5)
+    assert combine_desirabilities(
+        [0.0, 1.0], weights=[1.0, 1.0], method="arithmetic"
+    ) == pytest.approx(0.5)
     assert math.isnan(combine_desirabilities([0.5, float("nan")], method="geometric"))
 
 
 def test_score_mpo_row_end_to_end():
     specs = [
-        DesirabilitySpec(column="MW", kind="linear", direction="minimize", low=300.0, high=500.0, weight=1.0),
+        DesirabilitySpec(
+            column="MW", kind="linear", direction="minimize", low=300.0, high=500.0, weight=1.0
+        ),
         DesirabilitySpec(column="LogP", kind="gaussian", center=2.0, sigma=1.0, weight=1.0),
-        DesirabilitySpec(column="TPSA", kind="step", direction="target", low=20.0, high=90.0, weight=1.0),
+        DesirabilitySpec(
+            column="TPSA", kind="step", direction="target", low=20.0, high=90.0, weight=1.0
+        ),
     ]
-    overall, per = score_mpo_row({"MW": 300.0, "LogP": 2.0, "TPSA": 50.0}, specs, method="geometric")
+    overall, per = score_mpo_row(
+        {"MW": 300.0, "LogP": 2.0, "TPSA": 50.0}, specs, method="geometric"
+    )
     assert overall == pytest.approx(1.0)
     assert per["MW"] == pytest.approx(1.0)
     assert per["LogP"] == pytest.approx(1.0)

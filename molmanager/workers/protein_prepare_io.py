@@ -73,7 +73,7 @@ def append_prepare_log_file(path: str | Path | None, message: str) -> None:
 
 
 def _norm_key(chain: str, resi: str, icode: str) -> ResidueKey:
-    from ..structure_components import _norm_chain
+    from ..protein.structure_components import _norm_chain
 
     return (_norm_chain(chain), str(resi or "").strip() or "0", str(icode or "").strip())
 
@@ -221,7 +221,7 @@ def _write_openmm_structure(
     header = "".join(f"# {line}\n" for line in (remarks or []) if line)
     text = header + buf.getvalue()
     if chem_source:
-        from ..structure_components import (
+        from ..protein.structure_components import (
             attach_cif_chem_comp,
             parse_cif_chem_comp_atoms,
             parse_cif_chem_comp_bonds,
@@ -232,7 +232,7 @@ def _write_openmm_structure(
             parse_cif_chem_comp_atoms(chem_source),
             parse_cif_chem_comp_bonds(chem_source),
         )
-        from ..structure_cif import repair_cif_hydrogen_chem_bonds
+        from ..protein.structure_cif import repair_cif_hydrogen_chem_bonds
 
         text = repair_cif_hydrogen_chem_bonds(text)
     _write_text(path, text)
@@ -252,7 +252,7 @@ def _write_openmm_pdb(topology, positions, path: Path, remarks: list[str] | None
 
 def residue_kind_map(text: str, fmt: str) -> dict[ResidueKey, str]:
     """Map ``(chain, resi, icode)`` to Manager kind for residues in *text*."""
-    from ..structure_components import parse_polymer_sequences
+    from ..protein.structure_components import parse_polymer_sequences
 
     out: dict[ResidueKey, str] = {}
     for poly in parse_polymer_sequences(text or "", fmt):
@@ -265,7 +265,7 @@ def residue_kind_map(text: str, fmt: str) -> dict[ResidueKey, str]:
 
 def _ligand_residue_names(text: str, fmt: str, ligand_keys: set[ResidueKey]) -> set[str]:
     """Residue names for ligand keys in *text*."""
-    from ..structure_components import parse_polymer_sequences
+    from ..protein.structure_components import parse_polymer_sequences
 
     wanted = {_norm_key(*key) for key in ligand_keys}
     names: set[str] = set()
@@ -280,7 +280,7 @@ def _ligand_residue_names(text: str, fmt: str, ligand_keys: set[ResidueKey]) -> 
 
 def residue_names_by_key(text: str, fmt: str) -> dict[ResidueKey, str]:
     """Map ``(chain, resi, icode)`` to residue name in *text*."""
-    from ..structure_components import parse_polymer_sequences
+    from ..protein.structure_components import parse_polymer_sequences
 
     out: dict[ResidueKey, str] = {}
     for poly in parse_polymer_sequences(text or "", fmt):
@@ -373,7 +373,7 @@ def residues_to_drop(
     keep_chain_ids: tuple[str, ...] | set[str] = (),
 ) -> set[ResidueKey]:
     """Residue keys to delete before pdb2pqr (unwanted waters and heteros)."""
-    from ..structure_components import _norm_chain
+    from ..protein.structure_components import _norm_chain
     from .protein_prepare_qc import het_role
 
     keep_water = {_norm_key(*key) for key in keep_water_keys}
@@ -401,7 +401,12 @@ def residues_to_drop(
 
 
 def _topology_residue_kind(residue) -> str:
-    from ..structure_components import AMINO_ACIDS, METAL_RESIDUES, NUCLEIC_ACIDS, WATER_RESIDUES
+    from ..protein.structure_components import (
+        AMINO_ACIDS,
+        METAL_RESIDUES,
+        NUCLEIC_ACIDS,
+        WATER_RESIDUES,
+    )
 
     name = (getattr(residue, "name", "") or "").strip().upper()
     if name in WATER_RESIDUES:
@@ -427,7 +432,7 @@ def _prune_fixer_residues(
 ) -> None:
     from openmm.app import Modeller
 
-    from ..structure_components import _norm_chain
+    from ..protein.structure_components import _norm_chain
     from .protein_prepare_qc import het_role
 
     keep_water = {_norm_key(*key) for key in keep_water_keys}
@@ -465,7 +470,7 @@ def _prune_fixer_residues(
 
 def append_missing_pdb_residues(dest: str, source: str, keys: set[ResidueKey]) -> str:
     """Copy ATOM/HETATM records from *source* when *dest* is missing those residues."""
-    from ..structure_components import _pdb_residue_key
+    from ..protein.structure_components import _pdb_residue_key
 
     if not keys:
         return dest
@@ -502,7 +507,7 @@ def finalize_prepared_structure(
 ) -> str:
     """Strip or restore ligand/water records after pdb2pqr."""
     if _is_cif_fmt(fmt):
-        from ..structure_components import append_missing_cif_residues, delete_cif_residues
+        from ..protein.structure_components import append_missing_cif_residues, delete_cif_residues
 
         text = protonated_text or ""
         ligands = {_norm_key(*key) for key in ligand_keys}
@@ -531,7 +536,7 @@ def finalize_prepared_pdb(
     keep_water_keys: set[ResidueKey],
 ) -> str:
     """Strip or restore ligand/water records after pdb2pqr."""
-    from ..structure_components import delete_pdb_residues
+    from ..protein.structure_components import delete_pdb_residues
 
     text = protonated_text or ""
     ligands = {_norm_key(*key) for key in ligand_keys}

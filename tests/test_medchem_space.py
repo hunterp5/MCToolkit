@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.medchem_space import (
+from molmanager.analysis.medchem_space import (
     MedChemRowSnapshot,
     MedChemSpaceDataset,
     MedChemSpacePoint,

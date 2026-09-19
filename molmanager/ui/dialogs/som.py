@@ -32,11 +32,11 @@ from PyQt5.QtWidgets import (
 
 from rdkit import Chem
 
-from ...som_prediction import (
+from ...predictions.som_prediction import (
     DEFAULT_THRESHOLD,
     METABOLISM_SUBSET_OPTIONS,
 )
-from ...utils import parse_molecule_from_cell_text
+from ...chem.molecule_conversion import parse_molecule_from_cell_text
 from ...workers import SomPredictorWorker
 from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
 from ..qt_widget_utils import make_window_minimizable
@@ -190,7 +190,10 @@ class SomPredictorDialog(QDialog):
         som_signals = self.parent_app._ensure_som_predictor_signals()
         n = len(rows)
         prog = self.parent_app._tool_progress_state
-        from ...display_constants import structure_depict_height, structure_depict_width
+        from ...table.structure_depiction_layout import (
+            structure_depict_height,
+            structure_depict_width,
+        )
 
         enqueue_process_queue_job(
             self.parent_app,

@@ -24,7 +24,11 @@ pytest.importorskip("PyQt5.QtWidgets")
 
 import pandas as pd
 
-from molmanager.ui.data_analysis import DataAnalysisDialog, selected_table_column_headers, table_to_dataframe
+from molmanager.ui.data_analysis import (
+    DataAnalysisDialog,
+    selected_table_column_headers,
+    table_to_dataframe,
+)
 
 
 class _FakeTableModel:

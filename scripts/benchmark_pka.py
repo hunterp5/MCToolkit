@@ -140,7 +140,7 @@ def main() -> None:
     args = ap.parse_args()
     chunk_sizes = [max(1, int(x)) for x in str(args.chunks).split(",") if x.strip()]
 
-    from molmanager.ionization import (
+    from molmanager.ionization.unipka_ensembles import (
         pin_unipka_torch_threads,
         predict_ionization_ensembles,
         prepare_mol_for_ionization,
@@ -149,8 +149,11 @@ def main() -> None:
         unipka_use_gpu,
         warn_if_cuda_torch_missing,
     )
-    from molmanager.unipka_enumerator import enumerate_charge_ensemble, flatten_charge_ensemble
-    from molmanager.utils import mol_to_canonical_smiles
+    from molmanager.ionization.unipka_enumerator import (
+        enumerate_charge_ensemble,
+        flatten_charge_ensemble,
+    )
+    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
     from molmanager.workers.ionization_parallel import (
         UNIPKA_STRUCTURE_CHUNK,
         UNIPKA_STRUCTURE_CHUNK_SERIAL,

@@ -75,8 +75,8 @@ def _pdb2pqr_failure_message(exc: BaseException, capture: _Pdb2pqrLogCapture) ->
 
 def drop_uncappable_polymer_residues(text: str, fmt: str) -> tuple[str, tuple[ResidueKey, ...]]:
     """Remove amino-acid residues that lack backbone N/CA/C (pdb2pqr cannot cap them)."""
-    from ..structure_component_types import AMINO_ACIDS
-    from ..structure_components import (
+    from ..protein.structure_component_types import AMINO_ACIDS
+    from ..protein.structure_components import (
         delete_cif_residues,
         delete_pdb_residues,
         parse_structure_atoms,
@@ -160,7 +160,7 @@ def _run_pdb2pqr(
     if write_cif:
         pdb_out = output_pdb.with_name(output_pdb.stem + ".pdb2pqr.pdb")
     if write_cif_in:
-        from ..structure_components import _pdb_from_atoms, parse_structure_atoms
+        from ..protein.structure_components import _pdb_from_atoms, parse_structure_atoms
 
         scratch_in = input_pdb.with_name(input_pdb.stem + ".pdb2pqr_in.pdb")
         _write_text(
@@ -211,12 +211,12 @@ def _run_pdb2pqr(
     if not pdb_out.is_file() or pdb_out.stat().st_size < 32:
         raise RuntimeError("pdb2pqr did not write a protonated structure file.")
     if write_cif:
-        from ..structure_components import (
+        from ..protein.structure_components import (
             parse_cif_chem_comp_atoms,
             parse_cif_chem_comp_bonds,
             pdb_to_mmcif,
         )
-        from ..structure_cif import repair_cif_hydrogen_chem_bonds
+        from ..protein.structure_cif import repair_cif_hydrogen_chem_bonds
 
         src = ""
         if write_cif_in and input_pdb.is_file():

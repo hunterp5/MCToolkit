@@ -51,7 +51,7 @@ def test_sqlite_rebuild_worker_builds_queryable_db(qapp, tmp_path):  # noqa: ARG
 
 
 def test_sqlite_rebuild_worker_reports_write_progress(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.tool_progress import ToolProgressState
+    from molmanager.platform_support.tool_progress import ToolProgressState
 
     sig = SqliteRebuildSignals()
     results: list[tuple[int, str]] = []

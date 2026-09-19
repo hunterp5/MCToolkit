@@ -48,7 +48,7 @@ def _skip_session_auto_render(monkeypatch) -> None:
 
 
 def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
-    from molmanager.session_codec import (
+    from molmanager.table.session_codec import (
         dumps_session_document,
         expand_session_document,
         loads_session_bytes,
@@ -86,7 +86,7 @@ def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
 
 
 def test_build_session_document_keeps_only_selected_oids(qapp):  # noqa: ARG001
-    from molmanager.session_codec import (
+    from molmanager.table.session_codec import (
         dumps_session_document,
         expand_session_document,
         loads_session_bytes,
@@ -136,7 +136,7 @@ def test_apply_session_document_restores_row(qapp):  # noqa: ARG001
 
 def test_session_roundtrip_restores_mol_from_binary_not_smiles(qapp):  # noqa: ARG001
     """Saved RDKit binaries win over unparseable SMILES on Open."""
-    from molmanager.utils import mol_to_canonical_smiles
+    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
 
     parent = Chem.MolFromSmiles("CCN")
     w = ChemistryWorkspaceWindow()
@@ -183,8 +183,8 @@ def test_session_roundtrip_restores_saved_filter_bounds(qapp, monkeypatch):  # n
 
 
 def test_session_rows_parse_prefers_mol_binary_over_smiles(qapp):  # noqa: ARG001
-    from molmanager.session_codec import encode_mol_blob_b64
-    from molmanager.utils import mol_graph_binary, mol_to_canonical_smiles
+    from molmanager.table.session_codec import encode_mol_blob_b64
+    from molmanager.chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
     from molmanager.workers.session_rows_parse import (
         SessionRowsParseResult,
         SessionRowsParseSignals,
@@ -211,7 +211,7 @@ def test_session_rows_parse_prefers_mol_binary_over_smiles(qapp):  # noqa: ARG00
 
 
 def test_decode_session_mols_prefers_blob_over_smiles():
-    from molmanager.utils import mol_graph_binary, mol_to_canonical_smiles
+    from molmanager.chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
     from molmanager.workers.session_rows_parse import decode_session_mols
 
     parent = Chem.MolFromSmiles("CCO")
@@ -242,7 +242,7 @@ def test_session_plots_ready_without_waiting_for_webengine(qapp):  # noqa: ARG00
 
 def test_session_roundtrip_keeps_structure_independent_of_protonated(qapp):  # noqa: ARG001
     """Structure mols stay parent even when a Protonated column holds the ionized form."""
-    from molmanager.utils import mol_to_canonical_smiles
+    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
 
     parent = Chem.MolFromSmiles("CCN")
     ionized = "CC[NH3+]"
@@ -308,7 +308,7 @@ def test_legacy_session_without_structure_smiles_does_not_use_protonated(qapp): 
 
 
 def test_session_restore_render_tasks_keep_neutral_structure(qapp):  # noqa: ARG001
-    from molmanager.utils import mol_to_canonical_smiles
+    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
 
     parent = Chem.MolFromSmiles("CCN")
     w = ChemistryWorkspaceWindow()
@@ -390,7 +390,7 @@ def test_session_document_roundtrip_restores_logarithmic_columns(qapp):  # noqa:
 
 
 def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
-    from molmanager.som_prediction import (
+    from molmanager.predictions.som_prediction import (
         SOM_MAP_COLUMN,
         SOM_PROB_COLUMN,
         SOM_SITES_COLUMN,
@@ -431,7 +431,7 @@ def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
     assert w._table_model.backing_value_for_row_header(0, SOM_MAP_COLUMN) == "CCO"
 
     doc = w._build_session_document()
-    from molmanager.session_codec import expand_session_document
+    from molmanager.table.session_codec import expand_session_document
 
     expanded = expand_session_document(doc)
     assert expanded["rows"][0]["cells"][SOM_MAP_COLUMN] == "CCO"
@@ -452,7 +452,7 @@ def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
 
 
 def test_session_roundtrip_restores_mmp_ledger(qapp):  # noqa: ARG001
-    from molmanager.mmp_analysis import MmpPair
+    from molmanager.analysis.mmp_analysis import MmpPair
 
     pair = MmpPair(
         oid_a=1,
@@ -505,7 +505,10 @@ def _session_ethanol_pose(affinity: str, x: float):
 
 
 def test_session_roundtrip_restores_dock_results(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.confs_codec import mol_from_packed_confs_cell, rehydrate_v1_confs_cell
+    from molmanager.conformers.conformer_column_codec import (
+        mol_from_packed_confs_cell,
+        rehydrate_v1_confs_cell,
+    )
     from molmanager.services.column_labels import COLUMN_PARENT_OID
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
     from molmanager.ui.pose_browser import PoseBrowserWidget
@@ -627,8 +630,8 @@ def test_build_session_document_keeps_selected_dock_results(qapp):  # noqa: ARG0
 
 
 def test_session_roundtrip_restores_ionization_cache(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager import microstate_cache as mc
-    from molmanager.ionization import (
+    from molmanager.ionization import microstate_cache as mc
+    from molmanager.ionization.unipka_ensembles import (
         PicklableIonizationEnsemble,
         PicklableIonizationMicrostate,
         microstates_for_mol,
@@ -666,7 +669,9 @@ def test_session_roundtrip_restores_ionization_cache(qapp, monkeypatch) -> None:
         def boom(_m):
             raise AssertionError("Uni-pKa should not run after session restore")
 
-        monkeypatch.setattr("molmanager.ionization.predict_ionization_ensemble", boom)
+        monkeypatch.setattr(
+            "molmanager.ionization.unipka_ensembles.predict_ionization_ensemble", boom
+        )
         out = microstates_for_mol(Chem.MolFromSmiles("CCO"))
         assert out.macro_pkas == (15.9,)
     finally:
@@ -1269,7 +1274,7 @@ def test_session_omits_idle_table_search(qapp):  # noqa: ARG001
 
 
 def test_session_document_roundtrip_table_search(qapp):  # noqa: ARG001
-    from molmanager.session_codec import expand_session_document
+    from molmanager.table.session_codec import expand_session_document
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]

@@ -281,7 +281,7 @@ def test_meeko_failed_residue_key_and_strip():
 
 def test_write_receptor_pdbqt_protonated_glu_slice(tmp_path):
     pytest.importorskip("meeko")
-    from molmanager.structure_atoms import _pdb_from_atoms, parse_structure_atoms
+    from molmanager.protein.structure_atoms import _pdb_from_atoms, parse_structure_atoms
 
     src = Path(__file__).resolve().parents[1] / "samples" / "6bbu_fixed_protonated.cif"
     if not src.is_file():

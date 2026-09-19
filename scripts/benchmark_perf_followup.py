@@ -43,9 +43,9 @@ from rdkit import Chem, DataStructs
 from rdkit.Chem import AllChem
 from rdkit.Geometry import Point3D
 
-from molmanager.memory_usage import current_process_rss_bytes, format_memory_bytes
+from molmanager.platform_support.memory_usage import current_process_rss_bytes, format_memory_bytes
 from molmanager.storage.ensemble_store import EnsembleStore
-from molmanager.table_file_formats import _MOL2_MARKER, iter_mol2_mols, iter_sdf_mols
+from molmanager.table.table_file_formats import _MOL2_MARKER, iter_mol2_mols, iter_sdf_mols
 from molmanager.workers.cluster_worker import (
     _dense_fingerprint_matrix,
     cluster_butina,
@@ -171,8 +171,7 @@ def bench_mol2(tmp: Path) -> None:
         old_ms,
         new_ms,
         extra=(
-            f"peak alloc old {format_memory_bytes(old_peak)} "
-            f"new {format_memory_bytes(new_peak)}"
+            f"peak alloc old {format_memory_bytes(old_peak)} new {format_memory_bytes(new_peak)}"
         ),
     )
 

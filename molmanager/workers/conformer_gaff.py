@@ -140,7 +140,7 @@ def _build_ligand_prmtop(
     work_dir: Path,
 ) -> tuple[Path, Path]:
     """Write MOL2, run antechamber/parmchk2/tleap, return prmtop and inpcrd."""
-    from ..wsl import run_linux_tool
+    from ..platform_support.wsl_launcher import run_linux_tool
 
     ff = _normalize_ligand_ff(ligand_ff)
     atom_type = _gaff_atom_type(ff)

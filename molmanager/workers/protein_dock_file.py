@@ -54,7 +54,7 @@ def run_dock_file(req: DockFileRequest) -> ProteinPrepareResult:
     """Read the input structure and write apo PDBQT, ligand, and search-box files."""
     rec = Path(req.input_path)
     text = rec.read_text(encoding="utf-8")
-    from ..structure_components import sniff_structure_format, viewer_format_for
+    from ..protein.structure_components import sniff_structure_format, viewer_format_for
 
     fmt = viewer_format_for(sniff_structure_format(rec, text))
     keys = set(req.box_ligand_keys) if req.box_ligand_keys else None

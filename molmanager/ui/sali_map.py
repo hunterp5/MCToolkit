@@ -29,7 +29,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..sali_analysis import SaliPoint
+from ..analysis.sali_analysis import SaliPoint
 from .dockable_plot import style_plot_footer_text_button
 from .plotly_interactive_view import PlotlyInteractiveView
 from .plot_table_sync import visible_oids_for_plot

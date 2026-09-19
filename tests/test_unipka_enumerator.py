@@ -18,7 +18,10 @@
 
 from __future__ import annotations
 
-from molmanager.unipka_enumerator import enumerate_charge_ensemble, flatten_charge_ensemble
+from molmanager.ionization.unipka_enumerator import (
+    enumerate_charge_ensemble,
+    flatten_charge_ensemble,
+)
 from rdkit import Chem
 
 

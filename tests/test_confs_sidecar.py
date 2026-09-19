@@ -19,7 +19,7 @@
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.confs_codec import (
+from molmanager.conformers.conformer_column_codec import (
     demote_v1_cell_to_sidecar,
     deserialize_confs_sidecar,
     mol_from_packed_confs_cell,
@@ -90,7 +90,10 @@ def test_serialize_ensemble_store_is_empty_json_map():
 def test_pack_confs_cell_unlimited_when_max_chars_zero():
     from rdkit.Geometry import Point3D
 
-    from molmanager.confs_codec import CONFS_CELL_PACK_MAX_CHARS, format_confs_table_cell
+    from molmanager.conformers.conformer_column_codec import (
+        CONFS_CELL_PACK_MAX_CHARS,
+        format_confs_table_cell,
+    )
 
     mol = Chem.MolFromSmiles("CCO")
     for i in range(6):

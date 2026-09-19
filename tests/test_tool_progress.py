@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import threading
 
-from molmanager.tool_progress import ToolProgressState, format_tool_progress_text
+from molmanager.platform_support.tool_progress import ToolProgressState, format_tool_progress_text
 
 
 def test_format_tool_progress_text() -> None:
@@ -86,7 +86,7 @@ class _ProgressSignals:
 
 
 def test_report_tool_progress_force_signal_bypasses_throttle():
-    from molmanager.tool_progress import report_tool_progress
+    from molmanager.platform_support.tool_progress import report_tool_progress
 
     signals = _ProgressSignals()
     state = ToolProgressState()

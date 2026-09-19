@@ -25,8 +25,8 @@ from PyQt5.QtWidgets import QMessageBox
 
 from rdkit import Chem
 
-from ...confs_codec import pack_mols_as_confs_cell
-from ...dock_io import (
+from ...conformers.conformer_column_codec import pack_mols_as_confs_cell
+from ...docking.pose_file_io import (
     dock_poses_pack_meta,
     group_dock_poses,
     is_poses_header,
@@ -34,7 +34,7 @@ from ...dock_io import (
     stamp_pose_parent_oids,
 )
 from ...services.column_labels import COLUMN_PARENT_OID
-from ...utils import mol_to_canonical_smiles
+from ...chem.molecule_conversion import mol_to_canonical_smiles
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 
@@ -360,7 +360,7 @@ class DockToolsMixin:
 
     def _mols_from_table_pose_columns(self) -> list:
         """Rebuild pose molecules from packed ``poses`` table columns (session fallback)."""
-        from ...conformer_output import iter_single_conformer_mols
+        from ...conformers.conformer_output import iter_single_conformer_mols
         from .conformer_writeback import mol_for_ensemble_column
 
         model = getattr(self, "_table_model", None)

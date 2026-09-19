@@ -58,7 +58,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ..plot_axes import (
+from ..plotting.plot_axes import (
     AXIS_NONE,
     PLOT_SESSION_KIND,
     PLOT_TYPE_BOX,
@@ -89,8 +89,8 @@ from .dockable_plot import (
     request_close_plot_widget,
     show_plot_options_dialog,
 )
-from ..plot_color import PLOT_COLORSCALE_CHOICES
-from ..plot_radar import (
+from ..plotting.plot_marker_color import PLOT_COLORSCALE_CHOICES
+from ..plotting.plot_radar import (
     MAX_RADAR_DISPLAY_ENTRIES,
     MAX_RADAR_TRACES,
     MAX_RADAR_VARIABLES,

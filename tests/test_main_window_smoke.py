@@ -134,7 +134,7 @@ def test_file_session_submenu_lists_session_actions(qapp):  # noqa: ARG001
 def test_save_selected_to_session_writes_subset_without_clearing_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
     from PyQt5.QtWidgets import QFileDialog
 
-    from molmanager.session_codec import expand_session_document, loads_session_bytes
+    from molmanager.table.session_codec import expand_session_document, loads_session_bytes
 
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
@@ -586,7 +586,7 @@ def test_plot_clear_selection_drops_header_select_highlight(qapp):  # noqa: ARG0
 
 
 def test_duplicate_structure_column_is_chemistry_source(qapp):  # noqa: ARG001
-    from molmanager.display_constants import structure_column_minimum_width
+    from molmanager.table.structure_depiction_layout import structure_column_minimum_width
     from molmanager.ui.compound_table_model import CompoundTableModel
     from molmanager.ui.main_window.table_undo_commands import UndoDuplicateColumnCommand
 

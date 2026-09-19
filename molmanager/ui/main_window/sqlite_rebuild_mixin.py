@@ -23,7 +23,7 @@ from contextlib import nullcontext
 
 from PyQt5.QtCore import QTimer
 
-from ...config import load_config
+from ...platform_support.config import load_config
 from ...storage import SqliteTableStore
 from ...workers import SqliteRebuildWorker
 from ..strings import loaded_session_status

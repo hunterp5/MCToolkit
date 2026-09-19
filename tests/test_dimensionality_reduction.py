@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from molmanager.dimensionality_reduction import (
+from molmanager.analysis.dimensionality_reduction import (
     _maybe_pca_preprocess,
     build_reduction_result,
     is_fingerprint_bitcount_column,

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ..structure_components import (
+from ..protein.structure_components import (
     PolymerChain,
     delete_pdb_residues,
     letter_to_resn,

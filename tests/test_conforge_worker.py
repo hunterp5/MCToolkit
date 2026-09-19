@@ -21,7 +21,7 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.conforge import ConforgeParams
+from molmanager.conformers.conforge_generation import ConforgeParams
 from molmanager.workers.conforge_worker import ConforgeConformerWorker
 from molmanager.workers.signals import WorkerSignals
 

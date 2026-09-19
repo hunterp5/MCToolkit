@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from molmanager.structure_render_store import StructureRenderStore
+from molmanager.storage.structure_render_store import StructureRenderStore
 
 
 def test_structure_render_store_ingest_remove_and_trim():

@@ -25,7 +25,7 @@ import time
 from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 
-from ..permeability_prediction import (
+from ..predictions.permeability_prediction import (
     format_permeability_row,
     permeability_model_available,
     permeability_stack_import_error,
@@ -80,7 +80,7 @@ class PermeabilityPredictorWorker(QRunnable):
         self.progress_state = progress_state
 
     def run(self) -> None:
-        from ..tool_progress import report_tool_progress
+        from ..platform_support.tool_progress import report_tool_progress
 
         cancel_ev = self.cancel_event
         tot = max(len(self.rows), 1)

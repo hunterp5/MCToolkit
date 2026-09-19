@@ -38,7 +38,7 @@ from PyQt5.QtWidgets import (
 )
 from rdkit import Chem
 
-from ...biotransformer import (
+from ...predictions.biotransformer_metabolites import (
     BIOTRANSFORMER_CANCELLED,
     METABOLITE_COUNT_COLUMN,
     METABOLITE_REACTIONS_COLUMN,
@@ -46,11 +46,11 @@ from ...biotransformer import (
     is_metabolite_column_header,
     parse_metabolite_smiles_cell,
 )
-from ...display_constants import (
+from ...table.structure_depiction_layout import (
     BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
     BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
 )
-from ...structure_draw import render_molecule_png
+from ...chem.structure_2d_depiction import render_molecule_png
 from ..dockable_plot import (
     discard_host_dialog_after_dock,
     make_add_to_main_button,
@@ -197,7 +197,7 @@ def records_from_table(app: Any) -> list[MetaboliteBrowseRecord]:
             mols = getattr(app, "mols", None) or {}
             mol = mols.get(oid)
             if mol is not None:
-                from ...utils import mol_to_canonical_smiles
+                from ...chem.molecule_conversion import mol_to_canonical_smiles
 
                 parent_smi = mol_to_canonical_smiles(mol) or ""
         hits = tuple(MetaboliteBrowseHit(smiles=smi) for smi in products)

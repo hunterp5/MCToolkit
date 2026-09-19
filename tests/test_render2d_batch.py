@@ -21,7 +21,7 @@ from __future__ import annotations
 import pytest
 from rdkit import Chem
 
-from molmanager.config import load_config
+from molmanager.platform_support.config import load_config
 from molmanager.workers.load_render import (
     Render2DBatchProcessWorker,
     _mp_render_structure_batch,
@@ -100,7 +100,7 @@ def test_build_tasks_emits_empty_blob_for_missing_mol() -> None:
 
 
 def test_build_tasks_tags_reaction_smarts() -> None:
-    from molmanager.structure_draw import ReactionDrawSpec
+    from molmanager.chem.structure_2d_depiction import ReactionDrawSpec
 
     spec = ReactionDrawSpec("[C:1]>>[C:1]")
     tasks = _worker([(7, spec, 630, 170)]).build_tasks()

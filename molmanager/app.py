@@ -18,7 +18,7 @@ import logging
 import os
 import sys
 
-from .qt_webengine import configure_qtwebengine_quiet_logs
+from .platform_support.qt_webengine_flags import configure_qtwebengine_quiet_logs
 
 configure_qtwebengine_quiet_logs()
 
@@ -27,8 +27,8 @@ from PyQt5.QtWidgets import QApplication  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-from .app_logging import configure_app_logging, install_crash_excepthook  # noqa: E402
-from .rdkit_env import configure_rdkit_for_desktop_app  # noqa: E402
+from .platform_support.app_logging import configure_app_logging, install_crash_excepthook  # noqa: E402
+from .platform_support.rdkit_runtime_setup import configure_rdkit_for_desktop_app  # noqa: E402
 from .ui.main_window import ChemistryWorkspaceWindow  # noqa: E402
 from .ui.theme import bootstrap_application_gui  # noqa: E402
 
@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
 
     w = ChemistryWorkspaceWindow()
     w.show()
-    from .qt_webengine import schedule_qtwebengine_prewarm
+    from .platform_support.qt_webengine_flags import schedule_qtwebengine_prewarm
 
     schedule_qtwebengine_prewarm()
     if load_session:

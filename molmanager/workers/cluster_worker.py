@@ -30,7 +30,7 @@ from rdkit.ML.Cluster import Butina
 from rdkit.SimDivFilters.rdSimDivPickers import LeaderPicker
 
 from .fingerprint_similarity import fingerprint_bitvect_for_ui_choice
-from ..rdkit_fingerprints import fingerprint_bitvect_for_row
+from ..chem.rdkit_fingerprints import fingerprint_bitvect_for_row
 from .signals import emit_partial_results_if_cancelled
 
 logger = logging.getLogger(__name__)
@@ -490,7 +490,7 @@ class ClusterWorker(QRunnable):
                 )
                 return
 
-        from ..tool_progress import report_tool_progress
+        from ..platform_support.tool_progress import report_tool_progress
 
         cancel_ev = self.cancel_event
         oids: list[int] = []
@@ -605,7 +605,7 @@ class ClusterExploreWorker(QRunnable):
         self.progress_state = progress_state
 
     def run(self) -> None:
-        from ..tool_progress import report_tool_progress
+        from ..platform_support.tool_progress import report_tool_progress
 
         cancel_ev = self.cancel_event
         oids: list[int] = []

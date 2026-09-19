@@ -33,7 +33,7 @@ from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from molmanager.display_constants import (  # noqa: E402
+from molmanager.table.structure_depiction_layout import (  # noqa: E402
     STRUCTURE_DEPICT_HEIGHT,
     STRUCTURE_DEPICT_WIDTH,
 )
@@ -43,7 +43,7 @@ def _one(args: tuple):
     """Current shape: one molecule per task."""
     from rdkit import Chem
 
-    from molmanager.structure_draw import render_molecule_png
+    from molmanager.chem.structure_2d_depiction import render_molecule_png
 
     oid, blob, w, h = args
     if not blob:
@@ -58,7 +58,7 @@ def _batch(args: tuple):
     """Batched shape: many molecules per task."""
     from rdkit import Chem
 
-    from molmanager.structure_draw import render_molecule_png
+    from molmanager.chem.structure_2d_depiction import render_molecule_png
 
     items, w, h = args
     out = []

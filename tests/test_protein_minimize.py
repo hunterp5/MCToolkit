@@ -192,8 +192,8 @@ def test_minimize_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa
 
 
 def _d7d_h_bond_lengths(text: str) -> list[float]:
-    from molmanager.structure_atoms import parse_structure_atoms
-    from molmanager.structure_cif import parse_cif_chem_comp_bonds
+    from molmanager.protein.structure_atoms import parse_structure_atoms
+    from molmanager.protein.structure_cif import parse_cif_chem_comp_bonds
 
     by_name = {}
     for atom in parse_structure_atoms(text, "cif"):
@@ -222,7 +222,7 @@ def _d7d_h_bond_lengths(text: str) -> list[float]:
 def test_rebuild_hydrogen_chem_bonds_fixes_6bbu_abrocitinib():
     from pathlib import Path
 
-    from molmanager.structure_cif import (
+    from molmanager.protein.structure_cif import (
         cif_viewer_bond_tables,
         parse_cif_chem_comp_atoms,
         repair_cif_hydrogen_chem_bonds,

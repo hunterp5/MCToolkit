@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from molmanager import microstate_cache as mc
-from molmanager.ionization import (
+from molmanager.ionization import microstate_cache as mc
+from molmanager.ionization.unipka_ensembles import (
     PicklableIonizationEnsemble,
     PicklableIonizationMicrostate,
     PicklableMicrostate,
@@ -80,7 +80,7 @@ def test_microstates_for_mol_uses_session_cache(monkeypatch) -> None:
     def boom(_m):
         raise AssertionError("Uni-pKa should not run on cache hit")
 
-    monkeypatch.setattr("molmanager.ionization.predict_ionization_ensemble", boom)
+    monkeypatch.setattr("molmanager.ionization.unipka_ensembles.predict_ionization_ensemble", boom)
     out = microstates_for_mol(mol)
     assert out is fake
 

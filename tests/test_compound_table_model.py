@@ -343,7 +343,7 @@ def test_remove_rows_by_oids_bulk(model: CompoundTableModel):
 
 
 def test_remove_row_clears_structure_png_store(model: CompoundTableModel):
-    from molmanager.structure_render_store import StructureRenderStore
+    from molmanager.storage.structure_render_store import StructureRenderStore
 
     model.append_row(5, {"SMILES": "CC", "MW": "30"})
     store = StructureRenderStore(max_decoded_pixmaps=8)

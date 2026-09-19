@@ -23,7 +23,7 @@ import json
 
 from rdkit import Chem
 
-from molmanager.confs_codec import (
+from molmanager.conformers.conformer_column_codec import (
     mol_from_packed_confs_cell,
     pack_confs_cell,
     unpack_confs_blocks_json_b64,

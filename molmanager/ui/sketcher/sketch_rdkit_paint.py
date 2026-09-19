@@ -25,7 +25,7 @@ from PyQt5.QtGui import QImage, QPixmap, QTransform
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from ...exception_policy import log_swallowed_exception
+from ...platform_support.exception_policy import log_swallowed_exception
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,9 @@ logger = logging.getLogger(__name__)
 SKETCH_RDKIT_RENDER_SCALE = 3
 
 
-def sketch_node_bounds(nodes: list[dict[str, Any]], *, pad_px: float) -> tuple[int, int, int, int] | None:
+def sketch_node_bounds(
+    nodes: list[dict[str, Any]], *, pad_px: float
+) -> tuple[int, int, int, int] | None:
     """Return ``(min_x, min_y, max_x, max_y)`` in sketch model pixels, or None when empty."""
     if not nodes:
         return None
@@ -136,7 +138,9 @@ def _configure_sketch_drawer_style(
     opts.bondLineWidth = max(1.0, style.bond_width_px / sx_eff)
     # Keep multiple-bond offset proportional after ACS mode.
     try:
-        opts.multipleBondOffset = max(0.12, style.double_bond_offset_px / max(style.median_bond_px, 1.0))
+        opts.multipleBondOffset = max(
+            0.12, style.double_bond_offset_px / max(style.median_bond_px, 1.0)
+        )
     except Exception:
         log_swallowed_exception(logger, "multipleBondOffset unavailable for sketcher draw options")
     # Atom symbols are painted by the sketcher (ACS labels) after this pixmap is placed.
@@ -153,6 +157,7 @@ def _configure_sketch_drawer_style(
         opts.fixedBondLength = max(10.0, style.median_bond_px / sx_eff)
     except Exception:
         log_swallowed_exception(logger, "fixedBondLength unavailable for sketcher draw options")
+
 
 def _draw_sketch_mol(
     drawer: rdMolDraw2D.MolDraw2D,

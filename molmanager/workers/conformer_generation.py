@@ -28,7 +28,7 @@ from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from ..config import load_config
+from ..platform_support.config import load_config
 from .chemistry_worker_common import (
     emit_tool_progress_throttled,
     is_gaff_force_field,

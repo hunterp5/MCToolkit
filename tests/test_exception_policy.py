@@ -20,11 +20,11 @@ from __future__ import annotations
 
 import logging
 
-from molmanager.exception_policy import log_swallowed_exception
+from molmanager.platform_support.exception_policy import log_swallowed_exception
 
 
 def test_log_swallowed_exception_records_exc_info(caplog):
-    log = logging.getLogger("molmanager.exception_policy.test")
+    log = logging.getLogger("molmanager.platform_support.exception_policy.test")
     with caplog.at_level(logging.DEBUG, logger=log.name):
         try:
             raise ValueError("boom")

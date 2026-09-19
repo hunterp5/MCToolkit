@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from molmanager.filter_compute import build_sqlite_where, fetch_matching_oids
+from molmanager.table.filter_compute import build_sqlite_where, fetch_matching_oids
 from molmanager.storage.sqlite_table_store import SqliteTableStore
 
 

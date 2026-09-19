@@ -23,8 +23,8 @@ from contextlib import nullcontext
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
-from ...config import load_config
-from ...table_file_formats import TABLE_OPEN_FILTER, TABLE_SAVE_FILTER
+from ...platform_support.config import load_config
+from ...table.table_file_formats import TABLE_OPEN_FILTER, TABLE_SAVE_FILTER
 from ...workers import ExportWorker, UniversalLoadWorker
 from ..strings import LOADING_DETAIL_APPEND, LOADING_DETAIL_READING_DISK
 

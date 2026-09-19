@@ -34,13 +34,13 @@ from PyQt5.QtWidgets import (
 from rdkit import Chem
 from rdkit.Chem import Crippen, Descriptors, QED
 
-from molmanager.medchem_descriptors import (
+from molmanager.descriptors.medchem_descriptors import (
     ab_mps_score,
     cns_mpo_score,
     lipinski_violations,
     ro5_pass,
 )
-from molmanager.ionization import (
+from molmanager.ionization.unipka_ensembles import (
     logd74_from_microstates,
     pka_values_from_states,
 )

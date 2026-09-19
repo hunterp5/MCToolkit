@@ -22,7 +22,7 @@ import threading
 
 from PyQt5.QtCore import QRunnable
 
-from ..fragment_decomposition import RecompositionMethod, recompose_fragments
+from ..chem.fragment_decomposition import RecompositionMethod, recompose_fragments
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
 
 
@@ -58,7 +58,7 @@ class FragmentRecompositionWorker(QRunnable):
         if ev is not None and ev.is_set():
             self._finish_cancelled([], 0)
             return
-        from ..tool_progress import report_tool_progress
+        from ..platform_support.tool_progress import report_tool_progress
 
         label = self.tool_title
         target = max(1, int(self.max_products))

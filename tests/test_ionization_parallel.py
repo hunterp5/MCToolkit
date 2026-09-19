@@ -25,8 +25,8 @@ import pytest
 from rdkit import Chem
 
 import molmanager.workers.ionization_parallel as ionization_parallel
-from molmanager.ionization import PicklableMicrostate, microstates_to_picklable
-from molmanager.microstate_cache import clear as cache_clear
+from molmanager.ionization.unipka_ensembles import PicklableMicrostate, microstates_to_picklable
+from molmanager.ionization.microstate_cache import clear as cache_clear
 from molmanager.workers.ionization_parallel import plan_ionization_process_workers
 
 
@@ -114,7 +114,7 @@ def test_build_microstates_cache_reports_progress_during_sequential(monkeypatch)
         lambda _n, _c: (False, 1),
     )
     monkeypatch.setattr(
-        "molmanager.ionization.microstates_for_mol",
+        "molmanager.ionization.unipka_ensembles.microstates_for_mol",
         lambda _mol: [{"pka": 7.0}],
     )
     seen: list[tuple[int, int]] = []
@@ -122,7 +122,7 @@ def test_build_microstates_cache_reports_progress_during_sequential(monkeypatch)
     def _capture(**kwargs):
         seen.append((int(kwargs["done"]), int(kwargs["total"])))
 
-    monkeypatch.setattr("molmanager.tool_progress.report_tool_progress", _capture)
+    monkeypatch.setattr("molmanager.platform_support.tool_progress.report_tool_progress", _capture)
     mols = [Chem.MolFromSmiles(s) for s in ("CCO", "CCN", "CCC")]
     assert all(m is not None for m in mols)
     ionization_parallel.build_microstates_cache_by_key(
@@ -147,7 +147,7 @@ def test_build_microstates_cache_dedupes(monkeypatch) -> None:
         return [{"pka": 7.0}]
 
     monkeypatch.setattr(
-        "molmanager.ionization.microstates_for_mol",
+        "molmanager.ionization.unipka_ensembles.microstates_for_mol",
         _fake_microstates,
     )
 

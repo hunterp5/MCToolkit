@@ -36,7 +36,7 @@ def _as_oid(key: object) -> int:
 
 
 def _mol_blob(mol: Chem.Mol) -> bytes | None:
-    from ..utils import mol_graph_binary
+    from ..chem.molecule_conversion import mol_graph_binary
 
     blob = mol_graph_binary(mol)
     if blob:
@@ -285,7 +285,7 @@ def ensure_mol_store(holder: object, *, lru_max: int | None = None) -> MolStore:
     mols = getattr(holder, "mols", None)
     if isinstance(mols, MolStore):
         return mols
-    from ..config import load_config
+    from ..platform_support.config import load_config
 
     cap = int(lru_max) if lru_max is not None else int(load_config().mol_cache_lru)
     store = MolStore(lru_max=cap)

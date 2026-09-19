@@ -20,7 +20,10 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from ...import_structure import header_looks_like_structure_text, is_tool_generated_structure_header
+from ...chem.structure_source_headers import (
+    header_looks_like_structure_text,
+    is_tool_generated_structure_header,
+)
 from ...services.chemistry_columns import (
     canonical_smiles_header_for_updates,
     cell_texts_have_parseable_molecule,
@@ -31,7 +34,7 @@ from ...services.chemistry_columns import (
     should_skip_chemical_scan_column,
 )
 from ...services.table_scope import collect_scoped_pairs, resolve_structure_row_for_oid
-from ...utils import (
+from ...chem.molecule_conversion import (
     looks_like_mol_block,
     mol_to_canonical_smiles,
     parse_molecule_from_cell_text,
@@ -166,7 +169,7 @@ class TableChemistryAccessMixin:
         if col <= 0 or col >= len(self.headers):
             return False
         h = self.headers[col]
-        from ...som_prediction import is_som_map_header
+        from ...predictions.som_prediction import is_som_map_header
 
         if is_som_map_header(h):
             return False

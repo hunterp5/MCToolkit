@@ -21,10 +21,10 @@ from __future__ import annotations
 import logging
 from contextlib import nullcontext
 
-from ...config import MolManagerConfig, load_config
-from ...filter_compute import build_sqlite_where, fetch_matching_oids
+from ...platform_support.config import MolManagerConfig, load_config
+from ...table.filter_compute import build_sqlite_where, fetch_matching_oids
 from ...services.filter_config import cfg_column
-from ...utils import safe_float
+from ...chem.molecule_conversion import safe_float
 from ...workers import FilterApplyWorker, SubstructureFilterWorker
 from ..background_jobs import register_background_job, unregister_background_job
 from .cards import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard

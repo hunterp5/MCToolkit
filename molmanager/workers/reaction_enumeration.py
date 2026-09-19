@@ -22,7 +22,7 @@ import threading
 
 from PyQt5.QtCore import QRunnable
 
-from ..reaction_enumeration import (
+from ..chem.reaction_enumeration import (
     ReactionEnumerationJobResult,
     enumerate_reaction,
     load_reactant_pool,
@@ -79,7 +79,7 @@ class ReactionEnumerationWorker(QRunnable):
         if ev is not None and ev.is_set():
             self._finish_cancelled([], 0)
             return
-        from ..tool_progress import report_tool_progress
+        from ..platform_support.tool_progress import report_tool_progress
 
         label = self.tool_title
         target = max(1, int(self.max_products))

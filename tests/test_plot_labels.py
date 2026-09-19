@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from plotly import graph_objects as go
 
-from molmanager.plot_labels import add_fit_formula_annotation, apply_plotly_label_overrides
+from molmanager.plotting.plot_labels import add_fit_formula_annotation, apply_plotly_label_overrides
 
 
 def test_apply_plotly_label_overrides_2d() -> None:

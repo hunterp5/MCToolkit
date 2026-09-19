@@ -63,7 +63,7 @@ def __getattr__(name: str) -> Any:
 from .bulk_similarity import BulkSimilarityResult, BulkSimilarityWorker
 from .cluster_worker import ClusterExploreWorker, ClusterWorker
 from .export_worker import ExportWorker
-from ..rdkit_fingerprints import SIMILARITY_FP_TYPE_LABELS, fingerprint_bitvect_for_ui_choice
+from ..chem.rdkit_fingerprints import SIMILARITY_FP_TYPE_LABELS, fingerprint_bitvect_for_ui_choice
 from .diverse_subset_worker import (
     DiverseSubsetWorker,
     build_diverse_subset_pool,

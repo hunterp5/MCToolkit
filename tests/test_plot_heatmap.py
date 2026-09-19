@@ -16,8 +16,11 @@
 
 """Tests for 2D heatmap binning."""
 
-
-from molmanager.plot_heatmap import binned_count_matrix, oids_in_heatmap_cell, summarize_heatmap
+from molmanager.plotting.plot_heatmap import (
+    binned_count_matrix,
+    oids_in_heatmap_cell,
+    summarize_heatmap,
+)
 from molmanager.ui.plot import compute_histogram_bin_edges, resolve_plot_mode, PLOT_TYPE_HEATMAP
 
 

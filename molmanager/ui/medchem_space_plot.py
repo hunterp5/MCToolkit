@@ -22,13 +22,13 @@ from typing import Any
 
 from plotly import graph_objects as go
 
-from ..medchem_space import (
+from ..analysis.medchem_space import (
     MedChemSpaceDataset,
     bbb_polygon,
     gia_polygon,
     golden_triangle_polygon,
 )
-from ..plot_color import (
+from ..plotting.plot_marker_color import (
     DEFAULT_MARKER_SIZE_PX,
     DEFAULT_PLOT_COLORSCALE,
     DEFAULT_SELECTED_MARKER_SIZE_PX,
@@ -69,7 +69,7 @@ def _scatter_marker(
     size_min_px: float | None = None,
     size_max_px: float | None = None,
 ) -> dict:
-    from ..plot_color import scatter_marker_from_column_values
+    from ..plotting.plot_marker_color import scatter_marker_from_column_values
 
     kwargs: dict[str, Any] = {
         "color_label": color_label,

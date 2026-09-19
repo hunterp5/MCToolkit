@@ -25,8 +25,11 @@ pytest.importorskip("PyQt5.QtWidgets")
 
 from rdkit import Chem
 
-from molmanager.structure_hydrogens import add_explicit_hydrogens, remove_explicit_hydrogens
-from molmanager.ui.dialogs.mol_tools import AddExplicitHydrogensDialog, RemoveExplicitHydrogensDialog
+from molmanager.chem.structure_hydrogens import add_explicit_hydrogens, remove_explicit_hydrogens
+from molmanager.ui.dialogs.mol_tools import (
+    AddExplicitHydrogensDialog,
+    RemoveExplicitHydrogensDialog,
+)
 
 
 def test_add_explicit_hydrogens_helper_expands_implicit_h():

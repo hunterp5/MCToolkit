@@ -23,9 +23,9 @@ import threading
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.fingerprint_cache import clear as clear_fp_cache
-from molmanager.fingerprint_cache import get as cache_get
-from molmanager.fingerprint_cache import store_from_mol
+from molmanager.chem.fingerprint_cache import clear as clear_fp_cache
+from molmanager.chem.fingerprint_cache import get as cache_get
+from molmanager.chem.fingerprint_cache import store_from_mol
 from molmanager.workers.diverse_subset_worker import (
     DiverseSubsetPoolRow,
     DiverseSubsetWorker,
@@ -77,8 +77,7 @@ def test_lazy_pick_uses_cached_fp_without_mol():
     mols = [Chem.MolFromSmiles(s) for s in smis]
     fps = _morgan_fps(smis)
     pool = [
-        DiverseSubsetPoolRow(oid=i, mol=mols[i] if i == 0 else None, fp=fps[i])
-        for i in range(4)
+        DiverseSubsetPoolRow(oid=i, mol=mols[i] if i == 0 else None, fp=fps[i]) for i in range(4)
     ]
     picks = maxmin_diverse_pick_lazy(pool, "Morgan (r=2, n=2048)", 2, seed=1)
     assert len(picks) == 2

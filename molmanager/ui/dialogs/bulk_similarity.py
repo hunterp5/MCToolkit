@@ -139,7 +139,7 @@ class BulkSimilarityDialog(QDialog):
         rows = self._selected_mols_or_warn()
         if not rows:
             return
-        from ...memory_guards import check_cluster_workload
+        from ...platform_support.memory_guards import check_cluster_workload
 
         guard = check_cluster_workload(len(rows))
         if not guard.ok:

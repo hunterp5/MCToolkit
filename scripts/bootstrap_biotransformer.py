@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from molmanager.biotransformer_install import install_biotransformer
+from molmanager.predictions.biotransformer_install import install_biotransformer
 
 
 def main() -> int:

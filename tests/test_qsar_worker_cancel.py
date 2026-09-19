@@ -51,13 +51,15 @@ def test_qsar_predict_worker_emits_failed_when_cancelled_before_run() -> None:
     signals.failed.connect(collector.on_failed)
     cancel = threading.Event()
     cancel.set()
-    worker = QSARPredictWorker({"bundle": None, "oids": [], "dataframe": None}, signals, cancel_event=cancel)
+    worker = QSARPredictWorker(
+        {"bundle": None, "oids": [], "dataframe": None}, signals, cancel_event=cancel
+    )
     worker.run()
     assert collector.messages == ["Cancelled."]
 
 
 def test_qsar_train_worker_reports_fitting_progress(monkeypatch) -> None:
-    from molmanager.tool_progress import ToolProgressState
+    from molmanager.platform_support.tool_progress import ToolProgressState
 
     state = ToolProgressState()
     state.begin("QSAR", 3)

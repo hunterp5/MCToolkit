@@ -30,7 +30,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...display_constants import (
+from ...table.structure_depiction_layout import (
     DEFAULT_STRUCTURE_DEPICT_HEIGHT,
     DEFAULT_STRUCTURE_DEPICT_WIDTH,
     MAX_STRUCTURE_DEPICT_HEIGHT,

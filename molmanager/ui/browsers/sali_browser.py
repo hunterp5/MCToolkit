@@ -26,7 +26,7 @@ from PyQt5.QtWidgets import QLabel, QVBoxLayout
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from ...sali_analysis import SaliPoint
+from ...analysis.sali_analysis import SaliPoint
 from .chrome import configure_browser_mol_drawer, style_browser_emphasis_label
 from .pair_browser import PairBrowserDialog
 

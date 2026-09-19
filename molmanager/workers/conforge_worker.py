@@ -24,7 +24,7 @@ import threading
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..conforge import (
+from ..conformers.conforge_generation import (
     ConforgeParams,
     ensure_conforge_ready,
     run_conforge_generation,

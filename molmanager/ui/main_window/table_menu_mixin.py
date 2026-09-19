@@ -20,14 +20,17 @@ from __future__ import annotations
 
 from PyQt5.QtWidgets import QApplication, QInputDialog, QMenu
 
-from ...column_log_transform import (
+from ...table.column_log_transform import (
     column_can_apply_log10,
     column_can_apply_precision,
     transform_column_values_log10,
     transform_column_values_precision,
 )
-from ...confs_codec import is_packed_ensemble_header, resolve_blocks_b64_for_viewer
-from ...utils import mol_to_canonical_smiles
+from ...conformers.conformer_column_codec import (
+    is_packed_ensemble_header,
+    resolve_blocks_b64_for_viewer,
+)
+from ...chem.molecule_conversion import mol_to_canonical_smiles
 from ..strings import TOOL_RENDER_2D
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
 from .table_undo_commands import (
@@ -102,7 +105,7 @@ class TableMenuMixin:
             if col >= 2 and not self._table_model.is_pixmap_data_column(old_n):
                 color_act = menu.addAction("Color")
                 color_act.setObjectName("header_color")
-            from ...mmp_analysis import is_mmp_result_header
+            from ...analysis.mmp_analysis import is_mmp_result_header
 
             if is_mmp_result_header(old_n):
                 ledger_act = menu.addAction("Transform Ledger")
@@ -315,7 +318,7 @@ class TableMenuMixin:
         som_map_col = False
         som_header = ""
         if 0 <= col < len(self.headers):
-            from ...som_prediction import is_som_map_header
+            from ...predictions.som_prediction import is_som_map_header
 
             som_header = self.headers[col]
             som_map_col = is_som_map_header(som_header)
@@ -394,7 +397,7 @@ class TableMenuMixin:
 
         mmp_ledger_act = None
         if 0 <= col < len(self.headers):
-            from ...mmp_analysis import is_mmp_result_header
+            from ...analysis.mmp_analysis import is_mmp_result_header
 
             if is_mmp_result_header(self.headers[col]):
                 menu.addSeparator()

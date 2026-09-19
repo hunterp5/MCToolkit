@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 
-from ...utils import mol_to_canonical_smiles
+from ...chem.molecule_conversion import mol_to_canonical_smiles
 from ..background_jobs import unregister_background_job
 from .cards import SubstructureFilterCard
 

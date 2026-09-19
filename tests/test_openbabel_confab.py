@@ -24,7 +24,7 @@ import pytest
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.openbabel_confab import (
+from molmanager.conformers.openbabel_confab import (
     SystematicConfParams,
     apply_sdf_conformers,
     confab_cli_command,
@@ -58,15 +58,22 @@ def test_confab_cli_command_includes_cutoffs_and_original():
 
 
 def test_ensure_openbabel_confab_ready_missing(monkeypatch):
-    monkeypatch.setattr("molmanager.openbabel_confab.python_confab_available", lambda _p="": False)
-    monkeypatch.setattr("molmanager.openbabel_confab.resolve_obabel_executable", lambda _p="": None)
+    monkeypatch.setattr(
+        "molmanager.conformers.openbabel_confab.python_confab_available", lambda _p="": False
+    )
+    monkeypatch.setattr(
+        "molmanager.conformers.openbabel_confab.resolve_obabel_executable", lambda _p="": None
+    )
     err = ensure_openbabel_confab_ready()
     assert err is not None
     assert "Open Babel" in err
 
 
 def test_pip_openbabel_is_default_and_ready():
-    from molmanager.bundled_paths import default_external_executable, pip_openbabel_executable
+    from molmanager.platform_support.bundled_paths import (
+        default_external_executable,
+        pip_openbabel_executable,
+    )
 
     exe = pip_openbabel_executable()
     if exe is None:
@@ -78,7 +85,7 @@ def test_pip_openbabel_is_default_and_ready():
 
 
 def test_iter_sdf_mols_reads_molblock_records():
-    from molmanager.openbabel_confab import iter_sdf_mols
+    from molmanager.conformers.openbabel_confab import iter_sdf_mols
 
     src = _ethanol_confs(2)
     sdf = "".join(
@@ -114,7 +121,7 @@ def test_run_systematic_python_confab_loads_forcefield(caplog):
     if not python_confab_available():
         pytest.skip("Open Babel Python Confab not available")
     mol = Chem.MolFromSmiles("CCO")
-    with caplog.at_level("ERROR", logger="molmanager.openbabel_confab"):
+    with caplog.at_level("ERROR", logger="molmanager.conformers.openbabel_confab"):
         out, meta = run_systematic_conformer_generation(
             mol, SystematicConfParams(num_confs=8, energy_cutoff=50.0)
         )
@@ -130,9 +137,11 @@ def test_run_systematic_uses_confab_sdf(monkeypatch):
     blocks = [Chem.MolToMolBlock(src, confId=int(cid)) for cid in range(src.GetNumConformers())]
     sdf = "".join(b if b.endswith("$$$$\n") else b.rstrip("\n") + "\n$$$$\n" for b in blocks)
     monkeypatch.setattr(
-        "molmanager.openbabel_confab.ensure_openbabel_confab_ready", lambda _p="": None
+        "molmanager.conformers.openbabel_confab.ensure_openbabel_confab_ready", lambda _p="": None
     )
-    monkeypatch.setattr("molmanager.openbabel_confab._run_confab", lambda _sdf, _params: sdf)
+    monkeypatch.setattr(
+        "molmanager.conformers.openbabel_confab._run_confab", lambda _sdf, _params: sdf
+    )
     out, meta = run_systematic_conformer_generation(
         Chem.MolFromSmiles("CCO"), SystematicConfParams(num_confs=4)
     )

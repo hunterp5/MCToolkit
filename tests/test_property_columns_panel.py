@@ -88,7 +88,7 @@ def test_molecule_viewer_has_settings_not_hide_options_button(qapp):  # noqa: AR
 def test_view_conformers_omits_property_column_pickers(qapp) -> None:  # noqa: ARG001
     from rdkit.Chem import AllChem
 
-    from molmanager.confs_codec import conformer_mol_blocks_b64_json
+    from molmanager.conformers.conformer_column_codec import conformer_mol_blocks_b64_json
     from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget
 
     mol = Chem.MolFromSmiles("CCO")

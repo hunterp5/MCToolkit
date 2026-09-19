@@ -32,7 +32,7 @@ def sanitized_plotly_js() -> str:
 
 def interactive_plot_shell_html() -> str:
     """HTML document with Plotly, QWebChannel bridge, selection, and Plotter-specific click handlers."""
-    from ..config import load_config
+    from ..platform_support.config import load_config
 
     plotly_js = sanitized_plotly_js()
     overlay_max = int(load_config().plot_selection_overlay_max_points)

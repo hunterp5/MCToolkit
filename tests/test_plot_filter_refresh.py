@@ -22,7 +22,7 @@ from rdkit import Chem
 
 from PyQt5.QtWidgets import QWidget
 
-from molmanager.dimensionality_reduction import (
+from molmanager.analysis.dimensionality_reduction import (
     DimensionReductionResult,
     subset_dimension_reduction_result,
 )

@@ -31,8 +31,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..activity_cliff_analysis import ActivityCliffPoint, build_activity_cliff_points
-from ..mmp_analysis import MmpPair
+from ..analysis.activity_cliff_analysis import ActivityCliffPoint, build_activity_cliff_points
+from ..analysis.mmp_analysis import MmpPair
 from .activity_cliff_plot import build_activity_cliff_figure
 from .dockable_plot import style_plot_footer_text_button
 from .plotly_interactive_view import PlotlyInteractiveView
@@ -146,7 +146,7 @@ class ActivityCliffMapPanel(DockableResultPlotPanel):
     def apply_session_state(self, state: dict | None) -> None:
         if not isinstance(state, dict):
             return
-        from ..mmp_analysis import MmpPair
+        from ..analysis.mmp_analysis import MmpPair
 
         pairs: list[MmpPair] = []
         raw_pairs = state.get("pairs")

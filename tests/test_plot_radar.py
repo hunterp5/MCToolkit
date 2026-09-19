@@ -18,7 +18,7 @@
 
 import pytest
 
-from molmanager.plot_radar import (
+from molmanager.plotting.plot_radar import (
     MAX_RADAR_DISPLAY_ENTRIES,
     MAX_RADAR_VARIABLES,
     MIN_RADAR_VARIABLES,
@@ -89,8 +89,14 @@ def test_apply_radar_normalization_uses_scope_bounds(model):
 def test_resolve_entry_row_oid_by_oid_or_row_number(model):
     model.append_row(42, {"SMILES": "CC", "MW": "30"})
     model.append_row(99, {"SMILES": "CCC", "MW": "40"})
-    assert resolve_entry_row_oid("42", model=model, row_for_oid=lambda o: model.logical_row_for_oid(o)) == 42
-    assert resolve_entry_row_oid("2", model=model, row_for_oid=lambda o: model.logical_row_for_oid(o)) == 99
+    assert (
+        resolve_entry_row_oid("42", model=model, row_for_oid=lambda o: model.logical_row_for_oid(o))
+        == 42
+    )
+    assert (
+        resolve_entry_row_oid("2", model=model, row_for_oid=lambda o: model.logical_row_for_oid(o))
+        == 99
+    )
     assert resolve_entry_row_oid("", model=model, row_for_oid=lambda o: -1) is None
 
 

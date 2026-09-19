@@ -38,16 +38,16 @@ from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..fragment_disconnect import largest_fragment_and_rest
-from ..structure_neutralize import neutralize_mol
-from ..utils import mol_to_canonical_smiles, parse_molecule_from_cell_text
+from ..chem.fragment_disconnect import largest_fragment_and_rest
+from ..chem.structure_neutralize import neutralize_mol
+from ..chem.molecule_conversion import mol_to_canonical_smiles, parse_molecule_from_cell_text
 from .process_pool_utils import (
     register_process_pool,
     should_terminate_process_pool,
     shutdown_process_pool_executor,
 )
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
-from ..tool_progress import ToolProgressState, report_tool_progress
+from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
 
 logger = logging.getLogger(__name__)
 

@@ -26,16 +26,16 @@ from PyQt5.QtWidgets import (
     QDialog,
 )
 
-from ...confs_codec import (
+from ...conformers.conformer_column_codec import (
     demote_v1_cell_to_sidecar,
     is_packed_ensemble_header,
     rehydrate_v1_confs_cell,
 )
-from ...exception_policy import log_swallowed_exception
+from ...platform_support.exception_policy import log_swallowed_exception
 from ...services.table_selection import (
     collect_canonical_keys_from_column,
 )
-from ...utils import (
+from ...chem.molecule_conversion import (
     canonical_structure_key_from_smiles as canonical_structure_key_from_smiles_fn,
     mol_to_canonical_smiles,
 )
@@ -219,13 +219,13 @@ class TableUIMixin(
         if getattr(self, "_undo_stack", None) is not None:
             self._undo_stack.clear()
         try:
-            from ...fingerprint_cache import clear as clear_fingerprint_cache
+            from ...chem.fingerprint_cache import clear as clear_fingerprint_cache
 
             clear_fingerprint_cache()
         except Exception:
             log_swallowed_exception(logger, "fingerprint_cache.clear failed during clear_all")
         try:
-            from ...microstate_cache import clear as clear_microstate_cache
+            from ...ionization.microstate_cache import clear as clear_microstate_cache
 
             clear_microstate_cache()
         except Exception:

@@ -25,13 +25,13 @@ import time
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
 
-from molmanager.ionization import (
+from molmanager.ionization.unipka_ensembles import (
     format_pka_values,
     pka_values_from_states,
     populations_from_states,
     unipka_import_error,
 )
-from ..config import load_config
+from ..platform_support.config import load_config
 from .ionization_parallel import build_microstates_cache_by_key
 from .pka_predictor import _quieter_unipka_loggers
 from .process_pool_utils import should_terminate_process_pool
@@ -119,7 +119,7 @@ class ProtonateWorker(QRunnable):
         self.progress_message = progress_message
 
     def run(self) -> None:
-        from ..tool_progress import report_tool_progress
+        from ..platform_support.tool_progress import report_tool_progress
 
         with _quieter_unipka_loggers():
             err = unipka_import_error()

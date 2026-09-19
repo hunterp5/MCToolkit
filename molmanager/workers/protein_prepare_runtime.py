@@ -207,7 +207,7 @@ def _write_prepared_output(
     output_format: str = "cif",
 ) -> None:
     """Write the prepared receptor as mmCIF or PDB."""
-    from ..structure_components import (
+    from ..protein.structure_components import (
         _pdb_from_atoms,
         atoms_to_mmcif,
         parse_structure_atoms,
@@ -278,7 +278,7 @@ def _prepare_protein_structure(req: ProteinPrepareRequest):
 
     Raises RuntimeError when a required extra is missing or a step fails.
     """
-    from ..structure_components import sniff_structure_format
+    from ..protein.structure_components import sniff_structure_format
     from .protein_prepare_qc import (
         apply_highest_occupancy_altlocs,
         bridging_water_keys,
@@ -409,11 +409,11 @@ def _prepare_protein_structure(req: ProteinPrepareRequest):
         log_prepare("Skipping PDBFixer")
         if not req.include_ligand and orig_ligand_keys:
             if work_cif:
-                from ..structure_components import delete_cif_residues
+                from ..protein.structure_components import delete_cif_residues
 
                 work_text = delete_cif_residues(work_text, orig_ligand_keys)
             else:
-                from ..structure_components import delete_pdb_residues
+                from ..protein.structure_components import delete_pdb_residues
 
                 work_text = delete_pdb_residues(work_text, orig_ligand_keys)
     protein_ff = _normalize_protein_ff(req.protein_ff)
@@ -755,11 +755,11 @@ def _prepare_protein_structure(req: ProteinPrepareRequest):
             min_text = merged
             if ligand_keys and not use_gaff:
                 if work_cif:
-                    from ..structure_components import delete_cif_residues
+                    from ..protein.structure_components import delete_cif_residues
 
                     min_text = delete_cif_residues(merged, ligand_keys)
                 else:
-                    from ..structure_components import delete_pdb_residues
+                    from ..protein.structure_components import delete_pdb_residues
 
                     min_text = delete_pdb_residues(merged, ligand_keys)
             _write_text(finalized, min_text)
@@ -815,11 +815,11 @@ def _prepare_protein_structure(req: ProteinPrepareRequest):
         holo_text = merged if keep_ligand_in_merged else repaired_text
         if ligand_keys and not keep_ligand_out and (run_min or keep_ligand_in_merged):
             if work_cif:
-                from ..structure_components import delete_cif_residues
+                from ..protein.structure_components import delete_cif_residues
 
                 final_text = delete_cif_residues(final_text, ligand_keys)
             else:
-                from ..structure_components import delete_pdb_residues
+                from ..protein.structure_components import delete_pdb_residues
 
                 final_text = delete_pdb_residues(final_text, ligand_keys)
         chem_atoms, chem_bonds = _ligand_chem_tables(

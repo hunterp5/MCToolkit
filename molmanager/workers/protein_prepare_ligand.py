@@ -27,7 +27,7 @@ from pathlib import Path
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdmolops
 
-from ..structure_components import (
+from ..protein.structure_components import (
     _pdb_residue_key,
     parse_cif_chem_comp_atoms,
     parse_cif_chem_comp_bonds,
@@ -284,7 +284,7 @@ def ligand_residue_blocks(
 def _ligand_residue_blocks_cif(
     text: str, keys: set[ResidueKey]
 ) -> list[tuple[ResidueKey, str, str]]:
-    from ..structure_components import _norm_chain, _pdb_from_atoms, parse_structure_atoms
+    from ..protein.structure_components import _norm_chain, _pdb_from_atoms, parse_structure_atoms
 
     wanted = set(keys)
     grouped: dict[ResidueKey, list] = defaultdict(list)
@@ -433,7 +433,7 @@ def chem_comp_tables_from_mols(
     mols: Iterable[Chem.Mol],
 ) -> tuple[dict[str, tuple], dict[str, tuple]]:
     """CCD-style ``_chem_comp_atom`` / ``_chem_comp_bond`` tables from RDKit ligands."""
-    from ..structure_components import CifChemAtom, CifChemBond
+    from ..protein.structure_components import CifChemAtom, CifChemBond
 
     atoms_out: dict[str, list] = {}
     bonds_out: dict[str, list] = {}
@@ -508,7 +508,7 @@ def mol_to_structure_atoms(
     icode: str,
 ) -> list:
     """Coordinate atoms for rewriting an mmCIF ligand residue."""
-    from ..structure_components import StructureAtom
+    from ..protein.structure_components import StructureAtom
 
     if mol.GetNumConformers() == 0:
         raise ValueError("Ligand has no 3D coordinates.")
@@ -561,7 +561,7 @@ def prepare_ligands_for_gaff(
             template=template,
             templates_by_resn=templates_by_resn,
         )
-    from ..structure_components import delete_pdb_residues
+    from ..protein.structure_components import delete_pdb_residues
 
     if not ligand_keys:
         return [], pdb_text
@@ -611,7 +611,7 @@ def _prepare_ligands_for_gaff_cif(
     template: Chem.Mol | None = None,
     templates_by_resn: dict[str, Chem.Mol] | None = None,
 ) -> tuple[list[Chem.Mol], str]:
-    from ..structure_components import (
+    from ..protein.structure_components import (
         _residue_key3,
         atoms_to_mmcif,
         cif_comment_remarks,
@@ -714,7 +714,7 @@ def parse_pqr_atoms(
     text: str,
 ) -> list[tuple[ResidueKey, str, float, float, float, float]]:
     """Parse PQR ATOM/HETATM records as ``(key, name, x, y, z, charge)``."""
-    from ..structure_components import _norm_chain
+    from ..protein.structure_components import _norm_chain
 
     out: list[tuple[ResidueKey, str, float, float, float, float]] = []
     for line in (text or "").splitlines():
@@ -852,7 +852,7 @@ def write_ligand_mol2(mol: Chem.Mol, path: Path, *, resn: str, resi: str) -> Non
 
 def ligand_ionization_ensemble(template: Chem.Mol, ensemble=None):
     """Score a Uni-pKa ensemble for *template*, or return a precomputed *ensemble*."""
-    from ..ionization import predict_ionization_ensemble, unipka_import_error
+    from ..ionization.unipka_ensembles import predict_ionization_ensemble, unipka_import_error
 
     if ensemble is not None:
         return ensemble
@@ -885,7 +885,7 @@ def choose_ligand_protomer(
     again. Only microstates with aqueous population ≥ *min_aqueous_pct* (or the
     aqueous winner) are considered, so a 0.01% tautomer cannot win on noise.
     """
-    from ..ionization import g_effective, populations_from_states
+    from ..ionization.unipka_ensembles import g_effective, populations_from_states
 
     scored = ligand_ionization_ensemble(template, ensemble)
     pops = populations_from_states(scored, float(ph))

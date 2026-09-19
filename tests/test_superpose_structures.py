@@ -143,7 +143,7 @@ def test_run_superpose_structures_2d_batch():
 
 
 def test_pack_mols_as_confs_cell_same_and_mixed_atom_counts():
-    from molmanager.confs_codec import (
+    from molmanager.conformers.conformer_column_codec import (
         mol_from_packed_confs_cell,
         pack_mols_as_confs_cell,
         unpack_confs_blocks_json_b64,

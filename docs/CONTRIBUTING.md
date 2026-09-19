@@ -48,11 +48,11 @@ CI currently gates on Ruff correctness / undefined-name rules plus unused import
 
 - Prefer narrow `except` clauses and re-raise unexpected failures.
 - Do not use bare `except Exception: pass` for non-fatal paths without logging.
-- Use `molmanager.exception_policy.log_swallowed_exception` when intentionally swallowing an error
+- Use `molmanager.platform_support.exception_policy.log_swallowed_exception` when intentionally swallowing an error
   (best-effort UI/progress/shutdown helpers).
 - Large sketcher/RDKit call sites still contain many defensive catches; convert them as those
   modules are touched.
-- File logging is on by default (`molmanager/app_logging.py`); override with `MOLMANAGER_LOG_DIR`,
+- File logging is on by default (`molmanager/platform_support/app_logging.py`); override with `MOLMANAGER_LOG_DIR`,
   disable with `MOLMANAGER_LOG_TO_FILE=0`. Uncaught exceptions show a crash dialog with the log path.
 
 ### Git commits

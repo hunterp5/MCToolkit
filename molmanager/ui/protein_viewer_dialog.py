@@ -43,7 +43,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ..structure_components import PolymerChain, cif_viewer_bond_tables
+from ..protein.structure_components import PolymerChain, cif_viewer_bond_tables
 from .protein_chain_manager import ProteinChainManager
 from .protein_embed import ProteinEmbedView
 from .protein_sequence import ProteinSequenceDialog

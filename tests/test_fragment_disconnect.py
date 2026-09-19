@@ -20,13 +20,13 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.fragment_disconnect import (
+from molmanager.chem.fragment_disconnect import (
     collect_fragment_mols,
     largest_fragment_and_rest,
     split_dot_disconnected_smiles,
     split_multi_component_smiles,
 )
-from molmanager.utils import mol_to_canonical_smiles
+from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
 
 
 def test_split_dot_disconnected_smiles_respects_brackets() -> None:

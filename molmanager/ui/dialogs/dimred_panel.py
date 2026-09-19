@@ -43,7 +43,7 @@ from PyQt5.QtWidgets import (
 from rdkit import Chem
 
 from ..dockable_plot import hide_plot_options_dialog
-from ...dimensionality_reduction import (
+from ...analysis.dimensionality_reduction import (
     EMBEDDING_PCA_DIM,
     EMBEDDING_PCA_DIM_MAX,
     DimensionReductionResult,
@@ -53,7 +53,7 @@ from ...dimensionality_reduction import (
 from ...workers import SIMILARITY_FP_TYPE_LABELS
 from ...workers.dimensionality_reduction import DimensionReductionSignals, DimensionReductionWorker
 from .data_analysis import numeric_subset, table_to_dataframe
-from ...plot_color import (
+from ...plotting.plot_marker_color import (
     color_values_are_numeric,
     normalize_color_column,
     normalize_size_column,
@@ -380,7 +380,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         self._sync_pca_preprocess_controls()
 
     def collect_session_state(self) -> dict:
-        from ...dimensionality_reduction import result_to_dict
+        from ...analysis.dimensionality_reduction import result_to_dict
 
         state: dict = {
             "kind": self.DIMRED_SESSION_KIND,

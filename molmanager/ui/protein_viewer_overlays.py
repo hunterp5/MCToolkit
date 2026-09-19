@@ -23,8 +23,8 @@ import sys
 
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 
-from ..hydrogen_bonds import HBOND_KIND_COMPLEX
-from ..protein_interactions import (
+from ..protein.hydrogen_bonds import HBOND_KIND_COMPLEX
+from ..protein.protein_interactions import (
     compute_dock_pose_overlays,
     compute_viewer_interaction_overlays,
     prolif_available,

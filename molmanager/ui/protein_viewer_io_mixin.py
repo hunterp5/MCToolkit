@@ -26,7 +26,7 @@ from pathlib import Path
 from PyQt5.QtCore import QByteArray
 from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
-from ..structure_components import (
+from ..protein.structure_components import (
     LoadedStructure,
     component_id_for_atom,
     delete_cif_residues,
@@ -1113,7 +1113,7 @@ class ProteinViewerIoMixin:
             self._sync_pocket_surface_dialog()
             box = state.get("dockingBox")
             if isinstance(box, dict) and box.get("active"):
-                from ..docking_box import docking_box_from_dict
+                from ..docking.search_box import docking_box_from_dict
 
                 parsed = docking_box_from_dict(box)
                 payload = parsed.viewer_payload() if parsed is not None else box

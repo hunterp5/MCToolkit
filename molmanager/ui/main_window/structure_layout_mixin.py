@@ -22,7 +22,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 
 from ..compound_table_model import CompoundTableModel
-from ...display_constants import (
+from ...table.structure_depiction_layout import (
     STRUCTURE_COLUMN_HORIZONTAL_PADDING,
     structure_column_minimum_width,
     structure_depict_height,
@@ -61,7 +61,7 @@ class StructureLayoutMixin:
 
     def apply_structure_depict_size(self, width: int, height: int, *, persist: bool = True) -> None:
         """Apply depiction size from Settings and optionally re-render the Structure column."""
-        from ...display_constants import set_structure_depict_size
+        from ...table.structure_depiction_layout import set_structure_depict_size
 
         set_structure_depict_size(width, height, persist=persist)
         self.apply_structure_table_layout()

@@ -24,7 +24,7 @@ import threading
 
 from rdkit import Chem
 
-from molmanager.confs_codec import unpack_confs_blocks_json_b64
+from molmanager.conformers.conformer_column_codec import unpack_confs_blocks_json_b64
 from molmanager.workers import (
     ConformerGenParams,
     format_confs_table_cell,

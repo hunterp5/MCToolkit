@@ -48,6 +48,36 @@ flowchart TB
   CTA --> W
 ```
 
+## Package layout
+
+`molmanager/` holds no loose modules other than the `app.py` entry point; every module lives in a
+subpackage named for its subject. File names describe what the module does, so the flat listing of a
+subpackage reads as its table of contents.
+
+| Package | Contents |
+|---------|----------|
+| `platform_support/` | Process, config, and runtime concerns: `config.py`, `app_logging.py`, `bundled_paths.py`, `wsl_launcher.py`, `qt_webengine_flags.py`, `rdkit_runtime_setup.py`, `memory_guards.py`, `memory_usage.py`, `performance_tracking.py`, `exception_policy.py`, `tool_progress.py` |
+| `reference/` | In-app reference content: `help_markdown.py`, `citations_catalog.py`, `method_citations.py`, `descriptor_tooltips.py` |
+| `chem/` | Core molecule handling: `molecule_conversion.py`, `smarts_macropatterns.py`, `rdkit_fingerprints.py`, `fingerprint_cache.py`, `fragment_*.py`, `reaction_*.py`, `structure_2d_depiction.py`, `structure_hydrogens.py`, `structure_neutralize.py`, `structure_source_headers.py` |
+| `descriptors/` | `descriptors_3d.py`, `medchem_descriptors.py`, `descriptor_cache_reuse.py`, `ml_feature_matrix.py` |
+| `conformers/` | Generation and encoding: `conforge_generation.py`, `openbabel_confab.py`, `conformer_column_codec.py`, `ensemble_binary_codec.py`, `conformer_output.py` |
+| `ionization/` | `unipka_ensembles.py`, `unipka_enumerator.py`, `microstate_cache.py` |
+| `protein/` | Crystallographic structures and overlays: `structure_cif.py`, `structure_atoms.py`, `structure_inventory.py`, `structure_component_types.py`, `hydrogen_bonds.py`, `protein_interactions.py`, `protein_msa.py`, `pharmacophore*.py` |
+| `docking/` | `gnina_job.py`, `gnina_launch.py`, `pose_file_io.py`, `search_box.py`, `redock_validation.py` |
+| `predictions/` | `som_prediction.py`, `permeability_prediction.py`, `biotransformer_metabolites.py`, `biotransformer_install.py` |
+| `sources/` | External compound providers: `chembl_random_compounds.py`, `pubchem_names.py`, `surechembl_api.py`, `random_molecule_sources.py` |
+| `analysis/` | `mmp_analysis.py`, `mmp_neighborhood_analysis.py`, `activity_cliff_analysis.py`, `sali_analysis.py`, `qsar_models.py`, `mpo_scoring.py`, `medchem_space.py`, `dimensionality_reduction.py` |
+| `plotting/` | Chart computation, no Qt widgets: `plot_axes.py`, `plot_series_collect.py`, `plot_marker_color.py`, `plot_heatmap.py`, `plot_labels.py`, `plot_radar.py`, `plot_statistics_fits.py`, `plotly_legend.py` |
+| `table/` | Table data operations and documents: `column_*.py`, `calculator_expressions.py`, `filter_compute.py`, `random_number_columns.py`, `text_file_ingest.py`, `table_file_formats.py`, `session_codec.py`, `structure_depiction_layout.py` |
+| `storage/` | `MolStore`, `SqliteTableStore`, `extra_pixmap_store.py`, `structure_render_store.py` |
+| `services/` | Pure helpers shared by UI and workers (no Qt, no `molmanager.ui` imports) |
+| `workers/` | Background jobs (see *Chemistry workers layout*) |
+| `ui/` | Qt widgets, dialogs, and the main window |
+
+Bundled `resources/` are resolved from the package root via
+`platform_support.bundled_paths.package_root()`, never from a module's own `__file__`, so modules can
+move between subpackages without breaking resource lookup.
+
 ## Main window (`molmanager/ui/main_window/`)
 
 `ChemistryWorkspaceWindow` is a **QMainWindow facade** over an explicit GUI-thread kernel
@@ -188,13 +218,13 @@ Heavy chemistry jobs are split by concern (compat re-exports remain in `workers/
 | `workers/superpose_structures.py` | Align distinct molecules onto a reference |
 | `workers/superpose_rmsd.py` | Per-conformer RMSD |
 | `workers/strain_energy.py` | Strain energy + overlay helpers |
-| `workers/chemistry_calc.py` | Custom calculator (AST `safe_calc`) |
+| `workers/chemistry_calc.py` | Custom calculator (AST `calculator_expressions`) |
 | `workers/chemistry_worker_common.py` | Shared progress throttling and force-field names |
 
 Pure helpers live under `molmanager/services/` (e.g. `chemistry_columns.py`, `sql_load_policy.py`,
 `table_scope.py`, `activity_records.py`, `table_selection.py`, `sqlite_text_match.py`,
 `filter_config.py`, `column_labels.py`, `structure_grouping.py`). Domain modules must not import
-`molmanager.ui`; Plotly legend cleanup lives in `molmanager/plotly_legend.py` (re-exported from
+`molmanager.ui`; Plotly legend cleanup lives in `molmanager/plotting/plotly_legend.py` (re-exported from
 `ui/plotly_html.py`). Shared lineage header is `COLUMN_PARENT_OID` (`"Parent OID"`).
 MMP / Activity Cliff / Pair Network / SALI share `ui/analysis_job_support.py` for scoped
 activity-record prep, process-queue enqueue (`start_scoped_activity_job`), dialog open/finish
@@ -214,8 +244,8 @@ the sticky cache without a `mapToSource` loop. Column insert/remove is forwarded
 without that, deletes leave blank columns and new descriptor columns never appear.
 When visibility does not change, finalize skips reset/replot.
 
-Plotter axis/mode/histogram helpers live in `molmanager/plot_axes.py` (re-exported from
-`ui/plot.py`). Series collection for scatter/histogram lives in `molmanager/plot_collect.py`.
+Plotter axis/mode/histogram helpers live in `molmanager/plotting/plot_axes.py` (re-exported from
+`ui/plot.py`). Series collection for scatter/histogram lives in `molmanager/plotting/plot_series_collect.py`.
 Floating plot chrome is split into `ui/plot_bridge.py`, `ui/plot_statistics_panel.py`, and
 `ui/plot_dialog.py`. Figure / shell / style / axis / radar / collect / session modules under
 `ui/plot_*_mixin.py` are a **file-split of `PlotWidget`** (`ui/plot.py` owns UI construction).

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.rdkit_fingerprints import (
+from molmanager.chem.rdkit_fingerprints import (
     FINGERPRINT_SPECS,
     SIMILARITY_FP_TYPE_LABELS,
     descriptor_fingerprint_categories,

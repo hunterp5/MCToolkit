@@ -16,7 +16,7 @@
 
 """Dimred Plot Options open before the empty plot window."""
 
-from molmanager.dimensionality_reduction import EMBEDDING_PCA_DIM
+from molmanager.analysis.dimensionality_reduction import EMBEDDING_PCA_DIM
 from molmanager.ui.dialogs.dimensionality_reduction import (
     PCADialog,
     SOMPlotPanel,

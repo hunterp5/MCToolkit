@@ -24,7 +24,7 @@ import math
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from ..exception_policy import log_swallowed_exception
+from ..platform_support.exception_policy import log_swallowed_exception
 
 logger = logging.getLogger(__name__)
 

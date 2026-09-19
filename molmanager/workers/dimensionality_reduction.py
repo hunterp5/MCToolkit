@@ -25,7 +25,7 @@ import pandas as pd
 from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 
-from ..dimensionality_reduction import (
+from ..analysis.dimensionality_reduction import (
     DimensionReductionResult,
     build_reduction_result,
     run_pca,
@@ -34,7 +34,10 @@ from ..dimensionality_reduction import (
     run_umap,
     subsample_row_indices,
 )
-from ..feature_matrix import build_combined_feature_matrix, standardize_feature_matrix
+from ..descriptors.ml_feature_matrix import (
+    build_combined_feature_matrix,
+    standardize_feature_matrix,
+)
 
 
 def _safe_emit(obj, emitter_name: str, *args) -> None:

@@ -37,10 +37,14 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...confs_codec import is_packed_ensemble_header
-from ...config import load_config
-from ...pharmacophore import PHARMACOPHORE_FILE_FILTER, load_pharmacophore
-from ...pharmacophore_screen import DEFAULT_SLACK_ANGSTROM, output_column_names, screening_features
+from ...conformers.conformer_column_codec import is_packed_ensemble_header
+from ...platform_support.config import load_config
+from ...protein.pharmacophore import PHARMACOPHORE_FILE_FILTER, load_pharmacophore
+from ...protein.pharmacophore_screen import (
+    DEFAULT_SLACK_ANGSTROM,
+    output_column_names,
+    screening_features,
+)
 from ...workers.pharmacophore_screen import PharmacophoreScreenWorker
 from ...workers.signals import PharmacophoreScreenSignals
 from ..qt_widget_utils import make_window_minimizable

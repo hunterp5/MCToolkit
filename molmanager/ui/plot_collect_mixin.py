@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from PyQt5.QtWidgets import QMessageBox
 
-from ..medchem_space import snapshot_scope_row_indices
-from ..plot_collect import collect_histogram_values, collect_scatter_points
+from ..analysis.medchem_space import snapshot_scope_row_indices
+from ..plotting.plot_series_collect import collect_histogram_values, collect_scatter_points
 
 
 class PlotCollectMixin:

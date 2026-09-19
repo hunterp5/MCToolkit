@@ -19,11 +19,11 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 
-from ..import_structure import (
+from ..chem.structure_source_headers import (
     header_looks_like_structure_text,
     is_tool_generated_structure_header,
 )
-from ..utils import (
+from ..chem.molecule_conversion import (
     looks_like_mol_block,
     looks_like_structure_cell_text,
     parse_molecule_from_cell_text,

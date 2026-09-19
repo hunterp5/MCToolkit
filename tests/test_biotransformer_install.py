@@ -20,7 +20,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from molmanager.biotransformer_install import copy_biotransformer_tree, install_biotransformer
+from molmanager.predictions.biotransformer_install import (
+    copy_biotransformer_tree,
+    install_biotransformer,
+)
 
 
 def _fake_package(root: Path) -> Path:

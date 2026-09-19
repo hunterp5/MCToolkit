@@ -21,13 +21,13 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 
-from molmanager.confs_codec import (
+from molmanager.conformers.conformer_column_codec import (
     demote_v1_cell_to_sidecar,
     mol_from_packed_confs_cell,
     pack_confs_cell,
     rehydrate_v1_confs_cell,
 )
-from molmanager.ensemble_codec import pack_ensemble_mol, unpack_ensemble_mol
+from molmanager.conformers.ensemble_binary_codec import pack_ensemble_mol, unpack_ensemble_mol
 from molmanager.storage import EnsembleStore, ensure_confs_sidecar
 
 
@@ -120,7 +120,7 @@ def test_ensemble_mol_for_reads_sqlite_path():
 
 
 def test_write_ensemble_worker_results_stores_mol(qapp):  # noqa: ARG001
-    from molmanager.confs_codec import unpack_confs_blocks_json_b64
+    from molmanager.conformers.conformer_column_codec import unpack_confs_blocks_json_b64
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.main_window.conformer_writeback import write_ensemble_worker_results
 

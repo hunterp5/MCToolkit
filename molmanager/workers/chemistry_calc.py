@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
-"""Custom calculator worker (AST safe_calc expressions)."""
+"""Custom calculator worker (AST calculator_expressions)."""
 
 from __future__ import annotations
 
@@ -25,11 +25,12 @@ import time
 
 from PyQt5.QtCore import QRunnable
 
-from ..exception_policy import log_swallowed_exception
-from ..safe_calc import eval_custom_calc_expression
+from ..platform_support.exception_policy import log_swallowed_exception
+from ..table.calculator_expressions import eval_custom_calc_expression
 from .signals import emit_partial_results_if_cancelled
 
 logger = logging.getLogger(__name__)
+
 
 def describe_custom_calc_error(exc: BaseException) -> str:
     """Human-readable explanation for failed custom calculator evaluation."""
@@ -61,7 +62,7 @@ def describe_custom_calc_error(exc: BaseException) -> str:
 
 
 class CustomCalcWorker(QRunnable):
-    """Evaluate a numeric expression per row via the restricted AST safe_calc path.
+    """Evaluate a numeric expression per row via the restricted calculator_expressions path.
 
     Only ``math`` helpers and rewritten column variables are in scope. This is not a
     full sandbox—do not run sessions with untrusted expressions on sensitive machines.
@@ -110,7 +111,7 @@ class CustomCalcWorker(QRunnable):
 
                 for i, var in enumerate(var_keys):
                     safe_name = f"__v{i}"
-                    raw = (data_map.get(var, 0) if isinstance(data_map, dict) else 0)
+                    raw = data_map.get(var, 0) if isinstance(data_map, dict) else 0
                     try:
                         val = float(str(raw).strip()) if str(raw).strip() != "" else 0.0
                     except Exception:
@@ -148,4 +149,3 @@ class CustomCalcWorker(QRunnable):
             self.progress_state.update("Calculator…", min(done, tot) if rows else 0, tot)
         emit_partial_results_if_cancelled(self.signals, "Calculator", len(results), tot, cancelled)
         self.signals.custom_calc.emit(results)
-

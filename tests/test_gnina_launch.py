@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from molmanager.gnina_launch import (
+from molmanager.docking.gnina_launch import (
     convert_gnina_argv_paths,
     gnina_command_ok,
     gnina_exit_127_message,
@@ -28,7 +28,7 @@ from molmanager.gnina_launch import (
     resolve_gnina_command,
     write_gnina_config,
 )
-from molmanager.wsl import windows_path_to_wsl
+from molmanager.platform_support.wsl_launcher import windows_path_to_wsl
 
 
 def test_windows_path_to_wsl_drive():
@@ -37,7 +37,7 @@ def test_windows_path_to_wsl_drive():
 
 def test_convert_gnina_argv_paths_rewrites_file_flags(monkeypatch):
     monkeypatch.setattr(
-        "molmanager.wsl.linux_path",
+        "molmanager.platform_support.wsl_launcher.linux_path",
         lambda p: windows_path_to_wsl(p),
     )
     argv = [
@@ -67,7 +67,9 @@ def test_convert_gnina_argv_paths_rewrites_file_flags(monkeypatch):
 
 
 def test_write_gnina_config_linux_paths(tmp_path, monkeypatch):
-    monkeypatch.setattr("molmanager.wsl.linux_path", lambda p: windows_path_to_wsl(p))
+    monkeypatch.setattr(
+        "molmanager.platform_support.wsl_launcher.linux_path", lambda p: windows_path_to_wsl(p)
+    )
     dest = tmp_path / "gnina.conf"
     write_gnina_config(
         [
@@ -96,20 +98,22 @@ def test_gnina_linux_executable_converts_windows_file():
 
 
 def test_gnina_command_ok_accepts_bare_name_on_windows(monkeypatch):
-    monkeypatch.setattr("molmanager.gnina_launch.gnina_uses_wsl", lambda: True)
-    monkeypatch.setattr("molmanager.gnina_launch.resolve_user_executable", lambda _p: None)
+    monkeypatch.setattr("molmanager.docking.gnina_launch.gnina_uses_wsl", lambda: True)
+    monkeypatch.setattr("molmanager.docking.gnina_launch.resolve_user_executable", lambda _p: None)
     assert gnina_command_ok("gnina") is True
     assert gnina_command_ok("") is False
 
 
 def test_gnina_qprocess_spec_windows_wsl_mnt_paths(monkeypatch):
-    monkeypatch.setattr("molmanager.gnina_launch.gnina_uses_wsl", lambda: True)
-    monkeypatch.setattr("molmanager.wsl.linux_path", lambda p: windows_path_to_wsl(p))
+    monkeypatch.setattr("molmanager.docking.gnina_launch.gnina_uses_wsl", lambda: True)
     monkeypatch.setattr(
-        "molmanager.wsl.resolve_wsl_executable",
+        "molmanager.platform_support.wsl_launcher.linux_path", lambda p: windows_path_to_wsl(p)
+    )
+    monkeypatch.setattr(
+        "molmanager.platform_support.wsl_launcher.resolve_wsl_executable",
         lambda _p="": r"C:\Windows\System32\wsl.exe",
     )
-    monkeypatch.setattr("molmanager.gnina_launch.gnina_ld_library_path", lambda **_k: "")
+    monkeypatch.setattr("molmanager.docking.gnina_launch.gnina_ld_library_path", lambda **_k: "")
     program, args = gnina_qprocess_spec(
         "gnina",
         [
@@ -134,13 +138,15 @@ def test_gnina_qprocess_spec_windows_wsl_mnt_paths(monkeypatch):
 
 
 def test_gnina_qprocess_spec_chmods_mnt_binary(monkeypatch):
-    monkeypatch.setattr("molmanager.gnina_launch.gnina_uses_wsl", lambda: True)
-    monkeypatch.setattr("molmanager.wsl.linux_path", lambda p: windows_path_to_wsl(p))
+    monkeypatch.setattr("molmanager.docking.gnina_launch.gnina_uses_wsl", lambda: True)
     monkeypatch.setattr(
-        "molmanager.wsl.resolve_wsl_executable",
+        "molmanager.platform_support.wsl_launcher.linux_path", lambda p: windows_path_to_wsl(p)
+    )
+    monkeypatch.setattr(
+        "molmanager.platform_support.wsl_launcher.resolve_wsl_executable",
         lambda _p="": r"C:\Windows\System32\wsl.exe",
     )
-    monkeypatch.setattr("molmanager.gnina_launch.gnina_ld_library_path", lambda **_k: "")
+    monkeypatch.setattr("molmanager.docking.gnina_launch.gnina_ld_library_path", lambda **_k: "")
     program, args = gnina_qprocess_spec(
         r"C:\Tools\gnina",
         ["--receptor", r"C:\data\rec.pdbqt"],
@@ -153,30 +159,34 @@ def test_gnina_qprocess_spec_chmods_mnt_binary(monkeypatch):
 
 
 def test_resolve_gnina_command_uses_wsl_which(monkeypatch):
-    monkeypatch.setattr("molmanager.gnina_launch.gnina_uses_wsl", lambda: True)
-    monkeypatch.setattr("molmanager.gnina_launch.resolve_user_executable", lambda _p: None)
-    monkeypatch.setattr("molmanager.gnina_launch.resolve_bundled_executable", lambda _t: None)
+    monkeypatch.setattr("molmanager.docking.gnina_launch.gnina_uses_wsl", lambda: True)
+    monkeypatch.setattr("molmanager.docking.gnina_launch.resolve_user_executable", lambda _p: None)
     monkeypatch.setattr(
-        "molmanager.gnina_launch._wsl_which",
+        "molmanager.docking.gnina_launch.resolve_bundled_executable", lambda _t: None
+    )
+    monkeypatch.setattr(
+        "molmanager.docking.gnina_launch._wsl_which",
         lambda name, timeout=20.0: "/usr/local/bin/gnina" if name == "gnina" else None,
     )
     assert resolve_gnina_command("gnina") == "/usr/local/bin/gnina"
-    monkeypatch.setattr("molmanager.gnina_launch._wsl_which", lambda name, timeout=20.0: None)
+    monkeypatch.setattr(
+        "molmanager.docking.gnina_launch._wsl_which", lambda name, timeout=20.0: None
+    )
     assert resolve_gnina_command("gnina") is None
 
 
 def test_wsl_which_treats_exit_zero_as_success(monkeypatch):
     from types import SimpleNamespace
 
-    from molmanager.gnina_launch import _wsl_which
+    from molmanager.docking.gnina_launch import _wsl_which
 
     monkeypatch.setattr(
-        "molmanager.wsl.run_linux_tool",
+        "molmanager.platform_support.wsl_launcher.run_linux_tool",
         lambda *_a, **_k: SimpleNamespace(returncode=0, stdout="/usr/local/bin/gnina\n"),
     )
     assert _wsl_which("gnina") == "/usr/local/bin/gnina"
     monkeypatch.setattr(
-        "molmanager.wsl.run_linux_tool",
+        "molmanager.platform_support.wsl_launcher.run_linux_tool",
         lambda *_a, **_k: SimpleNamespace(returncode=1, stdout=""),
     )
     assert _wsl_which("gnina") is None
@@ -185,9 +195,9 @@ def test_wsl_which_treats_exit_zero_as_success(monkeypatch):
 def test_resolve_gnina_command_prefers_local_file(tmp_path, monkeypatch):
     exe = tmp_path / "gnina"
     exe.write_bytes(b"")
-    monkeypatch.setattr("molmanager.gnina_launch.gnina_uses_wsl", lambda: True)
+    monkeypatch.setattr("molmanager.docking.gnina_launch.gnina_uses_wsl", lambda: True)
     monkeypatch.setattr(
-        "molmanager.gnina_launch._wsl_which",
+        "molmanager.docking.gnina_launch._wsl_which",
         lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("WSL should not be probed")),
     )
     assert resolve_gnina_command(str(exe)) == str(exe)
@@ -210,14 +220,16 @@ def test_gnina_exit_127_message_shared_library():
 
 
 def test_gnina_qprocess_spec_exports_cuda_lib_path(monkeypatch):
-    monkeypatch.setattr("molmanager.gnina_launch.gnina_uses_wsl", lambda: True)
-    monkeypatch.setattr("molmanager.wsl.linux_path", lambda p: windows_path_to_wsl(p))
+    monkeypatch.setattr("molmanager.docking.gnina_launch.gnina_uses_wsl", lambda: True)
     monkeypatch.setattr(
-        "molmanager.wsl.resolve_wsl_executable",
+        "molmanager.platform_support.wsl_launcher.linux_path", lambda p: windows_path_to_wsl(p)
+    )
+    monkeypatch.setattr(
+        "molmanager.platform_support.wsl_launcher.resolve_wsl_executable",
         lambda _p="": r"C:\Windows\System32\wsl.exe",
     )
     monkeypatch.setattr(
-        "molmanager.gnina_launch.gnina_ld_library_path",
+        "molmanager.docking.gnina_launch.gnina_ld_library_path",
         lambda **_k: "/home/hp/miniconda3/envs/gnina-cuda/lib",
     )
     _program, args = gnina_qprocess_spec("gnina", ["--help"], work_dir=r"C:\data")

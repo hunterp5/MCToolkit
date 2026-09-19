@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from ...display_constants import structure_depict_height, structure_depict_width
-from ...utils import mol_to_canonical_smiles
+from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
+from ...chem.molecule_conversion import mol_to_canonical_smiles
 
 
 class StructureWritebackMixin:

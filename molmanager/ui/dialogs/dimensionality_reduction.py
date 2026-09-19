@@ -133,7 +133,7 @@ class TSNEPlotPanel(DimensionReductionPanel):
         form.addRow("Max iterations:", self.tsne_max_iter)
 
         self.tsne_max_points = QSpinBox()
-        from ...config import load_config
+        from ...platform_support.config import load_config
 
         dimred_cap = int(load_config().memory_guard_dimred_max_points)
         self.tsne_max_points.setRange(100, dimred_cap)
@@ -208,7 +208,7 @@ class UMAPPlotPanel(DimensionReductionPanel):
         form.addRow("min_dist:", self.umap_min_dist)
 
         self.umap_max_points = QSpinBox()
-        from ...config import load_config
+        from ...platform_support.config import load_config
 
         dimred_cap = int(load_config().memory_guard_dimred_max_points)
         self.umap_max_points.setRange(100, dimred_cap)
@@ -309,7 +309,7 @@ class SOMPlotPanel(DimensionReductionPanel):
         form.addRow("Point jitter:", self.som_jitter)
 
         self.som_max_points = QSpinBox()
-        from ...config import load_config
+        from ...platform_support.config import load_config
 
         dimred_cap = int(load_config().memory_guard_dimred_max_points)
         self.som_max_points.setRange(100, dimred_cap)

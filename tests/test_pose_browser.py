@@ -71,7 +71,7 @@ def test_set_dock_pose_overlay(qapp):  # noqa: ARG001
 
 
 def test_ligand_mol_to_pdb_inventories_as_ligand():
-    from molmanager.structure_components import parse_structure_components
+    from molmanager.protein.structure_components import parse_structure_components
     from molmanager.ui.dock_complex_viewer import ligand_mol_to_pdb_text, pose_manager_slot_name
 
     mol = _ethanol_pose("-7.1", 0.0)
@@ -315,7 +315,10 @@ def test_hidden_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp
 
 
 def test_write_dock_poses_to_table_packs_parent_row(qapp):  # noqa: ARG001
-    from molmanager.confs_codec import mol_from_packed_confs_cell, rehydrate_v1_confs_cell
+    from molmanager.conformers.conformer_column_codec import (
+        mol_from_packed_confs_cell,
+        rehydrate_v1_confs_cell,
+    )
     from molmanager.services.column_labels import COLUMN_PARENT_OID
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
@@ -342,7 +345,10 @@ def test_write_dock_poses_to_table_packs_parent_row(qapp):  # noqa: ARG001
 
 
 def test_write_dock_poses_to_table_adds_row_for_file_ligand(qapp):  # noqa: ARG001
-    from molmanager.confs_codec import mol_from_packed_confs_cell, rehydrate_v1_confs_cell
+    from molmanager.conformers.conformer_column_codec import (
+        mol_from_packed_confs_cell,
+        rehydrate_v1_confs_cell,
+    )
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()

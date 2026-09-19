@@ -179,7 +179,7 @@ class CompoundTableBulkMixin:
         if not cols or not col_set:
             return
         colored_cols = [h for h in col_set if h in self._column_color_rules]
-        from ..config import load_config
+        from ..platform_support.config import load_config
 
         defer_color = len(oid_value_rows) >= int(load_config().bulk_update_defer_color_cache_rows)
         rows_changed: list[int] = []

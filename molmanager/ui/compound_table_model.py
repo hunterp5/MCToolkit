@@ -33,9 +33,9 @@ from dataclasses import dataclass, field
 from PyQt5.QtCore import QAbstractItemModel, QAbstractTableModel, QModelIndex, QSize, Qt
 from PyQt5.QtGui import QColor, QPixmap
 
-from ..column_color_compute import ColumnColorRule
-from ..extra_pixmap_store import ExtraPixmapStore
-from ..display_constants import (
+from ..table.column_color_compute import ColumnColorRule
+from ..storage.extra_pixmap_store import ExtraPixmapStore
+from ..table.structure_depiction_layout import (
     STRUCTURE_COLUMN_HORIZONTAL_PADDING,
     STRUCTURE_DEPICT_HEIGHT,
     STRUCTURE_DEPICT_WIDTH,
@@ -45,8 +45,8 @@ from ..display_constants import (
     structure_depict_width,
     structure_row_default_height,
 )
-from ..structure_render_store import StructureRenderStore
-from ..utils import safe_float
+from ..storage.structure_render_store import StructureRenderStore
+from ..chem.molecule_conversion import safe_float
 from .compound_table_bounds_mixin import CompoundTableBoundsMixin
 from .compound_table_bulk_mixin import CompoundTableBulkMixin
 from .compound_table_color_mixin import CompoundTableColorMixin
@@ -138,7 +138,7 @@ class CompoundTableModel(
         self._oid_to_row: dict[int, int] = {}
         # Optional extra columns that show a 2D pixmap (e.g. disconnected fragment) keyed by (oid, header).
         self._pixmap_columns: set[str] = set()
-        from ..config import load_config
+        from ..platform_support.config import load_config
 
         self._extra_pixmaps = ExtraPixmapStore(
             max_decoded_pixmaps=load_config().structure_render_pixmap_lru

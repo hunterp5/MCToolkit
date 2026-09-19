@@ -31,7 +31,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...column_join import (
+from ...table.column_join import (
     JOIN_DELIMITER_MODES,
     JoinColumnsParams,
     JoinDelimiterMode,

@@ -458,7 +458,7 @@ class ProteinPrepareDialog(ProteinStructureSourceMixin, QDialog):
             self.chk_keep_selected_waters.setText("Keep Manager-selected waters")
 
     def _source_has_ligand(self, text: str, fmt: str) -> bool:
-        from ...structure_components import parse_structure_components
+        from ...protein.structure_components import parse_structure_components
 
         try:
             comps = parse_structure_components(text or "", fmt or "pdb")
@@ -467,7 +467,10 @@ class ProteinPrepareDialog(ProteinStructureSourceMixin, QDialog):
         return any(c.kind == "ligand" for c in comps)
 
     def _source_has_cif_ligand_bonds(self, text: str, fmt: str) -> bool:
-        from ...structure_components import cif_has_component_bonds, parse_structure_components
+        from ...protein.structure_components import (
+            cif_has_component_bonds,
+            parse_structure_components,
+        )
 
         if (fmt or "").lower() not in {"cif", "mmcif"}:
             return False

@@ -40,16 +40,16 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...fragment_recomposition_filters import (
+from ...chem.fragment_recomposition_filters import (
     parse_recomposition_filter_text,
     recomposition_filter_property_help,
 )
-from ...reaction_enumeration import (
+from ...chem.reaction_enumeration import (
     load_reaction_presets,
     load_reactant_molecules_from_smiles_text,
     validate_reaction_smarts,
 )
-from ...rxn_io import load_reaction_smarts_from_rxn_path
+from ...chem.reaction_file_io import load_reaction_smarts_from_rxn_path
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_REACTION_ENUMERATION
 
@@ -290,7 +290,7 @@ class ReactionEnumerationDialog(QDialog):
 
         limits_form = QFormLayout()
         self.max_products_sb = QSpinBox()
-        from ...config import load_config
+        from ...platform_support.config import load_config
 
         max_prod_cap = int(load_config().memory_guard_enum_max_products)
         self.max_products_sb.setRange(1, max_prod_cap)

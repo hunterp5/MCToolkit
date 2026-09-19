@@ -251,8 +251,11 @@ class PredictToolsMixin:
                 self.status_label.setText(notice)
 
     def _apply_som_map_pixmaps(self, written: list[str], table_rows: list) -> None:
-        from ...som_prediction import SOM_MAP_COLUMN
-        from ...display_constants import structure_depict_height, structure_depict_width
+        from ...predictions.som_prediction import SOM_MAP_COLUMN
+        from ...table.structure_depiction_layout import (
+            structure_depict_height,
+            structure_depict_width,
+        )
         from ..structure_pixmap import pixmap_from_structure_render_png
 
         map_col = written[0] if written else SOM_MAP_COLUMN
@@ -381,14 +384,14 @@ class PredictToolsMixin:
     def _has_som_viewer_data(self) -> bool:
         if getattr(self, "_som_browse_records", None):
             return True
-        from ...som_prediction import is_som_map_header
+        from ...predictions.som_prediction import is_som_map_header
 
         return any(is_som_map_header(h) for h in (self.headers or []))
 
     def _has_metabolite_viewer_data(self) -> bool:
         if getattr(self, "_metabolite_browse_records", None):
             return True
-        from ...biotransformer import (
+        from ...predictions.biotransformer_metabolites import (
             METABOLITE_COUNT_COLUMN,
             METABOLITE_SMILES_COLUMN,
             is_metabolite_column_header,

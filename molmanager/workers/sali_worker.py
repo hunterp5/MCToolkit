@@ -25,9 +25,9 @@ import time
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem, DataStructs
 
-from ..rdkit_fingerprints import fingerprint_bitvect_for_row, fingerprint_bitvect_for_ui_choice
-from ..sali_analysis import accumulate_sali_candidate, finalize_sali_points
-from ..tool_progress import report_tool_progress
+from ..chem.rdkit_fingerprints import fingerprint_bitvect_for_row, fingerprint_bitvect_for_ui_choice
+from ..analysis.sali_analysis import accumulate_sali_candidate, finalize_sali_points
+from ..platform_support.tool_progress import report_tool_progress
 from .fingerprint_similarity import SIMILARITY_METRIC_LABELS, pairwise_fingerprint_similarity
 from .signals import WorkerSignals
 

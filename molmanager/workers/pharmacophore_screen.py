@@ -28,10 +28,10 @@ from typing import Any
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..pharmacophore import pharmacophore_from_dict
-from ..pharmacophore_screen import DEFAULT_SLACK_ANGSTROM, screen_mol
+from ..protein.pharmacophore import pharmacophore_from_dict
+from ..protein.pharmacophore_screen import DEFAULT_SLACK_ANGSTROM, screen_mol
 from ..storage import ensemble_mol_for
-from ..tool_progress import ToolProgressState, report_tool_progress
+from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
 from .process_pool_utils import (
     register_process_pool,
     should_terminate_process_pool,

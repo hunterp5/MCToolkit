@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
 
-from ..ionization import cpu_torch_with_nvidia_gpu, cuda_pka_install_hint
+from ..ionization.unipka_ensembles import cpu_torch_with_nvidia_gpu, cuda_pka_install_hint
 
 
 def maybe_remind_unipka_cuda_wheel(parent: QWidget | None) -> None:

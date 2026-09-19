@@ -25,7 +25,7 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
-from ..pharmacophore import (
+from ..protein.pharmacophore import (
     PHARMACOPHORE_FILE_FILTER,
     Pharmacophore,
     PharmacophoreFeature,
@@ -36,7 +36,7 @@ from ..pharmacophore import (
     save_pharmacophore,
 )
 from .qt_widget_utils import qobject_is_deleted
-from ..structure_atoms import parse_structure_atoms
+from ..protein.structure_atoms import parse_structure_atoms
 
 logger = logging.getLogger(__name__)
 

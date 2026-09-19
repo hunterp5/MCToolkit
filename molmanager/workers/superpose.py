@@ -31,8 +31,8 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..config import load_config
-from ..confs_codec import mol_from_packed_confs_cell
+from ..platform_support.config import load_config
+from ..conformers.conformer_column_codec import mol_from_packed_confs_cell
 from ..storage import ensemble_mol_for
 from .chemistry_worker_common import emit_tool_progress_throttled
 from .signals import WorkerSignals, emit_partial_results_if_cancelled

@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from molmanager.help_markdown import (
+from molmanager.reference.help_markdown import (
     help_dir,
     load_help_markdown,
     markdown_to_html_fragment,

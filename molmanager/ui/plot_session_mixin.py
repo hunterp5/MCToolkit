@@ -22,8 +22,8 @@ from typing import TypeVar
 
 from PyQt5.QtWidgets import QComboBox
 
-from ..plot_axes import PLOT_SESSION_KIND
-from ..plot_radar import SPOKE_NONE
+from ..plotting.plot_axes import PLOT_SESSION_KIND
+from ..plotting.plot_radar import SPOKE_NONE
 
 _T = TypeVar("_T", bound="PlotSessionMixin")
 

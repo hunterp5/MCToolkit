@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.medchem_descriptors import mol_net_formal_charge
-from molmanager.structure_neutralize import neutralize_mol
+from molmanager.descriptors.medchem_descriptors import mol_net_formal_charge
+from molmanager.chem.structure_neutralize import neutralize_mol
 
 
 def test_neutralize_ammonium() -> None:

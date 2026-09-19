@@ -167,7 +167,7 @@ def _amber_missing_message() -> str:
 
 def ambertools_available(*, timeout: float = _WHICH_TIMEOUT_S) -> bool:
     """True when `antechamber` is on the Linux/WSL PATH."""
-    from ..wsl import run_linux_tool
+    from ..platform_support.wsl_launcher import run_linux_tool
 
     try:
         proc = run_linux_tool(["which", "antechamber"], work_dir=Path("."), timeout=timeout)
@@ -216,7 +216,7 @@ def _parameterize_ligand(
     work_dir: Path,
 ) -> str:
     """Run antechamber + parmchk2. Returns the charge-method tag used."""
-    from ..wsl import run_linux_tool
+    from ..platform_support.wsl_launcher import run_linux_tool
 
     gaff_mol2 = f"{stem}_gaff.mol2"
     frcmod = f"{stem}.frcmod"
@@ -300,7 +300,7 @@ def relabel_amber_histidines_pdb(text: str) -> str:
     """
     from collections import defaultdict
 
-    from ..structure_components import _norm_chain, rewrite_pdb_residue_names
+    from ..protein.structure_components import _norm_chain, rewrite_pdb_residue_names
 
     atoms_by_key: dict[tuple[str, str, str], set[str]] = defaultdict(set)
     resn_by_key: dict[tuple[str, str, str], str] = {}
@@ -333,12 +333,12 @@ def _write_protein_pdb(holo: Path, dest: Path, ligand_keys: set[ResidueKey]) -> 
     """Ligand-stripped PDB for tleap (AMBER names, hydrogens kept)."""
     text = holo.read_text(encoding="utf-8", errors="replace")
     if _is_cif_path(holo):
-        from ..structure_components import delete_cif_residues
+        from ..protein.structure_components import delete_cif_residues
 
         stripped = delete_cif_residues(text, ligand_keys)
         scratch = dest.with_suffix(".cif")
     else:
-        from ..structure_components import delete_pdb_residues
+        from ..protein.structure_components import delete_pdb_residues
 
         stripped = delete_pdb_residues(text, ligand_keys)
         scratch = dest.with_name(dest.stem + ".src.pdb")
@@ -439,7 +439,7 @@ def build_gaff_prmtop(
         newline="\n",
     )
     log_prepare("AmberTools: tleap building protein–ligand topology…")
-    from ..wsl import run_linux_tool
+    from ..platform_support.wsl_launcher import run_linux_tool
 
     try:
         proc = run_linux_tool(

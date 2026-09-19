@@ -198,7 +198,7 @@ class MmpDialog(QDialog):
                 "Need at least two selected molecules with valid structures.",
             )
             return
-        from ...mmp_analysis import compute_mcs_smarts
+        from ...analysis.mmp_analysis import compute_mcs_smarts
 
         smarts = compute_mcs_smarts(mols)
         if not smarts:

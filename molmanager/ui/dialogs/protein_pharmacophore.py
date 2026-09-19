@@ -35,7 +35,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...pharmacophore import (
+from ...protein.pharmacophore import (
     FEATURE_ATOMS,
     FEATURE_COLORS,
     FEATURE_TYPES,

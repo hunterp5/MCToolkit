@@ -22,8 +22,8 @@ from typing import Any
 
 from plotly import graph_objects as go
 
-from ..mmp_neighborhood_analysis import MmpNetworkGraph
-from ..plot_color import (
+from ..analysis.mmp_neighborhood_analysis import MmpNetworkGraph
+from ..plotting.plot_marker_color import (
     DEFAULT_MARKER_SIZE_MAX_PX,
     DEFAULT_MARKER_SIZE_MIN_PX,
     attach_marker_size_legend,

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from molmanager.tool_progress import ToolProgressState
+from molmanager.platform_support.tool_progress import ToolProgressState
 from molmanager.ui.background_activity import BackgroundActivityHub
 
 

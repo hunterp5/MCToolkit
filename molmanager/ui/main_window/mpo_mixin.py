@@ -21,7 +21,7 @@ from __future__ import annotations
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMessageBox
 
-from ...utils import safe_float
+from ...chem.molecule_conversion import safe_float
 
 
 class MpoMixin:
@@ -67,7 +67,7 @@ class MpoMixin:
         self._mpo_scoring_dialog = None
 
     def _on_mpo_scoring_dialog_accepted(self, d) -> None:
-        from ...mpo_scoring import format_score, score_mpo_row
+        from ...analysis.mpo_scoring import format_score, score_mpo_row
 
         try:
             p = d.params()

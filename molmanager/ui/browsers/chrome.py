@@ -36,7 +36,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...display_constants import (
+from ...table.structure_depiction_layout import (
     BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
     BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
 )
@@ -170,7 +170,7 @@ def make_pair_prop_box(parent: QWidget | None = None) -> tuple[QGroupBox, QFormL
 def configure_browser_mol_drawer(drawer: Any, width: int) -> None:
     """Apply the shared RDKit drawer theme when the helper is available."""
     try:
-        from ...structure_draw import configure_mol_drawer as cfg
+        from ...chem.structure_2d_depiction import configure_mol_drawer as cfg
 
         cfg(drawer, width)
     except Exception:

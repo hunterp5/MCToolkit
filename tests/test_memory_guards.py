@@ -18,10 +18,10 @@
 
 from __future__ import annotations
 
-from molmanager.fingerprint_cache import clear as clear_fp_cache
-from molmanager.fingerprint_cache import store as store_fp
-from molmanager.fingerprint_cache import get as get_fp
-from molmanager.memory_guards import (
+from molmanager.chem.fingerprint_cache import clear as clear_fp_cache
+from molmanager.chem.fingerprint_cache import store as store_fp
+from molmanager.chem.fingerprint_cache import get as get_fp
+from molmanager.platform_support.memory_guards import (
     check_cluster_workload,
     check_conformer_workload,
     check_diverse_subset_workload,
@@ -29,7 +29,7 @@ from molmanager.memory_guards import (
     check_product_enumeration,
     clamp_dimred_max_points,
 )
-from molmanager.structure_render_store import StructureRenderStore
+from molmanager.storage.structure_render_store import StructureRenderStore
 from molmanager.storage.sqlite_table_store import SqliteTableStore
 
 
@@ -100,7 +100,7 @@ def test_memory_guards_block_oversized_workloads(monkeypatch) -> None:
 
 
 def test_dimred_cap_allows_25k_fingerprint_rows():
-    from molmanager.config import load_config
+    from molmanager.platform_support.config import load_config
 
     assert load_config().memory_guard_dimred_max_points == 25_000
     assert clamp_dimred_max_points(100_000) == 25_000

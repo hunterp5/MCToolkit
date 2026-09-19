@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from molmanager.citations_catalog import (
+from molmanager.reference.citations_catalog import (
     CITATION_SECTIONS,
     iter_tool_citations,
     tool_citation,

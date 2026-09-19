@@ -30,7 +30,11 @@ from molmanager.ui.sketcher.bonds import (
     sanitize_sketch_stereo_bonds,
 )
 from molmanager.ui.sketcher.dialog import SketcherDialog
-from molmanager.ui.sketcher.iupac_style import condensed_heteroatom_label, iupac_sketch_style, snap_extension_angle
+from molmanager.ui.sketcher.iupac_style import (
+    condensed_heteroatom_label,
+    iupac_sketch_style,
+    snap_extension_angle,
+)
 from molmanager.ui.sketcher.iupac_validate import validate_iupac_sketch
 from rdkit import Chem
 import math
@@ -113,7 +117,14 @@ def test_hashed_wedge_and_condensed_paint_path(qapp) -> None:  # noqa: ARG001
     assert hasattr(style, "hash_bar_count")
     # Ring atoms detected for GR-1.10 interior double-bond bias.
     c.nodes = [
-        {"id": i, "pos": QPoint(100 + int(40 * math.cos(2 * math.pi * i / 6)), 100 + int(40 * math.sin(2 * math.pi * i / 6))), "element": "C"}
+        {
+            "id": i,
+            "pos": QPoint(
+                100 + int(40 * math.cos(2 * math.pi * i / 6)),
+                100 + int(40 * math.sin(2 * math.pi * i / 6)),
+            ),
+            "element": "C",
+        }
         for i in range(6)
     ]
     c.bonds = [_bond_make(i, (i + 1) % 6, 2 if i % 2 == 0 else 1, 0) for i in range(6)]
@@ -188,7 +199,9 @@ def test_iupac_double_bond_carbonyl_centered_vs_alkene_offset(qapp) -> None:  # 
         _bond_make(0, 2, 1, 0),
         _bond_make(0, 3, 1, 0),
     ]
-    pos_n, neg_n, ni_extra, nj_extra = c._double_bond_side_substituent_counts(c.nodes[0], c.nodes[1])
+    pos_n, neg_n, ni_extra, nj_extra = c._double_bond_side_substituent_counts(
+        c.nodes[0], c.nodes[1]
+    )
     assert ni_extra >= 2 and nj_extra == 0
     # Propene-like: one end substituted → offset (not carbonyl-centered pattern of ≥2).
     c.nodes = [
@@ -294,9 +307,7 @@ def test_bond_trim_stops_at_labeled_atoms(qapp) -> None:  # noqa: ARG001
         _bond_make(0, 1, 1, BOND_STEREO_WEDGE),
         _bond_make(1, 2, 1, 0),
     ]
-    _x1, _y1, x2s, _y2s = c._trimmed_bond_segment(
-        c.nodes[0], c.nodes[1], style, stereo=True
-    )
+    _x1, _y1, x2s, _y2s = c._trimmed_bond_segment(c.nodes[0], c.nodes[1], style, stereo=True)
     assert x2s < 160.0 - 1.0
     dlg.close()
 
@@ -562,7 +573,9 @@ def test_principal_ring_system_prefers_largest() -> None:
     princ = principal_ring_system(bonds, 9, elements=els, bond_orders=[1] * len(bonds))
     assert princ == set(range(6))
 
-    ox, oy = apply_iupac_orientation(xs, ys, elements=els, bonds=bonds, bond_orders=[1] * len(bonds))
+    ox, oy = apply_iupac_orientation(
+        xs, ys, elements=els, bonds=bonds, bond_orders=[1] * len(bonds)
+    )
     # Principal hex centroid should be left of the cyclopropane centroid (bottom-left priority).
     hex_cx = sum(ox[i] for i in range(6)) / 6
     small_cx = sum(ox[i] for i in (6, 7, 8)) / 3
@@ -590,7 +603,9 @@ def test_iupac_orientation_ring_heteroatom_right() -> None:
         (8, 9),
         (9, 6),
     ]
-    ox, oy = apply_iupac_orientation(xs, ys, elements=els, bonds=bonds, bond_orders=[1] * len(bonds))
+    ox, oy = apply_iupac_orientation(
+        xs, ys, elements=els, bonds=bonds, bond_orders=[1] * len(bonds)
+    )
     n_idx = 4
     assert ox[n_idx] >= sum(ox) / len(ox) - 1e-6
 

@@ -23,14 +23,14 @@ from typing import Any
 
 from plotly import graph_objects as go
 
-from ..plot_color import (
+from ..plotting.plot_marker_color import (
     DEFAULT_MARKER_SIZE_MAX_PX,
     DEFAULT_MARKER_SIZE_MIN_PX,
     attach_marker_size_legend,
     marker_sizes_from_column_values,
     scatter_marker_from_column_values,
 )
-from ..sali_analysis import SaliPoint
+from ..analysis.sali_analysis import SaliPoint
 from .dockable_plot import resolve_plot_title_text
 from .plotly_html import finalize_plot_legend
 

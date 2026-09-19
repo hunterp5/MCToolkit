@@ -22,7 +22,7 @@ from collections import defaultdict
 
 from rdkit import Chem
 
-from ..utils import mol_to_canonical_smiles
+from ..chem.molecule_conversion import mol_to_canonical_smiles
 
 
 def structure_key(mol: Chem.Mol) -> str:

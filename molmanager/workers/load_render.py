@@ -31,16 +31,16 @@ from .process_pool_utils import (
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..display_constants import structure_depict_height, structure_depict_width
-from ..config import load_config
-from ..import_structure import needs_structure_source_picker
-from ..ingest_text import (
+from ..table.structure_depiction_layout import structure_depict_height, structure_depict_width
+from ..platform_support.config import load_config
+from ..chem.structure_source_headers import needs_structure_source_picker
+from ..table.text_file_ingest import (
     csv_row_to_cells,
     find_smiles_column,
     smi_line_to_cells,
     sniff_table_delimiter,
 )
-from ..table_file_formats import (
+from ..table.table_file_formats import (
     RXN_EXTS,
     SMI_LINE_EXTS,
     STRUCTURE_MOL_EXTS,
@@ -51,18 +51,22 @@ from ..table_file_formats import (
     logical_suffix,
     open_text_maybe_gzip,
 )
-from ..fragment_disconnect import largest_fragment_and_rest
-from ..structure_draw import (
+from ..chem.fragment_disconnect import largest_fragment_and_rest
+from ..chem.structure_2d_depiction import (
     ReactionDrawSpec,
     render_depict_payload_png,
     render_molecule_png,
     render_reaction_png,
 )
-from ..structure_neutralize import neutralize_mol
-from ..structure_hydrogens import add_explicit_hydrogens, remove_explicit_hydrogens
-from ..rxn_io import RXN_TABLE_HEADERS, load_rxn_file
-from ..utils import parse_molecule_from_cell_text, row_cells_from_mol, safe_mol_prop_string
-from ..tool_progress import ToolProgressState, report_tool_progress
+from ..chem.structure_neutralize import neutralize_mol
+from ..chem.structure_hydrogens import add_explicit_hydrogens, remove_explicit_hydrogens
+from ..chem.reaction_file_io import RXN_TABLE_HEADERS, load_rxn_file
+from ..chem.molecule_conversion import (
+    parse_molecule_from_cell_text,
+    row_cells_from_mol,
+    safe_mol_prop_string,
+)
+from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
 
 logger = logging.getLogger(__name__)

@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from ...session_codec import SESSION_VERSION_CURRENT
+from ...table.session_codec import SESSION_VERSION_CURRENT
 from .session_csv_mixin import SessionCsvMixin
 from .session_plots_mixin import SessionPlotsMixin
 from .session_restore_mixin import SessionRestoreMixin

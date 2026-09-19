@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from molmanager.app_logging import (
+from molmanager.platform_support.app_logging import (
     active_log_file,
     configure_app_logging,
     default_log_dir,
@@ -49,7 +49,7 @@ def test_configure_app_logging_writes_file(monkeypatch, tmp_path: Path):
     assert path == tmp_path / "molmanager.log"
     assert active_log_file() == path
 
-    logging.getLogger("molmanager.app_logging.test").info("hello-log")
+    logging.getLogger("molmanager.platform_support.app_logging.test").info("hello-log")
     for h in root.handlers:
         if hasattr(h, "flush"):
             h.flush()

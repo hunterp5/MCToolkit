@@ -39,7 +39,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...surechembl_api import similarity_search
+from ...sources.surechembl_api import similarity_search
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 from ..threadpool_access import start_runnable_on_app_pool
 

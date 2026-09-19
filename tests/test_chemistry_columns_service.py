@@ -27,7 +27,10 @@ from molmanager.services.chemistry_columns import (
     skip_chemistry_tool_column_dropdown,
     should_skip_chemical_scan_column,
 )
-from molmanager.utils import canonical_structure_key_from_smiles, mol_from_binary_blob
+from molmanager.chem.molecule_conversion import (
+    canonical_structure_key_from_smiles,
+    mol_from_binary_blob,
+)
 
 
 def test_skip_chemistry_tool_column_dropdown():

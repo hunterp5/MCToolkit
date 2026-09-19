@@ -29,8 +29,8 @@ from rdkit import Chem
 
 import logging
 
-from ...conformer_output import write_conformer_results_to_sdf
-from ...confs_codec import (
+from ...conformers.conformer_output import write_conformer_results_to_sdf
+from ...conformers.conformer_column_codec import (
     rehydrate_v1_confs_cell,
     unpack_confs_blocks_json_b64,
 )
@@ -150,7 +150,7 @@ class ConformersToolsMixin:
         self._conformer_output_options = d.output_options()
         self._pending_conformer_initial_superpose = bool((params.align_pattern or "").strip())
         n = len(data)
-        from ...memory_guards import check_conformer_workload
+        from ...platform_support.memory_guards import check_conformer_workload
 
         guard = check_conformer_workload(n, int(getattr(params, "num_confs", 1) or 1))
         if not guard.ok:
@@ -186,7 +186,7 @@ class ConformersToolsMixin:
             )
             return
         params = d.params()
-        from ...openbabel_confab import ensure_openbabel_confab_ready
+        from ...conformers.openbabel_confab import ensure_openbabel_confab_ready
 
         missing = ensure_openbabel_confab_ready(params.obabel_path)
         if missing:
@@ -195,7 +195,7 @@ class ConformersToolsMixin:
         self._conformer_output_options = d.output_options()
         self._pending_conformer_initial_superpose = False
         n = len(data)
-        from ...memory_guards import check_conformer_workload
+        from ...platform_support.memory_guards import check_conformer_workload
 
         guard = check_conformer_workload(n, int(getattr(params, "num_confs", 1) or 1))
         if not guard.ok:
@@ -229,7 +229,7 @@ class ConformersToolsMixin:
             )
             return
         params = d.params()
-        from ...conforge import ensure_conforge_ready
+        from ...conformers.conforge_generation import ensure_conforge_ready
 
         missing = ensure_conforge_ready(params.confgen_path)
         if missing:
@@ -238,7 +238,7 @@ class ConformersToolsMixin:
         self._conformer_output_options = d.output_options()
         self._pending_conformer_initial_superpose = False
         n = len(data)
-        from ...memory_guards import check_conformer_workload
+        from ...platform_support.memory_guards import check_conformer_workload
 
         guard = check_conformer_workload(n, max(1, int(getattr(params, "num_confs", 1) or 1)))
         if not guard.ok:
@@ -571,7 +571,10 @@ class ConformersToolsMixin:
 
     def on_superpose_structures_finished(self, payload) -> None:
         self._finish_tool_progress("Superpose")
-        from ...confs_codec import conformer_mol_blocks_b64_json, pack_mols_as_confs_cell
+        from ...conformers.conformer_column_codec import (
+            conformer_mol_blocks_b64_json,
+            pack_mols_as_confs_cell,
+        )
 
         data = payload if isinstance(payload, dict) else {}
         results = list(data.get("results") or [])
@@ -733,7 +736,10 @@ class ConformersToolsMixin:
         confs_column: str,
         initial_superpose: bool,
     ) -> int:
-        from ...confs_codec import conformer_mol_blocks_b64_json, unpack_confs_blocks_json_b64
+        from ...conformers.conformer_column_codec import (
+            conformer_mol_blocks_b64_json,
+            unpack_confs_blocks_json_b64,
+        )
 
         n_ok = 0
         opened = False

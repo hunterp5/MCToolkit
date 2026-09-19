@@ -18,12 +18,12 @@
 
 from rdkit import Chem
 
-from molmanager.activity_cliff_analysis import (
+from molmanager.analysis.activity_cliff_analysis import (
     build_activity_cliff_points,
     change_heavy_atom_count,
     fragment_tanimoto_distance,
 )
-from molmanager.mmp_analysis import find_matched_molecular_pairs
+from molmanager.analysis.mmp_analysis import find_matched_molecular_pairs
 from molmanager.ui.activity_cliff_plot import build_activity_cliff_figure
 
 
@@ -53,7 +53,5 @@ def test_build_activity_cliff_points_from_mmp():
     fig = build_activity_cliff_figure(points, activity_column="pIC50")
     assert len(fig.data) == 1
     assert len(fig.data[0].x) == len(points)
-    fig2 = build_activity_cliff_figure(
-        points, activity_column="pIC50", x_mode="frag_distance"
-    )
+    fig2 = build_activity_cliff_figure(points, activity_column="pIC50", x_mode="frag_distance")
     assert len(fig2.data[0].x) == len(points)

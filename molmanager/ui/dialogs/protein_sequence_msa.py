@@ -46,12 +46,12 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...bundled_paths import (
+from ...platform_support.bundled_paths import (
     default_external_executable,
     ensure_mafft_ready,
     resolve_mafft_executable,
 )
-from ...protein_msa import (
+from ...protein.protein_msa import (
     FastaRecord,
     alignment_html,
     format_identity_matrix,

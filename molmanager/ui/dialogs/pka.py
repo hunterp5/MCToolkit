@@ -31,7 +31,7 @@ from PyQt5.QtWidgets import (
 
 from rdkit import Chem
 
-from ...utils import parse_molecule_from_cell_text
+from ...chem.molecule_conversion import parse_molecule_from_cell_text
 from ...workers import PKaPredictorWorker
 from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
 from ..qt_widget_utils import make_window_minimizable

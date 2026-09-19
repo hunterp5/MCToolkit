@@ -82,12 +82,12 @@ class ColumnWriteMixin:
             refresh_search()
 
     def _calc_writeback_async_min_rows(self) -> int:
-        from ...config import load_config
+        from ...platform_support.config import load_config
 
         return max(500, int(load_config().table_selection_chunk_rows))
 
     def _calc_writeback_chunk_rows(self) -> int:
-        from ...config import load_config
+        from ...platform_support.config import load_config
 
         cfg = load_config()
         return max(250, min(int(cfg.ingest_gui_chunk_size), int(cfg.table_selection_chunk_rows)))

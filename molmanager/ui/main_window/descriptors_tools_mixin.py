@@ -43,7 +43,7 @@ class DescriptorsToolsMixin:
         d.show()
 
     def _on_calc_descriptors_dialog_accepted(self, d) -> None:
-        from ...descriptors_3d import int_fns_need_3d
+        from ...descriptors.descriptors_3d import int_fns_need_3d
 
         disp, fns = d.get_selected()
         calc_headers = self._unique_table_column_names(disp)
@@ -119,7 +119,10 @@ class DescriptorsToolsMixin:
         self, oids, src: str
     ) -> tuple[dict[int, str], dict[int, str], str | None]:
         """Packed-cell fallback map, column map, and ensemble DB path for 3D descriptors."""
-        from ...confs_codec import rehydrate_v1_confs_cell, unpack_confs_blocks_json_b64
+        from ...conformers.conformer_column_codec import (
+            rehydrate_v1_confs_cell,
+            unpack_confs_blocks_json_b64,
+        )
         from ...storage import EnsembleStore, ensemble_db_path
 
         preferred: list[str] = []

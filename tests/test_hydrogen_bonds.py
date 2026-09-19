@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from molmanager.hydrogen_bonds import (
+from molmanager.protein.hydrogen_bonds import (
     HBOND_KIND_COMPLEX,
     HBOND_KIND_LIGAND,
     HBOND_KIND_PROTEIN,

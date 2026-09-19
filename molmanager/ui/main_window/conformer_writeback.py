@@ -20,15 +20,15 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from ...conformer_output import iter_single_conformer_mols
-from ...confs_codec import (
+from ...conformers.conformer_output import iter_single_conformer_mols
+from ...conformers.conformer_column_codec import (
     demote_v1_cell_to_sidecar,
     make_sidecar_cell,
     rehydrate_v1_confs_cell,
 )
 from ...services.column_labels import COLUMN_PARENT_OID
 from ...storage import EnsembleStore, ensure_confs_sidecar, ensemble_mol_for
-from ...utils import mol_to_canonical_smiles
+from ...chem.molecule_conversion import mol_to_canonical_smiles
 
 
 def append_generated_conformers_as_rows(app, results: list) -> int:
@@ -286,7 +286,7 @@ def mol_for_ensemble_column(
     app, oid: int, column: str, *, min_conformers: int = 1
 ) -> Chem.Mol | None:
     """Load a 3D ensemble for *oid*/*column* from the disk store, with packed-cell fallback."""
-    from ...confs_codec import mol_from_packed_confs_cell
+    from ...conformers.conformer_column_codec import mol_from_packed_confs_cell
 
     sc = getattr(app, "_confs_blocks_sidecar", None)
     if isinstance(sc, EnsembleStore):
@@ -328,7 +328,7 @@ def mol_for_ensemble_column(
 
 def mol_3d_for_structure_superpose(app, oid: int, src: str) -> Chem.Mol | None:
     """Best-effort 3D mol for structure superposition from *src* (Structure / confs / …)."""
-    from ...confs_codec import mol_has_3d_coordinates
+    from ...conformers.conformer_column_codec import mol_has_3d_coordinates
     from ..mol_viewer_3d import prepare_mol_3d
 
     r = app.logical_row_for_oid(oid)

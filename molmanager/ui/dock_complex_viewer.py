@@ -152,8 +152,8 @@ def ligand_mol_to_pdb_text(
     chain: str = "Z",
 ) -> str:
     """Write a docked pose as HETATM PDB so Protein Viewer inventories it as a ligand."""
-    from ..structure_atoms import _pdb_from_atoms
-    from ..structure_component_types import AMINO_ACIDS, NUCLEIC_ACIDS, StructureAtom
+    from ..protein.structure_atoms import _pdb_from_atoms
+    from ..protein.structure_component_types import AMINO_ACIDS, NUCLEIC_ACIDS, StructureAtom
 
     if mol is None:
         return ""

@@ -25,7 +25,7 @@ from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
 
 from ..compound_table_model import CompoundTableModel
-from ...exception_policy import log_swallowed_exception
+from ...platform_support.exception_policy import log_swallowed_exception
 
 logger = logging.getLogger(__name__)
 
@@ -283,13 +283,13 @@ class AppLifecycleMixin:
 
         # Avoid blocking on shutdown; cooperative cancel + pool termination should be enough.
         try:
-            from ...fingerprint_cache import clear as clear_fingerprint_cache
+            from ...chem.fingerprint_cache import clear as clear_fingerprint_cache
 
             clear_fingerprint_cache()
         except Exception:
             log_swallowed_exception(logger, "fingerprint_cache.clear failed during quit")
         try:
-            from ...microstate_cache import clear as clear_microstate_cache
+            from ...ionization.microstate_cache import clear as clear_microstate_cache
 
             clear_microstate_cache()
         except Exception:

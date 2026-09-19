@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-import molmanager.fingerprint_cache as fc
+from molmanager.chem import fingerprint_cache as fc
 
 
 def test_fingerprint_cache_lru_evicts_oldest(monkeypatch):

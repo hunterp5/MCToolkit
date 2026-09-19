@@ -21,7 +21,7 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.openbabel_confab import SystematicConfParams
+from molmanager.conformers.openbabel_confab import SystematicConfParams
 from molmanager.workers.openbabel_confab_worker import SystematicConformerWorker
 from molmanager.workers.signals import WorkerSignals
 

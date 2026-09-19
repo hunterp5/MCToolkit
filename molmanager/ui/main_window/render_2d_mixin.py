@@ -25,14 +25,14 @@ from PyQt5.QtWidgets import QMessageBox
 
 from rdkit import Chem
 
-from ...config import load_config
-from ...display_constants import (
+from ...platform_support.config import load_config
+from ...table.structure_depiction_layout import (
     reaction_depict_size,
     structure_depict_height,
     structure_depict_width,
 )
-from ...rxn_io import looks_like_reaction_smarts, parse_reaction_smarts
-from ...structure_draw import ReactionDrawSpec
+from ...chem.reaction_file_io import looks_like_reaction_smarts, parse_reaction_smarts
+from ...chem.structure_2d_depiction import ReactionDrawSpec
 from ...workers import Render2DBatchHeldJob, Render2DBatchProcessWorker
 from ..strings import TOOL_RENDER_2D
 

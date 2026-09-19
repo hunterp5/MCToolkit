@@ -22,7 +22,7 @@ from types import SimpleNamespace
 
 from rdkit import Chem
 
-from molmanager.ionization import LN10, build_ensemble_from_scored
+from molmanager.ionization.unipka_ensembles import LN10, build_ensemble_from_scored
 from molmanager.workers.protonate_worker import (
     _dominant_smiles_from_microstates,
     dominant_results_from_microstate_cache,

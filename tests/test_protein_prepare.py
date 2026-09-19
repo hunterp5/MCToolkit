@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from molmanager.structure_components import pdb_to_mmcif
+from molmanager.protein.structure_components import pdb_to_mmcif
 from molmanager.workers.protein_prepare_runtime import (
     ProteinPrepareRequest,
     _gb_kappa_per_nm,
@@ -786,7 +786,7 @@ def test_prepare_remaps_mmcif_ligand_chain_after_fixer(
     tmp_path,
 ):
     """OpenMM writes AXI on label chain B; Prepare must look it up there, not auth A."""
-    from molmanager.structure_components import atoms_to_mmcif, parse_structure_atoms
+    from molmanager.protein.structure_components import atoms_to_mmcif, parse_structure_atoms
 
     in_path = tmp_path / "in.cif"
     in_path.write_text(_HOLO_CIF, encoding="utf-8")
@@ -886,7 +886,7 @@ def test_finalize_prepared_structure_cif_ligand_and_water():
 
 
 def test_delete_cif_residues_drops_ligand():
-    from molmanager.structure_components import delete_cif_residues, parse_structure_atoms
+    from molmanager.protein.structure_components import delete_cif_residues, parse_structure_atoms
 
     text = delete_cif_residues(_HOLO_CIF, {("A", "2000", "")})
     resns = {atom.resn for atom in parse_structure_atoms(text, "cif")}
@@ -954,7 +954,7 @@ def test_prepare_ligands_for_gaff_cif_keeps_chem_comp_bond():
     assert "_atom_site." in rewritten
     assert "_chem_comp_bond.value_order" in rewritten
     assert "LIG" in rewritten
-    from molmanager.structure_components import parse_cif_chem_comp_bonds
+    from molmanager.protein.structure_components import parse_cif_chem_comp_bonds
 
     bonds = parse_cif_chem_comp_bonds(rewritten).get("LIG") or ()
     assert any({b.atom_id_1, b.atom_id_2} == {"C80", "O81"} and b.order == 2 for b in bonds)
@@ -1516,14 +1516,14 @@ def test_prepare_protein_structure_ala_optional_extras(tmp_path):
     text = Path(out.output_path).read_text(encoding="utf-8")
     assert "data_" in text
     assert "ALA" in text
-    from molmanager.structure_components import parse_structure_atoms
+    from molmanager.protein.structure_components import parse_structure_atoms
 
     atoms = parse_structure_atoms(text, "cif")
     assert any(a.elem == "H" for a in atoms), "expected pdb2pqr to place hydrogens"
 
 
 def test_pdb_to_mmcif_keeps_ligand_chem_comp_bonds():
-    from molmanager.structure_components import (
+    from molmanager.protein.structure_components import (
         CifChemAtom,
         CifChemBond,
         parse_cif_chem_comp_bonds,
@@ -1567,7 +1567,7 @@ END
 def _acetic_ensemble_near_ph_7_4():
     from rdkit import Chem
 
-    from molmanager.ionization import LN10, build_ensemble_from_scored
+    from molmanager.ionization.unipka_ensembles import LN10, build_ensemble_from_scored
 
     ha = Chem.MolFromSmiles("CC(=O)O")
     a = Chem.MolFromSmiles("CC(=O)[O-]")
@@ -1834,7 +1834,7 @@ END
 
 
 def test_highest_occupancy_altloc_preserves_cif_poly_seq():
-    from molmanager.structure_inventory import polymer_sequence_entries
+    from molmanager.protein.structure_inventory import polymer_sequence_entries
     from molmanager.workers.protein_prepare_qc import (
         apply_highest_occupancy_altlocs,
         apply_sequence_missing_residues,
@@ -1929,7 +1929,7 @@ def test_restrain_atom_backbone_and_ligand():
 
 
 def test_prepare_dialog_enables_open_smina_without_receptor(qapp):  # noqa: ARG001
-    from molmanager.docking_box import DockingBox
+    from molmanager.docking.search_box import DockingBox
     from molmanager.ui.dialogs.protein_prepare import ProteinPrepareDialog
     from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
 
@@ -1990,7 +1990,7 @@ def test_dock_file_dialog_defaults_and_auto_open_smina(qapp, tmp_path, monkeypat
 
     from PyQt5.QtWidgets import QMessageBox
 
-    from molmanager.docking_box import DockingBox
+    from molmanager.docking.search_box import DockingBox
     from molmanager.ui.dialogs.protein_dock_file import ProteinDockFileDialog
     from molmanager.ui.protein_viewer import ProteinViewerDialog
     from molmanager.workers.protein_prepare_smina import ProteinPrepareResult

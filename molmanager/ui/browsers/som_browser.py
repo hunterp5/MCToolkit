@@ -44,11 +44,11 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...display_constants import (
+from ...table.structure_depiction_layout import (
     BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
     browser_structure_preview_width,
 )
-from ...som_prediction import (
+from ...predictions.som_prediction import (
     SOM_CANCELLED_ERROR,
     SOM_MAP_COLUMN,
     SOM_P1_SITES_COLUMN,
@@ -259,7 +259,7 @@ def records_from_table(app: Any) -> list[SomBrowseRecord]:
             mols = getattr(app, "mols", None) or {}
             mol = mols.get(oid)
             if mol is not None:
-                from ...utils import mol_to_canonical_smiles
+                from ...chem.molecule_conversion import mol_to_canonical_smiles
 
                 smiles = mol_to_canonical_smiles(mol) or ""
         atoms = _atoms_from_som_columns(cols)
@@ -360,7 +360,7 @@ def restore_som_maps_for_session(app: Any, sidecar: Any = None) -> int:
     model = getattr(app, "_table_model", None)
     if model is None:
         return 0
-    from ...display_constants import structure_depict_height, structure_depict_width
+    from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
     from ..structure_pixmap import pixmap_from_structure_render_png
 
     for header in map_headers:

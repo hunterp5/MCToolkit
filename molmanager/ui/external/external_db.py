@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from ...config import load_config
+from ...platform_support.config import load_config
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 from PyQt5.QtWidgets import (
     QCheckBox,
@@ -214,7 +214,9 @@ class ExternalDBDialog(QDialog):
             self.url.setText("mysql+pymysql://user:password@localhost:3306/dbname")
         elif kind == "mssql":
             # Note: requires ODBC Driver installed on Windows + pyodbc Python package.
-            self.url.setText("mssql+pyodbc://user:password@localhost:1433/dbname?driver=ODBC+Driver+17+for+SQL+Server")
+            self.url.setText(
+                "mssql+pyodbc://user:password@localhost:1433/dbname?driver=ODBC+Driver+17+for+SQL+Server"
+            )
         else:
             self.url.setText("")
 
@@ -230,4 +232,3 @@ class ExternalDBDialog(QDialog):
         elif u.startswith("mssql"):
             msg = "SQL Server: install `pyodbc` and ensure an ODBC Driver is installed (e.g. ODBC Driver 17/18)."
         self.driver_hint.setText(msg)
-
