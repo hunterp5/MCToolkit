@@ -44,6 +44,7 @@ from ...table.column_split import (
 )
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_SPLIT_COLUMN
+from .delimiter_picker import DelimiterPicker
 from .scope import selection_scope_checked
 
 SplitColumnDialogParams = SplitColumnParams
@@ -72,21 +73,18 @@ class SplitColumnDialog(QDialog):
         self.col_combo.currentTextChanged.connect(self._on_source_changed)
         form.addRow("Column:", self.col_combo)
 
-        self.delim_combo = QComboBox()
-        for label, _mode in DELIMITER_MODES:
-            self.delim_combo.addItem(label)
-        self.delim_combo.setToolTip(
-            "Auto uses comma, semicolon, tab, or pipe when present; otherwise whitespace."
+        self._delim = DelimiterPicker(
+            DELIMITER_MODES,
+            combo_tooltip=(
+                "Auto uses comma, semicolon, tab, or pipe when present; otherwise whitespace."
+            ),
+            custom_placeholder=r"e.g. :  or  \t",
+            custom_tooltip="Used when Separator is Custom. \\t is a tab.",
+            custom_max_length=8,
         )
-        self.delim_combo.currentIndexChanged.connect(self._sync_custom_enabled)
-        form.addRow("Separator:", self.delim_combo)
-
-        self.custom_input = QLineEdit()
-        self.custom_input.setPlaceholderText(r"e.g. :  or  \t")
-        self.custom_input.setMaxLength(8)
-        self.custom_input.setToolTip("Used when Separator is Custom. \\t is a tab.")
-        self.custom_input.textChanged.connect(self._update_preview)
-        form.addRow("Custom:", self.custom_input)
+        self._delim.add_rows(form, combo_label="Separator:")
+        self.delim_combo = self._delim.combo
+        self.custom_input = self._delim.custom_input
 
         self.prefix_input = QLineEdit()
         self.prefix_input.setPlaceholderText("New column prefix")
@@ -134,18 +132,12 @@ class SplitColumnDialog(QDialog):
         box.rejected.connect(self.reject)
         root.addWidget(box)
 
+        self._delim.connect_changed(self._update_preview)
         self._on_source_changed(self.col_combo.currentText())
-        self._sync_custom_enabled()
         make_window_minimizable(self)
 
     def _delimiter_mode(self) -> DelimiterMode:
-        idx = max(0, min(self.delim_combo.currentIndex(), len(DELIMITER_MODES) - 1))
-        return DELIMITER_MODES[idx][1]
-
-    def _sync_custom_enabled(self) -> None:
-        custom = self._delimiter_mode() == "custom"
-        self.custom_input.setEnabled(custom)
-        self._update_preview()
+        return self._delim.mode()
 
     def _on_source_changed(self, name: str) -> None:
         if not (self.prefix_input.text() or "").strip():

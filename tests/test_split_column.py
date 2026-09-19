@@ -160,3 +160,16 @@ def test_split_dialog_extreme_checkboxes_exclusive(qapp):  # noqa: ARG001
     assert dlg.largest_cb.isChecked() is False
     assert dlg.params().keep == "smallest"
     dlg.close()
+
+
+def test_split_dialog_custom_delimiter_enables_input(qapp) -> None:  # noqa: ARG001
+    from molmanager.table.column_split import DELIMITER_MODES
+    from molmanager.ui.dialogs.split_column import SplitColumnDialog
+
+    dlg = SplitColumnDialog(["Tags"], 0)
+    assert dlg.custom_input.isEnabled() is False
+    custom_idx = next(i for i, (_lbl, mode) in enumerate(DELIMITER_MODES) if mode == "custom")
+    dlg.delim_combo.setCurrentIndex(custom_idx)
+    assert dlg.custom_input.isEnabled()
+    assert dlg.params().mode == "custom"
+    dlg.close()

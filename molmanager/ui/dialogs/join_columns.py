@@ -41,6 +41,7 @@ from ...table.column_join import (
 )
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_JOIN_COLUMNS
+from .delimiter_picker import DelimiterPicker
 from .scope import selection_scope_checked
 
 JoinColumnsDialogParams = JoinColumnsParams
@@ -77,19 +78,16 @@ class JoinColumnsDialog(QDialog):
         self.right_combo.currentTextChanged.connect(self._on_source_changed)
         form.addRow("Second column:", self.right_combo)
 
-        self.delim_combo = QComboBox()
-        for label, _mode in JOIN_DELIMITER_MODES:
-            self.delim_combo.addItem(label)
-        self.delim_combo.setToolTip("Text placed between the two cell values.")
-        self.delim_combo.currentIndexChanged.connect(self._sync_custom_enabled)
-        form.addRow("Delimiter:", self.delim_combo)
-
-        self.custom_input = QLineEdit()
-        self.custom_input.setPlaceholderText(r"e.g.  |  or  \t")
-        self.custom_input.setMaxLength(16)
-        self.custom_input.setToolTip("Used when Delimiter is Custom. \\t is a tab.")
-        self.custom_input.textChanged.connect(self._update_preview)
-        form.addRow("Custom:", self.custom_input)
+        self._delim = DelimiterPicker(
+            JOIN_DELIMITER_MODES,
+            combo_tooltip="Text placed between the two cell values.",
+            custom_placeholder=r"e.g.  |  or  \t",
+            custom_tooltip="Used when Delimiter is Custom. \\t is a tab.",
+            custom_max_length=16,
+        )
+        self._delim.add_rows(form, combo_label="Delimiter:")
+        self.delim_combo = self._delim.combo
+        self.custom_input = self._delim.custom_input
 
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("New column name")
@@ -131,18 +129,12 @@ class JoinColumnsDialog(QDialog):
         box.rejected.connect(self.reject)
         root.addWidget(box)
 
+        self._delim.connect_changed(self._update_preview)
         self._on_source_changed()
-        self._sync_custom_enabled()
         make_window_minimizable(self)
 
     def _delimiter_mode(self) -> JoinDelimiterMode:
-        idx = max(0, min(self.delim_combo.currentIndex(), len(JOIN_DELIMITER_MODES) - 1))
-        return JOIN_DELIMITER_MODES[idx][1]
-
-    def _sync_custom_enabled(self) -> None:
-        custom = self._delimiter_mode() == "custom"
-        self.custom_input.setEnabled(custom)
-        self._update_preview()
+        return self._delim.mode()
 
     def _on_source_changed(self, *_args) -> None:
         if not (self.name_input.text() or "").strip():
