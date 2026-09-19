@@ -26,6 +26,7 @@ from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
 from ...config import load_config
+from ...storage import load_mols_from_parse_result
 from ..qt_widget_utils import qobject_is_deleted
 from ..strings import LOADING_DETAIL_SESSION, loaded_session_status
 from ..threadpool_access import start_runnable_on_app_pool
@@ -120,10 +121,7 @@ class SessionCsvMixin:
         self._table_model.clear_rows()
         self._table_model.set_headers(list(self.headers))
         self.table.setColumnHidden(0, True)
-        try:
-            self.mols = dict(result.mols or {})
-        except Exception:
-            self.mols = {}
+        load_mols_from_parse_result(self, result)
         self._clear_filter_target_smiles_cache()
         self.global_bounds = {}
         self.next_oid = int(result.next_oid)

@@ -79,34 +79,13 @@ def collect_delete_row_snapshots(
     data_headers = [h for h in app.headers[2:] if h != "Structure"]
     out: list[DeleteRowSnapshot] = []
     model = app._table_model
-    # Skip heavy extra-column pixmap copies unless a single-row delete (memory cost).
-    copy_extra = (not light) and len(kill) <= 1
+    _ = light
     for r, row in enumerate(model._rows):  # noqa: SLF001 — bulk path; model owns rows
         oid = int(row.oid)
         if oid not in kill:
             continue
         cells = {h: str(row.values.get(h, "") or "") for h in data_headers}
-        if light:
-            out.append(DeleteRowSnapshot(orig_row=r, oid=oid, cells=cells, light=True))
-            continue
-        pm = app.mols.get(oid)
-        mol_copy = Chem.Mol(pm) if pm is not None else None
-        png = model.structure_png_bytes(oid)
-        # Prefer compact PNG bytes over decoded QPixmap when the lazy store has them.
-        spm = None if png else model.structure_pixmap_copy(oid)
-        extra = model.extra_column_pixmaps_copy(oid) if copy_extra else {}
-        out.append(
-            DeleteRowSnapshot(
-                orig_row=r,
-                oid=oid,
-                cells=cells,
-                mol_copy=mol_copy,
-                structure_pixmap=spm,
-                structure_png=png,
-                extra_pixmaps=extra,
-                light=False,
-            )
-        )
+        out.append(DeleteRowSnapshot(orig_row=r, oid=oid, cells=cells, light=True))
     return out
 
 
@@ -166,26 +145,39 @@ class UndoDeleteRowsCommand(QUndoCommand):
             batch = [(s.orig_row, s.oid, dict(s.cells)) for s in ordered]
             app._table_model.insert_rows_batch(batch)
             for snap in ordered:
-                self._restore_row_assets(app, snap)
+                self._restore_row_assets(app, snap, render_structure=False)
         else:
             for k, snap in enumerate(ordered):
                 insert_at = snap.orig_row + k
                 app._table_model.insert_row_at(insert_at, snap.oid, dict(snap.cells))
-                self._restore_row_assets(app, snap)
+                self._restore_row_assets(app, snap, render_structure=True)
 
     @staticmethod
-    def _restore_row_assets(app: TableUIMixin, snap: DeleteRowSnapshot) -> None:
-        if snap.light:
-            return
-        if snap.mol_copy is not None:
-            app.mols[snap.oid] = Chem.Mol(snap.mol_copy)
+    def _restore_row_assets(
+        app: TableUIMixin, snap: DeleteRowSnapshot, *, render_structure: bool = False
+    ) -> None:
+        smi = str(snap.cells.get("SMILES") or "").strip()
+        mol = None
+        if smi:
+            try:
+                mol = Chem.MolFromSmiles(smi)
+            except Exception:
+                mol = None
+        if mol is None and snap.mol_copy is not None:
+            mol = Chem.Mol(snap.mol_copy)
+        if mol is not None:
+            app.mols[snap.oid] = mol
+            if snap.light and render_structure:
+                render = getattr(app, "start_render_worker", None)
+                if callable(render):
+                    render(snap.oid, mol)
         else:
             app.mols.pop(snap.oid, None)
         if snap.structure_png:
             app._table_model.set_structure_png_bytes(snap.oid, snap.structure_png)
         elif snap.structure_pixmap is not None:
             app._table_model.set_structure_pixmap(snap.oid, snap.structure_pixmap)
-        else:
+        elif not snap.light:
             app._table_model.set_structure_pixmap(snap.oid, None)
         for h, pm in snap.extra_pixmaps.items():
             app._table_model.set_column_pixmap(snap.oid, h, pm)

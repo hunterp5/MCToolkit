@@ -197,7 +197,7 @@ class CompoundTableModel(
         self.beginResetModel()
         self._rows.clear()
         self._pixmaps.clear()
-        self._structure_png_store = None
+        self.clear_structure_png_store()
         self._oid_to_row.clear()
         self._extra_pixmaps.clear()
         self._highlighted_oids = None
@@ -230,7 +230,7 @@ class CompoundTableModel(
         self.beginResetModel()
         self._rows.clear()
         self._pixmaps.clear()
-        self._structure_png_store = None
+        self.clear_structure_png_store()
         self._headers.clear()
         self._oid_to_row.clear()
         self._pixmap_columns.clear()

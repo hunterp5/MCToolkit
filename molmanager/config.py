@@ -143,6 +143,7 @@ class MolManagerConfig:
     table_delete_batch_min: int
     table_delete_chunk_rows: int
     table_undo_limit: int
+    mol_cache_lru: int
     structure_render_png_max_entries: int
     memory_guard_conf_max_rows: int
     memory_guard_conf_max_row_confs: int
@@ -308,6 +309,7 @@ def load_config() -> MolManagerConfig:
             "MOLMANAGER_TABLE_DELETE_CHUNK_ROWS", 2000, lo=64, hi=100_000
         ),
         table_undo_limit=_env_int("MOLMANAGER_TABLE_UNDO_LIMIT", 50, lo=1, hi=500),
+        mol_cache_lru=_env_int("MOLMANAGER_MOL_CACHE_LRU", 256, lo=8, hi=4096),
         structure_render_png_max_entries=_env_int(
             # 0 = unlimited PNG bytes in the lazy structure store (decoded QPixmaps stay LRU-capped).
             # A positive cap was dropping Fast Prepare / Render 2D drawings beyond this limit.

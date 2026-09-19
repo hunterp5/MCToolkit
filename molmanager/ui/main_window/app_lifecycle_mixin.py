@@ -307,3 +307,25 @@ class AppLifecycleMixin:
                 closer()
             except Exception:
                 log_swallowed_exception(logger, "ensemble_store.close failed during quit")
+        mols = getattr(self, "mols", None)
+        closer = getattr(mols, "close", None)
+        if callable(closer):
+            try:
+                closer()
+            except Exception:
+                log_swallowed_exception(logger, "mol_store.close failed during quit")
+        model = getattr(self, "_table_model", None)
+        png_store = getattr(model, "_structure_png_store", None) if model is not None else None
+        closer = getattr(png_store, "close", None)
+        if callable(closer):
+            try:
+                closer()
+            except Exception:
+                log_swallowed_exception(logger, "structure_png_store.close failed during quit")
+        extra = getattr(model, "_extra_pixmaps", None) if model is not None else None
+        closer = getattr(extra, "close", None)
+        if callable(closer):
+            try:
+                closer()
+            except Exception:
+                log_swallowed_exception(logger, "extra_pixmap_store.close failed during quit")

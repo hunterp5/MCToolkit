@@ -207,9 +207,10 @@ class TableUIMixin(
         )
 
     def clear_all(self):
-        from ...storage import reset_confs_sidecar
+        from ...storage import reset_confs_sidecar, reset_mol_store
 
         reset_confs_sidecar(self)
+        reset_mol_store(self)
         self._som_browse_records = []
         clearer = getattr(self, "_store_last_dock_results", None)
         if callable(clearer):
@@ -240,7 +241,7 @@ class TableUIMixin(
         self.zoomed_ids = set()
         for f in self.filters:
             f.deleteLater()
-        self.filters, self.headers, self.mols, self.global_bounds = [], [], {}, {}
+        self.filters, self.headers, self.global_bounds = [], [], {}
         self._logarithmic_columns = set()
         self.next_oid = 0
         self._structure_field_override = None

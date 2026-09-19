@@ -30,6 +30,7 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 
 
 from ...config import load_config
+from ...storage import load_mols_from_parse_result
 from ...services.sql_load_policy import engine_kwargs_for_sql_load, sql_looks_destructive
 from ...utils import redact_sqlalchemy_url
 from ...workers.sql_load_worker import SqlLoadParseResult, SqlLoadSignals, SqlLoadWorker
@@ -309,10 +310,7 @@ class SqlLoadMixin:
             self._table_model.clear_rows()
             self._table_model.set_headers(list(self.headers))
             self.table.setColumnHidden(0, True)
-            try:
-                self.mols = dict(result.mols or {})
-            except Exception:
-                self.mols = {}
+            load_mols_from_parse_result(self, result)
             self._clear_filter_target_smiles_cache()
             self.global_bounds = {}
             self.next_oid = int(result.next_oid)

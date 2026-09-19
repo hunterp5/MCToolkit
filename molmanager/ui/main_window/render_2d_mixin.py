@@ -47,9 +47,10 @@ class Render2DMixin:
         """Build render tasks from ``self.mols`` (O(n) with O(1) row lookup; used after file/SQL ingest)."""
         renders: list = []
         row_by_oid: dict[int, int] = {}
-        for oid, mol in self.mols.items():
+        for oid in list(self.mols):
             if allowed_oids is not None and int(oid) not in allowed_oids:
                 continue
+            mol = self.mols.get(int(oid))
             if mol is None:
                 continue
             row = self._table_model.logical_row_for_oid(int(oid))

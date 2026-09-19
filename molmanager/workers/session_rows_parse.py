@@ -107,8 +107,12 @@ class SessionRowsParseResult:
     """Prepared table rows and parsed molecules for chunked UI apply."""
 
     prepared_rows: list[tuple[int, dict[str, str]]] = field(default_factory=list)
-    mols: dict[int, Any] = field(default_factory=dict)
+    mol_jobs: list[tuple[int, bytes | None, str]] = field(default_factory=list)
     max_id: int = -1
+
+    @property
+    def mols(self) -> dict[int, Any]:
+        return decode_session_mols(self.mol_jobs)
 
 
 @dataclass
@@ -117,8 +121,20 @@ class CsvSessionParseResult:
 
     columns: list[str] = field(default_factory=list)
     prepared_rows: list[tuple[int, dict[str, str]]] = field(default_factory=list)
-    mols: dict[int, Any] = field(default_factory=dict)
+    mol_blobs: dict[int, bytes] = field(default_factory=dict)
     next_oid: int = 0
+
+    @property
+    def mols(self) -> dict[int, Any]:
+        out: dict[int, Any] = {}
+        for oid, blob in self.mol_blobs.items():
+            try:
+                mol = Chem.Mol(blob)
+            except Exception:
+                continue
+            if mol is not None:
+                out[int(oid)] = mol
+        return out
 
 
 class SessionRowsParseSignals(QObject):
@@ -177,13 +193,12 @@ class SessionRowsParseWorker(QRunnable):
                 if i < len(self.structure_mols):
                     blob = decode_mol_blob_b64(self.structure_mols[i])
                 jobs.append((oid, blob, smi))
-            mols = decode_session_mols(jobs)
             _safe_emit(
                 self.signals,
                 "finished",
                 SessionRowsParseResult(
                     prepared_rows=prepared,
-                    mols=mols,
+                    mol_jobs=jobs,
                     max_id=max_id,
                 ),
             )
@@ -209,7 +224,7 @@ class CsvSessionParseWorker(QRunnable):
                 if "SMILES" not in cols:
                     cols = ["SMILES"] + cols
                 prepared: list[tuple[int, dict[str, str]]] = []
-                mols: dict[int, Any] = {}
+                mol_blobs: dict[int, bytes] = {}
                 oid = 0
                 for row in reader:
                     smi = (row.get("SMILES", "") or "").strip()
@@ -218,7 +233,12 @@ class CsvSessionParseWorker(QRunnable):
                     if smi:
                         mol = Chem.MolFromSmiles(smi)
                         if mol is not None:
-                            mols[oid] = mol
+                            try:
+                                blob = mol.ToBinary()
+                            except Exception:
+                                blob = None
+                            if blob:
+                                mol_blobs[oid] = bytes(blob)
                     oid += 1
             _safe_emit(
                 self.signals,
@@ -226,7 +246,7 @@ class CsvSessionParseWorker(QRunnable):
                 CsvSessionParseResult(
                     columns=cols,
                     prepared_rows=prepared,
-                    mols=mols,
+                    mol_blobs=mol_blobs,
                     next_oid=oid,
                 ),
             )

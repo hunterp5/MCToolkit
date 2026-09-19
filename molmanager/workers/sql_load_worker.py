@@ -53,11 +53,23 @@ class SqlLoadParseResult:
 
     columns: list[str] = field(default_factory=list)
     prepared_rows: list[tuple[int, dict[str, str]]] = field(default_factory=list)
-    mols: dict[int, Any] = field(default_factory=dict)
+    mol_blobs: dict[int, bytes] = field(default_factory=dict)
     next_oid: int = 0
     rows_hit_limit: bool = False
     limit_eff: int = 0
     smiles_column: str | None = None
+
+    @property
+    def mols(self) -> dict[int, Any]:
+        out: dict[int, Any] = {}
+        for oid, blob in self.mol_blobs.items():
+            try:
+                mol = Chem.Mol(blob)
+            except Exception:
+                continue
+            if mol is not None:
+                out[int(oid)] = mol
+        return out
 
 
 class SqlLoadSignals(QObject):
@@ -141,12 +153,10 @@ class SqlLoadWorker(QRunnable):
 
                 smiles_col = next((c for c in cols if c.lower() == "smiles"), None)
                 prepared: list[tuple[int, dict[str, str]]] = []
-                mols: dict[int, Any] = {}
+                mol_blobs: dict[int, bytes] = {}
                 oid = 0
                 rows_hit_limit = False
-                progress_total = (
-                    self.limit_eff if self.apply_limit and self.limit_eff > 0 else 0
-                )
+                progress_total = self.limit_eff if self.apply_limit and self.limit_eff > 0 else 0
                 self._emit_progress(0, progress_total if progress_total > 0 else 1)
 
                 while True:
@@ -171,7 +181,12 @@ class SqlLoadWorker(QRunnable):
                             if smi:
                                 mol = Chem.MolFromSmiles(smi)
                                 if mol is not None:
-                                    mols[oid] = mol
+                                    try:
+                                        blob = mol.ToBinary()
+                                    except Exception:
+                                        blob = None
+                                    if blob:
+                                        mol_blobs[oid] = bytes(blob)
                         oid += 1
                         if self.apply_limit and self.limit_eff and oid >= self.limit_eff:
                             rows_hit_limit = True
@@ -196,7 +211,7 @@ class SqlLoadWorker(QRunnable):
                 SqlLoadParseResult(
                     columns=cols,
                     prepared_rows=prepared,
-                    mols=mols,
+                    mol_blobs=mol_blobs,
                     next_oid=oid,
                     rows_hit_limit=rows_hit_limit,
                     limit_eff=self.limit_eff,

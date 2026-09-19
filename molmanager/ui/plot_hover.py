@@ -136,8 +136,9 @@ def structure_png_data_url_for_oid(
             png = None
     mols = getattr(app, "mols", None)
     mol = None
-    if isinstance(mols, dict):
-        mol = mols.get(int(oid))
+    getter = getattr(mols, "get", None)
+    if callable(getter):
+        mol = getter(int(oid))
     if mol is not None:
         try:
             png = render_molecule_png(mol, int(width), int(height))

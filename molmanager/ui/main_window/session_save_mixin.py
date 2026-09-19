@@ -163,14 +163,25 @@ class SessionSaveMixin:
                     cells[h] = self._table_model.backing_value_for_row_header(r, h)
                 else:
                     cells[h] = self._table_cell_text(r, ci)
-            mol = self.mols.get(oid)
-            if mol is None:
-                mol = self._mol_for_structure_row(r)
-            structure_mols.append(encode_mol_blob_b64(mol_graph_binary(mol)))
+            mol = None
+            blob = None
+            getter = getattr(self.mols, "blob_for", None)
+            if callable(getter):
+                blob = getter(oid)
+            if not blob:
+                mol = self.mols.get(oid)
+                if mol is None:
+                    mol = self._mol_for_structure_row(r)
+                blob = mol_graph_binary(mol)
+            structure_mols.append(encode_mol_blob_b64(blob))
             smi = str(cells.get("SMILES") or "").strip() if smiles_col else ""
             if smi:
                 structure_smiles.append(smi)
             else:
+                if mol is None and blob:
+                    mol = self.mols.get(oid)
+                    if mol is None:
+                        mol = self._mol_for_structure_row(r)
                 structure_smiles.append(mol_to_canonical_smiles(mol) if mol is not None else "")
                 if smiles_col and mol is not None and not (cells.get("SMILES") or "").strip():
                     cells["SMILES"] = structure_smiles[-1]

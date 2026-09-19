@@ -40,7 +40,7 @@ from ...config import load_config
 logger = logging.getLogger(__name__)
 from ...performance import PerformanceTracker
 from ...tool_progress import ToolProgressState
-from ...storage import EnsembleStore, SqliteTableStore
+from ...storage import EnsembleStore, MolStore, SqliteTableStore
 from ...workers import (
     FilterApplySignals,
     RenderWorker,
@@ -162,7 +162,8 @@ class ChemicalTableApp(
         else:
             ren_cap = max(2, min(cap, 8))
         self._render_threadpool.setMaxThreadCount(ren_cap)
-        self.mols, self.headers, self.filters, self.global_bounds = {}, [], [], {}
+        self.mols = MolStore(lru_max=cfg.mol_cache_lru)
+        self.headers, self.filters, self.global_bounds = [], [], {}
         self._logarithmic_columns: set[str] = set()
         self.zoomed_ids = set()
         self.signals = WorkerSignals()

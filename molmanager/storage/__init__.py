@@ -23,13 +23,18 @@ from .ensemble_store import (
     ensure_confs_sidecar,
     reset_confs_sidecar,
 )
+from .mol_store import MolStore, ensure_mol_store, load_mols_from_parse_result, reset_mol_store
 from .sqlite_table_store import SqliteTableStore
 
 __all__ = [
     "EnsembleStore",
+    "MolStore",
     "SqliteTableStore",
     "ensemble_db_path",
     "ensemble_mol_for",
     "ensure_confs_sidecar",
+    "ensure_mol_store",
+    "load_mols_from_parse_result",
     "reset_confs_sidecar",
+    "reset_mol_store",
 ]

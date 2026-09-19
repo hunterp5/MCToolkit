@@ -30,12 +30,15 @@ class CompoundTableStructureMixin:
         return store is not None and len(store) > 0
 
     def set_structure_png_store(self, store: StructureRenderStore | None) -> None:
+        old = self._structure_png_store
+        if old is not None and old is not store:
+            closer = getattr(old, "close", None)
+            if callable(closer):
+                closer()
         self._structure_png_store = store
 
     def clear_structure_png_store(self) -> None:
-        if self._structure_png_store is not None:
-            self._structure_png_store.clear()
-        self._structure_png_store = None
+        self.set_structure_png_store(None)
 
     def structure_pixmap_for_oid(self, oid: int) -> QPixmap | None:
         pix = self._pixmaps.get(int(oid))
@@ -211,11 +214,7 @@ class CompoundTableStructureMixin:
 
     def extra_column_pixmaps_copy(self, oid: int) -> dict[str, QPixmap]:
         """Detached copies of extra pixmap-column images for this oid."""
-        out: dict[str, QPixmap] = {}
-        for (o, h), pm in list(self._extra_pixmaps.items()):
-            if o == oid and pm is not None and not pm.isNull():
-                out[h] = QPixmap(pm)
-        return out
+        return self._extra_pixmaps.pixmaps_for_oid(int(oid))
 
     def is_pixmap_data_column(self, header_name: str) -> bool:
         return header_name in self._pixmap_columns
@@ -228,8 +227,4 @@ class CompoundTableStructureMixin:
 
     def column_pixmaps_by_oid(self, header_name: str) -> dict[int, QPixmap]:
         """Snapshot pixmap-column cells for undo (only rows that have an image)."""
-        out: dict[int, QPixmap] = {}
-        for (oid, h), pm in self._extra_pixmaps.items():
-            if h == header_name and pm is not None and not pm.isNull():
-                out[oid] = QPixmap(pm)
-        return out
+        return self._extra_pixmaps.pixmaps_for_header(str(header_name))

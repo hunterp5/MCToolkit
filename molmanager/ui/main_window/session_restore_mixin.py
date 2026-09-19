@@ -33,7 +33,7 @@ from ...session_codec import (
     expand_session_document,
     parse_session_global_bounds,
 )
-from ...storage import ensure_confs_sidecar
+from ...storage import ensure_confs_sidecar, load_mols_from_parse_result, reset_mol_store
 from ..strings import LOADING_DETAIL_SESSION, TOOL_RENDER_2D, loaded_session_status
 from ..threadpool_access import start_runnable_on_app_pool
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
@@ -108,7 +108,7 @@ class SessionRestoreMixin:
                     ):
                         self._table_model.register_pixmap_column(name)
         self.table.setColumnHidden(0, True)
-        self.mols = {}
+        reset_mol_store(self)
         self._clear_filter_target_smiles_cache()
         self.global_bounds = {}
         rows = doc.get("rows") or []
@@ -198,10 +198,7 @@ class SessionRestoreMixin:
             self._on_session_rows_parse_failed("Invalid session parse result.", generation)
             return
         prepared = list(result.prepared_rows or [])
-        try:
-            self.mols.update(result.mols or {})
-        except Exception:
-            self.mols = dict(result.mols or {})
+        load_mols_from_parse_result(self, result)
         if not prepared:
             self._begin_session_finalize(doc, int(result.max_id), gen=generation)
             return
