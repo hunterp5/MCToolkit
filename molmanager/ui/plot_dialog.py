@@ -50,9 +50,7 @@ class PlotDialog(QDialog):
         self.setWindowTitle("Plot Data")
         self.resize(960, 900)
 
-        self._plot_widget = (
-            plot_widget if plot_widget is not None else PlotWidgetCls(parent_app)
-        )
+        self._plot_widget = plot_widget if plot_widget is not None else PlotWidgetCls(parent_app)
         self.only_selected_cb = self._plot_widget.only_selected_cb
         self._only_selected_scope_prefix = self._plot_widget._only_selected_scope_prefix
 

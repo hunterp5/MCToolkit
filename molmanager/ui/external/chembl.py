@@ -89,7 +89,9 @@ def _client():
     try:
         from chembl_webresource_client.new_client import new_client
     except Exception as e:
-        raise RuntimeError("chembl_webresource_client is required. Install requirements.txt.") from e
+        raise RuntimeError(
+            "chembl_webresource_client is required. Install requirements.txt."
+        ) from e
     return new_client
 
 
@@ -215,6 +217,7 @@ def _fetch_activities(
             out.append(rec)
         else:
             out.append(dict(rec))
+
     # Sort by pchembl_value desc when present (most potent/highest pChEMBL first).
     def key(r: dict[str, Any]) -> float:
         v = r.get("pchembl_value", None)
@@ -300,7 +303,9 @@ class _ChEMBLBatchWorker(QRunnable):
 
         results: list[ChEMBLResult] = []
         logs: list[str] = []
-        acts_rows: list[str] = ["SMILES\tChEMBL_ID\tpchembl_value\tstandard_type\tstandard_relation\tstandard_value\tstandard_units\tconfidence_score\tassay_chembl_id\ttarget_chembl_id\tactivity_id"]
+        acts_rows: list[str] = [
+            "SMILES\tChEMBL_ID\tpchembl_value\tstandard_type\tstandard_relation\tstandard_value\tstandard_units\tconfidence_score\tassay_chembl_id\ttarget_chembl_id\tactivity_id"
+        ]
         targ_rows: list[str] = ["ChEMBL_ID\ttarget_chembl_id\tpref_name\ttarget_type\torganism"]
 
         if self.similarity is not None:
@@ -322,7 +327,9 @@ class _ChEMBLBatchWorker(QRunnable):
             except Exception as e:
                 settings.MAX_LIMIT = prev_limit
                 logs.append(f"{q} | similarity ERROR: {e}")
-                self.signals.finished.emit(results, logs, "\n".join(acts_rows), "\n".join(targ_rows))
+                self.signals.finished.emit(
+                    results, logs, "\n".join(acts_rows), "\n".join(targ_rows)
+                )
                 return
             finally:
                 settings.MAX_LIMIT = prev_limit
@@ -806,7 +813,9 @@ class ChEMBLDialog(QDialog):
         except Exception:
             parts = []
         if not parts:
-            QMessageBox.information(self, "ChEMBL", "No valid SMILES could be exported from the sketch.")
+            QMessageBox.information(
+                self, "ChEMBL", "No valid SMILES could be exported from the sketch."
+            )
             return
         self.chk_only_selected.setChecked(False)
         self.set_smiles_list(parts)
@@ -849,7 +858,9 @@ class ChEMBLDialog(QDialog):
             else:
                 smiles_list = self._parse_smiles_inputs()
                 if not smiles_list:
-                    QMessageBox.information(self, "ChEMBL", "Enter at least one SMILES string first.")
+                    QMessageBox.information(
+                        self, "ChEMBL", "Enter at least one SMILES string first."
+                    )
                     return
 
         self._last = []
@@ -921,7 +932,9 @@ class ChEMBLDialog(QDialog):
         # Summary: concise per-molecule overview.
         lines: list[str] = []
         for r in self._last:
-            lines.append(f"{r.smiles} | {r.chembl_id} | activities={len(r.activities)} | targets={len(r.targets)}")
+            lines.append(
+                f"{r.smiles} | {r.chembl_id} | activities={len(r.activities)} | targets={len(r.targets)}"
+            )
         self.tab_summary.setPlainText("\n".join(lines))
         self._worker = None
 
@@ -963,5 +976,6 @@ class ChEMBLDialog(QDialog):
             elif added:
                 app.status_label.setText(f"ChEMBL: added {added} row(s) to the table.")
             else:
-                app.status_label.setText("ChEMBL: no rows were added (see log in this window for errors).")
-
+                app.status_label.setText(
+                    "ChEMBL: no rows were added (see log in this window for errors)."
+                )

@@ -128,9 +128,7 @@ def _ring_atom_indices(bonds: Sequence[tuple[int, int]], n_atoms: int) -> set[in
     return set(range(n_atoms)) - removed
 
 
-def _ring_system_components(
-    bonds: Sequence[tuple[int, int]], ring: set[int]
-) -> list[set[int]]:
+def _ring_system_components(bonds: Sequence[tuple[int, int]], ring: set[int]) -> list[set[int]]:
     """
     Fused/bridged ring-system components (GR-3.4.1).
 
@@ -225,9 +223,7 @@ def _ring_system_components(
     return systems
 
 
-def _largest_cycle_in_component(
-    bonds: Sequence[tuple[int, int]], comp: set[int]
-) -> int:
+def _largest_cycle_in_component(bonds: Sequence[tuple[int, int]], comp: set[int]) -> int:
     """Approximate largest simple cycle size within a ring-system component."""
     from collections import deque
 
@@ -316,7 +312,9 @@ def principal_ring_system(
     return max(comps, key=_key)
 
 
-def _median_bond_length(xs: list[float], ys: list[float], bonds: Sequence[tuple[int, int]]) -> float:
+def _median_bond_length(
+    xs: list[float], ys: list[float], bonds: Sequence[tuple[int, int]]
+) -> float:
     lens: list[float] = []
     for i, j in bonds:
         if i < 0 or j < 0 or i >= len(xs) or j >= len(xs):
@@ -364,9 +362,7 @@ def count_bond_crossings(
             c, d = segs[j]
             if len({a, b, c, d}) < 4:
                 continue
-            if _segments_properly_intersect(
-                xs[a], ys[a], xs[b], ys[b], xs[c], ys[c], xs[d], ys[d]
-            ):
+            if _segments_properly_intersect(xs[a], ys[a], xs[b], ys[b], xs[c], ys[c], xs[d], ys[d]):
                 crossings += 1
     return crossings
 
@@ -410,7 +406,9 @@ def count_near_coincident_bonds(
             mx2, my2 = 0.5 * (cx + dx), 0.5 * (cy + dy)
             if math.hypot(mx2 - mx1, my2 - my1) > tol:
                 # Also check endpoint-to-segment distances for stacked short bonds.
-                def _dist_point_seg(px: float, py: float, qx0: float, qy0: float, qx1: float, qy1: float) -> float:
+                def _dist_point_seg(
+                    px: float, py: float, qx0: float, qy0: float, qx1: float, qy1: float
+                ) -> float:
                     wx, wy = qx1 - qx0, qy1 - qy0
                     den = wx * wx + wy * wy
                     if den < 1e-18:
@@ -622,9 +620,7 @@ def apply_iupac_orientation(
     ys = list(ys)
     orders = list(bond_orders) if bond_orders is not None else [1] * len(bonds)
     ring = _ring_atom_indices(bonds, n)
-    principal = principal_ring_system(
-        bonds, n, elements=elements, bond_orders=orders
-    )
+    principal = principal_ring_system(bonds, n, elements=elements, bond_orders=orders)
 
     base_x, base_y = _make_horizontal(xs, ys, bonds, principal=principal)
     candidates: list[tuple[list[float], list[float]]] = []
@@ -693,12 +689,8 @@ def resolve_layout_overlaps(
     pen = layout_overlap_penalty(xs, ys, bonds)
     if pen < 1e-6:
         # Still allow orientation improvement without overlap present.
-        return apply_iupac_orientation(
-            xs, ys, elements=elements, bonds=bonds, bond_orders=orders
-        )
-    return apply_iupac_orientation(
-        xs, ys, elements=elements, bonds=bonds, bond_orders=orders
-    )
+        return apply_iupac_orientation(xs, ys, elements=elements, bonds=bonds, bond_orders=orders)
+    return apply_iupac_orientation(xs, ys, elements=elements, bonds=bonds, bond_orders=orders)
 
 
 def apply_iupac_orientation_to_conformer(

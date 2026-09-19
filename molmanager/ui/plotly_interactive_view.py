@@ -79,10 +79,14 @@ class _PlotBridge(QObject):
 class PlotlyInteractiveView(QWidget):
     """Plotly scatter with lasso/click selection synced to the compound table."""
 
-    def __init__(self, parent_app: ChemistryWorkspaceWindow | None = None, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, parent_app: ChemistryWorkspaceWindow | None = None, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self.parent_app = parent_app
-        self._plot_shell_path = Path(tempfile.gettempdir()) / f"MOLMANAGER_plot_shell_{id(self)}.html"
+        self._plot_shell_path = (
+            Path(tempfile.gettempdir()) / f"MOLMANAGER_plot_shell_{id(self)}.html"
+        )
         self._last_browser_opened_path: str | None = None
         self.plotted_oids: list[int] = []
         self._partner_oids: list[int] | None = None
@@ -199,7 +203,9 @@ class PlotlyInteractiveView(QWidget):
         self.sync_selection_visual()
         return len(indices)
 
-    def sync_from_table_selection(self, selected_oids: set[int] | frozenset[int] | None = None) -> None:
+    def sync_from_table_selection(
+        self, selected_oids: set[int] | frozenset[int] | None = None
+    ) -> None:
         """Highlight plot points for the current table row selection."""
         if not self.plotted_oids or self.parent_app is None:
             return
@@ -347,7 +353,9 @@ class PlotlyInteractiveView(QWidget):
 
         def _after_probe(result) -> None:
             if not bool(result):
-                self._fallback_open_in_browser("Embedded Plotly renderer is not supported on this system.")
+                self._fallback_open_in_browser(
+                    "Embedded Plotly renderer is not supported on this system."
+                )
                 return
             self._web_ready = True
             self._apply_pending_payload()

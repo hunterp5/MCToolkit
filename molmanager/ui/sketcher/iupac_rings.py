@@ -255,7 +255,12 @@ def _relax_ring_bond_angles(
     bl = max(float(bond_length), 1.0)
     cur = [list(p) for p in pts]
     for _ in range(max(1, iterations)):
-        cur = [list(p) for p in _equalize_polygon_edges([(p[0], p[1]) for p in cur], bond_length=bl, iterations=2)]
+        cur = [
+            list(p)
+            for p in _equalize_polygon_edges(
+                [(p[0], p[1]) for p in cur], bond_length=bl, iterations=2
+            )
+        ]
         for i in range(n):
             ax, ay = cur[(i - 1) % n]
             bx, by = cur[i]
@@ -424,7 +429,9 @@ def rotate_offsets_to_inward_heteroatoms(
     n = len(offsets)
     if n == 0 or len(elements) != n:
         return list(offsets)
-    het = hetero or frozenset({"N", "O", "S", "P", "Se", "Te", "As", "B", "Si", "F", "Cl", "Br", "I"})
+    het = hetero or frozenset(
+        {"N", "O", "S", "P", "Se", "Te", "As", "B", "Si", "F", "Cl", "Br", "I"}
+    )
     het_idx = [i for i, el in enumerate(elements) if el in het]
     if not het_idx:
         return list(offsets)
@@ -509,7 +516,9 @@ def spiro_second_ring_offsets_y_up(
     """
     n = max(3, int(n_atoms))
     offsets = ring_vertex_offsets_y_up(n, bond_length=bond_length)
-    angs = sorted(math.atan2(dy, dx) for dx, dy in existing_ring_neighbor_dirs if math.hypot(dx, dy) > 1e-6)
+    angs = sorted(
+        math.atan2(dy, dx) for dx, dy in existing_ring_neighbor_dirs if math.hypot(dx, dy) > 1e-6
+    )
     if len(angs) < 2:
         target = 0.0
     else:

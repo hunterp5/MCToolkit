@@ -138,10 +138,7 @@ def main() -> int:
         )
         return 1
 
-    print(
-        f"ok: no gating vulnerabilities "
-        f"(ignored={len(ignore)}, warnings={len(warnings)})"
-    )
+    print(f"ok: no gating vulnerabilities (ignored={len(ignore)}, warnings={len(warnings)})")
     return 0
 
 

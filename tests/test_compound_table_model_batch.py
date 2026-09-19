@@ -52,4 +52,3 @@ def test_apply_columns_values_bulk_emits_sparse_row_ranges(qapp):  # noqa: ARG00
         [(2, {"pKa": "9.1"}), (5, {"pKa": "4.2"}), (17, {"pKa": "11.0"})],
     )
     assert emitted == [(2, 2), (5, 5), (17, 17)]
-

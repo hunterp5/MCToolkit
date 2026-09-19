@@ -50,6 +50,4 @@ def test_substructure_worker_invalid_smarts_empty_set(qapp):  # noqa: ARG001
     pool.start(SubstructureFilterWorker(1, "not_valid_smarts_{{{", [(0, "CC")], sig))
     assert pool.waitForDone(60000)
     qapp.processEvents()
-    assert results and results[0] == [
-        ("not_valid_smarts_{{{", "Structure", frozenset())
-    ]
+    assert results and results[0] == [("not_valid_smarts_{{{", "Structure", frozenset())]

@@ -23,9 +23,7 @@ import sys
 from pathlib import Path
 
 MARKER = "Copyright (C) 2026 Hunter Picard"
-SKIP_PREFIXES = (
-    "molmanager/ui/static/",
-)
+SKIP_PREFIXES = ("molmanager/ui/static/",)
 
 
 def tracked_python_files(root: Path) -> list[Path]:

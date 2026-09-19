@@ -168,7 +168,9 @@ def source_rows_for_point_indices(
     return sorted(set(rows))
 
 
-def _source_rows_already_selected(parent_app: ChemistryWorkspaceWindow, source_rows: list[int]) -> bool:
+def _source_rows_already_selected(
+    parent_app: ChemistryWorkspaceWindow, source_rows: list[int]
+) -> bool:
     """True when the table already reflects this source-row selection."""
     uniq = sorted({int(r) for r in source_rows})
     override = getattr(parent_app, "_selected_oids_override", None)
@@ -240,7 +242,9 @@ def _apply_table_selection_now(
     table.viewport().update()
 
 
-def _scroll_table_to_first_source_row(parent_app: ChemistryWorkspaceWindow, source_rows: list[int]) -> None:
+def _scroll_table_to_first_source_row(
+    parent_app: ChemistryWorkspaceWindow, source_rows: list[int]
+) -> None:
     if not source_rows:
         return
     view_rows = parent_app._source_rows_to_view_rows(source_rows[:1])

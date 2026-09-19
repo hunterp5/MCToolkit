@@ -38,7 +38,9 @@ def merge_sorted_row_indices(rows: list[int]) -> list[tuple[int, int]]:
     return spans
 
 
-def item_selection_for_view_rows(view_model, view_rows: list[int], *, last_col: int) -> QItemSelection:
+def item_selection_for_view_rows(
+    view_model, view_rows: list[int], *, last_col: int
+) -> QItemSelection:
     """Build a ``QItemSelection`` from proxy/view row indices using contiguous ranges."""
     selection = QItemSelection()
     for lo, hi in merge_sorted_row_indices(view_rows):

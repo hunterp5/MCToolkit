@@ -99,9 +99,7 @@ def load_toolbar_element_symbols() -> list[str]:
 
 def save_toolbar_element_symbols(symbols: Sequence[str]) -> None:
     ordered = normalize_toolbar_element_symbols(symbols)
-    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(
-        _SETTINGS_KEY_ELEMENTS, ",".join(ordered)
-    )
+    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_ELEMENTS, ",".join(ordered))
 
 
 def element_groups_for_symbols(
@@ -124,20 +122,14 @@ def element_groups_for_symbols(
 class CustomizeElementsDialog(QDialog):
     """Choose which element buttons appear beside the sketch canvas."""
 
-    def __init__(
-        self, parent: QWidget | None = None, selected: Sequence[str] | None = None
-    ):
+    def __init__(self, parent: QWidget | None = None, selected: Sequence[str] | None = None):
         super().__init__(parent)
         self.setWindowTitle("Customize Elements")
         self.setModal(True)
         self.setMinimumWidth(360)
         self.setMinimumHeight(420)
 
-        current = set(
-            normalize_toolbar_element_symbols(
-                selected or load_toolbar_element_symbols()
-            )
-        )
+        current = set(normalize_toolbar_element_symbols(selected or load_toolbar_element_symbols()))
         self._checks: dict[str, QCheckBox] = {}
 
         root = QVBoxLayout(self)

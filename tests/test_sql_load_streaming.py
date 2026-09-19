@@ -79,4 +79,3 @@ def test_load_from_sql_rejects_destructive_when_read_only(tmp_path, qapp):  # no
             read_only=True,
         )
     w.close()
-

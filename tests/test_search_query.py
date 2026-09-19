@@ -71,7 +71,9 @@ def test_quoted_string_accepted():
 
 def test_numeric_comparisons():
     assert parse_search_condition(">5", partial=True) == parse_search_condition("> 5", partial=True)
-    assert evaluate_search_condition("10", parse_search_condition(">5", partial=True), partial=True, case_sensitive=False)
+    assert evaluate_search_condition(
+        "10", parse_search_condition(">5", partial=True), partial=True, case_sensitive=False
+    )
     assert not evaluate_search_condition(
         "3", parse_search_condition(">5", partial=True), partial=True, case_sensitive=False
     )
@@ -96,9 +98,13 @@ def test_empty_and_not_empty():
 
 
 def test_and_or_combination_legacy_flat():
-    conds = parse_search_conditions('>5, <10', partial=True)
-    assert evaluate_search_conditions("7", conds, match_and=False, partial=True, case_sensitive=False)
-    assert evaluate_search_conditions("12", conds, match_and=False, partial=True, case_sensitive=False)
+    conds = parse_search_conditions(">5, <10", partial=True)
+    assert evaluate_search_conditions(
+        "7", conds, match_and=False, partial=True, case_sensitive=False
+    )
+    assert evaluate_search_conditions(
+        "12", conds, match_and=False, partial=True, case_sensitive=False
+    )
 
 
 def test_compound_and_or_expression():

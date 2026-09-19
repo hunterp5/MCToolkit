@@ -204,11 +204,7 @@ class PropertyColumnsPanel(QWidget):
                     return
 
         for i, cb in enumerate(self._prop_combos):
-            prefer = (
-                _DEFAULT_COLUMN_PREFERENCES[i]
-                if i < len(_DEFAULT_COLUMN_PREFERENCES)
-                else ()
-            )
+            prefer = _DEFAULT_COLUMN_PREFERENCES[i] if i < len(_DEFAULT_COLUMN_PREFERENCES) else ()
             if prefer:
                 _set_default(cb, prefer)
 

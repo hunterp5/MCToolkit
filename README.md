@@ -556,6 +556,7 @@ CI runs lint (Ruff + GPL headers) on Ubuntu, and tests on Ubuntu, macOS, and Win
 
 ```bash
 python -m ruff check molmanager tests scripts
+python -m ruff format --check molmanager tests scripts
 python scripts/check_gpl_headers.py
 ```
 

@@ -30,7 +30,9 @@ from molmanager.ui.sketcher.sketch_rdkit_paint import (
 )
 
 
-def _mol_with_sketch_coords(nodes: list[tuple[int, int]]) -> tuple[Chem.Mol, dict[int, int], list[dict]]:
+def _mol_with_sketch_coords(
+    nodes: list[tuple[int, int]],
+) -> tuple[Chem.Mol, dict[int, int], list[dict]]:
     scale = 40.0
     m = Chem.MolFromSmiles("CCC")
     conf = Conformer(3)

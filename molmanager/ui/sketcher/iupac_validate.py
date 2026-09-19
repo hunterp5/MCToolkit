@@ -92,7 +92,11 @@ def validate_iupac_sketch(
                 )
             )
 
-    med = float(median_bond_px) if median_bond_px and median_bond_px > 0 else _median(lengths, float(SKETCH_MEDIAN_BOND_PX))
+    med = (
+        float(median_bond_px)
+        if median_bond_px and median_bond_px > 0
+        else _median(lengths, float(SKETCH_MEDIAN_BOND_PX))
+    )
     for bi, bond in enumerate(bonds):
         a, b, _o, _s = _bond_unpack(bond)
         na, nb = by_id.get(a), by_id.get(b)

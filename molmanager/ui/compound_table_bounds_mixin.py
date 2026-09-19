@@ -110,7 +110,9 @@ class CompoundTableBoundsMixin:
         return scan_numeric_column(rows, h)
 
     @staticmethod
-    def merge_numeric_bounds_rows(rows, h: str, start_row: int, end_row: int, acc: dict | None) -> dict | None:
+    def merge_numeric_bounds_rows(
+        rows, h: str, start_row: int, end_row: int, acc: dict | None
+    ) -> dict | None:
         """Merge numeric min/max for ``rows[start_row:end_row]`` into *acc*."""
         return merge_numeric_bounds_rows_fn(rows, h, start_row, end_row, acc)
 
@@ -185,4 +187,3 @@ class CompoundTableBoundsMixin:
                 cache[h] = meta
         self._numeric_bounds_dirty_cols = set()
         return dict(cache)
-

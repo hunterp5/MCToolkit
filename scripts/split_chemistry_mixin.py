@@ -64,12 +64,7 @@ for filename, class_name, start, end in RANGES:
         "fragment_tools_mixin.py": "BRICS/RECAP/R-group fragment tools.",
         "tools_sql_predict_mixin.py": "Calculator, SQL load, external DB, and prediction dialogs.",
     }[filename]
-    text = (
-        f'"""{doc}"""\n\n'
-        f"{preamble}"
-        f"class {class_name}:\n"
-        f"{methods}\n"
-    )
+    text = f'"""{doc}"""\n\n{preamble}class {class_name}:\n{methods}\n'
     (OUT_DIR / filename).write_text(text, encoding="utf-8")
     print(f"wrote {filename} ({len(text)} bytes)")
 

@@ -26,6 +26,9 @@ jobs:
       - name: Ruff (correctness gate)
         run: python -m ruff check molmanager tests scripts
 
+      - name: Ruff (format gate)
+        run: python -m ruff format --check molmanager tests scripts
+
       - name: GPL copyright headers
         run: python scripts/check_gpl_headers.py
 

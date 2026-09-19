@@ -359,7 +359,6 @@ def test_stereo_with_wedge_not_unspecified_caution(qapp) -> None:  # noqa: ARG00
     assert inward >= 0  # smoke: inward index exists
 
 
-
 def test_add_ring_uses_median_chord(qapp) -> None:  # noqa: ARG001
     w = SketchWidget()
     w._median_bond_length_px = 60.0

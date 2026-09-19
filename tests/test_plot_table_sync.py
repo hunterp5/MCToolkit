@@ -54,7 +54,9 @@ def test_point_indices_for_oids_uses_index_and_partners() -> None:
 
 
 class _FakeModel:
-    def __init__(self, oids_by_row: dict[int, int], highlighted: frozenset[int] | None = None) -> None:
+    def __init__(
+        self, oids_by_row: dict[int, int], highlighted: frozenset[int] | None = None
+    ) -> None:
         self._oids_by_row = oids_by_row
         self._highlighted = highlighted
 

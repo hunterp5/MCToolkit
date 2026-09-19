@@ -77,9 +77,7 @@ class SaliMixin:
             make_worker=_make_worker,
         )
 
-    def on_sali_finished(
-        self, points, activity_column: str, fp_choice: str, metric: str
-    ) -> None:
+    def on_sali_finished(self, points, activity_column: str, fp_choice: str, metric: str) -> None:
         points = finish_analysis_pairs(
             self,
             TOOL_SALI_MAP,
@@ -97,9 +95,7 @@ class SaliMixin:
         self.status_label.setText(f"SALI: {len(points)} pair(s).")
 
     def on_sali_failed(self, message: str) -> None:
-        report_analysis_failure(
-            self, TOOL_SALI_MAP, message, fallback="SALI analysis failed."
-        )
+        report_analysis_failure(self, TOOL_SALI_MAP, message, fallback="SALI analysis failed.")
 
     def _open_sali_map(
         self,

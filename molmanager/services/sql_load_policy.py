@@ -105,7 +105,9 @@ def sqlite_database_path_from_url(url: str) -> str | None:
     return path_only
 
 
-def make_sqlite_read_only_creator(path: str, *, timeout_s: float) -> Callable[[], sqlite3.Connection]:
+def make_sqlite_read_only_creator(
+    path: str, *, timeout_s: float
+) -> Callable[[], sqlite3.Connection]:
     """Return a SQLAlchemy ``creator`` that opens ``path`` with SQLite ``mode=ro``."""
     resolved = Path(path).expanduser().resolve()
     uri = resolved.as_uri() + "?mode=ro"

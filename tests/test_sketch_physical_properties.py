@@ -113,12 +113,8 @@ def test_physical_properties_view_action(qapp) -> None:  # noqa: ARG001
     bars = dlg.findChildren(QMenuBar)
     assert bars
     menus = {a.text(): a.menu() for a in bars[0].actions() if a.menu()}
-    assert "Physical Properties" in [
-        a.text() for a in menus["View"].actions() if a.text()
-    ]
-    assert "Customize Elements" in [
-        a.text() for a in menus["Settings"].actions() if a.text()
-    ]
+    assert "Physical Properties" in [a.text() for a in menus["View"].actions() if a.text()]
+    assert "Customize Elements" in [a.text() for a in menus["Settings"].actions() if a.text()]
     dlg._open_physical_properties()
     assert dlg._phys_props_dlg is not None
     assert dlg._phys_props_dlg.isVisible()

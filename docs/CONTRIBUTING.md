@@ -23,11 +23,11 @@ Cursor-specific copies live under [`.cursor/rules/`](../.cursor/rules/) (tracked
 
 ```bash
 python -m ruff check molmanager tests scripts
-python -m ruff format molmanager tests scripts   # optional local format
+python -m ruff format molmanager tests scripts
 ```
 
-CI currently gates on Ruff correctness / undefined-name rules plus unused imports and locals
-(`E9`, `F63`, `F7`, `F82`, `F401`, `F841`).
+CI gates on `ruff check` (correctness / undefined-name rules plus unused imports and locals:
+`E9`, `F63`, `F7`, `F82`, `F401`, `F841`) and `ruff format --check`.
 
 ### Naming conventions
 
@@ -76,6 +76,7 @@ export QT_QPA_PLATFORM=offscreen   # Windows: $env:QT_QPA_PLATFORM="offscreen"
 python -m pytest tests/ -v
 python scripts/check_gpl_headers.py
 python -m ruff check molmanager tests scripts
+python -m ruff format --check molmanager tests scripts
 ```
 
 CI (`.github/workflows/ci.yml`) runs on **Ubuntu, macOS, and Windows**: lint/header checks, pytest, Linux perf gate, and a dependency audit that **fails on CRITICAL/HIGH/malware** findings (see [dependency-audit-exceptions.md](dependency-audit-exceptions.md)).

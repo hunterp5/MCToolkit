@@ -93,7 +93,9 @@ def test_sketcher_top_toolbar_controls(qapp) -> None:  # noqa: ARG001
     dlg.tb_3d.setChecked(False)
     assert dlg.view_3d.isHidden()
     bar = dlg._top_toolbar.layout()
-    tools = [bar.itemAt(i).widget() for i in range(bar.count()) if bar.itemAt(i).widget() is not None]
+    tools = [
+        bar.itemAt(i).widget() for i in range(bar.count()) if bar.itemAt(i).widget() is not None
+    ]
     idx_3d = next(i for i in range(bar.count()) if bar.itemAt(i).widget() is dlg.tb_3d)
     assert bar.itemAt(idx_3d + 1).widget() is not None
     assert bar.itemAt(idx_3d + 1).widget() is not dlg.tb_rxn_arrow

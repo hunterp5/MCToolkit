@@ -90,10 +90,7 @@ def main() -> int:
         for key in keys
     }
     avg = {key: statistics.fmean(s[key] for s in samples) for key in keys}
-    print(
-        "perf_gate 100k "
-        + " ".join(f"{k}:avg={avg[k]:.1f}ms,p95={p95[k]:.1f}ms" for k in keys)
-    )
+    print("perf_gate 100k " + " ".join(f"{k}:avg={avg[k]:.1f}ms,p95={p95[k]:.1f}ms" for k in keys))
 
     # Generous CI thresholds to catch major regressions while avoiding runner flakiness.
     # filter_ms is an explicit row-map rebuild (not invalidateFilter); keep headroom for

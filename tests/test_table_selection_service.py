@@ -87,39 +87,51 @@ def test_collect_canonical_keys_from_column() -> None:
 
 
 def test_structure_row_is_empty() -> None:
-    assert structure_row_is_empty(
-        mol_present=True,
-        smiles_text="",
-        probe_cells=[],
-        is_smiles_named=lambda _h: False,
-        header_looks_structural=lambda _h: False,
-        is_tool_generated=lambda _h: False,
-        looks_like_mol_block=lambda _t: False,
-    ) is False
-    assert structure_row_is_empty(
-        mol_present=False,
-        smiles_text="CCO",
-        probe_cells=[],
-        is_smiles_named=lambda _h: False,
-        header_looks_structural=lambda _h: False,
-        is_tool_generated=lambda _h: False,
-        looks_like_mol_block=lambda _t: False,
-    ) is False
-    assert structure_row_is_empty(
-        mol_present=False,
-        smiles_text="",
-        probe_cells=[("Note", "hello")],
-        is_smiles_named=lambda _h: False,
-        header_looks_structural=lambda _h: False,
-        is_tool_generated=lambda _h: False,
-        looks_like_mol_block=lambda _t: False,
-    ) is True
-    assert structure_row_is_empty(
-        mol_present=False,
-        smiles_text="",
-        probe_cells=[("SMILES", "CCO")],
-        is_smiles_named=lambda h: h == "SMILES",
-        header_looks_structural=lambda _h: False,
-        is_tool_generated=lambda _h: False,
-        looks_like_mol_block=lambda _t: False,
-    ) is False
+    assert (
+        structure_row_is_empty(
+            mol_present=True,
+            smiles_text="",
+            probe_cells=[],
+            is_smiles_named=lambda _h: False,
+            header_looks_structural=lambda _h: False,
+            is_tool_generated=lambda _h: False,
+            looks_like_mol_block=lambda _t: False,
+        )
+        is False
+    )
+    assert (
+        structure_row_is_empty(
+            mol_present=False,
+            smiles_text="CCO",
+            probe_cells=[],
+            is_smiles_named=lambda _h: False,
+            header_looks_structural=lambda _h: False,
+            is_tool_generated=lambda _h: False,
+            looks_like_mol_block=lambda _t: False,
+        )
+        is False
+    )
+    assert (
+        structure_row_is_empty(
+            mol_present=False,
+            smiles_text="",
+            probe_cells=[("Note", "hello")],
+            is_smiles_named=lambda _h: False,
+            header_looks_structural=lambda _h: False,
+            is_tool_generated=lambda _h: False,
+            looks_like_mol_block=lambda _t: False,
+        )
+        is True
+    )
+    assert (
+        structure_row_is_empty(
+            mol_present=False,
+            smiles_text="",
+            probe_cells=[("SMILES", "CCO")],
+            is_smiles_named=lambda h: h == "SMILES",
+            header_looks_structural=lambda _h: False,
+            is_tool_generated=lambda _h: False,
+            looks_like_mol_block=lambda _t: False,
+        )
+        is False
+    )

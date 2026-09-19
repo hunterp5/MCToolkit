@@ -26,10 +26,7 @@ from molmanager.workers.cluster_worker import cluster_sphere_exclusion
 
 def test_sphere_exclusion_assigns_nearest_centroid():
     smis = ["CCO", "CCCO", "c1ccccc1", "Cc1ccccc1", "CC(=O)O"]
-    fps = [
-        AllChem.GetMorganFingerprintAsBitVect(Chem.MolFromSmiles(s), 2, 2048)
-        for s in smis
-    ]
+    fps = [AllChem.GetMorganFingerprintAsBitVect(Chem.MolFromSmiles(s), 2, 2048) for s in smis]
     labels = cluster_sphere_exclusion(fps, 0.25)
     assert labels is not None
     assert labels.shape[0] == 5
@@ -38,10 +35,7 @@ def test_sphere_exclusion_assigns_nearest_centroid():
 
 def test_sphere_exclusion_high_cutoff_yields_many_clusters():
     smis = ["CCO", "CCC", "CCCC", "CCCCC"]
-    fps = [
-        AllChem.GetMorganFingerprintAsBitVect(Chem.MolFromSmiles(s), 2, 2048)
-        for s in smis
-    ]
+    fps = [AllChem.GetMorganFingerprintAsBitVect(Chem.MolFromSmiles(s), 2, 2048) for s in smis]
     labels = cluster_sphere_exclusion(fps, 0.05)
     assert labels is not None
     assert len(set(int(x) for x in labels)) == 4
@@ -59,10 +53,7 @@ def test_butina_and_jarvis_patrick_do_not_need_dense_matrix():
     assert not _method_needs_dense_matrix("sphere_exclusion")
     assert _method_needs_dense_matrix("kmeans")
     smis = ["CCO", "CCCO", "c1ccccc1", "Cc1ccccc1"]
-    fps = [
-        AllChem.GetMorganFingerprintAsBitVect(Chem.MolFromSmiles(s), 2, 2048)
-        for s in smis
-    ]
+    fps = [AllChem.GetMorganFingerprintAsBitVect(Chem.MolFromSmiles(s), 2, 2048) for s in smis]
     butina = cluster_butina(fps, 0.4)
     assert butina is not None
     assert butina.shape[0] == 4

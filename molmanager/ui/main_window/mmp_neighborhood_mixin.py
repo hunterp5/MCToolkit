@@ -51,9 +51,7 @@ class MmpNeighborhoodMixin:
             selected_row_count=len(self._selected_logical_rows()),
             parent=self,
         )
-        show_activity_tool_dialog(
-            self, d, on_accepted=self._on_mmp_neighborhood_dialog_accepted
-        )
+        show_activity_tool_dialog(self, d, on_accepted=self._on_mmp_neighborhood_dialog_accepted)
 
     def _on_mmp_neighborhood_dialog_accepted(self, d) -> None:
         p = d.params()

@@ -60,4 +60,3 @@ def test_cluster_worker_emits_partial_rows_on_cancel():
     assert isinstance(got_rows, list)
     assert len(got_rows) >= 1
     assert out.get("headers") == ["Cluster"]
-
