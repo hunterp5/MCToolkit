@@ -18,16 +18,13 @@
 
 from __future__ import annotations
 
-import os
 import re
-import shlex
 import sys
 import tempfile
-import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from PyQt5.QtCore import QProcess, QProcessEnvironment, Qt, QTimer
+from PyQt5.QtCore import QProcess, Qt
 from PyQt5.QtGui import QCloseEvent, QKeySequence
 from PyQt5.QtWidgets import (
     QApplication,
@@ -50,19 +47,34 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...bundled_paths import default_external_executable, gnina_launch_env, resolve_user_executable
-from ...confs_codec import is_packed_ensemble_header
+from ...bundled_paths import default_external_executable, resolve_user_executable
 from ...dock_io import AUTOBOX_LIGAND_FILTER
-from ...pharmacophore import PHARMACOPHORE_FILE_FILTER, load_pharmacophore
+from ...gnina_job import (
+    GninaJobSettings,
+    apply_dock_pharmacophore_filter,
+    effective_out_path,
+    ensemble_column_headers,
+    flex_out_path,
+    launch_argv_with_config,
+    ligand_arg,
+    ligand_cli_args,
+    ligand_mol_from_ensemble,
+    load_ligand_template_mols,
+    normalize_flexres,
+    require_dock_pharmacophore,
+    resolve_work_path,
+    same_input_path,
+    write_smina_config,
+)
 from ...gnina_launch import (
     cuda_available,
-    gnina_exit_127_message,
     gnina_missing_message,
-    gnina_qprocess_spec,
     gnina_uses_wsl,
     resolve_gnina_command,
-    write_gnina_config,
 )
+from ...pharmacophore import PHARMACOPHORE_FILE_FILTER
+from ...pharmacophore_screen import DEFAULT_DOCK_SLACK_ANGSTROM
+from ...workers.gnina_dock_worker import GninaDockWorker, system_stamp
 from ..qt_widget_utils import append_viewer_log, make_window_minimizable
 
 _RECEPTOR_FILE_FILTER = "Receptor (*.pdbqt *.pdb);;PDBQT (*.pdbqt);;PDB (*.pdb);;All files (*.*)"
@@ -72,8 +84,22 @@ _LIGAND_FILE_FILTER = (
     "MOL2 (*.mol2);;Molfile (*.mol);;PDBQT (*.pdbqt);;All files (*.*)"
 )
 _OUT_FILE_FILTER = "SDF (*.sdf *.sd);;PDBQT (*.pdbqt);;All files (*.*)"
-_FLEXRES_TOKEN = re.compile(r"^[A-Za-z0-9]+:-?\d+[A-Za-z]?$")
 _LOG_STAMP_RE = re.compile(r"^\[\d{2}:\d{2}:\d{2}\](?:\[system\])?\s*")
+
+# Compat re-exports (tests import these from the dialog module).
+_ligand_cli_args = ligand_cli_args
+_write_smina_config = write_smina_config
+
+__all__ = [
+    "GninaDockDialog",
+    "SminaDockDialog",
+    "_ligand_cli_args",
+    "_write_smina_config",
+    "ensemble_column_headers",
+    "flex_out_path",
+    "ligand_mol_from_ensemble",
+    "normalize_flexres",
+]
 
 
 class _GninaLogProxy:
@@ -98,94 +124,6 @@ def _browse_path_row(edit: QLineEdit, on_browse) -> QWidget:
     wrap = QWidget()
     wrap.setLayout(row)
     return wrap
-
-
-def _ligand_cli_args(ligand: str | Sequence[str]) -> tuple[list[str], str]:
-    """Expand one or more ligand paths to repeated ``--ligand`` flags.
-
-    Gnina accepts several ``--ligand`` files in one process. Concatenated Meeko
-    PDBQT is invalid as a single file, so split records are passed this way.
-    SDF/MOL2 is passed through so Gnina never needs a ligand PDBQT file.
-    """
-    if isinstance(ligand, (str, Path)):
-        paths = [str(ligand).strip()] if str(ligand).strip() else []
-    else:
-        paths = [str(p).strip() for p in ligand if str(p).strip()]
-    if not paths:
-        raise ValueError("Choose a ligand file (PDBQT or SDF).")
-    args: list[str] = []
-    for path in paths:
-        args.extend(["--ligand", path])
-    return args, paths[0]
-
-
-def normalize_flexres(text: str) -> str:
-    """Comma-separated Gnina ``--flexres`` tokens (``CHAIN:RESNUM``)."""
-    parts: list[str] = []
-    for raw in (text or "").replace(";", ",").split(","):
-        tok = raw.strip().replace(" ", "")
-        if not tok:
-            continue
-        if not _FLEXRES_TOKEN.match(tok):
-            raise ValueError(
-                f"Invalid flexible residue '{raw.strip()}'. Use CHAIN:RESNUM (e.g. A:123,A:145)."
-            )
-        parts.append(tok)
-    if not parts:
-        raise ValueError("Enter flexible residues as CHAIN:RESNUM (e.g. A:123,A:145).")
-    return ",".join(parts)
-
-
-def flex_out_path(out_path: str) -> str:
-    """PDB path for Gnina ``--out_flex`` beside the pose output file."""
-    p = Path((out_path or "").strip() or "out.sdf")
-    stem = p.stem or "out"
-    return str(p.with_name(f"{stem}_flex.pdb"))
-
-
-def ensemble_column_headers(app) -> list[str]:
-    """Packed-ensemble table headers (confs / superpose / poses) plus sidecar columns."""
-    if app is None:
-        return []
-    headers = [str(h).strip() for h in (getattr(app, "headers", None) or []) if str(h).strip()]
-    names: list[str] = []
-    for header in headers:
-        if is_packed_ensemble_header(header):
-            names.append(header)
-    sidecar = getattr(app, "_confs_blocks_sidecar", None)
-    if sidecar is None:
-        sidecar = {}
-    for key in sidecar:
-        if not isinstance(key, tuple) or len(key) != 2:
-            continue
-        col = str(key[1] or "").strip()
-        if col and col not in names and col in headers:
-            names.append(col)
-    return names
-
-
-def ligand_mol_from_ensemble(mol, oid: int):
-    """One 3D ligand per table row. Gnina searches from this start; extra packed confs are not docked."""
-    from rdkit import Chem
-
-    if mol is None:
-        return None
-    clone = Chem.Mol(mol)
-    n_conf = int(clone.GetNumConformers())
-    if n_conf > 1:
-        keep = Chem.Conformer(clone.GetConformer(0))
-        clone.RemoveAllConformers()
-        clone.AddConformer(keep, assignId=True)
-    clone.SetProp("_Name", str(oid))
-    from ...services.column_labels import COLUMN_PARENT_OID
-
-    clone.SetProp(COLUMN_PARENT_OID, str(oid))
-    return clone
-
-
-def _write_smina_config(argv: list[str], dest: Path) -> Path:
-    """Write a Gnina ``--config`` file (legacy name used by tests)."""
-    return write_gnina_config(argv, dest, linux_paths=gnina_uses_wsl())
 
 
 def _spin_row(pairs: tuple[tuple[str, QWidget], ...]) -> QWidget:
@@ -219,12 +157,8 @@ class GninaDockDialog(QDialog):
         self.setMinimumWidth(480)
         self.resize(540, 580)
 
-        self._proc = QProcess(self)
-        self._proc.finished.connect(self._on_proc_finished)
-        self._proc.readyReadStandardOutput.connect(self._append_stdout)
-        self._proc.readyReadStandardError.connect(self._append_stderr)
-        self._proc.started.connect(self._on_proc_started)
-        self._proc.errorOccurred.connect(self._on_proc_error)
+        self._worker = GninaDockWorker(self)
+        self._proc = self._worker.proc
         self._stdout_buf = ""
         self._stderr_buf = ""
         self._resolved_exe = ""
@@ -667,12 +601,12 @@ class GninaDockDialog(QDialog):
         make_window_minimizable(self)
 
     def is_gnina_running(self) -> bool:
-        return self._proc.state() != QProcess.NotRunning
+        return self._worker.is_running()
 
     is_smina_running = is_gnina_running
 
     def cancel_gnina(self) -> bool:
-        if self._proc.state() == QProcess.NotRunning:
+        if not self._worker.is_running():
             return False
         self._stop_proc()
         return True
@@ -834,49 +768,61 @@ class GninaDockDialog(QDialog):
         self.chk_full_flex.setEnabled(on)
 
     def _flexdist_ligand_path(self, dock_ligand: str) -> str:
-        explicit = (self.edit_flexdist_ligand.text() or "").strip()
-        if explicit:
-            return explicit
-        auto = (self.edit_autobox_ligand.text() or "").strip()
-        if auto:
-            return auto
-        crystal = (self._crystal_ligand_path or "").strip()
-        if crystal:
-            return crystal
-        return (dock_ligand or "").strip()
+        from ...gnina_job import flexdist_ligand_path
+
+        return flexdist_ligand_path(
+            explicit=self.edit_flexdist_ligand.text(),
+            autobox=self.edit_autobox_ligand.text(),
+            crystal=self._crystal_ligand_path,
+            dock_ligand=dock_ligand,
+        )
+
+    def _job_settings(self, *, no_gpu: bool | None = None) -> GninaJobSettings:
+        force_cpu = (
+            bool(no_gpu)
+            if no_gpu is not None
+            else (
+                (not self.gpu_cb.isChecked())
+                or sys.platform == "darwin"
+                or bool(getattr(self, "_force_no_gpu", False))
+            )
+        )
+        return GninaJobSettings(
+            receptor=self._receptor_for_gnina(),
+            autobox=bool(self.autobox_cb.isChecked()),
+            autobox_ligand=(self.edit_autobox_ligand.text() or "").strip(),
+            autobox_add=float(self.spin_autobox_add.value()),
+            center_x=float(self.spin_cx.value()),
+            center_y=float(self.spin_cy.value()),
+            center_z=float(self.spin_cz.value()),
+            size_x=float(self.spin_sx.value()),
+            size_y=float(self.spin_sy.value()),
+            size_z=float(self.spin_sz.value()),
+            exhaustiveness=int(self.spin_exhaust.value()),
+            num_modes=int(self.spin_modes.value()),
+            cpu=int(self.spin_cpu.value()),
+            extra=(self.edit_extra.text() or "").strip(),
+            flex_mode=self._flex_mode(),
+            flexdist_ligand=(self.edit_flexdist_ligand.text() or "").strip(),
+            crystal_ligand=(self._crystal_ligand_path or "").strip(),
+            flexdist=float(self.spin_flexdist.value()),
+            flex_max=int(self.spin_flex_max.value()),
+            flexres=self.edit_flexres.text(),
+            full_flex=bool(self.chk_full_flex.isChecked()),
+            cnn_scoring=str(self.combo_cnn_scoring.currentData() or "rescore"),
+            emp_scoring=str(self.combo_emp_scoring.currentData() or "vina"),
+            pose_sort=str(self.combo_pose_sort.currentData() or "CNNscore"),
+            cnn_model=str(self.combo_cnn_model.currentData() or ""),
+            no_gpu=force_cpu,
+            save_sdf=bool(self.save_sdf_cb.isChecked()),
+            work_dir=(self.edit_wd.text() or "").strip(),
+        )
 
     def _flex_argv(self, *, dock_ligand: str, out_path: str) -> list[str]:
         """Gnina flexible-side-chain flags, or empty when the receptor is rigid."""
-        mode = self._flex_mode()
-        if mode == "off":
-            return []
-        argv: list[str] = []
-        if mode == "dist":
-            lig = self._flexdist_ligand_path(dock_ligand)
-            if not lig:
-                raise ValueError(
-                    "Choose a reference ligand for flexible side chains "
-                    "(or set Autobox / a crystal ligand from Prepare)."
-                )
-            argv.extend(
-                [
-                    "--flexdist_ligand",
-                    lig,
-                    "--flexdist",
-                    f"{self.spin_flexdist.value():.2f}",
-                ]
-            )
-            nmax = int(self.spin_flex_max.value())
-            if nmax > 0:
-                argv.extend(["--flex_max", str(nmax)])
-        elif mode == "res":
-            argv.extend(["--flexres", normalize_flexres(self.edit_flexres.text())])
-        else:
-            return []
-        argv.extend(["--out_flex", flex_out_path(out_path)])
-        if self.chk_full_flex.isChecked():
-            argv.append("--full_flex_output")
-        return argv
+        from ...gnina_job import build_flex_argv
+
+        return build_flex_argv(self._job_settings(), dock_ligand=dock_ligand, out_path=out_path)
 
     def _sync_cnn_options(self) -> None:
         cnn_none = self.combo_cnn_scoring.currentData() == "none"
@@ -932,8 +878,9 @@ class GninaDockDialog(QDialog):
         self._sync_autobox()
 
     def _autobox_ligand_path(self, dock_ligand: str) -> str:
-        text = (self.edit_autobox_ligand.text() or "").strip()
-        return text or dock_ligand
+        from ...gnina_job import autobox_ligand_path
+
+        return autobox_ligand_path((self.edit_autobox_ligand.text() or "").strip(), dock_ligand)
 
     def _browse_out(self) -> None:
         path, _ = QFileDialog.getSaveFileName(self, "Docked output", "", _OUT_FILE_FILTER)
@@ -953,14 +900,8 @@ class GninaDockDialog(QDialog):
             self.edit_out.setText(str(path.with_suffix(".pdbqt")))
 
     def _effective_out_path(self, out: str | None = None) -> str:
-        from ...dock_io import sdf_path_for_pdbqt
-
         text = (out if out is not None else self.edit_out.text() or "").strip()
-        if not text:
-            return text
-        if self.save_sdf_cb.isChecked():
-            return str(sdf_path_for_pdbqt(text))
-        return text
+        return effective_out_path(text, save_sdf=self.save_sdf_cb.isChecked())
 
     def _gnina_executable(self) -> str:
         return (self.edit_exe.text() or "").strip() or default_external_executable("gnina")
@@ -982,8 +923,7 @@ class GninaDockDialog(QDialog):
         if argv.count("--ligand") <= 1:
             return argv
         cfg = self._ensure_batch_tmp("gnina_cfg_") / "gnina.conf"
-        write_gnina_config(argv, cfg, linux_paths=gnina_uses_wsl())
-        return ["--config", str(cfg)]
+        return launch_argv_with_config(argv, cfg)
 
     def _receptor_for_gnina(self) -> str:
         return (self._apo_receptor_path or self.edit_receptor.text() or "").strip()
@@ -995,232 +935,64 @@ class GninaDockDialog(QDialog):
         out: str | None = None,
         receptor: str | None = None,
     ) -> list[str]:
-        rec = (receptor if receptor is not None else self._receptor_for_gnina()).strip()
+        from ...gnina_job import build_gnina_argv
+
         lig_src: str | Sequence[str] = (
             ligand if ligand is not None else (self.edit_ligand.text() or "")
         )
-        lig_args, first_lig = _ligand_cli_args(lig_src)
         out_path = (out if out is not None else self._effective_out_path()).strip()
-        if not rec:
-            raise ValueError("Choose a receptor PDB or PDBQT file.")
-        if not out_path:
-            raise ValueError("Set an output path.")
-
-        argv = ["--receptor", rec, *lig_args, "--out", out_path]
-        if self.autobox_cb.isChecked():
-            box_lig = self._autobox_ligand_path(first_lig)
-            if not box_lig:
-                raise ValueError("Choose a ligand file, or a box ligand, for autobox.")
-            argv.extend(
-                [
-                    "--autobox_ligand",
-                    box_lig,
-                    "--autobox_add",
-                    f"{self.spin_autobox_add.value():.2f}",
-                ]
-            )
-        else:
-            argv.extend(
-                [
-                    "--center_x",
-                    f"{self.spin_cx.value():.3f}",
-                    "--center_y",
-                    f"{self.spin_cy.value():.3f}",
-                    "--center_z",
-                    f"{self.spin_cz.value():.3f}",
-                    "--size_x",
-                    f"{self.spin_sx.value():.2f}",
-                    "--size_y",
-                    f"{self.spin_sy.value():.2f}",
-                    "--size_z",
-                    f"{self.spin_sz.value():.2f}",
-                ]
-            )
-        argv.extend(
-            [
-                "--exhaustiveness",
-                str(int(self.spin_exhaust.value())),
-                "--num_modes",
-                str(int(self.spin_modes.value())),
-            ]
-        )
-        argv.extend(self._cnn_argv())
-        cpu = int(self.spin_cpu.value())
-        if cpu > 0:
-            argv.extend(["--cpu", str(cpu)])
-        argv.extend(self._flex_argv(dock_ligand=first_lig, out_path=out_path))
-        extra = (self.edit_extra.text() or "").strip()
-        if extra:
-            argv.extend(shlex.split(extra))
-        return argv
+        rec = (receptor if receptor is not None else self._receptor_for_gnina()).strip()
+        return build_gnina_argv(self._job_settings(), ligand=lig_src, out=out_path, receptor=rec)
 
     def _require_dock_pharmacophore(self) -> None:
         """Raise if the Pharmacophore field is set but the JSON cannot be used."""
-        path = (self.edit_pharmacophore.text() or "").strip()
-        if not path:
-            return
-        dest = Path(path)
-        if not dest.is_file():
-            raise ValueError(f"Pharmacophore file not found: {path}")
-        pharma = load_pharmacophore(dest)
-        if not pharma.enabled_features():
-            raise ValueError("Pharmacophore file has no enabled features.")
+        require_dock_pharmacophore((self.edit_pharmacophore.text() or "").strip())
 
     def _apply_pharmacophore_filter(self, mols: list, *, log: bool = True) -> list:
         """Keep docked poses that occupy the query spheres in the protein frame."""
-        path = (self.edit_pharmacophore.text() or "").strip()
-        if not path or not mols:
-            return list(mols)
-        try:
-            pharma = load_pharmacophore(path)
-        except Exception as exc:
-            if log:
-                stamp = time.strftime("%H:%M:%S")
-                self.log.append(f"[{stamp}][system] Pharmacophore filter skipped: {exc}")
-            return list(mols)
-        if not pharma.enabled_features():
-            return list(mols)
-        from ...pharmacophore_screen import DEFAULT_DOCK_SLACK_ANGSTROM, filter_docked_poses
-
         slack = (
             float(self.spin_pharma_slack.value())
             if getattr(self, "spin_pharma_slack", None) is not None
             else DEFAULT_DOCK_SLACK_ANGSTROM
         )
-        kept, dropped = filter_docked_poses(mols, pharma, slack=slack)
-        if log:
-            stamp = time.strftime("%H:%M:%S")
-            n_all = len(kept) + len(dropped)
-            if kept:
-                self.log.append(
-                    f"[{stamp}][system] Pharmacophore: kept {len(kept)} of {n_all} pose(s) "
-                    f"(slack {slack:.2f} Å)."
-                )
-            else:
-                self.log.append(
-                    f"[{stamp}][system] Pharmacophore: 0 of {n_all} pose(s) matched "
-                    f"(slack {slack:.2f} Å); keeping all for inspection."
-                )
-        return kept if kept else list(mols)
+        kept, msg = apply_dock_pharmacophore_filter(
+            mols,
+            (self.edit_pharmacophore.text() or "").strip(),
+            slack=slack,
+        )
+        if log and msg:
+            self.log.append(system_stamp(msg))
+        return kept
 
     def _cnn_argv(self, *, no_gpu: bool | None = None) -> list[str]:
-        scoring = str(self.combo_cnn_scoring.currentData() or "rescore")
-        argv = ["--cnn_scoring", scoring]
-        if scoring == "none":
-            emp = str(self.combo_emp_scoring.currentData() or "vina")
-            argv.extend(["--scoring", emp])
-        else:
-            argv.extend(
-                ["--pose_sort_order", str(self.combo_pose_sort.currentData() or "CNNscore")]
-            )
-            model = str(self.combo_cnn_model.currentData() or "")
-            if model:
-                argv.extend(["--cnn", model])
-        force_cpu = (
-            bool(no_gpu)
-            if no_gpu is not None
-            else (
-                (not self.gpu_cb.isChecked())
-                or sys.platform == "darwin"
-                or bool(getattr(self, "_force_no_gpu", False))
-            )
-        )
-        if force_cpu:
-            argv.append("--no_gpu")
-        return argv
+        from ...gnina_job import build_cnn_argv
+
+        return build_cnn_argv(self._job_settings(no_gpu=no_gpu))
 
     def _build_minimize_argv(self, ligand: str | Sequence[str], out: str) -> list[str]:
-        rec = self._receptor_for_gnina()
-        if not rec:
-            raise ValueError("Choose a receptor PDB or PDBQT file.")
-        lig_args, _first = _ligand_cli_args(ligand)
-        argv = ["--receptor", rec, *lig_args, "--out", out, "--minimize"]
-        argv.extend(self._cnn_argv())
-        cpu = int(self.spin_cpu.value())
-        if cpu > 0:
-            argv.extend(["--cpu", str(cpu)])
-        return argv
+        from ...gnina_job import build_minimize_argv
+
+        return build_minimize_argv(
+            self._job_settings(),
+            ligand,
+            out,
+            receptor=self._receptor_for_gnina(),
+        )
 
     def _stop_proc(self) -> None:
-        self._batch_cancelled = True
-        try:
-            self._proc.terminate()
-        except Exception:
-            pass
-        QTimer.singleShot(2500, self._kill_if_running)
-        stamp = time.strftime("%H:%M:%S")
-        self.log.append(f"[{stamp}][system] Stopping…")
+        self._worker.stop()
 
     def _kill_if_running(self) -> None:
-        if self._proc.state() != QProcess.NotRunning:
-            try:
-                self._proc.kill()
-            except Exception:
-                pass
+        self._worker.kill_if_running()
 
     def _on_proc_started(self) -> None:
-        self._set_running_ui(True)
-        if not self._minimize_ins:
-            self._stdout_buf = ""
-            self._stderr_buf = ""
-        pid = self._proc.processId()
-        stamp = time.strftime("%H:%M:%S")
-        n_min = self._minimize_n_poses or len(self._minimize_ins)
-        n_lig = len(self._batch_ligands)
-        if self._validation_phase:
-            self.log.append(
-                f"[{stamp}][system] Gnina started (PID {pid}) internal validation (crystal redock)."
-            )
-        elif n_min:
-            self.log.append(
-                f"[{stamp}][system] Gnina started (PID {pid}) minimizing {n_min} pose(s)."
-            )
-        elif n_lig > 1:
-            self.log.append(f"[{stamp}][system] Gnina started (PID {pid}) docking {n_lig} ligands.")
-        else:
-            self.log.append(f"[{stamp}][system] Gnina started (PID {pid}).")
-        if (not self._minimize_ins) and self._flex_mode() != "off":
-            self.log.append(
-                f"[{stamp}][system] Flexible side chains on (backbone rigid). "
-                f"Writing {flex_out_path(self._effective_out_path())}."
-            )
-        self._notify_activity()
+        self._worker.on_proc_started()
 
     def _on_proc_error(self, error: QProcess.ProcessError) -> None:
-        if error != QProcess.FailedToStart:
-            return
-        detail = (self._proc.errorString() or "").strip() or "Gnina failed to start."
-        stamp = time.strftime("%H:%M:%S")
-        self.log.append(f"[{stamp}][system] {detail}")
-        self._reveal_dock_dialog()
-        if self._minimize_ins:
-            self._finish_minimize_keep_placement()
-        else:
-            self._validation_phase = False
-            self._pending_user_ligand = None
-            self._clear_batch()
-        self._set_running_ui(False)
-        self._notify_activity()
+        self._worker.on_proc_error(error)
 
     def _write_sidecar_sdf(self, pdbqt_out: str) -> None:
-        from ...dock_io import is_sdf_path, write_pdbqt_poses_sdf
-
-        stamp = time.strftime("%H:%M:%S")
-        src = Path(pdbqt_out)
-        if is_sdf_path(src):
-            return
-        if not src.is_file():
-            self.log.append(f"[{stamp}][system] Output PDBQT not found; skipped SDF.")
-            return
-        try:
-            sdf_path, n_written = write_pdbqt_poses_sdf(src, template=self._ligand_template_mol())
-        except Exception as exc:
-            self.log.append(f"[{stamp}][system] SDF conversion failed: {exc}")
-            return
-        if n_written:
-            self.log.append(f"[{stamp}][system] Wrote {n_written} pose(s) to {sdf_path}.")
-        else:
-            self.log.append(f"[{stamp}][system] Could not convert PDBQT poses to SDF.")
+        self._worker.write_sidecar_sdf(pdbqt_out)
 
     def _clear_batch(self) -> None:
         self._batch_ligands = []
@@ -1254,364 +1026,50 @@ class GninaDockDialog(QDialog):
                 pass
 
     def _write_final_sdf(self, pdbqt_out: str) -> None:
-        if self.save_sdf_cb.isChecked():
-            self._write_sidecar_sdf(pdbqt_out)
+        self._worker.write_final_sdf(pdbqt_out)
 
     def _present_dock_results(self, out_path: str) -> None:
         """Load finished poses (all Gnina fields) into the pose browser."""
-        from ...dock_io import (
-            is_sdf_path,
-            mols_from_dock_output,
-            stamp_pose_ff_energies,
-            write_pose_mols_sdf,
-        )
-
-        path = str(self._resolve_path(out_path))
-        templates = self._ligand_template_mols()
-        template = templates[0] if templates else None
-        if self._stamp_crystal_on_poses and self._crystal_ref_mol is not None:
-            template = self._crystal_ref_mol
-        log = f"{self._stdout_buf or ''}\n{self._stderr_buf or ''}"
-        try:
-            mols = mols_from_dock_output(path, template=template, log_text=log)
-        except Exception as exc:
-            stamp = time.strftime("%H:%M:%S")
-            self.log.append(f"[{stamp}][system] Could not load dock results: {exc}")
-            return
-        from ...dock_validation import (
-            crystal_ref_label,
-            existing_crystal_ligand_path,
-            stamp_crystal_ref,
-            stamp_crystal_rmsd,
-        )
-
-        if self._stamp_crystal_on_poses and self._crystal_ref_mol is not None:
-            top = stamp_crystal_rmsd(mols, self._crystal_ref_mol)
-            if top is not None:
-                self._crystal_rmsd = top
-                stamp = time.strftime("%H:%M:%S")
-                self.log.append(
-                    f"[{stamp}][system] Internal validation: top pose crystal RMSD = {top:.3f} Å."
-                )
-        if self._stamp_crystal_on_poses:
-            ref_path = (self._validation_ligand_path or "").strip()
-            if self._crystal_ref_mol is not None or ref_path:
-                stamp_crystal_ref(mols, crystal_ref_label(self._crystal_ref_mol, ref_path))
-        stamp_pose_ff_energies(mols)
-        mols = self._apply_pharmacophore_filter(mols)
-        if is_sdf_path(path) and mols:
-            try:
-                write_pose_mols_sdf(mols, path)
-            except Exception:
-                pass
-        extra = [m for m in (self._validation_pose_mols or []) if m is not None]
-        if extra and not self._stamp_crystal_on_poses:
-            extra = self._apply_pharmacophore_filter(extra, log=False)
-            mols = extra + list(mols)
-        opener = getattr(self._main_window, "open_dock_results_window", None)
-        if not callable(opener) or not mols:
-            return
-        rec = self._receptor_for_gnina() or (self.edit_receptor.text() or "").strip()
-        writer = getattr(self._main_window, "write_dock_poses_to_table", None)
-        if callable(writer):
-            try:
-                col = writer(mols)
-            except Exception:
-                col = None
-            if col:
-                stamp = time.strftime("%H:%M:%S")
-                self.log.append(f"[{stamp}][system] Wrote packed poses to “{col}”.")
-        title = f"Pose browser — {Path(path).name}"
-        if self._crystal_rmsd is not None:
-            title += f"  (crystal RMSD {self._crystal_rmsd:.3f} Å)"
-        crystal = existing_crystal_ligand_path(
-            self._crystal_ligand_path
-        ) or existing_crystal_ligand_path(self._validation_ligand_path)
-        opener(mols, title=title, receptor_path=rec or None, crystal_path=crystal or None)
-        stamp = time.strftime("%H:%M:%S")
-        self.log.append(f"[{stamp}][system] Opened {len(mols)} pose(s) in the pose browser.")
+        self._worker.present_dock_results(out_path)
 
     def _restore_sdf_bonds(self, sdf_path: str) -> None:
-        from ...dock_io import is_sdf_path, restore_sdf_bond_orders
-
-        if not is_sdf_path(sdf_path):
-            return
-        templates = self._ligand_template_mols()
-        if not templates:
-            return
-        stamp = time.strftime("%H:%M:%S")
-        try:
-            n = restore_sdf_bond_orders(sdf_path, templates)
-        except Exception as exc:
-            self.log.append(f"[{stamp}][system] Could not restore SDF bond orders: {exc}")
-            return
-        if n:
-            self.log.append(
-                f"[{stamp}][system] Restored bond orders on {n} pose(s) from the input ligand."
-            )
+        self._worker.restore_sdf_bonds(sdf_path)
 
     def _after_successful_dock(self, placement_path: str) -> None:
-        self._restore_sdf_bonds(placement_path)
-        self._log_flex_output(placement_path)
-        if self.minimize_poses_cb.isChecked() and self._start_minimize_phase(placement_path):
-            return
-        self._write_final_sdf(placement_path)
-        self._present_dock_results(placement_path)
-        self._clear_batch()
-        self._set_running_ui(False)
-        self._notify_activity()
+        self._worker.after_successful_dock(placement_path)
 
     def _log_flex_output(self, pose_path: str) -> None:
-        if self._flex_mode() == "off":
-            return
-        dest = Path(flex_out_path(str(self._resolve_path(pose_path))))
-        stamp = time.strftime("%H:%M:%S")
-        if dest.is_file():
-            self.log.append(f"[{stamp}][system] Flexible residues: {dest}.")
-        else:
-            self.log.append(f"[{stamp}][system] Flexible-residue output was not written ({dest}).")
+        self._worker.log_flex_output(pose_path)
 
     def _start_minimize_phase(self, placement_path: str) -> bool:
-        from ...dock_io import is_sdf_path, load_sdf_mols, split_ligand_pdbqt_records
-
-        src = Path(placement_path)
-        if not src.is_file():
-            return False
-        tmp = self._ensure_batch_tmp("gnina_min_")
-        self._placement_out = placement_path
-        if is_sdf_path(src):
-            n_poses = len(load_sdf_mols(src))
-            if n_poses < 1:
-                return False
-            self._minimize_ins = [src]
-            self._minimize_out = tmp / "min_all.sdf"
-            self._minimize_n_poses = n_poses
-            stamp = time.strftime("%H:%M:%S")
-            self.log.append(
-                f"[{stamp}][system] Minimizing {n_poses} docked pose(s) from SDF in one Gnina process."
-            )
-            self._start_minimize_job()
-            return True
-        try:
-            records = split_ligand_pdbqt_records(src.read_text(encoding="utf-8", errors="replace"))
-        except OSError:
-            return False
-        if not records:
-            return False
-        self._minimize_ins = []
-        self._minimize_out = tmp / "min_all.pdbqt"
-        for i, rec in enumerate(records, start=1):
-            lig = tmp / f"place_{i:03d}.pdbqt"
-            lig.write_text(rec, encoding="utf-8")
-            self._minimize_ins.append(lig)
-        self._minimize_n_poses = len(records)
-        stamp = time.strftime("%H:%M:%S")
-        self.log.append(
-            f"[{stamp}][system] Minimizing {len(records)} docked pose(s) in one Gnina process."
-        )
-        self._start_minimize_job()
-        return True
+        return self._worker.start_minimize_phase(placement_path)
 
     def _start_minimize_job(self) -> None:
-        min_out = self._minimize_out
-        if min_out is None:
-            return
-        argv = self._build_minimize_argv(
-            [str(p) for p in self._minimize_ins],
-            str(min_out),
-        )
-        n = self._minimize_n_poses or len(self._minimize_ins)
-        launch = self._launch_argv(argv)
-        stamp = time.strftime("%H:%M:%S")
-        self.log.append(
-            f"[{stamp}][system] Minimize ({n} pose(s)): {self._resolved_exe} {' '.join(launch)}"
-        )
-        self._notify_activity()
-        self._start_gnina_process(launch)
+        self._worker.start_minimize_job()
 
     def _finish_minimize_keep_placement(self) -> None:
-        dest = (self._placement_out or (self.edit_out.text() or "").strip()).strip()
-        stamp = time.strftime("%H:%M:%S")
-        self.log.append(f"[{stamp}][system] Pose minimization stopped; keeping placement poses.")
-        if dest:
-            self._write_final_sdf(dest)
-            self._present_dock_results(dest)
-        self._clear_batch()
+        self._worker.finish_minimize_keep_placement()
 
     def _write_combined_minimize_results(self) -> None:
-        from ...dock_io import (
-            combine_placement_and_minimized,
-            combine_sdf_placement_and_minimized,
-            is_sdf_path,
-            split_pdbqt_models,
-        )
-
-        dest = (self._placement_out or "").strip()
-        min_path = self._minimize_out
-        if not dest or min_path is None:
-            return
-        src = Path(dest)
-        stamp = time.strftime("%H:%M:%S")
-        if is_sdf_path(src):
-            _, n_written = combine_sdf_placement_and_minimized(src, min_path, src)
-            self._restore_sdf_bonds(dest)
-            self.log.append(
-                f"[{stamp}][system] Wrote placement and minimized poses ({n_written} record(s)) to {dest}."
-            )
-            return
-        placement = src.read_text(encoding="utf-8", errors="replace")
-        if min_path.is_file() and min_path.stat().st_size > 0:
-            min_blocks = split_pdbqt_models(min_path.read_text(encoding="utf-8", errors="replace"))
-        else:
-            min_blocks = []
-        combined = combine_placement_and_minimized(placement, min_blocks)
-        src.write_text(combined, encoding="utf-8")
-        n_min = sum(1 for b in min_blocks if (b or "").strip())
-        self.log.append(
-            f"[{stamp}][system] Wrote placement and minimized poses ({n_min} minimized) to {dest}."
-        )
-        self._write_final_sdf(dest)
+        self._worker.write_combined_minimize()
 
     def _on_validation_finished(self, code: int, status: QProcess.ExitStatus) -> None:
-        stamp = time.strftime("%H:%M:%S")
-        self._validation_phase = False
-        failed = code != 0 or status == QProcess.CrashExit or self._batch_cancelled
-        self.log.append(f"[{stamp}][system] Gnina finished internal validation (exit code {code}).")
-        if self._batch_cancelled:
-            self._clear_batch()
-            self._set_running_ui(False)
-            self._notify_activity()
-            return
-        if failed:
-            self.log.append(
-                f"[{stamp}][system] Internal validation failed; continuing with docking."
-            )
-        else:
-            self._record_crystal_validation_rmsd()
-        pending = self._pending_user_ligand
-        pending_out = (self._pending_user_out or "").strip()
-        self._pending_user_ligand = None
-        self._pending_user_out = ""
-        if pending is None:
-            out = (self._validation_out or self._effective_out_path() or "").strip()
-            if not failed and out:
-                self._stamp_crystal_on_poses = True
-                self._after_successful_dock(out)
-                return
-            self._clear_batch()
-            self._set_running_ui(False)
-            self._notify_activity()
-            return
-        try:
-            argv = self._build_argv(ligand=pending, out=pending_out)
-        except Exception as exc:
-            self.log.append(f"[{stamp}][system] Could not start docking after validation: {exc}")
-            self._clear_batch()
-            self._set_running_ui(False)
-            self._notify_activity()
-            return
-        launch = self._launch_argv(argv)
-        self.log.append(f"[{stamp}][system] Launch: {self._resolved_exe} {' '.join(launch)}")
-        self._notify_activity()
-        self._start_gnina_process(launch)
+        self._worker.on_validation_finished(code, status)
 
     def _record_crystal_validation_rmsd(self) -> None:
-        from ...dock_io import mols_from_dock_output, stamp_pose_ff_energies
-        from ...dock_validation import crystal_ref_label, stamp_crystal_ref, stamp_crystal_rmsd
-
-        path = (self._validation_out or "").strip()
-        crystal = self._crystal_ref_mol
-        stamp = time.strftime("%H:%M:%S")
-        if not path or crystal is None:
-            return
-        try:
-            mols = mols_from_dock_output(path, template=crystal)
-        except Exception as exc:
-            self.log.append(f"[{stamp}][system] Could not read validation poses: {exc}")
-            return
-        top = stamp_crystal_rmsd(mols, crystal)
-        stamp_crystal_ref(mols, crystal_ref_label(crystal, self._validation_ligand_path or path))
-        stamp_pose_ff_energies(mols)
-        self._validation_pose_mols = [m for m in mols if m is not None]
-        if top is None:
-            self.log.append(
-                f"[{stamp}][system] Internal validation finished; could not compute crystal RMSD."
-            )
-            return
-        self._crystal_rmsd = top
-        self.log.append(
-            f"[{stamp}][system] Internal validation: top pose crystal RMSD = {top:.3f} Å."
-        )
+        self._worker.record_crystal_validation_rmsd()
 
     def _on_proc_finished(self, code: int, status: QProcess.ExitStatus) -> None:
-        stamp = time.strftime("%H:%M:%S")
-        if self._validation_phase:
-            self._on_validation_finished(code, status)
-            return
-        if self._minimize_ins:
-            n = self._minimize_n_poses or len(self._minimize_ins)
-            self.log.append(
-                f"[{stamp}][system] Gnina finished minimize of {n} pose(s) (exit code {code})."
-            )
-            if self._batch_cancelled:
-                self._finish_minimize_keep_placement()
-                self._set_running_ui(False)
-                self._notify_activity()
-                return
-            if code != 0 or status == QProcess.CrashExit:
-                self.log.append(f"[{stamp}][system] Minimize failed; keeping the placement poses.")
-                self._finish_minimize_keep_placement()
-                self._set_running_ui(False)
-                self._notify_activity()
-                return
-            try:
-                self._write_combined_minimize_results()
-            except Exception as exc:
-                self.log.append(f"[{stamp}][system] Could not combine minimized poses: {exc}")
-                self._finish_minimize_keep_placement()
-            else:
-                dest = (self._placement_out or self._effective_out_path() or "").strip()
-                if dest:
-                    self._present_dock_results(dest)
-                self._clear_batch()
-            self._set_running_ui(False)
-            self._notify_activity()
-            return
-
-        self.log.append(f"[{stamp}][system] Gnina finished (exit code {code}).")
-        if int(code) == 127:
-            self.log.append(
-                f"[{stamp}][system] " + gnina_exit_127_message(self._resolved_exe, self._stderr_buf)
-            )
-        failed = code != 0 or status == QProcess.CrashExit or self._batch_cancelled
-        out = self._effective_out_path()
-        if not failed and out:
-            self._after_successful_dock(out)
-            return
-        self._clear_batch()
-        self._set_running_ui(False)
-        self._notify_activity()
+        self._worker.on_proc_finished(code, status)
 
     def _append_stdout(self) -> None:
-        text = bytes(self._proc.readAllStandardOutput()).decode("utf-8", errors="replace")
-        self._stdout_buf += text
-        if text:
-            self.log.append(text.rstrip("\n"))
+        self._worker.append_stdout()
 
     def _append_stderr(self) -> None:
-        text = bytes(self._proc.readAllStandardError()).decode("utf-8", errors="replace")
-        self._stderr_buf += text
-        if text:
-            self.log.append(text.rstrip("\n"))
+        self._worker.append_stderr()
 
     def _resolve_path(self, path: str) -> Path:
-        p = Path(path)
-        if p.is_absolute():
-            return p
-        wd = (self.edit_wd.text() or "").strip()
-        if wd:
-            return Path(wd) / p
-        return p
+        return resolve_work_path(path, self.edit_wd.text())
 
     def _is_openbabel_ligand(self, path: str) -> bool:
         from ...dock_io import ligand_is_openbabel_format
@@ -1620,33 +1078,12 @@ class GninaDockDialog(QDialog):
 
     def _ligand_template_mols(self):
         """Input ligand molecules used to restore Kekulé/aromatic bonds on SDF poses."""
-        from rdkit import Chem
-
-        from ...dock_io import load_sdf_mols
-
-        mols: list = []
-        seen: set[str] = set()
         paths: list[Path] = []
         paths.extend(self._batch_ligands)
         lig = (self.edit_ligand.text() or "").strip()
         if lig:
             paths.append(self._resolve_path(lig))
-        for path in paths:
-            key = str(path)
-            if key in seen or not path.is_file():
-                continue
-            seen.add(key)
-            suf = path.suffix.lower()
-            try:
-                if suf in {".sdf", ".sd"}:
-                    mols.extend(load_sdf_mols(path))
-                elif suf == ".mol":
-                    mol = Chem.MolFromMolFile(str(path), removeHs=False)
-                    if mol is not None:
-                        mols.append(mol)
-            except Exception:
-                continue
-        return mols
+        return load_ligand_template_mols(paths)
 
     def _ligand_template_mol(self):
         """First input ligand molecule, used to restore bond orders."""
@@ -1657,34 +1094,7 @@ class GninaDockDialog(QDialog):
         """Return ligand files to pass to Gnina (SDF when bond orders can be restored)."""
         if self._ligand_source_key() == "rows":
             return self._prepare_table_row_ligands()
-        from ...dock_io import (
-            ligand_is_openbabel_format,
-            split_ligand_pdbqt_records,
-            write_ligand_pdbqt_as_sdf,
-        )
-
-        if not (ligand or "").strip():
-            raise ValueError("Choose a ligand file (PDBQT or SDF).")
-        lig_path = self._resolve_path(ligand)
-        if ligand_is_openbabel_format(lig_path):
-            return [lig_path]
-        raw = lig_path.read_text(encoding="utf-8", errors="replace")
-        records = split_ligand_pdbqt_records(raw)
-        self._clear_batch()
-        tmp = self._ensure_batch_tmp("gnina_ligands_")
-        dest = tmp / f"{lig_path.stem}.sdf"
-        _, n_written = write_ligand_pdbqt_as_sdf(lig_path, dest)
-        if n_written:
-            self._batch_ligands = [dest]
-            return [dest]
-        if len(records) <= 1:
-            return [lig_path]
-        self._batch_cancelled = False
-        for i, rec in enumerate(records, start=1):
-            lp = tmp / f"lig_{i:03d}.pdbqt"
-            lp.write_text(rec, encoding="utf-8")
-            self._batch_ligands.append(lp)
-        return list(self._batch_ligands)
+        return self._worker.prepare_file_ligands(ligand)
 
     def _prepare_table_row_ligands(self) -> list[Path]:
         """Write selected-row ensembles to a temp SDF for one Gnina process."""
@@ -1701,11 +1111,12 @@ class GninaDockDialog(QDialog):
         if n_written < 1:
             raise ValueError("Could not write selected-row ligands as SDF.")
         self._batch_ligands = [dest]
-        stamp = time.strftime("%H:%M:%S")
         self.log.append(
-            f"[{stamp}][system] Docking {n_written} ligand(s) from "
-            f"{len(self._selected_row_indices())} selected row(s) "
-            f"({self.combo_confs.currentText() or 'Structure'})."
+            system_stamp(
+                f"Docking {n_written} ligand(s) from "
+                f"{len(self._selected_row_indices())} selected row(s) "
+                f"({self.combo_confs.currentText() or 'Structure'})."
+            )
         )
         return [dest]
 
@@ -1764,38 +1175,10 @@ class GninaDockDialog(QDialog):
         return len(paths)
 
     def _start_gnina_process(self, launch: list[str]) -> None:
-        self._dismiss_for_run()
-        exe = self._resolved_exe or self._gnina_executable()
-        wd = (self.edit_wd.text() or "").strip()
-        if gnina_uses_wsl():
-            program, args = gnina_qprocess_spec(exe, launch, work_dir=wd)
-            self._proc.start(program, args)
-            return
-        env = QProcessEnvironment.systemEnvironment()
-        exe_dir = str(Path(exe).parent)
-        path = env.value("PATH") or ""
-        if exe_dir and exe_dir not in path.split(os.pathsep):
-            env.insert("PATH", exe_dir + os.pathsep + path)
-        for key, value in gnina_launch_env(exe).items():
-            env.insert(key, value)
-        self._proc.setProcessEnvironment(env)
-        if wd:
-            self._proc.setWorkingDirectory(str(Path(wd)))
-        self._proc.start(exe, launch)
+        self._worker.start_process(launch)
 
     def _same_input_path(self, left: str, right: str) -> bool:
-        a = str(left or "").strip()
-        b = str(right or "").strip()
-        if not a or not b:
-            return False
-        pa = self._resolve_path(a)
-        pb = self._resolve_path(b)
-        try:
-            if pa.is_file() and pb.is_file():
-                return pa.resolve() == pb.resolve()
-        except OSError:
-            pass
-        return str(pa) == str(pb)
+        return same_input_path(left, right, work_dir=self.edit_wd.text())
 
     def _ensure_validation_tmp(self) -> Path:
         if self._validation_tmp is None:
@@ -1803,16 +1186,17 @@ class GninaDockDialog(QDialog):
         return Path(self._validation_tmp.name)
 
     def _ligand_arg(self, lig_paths: list[Path]) -> str | list[str]:
-        if len(lig_paths) == 1:
-            return str(lig_paths[0])
-        return [str(p) for p in lig_paths]
+        return ligand_arg(lig_paths)
 
     def _sidecar_for_receptor(self, rec: str) -> str:
-        sidecar = (self._crystal_ligand_path or "").strip()
-        prep = (self._prepare_receptor_path or "").strip()
-        if sidecar and prep and not self._same_input_path(rec, prep):
-            return ""
-        return sidecar
+        from ...gnina_job import sidecar_for_receptor
+
+        return sidecar_for_receptor(
+            rec,
+            sidecar=self._crystal_ligand_path,
+            prepare_receptor=self._prepare_receptor_path,
+            work_dir=self.edit_wd.text(),
+        )
 
     def _setup_crystal_validation(
         self,
@@ -1821,44 +1205,7 @@ class GninaDockDialog(QDialog):
         durable_dir: Path | None = None,
         validate: bool = True,
     ) -> None:
-        from ...dock_validation import load_crystal_mol, prepare_crystal_ligand
-
-        dest = self._ensure_validation_tmp()
-        rec_path = str(self._resolve_path(rec)) if rec else rec
-        sidecar = self._sidecar_for_receptor(rec) if validate else ""
-        prep = prepare_crystal_ligand(rec_path, dest, crystal_ligand_path=sidecar)
-        self._validation_ligand_path = ""
-        if prep is None:
-            return
-        self._apo_receptor_path = prep.apo_receptor_path
-        if prep.stripped_from_receptor and durable_dir is not None:
-            src = Path(prep.apo_receptor_path)
-            durable = Path(durable_dir) / src.name
-            try:
-                durable.parent.mkdir(parents=True, exist_ok=True)
-                if not durable.exists() or durable.resolve() != src.resolve():
-                    durable.write_bytes(src.read_bytes())
-                    self._apo_receptor_path = str(durable)
-            except OSError:
-                pass
-        if not validate:
-            stamp = time.strftime("%H:%M:%S")
-            if prep.stripped_from_receptor:
-                self.log.append(f"[{stamp}][system] Receptor ligand stripped for apo docking.")
-            return
-        self._validation_ligand_path = prep.crystal_ligand_path
-        self._crystal_ref_mol = load_crystal_mol(prep.crystal_ligand_path)
-        stamp = time.strftime("%H:%M:%S")
-        if prep.stripped_from_receptor:
-            self.log.append(
-                f"[{stamp}][system] Internal validation: ligand found in the receptor; "
-                "docking into an apo copy."
-            )
-        else:
-            self.log.append(
-                f"[{stamp}][system] Internal validation: redocking crystal ligand "
-                f"{Path(prep.crystal_ligand_path).name}."
-            )
+        self._worker.setup_crystal_validation(rec, durable_dir=durable_dir, validate=validate)
 
     def _run_gnina(self) -> None:
         if self._proc.state() != QProcess.NotRunning:
@@ -1902,11 +1249,10 @@ class GninaDockDialog(QDialog):
         self._pending_user_out = ""
         self._validation_ligand_path = ""
         self._validation_pose_mols = []
-        stamp = time.strftime("%H:%M:%S")
         if self.gpu_cb.isChecked() and sys.platform != "darwin":
             if not cuda_available():
                 self._force_no_gpu = True
-                self.log.append(f"[{stamp}][system] CUDA not found (nvidia-smi); using --no_gpu.")
+                self.log.append(system_stamp("CUDA not found (nvidia-smi); using --no_gpu."))
         elif not self.gpu_cb.isChecked() or sys.platform == "darwin":
             self._force_no_gpu = True
 
@@ -1938,25 +1284,23 @@ class GninaDockDialog(QDialog):
             if not lig_paths and crystal_lig:
                 lig_paths = [Path(crystal_lig)]
                 self._stamp_crystal_on_poses = True
-                self.log.append(
-                    f"[{stamp}][system] No docking ligand; redocking the crystal ligand."
-                )
+                self.log.append(system_stamp("No docking ligand; redocking the crystal ligand."))
             elif crystal_lig and (
                 len(lig_paths) != 1 or not self._same_input_path(str(lig_paths[0]), crystal_lig)
             ):
                 extra_validation = True
             elif crystal_lig:
                 self._stamp_crystal_on_poses = True
-            ligand_arg = self._ligand_arg(lig_paths)
+            ligand_spec = self._ligand_arg(lig_paths)
             if extra_validation:
                 vout = str(self._ensure_validation_tmp() / "crystal_redock.sdf")
                 self._validation_out = vout
-                self._pending_user_ligand = ligand_arg
+                self._pending_user_ligand = ligand_spec
                 self._pending_user_out = out
                 self._validation_phase = True
                 argv = self._build_argv(ligand=crystal_lig, out=vout)
             else:
-                argv = self._build_argv(ligand=ligand_arg, out=out)
+                argv = self._build_argv(ligand=ligand_spec, out=out)
         except Exception as e:
             self._clear_batch()
             self._reveal_dock_dialog()
@@ -1966,19 +1310,20 @@ class GninaDockDialog(QDialog):
         out_path = Path(out)
         if lig_paths and self._is_openbabel_ligand(str(lig_paths[0])):
             self.log.append(
-                f"[{stamp}][system] Ligand and output are {out_path.suffix.lower() or 'SDF'}."
+                system_stamp(f"Ligand and output are {out_path.suffix.lower() or 'SDF'}.")
             )
         if len(lig_paths) > 1:
             self.log.append(
-                f"[{stamp}][system] Ligand PDBQT has {len(lig_paths)} records; "
-                "docking them in one Gnina process."
+                system_stamp(
+                    f"Ligand PDBQT has {len(lig_paths)} records; docking them in one Gnina process."
+                )
             )
         elif self._batch_ligands and self._is_openbabel_ligand(str(self._batch_ligands[0])):
             self.log.append(
-                f"[{stamp}][system] Converted ligand PDBQT to SDF so OpenBabel can use bond orders."
+                system_stamp("Converted ligand PDBQT to SDF so OpenBabel can use bond orders.")
             )
         launch = self._launch_argv(argv)
-        self.log.append(f"[{stamp}][system] Launch: {exe} {' '.join(launch)}")
+        self.log.append(system_stamp(f"Launch: {exe} {' '.join(launch)}"))
         self._notify_activity()
         self._start_gnina_process(launch)
 
@@ -1986,7 +1331,7 @@ class GninaDockDialog(QDialog):
     _prepare_smina_ligands = _prepare_gnina_ligands
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
-        if self._proc.state() != QProcess.NotRunning:
+        if self._worker.is_running():
             self._stop_proc()
         else:
             self._clear_batch()

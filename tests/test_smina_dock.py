@@ -776,8 +776,8 @@ def test_gnina_start_hides_dialog(qapp, monkeypatch):  # noqa: ARG001
     dlg.show()
     assert dlg.isVisible()
     dlg._resolved_exe = "gnina"
-    monkeypatch.setattr("molmanager.ui.dialogs.gnina_dock.gnina_uses_wsl", lambda: False)
-    monkeypatch.setattr("molmanager.ui.dialogs.gnina_dock.gnina_launch_env", lambda _exe: {})
+    monkeypatch.setattr("molmanager.workers.gnina_dock_worker.gnina_uses_wsl", lambda: False)
+    monkeypatch.setattr("molmanager.workers.gnina_dock_worker.gnina_launch_env", lambda _exe: {})
     monkeypatch.setattr(dlg._proc, "start", lambda *_args, **_kwargs: None)
     dlg._start_gnina_process(["--receptor", "rec.pdbqt"])
     assert dlg.isHidden()

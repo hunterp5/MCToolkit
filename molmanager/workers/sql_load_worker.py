@@ -47,9 +47,36 @@ def _safe_emit(obj: QObject | None, emitter_name: str, *args) -> None:
         pass
 
 
+def mol_blob_from_smiles(smiles: str) -> bytes | None:
+    """Parse *smiles* to an RDKit pickle, or ``None`` when the string is invalid."""
+    smi = (smiles or "").strip()
+    if not smi:
+        return None
+    try:
+        mol = Chem.MolFromSmiles(smi)
+    except Exception:
+        return None
+    if mol is None:
+        return None
+    try:
+        blob = mol.ToBinary()
+    except Exception:
+        return None
+    return bytes(blob) if blob else None
+
+
+def cells_from_sql_mapping(cols: list[str], mapping: Any) -> dict[str, str]:
+    """Stringify one SQLAlchemy row mapping into table cells."""
+    row_cells: dict[str, str] = {}
+    for c in cols:
+        v = mapping.get(c)
+        row_cells[c] = "" if v is None else str(v)
+    return row_cells
+
+
 @dataclass
 class SqlLoadParseResult:
-    """Prepared table rows and parsed molecules for chunked UI apply."""
+    """One page of prepared table rows, or a finished summary with empty rows."""
 
     columns: list[str] = field(default_factory=list)
     prepared_rows: list[tuple[int, dict[str, str]]] = field(default_factory=list)
@@ -58,6 +85,8 @@ class SqlLoadParseResult:
     rows_hit_limit: bool = False
     limit_eff: int = 0
     smiles_column: str | None = None
+    is_first: bool = False
+    is_last: bool = False
 
     @property
     def mols(self) -> dict[int, Any]:
@@ -75,6 +104,7 @@ class SqlLoadParseResult:
 class SqlLoadSignals(QObject):
     """Signals for SQL load workers (owned on the GUI thread)."""
 
+    chunk = pyqtSignal(object)
     finished = pyqtSignal(object)
     failed = pyqtSignal(str)
 
@@ -101,7 +131,7 @@ class SqlLoadWorker(QRunnable):
         self.url = str(url)
         self.engine_kwargs = dict(engine_kwargs or {})
         self.sql = str(sql)
-        self.page_size = max(32, int(page_size))
+        self.page_size = max(1, int(page_size))
         self.limit_eff = max(0, int(limit_eff))
         self.apply_limit = bool(apply_limit)
         self.signals = signals
@@ -152,10 +182,9 @@ class SqlLoadWorker(QRunnable):
                     return
 
                 smiles_col = next((c for c in cols if c.lower() == "smiles"), None)
-                prepared: list[tuple[int, dict[str, str]]] = []
-                mol_blobs: dict[int, bytes] = {}
                 oid = 0
                 rows_hit_limit = False
+                emitted_any = False
                 progress_total = self.limit_eff if self.apply_limit and self.limit_eff > 0 else 0
                 self._emit_progress(0, progress_total if progress_total > 0 else 1)
 
@@ -167,32 +196,48 @@ class SqlLoadWorker(QRunnable):
                             log_swallowed_exception(logger, "SQL load cancel: close result")
                         _safe_emit(self.signals, "failed", "Cancelled.")
                         return
-                    chunk = rs.fetchmany(self.page_size)
-                    if not chunk:
+                    recs = list(rs.fetchmany(self.page_size) or ())
+                    if not recs:
                         break
-                    for rec in chunk:
-                        row_cells: dict[str, str] = {}
-                        for c in cols:
-                            v = rec._mapping.get(c)
-                            row_cells[c] = "" if v is None else str(v)
-                        prepared.append((oid, row_cells))
-                        if smiles_col is not None:
-                            smi = (row_cells.get(smiles_col, "") or "").strip()
-                            if smi:
-                                mol = Chem.MolFromSmiles(smi)
-                                if mol is not None:
-                                    try:
-                                        blob = mol.ToBinary()
-                                    except Exception:
-                                        blob = None
-                                    if blob:
-                                        mol_blobs[oid] = bytes(blob)
-                        oid += 1
-                        if self.apply_limit and self.limit_eff and oid >= self.limit_eff:
-                            rows_hit_limit = True
+                    # Drivers (notably SQLite) may return more than page_size; emit
+                    # fixed windows so the GUI never waits on the full result.
+                    for start in range(0, len(recs), self.page_size):
+                        if self._cancelled():
+                            _safe_emit(self.signals, "failed", "Cancelled.")
+                            return
+                        page = recs[start : start + self.page_size]
+                        prepared: list[tuple[int, dict[str, str]]] = []
+                        mol_blobs: dict[int, bytes] = {}
+                        for rec in page:
+                            row_cells = cells_from_sql_mapping(cols, rec._mapping)
+                            prepared.append((oid, row_cells))
+                            if smiles_col is not None:
+                                blob = mol_blob_from_smiles(row_cells.get(smiles_col, "") or "")
+                                if blob:
+                                    mol_blobs[oid] = blob
+                            oid += 1
+                            if self.apply_limit and self.limit_eff and oid >= self.limit_eff:
+                                rows_hit_limit = True
+                                break
+                        _safe_emit(
+                            self.signals,
+                            "chunk",
+                            SqlLoadParseResult(
+                                columns=cols,
+                                prepared_rows=prepared,
+                                mol_blobs=mol_blobs,
+                                next_oid=oid,
+                                rows_hit_limit=rows_hit_limit,
+                                limit_eff=self.limit_eff,
+                                smiles_column=smiles_col,
+                                is_first=not emitted_any,
+                            ),
+                        )
+                        emitted_any = True
+                        total_ui = progress_total if progress_total > 0 else max(oid, 1)
+                        self._emit_progress(oid, total_ui)
+                        if rows_hit_limit:
                             break
-                    total_ui = progress_total if progress_total > 0 else max(oid, 1)
-                    self._emit_progress(oid, total_ui)
                     if rows_hit_limit:
                         break
                 rs.close()
@@ -210,12 +255,11 @@ class SqlLoadWorker(QRunnable):
                 "finished",
                 SqlLoadParseResult(
                     columns=cols,
-                    prepared_rows=prepared,
-                    mol_blobs=mol_blobs,
                     next_oid=oid,
                     rows_hit_limit=rows_hit_limit,
                     limit_eff=self.limit_eff,
                     smiles_column=smiles_col,
+                    is_last=True,
                 ),
             )
         except Exception as exc:

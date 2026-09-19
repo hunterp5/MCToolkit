@@ -159,3 +159,23 @@ def test_superpose_row_task_fetches_by_oid():
         assert out.GetNumConformers() == 3
     finally:
         store.close()
+
+
+def test_ensemble_store_batches_commits_and_still_reads():
+    mol = _ethanol_ensemble(2)
+    store = EnsembleStore()
+    try:
+        for oid in range(80):
+            assert store.store_mol(oid, "confs", mol)
+        assert store._pending < 64
+        got = store.mol_for(79, "confs")
+        assert got is not None
+        assert got.GetNumConformers() == 2
+        assert (0, "confs") in store
+        path = store.db_path
+        from molmanager.storage import ensemble_mol_for
+
+        other = ensemble_mol_for(path, 40, "confs", min_conformers=2)
+        assert other is not None
+    finally:
+        store.close()

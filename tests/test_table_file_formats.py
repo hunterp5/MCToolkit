@@ -118,6 +118,17 @@ def test_iter_mol2(tmp_path: Path) -> None:
     assert mols[0].GetNumAtoms() == 3
 
 
+def test_iter_mol2_two_records_without_full_read(tmp_path: Path) -> None:
+    path = tmp_path / "two.mol2"
+    path.write_text(_ETHANOL_MOL2 + _ETHANOL_MOL2, encoding="utf-8")
+    it = iter_mol2_mols(path)
+    first = next(it)
+    assert first.GetNumAtoms() == 3
+    second = next(it)
+    assert second.GetNumAtoms() == 3
+    assert next(it, None) is None
+
+
 def test_iter_pdbqt(tmp_path: Path) -> None:
     path = tmp_path / "pose.pdbqt"
     path.write_text(_CARBON_PDBQT, encoding="utf-8")

@@ -215,6 +215,12 @@ IO/residue maps are `protein_prepare_io.py`, pdb2pqr is `protein_prepare_pdb2pqr
 AmberTools GAFF/GAFF2 (WSL on Windows) is `protein_prepare_amber.py`,
 OpenMM min is `protein_prepare_minimize.py`. Complex-only Minimize (viewer **Minimize…**) is `protein_complex_minimize.py` with dialog `ui/dialogs/protein_minimize.py`. Tests patch names on the runtime module.
 
+Gnina dock: `ui/dialogs/gnina_dock.py` is the widget. Argv, ligand files, and pose
+I/O live in `gnina_job.py` (no Qt). `workers/gnina_dock_worker.py` owns the
+`QProcess` and dock → optional crystal validation → optional minimize sequencing.
+Launch/WSL/GPU probing stays in `gnina_launch.py`. Compat shims remain at
+`ui/gnina_dock.py` / `ui/smina_dock.py`.
+
 Auto Render 2D after ingest/session: the loading overlay stays until filter bounds
 are ready and restored plot views have settled. Auto Structure renders start in the
 background and do not block the workspace. Above `auto_render_2d_max_rows` auto 2D

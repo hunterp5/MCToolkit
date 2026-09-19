@@ -36,6 +36,9 @@ from .signals import emit_partial_results_if_cancelled
 logger = logging.getLogger(__name__)
 
 
+_SKLEARN_CLUSTER_METHODS = frozenset({"kmeans", "agglomerative", "dbscan"})
+
+
 def _bitvect_to_numpy(fp) -> np.ndarray:
     n = int(fp.GetNumBits())
     arr = np.zeros((n,), dtype=np.float64)
@@ -43,7 +46,17 @@ def _bitvect_to_numpy(fp) -> np.ndarray:
     return arr
 
 
-def _condensed_tanimoto_distances(fps: Sequence, cancel_event: threading.Event | None = None) -> list[float] | None:
+def _dense_fingerprint_matrix(fps: Sequence) -> np.ndarray:
+    return np.vstack([_bitvect_to_numpy(fp) for fp in fps])
+
+
+def _method_needs_dense_matrix(method: str) -> bool:
+    return str(method) in _SKLEARN_CLUSTER_METHODS
+
+
+def _condensed_tanimoto_distances(
+    fps: Sequence, cancel_event: threading.Event | None = None
+) -> list[float] | None:
     """Lower-triangle condensed distances d = 1 - Tanimoto (same order as RDKit Butina)."""
     n = len(fps)
     out: list[float] = []
@@ -157,9 +170,7 @@ def cluster_sphere_exclusion(
     if cancel_event is not None and cancel_event.is_set():
         return None
     try:
-        centroid_idxs = _leader_sphere_centroids(
-            fps, float(dist_cutoff), cancel_event=cancel_event
-        )
+        centroid_idxs = _leader_sphere_centroids(fps, float(dist_cutoff), cancel_event=cancel_event)
     except _ClusterCancelled:
         return None
     if centroid_idxs is None:
@@ -288,7 +299,7 @@ def _run_clustering(
     method: str,
     params: dict,
     *,
-    X: np.ndarray,
+    X: np.ndarray | None,
     fps: Sequence,
     cancel_event: threading.Event | None = None,
 ) -> np.ndarray | None:
@@ -312,10 +323,12 @@ def _run_clustering(
             int(params.get("common_neighbors", 8)),
             cancel_event=cancel_event,
         )
+    if X is None:
+        raise ValueError(f"{method} clustering requires a dense fingerprint matrix.")
     return _fit_sklearn_labels(X, method, params)
 
 
-def _summarize_partition(labels: np.ndarray, X: np.ndarray) -> dict[str, float | int | None]:
+def _summarize_partition(labels: np.ndarray, X: np.ndarray | None) -> dict[str, float | int | None]:
     n = int(labels.shape[0])
     noise_ct = int(np.sum(labels == -1))
     non_noise_mask = labels >= 0
@@ -334,7 +347,7 @@ def _summarize_partition(labels: np.ndarray, X: np.ndarray) -> dict[str, float |
         largest_pct = float(np.max(counts)) / float(max(n, 1)) * 100.0
 
     sil: float | None = None
-    if n >= 3 and n_clusters >= 2:
+    if X is not None and n >= 3 and n_clusters >= 2:
         try:
             from sklearn.metrics import silhouette_score
 
@@ -465,7 +478,7 @@ class ClusterWorker(QRunnable):
         self.progress_state = progress_state
 
     def run(self) -> None:
-        sk_methods = frozenset({"kmeans", "agglomerative", "dbscan"})
+        sk_methods = _SKLEARN_CLUSTER_METHODS
         if self.method in sk_methods:
             try:
                 from sklearn.cluster import KMeans  # noqa: F401
@@ -528,7 +541,7 @@ class ClusterWorker(QRunnable):
             )
             return
 
-        X = np.vstack([_bitvect_to_numpy(fp) for fp in fps])
+        X = _dense_fingerprint_matrix(fps) if _method_needs_dense_matrix(self.method) else None
 
         try:
             labels = _run_clustering(
@@ -632,10 +645,10 @@ class ClusterExploreWorker(QRunnable):
             )
             return
 
-        X = np.vstack([_bitvect_to_numpy(fp) for fp in fps])
-        n = X.shape[0]
+        n = len(fps)
         trials = generate_explore_trials(n, self.max_runs, self.include)
         needs_sk = any(m in ("kmeans", "agglomerative", "dbscan") for m, _ in trials)
+        X = _dense_fingerprint_matrix(fps) if needs_sk else None
         if needs_sk:
             try:
                 from sklearn.cluster import KMeans  # noqa: F401

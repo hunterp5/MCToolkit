@@ -45,3 +45,27 @@ def test_sphere_exclusion_high_cutoff_yields_many_clusters():
     labels = cluster_sphere_exclusion(fps, 0.05)
     assert labels is not None
     assert len(set(int(x) for x in labels)) == 4
+
+
+def test_butina_and_jarvis_patrick_do_not_need_dense_matrix():
+    from molmanager.workers.cluster_worker import (
+        _method_needs_dense_matrix,
+        cluster_butina,
+        cluster_jarvis_patrick,
+    )
+
+    assert not _method_needs_dense_matrix("butina")
+    assert not _method_needs_dense_matrix("jarvis_patrick")
+    assert not _method_needs_dense_matrix("sphere_exclusion")
+    assert _method_needs_dense_matrix("kmeans")
+    smis = ["CCO", "CCCO", "c1ccccc1", "Cc1ccccc1"]
+    fps = [
+        AllChem.GetMorganFingerprintAsBitVect(Chem.MolFromSmiles(s), 2, 2048)
+        for s in smis
+    ]
+    butina = cluster_butina(fps, 0.4)
+    assert butina is not None
+    assert butina.shape[0] == 4
+    jp = cluster_jarvis_patrick(fps, nn_count=2, common_neighbors=1)
+    assert jp is not None
+    assert jp.shape[0] == 4

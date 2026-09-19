@@ -33,10 +33,12 @@ from ..ensemble_codec import (
     pack_ensemble_mol,
     unpack_ensemble_mol,
 )
+from .temp_sqlite import close_owned_sqlite, open_owned_sqlite
 
 KIND_COMPACT = "compact"
 KIND_LEGACY = "legacy"
 _DEFAULT_LRU = 48
+_AUTOCOMMIT_EVERY = 64
 _thread_stores = threading.local()
 
 
@@ -55,14 +57,15 @@ class EnsembleStore(MutableMapping[tuple[int, str], str]):
     def __init__(self, db_path: str | Path | None = None, *, lru_max: int = _DEFAULT_LRU) -> None:
         self._owns_path = db_path is None
         if db_path is None:
-            handle = tempfile.NamedTemporaryFile(
-                prefix="molmanager_ens_", suffix=".sqlite3", delete=False
-            )
-            handle.close()
-            self._path = Path(handle.name)
+            self._path, self._conn = open_owned_sqlite("molmanager_ens_")
         else:
             self._path = Path(db_path)
-        self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
+            self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
+            try:
+                self._conn.execute("PRAGMA synchronous=NORMAL")
+                self._conn.execute("PRAGMA temp_store=MEMORY")
+            except sqlite3.Error:
+                pass
         self._conn.execute(
             "CREATE TABLE IF NOT EXISTS ensembles ("
             "oid INTEGER NOT NULL, col TEXT NOT NULL, kind TEXT NOT NULL, "
@@ -71,36 +74,54 @@ class EnsembleStore(MutableMapping[tuple[int, str], str]):
         self._conn.commit()
         self._lru: OrderedDict[tuple[int, str], str] = OrderedDict()
         self._lru_max = max(4, int(lru_max))
+        self._pending = 0
 
     @property
     def db_path(self) -> Path:
+        self._flush()
         return self._path
 
+    def flush(self) -> None:
+        """Commit pending writes so other connections can read them."""
+        self._flush()
+
+    def _flush(self) -> None:
+        if self._pending <= 0:
+            return
+        self._conn.commit()
+        self._pending = 0
+
+    def _write_row(self, oid: int, col: str, kind: str, data: bytes) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO ensembles (oid, col, kind, blob) VALUES (?, ?, ?, ?)",
+            (int(oid), str(col), str(kind), data),
+        )
+        self._pending += 1
+        if self._pending >= _AUTOCOMMIT_EVERY:
+            self._flush()
+
     def close(self) -> None:
-        try:
-            self._conn.close()
-        except Exception:
-            pass
+        self._flush()
         self._lru.clear()
-        if self._owns_path:
-            try:
-                self._path.unlink(missing_ok=True)
-            except OSError:
-                pass
+        close_owned_sqlite(self._path, self._conn, owns_path=self._owns_path)
 
     def clear(self) -> None:
+        self._flush()
         self._conn.execute("DELETE FROM ensembles")
         self._conn.commit()
+        self._pending = 0
         self._lru.clear()
 
     def __bool__(self) -> bool:
         return len(self) > 0
 
     def __len__(self) -> int:
+        self._flush()
         row = self._conn.execute("SELECT COUNT(*) FROM ensembles").fetchone()
         return int(row[0]) if row else 0
 
     def __iter__(self) -> Iterator[tuple[int, str]]:
+        self._flush()
         for oid, col in self._conn.execute("SELECT oid, col FROM ensembles"):
             yield (int(oid), str(col))
 
@@ -109,6 +130,9 @@ class EnsembleStore(MutableMapping[tuple[int, str], str]):
         if parsed is None:
             return False
         oid, col = parsed
+        if (oid, col) in self._lru:
+            return True
+        self._flush()
         row = self._conn.execute(
             "SELECT 1 FROM ensembles WHERE oid = ? AND col = ? LIMIT 1", (oid, col)
         ).fetchone()
@@ -135,6 +159,7 @@ class EnsembleStore(MutableMapping[tuple[int, str], str]):
         if cached is not None:
             self._lru.move_to_end((oid, col))
             return cached
+        self._flush()
         row = self._conn.execute(
             "SELECT kind, blob FROM ensembles WHERE oid = ? AND col = ?",
             (oid, col),
@@ -162,11 +187,7 @@ class EnsembleStore(MutableMapping[tuple[int, str], str]):
             kind, data = KIND_COMPACT, blob
         else:
             kind, data = KIND_LEGACY, text.encode("ascii", errors="ignore")
-        self._conn.execute(
-            "INSERT OR REPLACE INTO ensembles (oid, col, kind, blob) VALUES (?, ?, ?, ?)",
-            (oid, col, kind, data),
-        )
-        self._conn.commit()
+        self._write_row(oid, col, kind, data)
         if blob:
             self._lru.pop((oid, col), None)
         else:
@@ -177,8 +198,10 @@ class EnsembleStore(MutableMapping[tuple[int, str], str]):
         if parsed is None:
             raise KeyError(key)
         oid, col = parsed
+        self._flush()
         cur = self._conn.execute("DELETE FROM ensembles WHERE oid = ? AND col = ?", (oid, col))
         self._conn.commit()
+        self._pending = 0
         self._lru.pop((oid, col), None)
         if cur.rowcount <= 0:
             raise KeyError(key)
@@ -187,8 +210,29 @@ class EnsembleStore(MutableMapping[tuple[int, str], str]):
         if kwargs:
             raise TypeError("EnsembleStore.update does not take keyword keys")
         items = list(other.items()) if hasattr(other, "items") else list(other)
+        rows: list[tuple[int, str, str, bytes]] = []
         for key, value in items:
-            self[key] = value
+            parsed = _parse_key(key)
+            if parsed is None:
+                raise TypeError("EnsembleStore keys are (oid, column)")
+            oid, col = parsed
+            text = str(value or "")
+            blob = blocks_b64_to_ensemble_blob(text)
+            if blob:
+                kind, data = KIND_COMPACT, blob
+                self._lru.pop((oid, col), None)
+            else:
+                kind, data = KIND_LEGACY, text.encode("ascii", errors="ignore")
+                self._remember((oid, col), text)
+            rows.append((oid, col, kind, data))
+        if not rows:
+            return
+        self._flush()
+        self._conn.executemany(
+            "INSERT OR REPLACE INTO ensembles (oid, col, kind, blob) VALUES (?, ?, ?, ?)",
+            rows,
+        )
+        self._conn.commit()
 
     def store_mol(self, oid: int, column: str, mol: Chem.Mol | None) -> bool:
         """Write a compact blob from *mol*. Returns False when packing fails."""
@@ -196,16 +240,13 @@ class EnsembleStore(MutableMapping[tuple[int, str], str]):
         if not packed:
             return False
         key = (int(oid), str(column))
-        self._conn.execute(
-            "INSERT OR REPLACE INTO ensembles (oid, col, kind, blob) VALUES (?, ?, ?, ?)",
-            (key[0], key[1], KIND_COMPACT, packed),
-        )
-        self._conn.commit()
+        self._write_row(key[0], key[1], KIND_COMPACT, packed)
         self._lru.pop(key, None)
         return True
 
     def mol_for(self, oid: int, column: str) -> Chem.Mol | None:
         """Decode a stored ensemble without building nested base64."""
+        self._flush()
         row = self._conn.execute(
             "SELECT kind, blob FROM ensembles WHERE oid = ? AND col = ?",
             (int(oid), str(column)),
@@ -222,9 +263,11 @@ class EnsembleStore(MutableMapping[tuple[int, str], str]):
         dead = [int(o) for o in oids]
         if not dead:
             return
+        self._flush()
         qmarks = ",".join("?" * len(dead))
         self._conn.execute(f"DELETE FROM ensembles WHERE oid IN ({qmarks})", dead)
         self._conn.commit()
+        self._pending = 0
         gone = set(dead)
         for key in list(self._lru):
             if key[0] in gone:
@@ -232,6 +275,7 @@ class EnsembleStore(MutableMapping[tuple[int, str], str]):
 
     def copy_oid(self, src_oid: int, dst_oid: int, columns: Iterable[str]) -> None:
         src, dst = int(src_oid), int(dst_oid)
+        self._flush()
         for col in columns:
             row = self._conn.execute(
                 "SELECT kind, blob FROM ensembles WHERE oid = ? AND col = ?",
@@ -245,10 +289,11 @@ class EnsembleStore(MutableMapping[tuple[int, str], str]):
             )
             self._lru.pop((dst, str(col)), None)
         self._conn.commit()
+        self._pending = 0
 
     def export_sqlite_bytes(self, oids: set[int] | None = None) -> bytes:
         """Snapshot the ensemble DB (optionally one OID subset) as SQLite bytes."""
-        self._conn.commit()
+        self._flush()
         handle = tempfile.NamedTemporaryFile(
             prefix="molmanager_ens_exp_", suffix=".sqlite3", delete=False
         )

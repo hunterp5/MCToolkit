@@ -133,35 +133,46 @@ def uncompressed_path_if_gzip(path: str | Path) -> Iterator[str]:
 
 
 def iter_sdf_mols(path: str | Path) -> Iterator[Chem.Mol]:
-    """Yield molecules from SDF / SD / molfile, including gzipped files."""
-    _ext, gzipped = table_path_parts(path)
-    if gzipped:
-        with gzip.open(path, "rb") as fh:
-            suppl = Chem.ForwardSDMolSupplier(fh)
-            for mol in suppl:
-                if mol is not None:
-                    yield mol
-        return
-    suppl = Chem.SDMolSupplier(str(path))
-    for mol in suppl:
-        if mol is not None:
-            yield mol
+    """Yield molecules from SDF / SD / molfile, including gzipped files.
+
+    Always uses ``ForwardSDMolSupplier`` so uncompressed files are not indexed.
+    """
+    with open_binary_maybe_gzip(path) as fh:
+        suppl = Chem.ForwardSDMolSupplier(fh)
+        for mol in suppl:
+            if mol is not None:
+                yield mol
+
+
+def _iter_mol2_blocks(fh: TextIO) -> Iterator[str]:
+    """Yield one MOL2 record at a time without holding later records in memory."""
+    buf = ""
+    while True:
+        chunk = fh.read(1 << 20)
+        if not chunk:
+            break
+        buf += chunk
+        starts: list[int] = []
+        idx = buf.find(_MOL2_MARKER)
+        while idx >= 0:
+            starts.append(idx)
+            idx = buf.find(_MOL2_MARKER, idx + 1)
+        if len(starts) >= 2:
+            for a, b in zip(starts, starts[1:]):
+                yield buf[a:b]
+            buf = buf[starts[-1] :]
+    if buf:
+        yield buf
 
 
 def iter_mol2_mols(path: str | Path) -> Iterator[Chem.Mol]:
     """Yield molecules from Tripos MOL2 (multi-record files split on ``@<TRIPOS>MOLECULE``)."""
     with open_text_maybe_gzip(path) as fh:
-        text = fh.read()
-    if _MOL2_MARKER not in text:
-        mol = Chem.MolFromMol2Block(text)
-        if mol is not None:
-            yield mol
-        return
-    for chunk in text.split(_MOL2_MARKER)[1:]:
-        block = _MOL2_MARKER + chunk
-        mol = Chem.MolFromMol2Block(block)
-        if mol is not None:
-            yield mol
+        for block in _iter_mol2_blocks(fh):
+            text = block if _MOL2_MARKER in block else (_MOL2_MARKER + "\n" + block)
+            mol = Chem.MolFromMol2Block(text)
+            if mol is not None:
+                yield mol
 
 
 def iter_pdbqt_mols(path: str | Path) -> Iterator[Chem.Mol]:

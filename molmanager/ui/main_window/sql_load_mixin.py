@@ -124,7 +124,7 @@ class SqlLoadMixin:
             sqlite_timeout_s=sql_cfg.sqlite_timeout_s,
             pg_connect_timeout=sql_cfg.pg_connect_timeout,
         )
-        page_size = max(128, int(sql_cfg.sqlite_backend_page_size))
+        page_size = max(64, int(sql_cfg.ingest_gui_chunk_size))
         limit_eff = int(li) if apply_limit and li else 0
 
         # Precount warning stays on the GUI (needs a modal confirm).
@@ -209,8 +209,11 @@ class SqlLoadMixin:
         prog = getattr(self, "_tool_progress_state", None)
         signals = SqlLoadSignals(self)
 
+        def _on_chunk(result, g=gen) -> None:
+            self._on_sql_load_chunk(result, g)
+
         def _on_parsed(result, g=gen) -> None:
-            self._on_sql_load_parsed(result, g)
+            self._on_sql_load_finished(result, g)
 
         def _on_failed(message, g=gen) -> None:
             self._on_sql_load_failed(message, g)
@@ -228,6 +231,7 @@ class SqlLoadMixin:
             progress_state=prog,
         )
         if "pytest" in sys.modules:
+            signals.chunk.connect(_on_chunk, type=Qt.DirectConnection)
             signals.finished.connect(_on_parsed, type=Qt.DirectConnection)
             signals.failed.connect(_on_failed, type=Qt.DirectConnection)
             worker.run()
@@ -236,6 +240,7 @@ class SqlLoadMixin:
             if err:
                 raise RuntimeError(err)
         else:
+            signals.chunk.connect(_on_chunk, type=Qt.QueuedConnection)
             signals.finished.connect(_on_parsed, type=Qt.QueuedConnection)
             signals.failed.connect(_on_failed, type=Qt.QueuedConnection)
             start_runnable_on_app_pool(self, worker)
@@ -283,98 +288,83 @@ class SqlLoadMixin:
             else:
                 QMessageBox.critical(self, "SQL load", msg)
 
-    def _on_sql_load_parsed(self, result: object, generation: int) -> None:
+    def _on_sql_load_chunk(self, result: object, generation: int) -> None:
         if generation != getattr(self, "_sql_load_generation", 0):
             return
         if not isinstance(result, SqlLoadParseResult):
             self._on_sql_load_failed("Invalid SQL load result.", generation)
             return
+        cancel = getattr(self, "_sql_load_cancel_event", None)
+        if cancel is not None and cancel.is_set():
+            self._on_sql_load_failed("Cancelled.", generation)
+            return
         prepared = list(result.prepared_rows or [])
         if not prepared:
-            self._on_sql_load_failed("Query returned 0 rows.", generation)
             return
 
+        ctx = getattr(self, "_sql_load_ctx", None)
+        first = ctx is None or bool(result.is_first)
         perf = getattr(self, "_perf", None)
         scope = perf.track if perf is not None else (lambda *_args, **_kwargs: nullcontext())
         with scope("sql.apply_rows"):
-            if getattr(self, "_sql_load_clear_first", True):
-                self.clear_all()
-
-            cols = list(result.columns or [])
-            self.headers = ["ID_HIDDEN", "Structure"] + cols
-            self.table.setSortingEnabled(False)
-            try:
-                self.table.setUpdatesEnabled(False)
-            except Exception:
-                pass
-            self._table_model.clear_rows()
-            self._table_model.set_headers(list(self.headers))
-            self.table.setColumnHidden(0, True)
-            load_mols_from_parse_result(self, result)
-            self._clear_filter_target_smiles_cache()
-            self.global_bounds = {}
-            self.next_oid = int(result.next_oid)
-
-            chunk = max(64, int(load_config().ingest_gui_chunk_size))
-            self._sql_load_ctx = {
-                "gen": generation,
-                "prepared_rows": prepared,
-                "idx": 0,
-                "chunk": chunk,
-                "rows_hit_limit": bool(result.rows_hit_limit),
-                "limit_eff": int(result.limit_eff),
-            }
-            n = len(prepared)
-            on_prog = getattr(self, "_on_tool_progress", None)
-            if callable(on_prog):
-                on_prog("SQL load: applying…", 0, n)
-            else:
+            if first:
+                if getattr(self, "_sql_load_clear_first", True):
+                    self.clear_all()
+                cols = list(result.columns or [])
+                self.headers = ["ID_HIDDEN", "Structure"] + cols
+                self.table.setSortingEnabled(False)
                 try:
-                    self.status_label.setText(f"SQL load: applying… (0/{n:,})")
+                    self.table.setUpdatesEnabled(False)
                 except Exception:
                     pass
-            # Keep busy until apply finishes.
+                self._table_model.clear_rows()
+                self._table_model.set_headers(list(self.headers))
+                self.table.setColumnHidden(0, True)
+                load_mols_from_parse_result(self, result, replace=True)
+                self._clear_filter_target_smiles_cache()
+                self.global_bounds = {}
+                self._sql_load_ctx = {
+                    "gen": generation,
+                    "applied": 0,
+                    "rows_hit_limit": bool(result.rows_hit_limit),
+                    "limit_eff": int(result.limit_eff),
+                }
+                ctx = self._sql_load_ctx
+            else:
+                load_mols_from_parse_result(self, result, replace=False)
+                if ctx is not None:
+                    ctx["rows_hit_limit"] = ctx.get("rows_hit_limit") or bool(result.rows_hit_limit)
+
+            self._table_model.append_rows_batch(prepared, defer_color_cache=True)
+            self.next_oid = int(result.next_oid)
+            applied = int((ctx or {}).get("applied", 0)) + len(prepared)
+            if ctx is not None:
+                ctx["applied"] = applied
+            on_prog = getattr(self, "_on_tool_progress", None)
+            total_ui = int(result.limit_eff) if result.limit_eff else max(applied, 1)
+            if callable(on_prog):
+                on_prog("SQL load: applying…", applied, total_ui)
+            else:
+                try:
+                    self.status_label.setText(f"SQL load: applying… ({applied:,})")
+                except Exception:
+                    pass
             self._sql_load_busy = True
-            QTimer.singleShot(0, self._sql_load_apply_step)
 
-    def _sql_load_apply_step(self) -> None:
+    def _on_sql_load_finished(self, result: object, generation: int) -> None:
+        if generation != getattr(self, "_sql_load_generation", 0):
+            return
+        if not isinstance(result, SqlLoadParseResult):
+            self._on_sql_load_failed("Invalid SQL load result.", generation)
+            return
         ctx = getattr(self, "_sql_load_ctx", None)
-        if not ctx or ctx.get("gen") != getattr(self, "_sql_load_generation", 0):
-            try:
-                self.table.setUpdatesEnabled(True)
-            except Exception:
-                pass
-            self._sql_load_busy = False
+        n = int((ctx or {}).get("applied") or 0)
+        if n <= 0:
+            self._on_sql_load_failed("Query returned 0 rows.", generation)
             return
-        cancel = getattr(self, "_sql_load_cancel_event", None)
-        if cancel is not None and cancel.is_set():
-            self._sql_load_ctx = None
-            self._on_sql_load_failed("Cancelled.", int(ctx["gen"]))
-            return
-
-        prepared = ctx["prepared_rows"]
-        i = int(ctx["idx"])
-        chunk = int(ctx["chunk"])
-        n = len(prepared)
-        end = min(i + chunk, n)
-        batch = prepared[i:end]
-        if batch:
-            self._table_model.append_rows_batch(batch, defer_color_cache=True)
-        ctx["idx"] = end
-        on_prog = getattr(self, "_on_tool_progress", None)
-        if callable(on_prog):
-            on_prog("SQL load: applying…", end, n)
-        else:
-            try:
-                self.status_label.setText(f"SQL load: applying… ({end:,}/{n:,})")
-            except Exception:
-                pass
-        if end < n:
-            QTimer.singleShot(0, self._sql_load_apply_step)
-            return
-
-        rows_hit_limit = bool(ctx.get("rows_hit_limit"))
-        limit_eff = int(ctx.get("limit_eff") or 0)
+        rows_hit_limit = bool((ctx or {}).get("rows_hit_limit") or result.rows_hit_limit)
+        limit_eff = int((ctx or {}).get("limit_eff") or result.limit_eff or 0)
+        self.next_oid = int(result.next_oid or self.next_oid)
         self._sql_load_ctx = None
         self._sql_load_busy = False
         self._clear_sql_load_job()

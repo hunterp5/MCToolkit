@@ -304,9 +304,11 @@ def reset_mol_store(holder: object, *, lru_max: int | None = None) -> MolStore:
     return ensure_mol_store(holder, lru_max=lru_max)
 
 
-def load_mols_from_parse_result(holder: object, result: object) -> MolStore:
+def load_mols_from_parse_result(
+    holder: object, result: object, *, replace: bool = True
+) -> MolStore:
     """Ingest worker blobs/jobs into *holder.mols* without hydrating every molecule."""
-    store = reset_mol_store(holder)
+    store = reset_mol_store(holder) if replace else ensure_mol_store(holder)
     jobs = getattr(result, "mol_jobs", None)
     if jobs:
         store.ingest_jobs(jobs)
