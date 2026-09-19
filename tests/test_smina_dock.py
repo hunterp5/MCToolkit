@@ -207,7 +207,7 @@ def test_smina_writes_sidecar_sdf_on_success(qapp, tmp_path):  # noqa: ARG001
     dlg.save_sdf_cb.setChecked(False)
     dlg.edit_out.setText(str(pdbqt))
     dlg.save_sdf_cb.setChecked(True)
-    dlg._write_final_sdf(str(pdbqt))
+    dlg._worker.write_final_sdf(str(pdbqt))
     sdf = tmp_path / "out.sdf"
     assert sdf.is_file()
     dlg.close()
@@ -319,7 +319,7 @@ def test_smina_skips_sidecar_sdf_when_unchecked(qapp, tmp_path):  # noqa: ARG001
     dlg = GninaDockDialog(None)
     dlg.save_sdf_cb.setChecked(False)
     dlg.edit_out.setText(str(pdbqt))
-    dlg._on_proc_finished(0, QProcess.NormalExit)
+    dlg._worker.on_proc_finished(0, QProcess.NormalExit)
     assert not (tmp_path / "out.sdf").exists()
     dlg.close()
 
@@ -368,7 +368,7 @@ def test_smina_present_dock_results_opens_table(qapp, tmp_path):  # noqa: ARG001
     rec = tmp_path / "rec.pdbqt"
     rec.write_text("ATOM      1  CA  ALA A   1       0.000   0.000   0.000\n", encoding="utf-8")
     dlg.edit_receptor.setText(str(rec))
-    dlg._present_dock_results(str(sdf))
+    dlg._worker.present_dock_results(str(sdf))
     assert opened
     mols, title, receptor_path = opened[0]
     assert "docked.sdf" in title
@@ -570,7 +570,7 @@ def test_setup_crystal_validation_strips_holo_pdb(qapp, tmp_path):  # noqa: ARG0
     outdir.mkdir()
     dlg = GninaDockDialog(None)
     dlg.edit_receptor.setText(str(rec))
-    dlg._setup_crystal_validation(str(rec), durable_dir=outdir)
+    dlg._worker.setup_crystal_validation(str(rec), durable_dir=outdir)
     assert dlg._apo_receptor_path
     apo_text = Path(dlg._apo_receptor_path).read_text(encoding="utf-8")
     assert "AXI" not in apo_text
@@ -603,7 +603,7 @@ def test_setup_crystal_validation_off_strips_but_skips_redock(qapp, tmp_path):  
     dlg = GninaDockDialog(None)
     dlg.validate_crystal_cb.setChecked(False)
     dlg.edit_receptor.setText(str(rec))
-    dlg._setup_crystal_validation(str(rec), durable_dir=outdir, validate=False)
+    dlg._worker.setup_crystal_validation(str(rec), durable_dir=outdir, validate=False)
     assert dlg._apo_receptor_path
     assert "AXI" not in Path(dlg._apo_receptor_path).read_text(encoding="utf-8")
     assert dlg._validation_ligand_path == ""
@@ -634,7 +634,7 @@ def test_present_dock_results_title_includes_crystal_rmsd(qapp, tmp_path):  # no
     rec = tmp_path / "rec.pdbqt"
     rec.write_text("ATOM\n", encoding="utf-8")
     dlg.edit_receptor.setText(str(rec))
-    dlg._present_dock_results(str(sdf))
+    dlg._worker.present_dock_results(str(sdf))
     assert opened
     assert "crystal RMSD 1.250 Å" in opened[0]
     dlg.close()
@@ -670,7 +670,7 @@ def test_present_dock_results_stamps_crystal_ref(qapp, tmp_path):  # noqa: ARG00
     rec = tmp_path / "rec.pdbqt"
     rec.write_text("ATOM\n", encoding="utf-8")
     dlg.edit_receptor.setText(str(rec))
-    dlg._present_dock_results(str(sdf))
+    dlg._worker.present_dock_results(str(sdf))
     assert captured
     assert captured[0][0].GetProp(CRYSTAL_REF_PROP) == "AXI"
     dlg.close()
@@ -706,7 +706,7 @@ def test_present_dock_results_skips_crystal_ref_on_user_ligands(qapp, tmp_path):
     rec = tmp_path / "rec.pdbqt"
     rec.write_text("ATOM\n", encoding="utf-8")
     dlg.edit_receptor.setText(str(rec))
-    dlg._present_dock_results(str(sdf))
+    dlg._worker.present_dock_results(str(sdf))
     assert captured
     assert not captured[0][0].HasProp(CRYSTAL_REF_PROP)
     dlg.close()
@@ -742,7 +742,7 @@ def test_present_dock_results_keeps_crystal_ref_on_validation_entry_only(qapp, t
     rec = tmp_path / "rec.pdbqt"
     rec.write_text("ATOM\n", encoding="utf-8")
     dlg.edit_receptor.setText(str(rec))
-    dlg._present_dock_results(str(user_sdf))
+    dlg._worker.present_dock_results(str(user_sdf))
     assert captured
     mols = captured[0]
     assert len(mols) == 2
@@ -779,6 +779,6 @@ def test_gnina_start_hides_dialog(qapp, monkeypatch):  # noqa: ARG001
     monkeypatch.setattr("molmanager.workers.gnina_dock_worker.gnina_uses_wsl", lambda: False)
     monkeypatch.setattr("molmanager.workers.gnina_dock_worker.gnina_launch_env", lambda _exe: {})
     monkeypatch.setattr(dlg._proc, "start", lambda *_args, **_kwargs: None)
-    dlg._start_gnina_process(["--receptor", "rec.pdbqt"])
+    dlg._worker.start_process(["--receptor", "rec.pdbqt"])
     assert dlg.isHidden()
     dlg.close()

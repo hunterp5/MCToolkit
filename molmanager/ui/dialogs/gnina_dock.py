@@ -594,7 +594,7 @@ class GninaDockDialog(QDialog):
         btn_row.addWidget(self.btn_run)
         self.btn_stop = QPushButton("Stop")
         self.btn_stop.setEnabled(False)
-        self.btn_stop.clicked.connect(self._stop_proc)
+        self.btn_stop.clicked.connect(self._worker.stop)
         btn_row.addWidget(self.btn_stop)
         btn_row.addStretch()
         close_btn = QPushButton("Close")
@@ -613,7 +613,7 @@ class GninaDockDialog(QDialog):
     def cancel_gnina(self) -> bool:
         if not self._worker.is_running():
             return False
-        self._stop_proc()
+        self._worker.stop()
         return True
 
     cancel_smina = cancel_gnina
@@ -984,21 +984,6 @@ class GninaDockDialog(QDialog):
             receptor=self._receptor_for_gnina(),
         )
 
-    def _stop_proc(self) -> None:
-        self._worker.stop()
-
-    def _kill_if_running(self) -> None:
-        self._worker.kill_if_running()
-
-    def _on_proc_started(self) -> None:
-        self._worker.on_proc_started()
-
-    def _on_proc_error(self, error: QProcess.ProcessError) -> None:
-        self._worker.on_proc_error(error)
-
-    def _write_sidecar_sdf(self, pdbqt_out: str) -> None:
-        self._worker.write_sidecar_sdf(pdbqt_out)
-
     def _clear_batch(self) -> None:
         self._batch_ligands = []
         self._batch_cancelled = False
@@ -1029,49 +1014,6 @@ class GninaDockDialog(QDialog):
                 vtmp.cleanup()
             except Exception:
                 pass
-
-    def _write_final_sdf(self, pdbqt_out: str) -> None:
-        self._worker.write_final_sdf(pdbqt_out)
-
-    def _present_dock_results(self, out_path: str) -> None:
-        """Load finished poses (all Gnina fields) into the pose browser."""
-        self._worker.present_dock_results(out_path)
-
-    def _restore_sdf_bonds(self, sdf_path: str) -> None:
-        self._worker.restore_sdf_bonds(sdf_path)
-
-    def _after_successful_dock(self, placement_path: str) -> None:
-        self._worker.after_successful_dock(placement_path)
-
-    def _log_flex_output(self, pose_path: str) -> None:
-        self._worker.log_flex_output(pose_path)
-
-    def _start_minimize_phase(self, placement_path: str) -> bool:
-        return self._worker.start_minimize_phase(placement_path)
-
-    def _start_minimize_job(self) -> None:
-        self._worker.start_minimize_job()
-
-    def _finish_minimize_keep_placement(self) -> None:
-        self._worker.finish_minimize_keep_placement()
-
-    def _write_combined_minimize_results(self) -> None:
-        self._worker.write_combined_minimize()
-
-    def _on_validation_finished(self, code: int, status: QProcess.ExitStatus) -> None:
-        self._worker.on_validation_finished(code, status)
-
-    def _record_crystal_validation_rmsd(self) -> None:
-        self._worker.record_crystal_validation_rmsd()
-
-    def _on_proc_finished(self, code: int, status: QProcess.ExitStatus) -> None:
-        self._worker.on_proc_finished(code, status)
-
-    def _append_stdout(self) -> None:
-        self._worker.append_stdout()
-
-    def _append_stderr(self) -> None:
-        self._worker.append_stderr()
 
     def _resolve_path(self, path: str) -> Path:
         return resolve_work_path(path, self.edit_wd.text())
@@ -1179,9 +1121,6 @@ class GninaDockDialog(QDialog):
         paths = self._prepare_gnina_ligands(ligand)
         return len(paths)
 
-    def _start_gnina_process(self, launch: list[str]) -> None:
-        self._worker.start_process(launch)
-
     def _same_input_path(self, left: str, right: str) -> bool:
         return same_input_path(left, right, work_dir=self.edit_wd.text())
 
@@ -1202,15 +1141,6 @@ class GninaDockDialog(QDialog):
             prepare_receptor=self._prepare_receptor_path,
             work_dir=self.edit_wd.text(),
         )
-
-    def _setup_crystal_validation(
-        self,
-        rec: str,
-        *,
-        durable_dir: Path | None = None,
-        validate: bool = True,
-    ) -> None:
-        self._worker.setup_crystal_validation(rec, durable_dir=durable_dir, validate=validate)
 
     def _run_gnina(self) -> None:
         if self._proc.state() != QProcess.NotRunning:
@@ -1277,7 +1207,7 @@ class GninaDockDialog(QDialog):
             self._require_dock_pharmacophore()
             if not out:
                 raise ValueError("Set an output path.")
-            self._setup_crystal_validation(
+            self._worker.setup_crystal_validation(
                 rec,
                 durable_dir=self._resolve_path(out).parent,
                 validate=self.validate_crystal_cb.isChecked(),
@@ -1330,14 +1260,14 @@ class GninaDockDialog(QDialog):
         launch = self._launch_argv(argv)
         self.log.append(system_stamp(f"Launch: {exe} {' '.join(launch)}"))
         self._notify_activity()
-        self._start_gnina_process(launch)
+        self._worker.start_process(launch)
 
     _run_smina = _run_gnina
     _prepare_smina_ligands = _prepare_gnina_ligands
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         if self._worker.is_running():
-            self._stop_proc()
+            self._worker.stop()
         else:
             self._clear_batch()
         self._notify_activity()
