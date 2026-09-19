@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING
 
 from PyQt5.QtCore import QObject, QTimer, QUrl, pyqtSlot
 from PyQt5.QtWebChannel import QWebChannel
-from PyQt5.QtWidgets import QSizePolicy, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QVBoxLayout, QWidget
 from plotly import graph_objects as go
 
 from .plot_hover import hover_cards_payload, resolve_default_hover_columns
@@ -42,6 +42,7 @@ from .plot_table_sync import (
     selection_visual_push_key,
     source_rows_for_point_indices,
 )
+from .plot_web_surface import build_plot_web_view, no_web_surface
 from .plotly_html import figure_payload_json
 
 if TYPE_CHECKING:
@@ -104,14 +105,13 @@ class PlotlyInteractiveView(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        from PyQt5.QtWebEngineWidgets import QWebEngineView
-
-        self.web = QWebEngineView(self)
-        self.web.setMinimumHeight(220)
-        self.web.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.addWidget(self.web, 1)
+        self.web = build_plot_web_view(self, minimum_height=220)
+        layout.addWidget(self.web if self.web is not None else no_web_surface(self), 1)
 
         self._bridge = _PlotBridge(self)
+        self._web_channel = None
+        if self.web is None:
+            return
         self._web_channel = QWebChannel(self.web.page())
         self._web_channel.registerObject("chemBridge", self._bridge)
         self.web.page().setWebChannel(self._web_channel)
@@ -334,6 +334,8 @@ class PlotlyInteractiveView(QWidget):
         )
 
     def _load_plot_shell(self) -> None:
+        if self.web is None:
+            return
         from .plotly_shell import write_interactive_plot_shell
 
         write_interactive_plot_shell(self._plot_shell_path)
