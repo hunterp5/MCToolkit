@@ -60,8 +60,35 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
+      # The suite dies intermittently with a silent abort: no Qt message, no faulthandler
+      # dump, and 0xC0000409 (__fastfail) on Windows. Only a native stack can place it.
+      - name: Enable core dumps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gdb
+          sudo mkdir -p /tmp/cores
+          sudo chmod 1777 /tmp/cores
+          sudo sysctl -w kernel.core_pattern=/tmp/cores/core.%e.%p
+
       - name: Run tests
-        run: python -m pytest tests/ -v --tb=short
+        run: |
+          ulimit -c unlimited
+          python -m pytest tests/ -v --tb=short
+
+      - name: Native backtrace from core dump (Linux)
+        if: failure() && runner.os == 'Linux'
+        run: |
+          ls -l /tmp/cores || true
+          for core in /tmp/cores/core.*; do
+            [ -e "$core" ] || continue
+            echo "=== $core ==="
+            gdb -batch -n \
+              -ex "set pagination off" \
+              -ex "bt" \
+              -ex "thread apply all bt" \
+              "$(which python)" "$core" 2>&1 | tail -n 300
+          done
 
       - name: Performance gate (100k core model)
         if: runner.os == 'Linux'
