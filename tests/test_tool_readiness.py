@@ -1,0 +1,85 @@
+# This file is part of MolManager.
+# Copyright (C) 2026 Hunter Picard
+#
+# MolManager is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# MolManager is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+
+"""Tool-readiness decisions. No Qt, no qapp fixture, no main window."""
+
+from __future__ import annotations
+
+import sys
+
+from molmanager.workflows.tool_readiness import (
+    ToolBlocker,
+    plan_activity_analysis,
+    plan_table_readiness,
+)
+
+
+def test_workflow_layer_does_not_pull_in_qt():
+    """The point of the layer: importing a decision must not load PyQt5."""
+    for name in list(sys.modules):
+        if name.startswith("molmanager.workflows"):
+            del sys.modules[name]
+    qt_already_loaded = "PyQt5.QtWidgets" in sys.modules
+    import molmanager.workflows.tool_readiness  # noqa: F401
+
+    if not qt_already_loaded:
+        assert "PyQt5.QtWidgets" not in sys.modules
+
+
+def test_empty_table_blocks_on_no_table():
+    plan = plan_table_readiness(headers=[], row_count=0)
+    assert not plan.is_ready
+    assert plan.blocked_by is ToolBlocker.NO_TABLE
+
+
+def test_headers_alone_are_enough_when_rows_are_not_required():
+    assert plan_table_readiness(headers=["SMILES"], row_count=0).is_ready
+
+
+def test_row_requirement_blocks_an_empty_table():
+    plan = plan_table_readiness(headers=["SMILES"], row_count=0, require_rows=True)
+    assert plan.blocked_by is ToolBlocker.NO_ROWS
+
+
+def test_populated_table_is_ready():
+    assert plan_table_readiness(headers=["SMILES"], row_count=3, require_rows=True).is_ready
+
+
+def test_activity_analysis_needs_rows():
+    plan = plan_activity_analysis(headers=["SMILES"], row_count=0, activity_columns=["IC50"])
+    assert plan.blocked_by is ToolBlocker.NO_ROWS
+    assert plan.activity_columns == ()
+
+
+def test_activity_analysis_needs_a_numeric_column():
+    plan = plan_activity_analysis(headers=["SMILES"], row_count=5, activity_columns=[])
+    assert plan.blocked_by is ToolBlocker.NO_ACTIVITY_COLUMN
+
+
+def test_blank_activity_column_names_are_not_usable():
+    plan = plan_activity_analysis(headers=["SMILES"], row_count=5, activity_columns=["", "   "])
+    assert plan.blocked_by is ToolBlocker.NO_ACTIVITY_COLUMN
+
+
+def test_activity_analysis_returns_usable_columns():
+    plan = plan_activity_analysis(
+        headers=["SMILES", "IC50", "MW"],
+        row_count=5,
+        activity_columns=["IC50", "", "MW"],
+    )
+    assert plan.is_ready
+    assert plan.activity_columns == ("IC50", "MW")
+    assert plan.blocked_by is None

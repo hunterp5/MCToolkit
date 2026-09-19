@@ -71,12 +71,40 @@ subpackage reads as its table of contents.
 | `table/` | Table data operations and documents: `column_*.py`, `calculator_expressions.py`, `filter_compute.py`, `random_number_columns.py`, `text_file_ingest.py`, `table_file_formats.py`, `session_codec.py`, `structure_depiction_layout.py` |
 | `storage/` | `MolStore`, `SqliteTableStore`, `extra_pixmap_store.py`, `structure_render_store.py` |
 | `services/` | Pure helpers shared by UI and workers (no Qt, no `molmanager.ui` imports) |
+| `workflows/` | What the app should do next, decided without the UI (see *Workflow layer*) |
 | `workers/` | Background jobs (see *Chemistry workers layout*) |
 | `ui/` | Qt widgets, dialogs, and the main window |
 
 Bundled `resources/` are resolved from the package root via
 `platform_support.bundled_paths.package_root()`, never from a module's own `__file__`, so modules can
 move between subpackages without breaking resource lookup.
+
+## Workflow layer (`molmanager/workflows/`)
+
+Tool flows historically fused two things in one function: deciding whether a tool can run, and
+telling the user why not. That made every decision untestable without a `QApplication` and usually a
+whole `ChemistryWorkspaceWindow`. `workflows/` holds the decision half.
+
+Three rules define the layer:
+
+1. A workflow takes plain data or a narrow protocol. It never accepts the window or `AppKernel`.
+2. A workflow returns a result object. It never raises a dialog, touches a widget, or imports `PyQt5`.
+3. The UI adapter reads widgets into arguments, calls the workflow, and renders the result.
+
+`workflows/tool_readiness.py` is the reference implementation. `plan_activity_analysis` decides from
+`headers`, `row_count`, and candidate `activity_columns` whether MMP / Activity Cliffs / SALI / Pair
+Network can run, returning usable columns or a `ToolBlocker` reason.
+`ui/analysis_job_support.ensure_activity_analysis_ready` keeps its old signature and is now only the
+`QMessageBox` mapping over that result, so its four call sites are unchanged.
+`tests/test_tool_readiness.py` covers the decisions with no `qapp` fixture.
+
+Versus `services/`: a service computes a value from its inputs; a workflow branches on what the app
+should do. With no such branch, the code belongs in `services/`.
+
+When adding or changing a tool flow, extract its decision into `workflows/` first, then change it.
+Do not build new workflows on top of `AppKernel` — that protocol exposes the whole window
+(stores, table model, undo stack, timers) and depending on it reintroduces the coupling this layer
+removes.
 
 ## Main window (`molmanager/ui/main_window/`)
 

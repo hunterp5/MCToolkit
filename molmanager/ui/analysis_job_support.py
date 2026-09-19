@@ -30,9 +30,15 @@ from PyQt5.QtWidgets import QDialog, QMessageBox
 from rdkit import Chem
 
 from ..services.activity_records import build_oid_mol_activity_records, parse_activity_float
+from ..workflows.tool_readiness import ToolBlocker, plan_activity_analysis, plan_table_readiness
 from .tool_dialog_scope import abort_if_only_selected_but_empty, prepare_tool_dialog
 
 WorkerFactory = Callable[..., Any]
+
+_BLOCKER_TEXT = {
+    ToolBlocker.NO_TABLE: "Open a file or start a session first.",
+    ToolBlocker.NO_ROWS: "Load a table with at least one row first.",
+}
 
 
 def activity_value_for_table_oid(
@@ -60,21 +66,15 @@ def ensure_table_ready_for_tool(
     empty_message: str | None = None,
 ) -> bool:
     """Return True when the table can host *tool_label*; otherwise inform and return False."""
-    if not app.headers:
-        QMessageBox.information(
-            app,
-            tool_label,
-            empty_message or "Open a file or start a session first.",
-        )
-        return False
-    if require_rows and app._table_model.rowCount() == 0:
-        QMessageBox.information(
-            app,
-            tool_label,
-            empty_message or "Load a table with at least one row first.",
-        )
-        return False
-    return True
+    plan = plan_table_readiness(
+        headers=app.headers,
+        row_count=app._table_model.rowCount(),
+        require_rows=require_rows,
+    )
+    if plan.is_ready:
+        return True
+    QMessageBox.information(app, tool_label, empty_message or _BLOCKER_TEXT[plan.blocked_by])
+    return False
 
 
 def ensure_activity_analysis_ready(
@@ -84,20 +84,22 @@ def ensure_activity_analysis_ready(
     missing_activity_message: str,
 ) -> list[str] | None:
     """Return numeric activity columns, or ``None`` after informing the user."""
-    if not ensure_table_ready_for_tool(
-        app,
-        tool_label,
-        require_rows=True,
-        empty_message="Load a table with at least one row first.",
-    ):
-        return None
     from .dialogs.mmp import activity_columns_for_mmp
 
-    activity_cols = activity_columns_for_mmp(app, only_selected=False)
-    if not activity_cols:
-        QMessageBox.information(app, tool_label, missing_activity_message)
-        return None
-    return activity_cols
+    plan = plan_activity_analysis(
+        headers=app.headers,
+        row_count=app._table_model.rowCount(),
+        activity_columns=activity_columns_for_mmp(app, only_selected=False),
+    )
+    if plan.is_ready:
+        return list(plan.activity_columns)
+    message = (
+        missing_activity_message
+        if plan.blocked_by is ToolBlocker.NO_ACTIVITY_COLUMN
+        else "Load a table with at least one row first."
+    )
+    QMessageBox.information(app, tool_label, message)
+    return None
 
 
 def show_activity_tool_dialog(
