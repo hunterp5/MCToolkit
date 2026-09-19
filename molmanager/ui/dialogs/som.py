@@ -8,11 +8,13 @@
 #
 # MolManager is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+
+"""Tools → Predict → SOM."""
 
 from __future__ import annotations
 
@@ -23,25 +25,19 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
-    QMessageBox,
     QPushButton,
     QVBoxLayout,
-    QWidget,
 )
-
-from rdkit import Chem
 
 from ...predictions.som_prediction import (
     DEFAULT_THRESHOLD,
     METABOLISM_SUBSET_OPTIONS,
 )
-from ...chem.molecule_conversion import parse_molecule_from_cell_text
-from ...workers import SomPredictorWorker
-from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
+from ...workers.som_worker import SomPredictorRequest, SomPredictorWorker
+from ..analysis_job_support import enqueue_process_queue_job
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_PREDICT_SOM
-from .scope import selection_scope_checked
+from .structure_input import attach_structure_input
 
 
 class SomPredictorDialog(QDialog):
@@ -50,53 +46,23 @@ class SomPredictorDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
+        self._init_som_state(parent)
+        self._build_som_ui()
+        self._wire_som_ui()
+
+    def _init_som_state(self, parent) -> None:
         self.setWindowTitle(TOOL_PREDICT_SOM)
         self.setMinimumWidth(360)
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
+        self._selected_row_count = n_sel
         self._have_selection = n_sel > 0
 
+    def _build_som_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(4)
 
-        self.mode_combo = QComboBox()
-        self.mode_combo.addItems(["Table rows", "SMILES string"])
-        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
-        mode_row = QHBoxLayout()
-        mode_row.setSpacing(6)
-        mode_row.addWidget(QLabel("Input:"))
-        mode_row.addWidget(self.mode_combo, 1)
-        root.addLayout(mode_row)
-
-        self._table_cfg = QWidget()
-        tc_lyt = QVBoxLayout(self._table_cfg)
-        tc_lyt.setContentsMargins(0, 0, 0, 0)
-        tc_lyt.setSpacing(4)
-        src_row = QHBoxLayout()
-        src_row.setSpacing(6)
-        src_row.addWidget(QLabel("Source:"))
-        self.src_combo = QComboBox()
-        self.src_combo.setMinimumWidth(160)
-        src_row.addWidget(self.src_combo, 1)
-        tc_lyt.addLayout(src_row)
-        self.only_selected_cb = QCheckBox("Selected Rows Only")
-        self._only_selected_scope_prefix = "Selected Rows Only"
-        if self._have_selection:
-            self.only_selected_cb.setText(f"{self._only_selected_scope_prefix} ({n_sel} row(s))")
-        else:
-            self.only_selected_cb.setEnabled(False)
-        tc_lyt.addWidget(self.only_selected_cb)
-        root.addWidget(self._table_cfg)
-
-        self._smiles_cfg = QWidget()
-        sm_lyt = QVBoxLayout(self._smiles_cfg)
-        sm_lyt.setContentsMargins(0, 0, 0, 0)
-        sm_lyt.setSpacing(4)
-        self.smiles_edit = QLineEdit()
-        self.smiles_edit.setPlaceholderText("SMILES")
-        sm_lyt.addWidget(self.smiles_edit)
-        self._smiles_cfg.setVisible(False)
-        root.addWidget(self._smiles_cfg)
+        attach_structure_input(self, root, selected_row_count=self._selected_row_count)
 
         sub_row = QHBoxLayout()
         sub_row.setSpacing(6)
@@ -137,81 +103,48 @@ class SomPredictorDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
         self.predict_btn = QPushButton("Predict")
-        self.predict_btn.clicked.connect(self._on_predict)
         btn_row.addWidget(self.predict_btn)
         btn_row.addStretch()
         root.addLayout(btn_row)
 
+    def _wire_som_ui(self) -> None:
+        self.predict_btn.clicked.connect(self._on_predict)
         self._refresh_structure_sources()
         self.adjustSize()
         make_window_minimizable(self)
 
     def _refresh_structure_sources(self) -> None:
-        self.src_combo.clear()
-        if self.parent_app is None:
-            return
-        self.src_combo.addItems(self.parent_app.chemistry_tool_structure_sources())
-
-    def _on_mode_changed(self, idx: int) -> None:
-        is_smiles = idx == 1
-        self._table_cfg.setVisible(not is_smiles)
-        self._smiles_cfg.setVisible(is_smiles)
+        self._structure_input.refresh_sources(self.parent_app)
 
     def _on_predict(self) -> None:
         if self.parent_app is None:
             return
-        if self.mode_combo.currentIndex() == 1:
-            smi = (self.smiles_edit.text() or "").strip()
-            if not smi:
-                QMessageBox.warning(self, TOOL_PREDICT_SOM, "Enter a SMILES string.")
-                return
-            mol = parse_molecule_from_cell_text(smi)
-            if mol is None:
-                QMessageBox.warning(self, TOOL_PREDICT_SOM, "Could not parse SMILES.")
-                return
-            rows: list[tuple[int | None, Chem.Mol | None]] = [(None, mol)]
-        else:
-            only_selected = selection_scope_checked(self)
-            src = self.src_combo.currentText()
-            rows_m = prepare_scoped_structure_mols(
-                self.parent_app,
-                tool_label=TOOL_PREDICT_SOM,
-                structure_source=src,
-                only_selected=only_selected,
-                empty_message="No valid structures were found for this scope and source.",
-            )
-            if not rows_m:
-                return
-            rows = list(rows_m)
+        rows = self._structure_input.collect_rows(self, TOOL_PREDICT_SOM)
+        if rows is None:
+            return
 
-        subset = str(self.subset_combo.currentData() or "all")
-        threshold = float(self.threshold_spin.value())
-        fame_score = bool(self.fame_score_cb.isChecked())
-        som_signals = self.parent_app._ensure_som_predictor_signals()
-        n = len(rows)
-        prog = self.parent_app._tool_progress_state
         from ...table.structure_depiction_layout import (
             structure_depict_height,
             structure_depict_width,
         )
 
+        req = SomPredictorRequest(
+            rows=rows,
+            metabolism_subset=str(self.subset_combo.currentData() or "all"),
+            fame_score=bool(self.fame_score_cb.isChecked()),
+            threshold=float(self.threshold_spin.value()),
+            map_width=structure_depict_width(),
+            map_height=structure_depict_height(),
+        )
+        som_signals = self.parent_app._ensure_som_predictor_signals()
+        n = len(rows)
+        prog = self.parent_app._tool_progress_state
         enqueue_process_queue_job(
             self.parent_app,
             "Predict SOM",
             n,
-            lambda ev, r=rows, ws=self.parent_app.signals, ps=som_signals, sub=subset, fs=fame_score, thr=threshold, st=prog, mw=structure_depict_width(), mh=structure_depict_height(): (
-                SomPredictorWorker(
-                    r,
-                    ws,
-                    ps,
-                    cancel_event=ev,
-                    metabolism_subset=sub,
-                    fame_score=fs,
-                    threshold=thr,
-                    map_width=mw,
-                    map_height=mh,
-                    progress_state=st,
-                )
+            lambda ev, r=req, ws=self.parent_app.signals, ps=som_signals, st=prog: (
+                SomPredictorWorker(r, ws, ps, cancel_event=ev, progress_state=st)
             ),
             queue_label=f"Predict SOM ({n} molecules)",
         )

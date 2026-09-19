@@ -19,36 +19,26 @@
 from __future__ import annotations
 
 from PyQt5.QtWidgets import (
-    QCheckBox,
-    QComboBox,
     QDialog,
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
-    QWidget,
 )
 
-from ...chem.molecule_conversion import parse_molecule_from_cell_text
 from ...services.column_labels import COLUMN_PARENT_OID, COLUMN_PROTOMER_SOURCE_OID_LEGACY
 from ...workers.protomer_generator import (
     ProtomerGeneratorRequest,
     ProtomerGeneratorSignals,
     ProtomerGeneratorWorker,
 )
-from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
+from ..analysis_job_support import enqueue_process_queue_job
 from ..qt_widget_utils import make_window_minimizable
-from .scope import selection_scope_checked
-
-_INPUT_MODE_LABELS: tuple[tuple[str, str], ...] = (
-    ("table", "Table rows"),
-    ("smiles", "SMILES string"),
-)
+from .structure_input import attach_structure_input
 
 
 class ProtomerGeneratorDialog(QDialog):
@@ -69,48 +59,11 @@ class ProtomerGeneratorDialog(QDialog):
         self._have_selection = n_sel > 0
 
     def _build_protomer_ui(self) -> None:
-        n_sel = self._selected_row_count
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(4)
 
-        self.mode_combo = QComboBox()
-        for key, label in _INPUT_MODE_LABELS:
-            self.mode_combo.addItem(label, key)
-        mode_row = QHBoxLayout()
-        mode_row.setSpacing(6)
-        mode_row.addWidget(QLabel("Input:"))
-        mode_row.addWidget(self.mode_combo, 1)
-        root.addLayout(mode_row)
-
-        self._table_cfg = QWidget()
-        tc_lyt = QVBoxLayout(self._table_cfg)
-        tc_lyt.setContentsMargins(0, 0, 0, 0)
-        tc_lyt.setSpacing(4)
-        src_row = QHBoxLayout()
-        src_row.setSpacing(6)
-        src_row.addWidget(QLabel("Source:"))
-        self.src_combo = QComboBox()
-        self.src_combo.setMinimumWidth(160)
-        src_row.addWidget(self.src_combo, 1)
-        tc_lyt.addLayout(src_row)
-        self.only_selected_cb = QCheckBox("Selected Rows Only")
-        self._only_selected_scope_prefix = "Selected Rows Only"
-        if self._have_selection:
-            self.only_selected_cb.setText(f"{self._only_selected_scope_prefix} ({n_sel} row(s))")
-        else:
-            self.only_selected_cb.setEnabled(False)
-        tc_lyt.addWidget(self.only_selected_cb)
-        root.addWidget(self._table_cfg)
-
-        self._smiles_cfg = QWidget()
-        sm_lyt = QVBoxLayout(self._smiles_cfg)
-        sm_lyt.setContentsMargins(0, 0, 0, 0)
-        self.smiles_edit = QLineEdit()
-        self.smiles_edit.setPlaceholderText("SMILES")
-        sm_lyt.addWidget(self.smiles_edit)
-        self._smiles_cfg.setVisible(False)
-        root.addWidget(self._smiles_cfg)
+        attach_structure_input(self, root, selected_row_count=self._selected_row_count)
 
         ph_row = QHBoxLayout()
         ph_row.setSpacing(6)
@@ -148,7 +101,6 @@ class ProtomerGeneratorDialog(QDialog):
         root.addLayout(add_row)
 
     def _wire_protomer_ui(self) -> None:
-        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.generate_btn.clicked.connect(self._on_generate)
         self.add_all_btn.clicked.connect(self._add_all_to_main)
         self.add_sel_btn.clicked.connect(self._add_selected_to_main)
@@ -158,48 +110,16 @@ class ProtomerGeneratorDialog(QDialog):
         self._refresh_structure_sources()
         self.adjustSize()
         make_window_minimizable(self)
-        self._on_mode_changed()
 
     def _refresh_structure_sources(self) -> None:
-        self.src_combo.clear()
-        if self.parent_app is None:
-            return
-        self.src_combo.addItems(self.parent_app.chemistry_tool_structure_sources())
-
-    def _input_mode(self) -> str:
-        return str(self.mode_combo.currentData() or "table")
-
-    def _on_mode_changed(self, _idx: int = 0) -> None:
-        is_smiles = self._input_mode() == "smiles"
-        self._table_cfg.setVisible(not is_smiles)
-        self._smiles_cfg.setVisible(is_smiles)
+        self._structure_input.refresh_sources(self.parent_app)
 
     def _on_generate(self) -> None:
         if self.parent_app is None:
             return
-        if self._input_mode() == "smiles":
-            smi = (self.smiles_edit.text() or "").strip()
-            if not smi:
-                QMessageBox.warning(self, "Generate Protomers", "Enter a SMILES string.")
-                return
-            mol = parse_molecule_from_cell_text(smi)
-            if mol is None:
-                QMessageBox.warning(self, "Generate Protomers", "Could not parse SMILES.")
-                return
-            rows: list = [(None, mol)]
-        else:
-            only_selected = selection_scope_checked(self)
-            src = self.src_combo.currentText()
-            rows_m = prepare_scoped_structure_mols(
-                self.parent_app,
-                tool_label="Generate Protomers",
-                structure_source=src,
-                only_selected=only_selected,
-                empty_message="No valid structures were found for this scope and source.",
-            )
-            if not rows_m:
-                return
-            rows = list(rows_m)
+        rows = self._structure_input.collect_rows(self, "Generate Protomers")
+        if rows is None:
+            return
 
         self.generate_btn.setEnabled(False)
         req = ProtomerGeneratorRequest(rows=rows, pH=float(self.ph_spin.value()))

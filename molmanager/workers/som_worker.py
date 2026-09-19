@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass
 
 from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
@@ -45,6 +46,18 @@ logger = logging.getLogger(__name__)
 
 # Keep UI-facing label text local so workers do not import molmanager.ui.
 _TOOL_LABEL = "Predict SOM"
+
+
+@dataclass(frozen=True)
+class SomPredictorRequest:
+    """Row payloads and FAME3R options for :class:`SomPredictorWorker`."""
+
+    rows: list
+    metabolism_subset: MetabolismSubset = "all"
+    fame_score: bool = False
+    threshold: float = 0.3
+    map_width: int = 242
+    map_height: int = 202
 
 
 def _safe_emit(obj, emitter_name: str, *args) -> None:
@@ -91,28 +104,23 @@ class SomPredictorWorker(QRunnable):
 
     def __init__(
         self,
-        rows: list[tuple[int | None, Chem.Mol | None]],
+        request: SomPredictorRequest,
         worker_signals,
         som_signals: SomPredictorSignals,
-        cancel_event: threading.Event | None = None,
         *,
-        metabolism_subset: MetabolismSubset = "all",
-        fame_score: bool = False,
-        threshold: float = 0.3,
-        map_width: int = 242,
-        map_height: int = 202,
+        cancel_event: threading.Event | None = None,
         progress_state=None,
     ):
         super().__init__()
-        self.rows = rows
+        self.rows = request.rows
         self.worker_signals = worker_signals
         self.som_signals = som_signals
         self.cancel_event = cancel_event
-        self.metabolism_subset = metabolism_subset
-        self.fame_score = fame_score
-        self.threshold = threshold
-        self.map_width = map_width
-        self.map_height = map_height
+        self.metabolism_subset = request.metabolism_subset
+        self.fame_score = request.fame_score
+        self.threshold = request.threshold
+        self.map_width = request.map_width
+        self.map_height = request.map_height
         self.progress_state = progress_state
 
     def run(self) -> None:

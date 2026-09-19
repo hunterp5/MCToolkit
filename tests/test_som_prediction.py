@@ -321,7 +321,11 @@ def test_emphasize_keeps_atom_color() -> None:
 def test_som_worker_emits_map(monkeypatch, qapp) -> None:  # noqa: ARG001
     from molmanager.predictions.som_prediction import SOM_SITES_COLUMN
     from molmanager.workers.signals import WorkerSignals
-    from molmanager.workers.som_worker import SomPredictorSignals, SomPredictorWorker
+    from molmanager.workers.som_worker import (
+        SomPredictorRequest,
+        SomPredictorSignals,
+        SomPredictorWorker,
+    )
 
     finished: list = []
     failed: list = []
@@ -345,7 +349,7 @@ def test_som_worker_emits_map(monkeypatch, qapp) -> None:  # noqa: ARG001
     monkeypatch.setattr("molmanager.workers.som_worker.predict_soms_batch", fake_predict)
     mol = Chem.MolFromSmiles("CCO")
     assert mol is not None
-    SomPredictorWorker([(1, mol)], WorkerSignals(), sig).run()
+    SomPredictorWorker(SomPredictorRequest(rows=[(1, mol)]), WorkerSignals(), sig).run()
     assert failed == []
     assert finished
     oid, cols, png, atoms, headers = finished[0][0]
@@ -359,7 +363,11 @@ def test_som_worker_emits_map(monkeypatch, qapp) -> None:  # noqa: ARG001
 def test_som_worker_phase1_and_2_calls_predict_twice(monkeypatch, qapp) -> None:  # noqa: ARG001
     from molmanager.predictions.som_prediction import SOM_P1_SITES_COLUMN, SOM_P2_SITES_COLUMN
     from molmanager.workers.signals import WorkerSignals
-    from molmanager.workers.som_worker import SomPredictorSignals, SomPredictorWorker
+    from molmanager.workers.som_worker import (
+        SomPredictorRequest,
+        SomPredictorSignals,
+        SomPredictorWorker,
+    )
 
     finished: list = []
     failed: list = []
@@ -387,10 +395,9 @@ def test_som_worker_phase1_and_2_calls_predict_twice(monkeypatch, qapp) -> None:
     mol = Chem.MolFromSmiles("CCO")
     assert mol is not None
     SomPredictorWorker(
-        [(1, mol)],
+        SomPredictorRequest(rows=[(1, mol)], metabolism_subset="all"),
         WorkerSignals(),
         sig,
-        metabolism_subset="all",
     ).run()
     assert failed == []
     assert subsets == ["phase1", "phase2"]
@@ -478,7 +485,11 @@ def test_som_worker_emits_partial_results_on_cancel(monkeypatch, qapp) -> None: 
 
     from molmanager.predictions.som_prediction import SOM_CANCELLED_ERROR, SOM_SITES_COLUMN
     from molmanager.workers.signals import WorkerSignals
-    from molmanager.workers.som_worker import SomPredictorSignals, SomPredictorWorker
+    from molmanager.workers.som_worker import (
+        SomPredictorRequest,
+        SomPredictorSignals,
+        SomPredictorWorker,
+    )
 
     finished: list = []
     failed: list = []
@@ -511,7 +522,7 @@ def test_som_worker_emits_partial_results_on_cancel(monkeypatch, qapp) -> None: 
     mol_b = Chem.MolFromSmiles("c1ccccc1")
     assert mol_a is not None and mol_b is not None
     SomPredictorWorker(
-        [(1, mol_a), (2, mol_b)],
+        SomPredictorRequest(rows=[(1, mol_a), (2, mol_b)]),
         ws,
         sig,
         cancel_event=cancel_ev,
@@ -567,7 +578,11 @@ def test_job_entry_progress_completed_snaps_to_total() -> None:
 def test_som_worker_reports_waiting_progress_before_nerdd(monkeypatch, qapp) -> None:  # noqa: ARG001
     from molmanager.platform_support.tool_progress import ToolProgressState
     from molmanager.workers.signals import WorkerSignals
-    from molmanager.workers.som_worker import SomPredictorSignals, SomPredictorWorker
+    from molmanager.workers.som_worker import (
+        SomPredictorRequest,
+        SomPredictorSignals,
+        SomPredictorWorker,
+    )
 
     state = ToolProgressState()
     state.begin("Predict SOM", 1)
@@ -587,7 +602,7 @@ def test_som_worker_reports_waiting_progress_before_nerdd(monkeypatch, qapp) -> 
     assert mol is not None
     sig = SomPredictorSignals()
     SomPredictorWorker(
-        [(1, mol)],
+        SomPredictorRequest(rows=[(1, mol)]),
         WorkerSignals(),
         sig,
         progress_state=state,
