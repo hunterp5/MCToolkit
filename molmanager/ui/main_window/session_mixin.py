@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Session open/save orchestration composed from focused mixins."""
+"""Compat grouping for session file-splits. Implementation lives on ``SessionController``."""
 
 from __future__ import annotations
 

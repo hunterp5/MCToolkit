@@ -141,7 +141,10 @@ class ToolDialogScopeMixin:
 
 
 class ToolDialogScope:
-    """Collaborator: modeless tool dialogs and selected-rows-only scope chrome."""
+    """Collaborator: modeless tool dialogs and selected-rows-only scope chrome.
+
+    Legacy ``bind_mixin_methods`` still supplies the mixin body. New methods: ``self._app``.
+    """
 
     def __init__(self, app: AppKernel) -> None:
         self._app = app

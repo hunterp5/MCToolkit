@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Structure / pixmap storage helpers for CompoundTableModel."""
+"""Structure / pixmap storage helpers — file-split of ``CompoundTableModel``, not a reusable mixin."""
 
 from __future__ import annotations
 

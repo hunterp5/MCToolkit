@@ -14,7 +14,11 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Matched molecular pair (MMP) analysis entry points."""
+"""Matched molecular pair (MMP) analysis entry points.
+
+Leftover window MRO adapter over ``analysis_job_support``. New tools should go on
+``WorkspaceTools`` instead of adding another window base.
+"""
 
 from __future__ import annotations
 

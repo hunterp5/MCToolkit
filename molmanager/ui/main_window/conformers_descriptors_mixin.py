@@ -15,7 +15,7 @@
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Conformers, superposition, and descriptor calculation."""
+"""Compat grouping only. Writeback is ``TableWriteService``; tools remain window file-splits."""
 
 from __future__ import annotations
 
@@ -28,4 +28,4 @@ class ConformersDescriptorsMixin(
     ConformersToolsMixin,
     DescriptorsToolsMixin,
 ):
-    """Optional grouping. Writeback is ``TableWriteService``; these tools stay on the window."""
+    """Optional grouping. Writeback is ``TableWriteService``; these tools are leftover window bases."""

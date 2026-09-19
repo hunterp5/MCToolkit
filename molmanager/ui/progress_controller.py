@@ -23,7 +23,10 @@ from .main_window.app_progress_mixin import AppProgressMixin
 
 
 class ProgressController:
-    """Owns tool-progress / status-chrome behavior; state stays on the kernel."""
+    """Owns tool-progress / status-chrome behavior; state stays on the kernel.
+
+    Legacy ``bind_mixin_methods`` still supplies the mixin body. New methods: ``self._app``.
+    """
 
     def __init__(self, app: AppKernel) -> None:
         self._app = app

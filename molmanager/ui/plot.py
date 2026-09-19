@@ -122,7 +122,10 @@ class PlotWidget(
     PlotSessionMixin,
     QWidget,
 ):
-    """Interactive Plotly plotter for numeric table columns (dialog or main-window panel)."""
+    """Interactive Plotly plotter for numeric table columns (dialog or main-window panel).
+
+    Mixin bases are a file-split of this widget; extract helpers, not new mixin bases.
+    """
 
     # Color-by + Spectrum + Min/Max need ~640px; Statistics sits beside axes.
     _AXES_CONTROLS_MIN_WIDTH = 640

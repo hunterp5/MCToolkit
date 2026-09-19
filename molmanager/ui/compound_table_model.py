@@ -93,6 +93,8 @@ class CompoundTableModel(
     QAbstractTableModel,
 ):
     """
+    File-split of one table model (structure / bounds / bulk / color modules), not reusable mixins.
+
     Column 0: hidden id (string of oid).
     Column 1: Structure (pixmap via DecorationRole, or placeholder).
     Column 2..n: text from ``values`` keyed by header name.

@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Composite: filter cards, bounds, apply, and substructure matching."""
+"""File-split of the filter panel on ``ChemistryWorkspaceWindow`` (not a reusable mixin)."""
 
 from __future__ import annotations
 

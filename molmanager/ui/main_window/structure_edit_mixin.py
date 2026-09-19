@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Disconnect, neutralize, and explicit-hydrogen tools."""
+"""Disconnect / neutralize / explicit-H adapters on ``WorkspaceTools.structure_prep``."""
 
 from __future__ import annotations
 

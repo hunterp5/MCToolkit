@@ -24,7 +24,10 @@ from .main_window.table_selection_mixin import TableSelectionMixin
 
 
 class TableSession:
-    """Table selection + molecule access. Owns ``_visible_source_rows_cache`` via the kernel."""
+    """Table selection + molecule access. Owns ``_visible_source_rows_cache`` via the kernel.
+
+    Legacy ``bind_mixin_methods`` still supplies the mixin body. New methods: ``self._app``.
+    """
 
     def __init__(self, app: AppKernel) -> None:
         self._app = app

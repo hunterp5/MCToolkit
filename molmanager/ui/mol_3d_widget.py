@@ -92,7 +92,10 @@ def _multi_conf_block_count(blocks_json_b64: str | None) -> int:
 
 
 class Molecule3DViewerWidget(Mol3DConfMixin, Mol3DChromeMixin, QWidget):
-    """Interactive 3Dmol structure viewer; float or dock beside the compound table."""
+    """Interactive 3Dmol structure viewer; float or dock beside the compound table.
+
+    ``Mol3DConfMixin`` / ``Mol3DChromeMixin`` are a file-split of this widget.
+    """
 
     dockable_in_workspace = True
 

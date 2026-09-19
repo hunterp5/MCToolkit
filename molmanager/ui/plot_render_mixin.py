@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Figure builders and plot-type click handlers for :class:`PlotWidget`."""
+"""Figure builders and plot-type click handlers — file-split of ``PlotWidget``."""
 
 from __future__ import annotations
 

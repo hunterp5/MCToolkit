@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Composite: file ingest, SQLite rebuild, structure layout, and Render 2D results."""
+"""Compat grouping only. ``ChemistryWorkspaceWindow`` uses ``TableBuildPipeline`` instead."""
 
 from __future__ import annotations
 

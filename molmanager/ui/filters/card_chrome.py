@@ -158,7 +158,7 @@ def _fc_mini_label(text: str) -> QLabel:
 
 
 class _FilterCardDragMixin:
-    """Drag empty card chrome to reorder within the filter panel (not from controls)."""
+    """True mixin: drag empty card chrome to reorder (shared by all filter card types)."""
 
     _fc_drag_start: QPoint | None = None
 
@@ -273,7 +273,7 @@ class _FilterCardTitleLabel(QLabel):
 
 
 class _FilterCardEnableInvertMixin:
-    """Shared On/Off + Invert controls. Subclasses must define ``changed`` and ``removed`` signals."""
+    """True mixin: shared On/Off + Invert controls. Subclasses must define ``changed`` and ``removed``."""
 
     def _fc_init_enable_invert(
         self,

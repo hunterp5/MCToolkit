@@ -27,7 +27,10 @@ from .main_window.session_table_layout_mixin import SessionTableLayoutMixin
 
 
 class SessionController:
-    """Session document collect/restore. Kernel holds sqlite, table, and plot hosts."""
+    """Session document collect/restore. Kernel holds sqlite, table, and plot hosts.
+
+    Legacy ``bind_mixin_methods`` still supplies the mixin body. New methods: ``self._app``.
+    """
 
     def __init__(self, app: AppKernel) -> None:
         self._app = app

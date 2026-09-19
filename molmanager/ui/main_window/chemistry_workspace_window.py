@@ -158,10 +158,6 @@ class ChemistryWorkspaceWindow(
     TableUIMixin,
     IngestExportMixin,
     PlotToolsMixin,
-    ProtonateToolsMixin,
-    FastPrepareToolsMixin,
-    StructureEditMixin,
-    StructureWritebackMixin,
     ConformersToolsMixin,
     DescriptorsToolsMixin,
     FragmentToolsMixin,
@@ -179,6 +175,10 @@ class ChemistryWorkspaceWindow(
     GuiSettingsMixin,
 ):
     """Main window facade: table workspace, tools, and kernel-backed collaborators.
+
+    Remaining ``*_mixin`` bases are file-splits of this window, not reusable mixins.
+    Do not add more bases — new tools go on ``WorkspaceTools`` plus a window forward.
+    True multi-class mixins live on filter-card chrome and protein source pickers.
 
     Each row stores **one explicit structure** (connectivity + stereo as encoded). Isomerism scope
     (E/Z, R/S, tautomers, atropisomers, diastereomers) is summarized for developers in
@@ -727,3 +727,13 @@ install_window_forwards(
 )
 install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.qsar", (QsarMixin,))
 install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.mpo", (MpoMixin,))
+install_window_forwards(
+    ChemistryWorkspaceWindow,
+    "workspace_tools.structure_prep",
+    (
+        ProtonateToolsMixin,
+        FastPrepareToolsMixin,
+        StructureEditMixin,
+        StructureWritebackMixin,
+    ),
+)

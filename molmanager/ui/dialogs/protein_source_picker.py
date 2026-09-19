@@ -96,7 +96,7 @@ def ligand_options_from_structure_text(
 
 
 class ProteinStructureSourceMixin:
-    """Add Manager / file radios to a prepare dialog's Structure group."""
+    """True mixin: add Manager / file radios to a prepare dialog's Structure group."""
 
     _source_output_tag = "prepared"
     _source_tmp_prefix = "molmanager_prepare_in_"

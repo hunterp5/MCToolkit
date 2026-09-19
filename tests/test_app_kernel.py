@@ -23,7 +23,69 @@ from molmanager.ui.app_kernel import (
     install_window_forwards,
     wrap_mixin_callable,
 )
+from molmanager.ui.filters.filter_apply_mixin import FilterApplyMixin
+from molmanager.ui.filters.filter_bounds_mixin import FilterBoundsMixin
+from molmanager.ui.filters.filter_cards_mixin import FilterCardsMixin
+from molmanager.ui.filters.filter_substructure_mixin import FilterSubstructureMixin
+from molmanager.ui.filters.panel_mixin import FilterPanelMixin
+from molmanager.ui.gui_settings_mixin import GuiSettingsMixin
+from molmanager.ui.main_window.activity_cliff_mixin import ActivityCliffMixin
+from molmanager.ui.main_window.app_lifecycle_mixin import AppLifecycleMixin
+from molmanager.ui.main_window.app_menu_mixin import AppMenuMixin
 from molmanager.ui.main_window.column_write_mixin import ColumnWriteMixin
+from molmanager.ui.main_window.conformers_tools_mixin import ConformersToolsMixin
+from molmanager.ui.main_window.descriptors_tools_mixin import DescriptorsToolsMixin
+from molmanager.ui.main_window.dock_tools_mixin import DockToolsMixin
+from molmanager.ui.main_window.external_records_mixin import ExternalRecordsMixin
+from molmanager.ui.main_window.fragment_tools_mixin import FragmentToolsMixin
+from molmanager.ui.main_window.ingest_export_mixin import IngestExportMixin
+from molmanager.ui.main_window.mmp_mixin import MmpMixin
+from molmanager.ui.main_window.mmp_neighborhood_mixin import MmpNeighborhoodMixin
+from molmanager.ui.main_window.plot_tools_mixin import PlotToolsMixin
+from molmanager.ui.main_window.predict_tools_mixin import PredictToolsMixin
+from molmanager.ui.main_window.reaction_tools_mixin import ReactionToolsMixin
+from molmanager.ui.main_window.sali_mixin import SaliMixin
+from molmanager.ui.main_window.sql_load_mixin import SqlLoadMixin
+from molmanager.ui.main_window.table_calc_mixin import TableCalcMixin
+from molmanager.ui.main_window.table_edit_mixin import TableEditMixin
+from molmanager.ui.main_window.table_menu_mixin import TableMenuMixin
+from molmanager.ui.main_window.table_search_mixin import TableSearchMixin
+from molmanager.ui.main_window.table_ui_mixin import TableUIMixin
+from molmanager.ui.main_window.viewer_openers_mixin import ViewerOpenersMixin
+
+# Frozen allowlist: adding a ChemistryWorkspaceWindow mixin base must fail this set.
+_ALLOWED_WINDOW_MIXIN_BASES = frozenset(
+    {
+        ActivityCliffMixin,
+        AppLifecycleMixin,
+        AppMenuMixin,
+        ConformersToolsMixin,
+        DescriptorsToolsMixin,
+        DockToolsMixin,
+        ExternalRecordsMixin,
+        FilterApplyMixin,
+        FilterBoundsMixin,
+        FilterCardsMixin,
+        FilterPanelMixin,
+        FilterSubstructureMixin,
+        FragmentToolsMixin,
+        GuiSettingsMixin,
+        IngestExportMixin,
+        MmpMixin,
+        MmpNeighborhoodMixin,
+        PlotToolsMixin,
+        PredictToolsMixin,
+        ReactionToolsMixin,
+        SaliMixin,
+        SqlLoadMixin,
+        TableCalcMixin,
+        TableEditMixin,
+        TableMenuMixin,
+        TableSearchMixin,
+        TableUIMixin,
+        ViewerOpenersMixin,
+    }
+)
 
 
 class _Mixin:
@@ -63,13 +125,36 @@ def test_install_window_forwards_delegates_to_collaborator() -> None:
     assert w.collab.n == 1
 
 
+def test_lazy_mixin_host_binds_tuple_of_mixins() -> None:
+    from molmanager.ui.workspace_tools import _LazyMixinHost
+
+    class _A:
+        def a(self) -> str:
+            return f"{self.tag}a"
+
+    class _B:
+        def b(self) -> str:
+            return f"{self.tag}b"
+
+    class _Kernel:
+        tag = "k"
+
+    host = _LazyMixinHost(_Kernel(), lambda: (_A, _B))
+    assert host.a() == "ka"
+    assert host.b() == "kb"
+
+
 def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa: ARG001
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.main_window.chemistry_mixin import ChemistryMixin
     from molmanager.ui.main_window.cluster_mixin import ClusterMixin
+    from molmanager.ui.main_window.fast_prepare_tools_mixin import FastPrepareToolsMixin
     from molmanager.ui.main_window.mpo_mixin import MpoMixin
+    from molmanager.ui.main_window.protonate_tools_mixin import ProtonateToolsMixin
     from molmanager.ui.main_window.qsar_mixin import QsarMixin
     from molmanager.ui.main_window.session_mixin import SessionMixin
+    from molmanager.ui.main_window.structure_edit_mixin import StructureEditMixin
+    from molmanager.ui.main_window.structure_writeback_mixin import StructureWritebackMixin
 
     w = ChemistryWorkspaceWindow()
     assert w.progress is not None
@@ -80,8 +165,25 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
     assert w.session is not None
     assert w.workspace_tools is not None
     mro = type(w).mro()
-    for cls in (ChemistryMixin, SessionMixin, ClusterMixin, QsarMixin, MpoMixin):
+    off_mro = (
+        ChemistryMixin,
+        SessionMixin,
+        ClusterMixin,
+        QsarMixin,
+        MpoMixin,
+        ProtonateToolsMixin,
+        FastPrepareToolsMixin,
+        StructureEditMixin,
+        StructureWritebackMixin,
+    )
+    for cls in off_mro:
         assert cls not in mro
+    project_mixins = {
+        cls
+        for cls in mro
+        if cls.__module__.startswith("molmanager.") and cls is not ChemistryWorkspaceWindow
+    }
+    assert project_mixins == _ALLOWED_WINDOW_MIXIN_BASES
     assert hasattr(w, "_begin_tool_progress")
     assert hasattr(w, "on_calc_finished")
     assert hasattr(w, "_selected_oids_set")
@@ -89,6 +191,11 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
     assert hasattr(w, "_abort_if_only_selected_but_empty")
     assert hasattr(w, "open_cluster_dialog")
     assert hasattr(w, "_open_dimension_reduction_dialog")
+    assert hasattr(w, "run_protonate")
+    assert hasattr(w, "run_fast_prepare")
+    assert hasattr(w, "run_disconnect_fragments")
+    assert hasattr(w, "run_neutralize")
+    assert hasattr(w, "_write_mol_to_source_column")
     assert w.table_write._unique_table_column_names(["LogP"]) == ["LogP"]
     w.close()
 

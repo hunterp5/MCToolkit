@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Composite: protonate, Fast Prepare, structure edits, and Render 2D."""
+"""Optional grouping (not a window base). Prep tools live on ``WorkspaceTools``."""
 
 from __future__ import annotations
 
@@ -32,4 +32,4 @@ class PrepareStructuresMixin(
     Render2DMixin,
     StructureWritebackMixin,
 ):
-    """Optional grouping. Render 2D lives on ``TableBuildPipeline``; prep tools stay on the window."""
+    """Compat grouping only. Render 2D is ``TableBuildPipeline``; prep tools are ``WorkspaceTools``."""

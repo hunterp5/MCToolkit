@@ -29,7 +29,10 @@ from .main_window.structure_layout_mixin import StructureLayoutMixin
 
 
 class TableBuildPipeline(QObject):
-    """GUI-thread table-build owner. Timers and generation counters stay on the kernel."""
+    """GUI-thread table-build owner. Timers and generation counters stay on the kernel.
+
+    Legacy ``bind_mixin_methods`` still supplies ingest/render bodies. New methods: ``self._app``.
+    """
 
     def __init__(self, app: AppKernel) -> None:
         super().__init__(app)  # type: ignore[arg-type]

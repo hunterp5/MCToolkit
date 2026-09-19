@@ -40,7 +40,9 @@ CI currently gates on Ruff correctness / undefined-name rules plus unused import
 - Fix problems at the **cause**, not the symptom.
 - Keep the UI responsive by offloading heavy work off the GUI thread (`ProcessQueueManager`, `QThreadPool`, workers).
 - Keep changes cohesive; avoid drive-by refactors unless required.
-- New tools: dialog → worker (if heavy) → menu wiring → tests. See [ARCHITECTURE.md](ARCHITECTURE.md).
+- New tools: dialog → worker (if heavy) → `WorkspaceTools` or collaborator + window forward → tests. Do **not** add mixin bases to `ChemistryWorkspaceWindow`. See [ARCHITECTURE.md](ARCHITECTURE.md) (Mixins vs composition).
+- Most `*_mixin.py` files are file-splits of one host class. True mixins (shared by multiple classes) are filter-card chrome and `ProteinStructureSourceMixin` only.
+- New collaborator methods use `self._app`. `bind_mixin_methods` is a legacy bridge.
 
 ### Exception handling
 

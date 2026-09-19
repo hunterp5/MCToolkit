@@ -14,10 +14,15 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Lazy leaf-tool adapters (cluster, dimred, QSAR, MPO, medchem space).
+"""Lazy leaf-tool adapters (cluster, dimred, QSAR, MPO, medchem, structure-prep).
 
 Importing this module does not import the tool mixins or their dialogs.
 First use of a property loads that mixin and binds it to the kernel.
+
+New tools belong here (or as module functions + ``install_window_forwards``),
+not as ``ChemistryWorkspaceWindow`` bases. ``bind_mixin_methods`` on these
+hosts is the existing adapter pattern; new methods on a real collaborator
+should use ``self._app`` instead.
 """
 
 from __future__ import annotations
@@ -28,7 +33,7 @@ from .app_kernel import AppKernel, bind_mixin_methods
 
 
 class _LazyMixinHost:
-    """Bind one mixin class onto the kernel the first time it is needed."""
+    """Bind one or more mixin classes onto the kernel the first time they are needed."""
 
     def __init__(self, app: AppKernel, import_mixin) -> None:
         self._app = app
@@ -37,10 +42,12 @@ class _LazyMixinHost:
 
     def _ensure(self) -> Any:
         if self._bound is None:
-            mixin_cls = self._import_mixin()
-            host = type(f"{mixin_cls.__name__}Adapter", (), {})()
+            loaded = self._import_mixin()
+            mixin_classes = loaded if isinstance(loaded, tuple) else (loaded,)
+            label = "_".join(cls.__name__ for cls in mixin_classes)
+            host = type(f"{label}Adapter", (), {})()
             host._app = self._app
-            bind_mixin_methods(host, self._app, mixin_cls)
+            bind_mixin_methods(host, self._app, *mixin_classes)
             self._bound = host
         return self._bound
 
@@ -73,9 +80,22 @@ class WorkspaceTools:
         self.mpo = _LazyMixinHost(
             app, lambda: _load("molmanager.ui.main_window.mpo_mixin", "MpoMixin")
         )
+        self.structure_prep = _LazyMixinHost(app, _load_structure_prep)
 
 
 def _load(module: str, name: str):
     import importlib
 
     return getattr(importlib.import_module(module), name)
+
+
+def _load_structure_prep():
+    return (
+        _load("molmanager.ui.main_window.protonate_tools_mixin", "ProtonateToolsMixin"),
+        _load("molmanager.ui.main_window.fast_prepare_tools_mixin", "FastPrepareToolsMixin"),
+        _load("molmanager.ui.main_window.structure_edit_mixin", "StructureEditMixin"),
+        _load(
+            "molmanager.ui.main_window.structure_writeback_mixin",
+            "StructureWritebackMixin",
+        ),
+    )

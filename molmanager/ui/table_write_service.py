@@ -23,7 +23,11 @@ from .main_window.column_write_mixin import ColumnWriteMixin
 
 
 class TableWriteService:
-    """Owns ``on_calc_finished`` / column insert naming; mutates the kernel table."""
+    """Owns ``on_calc_finished`` / column insert naming; mutates the kernel table.
+
+    Bodies are still bound via legacy ``bind_mixin_methods`` (window as ``self``).
+    New methods on this class should use ``self._app`` instead of binding another mixin.
+    """
 
     def __init__(self, app: AppKernel) -> None:
         self._app = app

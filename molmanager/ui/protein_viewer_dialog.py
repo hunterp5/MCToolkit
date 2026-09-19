@@ -74,7 +74,10 @@ class ProteinViewerDialog(
     ProteinViewerPharmacophoreMixin,
     QDialog,
 ):
-    """Standalone Protein → Viewer window (3D canvas + chain Manager)."""
+    """Standalone Protein → Viewer window (3D canvas + chain Manager).
+
+    Mixin bases are a file-split of this dialog (IO/style/sequence/pharmacophore).
+    """
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)

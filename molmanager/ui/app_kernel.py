@@ -19,6 +19,9 @@
 ``ChemistryWorkspaceWindow`` stays a thin ``QMainWindow`` facade. Collaborators share this
 kernel (stores, table, pools, timers) and must not copy row data. See
 ``docs/ARCHITECTURE.md``.
+
+``bind_mixin_methods`` is a **legacy** MRO workaround (mixin body, window ``self``).
+New collaborator methods should use ``self._app`` instead of binding another mixin.
 """
 
 from __future__ import annotations
@@ -75,12 +78,12 @@ class AppKernel(Protocol):
 
 
 def wrap_mixin_callable(fn: Callable, app: Any) -> Callable:
-    """Bind a mixin instance method so ``self`` is the kernel window.
+    """Legacy: bind a mixin instance method so ``self`` is the kernel window.
 
     Extra positional args (``QAction.triggered(bool)``, ``destroyed(QObject)``)
     are dropped unless the mixin method declares ``*args``. Methods defined on
     the QMainWindow class used to get that from PyQt slot wrapping; installed
-    forwards do not.
+    forwards do not. Prefer collaborator methods that take ``self._app``.
     """
     code = getattr(fn, "__code__", None)
     accepts_varargs = bool(getattr(code, "co_flags", 0) & 0x04)
@@ -105,7 +108,13 @@ def bind_mixin_methods(
     *mixin_classes: type,
     skip: Iterable[str] = (),
 ) -> None:
-    """Attach mixin callables to *collaborator*, invoking them with *app* as ``self``."""
+    """Legacy bridge: copy mixin callables onto *collaborator* with *app* as ``self``.
+
+    Existing progress / write / session / WorkspaceTools adapters still use this so
+    historical mixin bodies keep a window-shaped ``self``. **Do not use for new
+    collaborator code** — implement methods on the collaborator and read the kernel
+    via ``self._app``.
+    """
     skipped = frozenset(skip)
     for cls in mixin_classes:
         for name, obj in cls.__dict__.items():

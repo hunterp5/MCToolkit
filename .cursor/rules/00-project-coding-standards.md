@@ -30,6 +30,16 @@ These rules apply to all new or modified code in this repository.
 - Prefer narrow `except` clauses. Do not use `except Exception: pass` without logging;
   use `molmanager.exception_policy.log_swallowed_exception` for intentional swallows.
 
+### Mixins vs composition
+
+- Most `*_mixin.py` files are **file-splits of one Qt host**, not reusable mixins.
+- Do **not** add mixin bases to `ChemistryWorkspaceWindow`. New tools go on `WorkspaceTools`
+  (or a collaborator) plus `install_window_forwards`. See `docs/ARCHITECTURE.md`.
+- True mixins (keep): filter-card chrome and `ProteinStructureSourceMixin`.
+- Do not add empty composite mixins (`ChemistryMixin`-style).
+- `bind_mixin_methods` is a **legacy** bridge (mixin body, window `self`). New collaborator
+  methods use `self._app`.
+
 ### Git commits
 
 - Anytime a git commit is made, write **detailed messages for every file that was altered** (brief per-file bullets).

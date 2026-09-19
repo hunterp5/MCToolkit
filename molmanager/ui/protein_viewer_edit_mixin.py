@@ -15,7 +15,7 @@
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Atom and ligand-bond edits in the Protein Viewer."""
+"""Atom and ligand-bond edits — file-split of ``ProteinViewerDialog``."""
 
 from __future__ import annotations
 

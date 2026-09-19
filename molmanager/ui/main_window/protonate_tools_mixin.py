@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Protomer generation tool (dialog, queue, writeback)."""
+"""Protomer generation adapter bound on ``WorkspaceTools.structure_prep`` (not a window base)."""
 
 from __future__ import annotations
 

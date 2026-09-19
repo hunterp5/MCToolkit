@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Compatibility composite for calculator, SQL, dock, viewers, and predictors."""
+"""Compat grouping for calculator, SQL, dock, viewers, and predictors (not a window base)."""
 
 from __future__ import annotations
 
@@ -44,4 +44,4 @@ class ToolsSqlPredictMixin(
     SqlLoadMixin,
     PredictToolsMixin,
 ):
-    """Composite mixin: table calc, viewers, external records, dock, SQL load, predictors."""
+    """Compat grouping only. Do not add new empty composites; prefer ``WorkspaceTools``."""

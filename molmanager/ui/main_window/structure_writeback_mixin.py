@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Shared molecule writeback and 2D follow-up for prepare-structure tools."""
+"""Mol writeback helpers for structure-prep tools (``WorkspaceTools.structure_prep``)."""
 
 from __future__ import annotations
 
