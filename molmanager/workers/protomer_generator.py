@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from dataclasses import dataclass
 
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 from rdkit import Chem
@@ -38,6 +39,14 @@ from .process_pool_utils import should_terminate_process_pool
 from .structure_grouping import group_rows_by_structure
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ProtomerGeneratorRequest:
+    """Molecules and target pH for :class:`ProtomerGeneratorWorker`."""
+
+    rows: list
+    pH: float
 
 
 def estimate_protomer_populations_from_states(
@@ -57,16 +66,16 @@ class ProtomerGeneratorWorker(QRunnable):
 
     def __init__(
         self,
-        rows: list[tuple[int | None, Chem.Mol | None]],
-        pH: float,
+        request: ProtomerGeneratorRequest,
         worker_signals,
         protomer_signals: ProtomerGeneratorSignals,
+        *,
         cancel_event: threading.Event | None = None,
         progress_state=None,
     ):
         super().__init__()
-        self.rows = rows
-        self.pH = float(pH)
+        self.rows = request.rows
+        self.pH = float(request.pH)
         self.worker_signals = worker_signals
         self.protomer_signals = protomer_signals
         self.cancel_event = cancel_event

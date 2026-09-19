@@ -8,11 +8,13 @@
 #
 # MolManager is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+
+"""Tools → Predict → Generate Protomers."""
 
 from __future__ import annotations
 
@@ -32,14 +34,21 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from rdkit import Chem
-
-from ...services.column_labels import COLUMN_PARENT_OID, COLUMN_PROTOMER_SOURCE_OID_LEGACY
 from ...chem.molecule_conversion import parse_molecule_from_cell_text
-from ...workers import ProtomerGeneratorSignals, ProtomerGeneratorWorker
+from ...services.column_labels import COLUMN_PARENT_OID, COLUMN_PROTOMER_SOURCE_OID_LEGACY
+from ...workers.protomer_generator import (
+    ProtomerGeneratorRequest,
+    ProtomerGeneratorSignals,
+    ProtomerGeneratorWorker,
+)
 from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
+
+_INPUT_MODE_LABELS: tuple[tuple[str, str], ...] = (
+    ("table", "Table rows"),
+    ("smiles", "SMILES string"),
+)
 
 
 class ProtomerGeneratorDialog(QDialog):
@@ -48,18 +57,26 @@ class ProtomerGeneratorDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
+        self._init_protomer_state(parent)
+        self._build_protomer_ui()
+        self._wire_protomer_ui()
+
+    def _init_protomer_state(self, parent) -> None:
         self.setWindowTitle("Generate Protomers")
         self.setMinimumWidth(420)
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
+        self._selected_row_count = n_sel
         self._have_selection = n_sel > 0
 
+    def _build_protomer_ui(self) -> None:
+        n_sel = self._selected_row_count
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(4)
 
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems(["Table rows", "SMILES string"])
-        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        for key, label in _INPUT_MODE_LABELS:
+            self.mode_combo.addItem(label, key)
         mode_row = QHBoxLayout()
         mode_row.setSpacing(6)
         mode_row.addWidget(QLabel("Input:"))
@@ -111,7 +128,6 @@ class ProtomerGeneratorDialog(QDialog):
         gen_row = QHBoxLayout()
         gen_row.setSpacing(6)
         self.generate_btn = QPushButton("Generate")
-        self.generate_btn.clicked.connect(self._on_generate)
         gen_row.addWidget(self.generate_btn)
         gen_row.addStretch()
         root.addLayout(gen_row)
@@ -125,21 +141,24 @@ class ProtomerGeneratorDialog(QDialog):
 
         add_row = QHBoxLayout()
         self.add_all_btn = QPushButton("Add all to main table")
-        self.add_all_btn.clicked.connect(self._add_all_to_main)
         self.add_sel_btn = QPushButton("Add selected to main table")
-        self.add_sel_btn.clicked.connect(self._add_selected_to_main)
         add_row.addWidget(self.add_all_btn)
         add_row.addWidget(self.add_sel_btn)
         add_row.addStretch()
         root.addLayout(add_row)
 
+    def _wire_protomer_ui(self) -> None:
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        self.generate_btn.clicked.connect(self._on_generate)
+        self.add_all_btn.clicked.connect(self._add_all_to_main)
+        self.add_sel_btn.clicked.connect(self._add_selected_to_main)
         self._prot_signals = ProtomerGeneratorSignals(self.parent_app)
         self._prot_signals.finished.connect(self._on_finished)
         self._prot_signals.failed.connect(self._on_failed)
-
         self._refresh_structure_sources()
         self.adjustSize()
         make_window_minimizable(self)
+        self._on_mode_changed()
 
     def _refresh_structure_sources(self) -> None:
         self.src_combo.clear()
@@ -147,15 +166,18 @@ class ProtomerGeneratorDialog(QDialog):
             return
         self.src_combo.addItems(self.parent_app.chemistry_tool_structure_sources())
 
-    def _on_mode_changed(self, idx: int) -> None:
-        is_smiles = idx == 1
+    def _input_mode(self) -> str:
+        return str(self.mode_combo.currentData() or "table")
+
+    def _on_mode_changed(self, _idx: int = 0) -> None:
+        is_smiles = self._input_mode() == "smiles"
         self._table_cfg.setVisible(not is_smiles)
         self._smiles_cfg.setVisible(is_smiles)
 
     def _on_generate(self) -> None:
         if self.parent_app is None:
             return
-        if self.mode_combo.currentIndex() == 1:
+        if self._input_mode() == "smiles":
             smi = (self.smiles_edit.text() or "").strip()
             if not smi:
                 QMessageBox.warning(self, "Generate Protomers", "Enter a SMILES string.")
@@ -164,7 +186,7 @@ class ProtomerGeneratorDialog(QDialog):
             if mol is None:
                 QMessageBox.warning(self, "Generate Protomers", "Could not parse SMILES.")
                 return
-            rows: list[tuple[int | None, Chem.Mol | None]] = [(None, mol)]
+            rows: list = [(None, mol)]
         else:
             only_selected = selection_scope_checked(self)
             src = self.src_combo.currentText()
@@ -180,15 +202,15 @@ class ProtomerGeneratorDialog(QDialog):
             rows = list(rows_m)
 
         self.generate_btn.setEnabled(False)
-        pH = float(self.ph_spin.value())
+        req = ProtomerGeneratorRequest(rows=rows, pH=float(self.ph_spin.value()))
         n = len(rows)
         prog = self.parent_app._tool_progress_state
         enqueue_process_queue_job(
             self.parent_app,
             "Generate protomers",
             n,
-            lambda ev, r=rows, ph=pH, ws=self.parent_app.signals, ps=self._prot_signals, st=prog: (
-                ProtomerGeneratorWorker(r, ph, ws, ps, cancel_event=ev, progress_state=st)
+            lambda ev, r=req, ws=self.parent_app.signals, ps=self._prot_signals, st=prog: (
+                ProtomerGeneratorWorker(r, ws, ps, cancel_event=ev, progress_state=st)
             ),
             queue_label=f"Generate protomers ({n} molecules)",
         )

@@ -21,6 +21,7 @@ from __future__ import annotations
 from rdkit import Chem
 
 from molmanager.services.structure_grouping import group_rows_by_structure, structure_key
+from molmanager.ui.dialogs.protomer import ProtomerGeneratorDialog
 
 
 def test_structure_key_canonical_smiles_merges_tautomers_of_same_graph():
@@ -49,3 +50,18 @@ def test_group_protomer_rows_keeps_distinct_structures():
     order, _rep, oids = group_rows_by_structure([(1, m1), (2, m2)])
     assert len(order) == 2
     assert sum(len(oids[k]) for k in order) == 2
+
+
+def test_protomer_dialog_input_mode_uses_item_data(qapp):  # noqa: ARG001
+    dlg = ProtomerGeneratorDialog(None)
+    try:
+        keys = [dlg.mode_combo.itemData(i) for i in range(dlg.mode_combo.count())]
+        assert keys == ["table", "smiles"]
+        assert not dlg._table_cfg.isHidden()
+        assert dlg._smiles_cfg.isHidden()
+        dlg.mode_combo.setCurrentIndex(keys.index("smiles"))
+        assert dlg.mode_combo.currentData() == "smiles"
+        assert not dlg._smiles_cfg.isHidden()
+        assert dlg._table_cfg.isHidden()
+    finally:
+        dlg.close()
