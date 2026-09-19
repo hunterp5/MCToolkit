@@ -150,6 +150,41 @@ def test_split_column_writes_largest_value(qapp):  # noqa: ARG001
     w.close()
 
 
+def test_split_column_writes_immediately_without_chunking(qapp, monkeypatch):  # noqa: ARG001
+    w = ChemistryWorkspaceWindow()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Tags"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_rows_batch(
+        [(i, {"SMILES": "CCO", "Tags": f"a{i}, b{i}"}) for i in range(6)]
+    )
+    w.mols = {i: Chem.MolFromSmiles("CCO") for i in range(6)}
+    w.next_oid = 6
+    monkeypatch.setattr(w.table_write, "_calc_writeback_async_min_rows", lambda: 2)
+    started: list[int] = []
+    monkeypatch.setattr(
+        w.table_write,
+        "_start_calc_writeback",
+        lambda *a, **k: started.append(1),
+    )
+    accepted = SimpleNamespace(
+        params=lambda: SplitColumnParams(
+            source_column="Tags",
+            mode="comma",
+            custom="",
+            prefix="Tags",
+        ),
+        only_selected_rows=lambda: False,
+    )
+    w._on_split_column_dialog_accepted(accepted)
+    assert started == []
+    assert "Tags_1" in w.headers
+    assert "Tags_2" in w.headers
+    i1 = w.headers.index("Tags_1")
+    assert w._table_model.cell_text(0, i1) == "a0"
+    assert w._table_model.cell_text(5, i1) == "a5"
+    w.close()
+
+
 def test_split_dialog_extreme_checkboxes_exclusive(qapp):  # noqa: ARG001
     from molmanager.ui.dialogs.split_column import SplitColumnDialog
 

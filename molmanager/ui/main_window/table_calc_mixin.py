@@ -120,9 +120,7 @@ class TableCalcMixin:
         allowed = self._selected_oids_set() if only_selected else None
         if self._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_RANDOM_NUMBER):
             return
-        oids = self._all_oids_in_table_order()
-        if allowed is not None:
-            oids = [o for o in oids if o in allowed]
+        oids = self._scoped_table_oids(allowed)
         if not oids:
             QMessageBox.information(self, TOOL_RANDOM_NUMBER, "No rows to process for this scope.")
             self.status_label.setText("Ready.")
@@ -222,6 +220,30 @@ class TableCalcMixin:
         unique = self._unique_table_column_names([label] * n)
         self._undo_stack.push(UndoAddBlankColumnCommand(self, unique))
 
+    def _scoped_table_oids(self, allowed: set | frozenset | None) -> list[int]:
+        """Table-order row OIDs, optionally restricted to *allowed*."""
+        m = self._table_model
+        if allowed is None:
+            return [int(m.row_oid(r)) for r in range(m.rowCount())]
+        return [oid for r in range(m.rowCount()) if (oid := int(m.row_oid(r))) in allowed]
+
+    def _oids_and_column_texts(
+        self, headers: str | list[str], *, allowed: set | frozenset | None
+    ) -> tuple[list[int], list[list[str]]]:
+        """One pass: table-order OIDs and backing text for each *headers* entry."""
+        names = [headers] if isinstance(headers, str) else list(headers)
+        m = self._table_model
+        oids: list[int] = []
+        columns: list[list[str]] = [[] for _ in names]
+        for r in range(m.rowCount()):
+            oid = int(m.row_oid(r))
+            if allowed is not None and oid not in allowed:
+                continue
+            oids.append(oid)
+            for i, header in enumerate(names):
+                columns[i].append(m.backing_value_for_row_header(r, header) or "")
+        return oids, columns
+
     def open_split_column_dialog(self) -> None:
         if not self.headers or self._table_model.rowCount() == 0:
             QMessageBox.information(
@@ -265,27 +287,10 @@ class TableCalcMixin:
         allowed = self._selected_oids_set() if only_selected else None
         if self._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_SPLIT_COLUMN):
             return
-        oids = self._all_oids_in_table_order()
-        if allowed is not None:
-            oids = [o for o in oids if o in allowed]
+        oids, (texts,) = self._oids_and_column_texts(source, allowed=allowed)
         if not oids:
             QMessageBox.information(self, TOOL_SPLIT_COLUMN, "No rows to process for this scope.")
             return
-        try:
-            ci = self.headers.index(source)
-        except ValueError:
-            QMessageBox.warning(self, TOOL_SPLIT_COLUMN, "Choose a column to split.")
-            return
-        texts: list[str] = []
-        for oid in oids:
-            row = self._table_model.logical_row_for_oid(int(oid))
-            if row < 0:
-                texts.append("")
-                continue
-            raw = self._table_model.backing_value_for_row_header(row, source) or ""
-            if not raw:
-                raw = self._table_cell_text(row, ci) or ""
-            texts.append(raw)
         try:
             _delim, parts = split_column_values(texts, p.mode, custom=p.custom)
         except ValueError as exc:
@@ -319,7 +324,9 @@ class TableCalcMixin:
             (int(oid), {headers[i]: padded[j][i] for i in range(n_cols)})
             for j, oid in enumerate(oids)
         ]
-        written = self.on_calc_finished(rows, headers, progress_label=TOOL_SPLIT_COLUMN)
+        written = self.on_calc_finished(
+            rows, headers, progress_label=TOOL_SPLIT_COLUMN, immediate=True
+        )
         extra = f" (capped at {n_cols})" if truncated else ""
         self.status_label.setText(
             f'{TOOL_SPLIT_COLUMN}: {len(written)} column(s) from "{source}"{extra}.'
@@ -362,9 +369,9 @@ class TableCalcMixin:
         allowed = self._selected_oids_set() if only_selected else None
         if self._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_JOIN_COLUMNS):
             return
-        oids = self._all_oids_in_table_order()
-        if allowed is not None:
-            oids = [o for o in oids if o in allowed]
+        oids, (left_texts, right_texts) = self._oids_and_column_texts(
+            [left, right], allowed=allowed
+        )
         if not oids:
             QMessageBox.information(self, TOOL_JOIN_COLUMNS, "No rows to process for this scope.")
             return
@@ -373,38 +380,25 @@ class TableCalcMixin:
         except ValueError as exc:
             QMessageBox.warning(self, TOOL_JOIN_COLUMNS, str(exc) or "Could not join the columns.")
             return
-        try:
-            li = self.headers.index(left)
-            ri = self.headers.index(right)
-        except ValueError:
-            QMessageBox.warning(self, TOOL_JOIN_COLUMNS, "Choose two columns to join.")
-            return
         out_name = (p.output_column or "").strip() or f"{left}_{right}"
-
-        def _cell(oid: int, header: str, col_idx: int) -> str:
-            row = self._table_model.logical_row_for_oid(int(oid))
-            if row < 0:
-                return ""
-            raw = self._table_model.backing_value_for_row_header(row, header) or ""
-            if not raw:
-                raw = self._table_cell_text(row, col_idx) or ""
-            return raw
-
+        skip_empty = bool(p.skip_empty)
         rows = [
             (
                 int(oid),
                 {
                     out_name: join_two_values(
-                        _cell(oid, left, li),
-                        _cell(oid, right, ri),
+                        left_texts[i],
+                        right_texts[i],
                         delim,
-                        skip_empty=bool(p.skip_empty),
+                        skip_empty=skip_empty,
                     )
                 },
             )
-            for oid in oids
+            for i, oid in enumerate(oids)
         ]
-        written = self.on_calc_finished(rows, [out_name], progress_label=TOOL_JOIN_COLUMNS)
+        written = self.on_calc_finished(
+            rows, [out_name], progress_label=TOOL_JOIN_COLUMNS, immediate=True
+        )
         final_col = written[0] if written else out_name
         self.status_label.setText(
             f'{TOOL_JOIN_COLUMNS}: column "{final_col}" from "{left}" and "{right}" '

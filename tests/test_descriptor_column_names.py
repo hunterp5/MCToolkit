@@ -138,3 +138,39 @@ def test_on_calc_finished_chunks_large_write(qapp, monkeypatch):  # noqa: ARG001
         "3",
     ]
     w.close()
+
+
+def test_on_calc_finished_immediate_skips_chunking(qapp, monkeypatch):  # noqa: ARG001
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+
+    w = ChemistryWorkspaceWindow()
+    w.headers = ["ID_HIDDEN", "Structure"]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_rows_batch([(i, {}) for i in range(4)])
+    w.mols = {}
+    w.next_oid = 4
+    monkeypatch.setattr(w.table_write, "_calc_writeback_async_min_rows", lambda: 2)
+    started: list[int] = []
+    monkeypatch.setattr(
+        w.table_write,
+        "_start_calc_writeback",
+        lambda *a, **k: started.append(1),
+    )
+    completed: list[list[str]] = []
+    written = w.on_calc_finished(
+        [(i, {"LogP": str(i)}) for i in range(4)],
+        ["LogP"],
+        finish_progress=False,
+        immediate=True,
+        on_complete=completed.append,
+    )
+    assert written == ["LogP"]
+    assert started == []
+    assert completed == [["LogP"]]
+    assert [w._table_model.value_for_header(i, "LogP") for i in range(4)] == [
+        "0",
+        "1",
+        "2",
+        "3",
+    ]
+    w.close()

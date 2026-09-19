@@ -199,7 +199,14 @@ class _UnfocusedWheelPassthroughFilter(QObject):
             return False
         _disable_wheel_focus(stealer)
         if _control_should_accept_wheel(stealer):
-            return False
+            if obj is stealer or _combo_popup_open(stealer):
+                return False
+            self._forwarding = True
+            try:
+                QApplication.sendEvent(stealer, event)
+            finally:
+                self._forwarding = False
+            return True
         scroll = _nearest_scroll_area(stealer)
         if scroll is None:
             event.ignore()
