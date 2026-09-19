@@ -23,17 +23,20 @@ import pytest
 pytest.importorskip("PyQt5.QtWidgets")
 
 from molmanager.ui.dialogs.mol_tools import FastPrepareDialog
+from molmanager.ui.dialogs.fast_prepare import FastPrepareDialogConfig
 
 
 def test_fast_prepare_dialog_config(qapp):  # noqa: ARG001
     dlg = FastPrepareDialog(["Structure", "SMILES"], ["Structure", "SMILES"], 2)
-    src, update_target, largest, fragments, only_sel, neutralize = dlg.config()
-    assert src == "Structure"
-    assert update_target is True
-    assert largest is None
-    assert fragments == "Fragments"
-    assert only_sel is False
-    assert neutralize is False
+    cfg = dlg.config()
+    assert cfg == FastPrepareDialogConfig(
+        source_column="Structure",
+        update_target=True,
+        largest_column=None,
+        fragments_column="Fragments",
+        only_selected=False,
+        neutralize=False,
+    )
     assert dlg.neutralize_cb.isChecked() is False
 
 
@@ -43,10 +46,10 @@ def test_fast_prepare_dialog_new_column_mode(qapp):  # noqa: ARG001
     dlg.largest_edit.setText("Largest")
     dlg.fragments_edit.setText("Rest")
     dlg.neutralize_cb.setChecked(True)
-    src, update_target, largest, fragments, only_sel, neutralize = dlg.config()
-    assert src == "Structure"
-    assert update_target is False
-    assert largest == "Largest"
-    assert fragments == "Rest"
-    assert only_sel is False
-    assert neutralize is True
+    cfg = dlg.config()
+    assert cfg.source_column == "Structure"
+    assert cfg.update_target is False
+    assert cfg.largest_column == "Largest"
+    assert cfg.fragments_column == "Rest"
+    assert cfg.only_selected is False
+    assert cfg.neutralize is True

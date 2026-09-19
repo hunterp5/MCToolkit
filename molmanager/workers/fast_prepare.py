@@ -34,6 +34,7 @@ import os
 import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from dataclasses import dataclass
 
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
@@ -53,6 +54,17 @@ logger = logging.getLogger(__name__)
 
 PROGRESS_LABEL = "Preparing structures…"
 TOOL_LABEL = "Fast prepare"
+
+
+@dataclass(frozen=True)
+class FastPrepareParams:
+    """Job flags for :class:`FastPrepareWorker` (not the row payloads)."""
+
+    is_smiles: bool = False
+    need_smiles: bool = False
+    neutralize: bool = False
+    batch_size: int = 64
+    process_pool_min_rows: int = 250
 
 
 def _prepare_one(
@@ -113,32 +125,25 @@ def _mp_fast_prepare_batch(args: tuple) -> list[tuple]:
 class FastPrepareWorker(QRunnable):
     """Disconnect (and optionally neutralize) every row in ``items``, batched across child processes.
 
-    ``items`` are ``(oid, mol, source_text)`` tuples, or ``(oid, cell_text)`` when *is_smiles*.
-    Emits ``signals.fast_prepared`` with ``(oid, mol_blob, fragments_text, canonical_smiles)`` rows.
+    ``items`` are ``(oid, mol, source_text)`` tuples, or ``(oid, cell_text)`` when
+    ``params.is_smiles``. Emits ``signals.fast_prepared`` with
+    ``(oid, mol_blob, fragments_text, canonical_smiles)`` rows.
     """
 
     def __init__(
         self,
         items: list,
+        params: FastPrepareParams,
         signals: WorkerSignals,
         *,
-        is_smiles: bool = False,
-        need_smiles: bool = False,
-        neutralize: bool = False,
         cancel_event: threading.Event | None = None,
-        batch_size: int = 64,
-        process_pool_min_rows: int = 250,
         progress_state: ToolProgressState | None = None,
     ):
         super().__init__()
         self.items = list(items)
+        self.params = params
         self.signals = signals
-        self.is_smiles = bool(is_smiles)
-        self.need_smiles = bool(need_smiles)
-        self.neutralize = bool(neutralize)
         self.cancel_event = cancel_event
-        self.batch_size = max(1, int(batch_size))
-        self.process_pool_min_rows = max(2, int(process_pool_min_rows))
         self.progress_state = progress_state
         self._progress_throttle = [0, 0.0]
 
@@ -157,7 +162,7 @@ class FastPrepareWorker(QRunnable):
         tasks: list[tuple[int, object, str | None]] = []
         for row in self.items:
             oid = int(row[0])
-            if self.is_smiles:
+            if self.params.is_smiles:
                 tasks.append((oid, str(row[1] or ""), None))
                 continue
             mol = row[1]
@@ -176,12 +181,14 @@ class FastPrepareWorker(QRunnable):
             self.signals.fast_prepared.emit([])
             return
 
+        p = self.params
+        batch_size = max(1, int(p.batch_size))
         batches = [
-            (tasks[s : s + self.batch_size], self.is_smiles, self.need_smiles, self.neutralize)
-            for s in range(0, len(tasks), self.batch_size)
+            (tasks[s : s + batch_size], p.is_smiles, p.need_smiles, p.neutralize)
+            for s in range(0, len(tasks), batch_size)
         ]
         workers = min(8, max(2, (os.cpu_count() or 4) - 1), 6)
-        use_pool = len(tasks) >= self.process_pool_min_rows and workers > 1
+        use_pool = len(tasks) >= max(2, int(p.process_pool_min_rows)) and workers > 1
 
         results: list[tuple] = []
         done = 0

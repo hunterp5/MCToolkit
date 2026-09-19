@@ -27,6 +27,7 @@ from molmanager.chem.fragment_disconnect import largest_fragment_and_rest
 from molmanager.chem.structure_neutralize import neutralize_mol
 from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
 from molmanager.workers.fast_prepare import (
+    FastPrepareParams,
     FastPrepareWorker,
     _mp_fast_prepare_batch,
     _prepare_one,
@@ -141,7 +142,8 @@ def _worker_rows(items, **kwargs):
     sig = _Recorder()
     # Stay in-process: spawning child processes inside the test suite is slow and unnecessary
     # for verifying payload shape, since both paths share ``_mp_fast_prepare_batch``.
-    worker = FastPrepareWorker(items, sig, process_pool_min_rows=10**9, **kwargs)
+    kwargs.setdefault("process_pool_min_rows", 10**9)
+    worker = FastPrepareWorker(items, FastPrepareParams(**kwargs), sig)
     worker.run()
     return sig, worker
 
@@ -182,7 +184,10 @@ def test_worker_cancellation_emits_partial_results() -> None:
     sig = _Recorder()
     items = [(i, s) for i, s in enumerate(SAMPLE_SMILES)]
     FastPrepareWorker(
-        items, sig, is_smiles=True, cancel_event=ev, process_pool_min_rows=10**9, batch_size=2
+        items,
+        FastPrepareParams(is_smiles=True, process_pool_min_rows=10**9, batch_size=2),
+        sig,
+        cancel_event=ev,
     ).run()
     assert sig.results == []
     assert sig.partial and sig.partial[0][0] == "Fast prepare"

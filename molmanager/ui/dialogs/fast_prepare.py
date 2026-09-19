@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -32,6 +34,18 @@ from PyQt5.QtWidgets import (
 from ..qt_widget_utils import make_window_minimizable
 from .disconnect_fragments import _validate_fragment_output_columns
 from .scope import selection_scope_checked
+
+
+@dataclass(frozen=True)
+class FastPrepareDialogConfig:
+    """Values the Fast Prepare dialog collects for the table-side job."""
+
+    source_column: str
+    update_target: bool
+    largest_column: str | None
+    fragments_column: str
+    only_selected: bool
+    neutralize: bool
 
 
 class FastPrepareDialog(QDialog):
@@ -117,17 +131,13 @@ class FastPrepareDialog(QDialog):
             return
         self.accept()
 
-    def config(self) -> tuple[str, bool, str | None, str, bool, bool]:
-        """
-        Returns ``(target_column, update_target, largest_column_or_None, smallest_fragments_column,
-        only_selected_rows, neutralize)``.
-        """
+    def config(self) -> FastPrepareDialogConfig:
         update_target = self.radio_update_target.isChecked()
-        return (
-            self.src_combo.currentText(),
-            update_target,
-            None if update_target else (self.largest_edit.text() or "").strip(),
-            (self.fragments_edit.text() or "").strip(),
-            selection_scope_checked(self),
-            bool(self.neutralize_cb.isChecked()),
+        return FastPrepareDialogConfig(
+            source_column=self.src_combo.currentText(),
+            update_target=update_target,
+            largest_column=None if update_target else (self.largest_edit.text() or "").strip(),
+            fragments_column=(self.fragments_edit.text() or "").strip(),
+            only_selected=selection_scope_checked(self),
+            neutralize=bool(self.neutralize_cb.isChecked()),
         )

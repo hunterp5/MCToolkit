@@ -22,7 +22,7 @@ from rdkit import Chem
 
 from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
-from molmanager.workers.fast_prepare import FastPrepareWorker
+from molmanager.workers.fast_prepare import FastPrepareParams, FastPrepareWorker
 
 SALTS = [
     "CC(=O)Oc1ccccc1C(=O)[O-].[Na+]",
@@ -83,11 +83,13 @@ def _run_fast_prepare_inline(
 
     FastPrepareWorker(
         items,
+        FastPrepareParams(
+            is_smiles=is_smiles,
+            need_smiles=need_smiles,
+            neutralize=neutralize,
+            process_pool_min_rows=10**9,
+        ),
         _Recorder(),
-        is_smiles=is_smiles,
-        need_smiles=need_smiles,
-        neutralize=neutralize,
-        process_pool_min_rows=10**9,
     ).run()
     assert captured, "worker emitted no results"
     win.on_fast_prepare_finished(captured[0])
