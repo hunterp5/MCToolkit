@@ -22,18 +22,18 @@ Table helpers: ``molmanager.ui.table_dataframe``. Statistics dialog:
 
 from __future__ import annotations
 
+from molmanager.analysis.table_statistics import (
+    outlier_mask_iqr as _outlier_mask_iqr,
+    outlier_mask_modified_z as _outlier_mask_modified_z,
+    outlier_mask_zscore as _outlier_mask_zscore,
+)
 from .table_dataframe import (
     iter_scoped_table_analysis_rows,
     numeric_subset,
     selected_table_column_headers,
     table_to_dataframe,
 )
-from .dialogs.data_analysis import (
-    DataAnalysisDialog,
-    _outlier_mask_iqr,
-    _outlier_mask_modified_z,
-    _outlier_mask_zscore,
-)
+from .dialogs.data_analysis import DataAnalysisDialog
 
 __all__ = [
     "DataAnalysisDialog",

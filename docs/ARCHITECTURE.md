@@ -66,7 +66,7 @@ subpackage reads as its table of contents.
 | `docking/` | `gnina_job.py`, `gnina_launch.py`, `pose_file_io.py`, `search_box.py`, `redock_validation.py` |
 | `predictions/` | `som_prediction.py`, `permeability_prediction.py`, `biotransformer_metabolites.py`, `biotransformer_install.py` |
 | `sources/` | External compound providers: `chembl_random_compounds.py`, `pubchem_names.py`, `surechembl_api.py`, `random_molecule_sources.py` |
-| `analysis/` | `mmp_analysis.py`, `mmp_neighborhood_analysis.py`, `activity_cliff_analysis.py`, `sali_analysis.py`, `qsar_models.py`, `mpo_scoring.py`, `medchem_space.py`, `dimensionality_reduction.py` |
+| `analysis/` | `mmp_analysis.py`, `mmp_neighborhood_analysis.py`, `activity_cliff_analysis.py`, `sali_analysis.py`, `qsar_models.py`, `mpo_scoring.py`, `medchem_space.py`, `dimensionality_reduction.py`, `table_statistics.py` |
 | `plotting/` | Chart computation, no Qt widgets: `plot_axes.py`, `plot_series_collect.py`, `plot_marker_color.py`, `plot_heatmap.py`, `plot_labels.py`, `plot_radar.py`, `plot_statistics_fits.py`, `plotly_legend.py` |
 | `table/` | Table data operations and documents: `column_*.py`, `calculator_expressions.py`, `filter_compute.py`, `random_number_columns.py`, `text_file_ingest.py`, `table_file_formats.py`, `session_codec.py`, `structure_depiction_layout.py` |
 | `storage/` | `MolStore`, `SqliteTableStore`, `extra_pixmap_store.py`, `structure_render_store.py` |
@@ -301,6 +301,8 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 - **Dock host:** `ui/plot_dock_host.py` (`PlotDockHost`) owns dock/undock, panel width, and pane close; `PlotToolsMixin` delegates the public API
 - **PCA / radar / dimred:** `ui/plotly_interactive_view.py`; dimred panel is `ui/dialogs/dimred_panel.py` (`DockableResultPlotPanel`), method dialogs stay in `ui/dialogs/dimensionality_reduction.py`
 - **MedChem space:** `ui/dialogs/medchem_space.py` (`MedChemPlotPanel` also subclasses `DockableResultPlotPanel`)
+- **Table → DataFrame:** `ui/table_dataframe.py` (Statistics, QSAR, MMP, dimred, and medchem-space)
+- **Statistics:** `analysis/table_statistics.py` is Qt-free (outliers, curve fit, hypothesis tests); `ui/dialogs/data_analysis.py` is the shell; tab widgets live in `ui/dialogs/data_analysis_tabs.py`
 - **Shared helpers:** `ui/plot_table_sync.py` (selection mapping, clear override); `ui/plotly_shell.py` + `ui/plotly_shell.html` (interactive Plotly HTML/JS for Plotter + Plotly views)
 - **Result maps:** `ui/result_plot_panel.py` (`DockableResultPlotPanel`) is the shared dock chrome for SALI / MMP / cliffs / dimred / MedChem
 - **Docked-plot chrome:** `ui/dockable_plot.py` re-exports glyphs, floating titles, footer buttons, and pane embed (`dockable_plot_glyphs.py`, `_title.py`, `_chrome.py`, `_embed.py`)
