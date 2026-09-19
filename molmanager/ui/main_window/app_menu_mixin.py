@@ -156,14 +156,10 @@ class AppMenuMixin:
         existing = getattr(self, "_protein_viewer_dialog", None)
         created = existing is None or qobject_is_deleted(existing)
 
-        def _on_destroyed() -> None:
-            self._protein_viewer_dialog = None
-
         reuse_or_show_modeless_singleton(
             self,
             "_protein_viewer_dialog",
             lambda: ProteinViewerDialog(self),
-            _on_destroyed,
             show=False,
         )
         dlg = self._protein_viewer_dialog
@@ -205,14 +201,10 @@ class AppMenuMixin:
         from ..dialogs.protein_sequence_msa import ProteinSequenceMsaDialog
         from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
-        def _on_destroyed() -> None:
-            self._protein_msa_dialog = None
-
         reuse_or_show_modeless_singleton(
             self,
             "_protein_msa_dialog",
             lambda: ProteinSequenceMsaDialog(self),
-            _on_destroyed,
             show=True,
         )
         return self._protein_msa_dialog

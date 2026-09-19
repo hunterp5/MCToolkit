@@ -59,12 +59,8 @@ class MpoMixin:
             self,
             "_mpo_scoring_dialog",
             _factory,
-            self._on_mpo_scoring_dialog_destroyed,
             on_reused_visible=lambda dlg: self._sync_dialog_only_selected_scope(dlg),
         )
-
-    def _on_mpo_scoring_dialog_destroyed(self) -> None:
-        self._mpo_scoring_dialog = None
 
     def _on_mpo_scoring_dialog_accepted(self, d) -> None:
         from ...analysis.mpo_scoring import format_score, score_mpo_row

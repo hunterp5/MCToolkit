@@ -353,7 +353,6 @@ class PredictToolsMixin:
             self,
             "_som_browser_dialog",
             _factory,
-            self._on_som_browser_dialog_destroyed,
             on_reused_visible=_on_reused,
         )
 
@@ -614,7 +613,6 @@ class PredictToolsMixin:
             self,
             "_metabolite_browser_dialog",
             _factory,
-            self._on_metabolite_browser_dialog_destroyed,
             on_reused_visible=_on_reused,
         )
 

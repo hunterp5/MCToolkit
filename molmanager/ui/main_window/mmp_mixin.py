@@ -149,12 +149,8 @@ class MmpMixin:
             self,
             "_mmp_ledger_dialog",
             _factory,
-            self._on_mmp_ledger_dialog_destroyed,
             on_reused_visible=_on_reused,
         )
-
-    def _on_mmp_ledger_dialog_destroyed(self, *_args) -> None:
-        self._mmp_ledger_dialog = None
 
     def _open_mmp_browser(self, pairs, *, activity_column: str) -> None:
         from ..mmp_browser import MmpBrowserDialog
@@ -172,9 +168,5 @@ class MmpMixin:
             self,
             "_mmp_browser_dialog",
             _factory,
-            self._on_mmp_browser_dialog_destroyed,
             on_reused_visible=_on_reused,
         )
-
-    def _on_mmp_browser_dialog_destroyed(self, *_args) -> None:
-        self._mmp_browser_dialog = None

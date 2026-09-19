@@ -40,14 +40,56 @@ def test_reuse_or_show_modeless_singleton_can_create_without_showing(qapp):  # n
         w.setWindowFlags(Qt.Window)
         return w
 
-    hidden = reuse_or_show_modeless_singleton(host, "_dlg", factory, lambda: None, show=False)
+    hidden = reuse_or_show_modeless_singleton(host, "_dlg", factory, show=False)
     assert hidden is host._dlg
     assert hidden.isVisible() is False
-    shown = reuse_or_show_modeless_singleton(host, "_dlg", factory, lambda: None)
+    shown = reuse_or_show_modeless_singleton(host, "_dlg", factory)
     assert shown is hidden
     assert shown.isVisible() is True
     shown.close()
     shown.deleteLater()
+    qapp.processEvents()
+
+
+def test_helper_clears_attr_when_on_destroyed_is_omitted(qapp) -> None:
+    from PyQt5 import sip
+    from PyQt5.QtWidgets import QDialog
+
+    host = QWidget()
+    host._dlg = None
+
+    def factory() -> QWidget:
+        return QDialog(host)
+
+    w = reuse_or_show_modeless_singleton(host, "_dlg", factory)
+    assert host._dlg is w
+    sip.delete(w)
+    qapp.processEvents()
+    assert host._dlg is None
+    host.deleteLater()
+    qapp.processEvents()
+
+
+def test_optional_on_destroyed_runs_after_attr_is_cleared(qapp) -> None:
+    from PyQt5 import sip
+    from PyQt5.QtWidgets import QDialog
+
+    host = QWidget()
+    host._dlg = None
+    seen: list[object] = []
+
+    def factory() -> QWidget:
+        return QDialog(host)
+
+    def extra() -> None:
+        seen.append(getattr(host, "_dlg", "missing"))
+
+    w = reuse_or_show_modeless_singleton(host, "_dlg", factory, extra)
+    sip.delete(w)
+    qapp.processEvents()
+    assert host._dlg is None
+    assert seen == [None]
+    host.deleteLater()
     qapp.processEvents()
 
 
@@ -171,6 +213,24 @@ def test_dimension_reduction_singleton_attrs_match_session_bookkeeping() -> None
         text = (_MAIN_WINDOW / name).read_text(encoding="utf-8")
         for attr in sorted(derived):
             assert f'"{attr}"' in text, f"{name} no longer tracks {attr}"
+
+
+def test_helper_call_sites_omit_boilerplate_clearers() -> None:
+    """``on_destroyed`` is extra teardown; pose browser is the remaining exception."""
+    import ast
+
+    extras: list[tuple[str, str]] = []
+    root = Path(__file__).resolve().parents[1] / "molmanager"
+    for path in root.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if not ast.unparse(node.func).endswith("reuse_or_show_modeless_singleton"):
+                continue
+            if len(node.args) >= 4:
+                extras.append((path.name, ast.unparse(node.args[3])))
+    assert extras == [("dock_tools_mixin.py", "self._on_pose_browser_dialog_destroyed")]
 
 
 def test_qobject_is_deleted_for_live_and_missing() -> None:

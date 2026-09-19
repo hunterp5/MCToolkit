@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from functools import partial
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMessageBox
@@ -69,7 +68,6 @@ class DimensionReductionMixin:
             self,
             attr,
             _factory,
-            partial(self._clear_dimension_reduction_dialog, attr),
             show=False,
         )
         if dlg is previous:
@@ -77,9 +75,6 @@ class DimensionReductionMixin:
                 getattr(dlg, "_panel", dlg)._reload_columns()
             self._sync_dialog_only_selected_scope(dlg)
         self._present_dimension_reduction_dialog(dlg)
-
-    def _clear_dimension_reduction_dialog(self, attr: str) -> None:
-        setattr(self, attr, None)
 
     def _present_dimension_reduction_dialog(self, dlg) -> None:
         """Show Plot Options until a figure exists; then raise the plot window."""

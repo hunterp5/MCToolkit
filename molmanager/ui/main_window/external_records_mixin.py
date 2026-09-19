@@ -37,7 +37,6 @@ class ExternalRecordsMixin:
             self,
             "_external_db_dialog",
             lambda: ExternalDBDialog(self),
-            self._on_external_db_dialog_destroyed,
         )
 
     def open_pubchem(self):
@@ -47,7 +46,6 @@ class ExternalRecordsMixin:
             self,
             "_pubchem_dialog",
             lambda: PubChemDialog(self),
-            self._on_pubchem_dialog_destroyed,
         )
 
     def open_chembl(self):
@@ -57,7 +55,6 @@ class ExternalRecordsMixin:
             self,
             "_chembl_dialog",
             lambda: ChEMBLDialog(self),
-            self._on_chembl_dialog_destroyed,
         )
 
     def open_patent_query(self):
@@ -67,7 +64,6 @@ class ExternalRecordsMixin:
             self,
             "_patent_query_dialog",
             lambda: PatentQueryDialog(self),
-            self._on_patent_query_dialog_destroyed,
         )
 
     def add_row_from_external_record(self, smiles: str, fields: dict[str, str]) -> None:
@@ -301,15 +297,3 @@ class ExternalRecordsMixin:
             except AttributeError:
                 pass
         self.add_rows_from_external_records_batch(records, render_structures=render_structures)
-
-    def _on_external_db_dialog_destroyed(self):
-        self._external_db_dialog = None
-
-    def _on_pubchem_dialog_destroyed(self):
-        self._pubchem_dialog = None
-
-    def _on_chembl_dialog_destroyed(self):
-        self._chembl_dialog = None
-
-    def _on_patent_query_dialog_destroyed(self):
-        self._patent_query_dialog = None

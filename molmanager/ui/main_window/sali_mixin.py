@@ -131,12 +131,8 @@ class SaliMixin:
             self,
             "_sali_map_dialog",
             _factory,
-            self._on_sali_map_dialog_destroyed,
             on_reused_visible=_on_reused,
         )
-
-    def _on_sali_map_dialog_destroyed(self, *_args) -> None:
-        self._sali_map_dialog = None
 
     def _open_sali_browser(
         self,
@@ -175,9 +171,5 @@ class SaliMixin:
             self,
             "_sali_browser_dialog",
             _factory,
-            self._on_sali_browser_dialog_destroyed,
             on_reused_visible=_on_reused,
         )
-
-    def _on_sali_browser_dialog_destroyed(self, *_args) -> None:
-        self._sali_browser_dialog = None

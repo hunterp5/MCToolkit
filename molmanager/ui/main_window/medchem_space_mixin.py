@@ -30,7 +30,6 @@ class MedChemSpaceMixin:
             plot_kind="boiled_egg",
             title="BOILED-Egg plot",
             attr="_boiled_egg_dialog",
-            destroyed=self._on_boiled_egg_dialog_destroyed,
         )
 
     def open_golden_triangle_plot(self) -> None:
@@ -38,7 +37,6 @@ class MedChemSpaceMixin:
             plot_kind="golden_triangle",
             title="Golden Triangle plot",
             attr="_golden_triangle_dialog",
-            destroyed=self._on_golden_triangle_dialog_destroyed,
         )
 
     def _open_medchem_space_dialog(
@@ -47,7 +45,6 @@ class MedChemSpaceMixin:
         plot_kind: str,
         title: str,
         attr: str,
-        destroyed,
     ) -> None:
         if not self.headers or self._table_model.rowCount() == 0:
             QMessageBox.information(
@@ -68,14 +65,7 @@ class MedChemSpaceMixin:
             self,
             attr,
             _factory,
-            destroyed,
             on_reused_visible=self._sync_dialog_only_selected_scope,
         )
         dlg.raise_()
         dlg.activateWindow()
-
-    def _on_boiled_egg_dialog_destroyed(self) -> None:
-        self._boiled_egg_dialog = None
-
-    def _on_golden_triangle_dialog_destroyed(self) -> None:
-        self._golden_triangle_dialog = None

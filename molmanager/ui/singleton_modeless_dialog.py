@@ -30,7 +30,7 @@ def reuse_or_show_modeless_singleton(
     host: Any,
     attr_name: str,
     factory: Callable[[], QWidget],
-    on_destroyed: Callable[[], None],
+    on_destroyed: Callable[[], None] | None = None,
     *,
     on_reused_visible: Callable[[QWidget], None] | None = None,
     show: bool = True,
@@ -38,11 +38,16 @@ def reuse_or_show_modeless_singleton(
     """
     If ``getattr(host, attr_name)`` is a live widget, ``show()`` / ``raise_()`` / ``activateWindow()``
     and optionally ``on_reused_visible(dlg)``. Otherwise create with ``factory()``, assign it,
-    connect ``destroyed`` to ``on_destroyed``, and ``show()``.
+    connect ``destroyed`` so the attribute is cleared, and ``show()``.
 
     Reuses the same instance even when it is **not visible** (e.g. minimized or hidden after
     ``close()`` without ``WA_DeleteOnClose``), so a long-running tool job is not orphaned when
     the user reopens the menu action.
+
+    The helper always sets ``host.attr_name`` to ``None`` when the tracked widget is destroyed,
+    and ignores a ``destroyed`` signal from a widget it no longer tracks. Pass *on_destroyed*
+    only for extra teardown (for example clearing a docked pose). A one-line
+    ``self._foo = None`` callback is redundant.
 
     Pass ``show=False`` to create or reuse without raising the window.
 
@@ -78,7 +83,9 @@ def reuse_or_show_modeless_singleton(
         try:
             if getattr(host, attr_name, None) is not obj:
                 return
-            on_destroyed()
+            setattr(host, attr_name, None)
+            if on_destroyed is not None:
+                on_destroyed()
         except RuntimeError:
             pass
 

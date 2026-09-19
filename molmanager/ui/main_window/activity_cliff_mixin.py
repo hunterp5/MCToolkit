@@ -117,9 +117,5 @@ class ActivityCliffMixin:
             self,
             "_activity_cliff_map_dialog",
             _factory,
-            self._on_activity_cliff_map_dialog_destroyed,
             on_reused_visible=_on_reused,
         )
-
-    def _on_activity_cliff_map_dialog_destroyed(self, *_args) -> None:
-        self._activity_cliff_map_dialog = None

@@ -166,12 +166,8 @@ class TableCalcMixin:
             self,
             "_calculator_dialog",
             _factory,
-            self._on_calculator_dialog_destroyed,
             on_reused_visible=lambda dlg: self._sync_dialog_only_selected_scope(dlg),
         )
-
-    def _on_calculator_dialog_destroyed(self):
-        self._calculator_dialog = None
 
     def _ensure_blank_table_headers(self) -> None:
         """Create ID and Structure columns so Add Row/Column work before a file is loaded."""

@@ -369,15 +369,10 @@ class RandomMoleculeDialog(QDialog):
             def _on_reused(dlg) -> None:
                 dlg.set_hits(hits, unique_only=unique_only)
 
-            def _on_destroyed() -> None:
-                if getattr(app, "_random_molecule_browser_dialog", None) is not None:
-                    app._random_molecule_browser_dialog = None
-
             reuse_or_show_modeless_singleton(
                 app,
                 "_random_molecule_browser_dialog",
                 _factory,
-                _on_destroyed,
                 on_reused_visible=_on_reused,
             )
             return

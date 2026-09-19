@@ -26,12 +26,6 @@ from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 
 class ViewerOpenersMixin:
-    def _on_sketcher_dialog_destroyed(self):
-        self._sketcher_dialog = None
-
-    def _on_data_analysis_dialog_destroyed(self):
-        self._data_analysis_dialog = None
-
     def open_data_analysis(self):
         if not self.headers or self._table_model.rowCount() == 0:
             QMessageBox.information(
@@ -54,7 +48,6 @@ class ViewerOpenersMixin:
             self,
             "_data_analysis_dialog",
             _factory,
-            self._on_data_analysis_dialog_destroyed,
             on_reused_visible=_on_reused,
         )
 
@@ -84,7 +77,6 @@ class ViewerOpenersMixin:
             self,
             "_sketcher_dialog",
             lambda: SketcherDialog(self, initial_mol=mol),
-            self._on_sketcher_dialog_destroyed,
             on_reused_visible=_on_reuse if mol is not None else None,
         )
 

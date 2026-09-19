@@ -403,6 +403,5 @@ class TableUIMixin(
             self,
             "_selection_browser_dialog",
             _factory,
-            self._on_selection_browser_dialog_destroyed,
             on_reused_visible=lambda dlg: dlg.refresh_from_app(preserve_position=True),
         )

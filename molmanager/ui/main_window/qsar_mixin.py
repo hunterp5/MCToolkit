@@ -44,9 +44,5 @@ class QsarMixin:
             self,
             "_qsar_dialog",
             _factory,
-            self._on_qsar_dialog_destroyed,
             on_reused_visible=lambda dlg: self._sync_dialog_only_selected_scope(dlg),
         )
-
-    def _on_qsar_dialog_destroyed(self) -> None:
-        self._qsar_dialog = None
