@@ -24,6 +24,11 @@ from typing import Literal
 import numpy as np
 
 DistributionName = Literal["uniform", "integer", "normal"]
+RANDOM_NUMBER_DISTRIBUTION_LABELS: tuple[tuple[DistributionName, str], ...] = (
+    ("uniform", "Uniform (continuous)"),
+    ("integer", "Uniform (integer)"),
+    ("normal", "Normal (Gaussian)"),
+)
 
 
 @dataclass(frozen=True)

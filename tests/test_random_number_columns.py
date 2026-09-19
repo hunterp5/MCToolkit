@@ -18,7 +18,11 @@
 
 import pytest
 
-from molmanager.table.random_number_columns import RandomNumberParams, generate_random_values
+from molmanager.table.random_number_columns import (
+    RANDOM_NUMBER_DISTRIBUTION_LABELS,
+    RandomNumberParams,
+    generate_random_values,
+)
 
 
 def test_uniform_reproducible_with_seed():
@@ -68,3 +72,22 @@ def test_normal_requires_positive_std():
 def test_empty_count():
     p = RandomNumberParams(distribution="uniform", low=0.0, high=1.0, seed=0)
     assert generate_random_values(0, p) == []
+
+
+def test_random_number_dialog_distribution_uses_item_data(qapp):  # noqa: ARG001
+    from molmanager.ui.dialogs.random_number import RandomNumberDialog
+
+    dlg = RandomNumberDialog(0)
+    try:
+        keys = [dlg.dist_combo.itemData(i) for i in range(dlg.dist_combo.count())]
+        assert keys == [k for k, _ in RANDOM_NUMBER_DISTRIBUTION_LABELS]
+        dlg.dist_combo.setCurrentIndex(keys.index("normal"))
+        assert dlg._distribution_key() == "normal"
+        assert dlg.mean_sb.isEnabled()
+        assert dlg.decimals_sb.isEnabled()
+        dlg.dist_combo.setCurrentIndex(keys.index("integer"))
+        assert dlg._distribution_key() == "integer"
+        assert not dlg.decimals_sb.isEnabled()
+        assert not dlg.mean_sb.isEnabled()
+    finally:
+        dlg.close()

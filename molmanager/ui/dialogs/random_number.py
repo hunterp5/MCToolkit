@@ -35,6 +35,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ...table.random_number_columns import (
+    RANDOM_NUMBER_DISTRIBUTION_LABELS,
     DistributionName,
     RandomNumberParams,
     generate_random_values,
@@ -42,12 +43,6 @@ from ...table.random_number_columns import (
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_RANDOM_NUMBER
 from .scope import selection_scope_checked
-
-_DIST_LABELS: tuple[tuple[str, DistributionName], ...] = (
-    ("Uniform (continuous)", "uniform"),
-    ("Uniform (integer)", "integer"),
-    ("Normal (Gaussian)", "normal"),
-)
 
 
 @dataclass(frozen=True)
@@ -64,11 +59,19 @@ class RandomNumberDialog(QDialog):
     def __init__(self, selected_row_count: int = 0, parent=None):
         super().__init__(parent)
         self.parent_app = parent
+        self._init_random_number_state(selected_row_count)
+        self._build_random_number_ui()
+        self._wire_random_number_ui()
+
+    def _init_random_number_state(self, selected_row_count: int) -> None:
         self.setWindowTitle(TOOL_RANDOM_NUMBER)
         self.setMinimumWidth(420)
         self.resize(460, 0)
+        self._selected_row_count = int(selected_row_count)
         self._have_selection = selected_row_count > 0
 
+    def _build_random_number_ui(self) -> None:
+        selected_row_count = self._selected_row_count
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 8)
         root.setSpacing(8)
@@ -84,10 +87,9 @@ class RandomNumberDialog(QDialog):
         form.addRow("Column name:", self.name_input)
 
         self.dist_combo = QComboBox()
-        for label, _key in _DIST_LABELS:
-            self.dist_combo.addItem(label)
+        for key, label in RANDOM_NUMBER_DISTRIBUTION_LABELS:
+            self.dist_combo.addItem(label, key)
         self.dist_combo.setToolTip("Distribution used to draw each row’s value.")
-        self.dist_combo.currentIndexChanged.connect(self._sync_distribution_fields)
         form.addRow("Distribution:", self.dist_combo)
 
         self.min_sb = QDoubleSpinBox()
@@ -116,7 +118,6 @@ class RandomNumberDialog(QDialog):
 
         self.clip_cb = QCheckBox("Clip normal draws to min/max")
         self.clip_cb.setChecked(False)
-        self.clip_cb.toggled.connect(self._sync_clip_bounds)
         form.addRow("", self.clip_cb)
 
         self.decimals_sb = QSpinBox()
@@ -129,7 +130,6 @@ class RandomNumberDialog(QDialog):
 
         self.use_seed_cb = QCheckBox("Use seed")
         self.use_seed_cb.setChecked(False)
-        self.use_seed_cb.toggled.connect(self._sync_seed_enabled)
         form.addRow("", self.use_seed_cb)
 
         self.seed_sb = QSpinBox()
@@ -150,17 +150,23 @@ class RandomNumberDialog(QDialog):
             self.only_selected_cb.setEnabled(False)
         root.addWidget(self.only_selected_cb)
 
-        box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        box.accepted.connect(self.accept)
-        box.rejected.connect(self.reject)
-        root.addWidget(box)
+        self._button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        root.addWidget(self._button_box)
 
+    def _wire_random_number_ui(self) -> None:
+        self.dist_combo.currentIndexChanged.connect(self._sync_distribution_fields)
+        self.clip_cb.toggled.connect(self._sync_clip_bounds)
+        self.use_seed_cb.toggled.connect(self._sync_seed_enabled)
+        self._button_box.accepted.connect(self.accept)
+        self._button_box.rejected.connect(self.reject)
         self._sync_distribution_fields()
         make_window_minimizable(self)
 
     def _distribution_key(self) -> DistributionName:
-        idx = max(0, min(self.dist_combo.currentIndex(), len(_DIST_LABELS) - 1))
-        return _DIST_LABELS[idx][1]
+        data = self.dist_combo.currentData()
+        if data in {"uniform", "integer", "normal"}:
+            return data
+        return "uniform"
 
     def _sync_distribution_fields(self) -> None:
         dist = self._distribution_key()
