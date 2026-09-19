@@ -12,7 +12,7 @@
 
 # --- Desktop app and chemistry core ---
 PyQt5>=5.15
-# Embedded 3D structure viewer (View in 3D); without it, the app opens the browser instead.
+# Embedded 3Dmol structure preview in Browser; without it, the app falls back.
 PyQtWebEngine>=5.15
 # Keep Plotly in the v5 line for broader Qt WebEngine compatibility.
 plotly>=5.0,<6

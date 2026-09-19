@@ -30,7 +30,7 @@ from ...conformers.conformer_column_codec import (
     is_packed_ensemble_header,
     resolve_blocks_b64_for_viewer,
 )
-from ...chem.molecule_conversion import mol_to_canonical_smiles
+from ...chem.molecule_conversion import mol_structure_copy_texts
 from ..strings import TOOL_RENDER_2D
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
 from .table_undo_commands import (
@@ -43,8 +43,39 @@ from .table_undo_commands import (
 )
 
 
+_STRUCTURE_COPY_FORMATS: tuple[tuple[str, str, str], ...] = (
+    ("smiles", "SMILES", "Canonical isomeric SMILES."),
+    ("inchi", "InChI", "Standard InChI."),
+    ("inchikey", "InChIKey", "Standard InChIKey."),
+    ("molfile", "Molfile", "MDL molfile (V2000)."),
+    ("smarts", "SMARTS", "Daylight SMARTS."),
+)
+
+
 class TableMenuMixin:
     """Column-header, row-header, and cell context menus."""
+
+    def _add_structure_copy_submenu(self, menu: QMenu, mol) -> dict:
+        """Copy submenu with SMILES and other structure formats. Maps actions to (text, status)."""
+        copy_menu = menu.addMenu("Copy")
+        copy_menu.setToolTipsVisible(True)
+        texts = mol_structure_copy_texts(mol)
+        by_act: dict = {}
+        for key, label, tooltip in _STRUCTURE_COPY_FORMATS:
+            act = copy_menu.addAction(label)
+            act.setObjectName(f"copy_format_{key}")
+            act.setToolTip(tooltip)
+            txt = texts.get(key) or ""
+            usable = bool(txt.strip())
+            act.setEnabled(usable)
+            if usable:
+                status = (
+                    "Copied canonical SMILES to clipboard."
+                    if key == "smiles"
+                    else f"Copied {label} to clipboard."
+                )
+                by_act[act] = (txt, status)
+        return by_act
 
     def _create_header_context_menu(self, col: int):
         """Column-header context menu. Dock results windows keep Sort and Select only."""
@@ -349,9 +380,7 @@ class TableMenuMixin:
         chem_col = self._column_eligible_for_table_chemistry_menu(row, col)
         mol_ctx = self._mol_for_table_context_menu(row, col) if chem_col else None
 
-        sketch_act = view_conformers_act = view3d_act = view2d_act = render2d_act = (
-            copy_smiles_act
-        ) = None
+        sketch_act = view_conformers_act = browser_act = render2d_act = None
         structure_menu = False
         if chem_col and mol_ctx is not None:
             sketch_act = menu.addAction("Open in Sketcher…")
@@ -359,30 +388,21 @@ class TableMenuMixin:
         if packed_confs_b64 is not None:
             view_conformers_act = menu.addAction("View Conformers…")
             structure_menu = True
-        if chem_col and mol_ctx is not None and packed_confs_b64 is None:
-            view3d_act = menu.addAction("View in 3D…")
-            structure_menu = True
         if chem_col and mol_ctx is not None:
-            view2d_act = menu.addAction("View in 2D…")
+            browser_act = menu.addAction("Browser…")
             render2d_act = menu.addAction(TOOL_RENDER_2D)
             render2d_act.setEnabled(oid is not None)
         if structure_menu:
             menu.addSeparator()
 
         can_copy, copy_text = self._copy_text_for_table_cell(row, col, oid)
-        copy_act = menu.addAction("Copy")
-        copy_act.setEnabled(can_copy)
-
-        copy_smiles_txt = ""
-        if chem_col and mol_ctx is not None:
-            try:
-                copy_smiles_txt = mol_to_canonical_smiles(mol_ctx).strip()
-            except Exception:
-                copy_smiles_txt = ""
-        copy_smiles_act = None
+        copy_act = None
+        copy_format_by_act: dict = {}
         if chem_col:
-            copy_smiles_act = menu.addAction("Copy as SMILES")
-            copy_smiles_act.setEnabled(bool(copy_smiles_txt))
+            copy_format_by_act = self._add_structure_copy_submenu(menu, mol_ctx)
+        else:
+            copy_act = menu.addAction("Copy")
+            copy_act.setEnabled(can_copy)
 
         can_paste = oid is not None and self._column_accepts_cell_paste(row, col)
         paste_act = menu.addAction("Paste")
@@ -434,16 +454,15 @@ class TableMenuMixin:
                 export_confs_column=confs_col,
                 source_oid=oid,
             )
-        elif view3d_act is not None and action == view3d_act and mol_ctx is not None:
-            self.open_molecule_3d(mol_ctx, source_oid=oid)
-        elif view2d_act is not None and action == view2d_act and mol_ctx is not None:
-            self.open_molecule_2d(mol_ctx, source_oid=oid)
+        elif browser_act is not None and action == browser_act:
+            self.open_selection_browser(focus_oid=oid)
         elif render2d_act is not None and action == render2d_act and mol_ctx is not None:
             self.run_render_2d_for_table_row(row, col)
-        elif copy_smiles_act is not None and action == copy_smiles_act and copy_smiles_txt:
-            QApplication.clipboard().setText(copy_smiles_txt)
-            self.status_label.setText("Copied canonical SMILES to clipboard.")
-        elif action == copy_act and can_copy:
+        elif action is not None and action in copy_format_by_act:
+            text, status = copy_format_by_act[action]
+            QApplication.clipboard().setText(text)
+            self.status_label.setText(status)
+        elif copy_act is not None and action == copy_act and can_copy:
             QApplication.clipboard().setText(copy_text)
         elif action == paste_act and can_paste:
             self.edit_paste(origin=(row, col))

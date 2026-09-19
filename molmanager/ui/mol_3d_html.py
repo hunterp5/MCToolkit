@@ -358,24 +358,32 @@ def _viewer_init_script_fragment(mol_b64: str, *, flat: bool) -> str:
     )
 
 
-def _viewer_embed_init_script_fragment(mol_b64: str = "") -> str:
+def _viewer_embed_init_script_fragment(mol_b64: str = "", *, flat: bool = False) -> str:
     """Minimal 3Dmol init for sketcher side panel: no atom pick UI; live ``molmanagerSetMolB64``."""
+    flat_js = "true" if flat else "false"
     tmpl = r"""  <script>
     function molmanagerInitView() {
       try {
         __RESET_JS__
-        const opts = { backgroundColor: "white" };
+        window.molmanagerFlat = __FLAT__;
+        const opts = window.molmanagerFlat
+          ? { backgroundColor: "white", orthographic: true }
+          : { backgroundColor: "white" };
         const viewer = $3Dmol.createViewer("v", opts);
         window.molmanagerViewer = viewer;
         installResetStructureMenu();
         window.molmanagerRefit = function () { fitAndCapture(window.molmanagerViewer); };
-        window.molmanagerSetMolB64 = function (b64) {
+        window.molmanagerSetMolB64 = function (b64, flat) {
+          if (typeof flat !== "undefined") window.molmanagerFlat = !!flat;
           if (!window.molmanagerViewer) return;
           var v = window.molmanagerViewer;
+          var isFlat = !!window.molmanagerFlat;
           v.clear();
           if (b64) {
             v.addModel(atob(b64), "mol");
-            v.setStyle({}, { stick: { radius: 0.12 }, sphere: { scale: 0.22 } });
+            var stickR = isFlat ? 0.1 : 0.12;
+            var sph = isFlat ? 0.18 : 0.22;
+            v.setStyle({}, { stick: { radius: stickR }, sphere: { scale: sph } });
             fitAndCapture(v);
           } else {
             v.render();
@@ -390,7 +398,11 @@ def _viewer_embed_init_script_fragment(mol_b64: str = "") -> str:
       }
     }
   </script>"""
-    return tmpl.replace("__MOLB64__", mol_b64 or "").replace("__RESET_JS__", _RESET_STRUCTURE_JS)
+    return (
+        tmpl.replace("__MOLB64__", mol_b64 or "")
+        .replace("__RESET_JS__", _RESET_STRUCTURE_JS)
+        .replace("__FLAT__", flat_js)
+    )
 
 
 def assemble_3dmol_shell_page(
@@ -450,9 +462,9 @@ def _assemble_viewer_page(
 </html>"""
 
 
-def _assemble_embed_viewer_page(mol_b64: str, *, script_src: str) -> str:
+def _assemble_embed_viewer_page(mol_b64: str, *, script_src: str, flat: bool = False) -> str:
     """Sketcher-embedded page: no atom boxes or mouse-controls overlay."""
-    init = _viewer_embed_init_script_fragment(mol_b64)
+    init = _viewer_embed_init_script_fragment(mol_b64, flat=flat)
     reset_menu = _reset_structure_menu_html()
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -475,8 +487,8 @@ def _offline_index_html(mol_b64: str, *, flat: bool = False) -> str:
     return _assemble_viewer_page(mol_b64, flat=flat, script_src="3Dmol-min.js")
 
 
-def _offline_embed_index_html(mol_b64: str = "") -> str:
-    return _assemble_embed_viewer_page(mol_b64, script_src="3Dmol-min.js")
+def _offline_embed_index_html(mol_b64: str = "", *, flat: bool = False) -> str:
+    return _assemble_embed_viewer_page(mol_b64, script_src="3Dmol-min.js", flat=flat)
 
 
 def _offline_index_html_multiconf(
@@ -500,8 +512,10 @@ def _cdn_fallback_html(mol_b64: str, *, flat: bool = False) -> str:
     )
 
 
-def _cdn_embed_fallback_html(mol_b64: str = "") -> str:
-    return _assemble_embed_viewer_page(mol_b64, script_src="https://3dmol.org/build/3Dmol-min.js")
+def _cdn_embed_fallback_html(mol_b64: str = "", *, flat: bool = False) -> str:
+    return _assemble_embed_viewer_page(
+        mol_b64, script_src="https://3dmol.org/build/3Dmol-min.js", flat=flat
+    )
 
 
 def _cdn_fallback_html_multiconf(

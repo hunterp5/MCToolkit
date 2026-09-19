@@ -119,3 +119,45 @@ def test_selection_browser_caption_in_header_bar(qapp):  # noqa: ARG001
     assert panel._meta.font().family() == header_font.family()
     panel.deleteLater()
     w.close()
+
+
+def test_selection_browser_preview_mode_uses_item_data(qapp):  # noqa: ARG001
+    from molmanager.ui.browsers.selection_browser import (
+        BROWSER_PREVIEW_MODE_3DMOL_2D,
+        BROWSER_PREVIEW_MODE_3DMOL_3D,
+        BROWSER_PREVIEW_MODE_LABELS,
+        BROWSER_PREVIEW_MODE_RDKIT_2D,
+        DEFAULT_BROWSER_PREVIEW_MODE,
+    )
+
+    w = ChemistryWorkspaceWindow()
+    _seed_row(w)
+    panel = SelectionBrowserWidget(w)
+    keys = [panel._preview_mode_combo.itemData(i) for i in range(panel._preview_mode_combo.count())]
+    assert keys == [k for k, _ in BROWSER_PREVIEW_MODE_LABELS]
+    assert panel._preview_mode_key() == DEFAULT_BROWSER_PREVIEW_MODE
+    assert panel._preview_mode_key() == BROWSER_PREVIEW_MODE_RDKIT_2D
+    assert not panel._uses_3dmol_preview()
+    panel.set_preview_mode(BROWSER_PREVIEW_MODE_3DMOL_2D)
+    assert panel._preview_mode_key() == BROWSER_PREVIEW_MODE_3DMOL_2D
+    assert panel._uses_3dmol_preview()
+    panel.set_preview_mode(BROWSER_PREVIEW_MODE_3DMOL_3D)
+    assert panel._preview_mode_key() == BROWSER_PREVIEW_MODE_3DMOL_3D
+    panel.deleteLater()
+    w.close()
+
+
+def test_selection_browser_focus_oid_walks_to_row(qapp):  # noqa: ARG001
+    w = ChemistryWorkspaceWindow()
+    _seed_row(w)
+    w._table_model.append_row(1, {"SMILES": "CCC", "Name": "propane", "MW": "44.10"})
+    w.mols[1] = Chem.MolFromSmiles("CCC")
+    w.next_oid = 2
+    panel = SelectionBrowserWidget(w)
+    panel._cb_only_selected.setChecked(False)
+    panel.refresh_from_app()
+    panel.focus_oid(1)
+    assert panel._rows[panel._idx] == 1
+    assert panel._row_table.item(0, 1).text() == "propane"
+    panel.deleteLater()
+    w.close()

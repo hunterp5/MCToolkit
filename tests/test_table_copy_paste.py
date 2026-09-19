@@ -137,3 +137,21 @@ def test_paste_block_skips_invalid_structure_cells(qapp) -> None:  # noqa: ARG00
     w.edit_paste(origin=(0, 1), block_mode="multi", overwrite=True)
     assert Chem.MolToSmiles(w.mols[0]) == "CC"
     assert w._table_model.cell_text(0, 2) == "new"
+
+
+def test_structure_copy_submenu_formats(qapp) -> None:  # noqa: ARG001
+    from PyQt5.QtWidgets import QMenu
+    from rdkit import Chem
+
+    from molmanager.ui.main_window.table_menu_mixin import TableMenuMixin
+
+    class _Host(TableMenuMixin):
+        pass
+
+    menu = QMenu()
+    by_act = _Host()._add_structure_copy_submenu(menu, Chem.MolFromSmiles("CCO"))
+    labels = [act.text() for act in by_act]
+    assert labels == ["SMILES", "InChI", "InChIKey", "Molfile", "SMARTS"]
+    assert all(act.isEnabled() for act in by_act)
+    copy_menu = next(a for a in menu.actions() if a.menu() is not None)
+    assert copy_menu.text() == "Copy"

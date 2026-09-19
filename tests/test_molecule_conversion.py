@@ -22,6 +22,7 @@ from rdkit import Chem
 
 from molmanager.chem.molecule_conversion import (
     looks_like_structure_cell_text,
+    mol_structure_copy_texts,
     parse_molecule_from_cell_text,
     redact_sqlalchemy_url,
     safe_float,
@@ -85,3 +86,27 @@ def test_parse_molecule_from_cell_text_skips_urls_and_json_quietly(capsys):
     err = capsys.readouterr().err
     assert "SMILES Parse Error" not in err
     assert "SMARTS Parse Error" not in err
+
+
+def test_mol_structure_copy_texts_ethanol():
+    mol = Chem.MolFromSmiles("CCO")
+    texts = mol_structure_copy_texts(mol)
+    assert texts["smiles"] == "CCO"
+    assert texts["inchi"] == "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3"
+    assert texts["inchikey"] == "LFQSCWFLJHTTHZ-UHFFFAOYSA-N"
+    assert "V2000" in texts["molfile"]
+    parsed = Chem.MolFromMolBlock(texts["molfile"])
+    assert parsed is not None
+    assert Chem.MolToSmiles(parsed, canonical=True) == "CCO"
+    assert texts["smarts"]
+
+
+def test_mol_structure_copy_texts_none():
+    texts = mol_structure_copy_texts(None)
+    assert texts == {
+        "smiles": "",
+        "inchi": "",
+        "inchikey": "",
+        "molfile": "",
+        "smarts": "",
+    }

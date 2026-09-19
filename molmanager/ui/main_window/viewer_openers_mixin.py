@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Open Plotter, Sketcher, 2D/3D molecule viewers, and Data analysis."""
+"""Open Plotter, Sketcher, Browser structure views, and Data analysis."""
 
 from __future__ import annotations
 
@@ -83,17 +83,13 @@ class ViewerOpenersMixin:
     def open_molecule_3d(self, mol=None, *, source_oid=None):
         if mol is not None and not isinstance(mol, Chem.Mol):
             mol = None
-        if mol is None:
+        if mol is None and source_oid is None:
             return
-        from ..mol_viewer_3d import open_molecule_3d_viewer
-
-        open_molecule_3d_viewer(mol, self, title="View in 3D", source_oid=source_oid)
+        self.open_selection_browser(focus_oid=source_oid, preview_mode="3dmol_3d")
 
     def open_molecule_2d(self, mol=None, *, source_oid=None):
         if mol is not None and not isinstance(mol, Chem.Mol):
             mol = None
-        if mol is None:
+        if mol is None and source_oid is None:
             return
-        from ..mol_viewer_3d import open_molecule_2d_viewer
-
-        open_molecule_2d_viewer(mol, self, title="View in 2D", source_oid=source_oid)
+        self.open_selection_browser(focus_oid=source_oid, preview_mode="3dmol_2d")

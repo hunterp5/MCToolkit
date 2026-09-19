@@ -139,6 +139,92 @@ def mol_to_canonical_smiles(mol, *, isomeric: bool = True) -> str:
     return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=isomeric)
 
 
+def mol_to_inchi(mol) -> str:
+    """Standard InChI, or empty string if RDKit cannot generate one."""
+    if mol is None:
+        return ""
+    from rdkit import Chem
+
+    blocker = _rdkit_log_blocker()
+    try:
+        return (Chem.MolToInchi(mol) or "").strip()
+    except Exception:
+        return ""
+    finally:
+        del blocker
+
+
+def mol_to_inchi_key(mol) -> str:
+    """Standard InChIKey, or empty string if RDKit cannot generate one."""
+    if mol is None:
+        return ""
+    from rdkit import Chem
+
+    blocker = _rdkit_log_blocker()
+    try:
+        return (Chem.MolToInchiKey(mol) or "").strip()
+    except Exception:
+        return ""
+    finally:
+        del blocker
+
+
+def mol_to_molblock(mol) -> str:
+    """MDL molfile (V2000). Adds 2D coords when the molecule has no conformer."""
+    if mol is None:
+        return ""
+    from rdkit import Chem
+
+    blocker = _rdkit_log_blocker()
+    try:
+        copy = Chem.Mol(mol)
+        if copy.GetNumConformers() == 0:
+            try:
+                from rdkit.Chem import rdDepictor
+
+                rdDepictor.Compute2DCoords(copy)
+            except Exception:
+                pass
+        block = Chem.MolToMolBlock(copy) or ""
+        return block if block.strip() else ""
+    except Exception:
+        return ""
+    finally:
+        del blocker
+
+
+def mol_to_smarts(mol) -> str:
+    """SMARTS for ``mol``, or empty string if RDKit cannot generate one."""
+    if mol is None:
+        return ""
+    from rdkit import Chem
+
+    blocker = _rdkit_log_blocker()
+    try:
+        return (Chem.MolToSmarts(mol) or "").strip()
+    except Exception:
+        return ""
+    finally:
+        del blocker
+
+
+def mol_structure_copy_texts(mol) -> dict[str, str]:
+    """Clipboard strings for the structure Copy submenu, keyed by format id."""
+    smiles = ""
+    if mol is not None:
+        try:
+            smiles = mol_to_canonical_smiles(mol).strip()
+        except Exception:
+            smiles = ""
+    return {
+        "smiles": smiles,
+        "inchi": mol_to_inchi(mol),
+        "inchikey": mol_to_inchi_key(mol),
+        "molfile": mol_to_molblock(mol),
+        "smarts": mol_to_smarts(mol),
+    }
+
+
 def mol_graph_binary(mol) -> bytes | None:
     """RDKit binary for the connection table only (no conformers).
 

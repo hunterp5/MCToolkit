@@ -121,7 +121,8 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "file_browser",
                 "Selection Browser",
                 "Selection Browser",
-                "Browse selected (or all) table rows with a structure preview and a compact row table.",
+                "Browse selected (or all) table rows with RDKit 2D, 3Dmol 2D, or 3Dmol 3D "
+                "structure preview and a compact row table.",
             ),
         ),
     ),

@@ -417,7 +417,7 @@ pip install -e .
 
 ### PyQtWebEngine fails to install
 
-The app can still run; the **View in 3D** feature may open structures in your web browser instead of an embedded viewer. On Linux you may need system packages (for example `libegl1` on Debian/Ubuntu).
+The app can still run; **Browser** 3Dmol previews may open in your system browser instead of an embedded viewer. On Linux you may need system packages (for example `libegl1` on Debian/Ubuntu).
 
 ### “No module named molmanager”
 

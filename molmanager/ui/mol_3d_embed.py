@@ -37,7 +37,7 @@ from .mol_3d_html import (
     _wire_webengine_console_logger,
     bundled_3dmol_available,
 )
-from .mol_3d_prepare import prepare_mol_3d
+from .mol_3d_prepare import prepare_mol_2d, prepare_mol_3d
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +50,11 @@ class Molecule3DEmbedView(QWidget):
     The WebEngine page is created lazily on first show so QtWebEngine can preload at app start.
     """
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None, *, flat: bool = False):
         super().__init__(parent)
         self.setMinimumWidth(420)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._flat = bool(flat)
         self._viewer_tmp: QTemporaryDir | None = None
         self._web_ready = False
         self._pending_b64: str | None = None
@@ -122,10 +123,12 @@ class Molecule3DEmbedView(QWidget):
                 tmp = Path(self._viewer_tmp.path())
                 shutil.copy2(_BUNDLED_3DMOL, tmp / "3Dmol-min.js")
                 index = tmp / "index.html"
-                index.write_text(_offline_embed_index_html(""), encoding="utf-8")
+                index.write_text(_offline_embed_index_html("", flat=self._flat), encoding="utf-8")
                 web.load(QUrl.fromLocalFile(str(index.resolve())))
             else:
-                web.setHtml(_cdn_embed_fallback_html(""), QUrl("https://3dmol.org/"))
+                web.setHtml(
+                    _cdn_embed_fallback_html("", flat=self._flat), QUrl("https://3dmol.org/")
+                )
             self._web = web
             self._status.hide()
             self._root.addWidget(web, 1)
@@ -153,7 +156,10 @@ class Molecule3DEmbedView(QWidget):
         if not self._web_ready:
             self._pending_b64 = b64
             return
-        js = f"if (window.molmanagerSetMolB64) window.molmanagerSetMolB64({json.dumps(b64)});"
+        js = (
+            "if (window.molmanagerSetMolB64) window.molmanagerSetMolB64("
+            f"{json.dumps(b64)}, {json.dumps(bool(self._flat))});"
+        )
         try:
             self._web.page().runJavaScript(js)
         except Exception:
@@ -164,28 +170,32 @@ class Molecule3DEmbedView(QWidget):
         self._run_set_mol_b64("")
 
     def set_molecule(self, mol: Chem.Mol | None, *, rebuild_3d: bool = True) -> None:
-        """Embed *mol* in 3D and display it, or clear when *mol* is empty/invalid.
+        """Display *mol*, or clear when *mol* is empty/invalid.
 
-        When *rebuild_3d* is False and *mol* already has a 3D conformer (e.g. a docked
-        ligand), that geometry is kept instead of running ETKDG again.
+        When ``flat`` is set on this view, a 2D layout is shown in 3Dmol (orthographic).
+        Otherwise, when *rebuild_3d* is False and *mol* already has a 3D conformer
+        (e.g. a docked ligand), that geometry is kept instead of running ETKDG again.
         """
         if mol is None or mol.GetNumAtoms() == 0:
             self.clear()
             return
-        m3 = None
-        if not rebuild_3d:
-            try:
-                if mol.GetNumConformers() >= 1 and mol.GetConformer().Is3D():
-                    m3 = Chem.Mol(mol)
-            except Exception:
-                m3 = None
-        if m3 is None:
-            m3 = prepare_mol_3d(mol)
-        if m3 is None:
+        prepared = None
+        if self._flat:
+            prepared = prepare_mol_2d(mol)
+        else:
+            if not rebuild_3d:
+                try:
+                    if mol.GetNumConformers() >= 1 and mol.GetConformer().Is3D():
+                        prepared = Chem.Mol(mol)
+                except Exception:
+                    prepared = None
+            if prepared is None:
+                prepared = prepare_mol_3d(mol)
+        if prepared is None:
             self.clear()
             return
         try:
-            self._run_set_mol_b64(_mol_block_b64(m3))
+            self._run_set_mol_b64(_mol_block_b64(prepared))
             self.schedule_refit()
             QTimer.singleShot(150, self.refit_view)
         except Exception:

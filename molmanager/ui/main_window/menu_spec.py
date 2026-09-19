@@ -679,7 +679,8 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             "&Browser…",
             "open_selection_browser",
             hotkey="file.browser",
-            tooltip="Open the selection browser to review and act on selected rows.",
+            tooltip="Open the selection browser to review and act on selected rows. "
+            "Right-click a structure for Browser; settings pick RDKit 2D, 3Dmol 2D, or 3Dmol 3D.",
         ),
     ),
     submenu(

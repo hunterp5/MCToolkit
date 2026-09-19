@@ -25,6 +25,7 @@ from PyQt5.QtGui import QBrush, QFont, QIcon, QImage, QPixmap
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
+    QComboBox,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -70,6 +71,23 @@ from .chrome import (
 _ROW_TABLE_PIXMAP_MAX = QSize(48, 36)
 _ROW_TABLE_ROW_HEIGHT = _ROW_TABLE_PIXMAP_MAX.height() + 8
 
+BROWSER_PREVIEW_MODE_RDKIT_2D = "rdkit_2d"
+BROWSER_PREVIEW_MODE_3DMOL_2D = "3dmol_2d"
+BROWSER_PREVIEW_MODE_3DMOL_3D = "3dmol_3d"
+BROWSER_PREVIEW_MODE_LABELS: tuple[tuple[str, str], ...] = (
+    (BROWSER_PREVIEW_MODE_RDKIT_2D, "RDKit 2D"),
+    (BROWSER_PREVIEW_MODE_3DMOL_2D, "3Dmol 2D"),
+    (BROWSER_PREVIEW_MODE_3DMOL_3D, "3Dmol 3D"),
+)
+DEFAULT_BROWSER_PREVIEW_MODE = BROWSER_PREVIEW_MODE_RDKIT_2D
+
+
+def _set_combo_current_data(combo: QComboBox, data) -> None:
+    for i in range(combo.count()):
+        if combo.itemData(i) == data:
+            combo.setCurrentIndex(i)
+            return
+
 
 class SelectionBrowserWidget(QWidget):
     """Forward/back through the current selection or entire table; shows a structure preview."""
@@ -112,7 +130,7 @@ class SelectionBrowserWidget(QWidget):
         style_browser_structure_label(self._struct_label)
         self._preview_ly.addWidget(self._struct_label, 1)
         self._view_3d = None
-        self._preview_3d_mode = False
+        self._preview_mode = DEFAULT_BROWSER_PREVIEW_MODE
         root.addWidget(self._preview_host, 1)
 
         self._options_host = QWidget(self)
@@ -196,7 +214,7 @@ class SelectionBrowserWidget(QWidget):
         left_ly.setSpacing(4)
         self._opts_btn = make_plot_options_button(
             self,
-            tooltip="Browser settings: row table and 3D preview.",
+            tooltip="Browser settings: row table and structure view.",
         )
         self._opts_btn.clicked.connect(self._open_browser_options)
         left_ly.addWidget(self._opts_btn)
@@ -249,19 +267,23 @@ class SelectionBrowserWidget(QWidget):
         )
         self._cb_hide_options.toggled.connect(self._on_hide_options_toggled)
         opts_form.addRow(self._cb_hide_options)
-        self._cb_view_3d = QCheckBox("3D")
-        self._cb_view_3d.setToolTip(
-            "Browse structures as interactive 3D models instead of 2D RDKit depictions.\n"
-            "Existing 3D coordinates (e.g. docked ligands) are kept when present."
+        self._preview_mode_combo = QComboBox()
+        for key, label in BROWSER_PREVIEW_MODE_LABELS:
+            self._preview_mode_combo.addItem(label, key)
+        _set_combo_current_data(self._preview_mode_combo, DEFAULT_BROWSER_PREVIEW_MODE)
+        self._preview_mode_combo.setToolTip(
+            "How the current structure is drawn: RDKit 2D depiction, interactive 3Dmol 2D "
+            "(flat), or interactive 3Dmol 3D. Existing 3D coordinates are kept in 3D mode "
+            "when present."
         )
-        self._cb_view_3d.toggled.connect(self._on_view_3d_toggled)
-        opts_form.addRow(self._cb_view_3d)
+        self._preview_mode_combo.currentIndexChanged.connect(self._on_preview_mode_changed)
+        opts_form.addRow("Structure view:", self._preview_mode_combo)
         self._opts_dialog = make_plot_options_dialog(
             self,
             self._opts_panel,
             title="Browser Settings",
             min_width=320,
-            min_height=140,
+            min_height=180,
         )
 
         self._btn_first.clicked.connect(self._go_first)
@@ -402,32 +424,108 @@ class SelectionBrowserWidget(QWidget):
         self._options_visible = not bool(checked)
         self._sync_options_chrome()
 
-    def _on_view_3d_toggled(self, checked: bool) -> None:
-        self._preview_3d_mode = bool(checked)
+    def _preview_mode_key(self) -> str:
+        data = self._preview_mode_combo.currentData()
+        if data in {
+            BROWSER_PREVIEW_MODE_RDKIT_2D,
+            BROWSER_PREVIEW_MODE_3DMOL_2D,
+            BROWSER_PREVIEW_MODE_3DMOL_3D,
+        }:
+            return str(data)
+        return DEFAULT_BROWSER_PREVIEW_MODE
+
+    def _uses_3dmol_preview(self) -> bool:
+        return self._preview_mode_key() in {
+            BROWSER_PREVIEW_MODE_3DMOL_2D,
+            BROWSER_PREVIEW_MODE_3DMOL_3D,
+        }
+
+    def set_preview_mode(self, mode: str) -> None:
+        """Select a structure-view mode by catalog key."""
+        key = str(mode or "").strip()
+        if key not in {k for k, _ in BROWSER_PREVIEW_MODE_LABELS}:
+            return
+        if self._preview_mode_combo.currentData() == key:
+            return
+        _set_combo_current_data(self._preview_mode_combo, key)
+
+    def apply_open_request(
+        self,
+        *,
+        focus_oid: int | None = None,
+        preview_mode: str | None = None,
+    ) -> None:
+        """Apply a Data → Browser / context-menu open: optional view mode and row focus."""
+        if preview_mode:
+            self.set_preview_mode(preview_mode)
+        self.refresh_from_app(preserve_position=focus_oid is None)
+        if focus_oid is not None:
+            self.focus_oid(int(focus_oid))
+
+    def focus_oid(self, oid: int) -> None:
+        """Walk to the table row for *oid*, expanding scope off “Browse Selected” if needed."""
+        app = self._app
+        if app is None:
+            return
+        target: int | None = None
+        try:
+            n = int(app._table_model.rowCount())
+        except Exception:
+            return
+        want = int(oid)
+        for r in range(n):
+            try:
+                if int(app._table_model.row_oid(r)) == want:
+                    target = r
+                    break
+            except Exception:
+                continue
+        if target is None:
+            return
+        if target not in self._rows and self._cb_only_selected.isChecked():
+            self._cb_only_selected.blockSignals(True)
+            self._cb_only_selected.setChecked(False)
+            self._cb_only_selected.blockSignals(False)
+            self.refresh_from_app()
+        if target not in self._rows:
+            return
+        self._idx = self._rows.index(target)
+        self._focus_row(target)
+
+    def _on_preview_mode_changed(self, _index: int = 0) -> None:
+        self._preview_mode = self._preview_mode_key()
         self._sync_preview_mode()
         row = self._current_row()
         if row is not None:
             self._update_preview(row)
-        elif bool(checked) and self._view_3d is not None:
+        elif self._uses_3dmol_preview() and self._view_3d is not None:
             self._view_3d.clear()
 
-    def _ensure_3d_view(self) -> None:
-        if getattr(self, "_view_3d", None) is not None:
+    def _ensure_3dmol_view(self, *, flat: bool) -> None:
+        view = getattr(self, "_view_3d", None)
+        if view is not None and bool(getattr(view, "_flat", False)) == bool(flat):
             return
+        if view is not None:
+            self._preview_ly.removeWidget(view)
+            view.setParent(None)
+            view.deleteLater()
+            self._view_3d = None
         try:
             from ..mol_viewer_3d import Molecule3DEmbedView
         except Exception:
             return
-        view = Molecule3DEmbedView(self._preview_host)
+        view = Molecule3DEmbedView(self._preview_host, flat=bool(flat))
         view.setMinimumSize(0, 0)
         view.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self._preview_ly.addWidget(view, 1)
         self._view_3d = view
 
     def _sync_preview_mode(self) -> None:
-        three_d = bool(getattr(self, "_preview_3d_mode", False))
-        if three_d:
-            self._ensure_3d_view()
+        mode = self._preview_mode_key()
+        three_dmol = mode in {BROWSER_PREVIEW_MODE_3DMOL_2D, BROWSER_PREVIEW_MODE_3DMOL_3D}
+        style_browser_preview_host(self._preview_host, canvas=mode != BROWSER_PREVIEW_MODE_3DMOL_3D)
+        if three_dmol:
+            self._ensure_3dmol_view(flat=mode == BROWSER_PREVIEW_MODE_3DMOL_2D)
             self._struct_label.hide()
             view = getattr(self, "_view_3d", None)
             if view is not None:
@@ -437,7 +535,7 @@ class SelectionBrowserWidget(QWidget):
                 self._struct_label.show()
                 self._struct_label.clear()
                 self._struct_label.setPixmap(QPixmap())
-                self._struct_label.setText("(3D viewer unavailable)")
+                self._struct_label.setText("(3Dmol viewer unavailable)")
         else:
             self._struct_label.show()
             view = getattr(self, "_view_3d", None)
@@ -512,7 +610,7 @@ class SelectionBrowserWidget(QWidget):
 
     def resizeEvent(self, event) -> None:  # noqa: N802 — Qt API
         super().resizeEvent(event)
-        if getattr(self, "_preview_3d_mode", False):
+        if self._uses_3dmol_preview():
             view = getattr(self, "_view_3d", None)
             if view is not None:
                 view.schedule_refit()
@@ -890,14 +988,15 @@ class SelectionBrowserWidget(QWidget):
             return None
         return None
 
-    def _update_preview_3d(self, logical_row: int) -> None:
-        self._ensure_3d_view()
+    def _update_preview_3dmol(self, logical_row: int) -> None:
+        flat = self._preview_mode_key() == BROWSER_PREVIEW_MODE_3DMOL_2D
+        self._ensure_3dmol_view(flat=flat)
         view = getattr(self, "_view_3d", None)
         if view is None:
             self._struct_label.show()
             self._struct_label.clear()
             self._struct_label.setPixmap(QPixmap())
-            self._struct_label.setText("(3D viewer unavailable)")
+            self._struct_label.setText("(3Dmol viewer unavailable)")
             return
         app = self._app
         try:
@@ -909,9 +1008,9 @@ class SelectionBrowserWidget(QWidget):
         view.set_molecule(mol, rebuild_3d=False)
 
     def _update_preview(self, logical_row: int) -> None:
-        if getattr(self, "_preview_3d_mode", False):
+        if self._uses_3dmol_preview():
             self._sync_preview_mode()
-            self._update_preview_3d(logical_row)
+            self._update_preview_3dmol(logical_row)
             return
         self._sync_preview_mode()
         pw, ph, dpr = self._preview_pixel_size()

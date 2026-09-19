@@ -163,7 +163,7 @@ class TableChemistryAccessMixin:
         return None
 
     def _column_eligible_for_table_chemistry_menu(self, row: int, col: int) -> bool:
-        """Whether the table cell's column should offer structure tools / Copy as SMILES."""
+        """Whether the table cell's column should offer structure tools / Copy formats."""
         if col == CompoundTableModel.STRUCTURE_COL:
             return True
         if col <= 0 or col >= len(self.headers):

@@ -252,7 +252,7 @@ class Molecule3DViewerWidget(Mol3DConfMixin, Mol3DChromeMixin, QWidget):
         options_ly.setContentsMargins(0, 0, 0, 0)
         options_ly.setSpacing(4)
         self._options_host.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
-        # View Conformers is multi-conf; skip table field pickers. Keep them for View 2D/3D.
+        # View Conformers is multi-conf; skip table field pickers (Browser shows the row table).
         if multi_conf_blocks_json_b64 is None:
             self._prop_panel = PropertyColumnsPanel(self._options_host)
             self._prop_panel.bind_app(parent_app)

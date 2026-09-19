@@ -379,9 +379,23 @@ class TableUIMixin(
             return
         self._selection_browser_dialog = None
 
-    def open_selection_browser(self) -> None:
+    def open_selection_browser(
+        self,
+        *,
+        focus_oid: int | None = None,
+        preview_mode: str | None = None,
+    ) -> None:
         """Open modeless dialog to walk selected rows with structure preview."""
         from ..selection_browser import SelectionBrowserDialog, SelectionBrowserWidget
+
+        def _apply(panel) -> None:
+            if panel is None:
+                return
+            apply_fn = getattr(panel, "apply_open_request", None)
+            if callable(apply_fn):
+                apply_fn(focus_oid=focus_oid, preview_mode=preview_mode)
+            else:
+                panel.refresh_from_app(preserve_position=True)
 
         for w in self.iter_docked_plot_widgets():
             if isinstance(w, SelectionBrowserWidget):
@@ -391,7 +405,7 @@ class TableUIMixin(
                     if pane is not None:
                         mgr.set_preferred_pane(pane)
                 self.show_docked_plot_panel()
-                w.refresh_from_app(preserve_position=True)
+                _apply(w)
                 w.raise_()
                 self.status_label.setText("Browser: focused in workspace pane.")
                 return
@@ -399,9 +413,10 @@ class TableUIMixin(
         def _factory():
             return SelectionBrowserDialog(self)
 
-        reuse_or_show_modeless_singleton(
+        dlg = reuse_or_show_modeless_singleton(
             self,
             "_selection_browser_dialog",
             _factory,
-            on_reused_visible=lambda dlg: dlg.refresh_from_app(preserve_position=True),
+            on_reused_visible=lambda d: _apply(getattr(d, "_panel", None)),
         )
+        _apply(getattr(dlg, "_panel", None))
