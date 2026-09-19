@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -47,6 +46,7 @@ from ...protein.pharmacophore_screen import (
 )
 from ...workers.pharmacophore_screen import PharmacophoreScreenWorker
 from ...workers.signals import PharmacophoreScreenSignals
+from ..chunked_table_write import ChunkedTableWriter
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -85,6 +85,7 @@ class PharmacophoreScreenDialog(QDialog):
         self._pending_columns: tuple[str, str, str, str] = output_column_names("pharma")
         self._ensemble_db: str | None = None
         self._ensemble_column: str | None = None
+        self._writer: ChunkedTableWriter | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -359,23 +360,25 @@ class PharmacophoreScreenDialog(QDialog):
         )
         self.close()
 
-    def _write_columns(self, rows) -> None:
-        app = self.parent_app
-        match_name, score_name, rmsd_name, conf_name = self._pending_columns
+    def _result_column_maps(self, rows) -> tuple[tuple[dict[int, str], ...], int, list[int]]:
+        """Turn worker rows into one oid->text map per result column.
+
+        Rows in scope that the worker never reported (and rows it could not
+        screen) are filled with ``N/A`` so the columns stay aligned with scope.
+        """
         match_map: dict[int, str] = {}
         score_map: dict[int, str] = {}
         rmsd_map: dict[int, str] = {}
         conf_map: dict[int, str] = {}
+        maps = (match_map, score_map, rmsd_map, conf_map)
         n_hit = 0
         hit_oids: list[int] = []
         found = set()
         for oid, matched, score, rmsd, conf_id in rows or []:
             found.add(int(oid))
             if matched is None:
-                match_map[int(oid)] = "N/A"
-                score_map[int(oid)] = "N/A"
-                rmsd_map[int(oid)] = "N/A"
-                conf_map[int(oid)] = "N/A"
+                for oid_map in maps:
+                    oid_map[int(oid)] = "N/A"
                 continue
             if matched:
                 n_hit += 1
@@ -387,101 +390,62 @@ class PharmacophoreScreenDialog(QDialog):
         for oid in self._compare_oids:
             if oid in found:
                 continue
-            match_map[oid] = "N/A"
-            score_map[oid] = "N/A"
-            rmsd_map[oid] = "N/A"
-            conf_map[oid] = "N/A"
+            for oid_map in maps:
+                oid_map[oid] = "N/A"
+        return maps, n_hit, hit_oids
+
+    def _write_columns(self, rows) -> None:
+        app = self.parent_app
+        maps, n_hit, hit_oids = self._result_column_maps(rows)
+        names = list(self._pending_columns)
         model = app._table_model
-        nc = model.columnCount()
-        names = [match_name, score_name, rmsd_name, conf_name]
         for name in names:
             app.headers.append(name)
-        model.insert_columns_at(nc, names, None)
-        maps = (match_map, score_map, rmsd_map, conf_map)
+        model.insert_columns_at(model.columnCount(), names, None)
+
         n_rows = model.rowCount()
         n_scope = len(self._compare_oids)
-        chunk = max(250, int(load_config().ingest_gui_chunk_size))
-        async_min = max(500, int(load_config().table_selection_chunk_rows))
-        if n_rows < async_min:
-            try:
-                app.table.setUpdatesEnabled(False)
-            except Exception:
-                pass
-            try:
-                for name, oid_map in zip(names, maps):
-                    model.fill_column_from_oid_map(name, oid_map, default="")
-                app._sync_global_bounds_for_headers(names, refresh_filters=True)
-            finally:
-                try:
-                    app.table.setUpdatesEnabled(True)
-                except Exception:
-                    pass
-            self._finish_screen_results(n_hit, n_scope, hit_oids)
-            return
-        self._write_gen = int(getattr(self, "_write_gen", 0)) + 1
-        gen = self._write_gen
-        app._begin_tool_progress("Writing results", n_rows)
-        self._write_ctx = {
-            "gen": gen,
-            "names": names,
-            "maps": maps,
-            "idx": 0,
-            "chunk": chunk,
-            "n_rows": n_rows,
-            "n_hit": n_hit,
-            "n_scope": n_scope,
-            "hit_oids": hit_oids,
-        }
-        QTimer.singleShot(0, self._write_step)
+        cfg = load_config()
+        chunked = n_rows >= max(500, int(cfg.table_selection_chunk_rows))
 
-    def _write_step(self) -> None:
-        ctx = getattr(self, "_write_ctx", None)
-        app = self.parent_app
-        if not ctx or ctx.get("gen") != getattr(self, "_write_gen", -1) or app is None:
-            return
-        names = ctx["names"]
-        maps = ctx["maps"]
-        idx = int(ctx["idx"])
-        chunk = int(ctx["chunk"])
-        n_rows = int(ctx["n_rows"])
-        end = min(idx + chunk, n_rows)
-        last = end >= n_rows
-        try:
-            app.table.setUpdatesEnabled(False)
-        except Exception:
-            pass
-        try:
+        def write_chunk(start: int, end: int, is_last: bool) -> None:
             for name, oid_map in zip(names, maps):
-                app._table_model.fill_column_from_oid_map(
+                model.fill_column_from_oid_map(
                     name,
                     oid_map,
                     default="",
-                    start_row=idx,
+                    start_row=start,
                     end_row=end,
                     emit=True,
-                    rebuild_color=last,
+                    rebuild_color=is_last,
                 )
-        finally:
-            try:
-                app.table.setUpdatesEnabled(True)
-            except Exception:
-                pass
-        ctx["idx"] = end
-        app._on_tool_progress("Writing results…", end, n_rows)
-        if not last:
-            QTimer.singleShot(0, self._write_step)
-            return
-        self._write_ctx = None
-        dirty = {name for name in names if name in app._table_model._bounds_data_headers()}
-        if dirty:
-            app._table_model._mark_numeric_bounds_dirty(dirty)
-        app._sync_global_bounds_for_headers(names, refresh_filters=True)
-        app._finish_tool_progress("Writing results", status_message=None)
-        self._finish_screen_results(
-            int(ctx["n_hit"]),
-            int(ctx["n_scope"]),
-            list(ctx.get("hit_oids") or []),
+
+        def on_done() -> None:
+            app._sync_global_bounds_for_headers(names, refresh_filters=True)
+            if chunked:
+                app._finish_tool_progress("Writing results", status_message=None)
+            self._finish_screen_results(n_hit, n_scope, hit_oids)
+
+        if self._writer is not None:
+            self._writer.cancel()
+        self._writer = ChunkedTableWriter(
+            table=app.table,
+            total=n_rows,
+            chunk=max(250, int(cfg.ingest_gui_chunk_size)) if chunked else max(1, n_rows),
+            write_chunk=write_chunk,
+            on_progress=(
+                (lambda done, total: app._on_tool_progress("Writing results…", done, total))
+                if chunked
+                else None
+            ),
+            on_done=on_done,
+            should_continue=lambda: self.parent_app is not None,
         )
+        if chunked:
+            app._begin_tool_progress("Writing results", n_rows)
+            self._writer.start()
+        else:
+            self._writer.run_now()
 
     def _finish_screen_results(self, n_hit: int, n_scope: int, hit_oids: list[int]) -> None:
         app = self.parent_app

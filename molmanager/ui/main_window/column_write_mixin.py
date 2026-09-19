@@ -20,8 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PyQt5.QtCore import QTimer
-
+from ..chunked_table_write import ChunkedTableWriter
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
 
 
@@ -131,46 +130,45 @@ class ColumnWriteMixin:
         if on_complete is not None:
             on_complete(list(calc_h))
 
-    def _calc_write_step(self) -> None:
-        ctx = getattr(self, "_calc_write_ctx", None)
-        if not ctx or ctx.get("gen") != getattr(self, "_calc_write_gen", -1):
-            return
-        bulk_rows: list[tuple[int, dict[str, str]]] = ctx["bulk_rows"]
-        calc_h: list[str] = ctx["calc_h"]
-        idx = int(ctx["idx"])
-        chunk = int(ctx["chunk"])
-        n = len(bulk_rows)
-        end = min(idx + chunk, n)
-        batch = bulk_rows[idx:end]
-        try:
-            self.table.setUpdatesEnabled(False)
-        except Exception:
-            pass
-        try:
-            self._apply_calc_bulk_rows(calc_h, batch)
-        finally:
-            try:
-                self.table.setUpdatesEnabled(True)
-            except Exception:
-                pass
-        ctx["idx"] = end
-        on_prog = getattr(self, "_on_tool_progress", None)
-        if callable(on_prog):
-            on_prog("Writing results…", end, n)
-        else:
-            self.status_label.setText(f"Writing results… ({end:,}/{n:,})")
-        if end < n:
-            QTimer.singleShot(0, self._calc_write_step)
-            return
-        self._calc_write_ctx = None
-        finish = getattr(self, "_finish_tool_progress", None)
-        if callable(finish):
-            finish("Writing results", status_message=None)
-        self._finalize_calc_writeback(
-            calc_h,
-            list(ctx.get("new_h") or []),
-            on_complete=ctx.get("on_complete"),
+    def _start_calc_writeback(
+        self,
+        calc_h: list[str],
+        new_h: list[str],
+        bulk_rows: list[tuple[int, dict[str, str]]],
+        *,
+        on_complete: Callable[[list[str]], None] | None = None,
+    ) -> None:
+        """Apply result rows in GUI-budgeted chunks, yielding between each one."""
+
+        def write_chunk(start: int, end: int, _is_last: bool) -> None:
+            self._apply_calc_bulk_rows(calc_h, bulk_rows[start:end])
+
+        def on_progress(done: int, total: int) -> None:
+            on_prog = getattr(self, "_on_tool_progress", None)
+            if callable(on_prog):
+                on_prog("Writing results…", done, total)
+            else:
+                self.status_label.setText(f"Writing results… ({done:,}/{total:,})")
+
+        def on_done() -> None:
+            self._calc_writer = None
+            finish = getattr(self, "_finish_tool_progress", None)
+            if callable(finish):
+                finish("Writing results", status_message=None)
+            self._finalize_calc_writeback(calc_h, new_h, on_complete=on_complete)
+
+        writer = getattr(self, "_calc_writer", None)
+        if writer is not None:
+            writer.cancel()
+        self._calc_writer = ChunkedTableWriter(
+            table=self.table,
+            total=len(bulk_rows),
+            chunk=self._calc_writeback_chunk_rows(),
+            write_chunk=write_chunk,
+            on_progress=on_progress,
+            on_done=on_done,
         )
+        self._calc_writer.start()
 
     def on_calc_finished(
         self,
@@ -232,24 +230,16 @@ class ColumnWriteMixin:
         ]
         async_min = self._calc_writeback_async_min_rows()
         if bulk_rows and len(bulk_rows) >= async_min:
-            self._calc_write_gen = int(getattr(self, "_calc_write_gen", 0)) + 1
             begin = getattr(self, "_begin_tool_progress", None)
             if callable(begin):
                 begin("Writing results", len(bulk_rows))
-            self._calc_write_ctx = {
-                "gen": self._calc_write_gen,
-                "bulk_rows": bulk_rows,
-                "calc_h": list(calc_h),
-                "new_h": list(new_h),
-                "idx": 0,
-                "chunk": self._calc_writeback_chunk_rows(),
-                "on_complete": on_complete,
-            }
             try:
                 self.table.setUpdatesEnabled(True)
             except Exception:
                 pass
-            QTimer.singleShot(0, self._calc_write_step)
+            self._start_calc_writeback(
+                list(calc_h), list(new_h), bulk_rows, on_complete=on_complete
+            )
             return list(calc_h)
 
         if finish_progress:

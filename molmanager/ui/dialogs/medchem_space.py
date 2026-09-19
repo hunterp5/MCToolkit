@@ -55,6 +55,7 @@ from ...analysis.medchem_space import (
 )
 from ...workers.medchem_space_worker import MedChemSpaceSignals, MedChemSpaceWorker
 from .data_analysis import numeric_subset, table_to_dataframe
+from ..chunked_table_write import ChunkedTableWriter
 from ..medchem_space_plot import build_boiled_egg_figure, build_golden_triangle_figure
 from ..plotly_interactive_view import PlotlyInteractiveView
 from ..plot_table_sync import visible_oids_for_plot
@@ -98,8 +99,7 @@ class MedChemPlotPanel(DockableResultPlotPanel):
         self._job_running = False
         self._snapshot_collect_gen = 0
         self._snapshot_collect_ctx: dict | None = None
-        self._table_write_ctx: dict | None = None
-        self._table_write_gen = 0
+        self._table_writer: ChunkedTableWriter | None = None
         super().__init__(
             parent_app,
             window_title=window_title,
@@ -740,8 +740,9 @@ class MedChemPlotPanel(DockableResultPlotPanel):
         QMessageBox.warning(self, self._window_title, message or "Plot build failed.")
 
     def _cancel_table_write_job(self) -> None:
-        self._table_write_gen += 1
-        self._table_write_ctx = None
+        if self._table_writer is not None:
+            self._table_writer.cancel()
+            self._table_writer = None
 
     def _start_table_write_job(
         self,
@@ -753,51 +754,27 @@ class MedChemPlotPanel(DockableResultPlotPanel):
             return
         app._ensure_columns(columns)
         self._cancel_table_write_job()
-        gen = self._table_write_gen
-        chunk = max(500, load_config().table_selection_chunk_rows // 4)
-        self._table_write_ctx = {
-            "gen": gen,
-            "updates": updates,
-            "columns": columns,
-            "idx": 0,
-            "chunk": chunk,
-        }
-        app._begin_tool_progress(f"{self._window_title}: writing descriptors", len(updates))
-        QTimer.singleShot(0, self._table_write_step)
+        label = f"{self._window_title}: writing descriptors"
 
-    def _table_write_step(self) -> None:
-        ctx = self._table_write_ctx
-        app = self.parent_app
-        if not ctx or ctx.get("gen") != self._table_write_gen or app is None:
-            return
-        updates: list[tuple[int, dict[str, str]]] = ctx["updates"]
-        columns: list[str] = ctx["columns"]
-        idx = int(ctx["idx"])
-        chunk = int(ctx["chunk"])
-        end = min(idx + chunk, len(updates))
-        batch = updates[idx:end]
-        if batch:
-            try:
-                app.table.setUpdatesEnabled(False)
-            except Exception:
-                pass
-            try:
-                app._table_model.apply_columns_values_bulk(columns, batch)
-            finally:
-                try:
-                    app.table.setUpdatesEnabled(True)
-                except Exception:
-                    pass
-        ctx["idx"] = end
-        app._tool_progress_state.update(
-            f"{self._window_title}: writing descriptors", end, len(updates)
+        def write_chunk(start: int, end: int, _is_last: bool) -> None:
+            app._table_model.apply_columns_values_bulk(columns, updates[start:end])
+
+        def on_done() -> None:
+            self._table_writer = None
+            app._sync_global_bounds_for_headers(columns, refresh_filters=True)
+            app._finish_tool_progress(f"{self._window_title}: descriptors written")
+
+        app._begin_tool_progress(label, len(updates))
+        self._table_writer = ChunkedTableWriter(
+            table=app.table,
+            total=len(updates),
+            chunk=max(500, load_config().table_selection_chunk_rows // 4),
+            write_chunk=write_chunk,
+            on_progress=lambda done, total: app._tool_progress_state.update(label, done, total),
+            on_done=on_done,
+            should_continue=lambda: self.parent_app is not None,
         )
-        if end < len(updates):
-            QTimer.singleShot(0, self._table_write_step)
-            return
-        self._table_write_ctx = None
-        app._sync_global_bounds_for_headers(columns, refresh_filters=True)
-        app._finish_tool_progress(f"{self._window_title}: descriptors written")
+        self._table_writer.start()
 
     @staticmethod
     def _parse_numeric_cell(text: str) -> float | None:

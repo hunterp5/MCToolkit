@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -38,6 +37,7 @@ from ...workers import (
     SIMILARITY_METRIC_LABELS,
 )
 from ..strings import COLUMN_TANIMOTO_SIMILARITY
+from ..chunked_table_write import ChunkedTableWriter
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -54,6 +54,7 @@ class FPSimilarityDialog(QDialog):
         self._have_selection = n_sel > 0
         self._compare_oids: set[int] = set()
         self._pending_column_name = ""
+        self._writer: ChunkedTableWriter | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
@@ -237,94 +238,59 @@ class FPSimilarityDialog(QDialog):
         )
 
     def _write_similarity_column(self, rows) -> None:
+        app = self.parent_app
         success = {oid: f"{sim:.4f}" for oid, sim, _ in (rows or [])}
         oid_map = {oid: success.get(oid, "N/A") for oid in self._compare_oids}
         name = self._pending_column_name
-        m = self.parent_app._table_model
-        nc = m.columnCount()
-        self.parent_app.headers.append(name)
-        m.insert_column_at(nc, name, None)
-        n_rows = m.rowCount()
+        model = app._table_model
+        app.headers.append(name)
+        model.insert_column_at(model.columnCount(), name, None)
+
+        n_rows = model.rowCount()
         n_scored = len(success)
         n_na = len(self._compare_oids) - n_scored
-        chunk = max(250, int(load_config().ingest_gui_chunk_size))
-        async_min = max(500, int(load_config().table_selection_chunk_rows))
-        if n_rows < async_min:
-            try:
-                self.parent_app.table.setUpdatesEnabled(False)
-            except Exception:
-                pass
-            try:
-                m.fill_column_from_oid_map(name, oid_map, default="")
-                self.parent_app._sync_global_bounds_for_headers([name], refresh_filters=True)
-            finally:
-                try:
-                    self.parent_app.table.setUpdatesEnabled(True)
-                except Exception:
-                    pass
-            self.parent_app.status_label.setText(
-                f"Added '{name}' with {n_scored} score(s); {n_na} N/A in scope"
-            )
-            return
-        self._fp_write_gen = int(getattr(self, "_fp_write_gen", 0)) + 1
-        gen = self._fp_write_gen
-        self.parent_app._begin_tool_progress("Writing results", n_rows)
-        self._fp_write_ctx = {
-            "gen": gen,
-            "name": name,
-            "oid_map": oid_map,
-            "idx": 0,
-            "chunk": chunk,
-            "n_rows": n_rows,
-            "n_scored": n_scored,
-            "n_na": n_na,
-        }
-        QTimer.singleShot(0, self._fp_write_step)
+        cfg = load_config()
+        chunked = n_rows >= max(500, int(cfg.table_selection_chunk_rows))
 
-    def _fp_write_step(self) -> None:
-        ctx = getattr(self, "_fp_write_ctx", None)
-        app = self.parent_app
-        if not ctx or ctx.get("gen") != getattr(self, "_fp_write_gen", -1) or app is None:
-            return
-        name = ctx["name"]
-        oid_map = ctx["oid_map"]
-        idx = int(ctx["idx"])
-        chunk = int(ctx["chunk"])
-        n_rows = int(ctx["n_rows"])
-        end = min(idx + chunk, n_rows)
-        last = end >= n_rows
-        try:
-            app.table.setUpdatesEnabled(False)
-        except Exception:
-            pass
-        try:
-            app._table_model.fill_column_from_oid_map(
+        def write_chunk(start: int, end: int, is_last: bool) -> None:
+            model.fill_column_from_oid_map(
                 name,
                 oid_map,
                 default="",
-                start_row=idx,
+                start_row=start,
                 end_row=end,
                 emit=True,
-                rebuild_color=last,
+                rebuild_color=is_last,
             )
-        finally:
-            try:
-                app.table.setUpdatesEnabled(True)
-            except Exception:
-                pass
-        ctx["idx"] = end
-        app._on_tool_progress("Writing results…", end, n_rows)
-        if not last:
-            QTimer.singleShot(0, self._fp_write_step)
-            return
-        self._fp_write_ctx = None
-        if name in app._table_model._bounds_data_headers():
-            app._table_model._mark_numeric_bounds_dirty({name})
-        app._sync_global_bounds_for_headers([name], refresh_filters=True)
-        app._finish_tool_progress("Writing results", status_message=None)
-        app.status_label.setText(
-            f"Added '{name}' with {ctx['n_scored']} score(s); {ctx['n_na']} N/A in scope"
+
+        def on_done() -> None:
+            app._sync_global_bounds_for_headers([name], refresh_filters=True)
+            if chunked:
+                app._finish_tool_progress("Writing results", status_message=None)
+            app.status_label.setText(
+                f"Added '{name}' with {n_scored} score(s); {n_na} N/A in scope"
+            )
+
+        if self._writer is not None:
+            self._writer.cancel()
+        self._writer = ChunkedTableWriter(
+            table=app.table,
+            total=n_rows,
+            chunk=max(250, int(cfg.ingest_gui_chunk_size)) if chunked else max(1, n_rows),
+            write_chunk=write_chunk,
+            on_progress=(
+                (lambda done, total: app._on_tool_progress("Writing results…", done, total))
+                if chunked
+                else None
+            ),
+            on_done=on_done,
+            should_continue=lambda: self.parent_app is not None,
         )
+        if chunked:
+            app._begin_tool_progress("Writing results", n_rows)
+            self._writer.start()
+        else:
+            self._writer.run_now()
 
     def _on_fp_similarity_finished(self, rows) -> None:
         self.compute_btn.setEnabled(True)
