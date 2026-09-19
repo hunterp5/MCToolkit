@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass
 
 from PyQt5 import sip
 from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
@@ -44,6 +45,18 @@ from .structure_grouping import group_rows_by_structure, structure_key
 logger = logging.getLogger(__name__)
 
 _TOOL_LABEL = "Predict Metabolites"
+
+
+@dataclass(frozen=True)
+class BiotransformerRequest:
+    """Row payloads and BioTransformer options for :class:`BiotransformerWorker`."""
+
+    rows: list
+    metabolism: MetabolismOption = "allHuman"
+    nsteps: int = DEFAULT_NSTEPS
+    cyp_mode: int = DEFAULT_CYP_MODE
+    max_metabolites: int = DEFAULT_MAX_METABOLITES
+    add_as_rows: bool = False
 
 
 def _safe_emit(obj, emitter_name: str, *args) -> None:
@@ -101,28 +114,23 @@ class BiotransformerWorker(QRunnable):
 
     def __init__(
         self,
-        rows: list[tuple[int | None, Chem.Mol | None]],
+        request: BiotransformerRequest,
         worker_signals,
         bt_signals: BiotransformerSignals,
-        cancel_event: threading.Event | None = None,
         *,
-        metabolism: MetabolismOption = "allHuman",
-        nsteps: int = DEFAULT_NSTEPS,
-        cyp_mode: int = DEFAULT_CYP_MODE,
-        max_metabolites: int = DEFAULT_MAX_METABOLITES,
-        add_as_rows: bool = False,
+        cancel_event: threading.Event | None = None,
         progress_state=None,
     ):
         super().__init__()
-        self.rows = rows
+        self.rows = request.rows
         self.worker_signals = worker_signals
         self.bt_signals = bt_signals
         self.cancel_event = cancel_event
-        self.metabolism = metabolism
-        self.nsteps = nsteps
-        self.cyp_mode = cyp_mode
-        self.max_metabolites = max_metabolites
-        self.add_as_rows = bool(add_as_rows)
+        self.metabolism = request.metabolism
+        self.nsteps = request.nsteps
+        self.cyp_mode = request.cyp_mode
+        self.max_metabolites = request.max_metabolites
+        self.add_as_rows = bool(request.add_as_rows)
         self.progress_state = progress_state
 
     def run(self) -> None:

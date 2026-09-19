@@ -209,6 +209,7 @@ def test_predict_metabolites_batch_cancel(monkeypatch) -> None:
 
 def test_biotransformer_worker_emits_columns(monkeypatch, qapp) -> None:  # noqa: ARG001
     from molmanager.workers.biotransformer_worker import (
+        BiotransformerRequest,
         BiotransformerSignals,
         BiotransformerWorker,
     )
@@ -234,7 +235,7 @@ def test_biotransformer_worker_emits_columns(monkeypatch, qapp) -> None:  # noqa
     )
     mol = Chem.MolFromSmiles("CCO")
     assert mol is not None
-    BiotransformerWorker([(1, mol)], WorkerSignals(), sig).run()
+    BiotransformerWorker(BiotransformerRequest(rows=[(1, mol)]), WorkerSignals(), sig).run()
     assert failed == []
     assert finished
     oid, cols, hits, headers, add, parent = finished[0][0]
@@ -278,6 +279,7 @@ def test_unknown_metabolism_raises() -> None:
 
 
 def test_biotransformer_dialog_disables_predict_when_missing(qapp, monkeypatch) -> None:  # noqa: ARG001
+    from molmanager.predictions.biotransformer_metabolites import CYP_MODE_LABELS, DEFAULT_CYP_MODE
     from molmanager.ui.dialogs.biotransformer import BiotransformerDialog
 
     monkeypatch.setattr(
@@ -285,6 +287,10 @@ def test_biotransformer_dialog_disables_predict_when_missing(qapp, monkeypatch) 
         lambda: "Java is not on PATH.",
     )
     dlg = BiotransformerDialog(None)
+    assert [dlg.cyp_combo.itemData(i) for i in range(dlg.cyp_combo.count())] == [
+        v for v, _ in CYP_MODE_LABELS
+    ]
+    assert dlg.cyp_combo.currentData() == DEFAULT_CYP_MODE
     assert not dlg.predict_btn.isEnabled()
     assert dlg.browse_btn.isEnabled()
     dlg.subset_combo.setCurrentIndex(

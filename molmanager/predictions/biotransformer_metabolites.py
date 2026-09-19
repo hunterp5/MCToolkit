@@ -57,6 +57,11 @@ CYP_MODE_METABOLISM = frozenset({"cyp450", "allHuman"})
 DEFAULT_NSTEPS = 1
 DEFAULT_CYP_MODE = 1
 DEFAULT_MAX_METABOLITES = 200
+CYP_MODE_LABELS: tuple[tuple[int, str], ...] = (
+    (1, "CypReact + rules"),
+    (2, "CyProduct only"),
+    (3, "Combined"),
+)
 DEFAULT_TIMEOUT_S = 600.0
 DEFAULT_JAVA_HEAP = "2g"
 _JAVA_HEAP_32BIT = "1024m"

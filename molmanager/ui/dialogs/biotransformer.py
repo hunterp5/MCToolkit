@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
+"""Tools → Predict → Metabolites (BioTransformer)."""
+
 from __future__ import annotations
 
 from PyQt5.QtCore import Qt
@@ -32,6 +34,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ...predictions.biotransformer_metabolites import (
+    CYP_MODE_LABELS,
     DEFAULT_CYP_MODE,
     DEFAULT_MAX_METABOLITES,
     DEFAULT_NSTEPS,
@@ -45,11 +48,18 @@ from ...platform_support.bundled_paths import (
     set_configured_biotransformer_jar,
 )
 from ...platform_support.memory_guards import check_product_enumeration, clamp_max_products_ui
-from ...workers import BiotransformerWorker
+from ...workers.biotransformer_worker import BiotransformerRequest, BiotransformerWorker
 from ..analysis_job_support import enqueue_process_queue_job
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_PREDICT_METABOLITES
 from .structure_input import attach_structure_input
+
+
+def _set_combo_current_data(combo: QComboBox, data) -> None:
+    for i in range(combo.count()):
+        if combo.itemData(i) == data:
+            combo.setCurrentIndex(i)
+            return
 
 
 class BiotransformerDialog(QDialog):
@@ -58,11 +68,19 @@ class BiotransformerDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
+        self._init_biotransformer_state(parent)
+        self._build_biotransformer_ui()
+        self._wire_biotransformer_ui()
+
+    def _init_biotransformer_state(self, parent) -> None:
         self.setWindowTitle(TOOL_PREDICT_METABOLITES)
         self.setMinimumWidth(380)
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
+        self._selected_row_count = n_sel
         self._have_selection = n_sel > 0
 
+    def _build_biotransformer_ui(self) -> None:
+        n_sel = self._selected_row_count
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(4)
@@ -83,7 +101,6 @@ class BiotransformerDialog(QDialog):
         self.subset_combo.setToolTip(
             "BioTransformer module. AllHuman covers host plus gut reactions at each step."
         )
-        self.subset_combo.currentIndexChanged.connect(self._sync_cyp_mode)
         sub_row.addWidget(self.subset_combo, 1)
         root.addLayout(sub_row)
 
@@ -97,10 +114,9 @@ class BiotransformerDialog(QDialog):
         step_row.addWidget(self.steps_spin)
         step_row.addWidget(QLabel("CYP mode:"))
         self.cyp_combo = QComboBox()
-        self.cyp_combo.addItem("CypReact + rules", 1)
-        self.cyp_combo.addItem("CyProduct only", 2)
-        self.cyp_combo.addItem("Combined", 3)
-        self.cyp_combo.setCurrentIndex(max(0, int(DEFAULT_CYP_MODE) - 1))
+        for value, label in CYP_MODE_LABELS:
+            self.cyp_combo.addItem(label, value)
+        _set_combo_current_data(self.cyp_combo, DEFAULT_CYP_MODE)
         step_row.addWidget(self.cyp_combo, 1)
         root.addLayout(step_row)
 
@@ -128,20 +144,22 @@ class BiotransformerDialog(QDialog):
             "Point at an existing BioTransformer JAR. supportfiles/ and btkb/ (or database/) "
             "must sit next to it."
         )
-        self.browse_btn.clicked.connect(self._browse_jar)
         btn_row.addWidget(self.browse_btn)
         self.install_btn = QPushButton("Install…")
         self.install_btn.setToolTip(
             "Download the official BioTransformer 3 package from Bitbucket (~120 MB)."
         )
-        self.install_btn.clicked.connect(self._install_from_bitbucket)
         btn_row.addWidget(self.install_btn)
         btn_row.addStretch()
         self.predict_btn = QPushButton("Predict")
-        self.predict_btn.clicked.connect(self._on_predict)
         btn_row.addWidget(self.predict_btn)
         root.addLayout(btn_row)
 
+    def _wire_biotransformer_ui(self) -> None:
+        self.subset_combo.currentIndexChanged.connect(self._sync_cyp_mode)
+        self.browse_btn.clicked.connect(self._browse_jar)
+        self.install_btn.clicked.connect(self._install_from_bitbucket)
+        self.predict_btn.clicked.connect(self._on_predict)
         self._refresh_structure_sources()
         self._sync_cyp_mode()
         self._refresh_install_state()
@@ -243,6 +261,14 @@ class BiotransformerDialog(QDialog):
         if rows is None:
             return
 
+        req = BiotransformerRequest(
+            rows=rows,
+            metabolism=metabolism,
+            nsteps=nsteps,
+            cyp_mode=cyp_mode,
+            max_metabolites=max_mets,
+            add_as_rows=add_as_rows,
+        )
         bt_signals = self.parent_app._ensure_biotransformer_signals()
         n = len(rows)
         prog = self.parent_app._tool_progress_state
@@ -250,19 +276,8 @@ class BiotransformerDialog(QDialog):
             self.parent_app,
             TOOL_PREDICT_METABOLITES,
             n,
-            lambda ev, r=rows, ws=self.parent_app.signals, ps=bt_signals, met=metabolism, st=nsteps, cm=cyp_mode, mx=max_mets, add=add_as_rows, prog_st=prog: (
-                BiotransformerWorker(
-                    r,
-                    ws,
-                    ps,
-                    cancel_event=ev,
-                    metabolism=met,
-                    nsteps=st,
-                    cyp_mode=cm,
-                    max_metabolites=mx,
-                    add_as_rows=add,
-                    progress_state=prog_st,
-                )
+            lambda ev, r=req, ws=self.parent_app.signals, ps=bt_signals, st=prog: (
+                BiotransformerWorker(r, ws, ps, cancel_event=ev, progress_state=st)
             ),
             queue_label=f"{TOOL_PREDICT_METABOLITES} ({n} molecules)",
         )
