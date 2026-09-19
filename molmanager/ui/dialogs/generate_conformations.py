@@ -31,7 +31,11 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...workers import ConformerGenParams
+from ...workers.conformer_generation import (
+    CONFORMER_FORCE_FIELDS,
+    DEFAULT_CONFORMER_FORCE_FIELD,
+    ConformerGenParams,
+)
 from ..qt_widget_utils import make_window_minimizable
 from .conformer_output import (
     ConformerOutputOptions,
@@ -40,8 +44,6 @@ from .conformer_output import (
 )
 from .scope import selection_scope_checked
 
-_CONFORMER_FORCE_FIELDS = ("MMFF", "MMFF94s", "UFF", "GAFF2", "GAFF")
-_CONFORMER_FORCE_FIELD_DEFAULT = "MMFF94s"
 _CONFORMER_FF_TOOLTIP = (
     "MMFF94 or MMFF94s when parameters exist; otherwise falls back to UFF automatically. "
     "GAFF2/GAFF minimize with AmberTools (antechamber) and OpenMM in vacuum; "
@@ -54,15 +56,31 @@ _STOCHASTIC_MAX_KEEP_MAX = 1000
 _STOCHASTIC_MAX_KEEP_DEFAULT = 100
 
 
+def _set_combo_current_data(combo: QComboBox, data) -> None:
+    for i in range(combo.count()):
+        if combo.itemData(i) == data:
+            combo.setCurrentIndex(i)
+            return
+
+
 class GenerateConformationsDialog(QDialog):
     """Configure stochastic ETKDG embedding, minimizer, energy window, optional alignment, and table scope."""
 
     def __init__(self, selected_row_count: int = 0, parent=None):
         super().__init__(parent)
+        self._init_generate_conformations_state(selected_row_count)
+        self._build_generate_conformations_ui()
+        self._wire_generate_conformations_ui()
+
+    def _init_generate_conformations_state(self, selected_row_count: int) -> None:
         self.setWindowTitle("Generate Conformations — Stochastic")
         self.setMinimumWidth(420)
         self.resize(460, 0)
+        self._selected_row_count = int(selected_row_count)
         self._have_selection = selected_row_count > 0
+
+    def _build_generate_conformations_ui(self) -> None:
+        selected_row_count = self._selected_row_count
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 8)
         root.setSpacing(8)
@@ -91,8 +109,9 @@ class GenerateConformationsDialog(QDialog):
         form.addRow("Energy window:", self.energy_win_sb)
 
         self.ff_combo = QComboBox()
-        self.ff_combo.addItems(list(_CONFORMER_FORCE_FIELDS))
-        self.ff_combo.setCurrentText(_CONFORMER_FORCE_FIELD_DEFAULT)
+        for name in CONFORMER_FORCE_FIELDS:
+            self.ff_combo.addItem(name, name)
+        _set_combo_current_data(self.ff_combo, DEFAULT_CONFORMER_FORCE_FIELD)
         self.ff_combo.setToolTip(_CONFORMER_FF_TOOLTIP)
         form.addRow("Force field:", self.ff_combo)
 
@@ -239,10 +258,12 @@ class GenerateConformationsDialog(QDialog):
         )
         root.addWidget(self.output_panel)
 
-        box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        box.accepted.connect(self._try_accept)
-        box.rejected.connect(self.reject)
-        root.addWidget(box)
+        self._button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        root.addWidget(self._button_box)
+
+    def _wire_generate_conformations_ui(self) -> None:
+        self._button_box.accepted.connect(self._try_accept)
+        self._button_box.rejected.connect(self.reject)
         make_window_minimizable(self)
 
     def _try_accept(self) -> None:
@@ -260,7 +281,7 @@ class GenerateConformationsDialog(QDialog):
         return ConformerGenParams(
             num_confs=int(self.num_confs_sb.value()),
             energy_window_kcal=float(self.energy_win_sb.value()),
-            force_field=str(self.ff_combo.currentText()),
+            force_field=str(self.ff_combo.currentData() or DEFAULT_CONFORMER_FORCE_FIELD),
             random_seed=int(self.seed_sb.value()),
             prune_rms_threshold=float(self.prune_rms_sb.value()),
             max_iterations=int(self.max_iters_sb.value()),

@@ -68,13 +68,17 @@ def drain_completed_futures(futures, results: list) -> tuple[set, int]:
     return remaining, added
 
 
+CONFORMER_FORCE_FIELDS: tuple[str, ...] = ("MMFF", "MMFF94s", "UFF", "GAFF2", "GAFF")
+DEFAULT_CONFORMER_FORCE_FIELD = "MMFF94s"
+
+
 @dataclass(frozen=True)
 class ConformerGenParams:
     """Options for :func:`run_conformer_generation` / :class:`ConformerGenerationWorker`."""
 
     num_confs: int = 10
     energy_window_kcal: float = 10.0
-    force_field: str = "MMFF94s"
+    force_field: str = DEFAULT_CONFORMER_FORCE_FIELD
     random_seed: int = 0xC0FFEE
     prune_rms_threshold: float = -1.0
     max_iterations: int = 200
@@ -100,7 +104,7 @@ class ConformerGenParams:
     def single_lowest_energy(
         cls,
         *,
-        force_field: str = "MMFF94s",
+        force_field: str = DEFAULT_CONFORMER_FORCE_FIELD,
         random_seed: int = 0xC0FFEE,
         prune_rms_threshold: float = -1.0,
         max_iterations: int = 200,

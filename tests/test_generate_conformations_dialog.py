@@ -25,6 +25,10 @@ pytest.importorskip("PyQt5.QtWidgets")
 from PyQt5.QtWidgets import QCheckBox, QGroupBox
 
 from molmanager.ui.dialogs.mol_tools import GenerateConformationsDialog
+from molmanager.workers.conformer_generation import (
+    CONFORMER_FORCE_FIELDS,
+    DEFAULT_CONFORMER_FORCE_FIELD,
+)
 
 
 def test_generate_conformations_dialog_align_params(qapp):  # noqa: ARG001
@@ -43,7 +47,10 @@ def test_generate_conformations_dialog_align_params(qapp):  # noqa: ARG001
 def test_generate_conformations_dialog_fine_tune_params(qapp):  # noqa: ARG001
     dlg = GenerateConformationsDialog(0)
     p = dlg.params()
-    assert p.force_field == "MMFF94s"
+    assert p.force_field == DEFAULT_CONFORMER_FORCE_FIELD
+    assert [dlg.ff_combo.itemData(i) for i in range(dlg.ff_combo.count())] == list(
+        CONFORMER_FORCE_FIELDS
+    )
     assert p.post_min_rms_threshold == 0.0
     assert p.num_confs == 50
     assert p.max_keep == 100
