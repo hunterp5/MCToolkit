@@ -116,18 +116,30 @@ values measured when the ratchet landed and may only go **down**
 
 | Counter | Frozen at | What it measures |
 |---------|-----------|------------------|
-| `window_typed_params` | 81 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
+| `window_typed_params` | 80 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
 | `modules_taking_the_window` | 30 | Modules with at least one such parameter |
-| `private_cross_module_access` | 311 | `app._x` / `self._app._x` — private window state read across a module boundary |
-| `deferred_intra_package_imports` | 593 | First-party imports nested in function bodies, i.e. import cycles |
+| `private_cross_module_access` | 91 | `app._x` / `self._app._x` where `_x` is **not** declared in any `ui/` protocol |
+| `deferred_intra_package_imports` | 590 | First-party imports nested in function bodies, i.e. import cycles |
 | `mixin_modules` | 75 | `*_mixin.py` files |
-| `bind_mixin_methods_sites` | 7 | Legacy binds where a collaborator runs mixin bodies with the window as `self` |
+| `bind_mixin_methods_sites` | 6 | Legacy binds where a collaborator runs mixin bodies with the window as `self` |
 | `rdkit_in_ui_modules` | 52 | Qt modules importing RDKit — chemistry living in the UI |
-| `app_kernel_members` | 31 | Size of the `AppKernel` protocol surface |
+| `app_kernel_members` | 31 | `AppKernel` surface, roles included |
+
+`private_cross_module_access` deliberately ignores members declared in a role or host protocol.
+Otherwise converting a mixin body would raise it every time — a hidden `self._x` becomes a visible
+`self._app._x` without any new coupling. What it still counts is undeclared reach, currently 91 uses
+of 50 distinct names, led by `_table_cell_text`.
+
+Declaring rather than reaching is the sanctioned move, and `protocols_over_member_cap` is what
+keeps it from becoming a loophole: no protocol under `ui/` may declare more than 8 members. That
+bound is the useful signal when converting a collaborator — if what it needs will not fit, the
+responsibility has not been split yet, and declaring 19 window members would only document the
+coupling rather than reduce it.
 
 Invariants that must stay 0: `domain_modules_importing_ui` (`molmanager/app.py` is the
-composition root and exempt), `qt_in_decision_layers`, `ui_in_decision_layers`. The `ui/` share
-of the package (64.4%) may not drift up by more than 0.5 points.
+composition root and exempt), `qt_in_decision_layers`, `ui_in_decision_layers`,
+`protocols_over_member_cap`. The `ui/` share of the package (64.4%) may not drift up by more than
+0.5 points.
 
 The target these counters move toward:
 
@@ -140,10 +152,10 @@ The target these counters move toward:
    rings 2–3 and render the results.
 
 Two rules make that real, and both are what the counters track. **Per-capability protocols
-instead of one kernel:** `AppKernel` has 31 members, so anything accepting it can reach the
-whole window; replace it with small role protocols (`ProgressReporter`, `ColumnWriter`,
-`TableRowsReader`, `SelectionScope`). **One table-reader interface:** domain code must not loop
-`app._table_cell_text`, which is what currently forces row-walking logic to stay in `ui/`.
+instead of one kernel:** anything accepting all 31 kernel members can reach the whole window, so
+collaborators should take the roles in `ui/app_roles.py` instead (see "Kernel roles" below).
+**One table-reader interface:** domain code must not loop `app._table_cell_text`, which is what
+currently forces row-walking logic to stay in `ui/`.
 
 ## Main window (`molmanager/ui/main_window/`)
 
@@ -155,7 +167,7 @@ window as one-line forwards so dialogs and tests keep calling `app.on_calc_finis
 
 | Collaborator | Module | Owns |
 |--------------|--------|------|
-| `ProgressController` | `ui/progress_controller.py` | Status chrome, `_begin_tool_progress` / `_finish_tool_progress` |
+| `ProgressController` | `ui/progress_controller.py` | Polled tool progress: poll timer, background-job depth, partial-results notice, status text |
 | `ToolDialogScope` | `ui/tool_dialog_scope.py` | Modeless tool dialogs, selected-rows-only scope, empty-selection abort |
 | `TableWriteService` | `ui/table_write_service.py` | `on_calc_finished`, unique column names, `_ensure_columns` |
 | `TableSession` | `ui/table_session.py` | Selection, chemistry-column lookup, sticky visible-row cache |
@@ -165,6 +177,31 @@ window as one-line forwards so dialogs and tests keep calling `app.on_calc_finis
 | `PlotDockHost` | `ui/plot_dock_host.py` | Dock/undock plot panes |
 | `ProcessQueueManager` | `ui/process_queue.py` | Serial heavy tools |
 | `BackgroundActivityHub` | `ui/background_activity.py` | Processes dialog |
+
+### Kernel roles (`molmanager/ui/app_roles.py`)
+
+`AppKernel` is not a list of members any more; it is the union of seven role protocols, and it
+declares nothing of its own. `tests/test_app_kernel.py` enforces both, so new kernel surface has
+to land in a named role and no single role may exceed 8 members.
+
+| Role | Covers |
+|------|--------|
+| `ProgressChrome` | Status line and queued-tool progress state |
+| `TableData` | `mols`, `headers`, and the table/proxy models |
+| `TableSelection` | The view plus the selection and visible-row caches |
+| `SessionState` | Dirty flag, oid allocation, filter/zoom state |
+| `JobScheduler` | Thread pools, process queue, background-activity hub |
+| `StoreAccess` | SQLite store, conformer sidecar, undo stack |
+| `CoalescedRefresh` | Debounce timers that collapse edit bursts into one recompute |
+
+Annotate a collaborator with the roles it actually reads, not `AppKernel`. When a collaborator
+needs window forwards that are not kernel members, declare a host protocol next to it that
+extends the relevant role — `ToolScopeHost` in `ui/tool_dialog_scope.py` is the reference. That
+keeps the extra coupling visible in one place so it can be removed later.
+
+Because the roles are the declared contract, the facade has to satisfy them for real: a member no
+implementation provides is a bug, not a note-to-self. Do not paper over a missing attribute with
+`getattr(self, "_thing", default)` — initialize it where the owning collaborator is built.
 
 The main menubar is data in `ui/main_window/menu_spec.py`. `menu_builder.install_menu_specs`
 turns that tree into Qt widgets. Add tools to the spec; do not grow `AppMenuMixin.init_menubar`.
@@ -195,7 +232,21 @@ A mixin is shared behavior used by **more than one** class. Almost all MolManage
 - Add empty composite mixins (`ChemistryMixin`-style).
 - Treat mixin MRO order as architecture. `QMainWindow` precedes remaining mixins, so Qt virtuals such as `closeEvent` must be declared on the shell (delegating into `AppLifecycleMixin`). Mixin implementations that need the C++ base should call `QMainWindow.closeEvent` explicitly rather than `super()`.
 
-`bind_mixin_methods` is a **legacy bridge**: it copies mixin functions onto a collaborator but still invokes them with the window as `self`. Existing collaborators keep it; convert bodies to `self._app` only when touching that code.
+`bind_mixin_methods` is a **legacy bridge**: it copies mixin functions onto a collaborator but still invokes them with the window as `self`. Six collaborators still use it; convert bodies to `self._app` when touching that code.
+
+`ToolDialogScope` shows the conversion, and it is four steps: move the mixin bodies onto the
+collaborator rewriting window `self` to `self._app`, move mixin-owned state out of the window
+`__init__` and into the collaborator, declare a host protocol for what is left, then point
+`install_window_forwards` at the collaborator class instead of the deleted mixin. Call sites do not
+change, because they go through those forwards.
+
+A mixin may not convert whole. `AppProgressMixin` held two jobs: the polled tool-progress state
+machine, and the status-bar chrome the window itself builds (loading overlay, memory label,
+status-bar visibility). Only the first fits an 8-member contract — the chrome drives widgets that
+do not exist yet when `ProgressController` is constructed — so the state machine moved onto the
+collaborator with `ProgressHost`, and the chrome half stays on the mixin and the legacy bridge.
+Splitting by what fits the cap is the intended way to make partial progress; forwards let both
+halves answer on the window, so callers never see the seam.
 
 New tools go through `ui/analysis_job_support.py` (which uses `tool_dialog_scope`) and kernel
 methods — do not add mixin bases to `ChemistryWorkspaceWindow`.
@@ -250,7 +301,6 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 - **Dock host:** `ui/plot_dock_host.py` (`PlotDockHost`) owns dock/undock, panel width, and pane close; `PlotToolsMixin` delegates the public API
 - **PCA / radar / dimred:** `ui/plotly_interactive_view.py`; dimred panel is `ui/dialogs/dimred_panel.py` (`DockableResultPlotPanel`), method dialogs stay in `ui/dialogs/dimensionality_reduction.py`
 - **MedChem space:** `ui/dialogs/medchem_space.py` (`MedChemPlotPanel` also subclasses `DockableResultPlotPanel`)
-- **Table → DataFrame:** `ui/table_dataframe.py` (Statistics, QSAR, MMP, dimred, and medchem-space; not the Statistics dialog module)
 - **Shared helpers:** `ui/plot_table_sync.py` (selection mapping, clear override); `ui/plotly_shell.py` + `ui/plotly_shell.html` (interactive Plotly HTML/JS for Plotter + Plotly views)
 - **Result maps:** `ui/result_plot_panel.py` (`DockableResultPlotPanel`) is the shared dock chrome for SALI / MMP / cliffs / dimred / MedChem
 - **Docked-plot chrome:** `ui/dockable_plot.py` re-exports glyphs, floating titles, footer buttons, and pane embed (`dockable_plot_glyphs.py`, `_title.py`, `_chrome.py`, `_embed.py`)

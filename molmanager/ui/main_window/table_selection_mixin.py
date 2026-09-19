@@ -267,7 +267,7 @@ class TableSelectionMixin:
         Results are cached until :meth:`_invalidate_visible_source_rows_cache` so
         multi-plot replot (including debounced Plotter rebuilds) does not rematerialize.
         """
-        cache = getattr(self, "_visible_source_rows_cache", _VISIBLE_SOURCE_ROWS_UNSET)
+        cache = self._visible_source_rows_cache
         if cache is not _VISIBLE_SOURCE_ROWS_UNSET:
             return cache  # type: ignore[return-value]
         oids = self._visible_oids_set()

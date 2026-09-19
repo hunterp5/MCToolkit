@@ -18,7 +18,12 @@
 
 from __future__ import annotations
 
+import types
+from typing import Protocol
+
+from molmanager.ui import app_roles
 from molmanager.ui.app_kernel import (
+    AppKernel,
     bind_mixin_methods,
     install_window_forwards,
     wrap_mixin_callable,
@@ -52,6 +57,7 @@ from molmanager.ui.main_window.table_menu_mixin import TableMenuMixin
 from molmanager.ui.main_window.table_search_mixin import TableSearchMixin
 from molmanager.ui.main_window.table_ui_mixin import TableUIMixin
 from molmanager.ui.main_window.viewer_openers_mixin import ViewerOpenersMixin
+from molmanager.ui.tool_dialog_scope import ToolScopeHost
 
 # Frozen allowlist: adding a ChemistryWorkspaceWindow mixin base must fail this set.
 _ALLOWED_WINDOW_MIXIN_BASES = frozenset(
@@ -88,9 +94,47 @@ _ALLOWED_WINDOW_MIXIN_BASES = frozenset(
 )
 
 
+# One role growing without bound would just be the kernel again under a new name.
+_MAX_ROLE_MEMBERS = 8
+
+
+def _protocol_members(cls: type) -> set[str]:
+    """Attributes and methods a protocol declares itself (not inherited, no dunders)."""
+    names = set(cls.__dict__.get("__annotations__", {}))
+    names |= {
+        name
+        for name, obj in vars(cls).items()
+        if isinstance(obj, types.FunctionType) and not name.startswith("__")
+    }
+    return names
+
+
+def _kernel_roles() -> list[type]:
+    return [
+        obj
+        for obj in vars(app_roles).values()
+        if isinstance(obj, type) and getattr(obj, "_is_protocol", False) and obj is not Protocol
+    ]
+
+
 class _Mixin:
     def greet(self, name: str) -> str:
         return f"{self.prefix}{name}"
+
+
+def test_app_kernel_is_exactly_the_union_of_named_roles() -> None:
+    """New kernel surface has to land in a role in ``app_roles``, not in a flat kernel list."""
+    assert _protocol_members(AppKernel) == set()
+    assert set(AppKernel.__bases__) - {Protocol} == set(_kernel_roles())
+
+
+def test_no_kernel_role_grows_into_a_second_god_object() -> None:
+    oversized = {
+        role.__name__: sorted(members)
+        for role in _kernel_roles()
+        if len(members := _protocol_members(role)) > _MAX_ROLE_MEMBERS
+    }
+    assert not oversized, f"split these roles further: {oversized}"
 
 
 def test_bind_mixin_methods_uses_kernel_as_self() -> None:
@@ -197,6 +241,11 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
     assert hasattr(w, "run_neutralize")
     assert hasattr(w, "_write_mol_to_source_column")
     assert w.table_write._unique_table_column_names(["LogP"]) == ["LogP"]
+    unsatisfied = {
+        role.__name__: sorted(n for n in _protocol_members(role) if not hasattr(w, n))
+        for role in (*_kernel_roles(), ToolScopeHost)
+    }
+    assert not {k: v for k, v in unsatisfied.items() if v}, unsatisfied
     w.close()
 
 

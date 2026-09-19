@@ -32,3 +32,4 @@ class TableSession:
     def __init__(self, app: AppKernel) -> None:
         self._app = app
         bind_mixin_methods(self, app, TableSelectionMixin, TableChemistryAccessMixin)
+        self._invalidate_visible_source_rows_cache()

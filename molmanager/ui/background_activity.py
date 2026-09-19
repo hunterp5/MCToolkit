@@ -78,7 +78,8 @@ class BackgroundActivityHub(QObject):
                 message, done, total, active = snapshot()
                 if active:
                     return format_tool_progress_text(message, done, total)
-        return str(getattr(self._app, "_last_tool_progress_status", "") or "")
+        progress = getattr(self._app, "progress", None)
+        return str(progress.current_status_text() if progress is not None else "")
 
     def processes_view_rows(
         self,

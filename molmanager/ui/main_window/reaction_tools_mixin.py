@@ -189,7 +189,7 @@ class ReactionToolsMixin:
         suffix = ""
         if int(result.skipped) > 0:
             suffix = f" ({int(result.skipped):,} outcome(s) skipped by constraints or duplicates)"
-        if getattr(self, "_partial_results_notice", None):
+        if self.has_partial_results_notice():
             return
         if parts:
             self.status_label.setText(f"{TOOL_REACTION_ENUMERATION}: {', '.join(parts)}{suffix}.")

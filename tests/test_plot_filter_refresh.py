@@ -152,7 +152,7 @@ def test_structure_paint_data_change_does_not_schedule_replot(qapp):  # noqa: AR
 def test_filter_apply_replots_even_during_background_job(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     _setup_two_row_mw_table(w)
-    w._background_job_ui_depth = 1
+    w._enter_background_job_ui()
     w._plot_replot_timer.stop()
     w._schedule_active_plots_replot()
     assert not w._plot_replot_timer.isActive()

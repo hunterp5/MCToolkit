@@ -30,51 +30,33 @@ import types
 from collections.abc import Callable, Iterable
 from typing import Any, Protocol
 
-from PyQt5.QtCore import QThreadPool, QTimer
-from PyQt5.QtWidgets import QTableView, QUndoStack
+from .app_roles import (
+    CoalescedRefresh,
+    JobScheduler,
+    ProgressChrome,
+    SessionState,
+    StoreAccess,
+    TableData,
+    TableSelection,
+)
 
 
-class AppKernel(Protocol):
-    """Shared GUI-thread context for main-window collaborators.
+class AppKernel(
+    ProgressChrome,
+    TableData,
+    TableSelection,
+    SessionState,
+    JobScheduler,
+    StoreAccess,
+    CoalescedRefresh,
+    Protocol,
+):
+    """Every kernel role at once: what the window facade provides.
 
-    Implementations are ``QMainWindow`` facades (``ChemistryWorkspaceWindow``). Attribute
-    names match the historical window ``self`` so mixin bodies can run against
-    the kernel without copying ``MolStore`` / table rows.
+    Implementations are ``QMainWindow`` facades (``ChemistryWorkspaceWindow``). Annotate
+    with this only where a collaborator genuinely spans most of the window; prefer the
+    individual roles in ``app_roles`` so the dependency is visible in the signature.
     """
-
-    mols: Any
-    headers: list
-    filters: list
-    global_bounds: dict
-    next_oid: int
-    zoomed_ids: set
-    table: QTableView
-    threadpool: QThreadPool
-    signals: Any
-    process_queue: Any
-    background_activity: Any
-    status_label: Any
-
-    _table_model: Any
-    _filter_proxy_model: Any
-    _render_threadpool: QThreadPool
-    _sqlite_store: Any
-    _confs_blocks_sidecar: Any
-    _undo_stack: QUndoStack
-    _tool_progress_state: Any
-    _selected_oids_override: frozenset[int] | None
-    _visible_source_rows_cache: Any
-    _apply_filters_timer: QTimer
-    _plot_table_sync_timer: QTimer
-    _plot_replot_timer: QTimer
-
-    def mark_session_dirty(self) -> None: ...
-    def schedule_calculate_global_bounds(self) -> None: ...
-    def _schedule_sqlite_rebuild(self, *args: Any, **kwargs: Any) -> None: ...
-    def _schedule_active_plots_replot(self, *args: Any, **kwargs: Any) -> None: ...
-    def _selected_oids_set(self) -> set[int]: ...
-    def _begin_tool_progress(self, message: str, total: int) -> None: ...
-    def _finish_tool_progress(self, message: str | None = None, **kwargs: Any) -> None: ...
 
 
 def wrap_mixin_callable(fn: Callable, app: Any) -> Callable:

@@ -14,19 +14,20 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Status chrome and tool-progress UI for ChemistryWorkspaceWindow."""
+"""Status-bar chrome for ChemistryWorkspaceWindow.
+
+The polled tool-progress state machine lives in ``ui/progress_controller.py``; what is left
+here is the chrome the window itself builds — loading overlay, status-bar visibility, and the
+memory label.
+"""
 
 from __future__ import annotations
 
 import logging
-from contextlib import suppress
 
 from PyQt5.QtCore import QTimer
 
-from ...platform_support.config import load_config
 from ...platform_support.memory_usage import format_process_memory_status
-from ...platform_support.tool_progress import format_tool_progress_text
-from ..strings import STATUS_READY
 
 logger = logging.getLogger(__name__)
 
@@ -113,25 +114,6 @@ class AppProgressMixin:
             return
         label.setText(text)
 
-    def _begin_tool_progress(self, message: str, total: int) -> None:
-        """Start polled status updates for a long-running queued tool."""
-        total_i = max(1, int(total))
-        self._tool_progress_active_label = str(message or "")
-        self._tool_progress_state.begin(message, total_i)
-        self._on_tool_progress(message, 0, total_i)
-        if not self._tool_progress_poll_timer.isActive():
-            self._tool_progress_poll_timer.start()
-
-    def _poll_tool_progress_state(self) -> None:
-        message, done, total, active = self._tool_progress_state.snapshot()
-        if not active:
-            self._tool_progress_poll_timer.stop()
-            return
-        self._on_tool_progress(message, done, total)
-
-    def _background_job_ui_active(self) -> bool:
-        return int(getattr(self, "_background_job_ui_depth", 0)) > 0
-
     def _status_work_is_active(self) -> bool:
         """True when the status line should keep showing in-progress work."""
         if bool(getattr(self, "_ingest_loading", False)):
@@ -150,106 +132,3 @@ class AppProgressMixin:
                 return True
         jobs = getattr(self, "_background_jobs", None)
         return bool(jobs)
-
-    def _restore_idle_status(self) -> None:
-        """Set the status line to Ready when nothing else is running."""
-        if self._status_work_is_active():
-            return
-        label = getattr(self, "status_label", None)
-        if label is None:
-            return
-        try:
-            if label.text() != STATUS_READY:
-                label.setText(STATUS_READY)
-        except RuntimeError:
-            pass
-
-    def _enter_background_job_ui(self) -> None:
-        """Reduce main-thread churn while a queued tool holds the machine busy."""
-        self._background_job_ui_depth = int(getattr(self, "_background_job_ui_depth", 0)) + 1
-        if self._background_job_ui_depth != 1:
-            return
-        cfg = load_config()
-        self._tool_progress_poll_timer.setInterval(int(cfg.background_job_poll_ms))
-
-    def _exit_background_job_ui(self) -> None:
-        self._background_job_ui_depth = max(
-            0, int(getattr(self, "_background_job_ui_depth", 0)) - 1
-        )
-        if self._background_job_ui_depth != 0:
-            return
-        ms = int(getattr(self, "_tool_progress_poll_interval_ms", 200))
-        self._tool_progress_poll_timer.setInterval(ms)
-
-    def _finish_tool_progress(
-        self,
-        message: str | None = None,
-        *,
-        status_message: str | None = STATUS_READY,
-    ) -> None:
-        """Show 100% once, then stop polling and optionally reset the status line."""
-        msg, done, total, active = self._tool_progress_state.snapshot()
-        stored = getattr(self, "_tool_progress_active_label", "") or ""
-        final_msg = message or msg or stored
-        if total > 0 and (active or done < total):
-            self._on_tool_progress(final_msg, total, total)
-        self._tool_progress_state.end()
-        self._tool_progress_active_label = ""
-        self._tool_progress_poll_timer.stop()
-        if status_message is not None:
-            self.status_label.setText(status_message)
-
-    def _on_export_finished_message(self, message: str) -> None:
-        self._export_busy = False
-        self._clear_tool_progress(status_message=None)
-        self.status_label.setText(message)
-
-    def _on_tool_progress(self, message: str, done: int, total: int) -> None:
-        if message:
-            if total < 0:
-                self._tool_progress_state.update(message, 0, -1)
-            else:
-                self._tool_progress_state.update(message, done, total)
-        text = format_tool_progress_text(message, done, total)
-        if text and text == getattr(self, "_last_tool_progress_status", ""):
-            return
-        self._last_tool_progress_status = text
-        if text:
-            self.status_label.setText(text)
-        if (
-            text
-            and self._workspace_loading_overlay_visible()
-            and not self._session_overlay_owns_loading_detail()
-        ):
-            detail = getattr(self, "_loading_detail", None)
-            if detail is not None:
-                with suppress(RuntimeError):
-                    detail.setText(text)
-        hub = getattr(self, "background_activity", None)
-        if hub is not None:
-            hub.notify_changed()
-
-    def _on_partial_results_notice(self, tool_label: str, done: int, total: int) -> None:
-        d = max(0, int(done))
-        t = max(1, int(total))
-        self._partial_results_notice = (
-            f"Cancelled — applied partial results for {tool_label} ({d}/{t})."
-        )
-
-    def _consume_partial_results_notice(self) -> str | None:
-        note = self._partial_results_notice
-        self._partial_results_notice = None
-        return note
-
-    def _clear_tool_progress(self, *, status_message: str | None = STATUS_READY) -> None:
-        """Stop polled tool progress; reset status line unless ``status_message`` is ``None``."""
-        self._tool_progress_state.end()
-        self._tool_progress_active_label = ""
-        self._last_tool_progress_status = ""
-        if self._tool_progress_poll_timer.isActive():
-            self._tool_progress_poll_timer.stop()
-        if status_message is not None:
-            self.status_label.setText(status_message)
-        hub = getattr(self, "background_activity", None)
-        if hub is not None:
-            hub.notify_changed()

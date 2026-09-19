@@ -22,16 +22,37 @@ not depend on plot-mixin behavior.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QMessageBox
+from PyQt5.QtWidgets import QDialog, QMessageBox, QWidget
 
-from .app_kernel import AppKernel, bind_mixin_methods
+from .app_roles import TableSelection
 
 
-class ToolDialogScopeMixin:
-    """Mixin body run against the kernel window (``self`` is the QWidget parent)."""
+class ToolScopeHost(TableSelection, Protocol):
+    """What ``ToolDialogScope`` needs: the table, selection counts, and a parent widget.
+
+    Beyond the ``TableSelection`` kernel role this names three window forwards. They are
+    the remaining coupling to the facade, so the list is meant to shrink, not grow.
+    """
+
+    def window(self) -> QWidget: ...
+    def _selected_row_count_fast(self) -> int: ...
+    def _selected_logical_rows(self) -> list: ...
+    def _schedule_sync_active_plots_from_table_selection(self) -> None: ...
+
+
+class ToolDialogScope:
+    """Collaborator: modeless tool dialogs and selected-rows-only scope chrome.
+
+    Owns the list of dialogs whose scope checkbox tracks the table selection; the window
+    reaches these methods through ``install_window_forwards``.
+    """
+
+    def __init__(self, app: ToolScopeHost) -> None:
+        self._app = app
+        self._scope_sync_targets: list = []
 
     def _prepare_tool_dialog(self, dialog: QDialog) -> None:
         """Let the main table stay interactive and keep scope UI in sync while the dialog is open."""
@@ -46,18 +67,16 @@ class ToolDialogScopeMixin:
         prior = getattr(target, "_scope_sync_disconnect", None)
         if callable(prior):
             prior()
-        if not hasattr(self, "_scope_sync_targets"):
-            self._scope_sync_targets = []
         if target not in self._scope_sync_targets:
             self._scope_sync_targets.append(target)
         self._sync_dialog_only_selected_scope(target)
-        sm = self.table.selectionModel()
+        sm = self._app.table.selectionModel()
         if sm is None:
             return
 
         def on_sel_changed(*_args):
             # Scope labels refresh once in the coalesced plot fan-out (avoids N× row scans).
-            self._schedule_sync_active_plots_from_table_selection()
+            self._app._schedule_sync_active_plots_from_table_selection()
 
         sm.selectionChanged.connect(on_sel_changed)
 
@@ -71,7 +90,7 @@ class ToolDialogScopeMixin:
                 pass
             try:
                 self._scope_sync_targets.remove(target)
-            except (ValueError, AttributeError):
+            except ValueError:
                 pass
             target._scope_sync_disconnect = None
 
@@ -93,11 +112,7 @@ class ToolDialogScopeMixin:
         except Exception:
             pass
         prefix = getattr(dialog, "_only_selected_scope_prefix", "Selected Rows Only")
-        if selected_count is None:
-            count_fn = getattr(self, "_selected_row_count_fast", None)
-            n = int(count_fn()) if callable(count_fn) else len(self._selected_logical_rows())
-        else:
-            n = int(selected_count)
+        n = self._app._selected_row_count_fast() if selected_count is None else int(selected_count)
         try:
             if n > 0:
                 cb.setEnabled(True)
@@ -111,10 +126,9 @@ class ToolDialogScopeMixin:
 
     def _refresh_attached_tool_scope_labels(self) -> None:
         """Update all open tool/plot scope checkboxes once per selection fan-out."""
-        count_fn = getattr(self, "_selected_row_count_fast", None)
-        n = int(count_fn()) if callable(count_fn) else len(self._selected_logical_rows())
+        n = self._app._selected_row_count_fast()
         alive: list = []
-        for target in list(getattr(self, "_scope_sync_targets", [])):
+        for target in list(self._scope_sync_targets):
             try:
                 from PyQt5 import sip
 
@@ -132,23 +146,12 @@ class ToolDialogScopeMixin:
         """Return True if the user should stop (warning shown for empty selection)."""
         if only_selected and not allowed:
             QMessageBox.warning(
-                self,
+                self._app.window(),
                 title,
                 "\u201cSelected Rows Only\u201d is checked but nothing is selected.",
             )
             return True
         return False
-
-
-class ToolDialogScope:
-    """Collaborator: modeless tool dialogs and selected-rows-only scope chrome.
-
-    Legacy ``bind_mixin_methods`` still supplies the mixin body. New methods: ``self._app``.
-    """
-
-    def __init__(self, app: AppKernel) -> None:
-        self._app = app
-        bind_mixin_methods(self, app, ToolDialogScopeMixin)
 
 
 def prepare_tool_dialog(app: Any, dialog: QDialog) -> None:

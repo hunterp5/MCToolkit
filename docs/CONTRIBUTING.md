@@ -72,6 +72,12 @@ CI gates on `ruff check` (correctness / undefined-name rules plus unused imports
 - If a counter grows, the fix is to put the decision in `molmanager/workflows/` or the
   computation in `molmanager/services/` rather than the Qt layer. See
   [ARCHITECTURE.md](ARCHITECTURE.md#target-architecture-and-the-ratchet).
+- Reaching into window state (`self._app._x`) counts against `private_cross_module_access` unless
+  `_x` is declared in a role in [`molmanager/ui/app_roles.py`](../molmanager/ui/app_roles.py) or in
+  a host protocol beside the collaborator. Declare what a collaborator needs instead of taking the
+  whole window — but no protocol may declare more than 8 members
+  (`protocols_over_member_cap` must stay 0), so a contract that will not fit means the
+  responsibility still needs splitting.
 
 ### Git commits
 
@@ -116,6 +122,31 @@ Consequences when writing tests:
   `QApplication` existed, which made crashes appear in unrelated later tests.
 - Real coverage of the web paths needs a display: run locally without `QT_QPA_PLATFORM`, or on
   Linux under `xvfb-run`.
+
+### Known flake: intermittent native abort on full Windows runs
+
+A full Windows run aborts (`0xC0000005`, sometimes `0xC0000409`) in roughly half of runs. The same
+commit and command pass on one run and abort on the next, so **an abort is not evidence that your
+change broke something** — reproduce it before you bisect.
+
+What is known, measured on one unchanged tree over eight runs:
+
+- Aborts cluster in `tests/test_protein_viewer.py` (three of six), but one landed in
+  `tests/test_fast_prepare_pipeline.py`, so the victim test is not the cause.
+- There is no Python traceback, and the faulthandler dump holds no MolManager frames. This is
+  native state, not an error in the test that happened to be running.
+- Capture mode is not a reliable workaround. Three `--capture=sys` runs passed and a fourth
+  aborted; `--capture=sys` is still the configured default because an fd-captured abort throws the
+  native diagnostics away, while `--capture=sys` lets them reach the terminal.
+- **Splitting the run into two processes passed both**, which is the practical workaround:
+
+```bash
+python -m pytest -q --ignore=tests/test_protein_viewer.py
+python -m pytest -q tests/test_protein_viewer.py
+```
+
+Every viewer module also passes on its own. The fix is real process isolation for the
+WebEngine-touching modules; until then, use the split above to get a trustworthy green.
 
 ## Dependency audit exceptions
 

@@ -350,7 +350,7 @@ class FragmentToolsMixin:
         suffix = ""
         if skipped > 0:
             suffix = f" ({skipped:,} assembly candidate(s) skipped by constraints)"
-        if getattr(self, "_partial_results_notice", None):
+        if self.has_partial_results_notice():
             return
         self.status_label.setText(f"{tool_title}: added {n:,} product row(s){suffix}.")
 

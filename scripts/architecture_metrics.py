@@ -60,8 +60,12 @@ STALE_BASELINE_SLACK = 0.20
 # nudge it; a new subsystem landing in the Qt layer should not.
 UI_SHARE_TOLERANCE_PP = 0.5
 
+# Largest contract a single protocol may declare. A collaborator that cannot state what it
+# needs in this many members has not been factored yet, so declaring more is not the fix.
+PROTOCOL_MEMBER_CAP = 8
+
 _WINDOW_PARAM_RE = re.compile(r"(?<![\w.])(?:parent_app|app)\s*:\s*(?:\"?AppKernel\"?|Any)\b")
-_PRIVATE_ACCESS_RE = re.compile(r"(?<!\w)(?:parent_app|_app|app)\._[A-Za-z]")
+_PRIVATE_ACCESS_RE = re.compile(r"(?<!\w)(?:parent_app|_app|app)\.(_[A-Za-z]\w*)")
 _BIND_MIXIN_CALL_RE = re.compile(r"(?<!def )\bbind_mixin_methods\s*\(")
 
 
@@ -158,18 +162,78 @@ def _deferred_intra_package_imports(tree: ast.AST) -> int:
     return total
 
 
-def _app_kernel_member_count() -> int:
-    """Size of the ``AppKernel`` protocol surface (annotated attributes plus methods)."""
-    path = PACKAGE / "ui" / "app_kernel.py"
+def _ui_protocols() -> dict[str, list[str]]:
+    """Members declared by each ``Protocol`` under ``ui/``, keyed by ``module::Class``."""
+    found: dict[str, list[str]] = {}
+    for path in iter_python_files(PACKAGE / "ui"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=_rel(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            if not any(isinstance(b, ast.Name) and b.id == "Protocol" for b in node.bases):
+                continue
+            names = []
+            for member in node.body:
+                if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    names.append(member.name)
+                elif isinstance(member, ast.AnnAssign) and isinstance(member.target, ast.Name):
+                    names.append(member.target.id)
+            found[f"{_rel(path)}::{node.name}"] = names
+    return found
+
+
+def _protocol_private_members(protocols: dict[str, list[str]]) -> set[str]:
+    """Private window members that some ``ui/`` protocol declares.
+
+    Reading one of these through ``self._app`` is coupling the window has admitted to, so
+    ``private_cross_module_access`` skips it: converting a mixin body off
+    ``bind_mixin_methods`` must not be punished for turning a hidden ``self._x`` into a
+    visible ``self._app._x``. Declaring instead of reaching is the sanctioned move, and
+    ``protocols_over_member_cap`` is what stops a protocol from absorbing a whole window.
+    """
+    return {
+        name
+        for names in protocols.values()
+        for name in names
+        if name.startswith("_") and not name.startswith("__")
+    }
+
+
+def _class_defs(path: Path) -> dict[str, ast.ClassDef]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    for node in tree.body:
-        if isinstance(node, ast.ClassDef) and node.name == "AppKernel":
-            return sum(
-                1
-                for member in node.body
-                if isinstance(member, (ast.AnnAssign, ast.FunctionDef, ast.AsyncFunctionDef))
-            )
-    raise AssertionError(f"AppKernel class not found in {_rel(path)}")
+    return {node.name: node for node in tree.body if isinstance(node, ast.ClassDef)}
+
+
+def _declared_members(node: ast.ClassDef) -> int:
+    return sum(
+        1
+        for member in node.body
+        if isinstance(member, (ast.AnnAssign, ast.FunctionDef, ast.AsyncFunctionDef))
+    )
+
+
+def _app_kernel_member_count() -> int:
+    """Total ``AppKernel`` surface: its own members plus every role it inherits.
+
+    Roles are counted so that splitting the kernel into ``app_roles`` protocols does not
+    move the number; it drops only when the surface a collaborator can reach shrinks.
+    """
+    kernel_path = PACKAGE / "ui" / "app_kernel.py"
+    classes = _class_defs(kernel_path)
+    kernel = classes.get("AppKernel")
+    if kernel is None:
+        raise AssertionError(f"AppKernel class not found in {_rel(kernel_path)}")
+    roles = _class_defs(PACKAGE / "ui" / "app_roles.py")
+    total = _declared_members(kernel)
+    for base in kernel.bases:
+        name = base.id if isinstance(base, ast.Name) else ""
+        if name in ("Protocol", ""):
+            continue
+        role = roles.get(name) or classes.get(name)
+        if role is None:
+            raise AssertionError(f"AppKernel base {name!r} not found in ui/app_roles.py")
+        total += _declared_members(role)
+    return total
 
 
 def collect() -> Metrics:
@@ -183,6 +247,13 @@ def collect() -> Metrics:
         "modules_taking_the_window": [],
     }
 
+    ui_protocols = _ui_protocols()
+    declared_private = _protocol_private_members(ui_protocols)
+    offenders["protocols_over_member_cap"] = [
+        f"{where} ({len(names)} members)"
+        for where, names in sorted(ui_protocols.items())
+        if len(names) > PROTOCOL_MEMBER_CAP
+    ]
     window_params = 0
     private_access = 0
     deferred_imports = 0
@@ -207,7 +278,9 @@ def collect() -> Metrics:
         window_params += n_window_params
         if n_window_params:
             offenders["modules_taking_the_window"].append(rel)
-        private_access += len(_PRIVATE_ACCESS_RE.findall(text))
+        private_access += sum(
+            1 for name in _PRIVATE_ACCESS_RE.findall(text) if name not in declared_private
+        )
         bind_sites += len(_BIND_MIXIN_CALL_RE.findall(text))
 
         tree = ast.parse(text, filename=rel)
@@ -248,10 +321,12 @@ def collect() -> Metrics:
         "domain_modules_importing_ui": len(offenders["domain_modules_importing_ui"]),
         "qt_in_decision_layers": len(offenders["qt_in_decision_layers"]),
         "ui_in_decision_layers": len(offenders["ui_in_decision_layers"]),
+        "protocols_over_member_cap": len(offenders["protocols_over_member_cap"]),
     }
 
     gui_tests, all_tests = _test_shape()
     metrics.tracked = {
+        "declared_private_kernel_members": len(declared_private),
         "ui_loc_share_pct": round(100.0 * ui_loc / total_loc, 1) if total_loc else 0.0,
         "ui_loc": ui_loc,
         "package_loc": total_loc,

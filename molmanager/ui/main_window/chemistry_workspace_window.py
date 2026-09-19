@@ -70,7 +70,7 @@ from ..table_selection_delegate import RowHighlightDelegate
 from ..process_queue import ProcessQueueManager
 from ..table_session import TableSession
 from ..table_write_service import TableWriteService
-from ..tool_dialog_scope import ToolDialogScope, ToolDialogScopeMixin
+from ..tool_dialog_scope import ToolDialogScope
 from ..workspace_tools import WorkspaceTools
 from .activity_cliff_mixin import ActivityCliffMixin
 from .app_lifecycle_mixin import AppLifecycleMixin
@@ -289,7 +289,6 @@ class ChemistryWorkspaceWindow(
         self._filter_bg_job_id = None
         self._substructure_job_smarts = None
         self._substructure_target_mol_cache = {}
-        self._partial_results_notice = None
         self._ingest_loading = False
         self._ingest_prep_before_reveal = False
         self._ingest_waiting_for_render = False
@@ -334,7 +333,6 @@ class ChemistryWorkspaceWindow(
         self._dock_result_windows: list = []
         self._last_dock_results: dict | None = None
         self._dock_results_mode = False
-        self._scope_sync_targets: list = []
         self._cached_plot_selected_oids: frozenset[int] | None = None
         self._selected_oids_override: frozenset[int] | None = None
         self._in_programmatic_table_selection = False
@@ -424,12 +422,6 @@ class ChemistryWorkspaceWindow(
         self._wire_sqlite_store_dirty_tracking()
         self._wire_table_plot_refresh()
         self._tool_progress_state = ToolProgressState()
-        self._tool_progress_poll_timer = QTimer(self)
-        self._tool_progress_poll_interval_ms = int(cfg.tool_progress_poll_ms)
-        self._tool_progress_poll_timer.setInterval(self._tool_progress_poll_interval_ms)
-        self._tool_progress_poll_timer.timeout.connect(self._poll_tool_progress_state)
-        self._background_job_ui_depth = 0
-        self._last_tool_progress_status = ""
         self._init_status_memory_tracker(cfg)
 
     def render2d_batch_active(self) -> bool:
@@ -688,8 +680,10 @@ class ChemistryWorkspaceWindow(
             self.on_cell_double_click(index.row(), index.column())
 
 
-install_window_forwards(ChemistryWorkspaceWindow, "progress", (AppProgressMixin,))
-install_window_forwards(ChemistryWorkspaceWindow, "tool_scope", (ToolDialogScopeMixin,))
+install_window_forwards(
+    ChemistryWorkspaceWindow, "progress", (AppProgressMixin, ProgressController)
+)
+install_window_forwards(ChemistryWorkspaceWindow, "tool_scope", (ToolDialogScope,))
 install_window_forwards(ChemistryWorkspaceWindow, "table_write", (ColumnWriteMixin,))
 install_window_forwards(
     ChemistryWorkspaceWindow,
