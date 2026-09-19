@@ -25,7 +25,18 @@ import logging
 import shutil
 from pathlib import Path
 
-from PyQt5.QtCore import QEventLoop, QObject, QTemporaryDir, QTimer, QUrl, Qt, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import (
+    QEvent,
+    QEventLoop,
+    QObject,
+    QTemporaryDir,
+    QTimer,
+    QUrl,
+    Qt,
+    pyqtSignal,
+    pyqtSlot,
+)
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from .mol_3d_html import _BUNDLED_3DMOL, _wire_webengine_console_logger, bundled_3dmol_available
@@ -36,16 +47,34 @@ logger = logging.getLogger(__name__)
 
 class _ProteinViewerBridge(QObject):
     atom_picked = pyqtSignal(str)
+    delete_requested = pyqtSignal()
+    undo_requested = pyqtSignal()
+    redo_requested = pyqtSignal()
 
     @pyqtSlot(str)
     def atomPicked(self, payload: str) -> None:
         self.atom_picked.emit(payload)
+
+    @pyqtSlot()
+    def deleteRequested(self) -> None:
+        self.delete_requested.emit()
+
+    @pyqtSlot()
+    def undoRequested(self) -> None:
+        self.undo_requested.emit()
+
+    @pyqtSlot()
+    def redoRequested(self) -> None:
+        self.redo_requested.emit()
 
 
 class ProteinEmbedView(QWidget):
     """WebEngine host for the protein 3Dmol canvas."""
 
     atom_picked = pyqtSignal(str)
+    delete_requested = pyqtSignal()
+    undo_requested = pyqtSignal()
+    redo_requested = pyqtSignal()
     web_ready = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None):
@@ -67,6 +96,9 @@ class ProteinEmbedView(QWidget):
         self._bootstrapped = False
         self._bridge = _ProteinViewerBridge(self)
         self._bridge.atom_picked.connect(self.atom_picked.emit)
+        self._bridge.delete_requested.connect(self.delete_requested.emit)
+        self._bridge.undo_requested.connect(self.undo_requested.emit)
+        self._bridge.redo_requested.connect(self.redo_requested.emit)
         self._resize_timer = QTimer(self)
         self._resize_timer.setSingleShot(True)
         self._resize_timer.setInterval(50)
@@ -113,7 +145,9 @@ class ProteinEmbedView(QWidget):
             from PyQt5.QtWebEngineWidgets import QWebEngineSettings, QWebEngineView
 
             web = QWebEngineView(self)
+            web.setFocusPolicy(Qt.StrongFocus)
             web.setContextMenuPolicy(Qt.NoContextMenu)
+            web.installEventFilter(self)
             _wire_webengine_console_logger(web)
             try:
                 s = web.settings()
@@ -139,6 +173,9 @@ class ProteinEmbedView(QWidget):
             else:
                 web.setHtml(build_protein_viewer_html(), QUrl("https://3dmol.org/"))
             self._web = web
+            proxy = web.focusProxy()
+            if proxy is not None:
+                proxy.installEventFilter(self)
             self._status.hide()
             self._root.addWidget(web, 1)
         except Exception as e:
@@ -147,6 +184,29 @@ class ProteinEmbedView(QWidget):
                 "3D view unavailable.\nInstall matching PyQtWebEngine and restart with "
                 "`python -m molmanager`."
             )
+
+    def eventFilter(self, obj, event):  # noqa: N802
+        """Keep Delete / Undo available when the WebEngine canvas has focus."""
+        if event is not None and event.type() == QEvent.KeyPress:
+            if self._emit_canvas_edit_key(event):
+                return True
+        return super().eventFilter(obj, event)
+
+    def _emit_canvas_edit_key(self, event) -> bool:
+        key = event.key()
+        if key in (Qt.Key_Delete, Qt.Key_Backspace):
+            self.delete_requested.emit()
+            return True
+        try:
+            if event.matches(QKeySequence.Undo):
+                self.undo_requested.emit()
+                return True
+            if event.matches(QKeySequence.Redo):
+                self.redo_requested.emit()
+                return True
+        except Exception:
+            return False
+        return False
 
     def _on_load_finished(self, ok: bool) -> None:
         self._web_ready = bool(ok)

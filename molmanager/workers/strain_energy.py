@@ -33,6 +33,7 @@ from rdkit.Chem import AllChem
 
 from ..config import load_config
 from ..confs_codec import mol_from_packed_confs_cell
+from ..storage import ensemble_mol_for
 from .chemistry_worker_common import emit_tool_progress_throttled, normalize_force_field
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
 from .superpose import RmsdParams, run_conformer_rmsd
@@ -118,6 +119,19 @@ def _single_point_conformer_energies(
             return None
         energies.append(float(ff.CalcEnergy()))
     return energies, "UFF"
+
+
+def single_point_energy_kcal(mol: Chem.Mol, force_field: str) -> float | None:
+    """Vacuum single-point energy (kcal/mol) of the first conformer; no minimization."""
+    if mol is None:
+        return None
+    got = _single_point_conformer_energies(mol, force_field, allow_uff_fallback=False)
+    if got is None or not got[0]:
+        return None
+    value = float(got[0][0])
+    if not math.isfinite(value):
+        return None
+    return value
 
 
 def _alternate_force_field_energies(
@@ -383,13 +397,18 @@ def strain_overlay_for_blocks_b64(
 
 
 def _strain_energy_row_task(task: tuple) -> tuple[int, dict[str, str]]:
-    oid, cell, params = task[0], task[1], task[2]
+    oid, src, params = task[0], task[1], task[2]
     cancel_event = task[3] if len(task) > 3 else None
+    db_path = task[4] if len(task) > 4 else None
     na = {h: "N/A" for h in STRAIN_ENERGY_HEADERS}
     try:
         if cancel_event is not None and cancel_event.is_set():
             return oid, na
-        mol = mol_from_packed_confs_cell(cell or "", min_conformers=1)
+        mol = None
+        if db_path and not str(src or "").lstrip().startswith("{"):
+            mol = ensemble_mol_for(db_path, oid, str(src or ""), min_conformers=1)
+        if mol is None:
+            mol = mol_from_packed_confs_cell(src or "", min_conformers=1)
         if mol is None:
             return oid, na
         row, meta = run_strain_energy(mol, params, cancel_event=cancel_event)
@@ -412,6 +431,7 @@ class StrainEnergyWorker(QRunnable):
         cancel_event: threading.Event | None = None,
         progress_state=None,
         output_headers: list[str] | None = None,
+        ensemble_db: str | None = None,
     ):
         super().__init__()
         self.data = data
@@ -419,6 +439,7 @@ class StrainEnergyWorker(QRunnable):
         self.signals = signals
         self.cancel_event = cancel_event
         self.progress_state = progress_state
+        self.ensemble_db = ensemble_db
         if output_headers and len(output_headers) == len(STRAIN_ENERGY_HEADERS):
             self.output_headers = list(output_headers)
         else:
@@ -454,7 +475,7 @@ class StrainEnergyWorker(QRunnable):
                 ex = ThreadPoolExecutor(max_workers=max_workers)
                 shutdown_cancel = False
                 try:
-                    row_tasks = [(*t, cancel_ev) for t in tasks]
+                    row_tasks = [(*t, cancel_ev, self.ensemble_db) for t in tasks]
                     pending = {ex.submit(_strain_energy_row_task, rt) for rt in row_tasks}
                     while pending:
                         if cancel_ev is not None and cancel_ev.is_set():
@@ -507,7 +528,7 @@ class StrainEnergyWorker(QRunnable):
                     if cancel_ev is not None and cancel_ev.is_set():
                         cancelled = True
                         break
-                    results.append(_strain_energy_row_task((*t, cancel_ev)))
+                    results.append(_strain_energy_row_task((*t, cancel_ev, self.ensemble_db)))
                     done_count = done
                     emit_tool_progress_throttled(
                         self.signals,

@@ -156,3 +156,26 @@ def test_compact_omits_empty_structure_mols_and_bounds():
     )
     assert "structure_mols" not in compact
     assert "global_bounds" not in compact
+
+
+def test_session_zip_roundtrip_keeps_ensembles():
+    from molmanager.session_codec import SESSION_ENSEMBLES_KEY
+
+    compact = compact_session_document(
+        {
+            "format": "molmanager_session",
+            "version": 1,
+            "headers": ["ID_HIDDEN", "Structure", "SMILES"],
+            "rows": [{"id": 0, "cells": {"SMILES": "O"}}],
+            "next_oid": 1,
+        }
+    )
+    compact[SESSION_ENSEMBLES_KEY] = b"SQLite-format-3\x00placeholder"
+    raw = dumps_session_document(compact)
+    assert raw.startswith(b"PK")
+    assert compact[SESSION_ENSEMBLES_KEY] == b"SQLite-format-3\x00placeholder"
+    back = loads_session_bytes(raw)
+    assert back[SESSION_ENSEMBLES_KEY] == compact[SESSION_ENSEMBLES_KEY]
+    expanded = expand_session_document(back)
+    assert expanded["rows"][0]["cells"]["SMILES"] == "O"
+    assert expanded[SESSION_ENSEMBLES_KEY] == compact[SESSION_ENSEMBLES_KEY]

@@ -24,7 +24,6 @@ import threading
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
-from ..confs_codec import format_confs_table_cell, pack_confs_cell
 from ..openbabel_confab import (
     SystematicConfParams,
     ensure_openbabel_confab_ready,
@@ -118,7 +117,7 @@ class SystematicConformerWorker(QRunnable):
             logger.warning("conformers_finished emit failed", exc_info=True)
 
 
-def _error_row(oid: int, params: SystematicConfParams, err: str) -> tuple[int, None, str]:
+def _error_row(oid: int, params: SystematicConfParams, err: str) -> tuple[int, None, dict]:
     meta = {
         "ok": False,
         "err": err[:200],
@@ -126,7 +125,7 @@ def _error_row(oid: int, params: SystematicConfParams, err: str) -> tuple[int, N
         "ff": "MMFF94",
         "op": "confab",
     }
-    return int(oid), None, format_confs_table_cell(meta)
+    return int(oid), None, meta
 
 
 def _row_result(
@@ -134,12 +133,12 @@ def _row_result(
     mol: Chem.Mol | None,
     params: SystematicConfParams,
     cancel_event: threading.Event | None,
-) -> tuple[int, Chem.Mol | None, str]:
+) -> tuple[int, Chem.Mol | None, dict]:
     try:
         if mol is None:
             return _error_row(oid, params, "missing_mol")
         new_m, meta = run_systematic_conformer_generation(mol, params, cancel_event=cancel_event)
-        return oid, new_m, pack_confs_cell(meta, new_m)
+        return oid, new_m, dict(meta)
     except Exception as e:
         logger.exception("SystematicConformerWorker failed for oid=%s", oid)
         return _error_row(oid, params, str(e))

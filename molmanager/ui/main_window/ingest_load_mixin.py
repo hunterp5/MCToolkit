@@ -29,12 +29,12 @@ from rdkit import Chem
 
 from ...config import load_config
 from ...confs_codec import (
-    demote_v1_cell_to_sidecar,
     is_packed_ensemble_header,
+    make_sidecar_cell,
     mol_has_3d_coordinates,
-    pack_confs_cell,
 )
 from ...ingest_text import is_ingest_cell_batch
+from ...storage import ensure_confs_sidecar
 from ..strings import LOADING_DETAIL_AFTER_FILE_READ, STATUS_READY_RENDER_2D, TOOL_RENDER_2D
 
 logger = logging.getLogger(__name__)
@@ -243,22 +243,15 @@ class IngestLoadMixin:
                 n_conf = int(mol.GetNumConformers())
             except Exception:
                 n_conf = 0
-            packed = pack_confs_cell(
-                {
-                    "ok": True,
-                    "op": "ingest",
-                    "n_kept": n_conf,
-                    "n_packed": n_conf,
-                },
-                mol,
-            )
-            light, b64 = demote_v1_cell_to_sidecar(packed, "confs")
-            sc = getattr(self, "_confs_blocks_sidecar", None)
-            if sc is None:
-                self._confs_blocks_sidecar = {}
-                sc = self._confs_blocks_sidecar
-            if b64 is not None:
-                sc[(int(oid), "confs")] = b64
+            meta = {
+                "ok": True,
+                "op": "ingest",
+                "n_kept": n_conf,
+                "n_packed": n_conf,
+            }
+            sc = ensure_confs_sidecar(self)
+            sc.store_mol(int(oid), "confs", mol)
+            light = make_sidecar_cell("confs", meta)
             depict = prepare_mol_2d(mol)
             self.mols[oid] = depict if depict is not None else mol
             cells["confs"] = light

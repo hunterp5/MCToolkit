@@ -38,6 +38,7 @@ from ...session_codec import (
     encode_mol_blob_b64,
     expand_session_document,
     loads_session_bytes,
+    SESSION_ENSEMBLES_KEY,
     session_format_ok,
     session_version_ok,
 )
@@ -270,13 +271,32 @@ class SessionSaveMixin:
             search_payload = collect_search()
             if search_payload:
                 doc["table_search"] = search_payload
-        return compact_session_document(doc)
+        out = compact_session_document(doc)
+        ensembles = self._ensembles_sqlite_for_session(want)
+        if ensembles:
+            out[SESSION_ENSEMBLES_KEY] = ensembles
+        return out
 
     def _confs_sidecar_for_session(self, oids: set[int] | None) -> dict[tuple[int, str], str]:
-        store = getattr(self, "_confs_blocks_sidecar", {}) or {}
+        from ...storage import EnsembleStore
+
+        store = getattr(self, "_confs_blocks_sidecar", None)
+        if store is None or isinstance(store, EnsembleStore):
+            return {}
         if oids is None:
             return store
         return {k: v for k, v in store.items() if int(k[0]) in oids}
+
+    def _ensembles_sqlite_for_session(self, oids: set[int] | None) -> bytes | None:
+        from ...storage import EnsembleStore
+
+        store = getattr(self, "_confs_blocks_sidecar", None)
+        if not isinstance(store, EnsembleStore) or len(store) == 0:
+            return None
+        if oids is not None and not any(int(k[0]) in oids for k in store):
+            return None
+        blob = store.export_sqlite_bytes(None if oids is None else oids)
+        return blob or None
 
     def _session_som_browse_payload(self, *, oids: set[int] | None = None) -> list[dict]:
         """Atom-level SOM maps for session restore (redraws table images on open)."""

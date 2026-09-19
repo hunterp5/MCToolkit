@@ -145,7 +145,10 @@ def test_minimize_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa
 
     dlg = ProteinViewerDialog()
     mb = dlg.findChild(QMenuBar)
-    prepare_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Prepare")
+    tools_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    prepare_menu = next(
+        a.menu() for a in tools_menu.actions() if a.text().replace("&", "") == "Prepare"
+    )
     prepare_labels = [a.text().replace("&", "") for a in prepare_menu.actions()]
     assert any(label.startswith("Minimize") for label in prepare_labels)
 

@@ -29,7 +29,6 @@ from ..conforge import (
     ensure_conforge_ready,
     run_conforge_generation,
 )
-from ..confs_codec import format_confs_table_cell, pack_confs_cell
 from .chemistry_worker_common import emit_tool_progress_throttled
 from .process_pool_utils import should_terminate_process_pool
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
@@ -118,7 +117,7 @@ class ConforgeConformerWorker(QRunnable):
             logger.warning("conformers_finished emit failed", exc_info=True)
 
 
-def _error_row(oid: int, params: ConforgeParams, err: str) -> tuple[int, None, str]:
+def _error_row(oid: int, params: ConforgeParams, err: str) -> tuple[int, None, dict]:
     meta = {
         "ok": False,
         "err": err[:200],
@@ -126,7 +125,7 @@ def _error_row(oid: int, params: ConforgeParams, err: str) -> tuple[int, None, s
         "ff": "MMFF94",
         "op": "conforge",
     }
-    return int(oid), None, format_confs_table_cell(meta)
+    return int(oid), None, meta
 
 
 def _row_result(
@@ -134,12 +133,12 @@ def _row_result(
     mol: Chem.Mol | None,
     params: ConforgeParams,
     cancel_event: threading.Event | None,
-) -> tuple[int, Chem.Mol | None, str]:
+) -> tuple[int, Chem.Mol | None, dict]:
     try:
         if mol is None:
             return _error_row(oid, params, "missing_mol")
         new_m, meta = run_conforge_generation(mol, params, cancel_event=cancel_event)
-        return oid, new_m, pack_confs_cell(meta, new_m)
+        return oid, new_m, dict(meta)
     except Exception as e:
         logger.exception("ConforgeConformerWorker failed for oid=%s", oid)
         return _error_row(oid, params, str(e))

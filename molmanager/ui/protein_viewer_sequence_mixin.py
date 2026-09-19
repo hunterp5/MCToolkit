@@ -172,8 +172,19 @@ class ProteinViewerSequenceMixin:
     def _on_sequence_deleted(self, residues: list) -> None:
         if not residues:
             return
+        sels = []
+        for res in residues:
+            sel = res.selection()
+            sel["structure_id"] = res.structure_id
+            sel["kind"] = res.kind
+            sel["resn"] = res.resn
+            sels.append(sel)
+        deleter = getattr(self, "delete_residue_selections", None)
+        if callable(deleter):
+            deleter(sels, confirm=False)
+            return
         keys = {(res.chain, res.resi, res.icode) for res in residues}
-        sels = [res.selection() for res in residues]
+        js_sels = [res.selection() for res in residues]
         by_slot: dict[str, set[tuple[str, str, str]]] = {}
         for res in residues:
             slot = self._slot_for_residue(res)
@@ -185,7 +196,7 @@ class ProteinViewerSequenceMixin:
             if slot_keys and slot.fmt in {"pdb", "pqr"}:
                 slot.text = delete_pdb_residues(slot.text, slot_keys)
                 self._invalidate_hbonds(slot.structure_id)
-        self.viewer.delete_residues(sels)
+        self.viewer.delete_residues(js_sels)
         self._residue_highlight = [
             sel
             for sel in self._residue_highlight

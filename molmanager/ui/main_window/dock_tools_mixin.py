@@ -360,8 +360,8 @@ class DockToolsMixin:
 
     def _mols_from_table_pose_columns(self) -> list:
         """Rebuild pose molecules from packed ``poses`` table columns (session fallback)."""
-        from ...confs_codec import mol_from_packed_confs_cell, rehydrate_v1_confs_cell
         from ...conformer_output import iter_single_conformer_mols
+        from .conformer_writeback import mol_for_ensemble_column
 
         model = getattr(self, "_table_model", None)
         if model is None:
@@ -373,7 +373,6 @@ class DockToolsMixin:
             n = int(model.rowCount())
         except Exception:
             return []
-        sidecar = getattr(self, "_confs_blocks_sidecar", {}) or {}
         out: list = []
         for row in range(n):
             try:
@@ -381,12 +380,7 @@ class DockToolsMixin:
             except Exception:
                 continue
             for header in headers:
-                try:
-                    raw = model.backing_value_for_row_header(row, header)
-                except Exception:
-                    continue
-                full = rehydrate_v1_confs_cell(raw, header, oid, sidecar)
-                packed = mol_from_packed_confs_cell(full, min_conformers=1)
+                packed = mol_for_ensemble_column(self, oid, header, min_conformers=1)
                 if packed is None:
                     continue
                 for mol in iter_single_conformer_mols(packed):

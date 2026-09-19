@@ -14,4 +14,4 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Result browsers (SOM, selection, MMP, SALI, metabolites, poses)."""
+"""Result browsers (SOM, selection, MMP, SALI, metabolites, poses, random molecules)."""

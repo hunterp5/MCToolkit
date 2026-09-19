@@ -78,6 +78,7 @@ from .fingerprint_similarity import (
     SIMILARITY_METRIC_LABELS,
     pairwise_fingerprint_similarity,
 )
+from .pharmacophore_screen import PharmacophoreScreenWorker
 from .fast_prepare import FastPrepareWorker
 from .load_render import (
     AddExplicitHydrogensWorker,
@@ -110,6 +111,7 @@ from .signals import (
     DiverseSubsetSignals,
     FilterApplySignals,
     FPSimilaritySignals,
+    PharmacophoreScreenSignals,
     SqliteRebuildSignals,
     SubstructureFilterSignals,
     WorkerSignals,
@@ -146,6 +148,8 @@ __all__ = [
     "ReactionEnumerationWorker",
     "FPSimilaritySignals",
     "FPSimilarityWorker",
+    "PharmacophoreScreenSignals",
+    "PharmacophoreScreenWorker",
     "SIMILARITY_FP_TYPE_LABELS",
     "SIMILARITY_METRIC_LABELS",
     "pairwise_fingerprint_similarity",

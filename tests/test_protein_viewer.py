@@ -490,8 +490,19 @@ def test_build_protein_viewer_html_has_setters():
     assert "molmanagerSetHbonds" in html
     assert "applyHydrogenVisibility" in html
     assert "indexVisibleHeavyResidues" in html
+    assert "atomHasAtomRepresentation" in html
     assert "normalizeHydrogensMode" in html
+    assert "normalizeHydrogenElements" in html
+    assert "attachHydrogensToHeavies" in html
+    assert "showHydrogenParent" in html
+    assert "keepH: true" in html
+    assert html.count("function isHydrogenAtom") == 1
+    assert "at.style.hidden = true" in html
+    assert "at.hidden = true" in html
     assert 'mode === "none"' in html
+    assert "visibleHeavies[residueResKey(at)]" in html
+    assert "opacity <= 0.05" in html
+    assert 'atomModelId(at) + "\\t" + (at.chain' in html
     assert "applyHydrogenBonds" in html
     assert "applyPocketOverlay" in html
     assert "addStyle(resSel, {stick: {radius: 0.15}})" in html
@@ -518,13 +529,25 @@ def test_build_protein_viewer_html_has_setters():
     assert "v.setClickable({}, true" in html
     assert "doubleClick" in html
     assert "ligandComponentId" in html
-    assert 'sphere: {scale: 0.28, color: "orange"}' in html
+    assert "applyClickTargets" in html
+    assert "clicksphere" in html
+    assert 'elem: "H"' in html
+    assert "hydrogenHideSpec" in html
+    assert "opacity: 0.01" not in html
+    assert "bindViewerKeys" in html
+    assert "deleteRequested" in html
+    assert "undoRequested" in html
+    assert 'sphere: {scale: 0.34, color: "orange"}' in html
+    assert 'cross: {radius: 0.7, color: "orange"}' in html
     assert 'sphere: {scale: 0.42, color: "orange"}' not in html
     assert 'v.setClickable({elem: ["H", "D", "T"], invert: true}' not in html
     assert "v.addStyle({model: atomModelId(at), serial: at.serial}, {hidden: true})" not in html
     assert "molmanagerSetDockPose" in html
     assert "molmanagerSetPharmacophore" in html
     assert "applyPharmacophore" in html
+    assert "alpha: 0.58" in html
+    assert "wireframe: true" in html
+    assert "linewidth: 2" in html
     assert "payload.pharmacophore" in html
 
 
@@ -539,6 +562,26 @@ def test_protein_viewer_has_prepare_log(qapp):  # noqa: ARG001
     text = dlg.log.toPlainText()
     assert "hello" in text
     assert "[" in text
+    dlg.close()
+
+
+def test_protein_viewer_manager_reaches_window_bottom(qapp):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    dlg = ProteinViewerDialog()
+    dlg.resize(1100, 720)
+    dlg.show()
+    qapp.processEvents()
+    ready = dlg._workspace_ready_page
+    manager = dlg.manager
+    log = dlg.log
+    ready_h = int(ready.height())
+    mgr_bottom = int(manager.mapTo(ready, manager.rect().bottomLeft()).y())
+    assert mgr_bottom >= ready_h - 2
+    log_right = int(log.mapTo(ready, log.rect().topRight()).x())
+    mgr_left = int(manager.mapTo(ready, manager.rect().topLeft()).x())
+    assert log_right <= mgr_left + 2
+    assert int(log.height()) <= max(64, int(dlg.viewer.height()) // 6)
     dlg.close()
 
 
@@ -718,6 +761,70 @@ def test_edit_structure_two_atom_pick_and_atom_delete(qapp, tmp_path, monkeypatc
     dlg.close()
 
 
+def test_delete_selected_residue_ligand_and_undo(qapp, tmp_path, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtWidgets import QMessageBox
+
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    path = tmp_path / "mini.pdb"
+    path.write_text(_MINI_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(path)
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+    dlg._on_atom_picked(
+        '{"chain":"A","resn":"MET","resi":"1","icode":"","atom":"CA","elem":"C","serial":2,'
+        '"doubleClick":true,"model":0}'
+    )
+    assert dlg._residue_highlight[0].get("atom") in (None, "")
+    polymer_id = next(r.spec.component_id for r in dlg._rows if r.spec.kind == "polymer")
+    ligand_id = next(r.spec.component_id for r in dlg._rows if r.spec.kind == "ligand")
+    dlg.delete_selected()
+    text = dlg._slots[0].text
+    assert " MET A" not in text
+    assert " LEU B" in text
+    assert " AXI A" in text
+    assert polymer_id in {r.spec.component_id for r in dlg._rows}
+    assert ligand_id in {r.spec.component_id for r in dlg._rows}
+    assert dlg._act_undo.isEnabled() is True
+    dlg.undo_manager_delete()
+    assert " MET A" in dlg._slots[0].text
+    dlg._on_atom_picked(
+        '{"chain":"A","resn":"AXI","resi":"2000","atom":"C80","elem":"C","serial":101,'
+        '"doubleClick":true,"model":0}'
+    )
+    dlg.delete_selected()
+    assert " AXI A" not in dlg._slots[0].text
+    assert ligand_id not in {r.spec.component_id for r in dlg._rows}
+    assert polymer_id in {r.spec.component_id for r in dlg._rows}
+    dlg.undo_manager_delete()
+    assert " AXI A" in dlg._slots[0].text
+    assert any(r.spec.kind == "ligand" for r in dlg._rows)
+    dlg.close()
+
+
+def test_sequence_delete_is_undoable(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    path = tmp_path / "mini.pdb"
+    path.write_text(_MINI_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.load_structure_path(path)
+    dlg._refresh_sequence_chains(force=True)
+    met = next(
+        res
+        for chain in dlg._sequence_chains
+        for res in chain.residues
+        if res.chain == "A" and res.resi == "1"
+    )
+    dlg._on_sequence_deleted([met])
+    assert " MET A" not in dlg._slots[0].text
+    assert " LEU B" in dlg._slots[0].text
+    assert dlg._act_undo.isEnabled() is True
+    dlg.undo_manager_delete()
+    assert " MET A" in dlg._slots[0].text
+    dlg.close()
+
+
 def test_pocket_view_plan_near_ligand_residues_and_polar_h():
     plan = pocket_view_plan(_POCKET_PDB, "pdb")
     assert plan is not None
@@ -754,9 +861,15 @@ def test_pocket_view_plan_keeps_only_polar_hydrogens():
 def test_protein_viewer_html_draws_heteroatom_polar_hydrogens():
     html = build_protein_viewer_html()
     assert "function polarHeavy" in html
-    assert 'e !== "C"' in html
+    assert "polarHeavyAtom" in html
     assert "showPolarHydrogen" in html
     assert "foundPolar" in html
+    assert "keepH: true" in html
+    assert "normalizeHydrogenElements" in html
+    assert "attachHydrogensToHeavies" in html
+    assert "showHydrogenParent" in html
+    assert "{stick: {radius: 0.12, hidden: false}, sphere: {scale: 0.16, hidden: false}}" in html
+    assert "v.setStyle({model: mid}, {hidden: true})" not in html
 
 
 def test_protein_menu_opens_viewer(qapp):  # noqa: ARG001
@@ -779,6 +892,23 @@ def test_protein_menu_opens_viewer(qapp):  # noqa: ARG001
     assert dlg.manager.tree.topLevelItemCount() == 0
     dlg.close()
     w.close()
+
+
+def test_log_reaches_window_bottom_with_manager(qapp):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    dlg = ProteinViewerDialog()
+    dlg.resize(1180, 760)
+    dlg.show()
+    qapp.processEvents()
+    log_bottom = dlg.log.mapTo(dlg, dlg.log.rect().bottomRight()).y()
+    mgr_bottom = dlg.manager.mapTo(dlg, dlg.manager.rect().bottomRight()).y()
+    tree_bottom = dlg.manager.tree.mapTo(dlg, dlg.manager.tree.rect().bottomRight()).y()
+    assert abs(log_bottom - mgr_bottom) <= 2
+    assert abs(log_bottom - tree_bottom) <= 2
+    status_bottom = dlg._atom_status.mapTo(dlg, dlg._atom_status.rect().bottomRight()).y()
+    assert status_bottom < dlg.log.mapTo(dlg, dlg.log.rect().topLeft()).y()
+    dlg.close()
 
 
 def test_manager_hide_select_delete(qapp, tmp_path, monkeypatch):  # noqa: ARG001
@@ -817,6 +947,12 @@ def test_manager_hide_select_delete(qapp, tmp_path, monkeypatch):  # noqa: ARG00
     assert next(r for r in dlg._rows if r.spec.component_id == ligand_id).visible is False
 
     dlg._on_manager_selection([ligand_id])
+    assert next(r for r in dlg._rows if r.spec.component_id == ligand_id).selected is True
+    assert next(r for r in dlg._rows if r.spec.kind == "polymer").selected is False
+    dlg.invert_selection()
+    assert next(r for r in dlg._rows if r.spec.component_id == ligand_id).selected is False
+    assert any(r.selected for r in dlg._rows if r.spec.kind == "polymer")
+    dlg.invert_selection()
     assert next(r for r in dlg._rows if r.spec.component_id == ligand_id).selected is True
     assert next(r for r in dlg._rows if r.spec.kind == "polymer").selected is False
 
@@ -869,7 +1005,7 @@ def test_manager_delete_undo_redo(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     dlg.load_structure_path(path)
     mb = dlg.findChild(QMenuBar)
     labels = [a.text().replace("&", "") for a in mb.actions()]
-    assert labels[:3] == ["File", "Edit", "Render"]
+    assert labels[:4] == ["File", "Edit", "Tools", "Render"]
     edit_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Edit")
     edit_labels = [a.text().replace("&", "") for a in edit_menu.actions() if a.text().strip()]
     assert edit_labels == [
@@ -915,9 +1051,11 @@ def test_manager_context_menu_duplicate(qapp, tmp_path, monkeypatch):  # noqa: A
     dlg.load_structure_path(path)
     assert dlg.manager.tree.contextMenuPolicy() == Qt.CustomContextMenu
     menu_labels = [
-        action.text().replace("&", "") for action in dlg.manager._make_context_menu().actions()
+        action.text().replace("&", "")
+        for action in dlg.manager._make_context_menu().actions()
+        if action.text()
     ]
-    assert menu_labels == ["Delete", "Duplicate"]
+    assert menu_labels == ["Delete", "Duplicate", "Add to Group"]
 
     ligand_id = next(r.spec.component_id for r in dlg._rows if r.spec.kind == "ligand")
     ligand_item = None
@@ -935,14 +1073,14 @@ def test_manager_context_menu_duplicate(qapp, tmp_path, monkeypatch):  # noqa: A
     shown: list[list[str]] = []
 
     def fake_exec(self, *a, **k):  # noqa: ARG001
-        shown.append([action.text().replace("&", "") for action in self.actions()])
+        shown.append([action.text().replace("&", "") for action in self.actions() if action.text()])
         return None
 
     monkeypatch.setattr(dlg.manager.tree, "itemAt", lambda _pos: ligand_item)
     monkeypatch.setattr(QMenu, "exec_", fake_exec)
     dlg.manager._on_context_menu(QPoint(0, 0))
     assert ligand_item.isSelected()
-    assert shown == [["Delete", "Duplicate"]]
+    assert shown == [["Delete", "Duplicate", "Add to Group"]]
 
     dlg._on_manager_selection([ligand_id])
     dlg._apply_selected_color("green")
@@ -965,6 +1103,124 @@ def test_manager_context_menu_duplicate(qapp, tmp_path, monkeypatch):  # noqa: A
     dlg.close()
 
 
+def test_manager_named_groups(qapp, tmp_path):  # noqa: ARG001
+    from molmanager.ui.protein_viewer import (
+        USER_GROUP_KIND,
+        _GROUP_ROLE,
+        _ID_ROLE,
+        _KIND_ROLE,
+        ProteinViewerDialog,
+    )
+
+    def _walk(tree):
+        def walk(item):
+            yield item
+            for i in range(item.childCount()):
+                yield from walk(item.child(i))
+
+        for i in range(tree.topLevelItemCount()):
+            yield from walk(tree.topLevelItem(i))
+
+    def _file_item(tree, cid):
+        for item in _walk(tree):
+            if item.data(0, _ID_ROLE) == cid and not item.data(0, _GROUP_ROLE):
+                return item
+        return None
+
+    def _group_folder(tree, name):
+        for i in range(tree.topLevelItemCount()):
+            item = tree.topLevelItem(i)
+            if item.data(0, _KIND_ROLE) == USER_GROUP_KIND and item.text(0) == name:
+                return item
+        return None
+
+    first = tmp_path / "first.pdb"
+    second = tmp_path / "second.pdb"
+    first.write_text(_MINI_PDB, encoding="utf-8")
+    second.write_text(_MINI_PDB, encoding="utf-8")
+    dlg = ProteinViewerDialog()
+    dlg.add_structure_path(first, refit=False)
+    dlg.add_structure_path(second, refit=False)
+    ligand_ids = [row.spec.component_id for row in dlg._rows if row.spec.kind == "ligand"]
+    polymer_ids = [row.spec.component_id for row in dlg._rows if row.spec.kind == "polymer"]
+    assert len(ligand_ids) == 2
+    assert len(polymer_ids) >= 2
+
+    dlg.manager.tree.clearSelection()
+    _file_item(dlg.manager.tree, ligand_ids[0]).setSelected(True)
+    dlg._on_add_to_group("Pocket")
+    folder = _group_folder(dlg.manager.tree, "Pocket")
+    assert folder is not None
+    assert folder.childCount() == 1
+    assert folder.child(0).data(0, _ID_ROLE) == ligand_ids[0]
+
+    dlg.manager.tree.clearSelection()
+    _file_item(dlg.manager.tree, polymer_ids[0]).setSelected(True)
+    dlg._on_add_to_group("pocket")
+    folder = _group_folder(dlg.manager.tree, "Pocket")
+    member_ids = [folder.child(i).data(0, _ID_ROLE) for i in range(folder.childCount())]
+    assert ligand_ids[0] in member_ids
+    assert polymer_ids[0] in member_ids
+
+    dlg.manager.tree.clearSelection()
+    _file_item(dlg.manager.tree, ligand_ids[1]).setSelected(True)
+    dlg._on_add_to_group("Pocket")
+    folder = _group_folder(dlg.manager.tree, "Pocket")
+    member_ids = [folder.child(i).data(0, _ID_ROLE) for i in range(folder.childCount())]
+    assert ligand_ids[0] in member_ids
+    assert ligand_ids[1] in member_ids
+    assert polymer_ids[0] in member_ids
+    labels = [folder.child(i).text(0) for i in range(folder.childCount())]
+    assert any("first.pdb" in text or "second.pdb" in text for text in labels)
+
+    dlg.manager.tree.clearSelection()
+    folder.setSelected(True)
+    group_labels = [
+        action.text().replace("&", "")
+        for action in dlg.manager._make_context_menu(folder).actions()
+        if action.text()
+    ]
+    assert group_labels == ["Rename Group…", "Remove Group"]
+
+    state = dlg.collect_session_state()
+    assert state is not None
+    payload = state["namedGroups"]
+    assert len(payload) == 1
+    assert payload[0]["name"] == "Pocket"
+    assert len(payload[0]["members"]) == 3
+
+    dlg2 = ProteinViewerDialog()
+    dlg2.apply_session_state(state)
+    folder2 = _group_folder(dlg2.manager.tree, "Pocket")
+    assert folder2 is not None
+    assert folder2.childCount() == 3
+
+    member = folder2.child(0)
+    drop_id = member.data(0, _ID_ROLE)
+    dlg2.manager.tree.clearSelection()
+    member.setSelected(True)
+    dlg2._on_remove_from_group(str(member.data(0, _GROUP_ROLE) or ""))
+    folder2 = _group_folder(dlg2.manager.tree, "Pocket")
+    remaining = [folder2.child(i).data(0, _ID_ROLE) for i in range(folder2.childCount())]
+    assert drop_id not in remaining
+    assert folder2.childCount() == 2
+    assert len(dlg2._slots) == 2
+
+    dlg2._on_delete_group(str(folder2.data(0, _GROUP_ROLE) or ""))
+    assert _group_folder(dlg2.manager.tree, "Pocket") is None
+    assert len(dlg2._slots) == 2
+    dlg.close()
+    dlg2.close()
+
+
+def test_unscoped_component_id():
+    from molmanager.ui.protein_viewer_models import unscoped_component_id
+
+    assert unscoped_component_id("s0:ligand:A:AXI:2000") == "ligand:A:AXI:2000"
+    assert unscoped_component_id("s12:polymer:A") == "polymer:A"
+    assert unscoped_component_id("ligand:A:AXI:2000") == "ligand:A:AXI:2000"
+
+
 def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     from PyQt5.QtCore import Qt
     from PyQt5.QtTest import QTest
@@ -981,15 +1237,21 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     mb = dlg.findChild(QMenuBar)
     assert mb is not None
     labels = [a.text().replace("&", "") for a in mb.actions()]
-    assert labels[0] == "File"
-    assert labels[1] == "Edit"
-    assert labels[2] == "Render"
-    assert labels[3] == "Select"
-    assert "Sequence" in labels
-    assert any(label.startswith("Prepare") for label in labels)
+    assert labels[:4] == ["File", "Edit", "Tools", "Render"]
+    assert labels[4] == "Select"
+    assert "Sequence" not in labels
+    tools_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    tools_labels = [a.text().replace("&", "") for a in tools_menu.actions() if a.text().strip()]
+    assert tools_labels[:2] == ["Prepare", "Pharmacophore"]
+    corner = mb.cornerWidget(Qt.TopRightCorner)
+    assert corner is not None
+    assert dlg._btn_sequence is not None
+    assert dlg._btn_sequence.text() == "Sequence"
+    assert dlg._btn_sequence.parent() is corner
     select_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Select")
     select_labels = [a.text().replace("&", "") for a in select_menu.actions() if a.text().strip()]
-    assert select_labels[:5] == ["Hide", "Show", "Focus", "Delete", "Duplicate"]
+    assert select_labels[:4] == ["Hide", "Show", "Focus", "Invert Selection"]
+    assert "Delete" in select_labels
     assert "Clear Selection" in select_labels
     assert "Render" in select_labels
     assert "Color" in select_labels
@@ -1000,13 +1262,33 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
         a.menu() for a in select_menu.actions() if a.text().replace("&", "") == "Color"
     )
     assert "Cartoon" in [a.text().replace("&", "") for a in select_render.actions()]
+    select_render_labels = [a.text().replace("&", "") for a in select_render.actions()]
+    assert "Spheres" not in select_render_labels
+    assert "Wireframe" not in select_render_labels
+    assert "Hydrogens" in select_render_labels
+    select_h = next(
+        a.menu() for a in select_render.actions() if a.text().replace("&", "") == "Hydrogens"
+    )
+    assert [a.text().replace("&", "") for a in select_h.actions()] == ["All", "Polar", "None"]
+    select_h_all = next(a for a in select_h.actions() if a.text().replace("&", "") == "All")
+    select_h_polar = next(a for a in select_h.actions() if a.text().replace("&", "") == "Polar")
+    assert select_h_polar.isChecked()
+    select_h_all.trigger()
+    assert dlg._hydrogen_mode() == "all"
+    assert dlg._act_hydrogens_all.isChecked()
+    assert all(a.isChecked() for a in dlg._hydrogen_mode_actions["all"])
+    dlg._act_hydrogens_polar.trigger()
+    assert dlg._hydrogen_mode() == "polar"
+    assert select_h_polar.isChecked()
     assert "Custom…" in [a.text().replace("&", "") for a in select_color.actions()]
     render_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Render")
     render_labels = [a.text().replace("&", "") for a in render_menu.actions() if a.text().strip()]
     assert "Protein" in render_labels
     assert "Ligand" in render_labels
-    assert "Pocket" in render_labels
+    assert "Focus Pocket" in render_labels
+    assert "Pocket" not in render_labels
     assert "All Atoms" in render_labels
+    assert render_labels.index("Focus Pocket") == render_labels.index("Reset Camera") - 1
     protein_menu = next(
         a.menu() for a in render_menu.actions() if a.text().replace("&", "") == "Protein"
     )
@@ -1016,9 +1298,11 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     protein_styles = [a.text().replace("&", "") for a in protein_menu.actions() if a.text().strip()]
     ligand_styles = [a.text().replace("&", "") for a in ligand_menu.actions() if a.text().strip()]
     assert "Cartoon" in protein_styles
-    assert "Spheres" in protein_styles
+    assert "Spheres" not in protein_styles
+    assert "Wireframe" not in protein_styles
     assert "Cartoon" not in ligand_styles
     assert "Spheres" not in ligand_styles
+    assert "Wireframe" not in ligand_styles
     assert "Ball and stick" in ligand_styles
     assert "Sticks" in ligand_styles
     assert "Color" in protein_styles

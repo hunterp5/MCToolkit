@@ -393,6 +393,44 @@ def test_selected_oids_override_preferred(qapp):  # noqa: ARG001
     assert w._selected_oids_set() == {1}
 
 
+def test_column_header_click_keeps_table_scroll(qapp):  # noqa: ARG001
+    from PyQt5.QtCore import QPoint, Qt
+    from PyQt5.QtTest import QTest
+
+    w = ChemicalTableApp()
+    w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
+    w._table_model.set_headers(list(w.headers))
+    for i in range(80):
+        w._table_model.append_row(i, {"SMILES": "C", "MW": str(i)})
+        w.mols[i] = Chem.MolFromSmiles("C")
+    w.next_oid = 80
+    w.resize(900, 420)
+    w.show()
+    qapp.processEvents()
+    vbar = w.table.verticalScrollBar()
+    hbar = w.table.horizontalScrollBar()
+    vbar.setValue(max(1, int(vbar.maximum()) // 2))
+    if hbar.maximum() > 0:
+        hbar.setValue(min(80, int(hbar.maximum())))
+    qapp.processEvents()
+    before_v = int(vbar.value())
+    before_h = int(hbar.value())
+    assert before_v > 0
+    smiles_col = w.headers.index("SMILES")
+    hh = w.table.horizontalHeader()
+    x = int(hh.sectionViewportPosition(smiles_col) + max(8, hh.sectionSize(smiles_col) // 4))
+    y = max(1, int(hh.height() // 2))
+    QTest.mouseClick(hh.viewport(), Qt.LeftButton, Qt.NoModifier, QPoint(x, y))
+    qapp.processEvents()
+    after_v = int(vbar.value())
+    after_h = int(hbar.value())
+    assert after_v > 1000
+    assert abs(after_v - before_v) <= 16
+    assert abs(after_h - before_h) <= 16
+    assert w._selected_full_column_indices() == [smiles_col]
+    w.close()
+
+
 def test_delete_selection_kind_rows_columns_cells(qapp):  # noqa: ARG001
     from PyQt5.QtCore import QItemSelectionModel
 

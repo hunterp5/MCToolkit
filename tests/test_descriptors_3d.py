@@ -190,6 +190,7 @@ def test_all_3d_keys_have_dialog_items_and_fns():
 
 
 def test_packed_confs_from_ingest_structure_column(qapp):  # noqa: ARG001
+    from molmanager.storage import ensemble_mol_for
     from molmanager.ui.main_window import ChemicalTableApp
 
     w = ChemicalTableApp()
@@ -201,9 +202,11 @@ def test_packed_confs_from_ingest_structure_column(qapp):  # noqa: ARG001
     w.next_oid += 1
     cells = w._ingest_store_mol(oid, mol3d)
     w._table_model.append_row(oid, cells)
-    packed = w._packed_confs_cells_for_descriptor_job([oid], "Structure")
-    assert oid in packed
-    work = mol_for_3d_descriptors(w.mols[oid], packed_cell=packed[oid])
+    packed, cols, db = w._ensemble_inputs_for_descriptor_job([oid], "Structure")
+    assert oid in cols
+    ens = ensemble_mol_for(db, oid, cols[oid], min_conformers=1)
+    assert ens is not None
+    work = mol_for_3d_descriptors(ens, packed_cell=packed.get(oid))
     assert work is not None
     oid_out, row = _calc_descriptor_row_values(
         oid,
@@ -213,7 +216,7 @@ def test_packed_confs_from_ingest_structure_column(qapp):  # noqa: ARG001
         {},
         pka_states=None,
         pka_cache_used=False,
-        packed_confs=packed[oid],
+        mol_3d=work,
     )
     assert oid_out == oid
     assert float(row["PMI 1"]) > 0.0

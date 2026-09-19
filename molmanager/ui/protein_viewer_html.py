@@ -151,6 +151,17 @@ def _viewer_protein_init_script() -> str:
             } catch (eSel) {}
           }
         }
+        function viewerSel(src) {
+          var out = {};
+          if (!src) return out;
+          if (src.model != null && src.model !== "") out.model = src.model;
+          if (src.serial != null && src.serial !== "") out.serial = src.serial;
+          if (src.chain) out.chain = src.chain;
+          if (src.resi != null && src.resi !== "") out.resi = src.resi;
+          if (src.icode) out.icode = src.icode;
+          if (src.atom) out.atom = src.atom;
+          return out;
+        }
         function applyResidueHighlight(v) {
           v = v || window.molmanagerViewer;
           if (!v) return;
@@ -160,19 +171,11 @@ def _viewer_protein_init_script() -> str:
           var atomParts = [];
           for (var i = 0; i < sels.length; i++) {
             var src = sels[i] || {};
+            var asel = viewerSel(src);
             if ((src.serial != null && src.serial !== "") || src.atom) {
-              var asel = {};
-              if (src.model != null && src.model !== "") asel.model = src.model;
-              if (src.serial != null && src.serial !== "") asel.serial = src.serial;
-              else {
-                if (src.chain) asel.chain = src.chain;
-                if (src.resi != null && src.resi !== "") asel.resi = src.resi;
-                if (src.icode) asel.icode = src.icode;
-                if (src.atom) asel.atom = src.atom;
-              }
               atomParts.push(asel);
             } else {
-              residueParts.push(src);
+              residueParts.push(asel);
             }
           }
           if (residueParts.length) {
@@ -186,8 +189,9 @@ def _viewer_protein_init_script() -> str:
             var atomSel = atomParts[j];
             try {
               v.addStyle(atomSel, {
-                sphere: {scale: 0.28, color: "orange"},
-                stick: {radius: 0.16, color: "orange"}
+                sphere: {scale: 0.34, color: "orange"},
+                stick: {radius: 0.18, color: "orange"},
+                cross: {radius: 0.7, color: "orange"}
               });
             } catch (eAt) {}
             try {
@@ -263,10 +267,51 @@ def _viewer_protein_init_script() -> str:
           strip(a, b);
           strip(b, a);
         }
-        function atomIsHydrogen(at) {
+        function isHydrogenAtom(at) {
           if (!at) return false;
-          var el = String(at.elem || at.element || "").toUpperCase();
-          return el === "H" || el === "D" || el === "T";
+          var raw = String(at.elem || at.element || "").replace(/[^A-Za-z]/g, "");
+          if (!raw) raw = String(at.atom || at.name || "").replace(/[^A-Za-z]/g, "");
+          var e = raw.toUpperCase();
+          if (e === "H" || e === "D" || e === "T") return true;
+          if (!e || e.charAt(0) !== "H") return false;
+          var resn = String(at.resn || "").toUpperCase();
+          if (e === "HE" && resn === "HE") return false;
+          if (e === "HG" && resn === "HG") return false;
+          if (e === "HF" || e === "HO" || e === "HS") return false;
+          return e.length <= 2;
+        }
+        function atomIsHydrogen(at) {
+          return isHydrogenAtom(at);
+        }
+        function atomNameLooksHydrogen(at) {
+          var name = String((at && (at.atom || at.name)) || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+          if (!name) return false;
+          if (name === "H" || name === "D" || name === "T") return true;
+          if (name.charAt(0) === "H") return name !== "HOH";
+          return name.length >= 2 && name.charAt(1) === "H" && name.charAt(0) >= "0" && name.charAt(0) <= "9";
+        }
+        function normalizeHydrogenElements(v) {
+          v = v || window.molmanagerViewer;
+          if (!v) return;
+          var atoms;
+          try { atoms = v.selectedAtoms({}); } catch (eA) { return; }
+          if (!atoms || !atoms.length) return;
+          for (var i = 0; i < atoms.length; i++) {
+            var at = atoms[i];
+            if (!at) continue;
+            var resn = String(at.resn || "").toUpperCase();
+            var name = String(at.atom || at.name || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+            if ((name === "HE" && resn === "HE") || (name === "HG" && resn === "HG")) continue;
+            if (!isHydrogenAtom(at) && !atomNameLooksHydrogen(at)) continue;
+            var raw = String(at.elem || at.element || "").replace(/[^A-Za-z]/g, "").toUpperCase();
+            if (raw === "D" || raw === "T") {
+              at.elem = raw;
+              at.element = raw;
+            } else {
+              at.elem = "H";
+              at.element = "H";
+            }
+          }
         }
         function applyCifBondOrders(v, tables, modelId) {
           if (!v || !tables) return;
@@ -356,6 +401,48 @@ def _viewer_protein_init_script() -> str:
             }
           }
         }
+        function attachHydrogensToHeavies(v) {
+          v = v || window.molmanagerViewer;
+          if (!v) return;
+          var atoms;
+          try { atoms = v.selectedAtoms({}); } catch (eA) { return; }
+          if (!atoms || !atoms.length) return;
+          var heavies = [];
+          for (var i = 0; i < atoms.length; i++) {
+            if (atoms[i] && !isHydrogenAtom(atoms[i])) heavies.push(atoms[i]);
+          }
+          var lim = 1.5 * 1.5;
+          for (var j = 0; j < atoms.length; j++) {
+            var at = atoms[j];
+            if (!isHydrogenAtom(at)) continue;
+            var bonded = false;
+            var bonds = at.bonds || [];
+            for (var b = 0; b < bonds.length; b++) {
+              var other = bondedAtom(at, bonds[b]);
+              if (other && !isHydrogenAtom(other)) {
+                bonded = true;
+                break;
+              }
+            }
+            if (bonded) continue;
+            var parent = null;
+            var best = lim + 1;
+            for (var h = 0; h < heavies.length; h++) {
+              var hv = heavies[h];
+              if (atomModelId(hv) !== atomModelId(at)) continue;
+              if ((hv.chain || "") !== (at.chain || "")) continue;
+              if (String(hv.resi == null ? "" : hv.resi) !== String(at.resi == null ? "" : at.resi)) continue;
+              if ((hv.icode || "") !== (at.icode || "")) continue;
+              var dx = hv.x - at.x, dy = hv.y - at.y, dz = hv.z - at.z;
+              var d2 = dx * dx + dy * dy + dz * dz;
+              if (d2 <= lim && d2 < best) {
+                best = d2;
+                parent = hv;
+              }
+            }
+            if (parent) setBond(at, parent, 1);
+          }
+        }
         function applyAll(v) {
           v = v || window.molmanagerViewer;
           if (!v) return;
@@ -368,25 +455,27 @@ def _viewer_protein_init_script() -> str:
           applyResidueHighlight(v);
           applyPocketOverlay(v);
           applyPocketSurface(v);
+          normalizeHydrogenElements(v);
+          attachHydrogensToHeavies(v);
           applyHydrogenVisibility(v);
+          applyClickTargets(v);
           applyHydrogenBonds(v);
           applyDockingBox(v);
           applyDockPose(v);
           applyPharmacophore(v);
           bindPicking(v);
         }
-        function isHydrogenAtom(at) {
-          var e = String((at && at.elem) || "").toUpperCase();
-          return e === "H" || e === "D" || e === "T";
-        }
         function atomModelId(at) {
           if (at && at.model && typeof at.model.id === "number") return at.model.id;
           if (typeof at.model === "number") return at.model;
           return 0;
         }
+        function polarHeavyAtom(at) {
+          if (!at || isHydrogenAtom(at)) return false;
+          return String(at.elem || "").toUpperCase() !== "C";
+        }
         function polarHeavy(elem) {
-          var e = String(elem || "").toUpperCase();
-          return !!e && e !== "C" && e !== "H" && e !== "D" && e !== "T";
+          return polarHeavyAtom({elem: elem});
         }
         function bondedAtom(at, bondRef) {
           if (bondRef && typeof bondRef === "object" && bondRef.elem != null) return bondRef;
@@ -415,13 +504,13 @@ def _viewer_protein_init_script() -> str:
           var bonds = at.bonds || [];
           for (var i = 0; i < bonds.length; i++) {
             var other = bondedAtom(at, bonds[i]);
-            if (other && polarHeavy(other.elem)) return true;
+            if (other && polarHeavyAtom(other)) return true;
           }
           var list = (heavyIndex && heavyIndex[residueHeavyKey(at)]) || [];
           var lim = 1.5 * 1.5;
           for (var j = 0; j < list.length; j++) {
             var o = list[j];
-            if (!polarHeavy(o.elem)) continue;
+            if (!polarHeavyAtom(o)) continue;
             var dx = o.x - at.x, dy = o.y - at.y, dz = o.z - at.z;
             if ((dx * dx + dy * dy + dz * dz) <= lim) return true;
           }
@@ -429,8 +518,10 @@ def _viewer_protein_init_script() -> str:
         }
         function hideAtom(at) {
           if (!at) return;
+          at.hidden = true;
           at.style = at.style || {};
-          var kinds = ["stick", "sphere", "line", "cross", "cartoon"];
+          at.style.hidden = true;
+          var kinds = ["stick", "sphere", "line", "cross", "cartoon", "clicksphere"];
           for (var i = 0; i < kinds.length; i++) {
             var k = kinds[i];
             at.style[k] = at.style[k] || {};
@@ -438,17 +529,37 @@ def _viewer_protein_init_script() -> str:
           }
           at.clickable = false;
         }
+        function bondedHeavyAtom(at) {
+          var bonds = (at && at.bonds) || [];
+          for (var i = 0; i < bonds.length; i++) {
+            var other = bondedAtom(at, bonds[i]);
+            if (other && !isHydrogenAtom(other)) return other;
+          }
+          return null;
+        }
+        function showHydrogenParent(at) {
+          var parent = bondedHeavyAtom(at);
+          if (!parent || atomLooksHidden(parent)) return;
+          parent.style = parent.style || {};
+          parent.style.hidden = false;
+          parent.style.stick = parent.style.stick || {};
+          parent.style.stick.hidden = false;
+          if (parent.style.stick.radius == null) parent.style.stick.radius = 0.12;
+        }
         function showPolarHydrogen(at) {
           if (!at) return;
+          at.hidden = false;
           at.style = at.style || {};
+          at.style.hidden = false;
           at.style.cartoon = {hidden: true};
           at.style.stick = {radius: 0.08, hidden: false, color: "white"};
           at.style.sphere = {scale: 0.18, hidden: false, color: "white"};
           at.clickable = true;
+          showHydrogenParent(at);
         }
         function residueResKey(at) {
-          return (at.chain || "") + "\t" + (at.resi == null ? "" : String(at.resi))
-            + "\t" + (at.icode || "");
+          return atomModelId(at) + "\t" + (at.chain || "") + "\t"
+            + (at.resi == null ? "" : String(at.resi)) + "\t" + (at.icode || "");
         }
         function atomHasAtomRepresentation(at) {
           if (!at || atomLooksHidden(at)) return false;
@@ -456,7 +567,9 @@ def _viewer_protein_init_script() -> str:
           var kinds = ["stick", "sphere", "line", "cross"];
           for (var i = 0; i < kinds.length; i++) {
             var spec = st[kinds[i]];
-            if (spec && !spec.hidden) return true;
+            if (!spec || spec.hidden) continue;
+            if (kinds[i] === "sphere" && spec.opacity != null && spec.opacity <= 0.05) continue;
+            return true;
           }
           return false;
         }
@@ -465,6 +578,7 @@ def _viewer_protein_init_script() -> str:
           for (var i = 0; i < atoms.length; i++) {
             var o = atoms[i];
             if (!o || isHydrogenAtom(o)) continue;
+            if (atomLooksHidden(o)) continue;
             if (!atomHasAtomRepresentation(o)) continue;
             idx[residueResKey(o)] = true;
           }
@@ -473,6 +587,47 @@ def _viewer_protein_init_script() -> str:
         function normalizeHydrogensMode(mode) {
           if (mode === "all" || mode === "none") return mode;
           return "polar";
+        }
+        function applyClickTargets(v) {
+          v = v || window.molmanagerViewer;
+          if (!v) return;
+          var atoms;
+          try { atoms = v.selectedAtoms({}); } catch (eA) { return; }
+          if (!atoms || !atoms.length) return;
+          for (var i = 0; i < atoms.length; i++) {
+            var at = atoms[i];
+            if (!at || atomLooksHidden(at) || (isHydrogenAtom(at) && !atomHasAtomRepresentation(at))) {
+              if (at) at.clickable = false;
+              continue;
+            }
+            at.clickable = true;
+            at.style = at.style || {};
+            if (at.style.sphere && at.style.sphere.opacity != null && at.style.sphere.opacity <= 0.05) {
+              at.style.sphere.hidden = true;
+            }
+            if (atomHasAtomRepresentation(at)) continue;
+            at.style.clicksphere = {hidden: false, radius: 0.8};
+          }
+        }
+        function hydrogenHideSpec() {
+          return {
+            cartoon: {hidden: true},
+            stick: {hidden: true},
+            sphere: {hidden: true},
+            line: {hidden: true},
+            cross: {hidden: true},
+            clicksphere: {hidden: true}
+          };
+        }
+        function hydrogenShowSpec() {
+          return {
+            cartoon: {hidden: true},
+            stick: {radius: 0.08, hidden: false, color: "white"},
+            sphere: {scale: 0.18, hidden: false, color: "white"}
+          };
+        }
+        function applyHydrogenSetStyle(v, sel, spec) {
+          try { v.setStyle(sel, spec); } catch (eHset) {}
         }
         function applyHydrogenVisibility(v) {
           v = v || window.molmanagerViewer;
@@ -483,19 +638,34 @@ def _viewer_protein_init_script() -> str:
           var mode = normalizeHydrogensMode(window.molmanagerHydrogens);
           var visibleHeavies = indexVisibleHeavyResidues(atoms);
           var heavyIndex = indexResidueHeavies(atoms);
+          var showByModel = {};
           for (var i = 0; i < atoms.length; i++) {
             var at = atoms[i];
             if (!isHydrogenAtom(at)) continue;
-            if (mode === "none" || !visibleHeavies[residueResKey(at)]) {
-              hideAtom(at);
-              continue;
+            var keep = false;
+            if (mode !== "none" && !atomLooksHidden(at) && visibleHeavies[residueResKey(at)]) {
+              keep = (mode === "all") || hydrogenParentIsPolar(at, heavyIndex);
             }
-            if (mode === "all") {
+            if (keep) {
               showPolarHydrogen(at);
-              continue;
+              var mid = atomModelId(at);
+              if (!showByModel[mid]) showByModel[mid] = [];
+              showByModel[mid].push(at.serial);
+            } else {
+              hideAtom(at);
             }
-            if (hydrogenParentIsPolar(at, heavyIndex)) showPolarHydrogen(at);
-            else hideAtom(at);
+          }
+          applyHydrogenSetStyle(v, {elem: "H"}, hydrogenHideSpec());
+          applyHydrogenSetStyle(v, {elem: "D"}, hydrogenHideSpec());
+          applyHydrogenSetStyle(v, {elem: "T"}, hydrogenHideSpec());
+          var showSpec = hydrogenShowSpec();
+          for (var key in showByModel) {
+            if (!Object.prototype.hasOwnProperty.call(showByModel, key)) continue;
+            var serials = showByModel[key];
+            if (!serials.length) continue;
+            var sel = {serial: serials};
+            if (key !== "") sel.model = parseInt(key, 10);
+            applyHydrogenSetStyle(v, sel, showSpec);
           }
         }
         function removePocketHModel(v) {
@@ -538,21 +708,16 @@ def _viewer_protein_init_script() -> str:
           if (!p.polarHPdb || foundPolar) return;
           if (normalizeHydrogensMode(window.molmanagerHydrogens) === "none") return;
           try {
-            var mdl = v.addModel(atob(p.polarHPdb), "pdb");
+            var mdl = v.addModel(atob(p.polarHPdb), "pdb", {keepH: true});
             window.molmanagerPocketHModel = mdl;
             var mid = (mdl && mdl.id != null) ? mdl.id : null;
             if (mid == null) {
               try { mid = v.getModel().id; } catch (eG) {}
             }
             if (mid == null) return;
-            v.setStyle({model: mid}, {hidden: true});
             v.setStyle(
-              {model: mid, elem: "H"},
-              {stick: {radius: 0.08, color: "white"}, sphere: {scale: 0.18, color: "white"}}
-            );
-            v.setStyle(
-              {model: mid, elem: "D"},
-              {stick: {radius: 0.08, color: "white"}, sphere: {scale: 0.18, color: "white"}}
+              {model: mid},
+              {stick: {radius: 0.12, hidden: false}, sphere: {scale: 0.16, hidden: false}}
             );
           } catch (eHmod) {}
         }
@@ -637,11 +802,21 @@ def _viewer_protein_init_script() -> str:
                 center: {x: cx, y: cy, z: cz},
                 radius: radius,
                 color: color,
-                alpha: 0.35
+                alpha: 0.58
+              });
+              v.addSphere({
+                center: {x: cx, y: cy, z: cz},
+                radius: radius,
+                color: color,
+                alpha: 0.95,
+                wireframe: true,
+                linewidth: 2
               });
             } catch (eSph) {}
+            var label = String(f.type || "");
+            if (f.atom) label += " " + String(f.atom);
             try {
-              v.addLabel(String(f.type || ""), {
+              v.addLabel(label, {
                 position: {x: cx, y: cy, z: cz},
                 backgroundColor: color,
                 backgroundOpacity: 0.75,
@@ -702,7 +877,7 @@ def _viewer_protein_init_script() -> str:
           }
           if (window.molmanagerDockPoseModel) return;
           try {
-            window.molmanagerDockPoseModel = v.addModel(atob(p.data), p.fmt || "sdf");
+            window.molmanagerDockPoseModel = v.addModel(atob(p.data), p.fmt || "sdf", {keepH: true});
           } catch (eAdd) {
             window.molmanagerDockPoseModel = null;
           }
@@ -737,10 +912,11 @@ def _viewer_protein_init_script() -> str:
         }
         function atomLooksHidden(at) {
           if (!at) return true;
+          if (at.hidden) return true;
           var st = at.style;
           if (!st) return false;
           if (st.hidden) return true;
-          var kinds = ["stick", "sphere", "line", "cross", "cartoon"];
+          var kinds = ["stick", "sphere", "line", "cross", "cartoon", "clicksphere"];
           var saw = false;
           for (var i = 0; i < kinds.length; i++) {
             var spec = st[kinds[i]];
@@ -764,6 +940,33 @@ def _viewer_protein_init_script() -> str:
             return c.id || "";
           }
           return "";
+        }
+        function bindViewerKeys() {
+          if (window.molmanagerKeysBound) return;
+          window.molmanagerKeysBound = true;
+          window.addEventListener("keydown", function (ev) {
+            var tag = (ev.target && ev.target.tagName) ? String(ev.target.tagName).toUpperCase() : "";
+            if (tag === "INPUT" || tag === "TEXTAREA" || (ev.target && ev.target.isContentEditable)) return;
+            var bridge = window.proteinBridge;
+            if (!bridge) return;
+            var key = ev.key;
+            if (key === "Delete" || key === "Backspace") {
+              ev.preventDefault();
+              if (bridge.deleteRequested) bridge.deleteRequested();
+              return;
+            }
+            var chord = ev.ctrlKey || ev.metaKey;
+            if (!chord || ev.altKey) return;
+            if (key === "z" || key === "Z") {
+              ev.preventDefault();
+              if (ev.shiftKey) {
+                if (bridge.redoRequested) bridge.redoRequested();
+              } else if (bridge.undoRequested) bridge.undoRequested();
+            } else if (key === "y" || key === "Y") {
+              ev.preventDefault();
+              if (bridge.redoRequested) bridge.redoRequested();
+            }
+          }, true);
         }
         function bindPicking(v) {
           try {
@@ -821,6 +1024,7 @@ def _viewer_protein_init_script() -> str:
             if (typeof QWebChannel !== "function" || typeof qt === "undefined") return;
             new QWebChannel(qt.webChannelTransport, function (channel) {
               window.proteinBridge = channel.objects.proteinBridge || null;
+              bindViewerKeys();
             });
           } catch (eCh) {}
         }
@@ -842,6 +1046,7 @@ def _viewer_protein_init_script() -> str:
         installResetStructureMenu();
         connectBridge();
         bindPicking(viewer);
+        bindViewerKeys();
         window.molmanagerResizeKeepView = function () { keepViewResize(window.molmanagerViewer); };
         window.molmanagerModelCount = 0;
         function rememberPayloadOverlays(payload) {
@@ -879,14 +1084,16 @@ def _viewer_protein_init_script() -> str:
             var data = md.data || "";
             var fmt = md.fmt || window.molmanagerFmt || "pdb";
             if (!data) continue;
-            try { v.addModel(atob(data), fmt); } catch (eAdd) {
+            try { v.addModel(atob(data), fmt, {keepH: true}); } catch (eAdd) {
               document.body.innerHTML = "<pre style='padding:12px;font-family:monospace'>3Dmol error: " + eAdd + "</pre>";
               return added;
             }
             var modelId = (startIndex || 0) + added;
+            try { normalizeHydrogenElements(v); } catch (eNorm) {}
             if (md.cifBonds) {
               try { applyCifBondOrders(v, md.cifBonds, modelId); } catch (eBonds) {}
             }
+            try { attachHydrogensToHeavies(v); } catch (eHbond) {}
             added++;
           }
           return added;
@@ -1050,7 +1257,7 @@ def _viewer_protein_init_script() -> str:
           try { model = v.getModel(); } catch (eM) {}
           for (var i = 0; i < sels.length; i++) {
             try {
-              var atoms = v.selectedAtoms(sels[i]);
+              var atoms = v.selectedAtoms(viewerSel(sels[i]));
               if (atoms && atoms.length) {
                 var mdl = atoms[0].model || model;
                 if (!mdl) {

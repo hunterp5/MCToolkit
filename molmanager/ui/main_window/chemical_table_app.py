@@ -40,7 +40,7 @@ from ...config import load_config
 logger = logging.getLogger(__name__)
 from ...performance import PerformanceTracker
 from ...tool_progress import ToolProgressState
-from ...storage import SqliteTableStore
+from ...storage import EnsembleStore, SqliteTableStore
 from ...workers import (
     FilterApplySignals,
     RenderWorker,
@@ -347,6 +347,7 @@ class ChemicalTableApp(
         )
         # Local SQLite cache for text/numeric filter pushdown and column search at 100k+ rows.
         self._sqlite_store = SqliteTableStore()
+        self._confs_blocks_sidecar = EnsembleStore()
         self._sqlite_store_dirty = False
         self._sqlite_rebuild_in_progress = False
         self._sqlite_rebuild_gen = 0

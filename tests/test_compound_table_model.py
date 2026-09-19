@@ -420,6 +420,7 @@ def test_compound_table_view_pixel_scrolls_and_keeps_edge_grip(qapp):
     hh = view.horizontalHeader()
     assert isinstance(hh, CompoundTableHeaderView)
     assert hh.stretchLastSection() is False
+    assert hh.sectionsClickable() is True
 
     smiles = model._headers.index("SMILES")
     left = int(hh.sectionViewportPosition(smiles))
@@ -477,12 +478,13 @@ def test_header_drag_scroll_step_grows_toward_viewport_edge(qapp):  # noqa: ARG0
     vp_w = 400
     hh.viewport().resize(vp_w, 24)
     assert hh._header_drag_scroll_step(vp_w // 2) == 0
-    right = hh._header_drag_scroll_step(vp_w - 1)
+    assert hh._header_drag_scroll_step(vp_w - 1) == 0
+    right = hh._header_drag_scroll_step(vp_w)
     farther = hh._header_drag_scroll_step(vp_w + 40)
     assert right >= _HEADER_DRAG_SCROLL_MIN_STEP_PX
     assert farther > right
     assert farther <= _HEADER_DRAG_SCROLL_MAX_STEP_PX
-    left = hh._header_drag_scroll_step(0)
+    left = hh._header_drag_scroll_step(-1)
     assert left <= -_HEADER_DRAG_SCROLL_MIN_STEP_PX
     view.deleteLater()
 

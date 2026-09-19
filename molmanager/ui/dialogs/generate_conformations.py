@@ -41,6 +41,7 @@ from .conformer_output import (
 from .scope import selection_scope_checked
 
 _CONFORMER_FORCE_FIELDS = ("MMFF", "MMFF94s", "UFF", "GAFF2", "GAFF")
+_CONFORMER_FORCE_FIELD_DEFAULT = "MMFF94s"
 _CONFORMER_FF_TOOLTIP = (
     "MMFF94 or MMFF94s when parameters exist; otherwise falls back to UFF automatically. "
     "GAFF2/GAFF minimize with AmberTools (antechamber) and OpenMM in vacuum; "
@@ -91,6 +92,7 @@ class GenerateConformationsDialog(QDialog):
 
         self.ff_combo = QComboBox()
         self.ff_combo.addItems(list(_CONFORMER_FORCE_FIELDS))
+        self.ff_combo.setCurrentText(_CONFORMER_FORCE_FIELD_DEFAULT)
         self.ff_combo.setToolTip(_CONFORMER_FF_TOOLTIP)
         form.addRow("Force field:", self.ff_combo)
 
@@ -130,7 +132,7 @@ class GenerateConformationsDialog(QDialog):
         self.max_keep_sb.setToolTip(
             "Keep at most this many lowest-energy conformers after energy-window and RMS "
             "pruning. Default 100 keeps table cells and the 3D viewer compact. "
-            "0 stores every survivor (packed cells still truncate very large ensembles)."
+            "0 stores every survivor (coordinates go to the disk-backed ensemble store)."
         )
         form.addRow("Max keep:", self.max_keep_sb)
 

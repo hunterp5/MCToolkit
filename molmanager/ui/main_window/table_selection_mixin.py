@@ -89,33 +89,70 @@ class TableSelectionMixin:
             self._report_table_selection_status(0)
             return
         prev_behavior = self.table.selectionBehavior()
+        was_auto_scroll = bool(self.table.hasAutoScroll())
         self.table.setSelectionBehavior(QAbstractItemView.SelectColumns)
+        self.table.setAutoScroll(False)
         sel = QItemSelection()
         for col in unique_cols:
             top = view_model.index(0, col)
             bottom = view_model.index(n - 1, col)
             sel.select(top, bottom)
         sm = self.table.selectionModel()
+        scroll_pos = self._table_scroll_pos()
+        current = sm.currentIndex() if sm is not None else None
         was_programmatic = bool(getattr(self, "_in_programmatic_table_selection", False))
         self._in_programmatic_table_selection = True
         try:
             if sm is not None:
                 sm.select(sel, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Columns)
+                if current is not None and current.isValid():
+                    keep = view_model.index(current.row(), unique_cols[0])
+                    if keep.isValid():
+                        sm.setCurrentIndex(keep, QItemSelectionModel.NoUpdate)
         finally:
             self._in_programmatic_table_selection = was_programmatic
-        self.table.setSelectionBehavior(prev_behavior)
+            self.table.setSelectionBehavior(prev_behavior)
+            self.table.setAutoScroll(was_auto_scroll)
+            self._restore_table_scroll_pos(scroll_pos)
         focus_col = (
             int(anchor_col)
             if anchor_col is not None and int(anchor_col) in seen
             else unique_cols[-1]
         )
-        self._refresh_table_selection_visual([0] if n > 0 else None, anchor_col=focus_col)
+        self._refresh_table_selection_visual(
+            None,
+            anchor_col=focus_col,
+            preserve_scroll=True,
+            scroll_pos=scroll_pos,
+        )
         n_cols = len(unique_cols)
         extra = f"{n_cols} column{'s' if n_cols != 1 else ''}."
         self._report_table_selection_status(n, extra=extra)
+        self._restore_table_scroll_pos(scroll_pos)
+
+    def _table_scroll_pos(self) -> tuple[int, int]:
+        vbar = self.table.verticalScrollBar()
+        hbar = self.table.horizontalScrollBar()
+        return (
+            int(vbar.value()) if vbar is not None else 0,
+            int(hbar.value()) if hbar is not None else 0,
+        )
+
+    def _restore_table_scroll_pos(self, pos: tuple[int, int]) -> None:
+        vbar = self.table.verticalScrollBar()
+        hbar = self.table.horizontalScrollBar()
+        if vbar is not None:
+            vbar.setValue(int(pos[0]))
+        if hbar is not None:
+            hbar.setValue(int(pos[1]))
 
     def _refresh_table_selection_visual(
-        self, anchor_rows: list[int] | None, anchor_col: int | None = None
+        self,
+        anchor_rows: list[int] | None,
+        anchor_col: int | None = None,
+        *,
+        preserve_scroll: bool = False,
+        scroll_pos: tuple[int, int] | None = None,
     ) -> None:
         """
         Show selection highlight immediately after programmatic select.
@@ -126,31 +163,39 @@ class TableSelectionMixin:
         When ``anchor_col`` is given (e.g. column selection), the current cell and any
         auto-scroll target that column so the horizontal scroll position is preserved;
         otherwise it defaults to the Structure column for row-based selections.
+        ``preserve_scroll`` keeps the current viewport (column header clicks).
+        ``scroll_pos`` is the viewport to restore when ``preserve_scroll`` is set.
         """
+        frozen = scroll_pos if preserve_scroll else None
 
         def _apply() -> None:
-            if anchor_rows:
-                first = min(anchor_rows)
-                ncol = self._table_model.columnCount()
-                if anchor_col is not None:
-                    target_col = max(0, min(anchor_col, ncol - 1))
-                else:
-                    target_col = 1 if ncol > 1 else 0
-                view_model = self.table.model()
-                proxy = getattr(self, "_filter_proxy_model", None)
-                if proxy is not None and view_model is proxy:
-                    pidx = proxy.mapFromSource(self._table_model.index(first, 0))
-                    if not pidx.isValid():
-                        return
-                    idx = view_model.index(pidx.row(), target_col)
-                else:
-                    idx = self._table_model.index(first, target_col)
-                sm = self.table.selectionModel()
-                if sm is not None and idx.isValid():
-                    sm.setCurrentIndex(idx, QItemSelectionModel.NoUpdate)
-                    self.table.scrollTo(idx, QAbstractItemView.EnsureVisible)
-            self.table.setFocus(Qt.OtherFocusReason)
-            self.table.viewport().update()
+            try:
+                if anchor_rows and not preserve_scroll:
+                    first = min(anchor_rows)
+                    ncol = self._table_model.columnCount()
+                    if anchor_col is not None:
+                        target_col = max(0, min(anchor_col, ncol - 1))
+                    else:
+                        target_col = 1 if ncol > 1 else 0
+                    view_model = self.table.model()
+                    proxy = getattr(self, "_filter_proxy_model", None)
+                    if proxy is not None and view_model is proxy:
+                        pidx = proxy.mapFromSource(self._table_model.index(first, 0))
+                        if not pidx.isValid():
+                            return
+                        idx = view_model.index(pidx.row(), target_col)
+                    else:
+                        idx = self._table_model.index(first, target_col)
+                    sm = self.table.selectionModel()
+                    if sm is not None and idx.isValid():
+                        sm.setCurrentIndex(idx, QItemSelectionModel.NoUpdate)
+                        self.table.scrollTo(idx, QAbstractItemView.EnsureVisible)
+            finally:
+                if frozen is not None:
+                    self._restore_table_scroll_pos(frozen)
+                if not preserve_scroll:
+                    self.table.setFocus(Qt.OtherFocusReason)
+                self.table.viewport().update()
 
         QTimer.singleShot(0, _apply)
 

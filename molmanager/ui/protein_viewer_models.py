@@ -32,13 +32,9 @@ COMPONENT_STYLE_CHOICES = (
     ("surface", "Surface"),
     ("stick", "Sticks"),
     ("ballstick", "Ball and stick"),
-    ("sphere", "Spheres"),
-    ("line", "Wireframe"),
 )
 
-LIGAND_STYLE_CHOICES = tuple(
-    item for item in COMPONENT_STYLE_CHOICES if item[0] not in {"cartoon", "sphere"}
-)
+LIGAND_STYLE_CHOICES = tuple(item for item in COMPONENT_STYLE_CHOICES if item[0] != "cartoon")
 LIGAND_STYLE_IDS = {key for key, _label in LIGAND_STYLE_CHOICES}
 
 COMPONENT_COLOR_CHOICES = (
@@ -80,6 +76,19 @@ STRUCTURE_SAVE_FILTER = "mmCIF (*.cif *.mmcif *.mcif);;PDB (*.pdb);;All files (*
 _ID_ROLE = Qt.UserRole
 _KIND_ROLE = Qt.UserRole + 1
 _STRUCT_ROLE = Qt.UserRole + 2
+_GROUP_ROLE = Qt.UserRole + 3
+USER_GROUP_KIND = "user_group"
+
+
+def unscoped_component_id(component_id: str) -> str:
+    """Strip the ``sN:`` structure prefix from a Manager component id."""
+    cid = str(component_id or "")
+    if ":" not in cid:
+        return cid
+    head, rest = cid.split(":", 1)
+    if head.startswith("s") and head[1:].isdigit():
+        return rest
+    return cid
 
 
 @dataclass
@@ -91,6 +100,15 @@ class _ComponentView:
     color_scheme: str = "default"
     loaded_style: str = ""
     loaded_color_scheme: str = "default"
+
+
+@dataclass
+class NamedManagerGroup:
+    """User-named Manager folder that can hold components from any loaded structure."""
+
+    group_id: str
+    name: str
+    component_ids: list[str]
 
 
 @dataclass

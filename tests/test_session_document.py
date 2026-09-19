@@ -541,7 +541,7 @@ def test_session_roundtrip_restores_dock_results(qapp, monkeypatch) -> None:  # 
     assert doc["dock_results"]["title"] == "Pose browser — out.sdf"
     assert len(doc["dock_results"]["poses"]) == 2
     sidecar = doc.get("confs_sidecar") or {}
-    assert any(str(k).endswith(":poses") for k in sidecar)
+    assert any(str(k).endswith(":poses") for k in sidecar) or doc.get("__ensembles_sqlite__")
 
     w2 = ChemicalTableApp()
     w2._apply_session_document(doc)

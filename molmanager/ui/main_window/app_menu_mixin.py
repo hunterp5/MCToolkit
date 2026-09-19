@@ -259,6 +259,16 @@ class AppMenuMixin:
             "Overlay conformers within a row or structures across rows, in 3D (spatial) or 2D (topological)."
         )
         conformations_menu.addAction(act_superpose)
+        act_pharma_screen = QAction(
+            "Screen Pharmacophore…",
+            self,
+            triggered=self.open_pharmacophore_screen,
+        )
+        act_pharma_screen.setToolTip(
+            "Find table molecules whose conformers match a 3D pharmacophore "
+            "(RDKit feature types and pairwise distances)."
+        )
+        conformations_menu.addAction(act_pharma_screen)
 
         fp_menu = tools.addMenu("&Fingerprints")
         fp_menu.setToolTipsVisible(True)
@@ -400,7 +410,7 @@ class AppMenuMixin:
         random_menu.addAction(act_random_number)
         act_random_molecule = QAction("Molecule…", self, triggered=self.open_random_molecule_dialog)
         act_random_molecule.setToolTip(
-            "Fetch a specified number of random small molecules from ChEMBL and add them to the table."
+            "Fetch random small molecules from ChEMBL, PubChem, or ZINC and add them to the table."
         )
         random_menu.addAction(act_random_molecule)
 

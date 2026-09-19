@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 from rdkit import Chem
+from rdkit.Chem import AllChem
 
 from molmanager.workers import (
     ConformerGenParams,
@@ -28,6 +29,17 @@ from molmanager.workers import (
     strain_overlay_for_mol,
     strain_overlay_for_mols,
 )
+from molmanager.workers.strain_energy import single_point_energy_kcal
+
+
+def test_single_point_energy_kcal_mmff_and_uff():
+    mol = Chem.AddHs(Chem.MolFromSmiles("CCO"))
+    assert mol is not None
+    assert AllChem.EmbedMolecule(mol, randomSeed=7) == 0
+    mmff = single_point_energy_kcal(mol, "MMFF")
+    uff = single_point_energy_kcal(mol, "UFF")
+    assert mmff is not None and uff is not None
+    assert mmff != uff
 
 
 def test_run_strain_energy_relative_to_reference():

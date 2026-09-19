@@ -63,7 +63,6 @@ QHeaderView::section {
 # Compact QSS padding (1px × 2) plus the section border.
 _HEADER_FONT_PAD_PX = 3
 # Fast edge-scroll while dragging a column header off the visible area.
-_HEADER_DRAG_SCROLL_EDGE_PX = 40
 _HEADER_DRAG_SCROLL_INTERVAL_MS = 16
 _HEADER_DRAG_SCROLL_MIN_STEP_PX = 32
 _HEADER_DRAG_SCROLL_MAX_STEP_PX = 180
@@ -240,6 +239,7 @@ class CompoundTableHeaderView(QHeaderView):
         super().__init__(orientation, parent)
         self.setSectionsMovable(True)
         self.setFirstSectionMovable(False)
+        self.setSectionsClickable(True)
         self.setSectionResizeMode(QHeaderView.Interactive)
         self.setStretchLastSection(False)
         self.setMouseTracking(True)
@@ -279,12 +279,11 @@ class CompoundTableHeaderView(QHeaderView):
             width = int(pvp.width()) if pvp is not None else 0
         if width <= 0:
             return 0
-        edge = _HEADER_DRAG_SCROLL_EDGE_PX
-        if x >= width - edge:
-            overshoot = int(x) - (width - edge)
+        if x >= width:
+            overshoot = int(x) - width + 1
             sign = 1
-        elif x <= edge:
-            overshoot = edge - int(x)
+        elif x < 0:
+            overshoot = -int(x)
             sign = -1
         else:
             return 0
@@ -428,6 +427,12 @@ class CompoundTableView(QTableView):
         self.verticalHeader().setStyleSheet(TABLE_HEADER_SECTION_QSS)
         hh = CompoundTableHeaderView(Qt.Horizontal, self)
         self.setHorizontalHeader(hh)
+        # QTableView connects sectionPressed → _q_selectColumn, which selects the
+        # column from row 0 and scrolls there before our click handler runs.
+        try:
+            hh.sectionPressed.disconnect()
+        except TypeError:
+            pass
         self.setSortingEnabled(False)
         self._compound_model = None
         self._structure_column_min_width = structure_column_minimum_width()

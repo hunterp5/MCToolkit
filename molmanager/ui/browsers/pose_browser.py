@@ -22,23 +22,20 @@ from typing import Any
 
 from pathlib import Path
 
-from PyQt5.QtCore import QEvent, QSize, Qt, QTimer
-from PyQt5.QtGui import QFont, QKeySequence
+from PyQt5.QtCore import QEvent, Qt, QTimer
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QAbstractScrollArea,
     QCheckBox,
     QComboBox,
-    QDialog,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLayout,
     QMessageBox,
     QPushButton,
-    QShortcut,
     QSizePolicy,
     QStyle,
     QTableWidget,
@@ -61,8 +58,6 @@ from ...services.column_labels import COLUMN_PARENT_OID
 from ...utils import safe_float
 from ..dock_complex_viewer import RENDER_STYLE_CHOICES, DockComplexEmbedView
 from ..dockable_plot import (
-    PLOT_BODY_MARGINS,
-    PLOT_BODY_SPACING,
     _GLYPH_BTN_SIZE,
     add_centered_browser_nav,
     discard_host_dialog_after_dock,
@@ -75,23 +70,37 @@ from ..dockable_plot import (
     style_browser_nav_buttons,
     style_plot_footer_text_button,
 )
-from ..qt_widget_utils import make_window_minimizable
 from ..widgets import NumericTableWidgetItem
+from .chrome import (
+    BrowserHostDialog,
+    apply_browser_body_layout,
+    floating_browser_minimum_width,
+    install_browser_nav_shortcuts,
+    style_browser_data_table,
+    style_browser_preview_host,
+)
 
 _ROW_TABLE_ROW_HEIGHT = 28
 _TABLE_MAX_VISIBLE_ROWS = 8
 _ROW_TABLE_MIN_COL_WIDTH = 72
-_SKIP_HEADERS = frozenset({"ID_HIDDEN", "Structure"})
+POSE_ID_HEADER = "Pose"
+_SKIP_HEADERS = frozenset({"ID_HIDDEN", "Structure", "SMILES", POSE_ID_HEADER})
 _SCORE_KEYS = ("minimizedAffinity", "CNNaffinity", "CNNscore")
 
 
 def pose_browser_headers(mols: list) -> list[str]:
-    """Visible pose-property columns (no hidden structure / packed-ensemble fields)."""
-    return [
+    """Visible pose columns: unique Pose id, then scores (no SMILES or hidden fields)."""
+    tail = [
         h
         for h in dock_result_headers(mols or [])
         if h not in _SKIP_HEADERS and not is_packed_ensemble_header(h)
     ]
+    return [POSE_ID_HEADER, *tail]
+
+
+def pose_browser_id(*, ligand: int, pose: int) -> str:
+    """Unique 1-based pose id (``1.1`` is ligand 1, pose 1)."""
+    return f"{max(1, int(ligand) + 1)}.{max(1, int(pose) + 1)}"
 
 
 def parent_oid_from_mol(mol: Chem.Mol | None) -> int | None:
@@ -151,8 +160,7 @@ class PoseBrowserWidget(QWidget):
         self._sort_order = Qt.DescendingOrder
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(*PLOT_BODY_MARGINS)
-        root.setSpacing(PLOT_BODY_SPACING)
+        apply_browser_body_layout(root)
 
         self._cb_only_selected = QCheckBox("Browse Selected")
         self._cb_only_selected.setToolTip(
@@ -163,7 +171,7 @@ class PoseBrowserWidget(QWidget):
         self._preview_host = QWidget(self)
         self._preview_host.setMinimumSize(360, 260)
         self._preview_host.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self._preview_host.setStyleSheet("border: 1px solid palette(mid); border-radius: 4px;")
+        style_browser_preview_host(self._preview_host, canvas=False)
         self._preview_ly = QVBoxLayout(self._preview_host)
         self._preview_ly.setContentsMargins(0, 0, 0, 0)
         self._preview_ly.setSpacing(0)
@@ -203,10 +211,7 @@ class PoseBrowserWidget(QWidget):
         self._row_table.setShowGrid(True)
         self._row_table.verticalHeader().setDefaultSectionSize(_ROW_TABLE_ROW_HEIGHT)
         self._row_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._row_table.setStyleSheet(
-            "QTableWidget { background-color: palette(base); "
-            "border: 1px solid palette(mid); border-radius: 4px; }"
-        )
+        style_browser_data_table(self._row_table)
         options_ly.addWidget(self._row_table)
         bar = self._row_table.horizontalScrollBar()
         if bar is not None:
@@ -359,15 +364,12 @@ class PoseBrowserWidget(QWidget):
         self._cb_only_selected.toggled.connect(self._on_only_selected_toggled)
         self._row_table.itemSelectionChanged.connect(self._on_pose_row_selected)
 
-        for key, slot in (
-            (Qt.Key_Home, self._go_first),
-            (Qt.Key_Left, lambda: self._step(-1)),
-            (Qt.Key_Right, lambda: self._step(1)),
-            (Qt.Key_End, self._go_last),
-        ):
-            sc = QShortcut(QKeySequence(key), self)
-            sc.setContext(Qt.WidgetWithChildrenShortcut)
-            sc.activated.connect(slot)
+        install_browser_nav_shortcuts(
+            self,
+            go_first=self._go_first,
+            step=self._step,
+            go_last=self._go_last,
+        )
 
         self._selection_timer = QTimer(self)
         self._selection_timer.setSingleShot(True)
@@ -422,18 +424,7 @@ class PoseBrowserWidget(QWidget):
 
     def floating_content_minimum_width(self) -> int:
         """Width needed for footer + nav chrome without clipping."""
-        margins = 8
-        widths = [self.embedded_minimum_width()]
-        for bar in (getattr(self, "_footer_bar", None), getattr(self, "_nav_bar", None)):
-            if bar is None:
-                continue
-            try:
-                hint = bar.sizeHint()
-                min_hint = bar.minimumSizeHint()
-                widths.append(max(int(hint.width()), int(min_hint.width()), 0))
-            except RuntimeError:
-                continue
-        return max(widths) + margins
+        return floating_browser_minimum_width(self, floor=self.embedded_minimum_width())
 
     def create_floating_dialog(self, parent_app) -> "PoseBrowserDialog":
         self.show()
@@ -492,6 +483,15 @@ class PoseBrowserWidget(QWidget):
         if not self._groups or not (0 <= self._group_idx < len(self._groups)):
             return []
         return self._groups[self._group_idx]
+
+    def _ligand_index_for_group(self, group: list[Chem.Mol]) -> int:
+        for i, item in enumerate(self._all_groups):
+            if item is group:
+                return i
+        try:
+            return self._all_groups.index(group)
+        except ValueError:
+            return self._group_idx
 
     def _known_table_oids(self) -> set[int]:
         app = self._app
@@ -856,7 +856,7 @@ class PoseBrowserWidget(QWidget):
         if app is None:
             return None
         ensure = getattr(app, "_ensure_columns", None)
-        cols = [h for h in pose_browser_headers([mol]) if h != "Structure"]
+        cols = [h for h in pose_browser_headers([mol]) if h not in {"Structure", POSE_ID_HEADER}]
         if callable(ensure) and cols:
             ensure(cols)
         try:
@@ -1049,10 +1049,15 @@ class PoseBrowserWidget(QWidget):
         hdr.blockSignals(True)
         try:
             table.setRowCount(len(group))
+            ligand_idx = self._ligand_index_for_group(group)
             for row, mol in enumerate(group):
                 props = pose_table_props(mol)
                 for col, name in enumerate(self._headers):
-                    table.setItem(row, col, self._pose_table_item(props.get(name) or "", row))
+                    if name == POSE_ID_HEADER:
+                        text = pose_browser_id(ligand=ligand_idx, pose=row)
+                    else:
+                        text = props.get(name) or ""
+                    table.setItem(row, col, self._pose_table_item(text, row))
                 table.setRowHeight(row, _ROW_TABLE_ROW_HEIGHT)
             self._size_pose_table_columns()
             self._apply_pose_table_sort()
@@ -1162,60 +1167,13 @@ class PoseBrowserWidget(QWidget):
         self._sync_pose_views()
 
 
-class PoseBrowserDialog(QDialog):
+class PoseBrowserDialog(BrowserHostDialog):
     """Floating window hosting a :class:`PoseBrowserWidget`."""
 
-    def __init__(self, parent: Any = None, *, panel: PoseBrowserWidget | None = None):
-        super().__init__(parent)
-        self.parent_app = parent
-        self.setWindowTitle("Pose Browser")
-        self.setModal(False)
-        self.setWindowModality(Qt.NonModal)
-        self._force_close = False
-
-        if panel is not None:
-            self._panel = panel
-            self._panel.setParent(self)
-            self._panel.rebind_parent_app(parent)
-            self._panel.show()
-        else:
-            self._panel = PoseBrowserWidget(parent, self)
-
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSizeConstraint(QLayout.SetDefaultConstraint)
-        root.addWidget(self._panel, 1)
-        self._panel._sync_footer_chrome()
-        self._panel._sync_options_chrome()
-        make_window_minimizable(self)
-        self.ensure_fits_chrome(initial=True)
-
-    def ensure_fits_chrome(self, *, initial: bool = False) -> None:
-        """Keep the floating window at least as wide as footer/nav chrome."""
-        panel = getattr(self, "_panel", None)
-        if panel is None:
-            return
-        try:
-            min_w = int(panel.floating_content_minimum_width())
-        except Exception:
-            min_w = 480
-        min_w = max(480, min_w)
-        self.setMinimumWidth(min_w)
-        if initial:
-            self.resize(min_w, max(520, int(self.height()) or 520))
-        elif self.width() < min_w:
-            self.resize(min_w, self.height())
-
-    def sizeHint(self) -> QSize:  # noqa: N802 — Qt API
-        hint = super().sizeHint()
-        panel = getattr(self, "_panel", None)
-        if panel is None:
-            return hint
-        try:
-            min_w = int(panel.floating_content_minimum_width())
-        except Exception:
-            min_w = hint.width()
-        return QSize(max(hint.width(), min_w, 480), max(hint.height(), 520))
+    default_title = "Pose Browser"
+    panel_cls = PoseBrowserWidget
+    fit_chrome = True
+    sync_options_chrome = True
 
     def set_poses(
         self,
@@ -1230,23 +1188,10 @@ class PoseBrowserDialog(QDialog):
             mols, title=title, receptor_path=receptor_path, crystal_path=crystal_path
         )
 
-    def closeEvent(self, event) -> None:  # noqa: N802 — Qt API
-        from ..dockable_plot import handle_floating_plot_close_event
-
-        if getattr(self, "_panel", None) is not None and self._panel.parent() is not self:
-            self._force_close = True
-            self._panel = None
-        handle_floating_plot_close_event(
-            self,
-            event,
-            title="Close Browser",
-            message="Close this browser?",
-        )
+    def _on_close_accepted(self) -> None:
         # Floating close hides this singleton without destroying it; drop the
         # Protein Viewer overlay immediately. Docked panels keep the overlay
         # until the widget itself is destroyed.
-        if not event.isAccepted():
-            return
         if getattr(self, "_panel", None) is None:
             return
         app = self.parent_app

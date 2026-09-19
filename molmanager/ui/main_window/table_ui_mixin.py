@@ -123,9 +123,6 @@ class TableUIMixin(
             return
         if self.headers[logical_index] == "ID_HIDDEN":
             return
-        view_model = self.table.model()
-        if view_model is not None and view_model.rowCount() > 0:
-            self.table.setCurrentIndex(view_model.index(0, logical_index))
         mods = QApplication.keyboardModifiers()
         if mods & Qt.ShiftModifier:
             anchor = getattr(self, "_column_selection_anchor", None)
@@ -210,7 +207,9 @@ class TableUIMixin(
         )
 
     def clear_all(self):
-        self._confs_blocks_sidecar = {}
+        from ...storage import reset_confs_sidecar
+
+        reset_confs_sidecar(self)
         self._som_browse_records = []
         clearer = getattr(self, "_store_last_dock_results", None)
         if callable(clearer):
@@ -302,10 +301,9 @@ class TableUIMixin(
 
     def _migrate_legacy_confs_cells_to_sidecar(self) -> None:
         """Move embedded v1 conformer payloads out of ``confs`` / ``superpose`` cells into ``_confs_blocks_sidecar``."""
-        sc = getattr(self, "_confs_blocks_sidecar", None)
-        if sc is None:
-            self._confs_blocks_sidecar = {}
-            sc = self._confs_blocks_sidecar
+        from ...storage import ensure_confs_sidecar
+
+        sc = ensure_confs_sidecar(self)
         cols = [c for c in self.headers if is_packed_ensemble_header(c)]
         if not cols:
             return
@@ -324,8 +322,13 @@ class TableUIMixin(
                         self._table_model.set_cell_text(oid, col, light)
 
     def _confs_sidecar_discard_oids(self, oids: list[int]) -> None:
+        from ...storage import EnsembleStore
+
         sc = getattr(self, "_confs_blocks_sidecar", None)
-        if not sc or not oids:
+        if sc is None or not oids:
+            return
+        if isinstance(sc, EnsembleStore):
+            sc.discard_oids(oids)
             return
         dead = {int(o) for o in oids}
         for k in list(sc.keys()):
@@ -333,10 +336,16 @@ class TableUIMixin(
                 del sc[k]
 
     def _confs_sidecar_copy_for_new_row(self, src_oid: int, dst_oid: int) -> None:
+        from ...storage import EnsembleStore
+
         sc = getattr(self, "_confs_blocks_sidecar", None)
-        if not sc:
+        if sc is None:
             return
-        for col in [h for h in self.headers if is_packed_ensemble_header(h)]:
+        cols = [h for h in self.headers if is_packed_ensemble_header(h)]
+        if isinstance(sc, EnsembleStore):
+            sc.copy_oid(src_oid, dst_oid, cols)
+            return
+        for col in cols:
             b = sc.get((int(src_oid), col))
             if b:
                 sc[(int(dst_oid), col)] = b
@@ -351,7 +360,9 @@ class TableUIMixin(
             t0 = self._table_model.cell_text(row, 0)
             oid = int(t0) if t0.isdigit() else -1
             if oid >= 0:
-                sc = getattr(self, "_confs_blocks_sidecar", {}) or {}
+                sc = getattr(self, "_confs_blocks_sidecar", None)
+                if sc is None:
+                    sc = {}
                 return rehydrate_v1_confs_cell(raw, h, oid, sc)
         return (self._table_cell_text(row, col) or "").strip()
 

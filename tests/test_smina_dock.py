@@ -376,6 +376,8 @@ def test_smina_present_dock_results_opens_table(qapp, tmp_path):  # noqa: ARG001
     assert mols[0].GetProp("minimizedAffinity") == "-9.100"
     assert mols[0].GetProp("mode") == "1"
     assert mols[0].GetProp("rmsd_lb") == "0.000"
+    assert mols[0].HasProp("E_MMFF")
+    assert mols[0].HasProp("E_UFF")
     dlg.close()
 
 
@@ -746,4 +748,37 @@ def test_present_dock_results_keeps_crystal_ref_on_validation_entry_only(qapp, t
     assert len(mols) == 2
     assert mols[0].GetProp(CRYSTAL_REF_PROP) == "AXI A 2000"
     assert not mols[1].HasProp(CRYSTAL_REF_PROP)
+    dlg.close()
+
+
+def test_gnina_log_goes_to_protein_viewer(qapp):  # noqa: ARG001
+    from types import SimpleNamespace
+
+    from PyQt5.QtWidgets import QGroupBox
+
+    from molmanager.ui.protein_viewer import ProteinViewerDialog
+
+    viewer = ProteinViewerDialog()
+    host = SimpleNamespace(_live_protein_viewer=lambda: viewer)
+    dlg = GninaDockDialog(None)
+    dlg._main_window = host
+    assert "Log" not in [g.title() for g in dlg.findChildren(QGroupBox)]
+    dlg.log.append("[12:00:00][system] Launch: gnina --receptor rec.pdbqt")
+    text = viewer.log.toPlainText()
+    assert "Launch: gnina --receptor rec.pdbqt" in text
+    assert "[system]" not in text
+    dlg.close()
+    viewer.close()
+
+
+def test_gnina_start_hides_dialog(qapp, monkeypatch):  # noqa: ARG001
+    dlg = GninaDockDialog(None)
+    dlg.show()
+    assert dlg.isVisible()
+    dlg._resolved_exe = "gnina"
+    monkeypatch.setattr("molmanager.ui.dialogs.gnina_dock.gnina_uses_wsl", lambda: False)
+    monkeypatch.setattr("molmanager.ui.dialogs.gnina_dock.gnina_launch_env", lambda _exe: {})
+    monkeypatch.setattr(dlg._proc, "start", lambda *_args, **_kwargs: None)
+    dlg._start_gnina_process(["--receptor", "rec.pdbqt"])
+    assert dlg.isHidden()
     dlg.close()

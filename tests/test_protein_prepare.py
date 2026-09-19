@@ -1271,8 +1271,11 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     dlg = ProteinViewerDialog()
     mb = dlg.findChild(QMenuBar)
     labels = [a.text().replace("&", "") for a in mb.actions()]
-    assert "Prepare" in labels
-    prepare_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Prepare")
+    assert "Tools" in labels
+    tools_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
+    prepare_menu = next(
+        a.menu() for a in tools_menu.actions() if a.text().replace("&", "") == "Prepare"
+    )
     prepare_labels = [a.text().replace("&", "") for a in prepare_menu.actions()]
     assert any(label.startswith("Fast Prepare") for label in prepare_labels)
     assert any(label.startswith("PDBFixer") for label in prepare_labels)

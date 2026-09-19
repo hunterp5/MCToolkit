@@ -212,9 +212,7 @@ def test_pose_browser_overlays_open_protein_viewer(qapp, tmp_path, monkeypatch):
         parent.close()
 
 
-def test_closed_pose_browser_does_not_restore_overlay_on_viewer_reopen(
-    qapp, tmp_path, monkeypatch
-):  # noqa: ARG001
+def test_closed_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
     from molmanager.ui.main_window import ChemicalTableApp
     from molmanager.ui.protein_embed import ProteinEmbedView
@@ -264,9 +262,7 @@ def test_closed_pose_browser_does_not_restore_overlay_on_viewer_reopen(
         parent.close()
 
 
-def test_hidden_pose_browser_does_not_restore_overlay_on_viewer_reopen(
-    qapp, tmp_path, monkeypatch
-):  # noqa: ARG001
+def test_hidden_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
     from molmanager.ui.main_window import ChemicalTableApp
     from molmanager.ui.protein_embed import ProteinEmbedView
@@ -401,3 +397,52 @@ def test_protein_chain_manager_docks_widget(qapp):  # noqa: ARG001
     assert mgr.page_count() == 1
     assert mgr._header.isHidden() is True
     mgr.close()
+
+
+def test_pose_browser_headers_use_pose_id_not_smiles():
+    from molmanager.ui.browsers.pose_browser import (
+        POSE_ID_HEADER,
+        pose_browser_headers,
+        pose_browser_id,
+    )
+
+    mol = _ethanol_pose("-8.100", 1.0)
+    mol.SetProp("SMILES", "CCO")
+    mol.SetProp("mode", "1")
+    headers = pose_browser_headers([mol])
+    assert headers[0] == POSE_ID_HEADER
+    assert "SMILES" not in headers
+    assert "minimizedAffinity" in headers
+    assert pose_browser_id(ligand=0, pose=0) == "1.1"
+    assert pose_browser_id(ligand=1, pose=2) == "2.3"
+
+
+def test_pose_browser_table_shows_unique_pose_ids(qapp, monkeypatch):  # noqa: ARG001
+    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
+    from molmanager.ui.pose_browser import POSE_ID_HEADER, PoseBrowserWidget
+
+    monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
+    panel = PoseBrowserWidget(None)
+    lig_a1 = _ethanol_pose("-8.100", 1.0)
+    lig_a2 = _ethanol_pose("-6.400", 4.0)
+    lig_b1 = _ethanol_pose("-5.000", 7.0)
+    lig_a1.SetProp("SMILES", "CCO")
+    lig_a2.SetProp("SMILES", "CCO")
+    lig_b1.SetProp("SMILES", "CCN")
+    lig_a1.SetProp("_Name", "ligA")
+    lig_a2.SetProp("_Name", "ligA")
+    lig_b1.SetProp("_Name", "ligB")
+    panel.set_poses([lig_a1, lig_a2, lig_b1])
+    headers = [
+        panel._row_table.horizontalHeaderItem(i).text()
+        for i in range(panel._row_table.columnCount())
+    ]
+    assert headers[0] == POSE_ID_HEADER
+    assert "SMILES" not in headers
+    assert panel._row_table.rowCount() == 2
+    assert panel._row_table.item(0, 0).text() == "1.1"
+    assert panel._row_table.item(1, 0).text() == "1.2"
+    panel._step(1)
+    assert panel._row_table.rowCount() == 1
+    assert panel._row_table.item(0, 0).text() == "2.1"
+    panel.close()

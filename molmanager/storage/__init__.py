@@ -16,7 +16,20 @@
 
 """Storage backends for large-table workloads."""
 
+from .ensemble_store import (
+    EnsembleStore,
+    ensemble_db_path,
+    ensemble_mol_for,
+    ensure_confs_sidecar,
+    reset_confs_sidecar,
+)
 from .sqlite_table_store import SqliteTableStore
 
-__all__ = ["SqliteTableStore"]
-
+__all__ = [
+    "EnsembleStore",
+    "SqliteTableStore",
+    "ensemble_db_path",
+    "ensemble_mol_for",
+    "ensure_confs_sidecar",
+    "reset_confs_sidecar",
+]

@@ -21,18 +21,15 @@ from __future__ import annotations
 from typing import Any
 
 from PyQt5.QtCore import QEvent, QItemSelectionModel, QSize, Qt, QTimer
-from PyQt5.QtGui import QBrush, QFont, QIcon, QImage, QKeySequence, QPixmap
+from PyQt5.QtGui import QBrush, QFont, QIcon, QImage, QPixmap
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
-    QDialog,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLayout,
     QPushButton,
-    QShortcut,
     QSizePolicy,
     QStyle,
     QTableWidget,
@@ -47,8 +44,6 @@ from ...display_constants import (
 )
 from ..compound_table_model import CompoundTableModel
 from ..dockable_plot import (
-    PLOT_BODY_MARGINS,
-    PLOT_BODY_SPACING,
     _GLYPH_BTN_SIZE,
     discard_host_dialog_after_dock,
     make_add_to_main_button,
@@ -61,8 +56,16 @@ from ..dockable_plot import (
     style_browser_nav_buttons,
     style_plot_footer_text_button,
 )
-from ..qt_widget_utils import make_window_minimizable
 from ..table_selection import item_selection_for_view_rows
+from .chrome import (
+    BrowserHostDialog,
+    apply_browser_body_layout,
+    floating_browser_minimum_width,
+    install_browser_nav_shortcuts,
+    style_browser_data_table,
+    style_browser_preview_host,
+    style_browser_structure_label,
+)
 
 _ROW_TABLE_PIXMAP_MAX = QSize(48, 36)
 _ROW_TABLE_ROW_HEIGHT = _ROW_TABLE_PIXMAP_MAX.height() + 8
@@ -87,8 +90,7 @@ class SelectionBrowserWidget(QWidget):
         ] = {}  # (oid, w_px, h_px) -> pixmap
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(*PLOT_BODY_MARGINS)
-        root.setSpacing(PLOT_BODY_SPACING)
+        apply_browser_body_layout(root)
 
         self._cb_only_selected = QCheckBox("Browse Selected")
         self._cb_only_selected.setToolTip(
@@ -100,19 +102,14 @@ class SelectionBrowserWidget(QWidget):
         self._preview_host.setMinimumSize(360, 260)
         # Ignored: preview content must not drive the window sizeHint (move/resize loop).
         self._preview_host.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self._preview_host.setStyleSheet(
-            "background-color: #ffffff; border: 1px solid palette(mid); border-radius: 4px;"
-        )
+        style_browser_preview_host(self._preview_host)
         self._preview_ly = QVBoxLayout(self._preview_host)
         self._preview_ly.setContentsMargins(0, 0, 0, 0)
         self._preview_ly.setSpacing(0)
 
         self._struct_label = QLabel(self._preview_host)
-        self._struct_label.setAlignment(Qt.AlignCenter)
         self._struct_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self._struct_label.setScaledContents(False)
-        # Match RDKit depiction background (white), not palette(base).
-        self._struct_label.setStyleSheet("background-color: #ffffff; border: none;")
+        style_browser_structure_label(self._struct_label)
         self._preview_ly.addWidget(self._struct_label, 1)
         self._view_3d = None
         self._preview_3d_mode = False
@@ -139,10 +136,7 @@ class SelectionBrowserWidget(QWidget):
         self._row_table.setIconSize(_ROW_TABLE_PIXMAP_MAX)
         self._row_table.verticalHeader().setDefaultSectionSize(_ROW_TABLE_ROW_HEIGHT)
         self._row_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._row_table.setStyleSheet(
-            "QTableWidget { background-color: palette(base); "
-            "border: 1px solid palette(mid); border-radius: 4px; }"
-        )
+        style_browser_data_table(self._row_table)
         options_ly.addWidget(self._row_table)
         bar = self._row_table.horizontalScrollBar()
         if bar is not None:
@@ -277,15 +271,12 @@ class SelectionBrowserWidget(QWidget):
         self._btn_toggle_select.clicked.connect(self._toggle_current_row_selected)
         self._cb_only_selected.toggled.connect(lambda _v: self.refresh_from_app())
 
-        for key, slot in (
-            (Qt.Key_Home, self._go_first),
-            (Qt.Key_Left, lambda: self._step(-1)),
-            (Qt.Key_Right, lambda: self._step(1)),
-            (Qt.Key_End, self._go_last),
-        ):
-            sc = QShortcut(QKeySequence(key), self)
-            sc.setContext(Qt.WidgetWithChildrenShortcut)
-            sc.activated.connect(slot)
+        install_browser_nav_shortcuts(
+            self,
+            go_first=self._go_first,
+            step=self._step,
+            go_last=self._go_last,
+        )
 
         self._auto_refresh_timer = QTimer(self)
         self._auto_refresh_timer.setSingleShot(True)
@@ -319,18 +310,7 @@ class SelectionBrowserWidget(QWidget):
 
     def floating_content_minimum_width(self) -> int:
         """Width needed for footer + nav chrome without clipping."""
-        margins = 8  # root layout left+right (4+4)
-        widths = [self.embedded_minimum_width()]
-        for bar in (getattr(self, "_footer_bar", None), getattr(self, "_nav_bar", None)):
-            if bar is None:
-                continue
-            try:
-                hint = bar.sizeHint()
-                min_hint = bar.minimumSizeHint()
-                widths.append(max(int(hint.width()), int(min_hint.width()), 0))
-            except RuntimeError:
-                continue
-        return max(widths) + margins
+        return floating_browser_minimum_width(self, floor=self.embedded_minimum_width())
 
     def create_floating_dialog(self, parent_app) -> "SelectionBrowserDialog":
         """Re-open this browser in a floating window after undocking from the main table."""
@@ -986,74 +966,13 @@ class SelectionBrowserWidget(QWidget):
             self._update_preview(r)
 
 
-class SelectionBrowserDialog(QDialog):
+class SelectionBrowserDialog(BrowserHostDialog):
     """Floating window hosting a :class:`SelectionBrowserWidget`."""
 
-    def __init__(self, parent: Any = None, *, panel: SelectionBrowserWidget | None = None):
-        super().__init__(parent)
-        self.parent_app = parent
-        self.setWindowTitle("Browser")
-        self.setModal(False)
-        self.setWindowModality(Qt.NonModal)
-        self._force_close = False
-
-        if panel is not None:
-            self._panel = panel
-            self._panel.setParent(self)
-            self._panel.rebind_parent_app(parent)
-            self._panel.show()
-        else:
-            self._panel = SelectionBrowserWidget(parent, self)
-
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSizeConstraint(QLayout.SetDefaultConstraint)
-        root.addWidget(self._panel, 1)
-        self._panel._sync_footer_chrome()
-        self._panel._sync_options_chrome()
-        make_window_minimizable(self)
-        self.ensure_fits_chrome(initial=True)
-
-    def ensure_fits_chrome(self, *, initial: bool = False) -> None:
-        """Keep the floating window at least as wide as footer/nav chrome."""
-        panel = getattr(self, "_panel", None)
-        if panel is None:
-            return
-        try:
-            min_w = int(panel.floating_content_minimum_width())
-        except Exception:
-            min_w = 480
-        min_w = max(480, min_w)
-        self.setMinimumWidth(min_w)
-        if initial:
-            self.resize(min_w, max(520, int(self.height()) or 520))
-        elif self.width() < min_w:
-            self.resize(min_w, self.height())
-
-    def sizeHint(self) -> QSize:  # noqa: N802 — Qt API
-        hint = super().sizeHint()
-        panel = getattr(self, "_panel", None)
-        if panel is None:
-            return hint
-        try:
-            min_w = int(panel.floating_content_minimum_width())
-        except Exception:
-            min_w = hint.width()
-        return QSize(max(hint.width(), min_w, 480), max(hint.height(), 520))
+    default_title = "Browser"
+    panel_cls = SelectionBrowserWidget
+    fit_chrome = True
+    sync_options_chrome = True
 
     def refresh_from_app(self, *, preserve_position: bool = False) -> None:
         self._panel.refresh_from_app(preserve_position=preserve_position)
-
-    def closeEvent(self, event) -> None:  # noqa: N802 — Qt API
-        from ..dockable_plot import handle_floating_plot_close_event
-
-        if getattr(self, "_panel", None) is not None and self._panel.parent() is not self:
-            # Panel was docked into the workspace; just drop the husk reference.
-            self._force_close = True
-            self._panel = None
-        handle_floating_plot_close_event(
-            self,
-            event,
-            title="Close Browser",
-            message="Close this browser?",
-        )

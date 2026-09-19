@@ -59,10 +59,10 @@ class DescriptorsToolsMixin:
         oids_list = self._all_oids_in_table_order()
         if allowed is not None:
             oids_list = [o for o in oids_list if o in allowed]
-        confs_by_idx = (
-            self._packed_confs_cells_for_descriptor_job(oids_list, src)
+        packed_confs, confs_cols, ensemble_db = (
+            self._ensemble_inputs_for_descriptor_job(oids_list, src)
             if int_fns_need_3d(fns)
-            else {}
+            else ({}, {}, None)
         )
         if not is_s:
             data = []
@@ -89,7 +89,16 @@ class DescriptorsToolsMixin:
         ps = self._tool_progress_state
         self._begin_tool_progress("Calculate descriptors", len(data))
 
-        def _make_calc_worker(ev, d=data, dh=calc_headers, fn=fns, sm=is_s, c=confs_by_idx):
+        def _make_calc_worker(
+            ev,
+            d=data,
+            dh=calc_headers,
+            fn=fns,
+            sm=is_s,
+            c=packed_confs,
+            cols=confs_cols,
+            db=ensemble_db,
+        ):
             return CalcWorker(
                 d,
                 dh,
@@ -99,6 +108,8 @@ class DescriptorsToolsMixin:
                 cancel_event=ev,
                 progress_state=ps,
                 confs_by_idx=c,
+                confs_col_by_idx=cols,
+                ensemble_db=db,
             )
 
         self.process_queue.enqueue(
@@ -106,9 +117,12 @@ class DescriptorsToolsMixin:
             _make_calc_worker,
         )
 
-    def _packed_confs_cells_for_descriptor_job(self, oids, src: str) -> dict[int, str]:
-        """Rehydrated packed ``confs`` / ``superpose`` cells for 3D descriptor rows."""
+    def _ensemble_inputs_for_descriptor_job(
+        self, oids, src: str
+    ) -> tuple[dict[int, str], dict[int, str], str | None]:
+        """Packed-cell fallback map, column map, and ensemble DB path for 3D descriptors."""
         from ...confs_codec import rehydrate_v1_confs_cell, unpack_confs_blocks_json_b64
+        from ...storage import EnsembleStore, ensemble_db_path
 
         preferred: list[str] = []
         src_h = (src or "").strip()
@@ -118,20 +132,30 @@ class DescriptorsToolsMixin:
             if col not in preferred and col in self.headers:
                 preferred.append(col)
         if not preferred:
-            return {}
-        sc = getattr(self, "_confs_blocks_sidecar", {}) or {}
-        out: dict[int, str] = {}
+            return {}, {}, None
+        sc = getattr(self, "_confs_blocks_sidecar", None)
+        db = str(ensemble_db_path(self) or "") or None
+        packed: dict[int, str] = {}
+        cols: dict[int, str] = {}
+        mapping = sc if sc is not None else {}
         for oid in oids:
             r = self.logical_row_for_oid(int(oid))
             if r < 0:
                 continue
             for col in preferred:
-                raw = self._table_model.backing_value_for_row_header(r, col)
-                full = rehydrate_v1_confs_cell(raw, col, int(oid), sc)
-                if unpack_confs_blocks_json_b64(full):
-                    out[int(oid)] = full
+                if isinstance(sc, EnsembleStore) and (int(oid), col) in sc:
+                    cols[int(oid)] = col
                     break
-        return out
+                raw = self._table_model.backing_value_for_row_header(r, col)
+                full = rehydrate_v1_confs_cell(raw, col, int(oid), mapping)
+                if unpack_confs_blocks_json_b64(full):
+                    packed[int(oid)] = full
+                    break
+        return packed, cols, db
+
+    def _packed_confs_cells_for_descriptor_job(self, oids, src: str) -> dict[int, str]:
+        packed, _cols, _db = self._ensemble_inputs_for_descriptor_job(oids, src)
+        return packed
 
     def _calc_writeback_async_min_rows(self) -> int:
         from ...config import load_config

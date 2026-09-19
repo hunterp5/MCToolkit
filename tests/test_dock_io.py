@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
@@ -44,6 +45,7 @@ from molmanager.dock_io import (
     smina_log_pose_rows,
     split_ligand_pdbqt_records,
     split_pdbqt_models,
+    stamp_pose_ff_energies,
     write_ligand_pdbqt_as_sdf,
     write_pdbqt_poses_sdf,
     write_protein_setup,
@@ -509,6 +511,28 @@ def test_dock_result_headers_include_crystal_ref():
     assert "crystalRef" in headers
     assert headers.index("minimizedAffinity") < headers.index("crystalRMSD")
     assert headers.index("crystalRMSD") < headers.index("crystalRef")
+
+
+def test_stamp_pose_ff_energies_writes_mmff_and_uff():
+    mol = Chem.AddHs(Chem.MolFromSmiles("CCO"))
+    assert mol is not None
+    assert AllChem.EmbedMolecule(mol, randomSeed=7) == 0
+    stamp_pose_ff_energies([mol])
+    mmff = float(mol.GetProp("E_MMFF"))
+    uff = float(mol.GetProp("E_UFF"))
+    assert math.isfinite(mmff)
+    assert math.isfinite(uff)
+
+
+def test_dock_result_headers_include_ff_energies():
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    mol.SetProp("minimizedAffinity", "-7.250")
+    mol.SetProp("E_MMFF", "12.500")
+    mol.SetProp("E_UFF", "8.250")
+    headers = dock_result_headers([mol])
+    assert headers.index("minimizedAffinity") < headers.index("E_MMFF")
+    assert headers.index("E_MMFF") < headers.index("E_UFF")
 
 
 def test_is_poses_header():

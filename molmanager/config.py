@@ -320,7 +320,7 @@ def load_config() -> MolManagerConfig:
             "MOLMANAGER_MEMORY_GUARD_CONF_MAX_ROWS", 5_000, lo=1, hi=10_000_000
         ),
         memory_guard_conf_max_row_confs=_env_int(
-            "MOLMANAGER_MEMORY_GUARD_CONF_MAX_ROW_CONFS", 100_000, lo=100, hi=50_000_000
+            "MOLMANAGER_MEMORY_GUARD_CONF_MAX_ROW_CONFS", 1_000_000, lo=100, hi=50_000_000
         ),
         memory_guard_cluster_max_rows=_env_int(
             "MOLMANAGER_MEMORY_GUARD_CLUSTER_MAX_ROWS", 25_000, lo=100, hi=10_000_000

@@ -78,7 +78,7 @@ def add_openmm_platform_combo(combo: QComboBox) -> QComboBox:
 
 
 class ProteinPrepareDialog(ProteinStructureSourceMixin, QDialog):
-    """Options for Protein Viewer → Prepare → Fast Prepare."""
+    """Options for Protein Viewer → Tools → Prepare → Fast Prepare."""
 
     prepared = pyqtSignal(str)
     smina_prepared = pyqtSignal(object)

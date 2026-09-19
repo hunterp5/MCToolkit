@@ -48,6 +48,23 @@ FEATURE_TYPES: tuple[tuple[str, str], ...] = (
 FEATURE_TYPE_IDS: tuple[str, ...] = tuple(key for key, _label in FEATURE_TYPES)
 _TYPE_LOOKUP = {key.lower(): key for key in FEATURE_TYPE_IDS}
 
+# Empty string means any element. Common symbols for the editor combo.
+FEATURE_ATOMS: tuple[tuple[str, str], ...] = (
+    ("", "Any"),
+    ("C", "C"),
+    ("N", "N"),
+    ("O", "O"),
+    ("S", "S"),
+    ("P", "P"),
+    ("F", "F"),
+    ("Cl", "Cl"),
+    ("Br", "Br"),
+    ("I", "I"),
+    ("H", "H"),
+    ("Zn", "Zn"),
+)
+_ATOM_ANY_ALIASES = {"", "*", "-", "any", "all"}
+
 DEFAULT_RADIUS: dict[str, float] = {
     "Donor": 1.0,
     "Acceptor": 1.0,
@@ -93,6 +110,28 @@ def feature_color(feature_type: str) -> str:
     return FEATURE_COLORS.get(normalize_feature_type(feature_type), "#9b59b6")
 
 
+def normalize_feature_atom(value: str) -> str:
+    """Return a periodic-table symbol, or an empty string for any element."""
+    raw = str(value or "").strip()
+    if not raw or raw.lower() in _ATOM_ANY_ALIASES:
+        return ""
+    if raw.lower() in {"d", "t"}:
+        return "H"
+    if len(raw) == 1:
+        return raw.upper()
+    if len(raw) == 2:
+        return raw[0].upper() + raw[1].lower()
+    return ""
+
+
+def feature_atom_matches(query_atom: str, ligand_atom: str) -> bool:
+    """True when *query_atom* is Any or equals *ligand_atom*."""
+    want = normalize_feature_atom(query_atom)
+    if not want:
+        return True
+    return normalize_feature_atom(ligand_atom) == want
+
+
 @dataclass
 class PharmacophoreFeature:
     """One spherical pharmacophore site in Cartesian coordinates (Å)."""
@@ -104,20 +143,28 @@ class PharmacophoreFeature:
     z: float
     radius: float = 1.0
     enabled: bool = True
+    atom: str = ""
 
     def normalized(self) -> PharmacophoreFeature:
-        """Return a copy with a known type and a positive radius."""
+        """Return a copy with a known type, atom symbol, and a positive radius."""
         kind = normalize_feature_type(self.type)
         radius = float(self.radius)
         if not math.isfinite(radius) or radius <= 0.0:
             radius = default_feature_radius(kind)
-        return replace(self, type=kind, radius=radius, enabled=bool(self.enabled))
+        return replace(
+            self,
+            type=kind,
+            atom=normalize_feature_atom(self.atom),
+            radius=radius,
+            enabled=bool(self.enabled),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         feat = self.normalized()
         return {
             "id": feat.id,
             "type": feat.type,
+            "atom": feat.atom,
             "x": float(feat.x),
             "y": float(feat.y),
             "z": float(feat.z),
@@ -168,6 +215,7 @@ class Pharmacophore:
         radius: float | None = None,
         enabled: bool = True,
         feature_id: str = "",
+        atom: str = "",
     ) -> PharmacophoreFeature:
         kind = normalize_feature_type(feature_type)
         feat = PharmacophoreFeature(
@@ -178,6 +226,7 @@ class Pharmacophore:
             z=float(z),
             radius=float(radius) if radius is not None else default_feature_radius(kind),
             enabled=bool(enabled),
+            atom=atom,
         ).normalized()
         self.features.append(feat)
         return feat
@@ -257,6 +306,9 @@ def pharmacophore_from_dict(raw: Any) -> Pharmacophore:
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Pharmacophore feature {feat_id} has a non-numeric radius.") from exc
         enabled = item.get("enabled", True)
+        atom = item.get("atom")
+        if atom is None:
+            atom = item.get("elem") or item.get("element") or ""
         features.append(
             PharmacophoreFeature(
                 id=feat_id,
@@ -266,6 +318,7 @@ def pharmacophore_from_dict(raw: Any) -> Pharmacophore:
                 z=z,
                 radius=radius,
                 enabled=bool(enabled),
+                atom=str(atom or ""),
             ).normalized()
         )
     return Pharmacophore(features=features, version=version)
@@ -300,14 +353,26 @@ def feature_factory():
     return _FACTORY
 
 
-def features_from_mol(mol) -> list[PharmacophoreFeature]:
+def features_from_mol(mol, *, conf_id: int | None = None) -> list[PharmacophoreFeature]:
     """RDKit BaseFeatures sites for a molecule that already has a 3D conformer."""
     if mol is None or mol.GetNumAtoms() == 0:
         return []
     if mol.GetNumConformers() == 0:
         return []
     factory = feature_factory()
-    raw = factory.GetFeaturesForMol(mol)
+    target = mol
+    if conf_id is not None:
+        try:
+            raw = factory.GetFeaturesForMol(mol, confId=int(conf_id))
+        except TypeError:
+            from rdkit import Chem
+
+            target = Chem.Mol(mol)
+            target.RemoveAllConformers()
+            target.AddConformer(mol.GetConformer(int(conf_id)), assignId=True)
+            raw = factory.GetFeaturesForMol(target)
+    else:
+        raw = factory.GetFeaturesForMol(target)
     out: list[PharmacophoreFeature] = []
     for i, feat in enumerate(raw, 1):
         family = normalize_feature_type(str(feat.GetFamily() or "Donor"))
@@ -320,9 +385,31 @@ def features_from_mol(mol) -> list[PharmacophoreFeature]:
                 y=float(pos.y),
                 z=float(pos.z),
                 radius=default_feature_radius(family),
+                atom=_feature_atom_from_rdkit(target, feat),
             )
         )
     return out
+
+
+def _feature_atom_from_rdkit(mol, feat) -> str:
+    """Element symbol when every RDKit site atom is the same element."""
+    try:
+        ids = list(feat.GetAtomIds() or ())
+    except Exception:
+        return ""
+    symbols: set[str] = set()
+    for idx in ids:
+        try:
+            sym = normalize_feature_atom(mol.GetAtomWithIdx(int(idx)).GetSymbol())
+        except Exception:
+            continue
+        if sym:
+            symbols.add(sym)
+    heavies = {sym for sym in symbols if sym != "H"}
+    pool = heavies or symbols
+    if len(pool) == 1:
+        return next(iter(pool))
+    return ""
 
 
 def ligand_pdb_from_atoms(atoms: Sequence[Any]) -> str:

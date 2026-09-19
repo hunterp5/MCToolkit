@@ -28,7 +28,12 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 from ...config import load_config
 from ...confs_codec import deserialize_confs_sidecar
 from ...microstate_cache import restore_ionization_sidecar
-from ...session_codec import expand_session_document, parse_session_global_bounds
+from ...session_codec import (
+    SESSION_ENSEMBLES_KEY,
+    expand_session_document,
+    parse_session_global_bounds,
+)
+from ...storage import ensure_confs_sidecar
 from ..strings import LOADING_DETAIL_SESSION, TOOL_RENDER_2D, loaded_session_status
 from ..threadpool_access import start_runnable_on_app_pool
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
@@ -468,12 +473,12 @@ class SessionRestoreMixin:
             self._sqlite_store_dirty = True
 
     def _finalize_session_sidecars_and_reveal(self, doc: dict) -> None:
+        cs = ensure_confs_sidecar(self)
+        blob = doc.get(SESSION_ENSEMBLES_KEY)
+        if isinstance(blob, (bytes, bytearray)) and blob:
+            cs.import_sqlite_bytes(bytes(blob), replace=True)
         side = deserialize_confs_sidecar(doc.get("confs_sidecar"))
         if side:
-            cs = getattr(self, "_confs_blocks_sidecar", None)
-            if cs is None:
-                self._confs_blocks_sidecar = {}
-                cs = self._confs_blocks_sidecar
             cs.update(side)
         self._pending_session_som_browse = doc.get("som_browse")
         restore_ionization_sidecar(doc.get("ionization_sidecar"))

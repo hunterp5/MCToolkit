@@ -41,7 +41,9 @@ class RandomChemblMolecule:
 
 
 def _http_get_json(url: str, *, timeout: float = 60.0) -> dict[str, Any]:
-    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": _USER_AGENT})
+    req = urllib.request.Request(
+        url, headers={"Accept": "application/json", "User-Agent": _USER_AGENT}
+    )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
@@ -114,6 +116,8 @@ def fetch_random_chembl_molecules(
     total_count: int | None = None,
     page_size: int = 25,
     max_pages: int | None = None,
+    keep: Callable[[RandomChemblMolecule], bool] | None = None,
+    filtered: bool = False,
 ) -> list[RandomChemblMolecule]:
     """
     Sample *count* random small molecules from ChEMBL (with canonical SMILES).
@@ -135,7 +139,12 @@ def fetch_random_chembl_molecules(
     out: list[RandomChemblMolecule] = []
     seen: set[str] = set()
     pages_done = 0
-    page_budget = int(max_pages) if max_pages is not None else max(8, (n + page - 1) // page * 4 + 4)
+    if max_pages is not None:
+        page_budget = int(max_pages)
+    else:
+        page_budget = max(8, (n + page - 1) // page * 4 + 4)
+        if filtered or keep is not None:
+            page_budget = min(80, max(page_budget * 6, 32))
 
     def _cancelled() -> bool:
         return bool(cancel_check and cancel_check())
@@ -159,6 +168,8 @@ def fetch_random_chembl_molecules(
             if hit is None or hit.chembl_id in seen:
                 continue
             seen.add(hit.chembl_id)
+            if keep is not None and not keep(hit):
+                continue
             out.append(hit)
             if progress:
                 progress(len(out), n)
@@ -166,9 +177,10 @@ def fetch_random_chembl_molecules(
                 break
 
     if len(out) < n:
+        extra = " that match the property filters" if (filtered or keep is not None) else ""
         raise RuntimeError(
-            f"Only retrieved {len(out)} of {n} random ChEMBL molecule(s). "
-            "Try again, or request fewer compounds."
+            f"Only retrieved {len(out)} of {n} random ChEMBL molecule(s){extra}. "
+            "Try again, loosen the filters, or request fewer compounds."
         )
     return out[:n]
 

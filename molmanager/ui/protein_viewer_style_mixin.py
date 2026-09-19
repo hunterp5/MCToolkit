@@ -70,16 +70,67 @@ class ProteinViewerStyleMixin:
         self._apply_kind_style("polymer", style)
 
     def _hydrogen_mode(self) -> str:
+        for mode in ("all", "none", "polar"):
+            for act in self._hydrogen_mode_actions.get(mode) or ():
+                if act is not None and act.isChecked():
+                    return mode
         if self._act_hydrogens_all is not None and self._act_hydrogens_all.isChecked():
             return "all"
         if self._act_hydrogens_none is not None and self._act_hydrogens_none.isChecked():
             return "none"
         return "polar"
 
+    def _sync_hydrogen_mode_actions(self, mode: str) -> None:
+        chosen = mode if mode in ("all", "polar", "none") else "polar"
+        for key, acts in (getattr(self, "_hydrogen_mode_actions", None) or {}).items():
+            for act in acts:
+                if act is None:
+                    continue
+                act.blockSignals(True)
+                act.setChecked(key == chosen)
+                act.blockSignals(False)
+
     def _set_hydrogen_mode(self, mode: str) -> None:
         chosen = mode if mode in ("all", "polar", "none") else "polar"
+        self._sync_hydrogen_mode_actions(chosen)
         self.viewer.set_hydrogens(chosen)
         self._mark_viewer_unsaved()
+
+    def _add_hydrogen_mode_menu(self, menu) -> None:
+        """All / Polar / None hydrogen visibility (same mode as Render → Hydrogens)."""
+        group = QActionGroup(self)
+        group.setExclusive(True)
+        specs = (
+            (
+                "all",
+                "&All",
+                "Show all explicit hydrogens on residues and ligands whose heavy atoms "
+                "are visible (not cartoon-only or hidden).",
+            ),
+            (
+                "polar",
+                "&Polar",
+                "Show hydrogens bonded to heteroatoms on protein and ligand. "
+                "Hydrogens appear only when that residue or ligand's heavy atoms are visible.",
+            ),
+            (
+                "none",
+                "&None",
+                "Hide all explicit hydrogens on the 3D canvas.",
+            ),
+        )
+        store = getattr(self, "_hydrogen_mode_actions", None)
+        if store is None:
+            self._hydrogen_mode_actions = {"all": [], "polar": [], "none": []}
+            store = self._hydrogen_mode_actions
+        for mode, label, tip in specs:
+            act = QAction(label, self)
+            act.setCheckable(True)
+            act.setToolTip(tip)
+            group.addAction(act)
+            menu.addAction(act)
+            act.triggered.connect(lambda _checked=False, m=mode: self._set_hydrogen_mode(m))
+            store.setdefault(mode, []).append(act)
 
     def _protein_ligand_interaction_actions(self):
         """Intermolecular contact toggles (not intramolecular protein/ligand H-bonds)."""
@@ -491,6 +542,8 @@ class ProteinViewerStyleMixin:
             act.setToolTip("Apply this style to the Manager selection.")
             act.triggered.connect(lambda _checked=False, s=style_id: self._on_style_requested(s))
             menu.addAction(act)
+        menu.addSeparator()
+        self._add_hydrogen_mode_menu(menu.addMenu("&Hydrogens"))
 
     def _add_select_color_menu(self, menu) -> None:
         for color_id, label in COMPONENT_COLOR_CHOICES:
@@ -951,6 +1004,10 @@ class ProteinViewerStyleMixin:
         }
 
     def delete_selected_chains(self) -> None:
+        if self.manager.selected_items_are_groups_only():
+            for gid in self.manager.selected_user_group_ids():
+                self._on_delete_group(gid)
+            return
         ids = self._selected_component_ids()
         if not ids:
             return
@@ -1091,6 +1148,34 @@ class ProteinViewerStyleMixin:
                 clearer()
             self._set_residue_highlight([])
             self._set_atom_status("")
+        finally:
+            self._syncing_from_atom = False
+        sync_edit = getattr(self, "_sync_structure_edit_actions", None)
+        if callable(sync_edit):
+            sync_edit()
+        if changed:
+            self._push_states()
+
+    def invert_selection(self) -> None:
+        """Select unselected Manager components and deselect the current selection."""
+        selected = {row.spec.component_id for row in self._rows if row.selected}
+        changed = False
+        for slot in self._slots:
+            new_rows = []
+            for row in slot.rows:
+                now = row.spec.component_id not in selected
+                if row.selected != now:
+                    new_rows.append(replace(row, selected=now))
+                    changed = True
+                else:
+                    new_rows.append(row)
+            slot.rows = new_rows
+        self._syncing_from_atom = True
+        try:
+            self.manager.apply_row_states(self._rows)
+            if self._residue_highlight:
+                self._set_residue_highlight([])
+                self._set_atom_status("")
         finally:
             self._syncing_from_atom = False
         sync_edit = getattr(self, "_sync_structure_edit_actions", None)
@@ -1270,6 +1355,7 @@ class ProteinViewerStyleMixin:
                 sel["resi"] = str(sel.get("resi") or "")
         sel["resn"] = str(data.get("resn") or sel.get("resn") or "")
         sel["kind"] = kind
+        sel["component_id"] = cid
         if spec is not None:
             sel["structure_id"] = spec.structure_id
         highlights = [sel]

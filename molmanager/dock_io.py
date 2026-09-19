@@ -59,6 +59,8 @@ _CNN_REMARK_KEYS = {
     "cnnvs": "CNN_VS",
 }
 _SKIP_REMARK_KEYS = frozenset({"SMILES", "H", "ROOT", "BRANCH", "status", "between"})
+POSE_E_MMFF_PROP = "E_MMFF"
+POSE_E_UFF_PROP = "E_UFF"
 DOCK_RESULT_PREFERRED_COLUMNS = (
     "SMILES",
     COLUMN_PARENT_OID,
@@ -66,11 +68,16 @@ DOCK_RESULT_PREFERRED_COLUMNS = (
     "CNNscore",
     "CNNaffinity",
     "minimizedAffinity",
+    POSE_E_MMFF_PROP,
+    POSE_E_UFF_PROP,
     "minimizedRMSD",
     "rmsd_lb",
     "rmsd_ub",
     "crystalRMSD",
     "crystalRef",
+    "pharmaMatch",
+    "pharmaRMSD",
+    "pharmaN",
     "poseStage",
     "Name",
 )
@@ -292,6 +299,21 @@ def apply_pose_metadata(
         if not overwrite and mol.HasProp(key) and mol.GetProp(key).strip():
             continue
         mol.SetProp(key, text)
+
+
+def stamp_pose_ff_energies(mols: list[Chem.Mol] | None) -> None:
+    """Write vacuum MMFF and UFF single-point energies (kcal/mol) on each pose."""
+    from .workers.strain_energy import single_point_energy_kcal
+
+    for mol in mols or []:
+        if mol is None:
+            continue
+        mmff = single_point_energy_kcal(mol, "MMFF")
+        if mmff is not None:
+            mol.SetProp(POSE_E_MMFF_PROP, f"{mmff:.3f}")
+        uff = single_point_energy_kcal(mol, "UFF")
+        if uff is not None:
+            mol.SetProp(POSE_E_UFF_PROP, f"{uff:.3f}")
 
 
 def smina_log_pose_rows(log_text: str) -> list[dict[str, str]]:

@@ -156,7 +156,6 @@ class TableMenuMixin:
             return
         name = action.objectName()
         if name == "header_select_column":
-            self.table.setCurrentIndex(self._table_model.index(0, col))
             self._select_column(col)
         elif name == "header_sort_num_asc":
             self._apply_table_sort(col, True, "numeric")

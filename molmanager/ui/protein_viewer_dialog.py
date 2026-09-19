@@ -28,9 +28,9 @@ from PyQt5.QtCore import QEventLoop, Qt, QTimer
 from PyQt5.QtGui import QCloseEvent, QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
-    QActionGroup,
     QApplication,
     QDialog,
+    QHBoxLayout,
     QLabel,
     QMenuBar,
     QShortcut,
@@ -38,6 +38,7 @@ from PyQt5.QtWidgets import (
     QSplitter,
     QStackedWidget,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -51,6 +52,7 @@ from .protein_viewer_io_mixin import ProteinViewerIoMixin
 from .protein_viewer_models import (
     LIGAND_STYLE_CHOICES,
     LIGAND_STYLE_IDS,
+    NamedManagerGroup,
     _LoadedSlot,
     _RENDER_COLOR_SPEC,
 )
@@ -82,6 +84,8 @@ class ProteinViewerDialog(
 
         self._slots: list[_LoadedSlot] = []
         self._slot_seq = 0
+        self._named_groups: list[NamedManagerGroup] = []
+        self._group_seq = 0
         self._manager_delete_undo: list[tuple[list[_LoadedSlot], list[_LoadedSlot]]] = []
         self._manager_delete_redo: list[tuple[list[_LoadedSlot], list[_LoadedSlot]]] = []
         self._act_undo: QAction | None = None
@@ -106,8 +110,8 @@ class ProteinViewerDialog(
         self._pharmacophore = None
         self._pharmacophore_path: str | None = None
         self._pharmacophore_temp_path: str | None = None
-        self._pharmacophore_place = False
         self._pharmacophore_dialog = None
+        self._pharmacophore_overlay_visible = False
         self._docking_box_payload: dict | None = None
         self._dock_pose_payload: dict | None = None
         self._dock_pose_mol = None
@@ -120,6 +124,11 @@ class ProteinViewerDialog(
         self._act_hydrogens_all: QAction | None = None
         self._act_hydrogens_polar: QAction | None = None
         self._act_hydrogens_none: QAction | None = None
+        self._hydrogen_mode_actions: dict[str, list[QAction]] = {
+            "all": [],
+            "polar": [],
+            "none": [],
+        }
         self._act_hbond_protein: QAction | None = None
         self._act_hbond_ligand: QAction | None = None
         self._act_hbond_complex: QAction | None = None
@@ -184,8 +193,7 @@ class ProteinViewerDialog(
         edit_menu.addSeparator()
         self._act_edit_structure = QAction("Edit &Structure", self, checkable=True)
         self._act_edit_structure.setToolTip(
-            "Click atoms to select them (up to two). Delete removes atoms instead of chains. "
-            "Two ligand atoms enable Add Bond / Delete Bond."
+            "Click a second atom to pick a ligand bond. Delete removes the current 3D selection."
         )
         self._act_edit_structure.toggled.connect(self._on_edit_structure_toggled)
         edit_menu.addAction(self._act_edit_structure)
@@ -209,44 +217,10 @@ class ProteinViewerDialog(
         )
         self._act_delete_bond.setEnabled(False)
         edit_menu.addAction(self._act_delete_bond)
-        render_menu = menubar.addMenu("&Render")
-        select_menu = menubar.addMenu("&Select")
-        act_sequence = QAction("&Sequence", self, triggered=self.open_sequence_window)
-        act_sequence.setToolTip("Show the editable amino-acid sequence and select residues in 3D.")
-        menubar.addAction(act_sequence)
-        pharma_menu = menubar.addMenu("&Pharmacophore")
-        act_pharma_edit = QAction(
-            "&Edit Pharmacophore…", self, triggered=self.open_pharmacophore_dialog
-        )
-        act_pharma_edit.setToolTip(
-            "Place pharmacophore features in the canvas (type, radius) and save them for Gnina."
-        )
-        pharma_menu.addAction(act_pharma_edit)
-        self._act_pharma_place = QAction("&Place on Atom Click", self, checkable=True)
-        self._act_pharma_place.setToolTip(
-            "Click an atom in 3D to insert a feature at that coordinate. "
-            "Use Edit Pharmacophore for type, radius, and explicit XYZ."
-        )
-        self._act_pharma_place.toggled.connect(self._on_pharmacophore_place_toggled)
-        pharma_menu.addAction(self._act_pharma_place)
-        act_pharma_ligand = QAction(
-            "From &Ligand", self, triggered=self.add_pharmacophore_from_ligand
-        )
-        act_pharma_ligand.setToolTip(
-            "Add RDKit BaseFeatures (donors, acceptors, aromatic centroids, …) from the ligand."
-        )
-        pharma_menu.addAction(act_pharma_ligand)
-        pharma_menu.addSeparator()
-        pharma_menu.addAction(QAction("&Open…", self, triggered=self.open_pharmacophore_file))
-        pharma_menu.addAction(QAction("&Save…", self, triggered=self.save_pharmacophore_file))
-        pharma_menu.addAction(QAction("&Clear", self, triggered=self.clear_pharmacophore))
-        pharma_menu.addSeparator()
-        act_pharma_gnina = QAction(
-            "Send to &Gnina", self, triggered=self.send_pharmacophore_to_gnina
-        )
-        act_pharma_gnina.setToolTip("Fill Protein → Dock Ligand → Gnina with this pharmacophore.")
-        pharma_menu.addAction(act_pharma_gnina)
-        prepare_menu = menubar.addMenu("&Prepare")
+        tools_menu = menubar.addMenu("&Tools")
+        tools_menu.setToolTipsVisible(True)
+        prepare_menu = tools_menu.addMenu("&Prepare")
+        prepare_menu.setToolTipsVisible(True)
         act_fast_prepare = QAction("&Fast Prepare…", self, triggered=self.open_prepare_dialog)
         act_fast_prepare.setToolTip(
             "Repair missing atoms, strip waters/heterogens, protonate at pH, and relax with OpenMM."
@@ -275,6 +249,25 @@ class ProteinViewerDialog(
             "ligand is kept for internal validation)."
         )
         prepare_menu.addAction(act_dock_file)
+        pharma_menu = tools_menu.addMenu("&Pharmacophore")
+        pharma_menu.setToolTipsVisible(True)
+        act_pharma_edit = QAction("&Editor", self, triggered=self.open_pharmacophore_dialog)
+        act_pharma_edit.setToolTip(
+            "Place and edit pharmacophore features, save them, and send them to Gnina."
+        )
+        pharma_menu.addAction(act_pharma_edit)
+        act_pharma_screen = QAction(
+            "Screen &Table…", self, triggered=self.screen_pharmacophore_table
+        )
+        act_pharma_screen.setToolTip(
+            "Screen packed table ensembles (confs / superpose / poses) against this pharmacophore."
+        )
+        pharma_menu.addAction(act_pharma_screen)
+        act_pharma_open = QAction("&Open…", self, triggered=self.open_pharmacophore_file)
+        act_pharma_open.setToolTip("Load a saved pharmacophore JSON onto the canvas.")
+        pharma_menu.addAction(act_pharma_open)
+        render_menu = menubar.addMenu("&Render")
+        select_menu = menubar.addMenu("&Select")
         protein_menu = render_menu.addMenu("&Protein")
         self._protein_style_actions = self._add_render_style_menu(
             protein_menu,
@@ -299,33 +292,11 @@ class ProteinViewerDialog(
             kind="ligand",
         )
         hydrogens_menu = render_menu.addMenu("&Hydrogens")
-        hydrogen_group = QActionGroup(self)
-        hydrogen_group.setExclusive(True)
-        self._act_hydrogens_all = QAction("&All", self)
-        self._act_hydrogens_all.setCheckable(True)
-        self._act_hydrogens_all.setToolTip(
-            "Show all explicit hydrogens on residues whose heavy atoms are visible "
-            "(not cartoon-only)."
-        )
-        self._act_hydrogens_polar = QAction("&Polar", self)
-        self._act_hydrogens_polar.setCheckable(True)
-        self._act_hydrogens_polar.setChecked(True)
-        self._act_hydrogens_polar.setToolTip(
-            "Show hydrogens bonded to heteroatoms (any non-carbon atom) on protein and ligand. "
-            "Amino-acid hydrogens appear only when that residue's heavy atoms are visible."
-        )
-        self._act_hydrogens_none = QAction("&None", self)
-        self._act_hydrogens_none.setCheckable(True)
-        self._act_hydrogens_none.setToolTip("Hide all explicit hydrogens on the 3D canvas.")
-        hydrogen_group.addAction(self._act_hydrogens_all)
-        hydrogen_group.addAction(self._act_hydrogens_polar)
-        hydrogen_group.addAction(self._act_hydrogens_none)
-        hydrogens_menu.addAction(self._act_hydrogens_all)
-        hydrogens_menu.addAction(self._act_hydrogens_polar)
-        hydrogens_menu.addAction(self._act_hydrogens_none)
-        self._act_hydrogens_all.triggered.connect(lambda: self._set_hydrogen_mode("all"))
-        self._act_hydrogens_polar.triggered.connect(lambda: self._set_hydrogen_mode("polar"))
-        self._act_hydrogens_none.triggered.connect(lambda: self._set_hydrogen_mode("none"))
+        self._add_hydrogen_mode_menu(hydrogens_menu)
+        self._act_hydrogens_all = (self._hydrogen_mode_actions.get("all") or [None])[0]
+        self._act_hydrogens_polar = (self._hydrogen_mode_actions.get("polar") or [None])[0]
+        self._act_hydrogens_none = (self._hydrogen_mode_actions.get("none") or [None])[0]
+        self._sync_hydrogen_mode_actions("polar")
         interactions_menu = render_menu.addMenu("&Interactions")
         hbonds_menu = interactions_menu.addMenu("Hydrogen &Bonds")
         self._act_hbond_protein = QAction("&Protein", self)
@@ -383,13 +354,6 @@ class ProteinViewerDialog(
         self._act_interact_pi_stacking.toggled.connect(self._on_hbond_toggles)
         self._act_interact_pi_cation.toggled.connect(self._on_hbond_toggles)
         self._act_interact_halogen.toggled.connect(self._on_hbond_toggles)
-        self._act_pocket = QAction("&Pocket", self)
-        self._act_pocket.setToolTip(
-            "Zoom to the ligand, show nearby protein residues as ball-and-stick, "
-            "and display polar hydrogens on heteroatoms in the pocket."
-        )
-        self._act_pocket.triggered.connect(self._on_pocket)
-        render_menu.addAction(self._act_pocket)
         self._act_pocket_surface = QAction("Pocket &Surface…", self)
         self._act_pocket_surface.setToolTip(
             "Open options for a molecular surface on protein residues within 4.5 Å of the ligand."
@@ -412,6 +376,13 @@ class ProteinViewerDialog(
         self._act_all_atoms.toggled.connect(self._on_all_atoms_toggled)
         render_menu.addAction(self._act_all_atoms)
         render_menu.addSeparator()
+        self._act_pocket = QAction("Focus &Pocket", self)
+        self._act_pocket.setToolTip(
+            "Zoom to the ligand, show nearby protein residues as ball-and-stick, "
+            "and display polar hydrogens on heteroatoms in the pocket."
+        )
+        self._act_pocket.triggered.connect(self._on_pocket)
+        render_menu.addAction(self._act_pocket)
         self._act_reset_camera = QAction("Reset Camera", self, triggered=self._reset_camera)
         self._act_reset_camera.setToolTip(
             "Restore the fitted view and the protein/ligand styles from when they were loaded."
@@ -426,10 +397,14 @@ class ProteinViewerDialog(
         act_focus = QAction("&Focus", self, triggered=self.focus_selected)
         act_focus.setToolTip("Zoom the 3D view to the Manager selection.")
         select_menu.addAction(act_focus)
-        act_delete = QAction("&Delete", self, triggered=self.delete_selected)
-        act_delete.setToolTip(
-            "Delete highlighted atoms, or selected Manager chains if no atom is picked."
+        select_menu.addSeparator()
+        act_invert = QAction("&Invert Selection", self, triggered=self.invert_selection)
+        act_invert.setToolTip(
+            "Select unselected Manager chains and deselect the current selection."
         )
+        select_menu.addAction(act_invert)
+        act_delete = QAction("&Delete", self, triggered=self.delete_selected)
+        act_delete.setToolTip("Delete highlighted atoms or residues, or selected Manager chains.")
         select_menu.addAction(act_delete)
         act_duplicate = QAction("D&uplicate", self, triggered=self.duplicate_selected)
         act_duplicate.setToolTip("Copy the Manager selection as a new overlay structure.")
@@ -438,14 +413,36 @@ class ProteinViewerDialog(
         act_clear.setToolTip("Deselect Manager rows and clear the 3D atom/residue highlight.")
         select_menu.addAction(act_clear)
         select_menu.addSeparator()
-        self._add_select_style_menu(select_menu.addMenu("&Render"))
+        select_render = select_menu.addMenu("&Render")
+        self._add_select_style_menu(select_render)
         self._add_select_color_menu(select_menu.addMenu("&Color"))
+        self._sync_hydrogen_mode_actions(self._hydrogen_mode())
+        # Native Windows menu bars can swallow clicks meant for the corner widget.
+        if sys.platform == "win32":
+            menubar.setNativeMenuBar(False)
+        corner = QWidget(menubar)
+        corner_ly = QHBoxLayout(corner)
+        corner_ly.setContentsMargins(0, 0, 4, 0)
+        btn_sequence = QToolButton(corner)
+        btn_sequence.setText("Sequence")
+        btn_sequence.setToolTip("Show the editable amino-acid sequence and select residues in 3D.")
+        btn_sequence.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        btn_sequence.setAutoRaise(True)
+        btn_sequence.setFocusPolicy(Qt.NoFocus)
+        btn_sequence.setFont(menubar.font())
+        btn_sequence.clicked.connect(self.open_sequence_window)
+        self._btn_sequence = btn_sequence
+        corner_ly.addWidget(btn_sequence)
+        menubar.setCornerWidget(corner, Qt.TopRightCorner)
         root.setMenuBar(menubar)
 
         splitter = QSplitter(Qt.Horizontal)
         self._main_splitter = splitter
         self.viewer = ProteinEmbedView(self)
         self.viewer.atom_picked.connect(self._on_atom_picked)
+        self.viewer.delete_requested.connect(self.delete_selected)
+        self.viewer.undo_requested.connect(self.undo_manager_delete)
+        self.viewer.redo_requested.connect(self.redo_manager_delete)
         self.viewer.web_ready.connect(self._on_canvas_web_ready)
         self.manager = ProteinChainManager(self)
         self.manager.visibility_changed.connect(self._on_visibility_changed)
@@ -453,31 +450,50 @@ class ProteinViewerDialog(
         self.manager.focus_requested.connect(self.focus_selected)
         self.manager.delete_requested.connect(self.delete_selected_chains)
         self.manager.duplicate_requested.connect(self.duplicate_selected)
-        splitter.addWidget(self.viewer)
+        self.manager.add_to_group_requested.connect(self._on_add_to_group)
+        self.manager.remove_from_group_requested.connect(self._on_remove_from_group)
+        self.manager.rename_group_requested.connect(self._on_rename_group)
+        self.manager.delete_group_requested.connect(self._on_delete_group)
+
+        self.log = QTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setMinimumHeight(36)
+        self.log.setPlaceholderText(
+            "Progress from Fast Prepare, PDBFixer, pdb2pqr, Minimize, and Gnina appears here."
+        )
+        apply_monospace_to_text_edit(self.log)
+        self.log.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.log.document().setDocumentMargin(2)
+
+        self._atom_status = QLabel("")
+        self._atom_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._atom_status.setStyleSheet("padding: 0px 6px; color: palette(window-text);")
+        self._atom_status.setToolTip("Clicked atom in the 3D view.")
+
+        canvas_host = QWidget(self)
+        canvas_host.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        canvas_ly = QVBoxLayout(canvas_host)
+        canvas_ly.setContentsMargins(0, 0, 0, 0)
+        canvas_ly.setSpacing(0)
+        canvas_ly.addWidget(self.viewer, 1)
+        canvas_ly.addWidget(self._atom_status)
+
+        vsplit = QSplitter(Qt.Vertical)
+        self._log_splitter = vsplit
+        vsplit.addWidget(canvas_host)
+        vsplit.addWidget(self.log)
+        vsplit.setHandleWidth(3)
+        vsplit.setStretchFactor(0, 1)
+        vsplit.setStretchFactor(1, 0)
+        vsplit.setSizes([800, 48])
+        vsplit.setChildrenCollapsible(False)
+
+        splitter.addWidget(vsplit)
         splitter.addWidget(self.manager)
         splitter.setStretchFactor(0, 4)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([860, 300])
-
-        self.log = QTextEdit()
-        self.log.setReadOnly(True)
-        self.log.setMinimumHeight(80)
-        self.log.setPlaceholderText(
-            "Progress from Fast Prepare, PDBFixer, pdb2pqr, and Minimize appears here."
-        )
-        apply_monospace_to_text_edit(self.log)
-
-        vsplit = QSplitter(Qt.Vertical)
-        self._log_splitter = vsplit
-        vsplit.addWidget(splitter)
-        vsplit.addWidget(self.log)
-        vsplit.setStretchFactor(0, 5)
-        vsplit.setStretchFactor(1, 1)
-        vsplit.setSizes([620, 140])
-        self._atom_status = QLabel("")
-        self._atom_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._atom_status.setStyleSheet("padding: 4px 8px; color: palette(window-text);")
-        self._atom_status.setToolTip("Clicked atom in the 3D view.")
+        splitter.setChildrenCollapsible(False)
 
         self._loading_page = QWidget()
         load_lyt = QVBoxLayout(self._loading_page)
@@ -494,8 +510,7 @@ class ProteinViewerDialog(
         ready_lyt = QVBoxLayout(self._workspace_ready_page)
         ready_lyt.setContentsMargins(0, 0, 0, 0)
         ready_lyt.setSpacing(0)
-        ready_lyt.addWidget(vsplit, 1)
-        ready_lyt.addWidget(self._atom_status)
+        ready_lyt.addWidget(splitter, 1)
 
         self._content_stack = QStackedWidget()
         self._content_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)

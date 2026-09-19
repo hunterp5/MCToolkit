@@ -29,7 +29,6 @@ from ..pharmacophore import (
     PHARMACOPHORE_FILE_FILTER,
     Pharmacophore,
     PharmacophoreFeature,
-    default_feature_radius,
     features_from_mol,
     load_pharmacophore,
     mol_from_ligand_atoms,
@@ -52,21 +51,38 @@ class ProteinViewerPharmacophoreMixin:
         return self._pharmacophore
 
     def _pharmacophore_overlay_payload(self) -> dict:
+        if not getattr(self, "_pharmacophore_overlay_visible", False):
+            return {"active": False, "features": []}
         return self._ensure_pharmacophore().overlay_payload()
 
-    def _push_pharmacophore_overlay(self, *, sync_dialog: bool = True) -> None:
+    def _push_pharmacophore_overlay(
+        self, *, sync_dialog: bool = True, mark_unsaved: bool = True
+    ) -> None:
+        self._pharmacophore_overlay_visible = True
         viewer = getattr(self, "viewer", None)
         setter = getattr(viewer, "set_pharmacophore", None) if viewer is not None else None
         if callable(setter):
             setter(self._pharmacophore_overlay_payload())
         if sync_dialog:
             self._sync_pharmacophore_dialog()
-        mark = getattr(self, "_mark_viewer_unsaved", None)
-        if callable(mark):
-            mark()
+        if mark_unsaved:
+            mark = getattr(self, "_mark_viewer_unsaved", None)
+            if callable(mark):
+                mark()
+
+    def _hide_pharmacophore_canvas_overlay(self) -> None:
+        self._pharmacophore_overlay_visible = False
+        viewer = getattr(self, "viewer", None)
+        setter = getattr(viewer, "set_pharmacophore", None) if viewer is not None else None
+        if callable(setter):
+            setter({"active": False, "features": []})
+
+    def _pharmacophore_editor_is_open(self) -> bool:
+        dlg = getattr(self, "_pharmacophore_dialog", None)
+        return dlg is not None and not qobject_is_deleted(dlg) and bool(dlg.isVisible())
 
     def open_pharmacophore_dialog(self) -> None:
-        """Open the modeless pharmacophore editor and enable atom-click placement."""
+        """Open the modeless pharmacophore editor."""
         from .dialogs.protein_pharmacophore import ProteinPharmacophoreDialog
 
         dlg = getattr(self, "_pharmacophore_dialog", None)
@@ -75,7 +91,6 @@ class ProteinViewerPharmacophoreMixin:
             dlg = None
         if dlg is None:
             dlg = ProteinPharmacophoreDialog(self)
-            dlg.place_toggled.connect(self._on_pharmacophore_place_toggled)
             dlg.add_at_coords.connect(self._on_pharmacophore_add_xyz)
             dlg.feature_changed.connect(self._on_pharmacophore_feature_changed)
             dlg.feature_removed.connect(self._on_pharmacophore_feature_removed)
@@ -84,42 +99,29 @@ class ProteinViewerPharmacophoreMixin:
             dlg.save_clicked.connect(self.save_pharmacophore_file)
             dlg.clear_clicked.connect(self.clear_pharmacophore)
             dlg.send_gnina_clicked.connect(self.send_pharmacophore_to_gnina)
+            dlg.finished.connect(self._on_pharmacophore_editor_closed)
             dlg.destroyed.connect(self._on_pharmacophore_dialog_destroyed)
             self._pharmacophore_dialog = dlg
         self._sync_pharmacophore_dialog()
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
-        self.set_pharmacophore_place_mode(True)
+        self._push_pharmacophore_overlay(mark_unsaved=False)
+
+    def _on_pharmacophore_editor_closed(self, *_args) -> None:
+        self._hide_pharmacophore_canvas_overlay()
 
     def _on_pharmacophore_dialog_destroyed(self) -> None:
         self._pharmacophore_dialog = None
-        self.set_pharmacophore_place_mode(False)
+        self._hide_pharmacophore_canvas_overlay()
 
     def _sync_pharmacophore_dialog(self) -> None:
         dlg = getattr(self, "_pharmacophore_dialog", None)
         if dlg is None or qobject_is_deleted(dlg):
             return
-        dlg.set_place_mode(bool(getattr(self, "_pharmacophore_place", False)))
         dlg.set_features(list(self._ensure_pharmacophore().features))
 
-    def set_pharmacophore_place_mode(self, on: bool) -> None:
-        self._pharmacophore_place = bool(on)
-        act = getattr(self, "_act_pharma_place", None)
-        if act is not None:
-            act.blockSignals(True)
-            act.setChecked(bool(on))
-            act.blockSignals(False)
-        dlg = getattr(self, "_pharmacophore_dialog", None)
-        if dlg is not None and not qobject_is_deleted(dlg):
-            dlg.set_place_mode(bool(on))
-
-    def _on_pharmacophore_place_toggled(self, on: bool) -> None:
-        self.set_pharmacophore_place_mode(bool(on))
-
     def _on_pharmacophore_atom_picked(self, data: dict) -> None:
-        if not bool(getattr(self, "_pharmacophore_place", False)):
-            return
         try:
             x = float(data.get("x"))
             y = float(data.get("y"))
@@ -127,24 +129,19 @@ class ProteinViewerPharmacophoreMixin:
         except (TypeError, ValueError):
             return
         dlg = getattr(self, "_pharmacophore_dialog", None)
-        kind = "Donor"
-        radius = default_feature_radius(kind)
-        if dlg is not None and not qobject_is_deleted(dlg):
-            kind = dlg.next_type()
-            radius = dlg.next_radius()
-            dlg.set_last_xyz(x, y, z)
-        self._ensure_pharmacophore().add_feature(
-            feature_type=kind,
-            x=x,
-            y=y,
-            z=z,
-            radius=radius,
+        if dlg is None or qobject_is_deleted(dlg):
+            return
+        dlg.set_last_xyz(
+            x,
+            y,
+            z,
+            str(data.get("elem") or data.get("element") or ""),
         )
-        self._push_pharmacophore_overlay()
 
     def _on_pharmacophore_add_xyz(
         self,
         feature_type: str,
+        atom: str,
         x: float,
         y: float,
         z: float,
@@ -156,6 +153,7 @@ class ProteinViewerPharmacophoreMixin:
             y=y,
             z=z,
             radius=radius,
+            atom=atom,
         )
         self._push_pharmacophore_overlay()
 
@@ -197,6 +195,7 @@ class ProteinViewerPharmacophoreMixin:
                     y=feat.y,
                     z=feat.z,
                     radius=feat.radius,
+                    atom=feat.atom,
                 )
                 added += 1
         if not added:
@@ -314,7 +313,10 @@ class ProteinViewerPharmacophoreMixin:
             return
         if path:
             self._pharmacophore_path = path
-        self._push_pharmacophore_overlay()
+        if self._pharmacophore_editor_is_open():
+            self._push_pharmacophore_overlay()
+        else:
+            self._hide_pharmacophore_canvas_overlay()
 
     def send_pharmacophore_to_gnina(self) -> None:
         path = self.pharmacophore_file_for_gnina()
@@ -342,3 +344,24 @@ class ProteinViewerPharmacophoreMixin:
             edit = getattr(dlg, "edit_pharmacophore", None)
             if edit is not None:
                 edit.setText(path)
+
+    def screen_pharmacophore_table(self) -> None:
+        path = self.pharmacophore_file_for_gnina()
+        if not path:
+            QMessageBox.information(
+                self,
+                "Pharmacophore",
+                "Add at least one enabled feature before screening the table.",
+            )
+            return
+        parent = self.parent()
+        opener = getattr(parent, "open_pharmacophore_screen", None)
+        if not callable(opener):
+            QMessageBox.information(
+                self,
+                "Pharmacophore",
+                f"Saved to {path}. Open Tools → Conformations → Screen Pharmacophore… "
+                "and browse to that file.",
+            )
+            return
+        opener(path)

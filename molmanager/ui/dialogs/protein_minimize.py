@@ -50,7 +50,7 @@ _MINIMIZE_FMTS = frozenset({"pdb", "pqr", "cif"})
 
 
 class ProteinMinimizeDialog(ProteinStructureSourceMixin, QDialog):
-    """Options for Protein Viewer → Prepare → Minimize."""
+    """Options for Protein Viewer → Tools → Prepare → Minimize."""
 
     minimized = pyqtSignal(str)
     _source_output_tag = "minimized"

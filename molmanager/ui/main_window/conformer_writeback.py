@@ -21,8 +21,13 @@ from __future__ import annotations
 from rdkit import Chem
 
 from ...conformer_output import iter_single_conformer_mols
-from ...confs_codec import demote_v1_cell_to_sidecar, pack_confs_cell, rehydrate_v1_confs_cell
+from ...confs_codec import (
+    demote_v1_cell_to_sidecar,
+    make_sidecar_cell,
+    rehydrate_v1_confs_cell,
+)
 from ...services.column_labels import COLUMN_PARENT_OID
+from ...storage import EnsembleStore, ensure_confs_sidecar, ensemble_mol_for
 from ...utils import mol_to_canonical_smiles
 
 
@@ -133,10 +138,7 @@ def export_conformer_viewer_to_table(
         ensure_cols.append("RMSD")
     app._ensure_columns(ensure_cols)
 
-    sc = getattr(app, "_confs_blocks_sidecar", None)
-    if sc is None:
-        app._confs_blocks_sidecar = {}
-        sc = app._confs_blocks_sidecar
+    sc = ensure_confs_sidecar(app)
 
     def _fmt_num(val) -> str:
         try:
@@ -174,13 +176,10 @@ def export_conformer_viewer_to_table(
             "n_kept": 1,
             "n_packed": 1,
         }
-        packed = pack_confs_cell(meta, mol3d)
-        light, b64 = demote_v1_cell_to_sidecar(packed, confs_col)
-
+        light = make_sidecar_cell(confs_col, meta)
         oid = app.next_oid
         app.next_oid += 1
-        if b64 is not None:
-            sc[(oid, confs_col)] = b64
+        sc.store_mol(oid, confs_col, mol3d)
 
         row_cells: dict[str, str] = {}
         for h in app.headers[2:]:
@@ -243,10 +242,7 @@ def next_packed_ensemble_column(app, base: str) -> str:
 
 def write_packed_ensemble_cells(app, column: str, pairs: list[tuple[int, str]]) -> None:
     """Store packed ensembles under *column*, demoting payloads into the sidecar keyed by that header."""
-    sc = getattr(app, "_confs_blocks_sidecar", None)
-    if sc is None:
-        app._confs_blocks_sidecar = {}
-        sc = app._confs_blocks_sidecar
+    sc = ensure_confs_sidecar(app)
     out: list[tuple[int, str]] = []
     for oid, cell in pairs:
         light, b64 = demote_v1_cell_to_sidecar(str(cell or ""), column)
@@ -257,9 +253,82 @@ def write_packed_ensemble_cells(app, column: str, pairs: list[tuple[int, str]]) 
         app._table_model.set_column_text_by_oids(column, out)
 
 
+def write_ensemble_worker_results(app, column: str, results: list) -> None:
+    """Write worker tuples ``(oid, mol, meta_or_packed_cell)`` into *column* + ensemble store."""
+    packed: list[tuple[int, str]] = []
+    mol_rows: list[tuple[int, Chem.Mol | None, dict]] = []
+    for item in results:
+        if not item or len(item) < 2:
+            continue
+        oid = int(item[0])
+        mol = item[1]
+        payload = item[2] if len(item) > 2 else None
+        if isinstance(payload, dict):
+            mol_rows.append((oid, mol if isinstance(mol, Chem.Mol) else None, payload))
+        elif isinstance(payload, str) and payload.strip():
+            packed.append((oid, payload))
+        elif isinstance(mol, Chem.Mol):
+            mol_rows.append((oid, mol, {"ok": True}))
+    if packed:
+        write_packed_ensemble_cells(app, column, packed)
+    if not mol_rows:
+        return
+    sc = ensure_confs_sidecar(app)
+    out: list[tuple[int, str]] = []
+    for oid, mol, meta in mol_rows:
+        if mol is not None:
+            sc.store_mol(oid, column, mol)
+        out.append((oid, make_sidecar_cell(column, meta)))
+    app._table_model.set_column_text_by_oids(column, out)
+
+
+def mol_for_ensemble_column(
+    app, oid: int, column: str, *, min_conformers: int = 1
+) -> Chem.Mol | None:
+    """Load a 3D ensemble for *oid*/*column* from the disk store, with packed-cell fallback."""
+    from ...confs_codec import mol_from_packed_confs_cell
+
+    sc = getattr(app, "_confs_blocks_sidecar", None)
+    if isinstance(sc, EnsembleStore):
+        mol = ensemble_mol_for(sc, oid, column, min_conformers=min_conformers)
+        if mol is not None:
+            return mol
+    mapping = sc if sc is not None else {}
+    model = getattr(app, "_table_model", None)
+    raw = None
+    finder = getattr(app, "logical_row_for_oid", None)
+    r = -1
+    if callable(finder):
+        try:
+            r = int(finder(int(oid)))
+        except Exception:
+            r = -1
+    if model is not None and r >= 0:
+        raw = model.backing_value_for_row_header(r, column)
+    elif model is not None:
+        row_oid = getattr(model, "row_oid", None)
+        n = 1
+        try:
+            n = int(model.rowCount())
+        except Exception:
+            n = 1
+        if callable(row_oid):
+            for row in range(max(n, 1)):
+                try:
+                    if int(row_oid(row)) == int(oid):
+                        raw = model.backing_value_for_row_header(row, column)
+                        break
+                except Exception:
+                    continue
+    if not raw:
+        return None
+    full = rehydrate_v1_confs_cell(raw, column, int(oid), mapping)
+    return mol_from_packed_confs_cell(full, min_conformers=min_conformers)
+
+
 def mol_3d_for_structure_superpose(app, oid: int, src: str) -> Chem.Mol | None:
     """Best-effort 3D mol for structure superposition from *src* (Structure / confs / …)."""
-    from ...confs_codec import mol_from_packed_confs_cell, mol_has_3d_coordinates
+    from ...confs_codec import mol_has_3d_coordinates
     from ..mol_viewer_3d import prepare_mol_3d
 
     r = app.logical_row_for_oid(oid)
@@ -267,10 +336,7 @@ def mol_3d_for_structure_superpose(app, oid: int, src: str) -> Chem.Mol | None:
         return None
     src_h = (src or "Structure").strip() or "Structure"
     if src_h != "Structure" and src_h in app.headers:
-        raw = app._table_model.backing_value_for_row_header(r, src_h)
-        sc = getattr(app, "_confs_blocks_sidecar", {}) or {}
-        full = rehydrate_v1_confs_cell(raw, src_h, int(oid), sc)
-        packed = mol_from_packed_confs_cell(full, min_conformers=1)
+        packed = mol_for_ensemble_column(app, oid, src_h, min_conformers=1)
         if packed is not None and mol_has_3d_coordinates(packed):
             return packed
     m = app.mols.get(oid)
@@ -280,14 +346,10 @@ def mol_3d_for_structure_superpose(app, oid: int, src: str) -> Chem.Mol | None:
         return None
     if mol_has_3d_coordinates(m):
         return Chem.Mol(m)
-    # Prefer packed confs even when source is Structure.
     for col in ("confs", "superpose"):
         if col not in app.headers:
             continue
-        raw = app._table_model.backing_value_for_row_header(r, col)
-        sc = getattr(app, "_confs_blocks_sidecar", {}) or {}
-        full = rehydrate_v1_confs_cell(raw, col, int(oid), sc)
-        packed = mol_from_packed_confs_cell(full, min_conformers=1)
+        packed = mol_for_ensemble_column(app, oid, col, min_conformers=1)
         if packed is not None and mol_has_3d_coordinates(packed):
             return packed
     return prepare_mol_3d(m)
@@ -300,17 +362,13 @@ def mol_for_structure_superpose(
     geom = str(geometry or "3d").strip().lower()
     if not geom.startswith("2"):
         return mol_3d_for_structure_superpose(app, oid, src)
-    from ...confs_codec import mol_from_packed_confs_cell
 
     r = app.logical_row_for_oid(oid)
     if r < 0:
         return None
     src_h = (src or "Structure").strip() or "Structure"
     if src_h != "Structure" and src_h in app.headers:
-        raw = app._table_model.backing_value_for_row_header(r, src_h)
-        sc = getattr(app, "_confs_blocks_sidecar", {}) or {}
-        full = rehydrate_v1_confs_cell(raw, src_h, int(oid), sc)
-        packed = mol_from_packed_confs_cell(full, min_conformers=1)
+        packed = mol_for_ensemble_column(app, oid, src_h, min_conformers=1)
         if packed is not None:
             return packed
     m = app.mols.get(oid)

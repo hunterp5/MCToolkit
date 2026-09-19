@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMenu,
@@ -44,7 +45,10 @@ from .dockable_plot import (
     style_plot_pane_title_edit,
 )
 from .protein_viewer_models import (
+    NamedManagerGroup,
+    USER_GROUP_KIND,
     _ComponentView,
+    _GROUP_ROLE,
     _ID_ROLE,
     _KIND_ROLE,
     _STRUCT_ROLE,
@@ -59,6 +63,10 @@ class ProteinChainManager(QWidget):
     focus_requested = pyqtSignal()
     delete_requested = pyqtSignal()
     duplicate_requested = pyqtSignal()
+    add_to_group_requested = pyqtSignal(str)
+    remove_from_group_requested = pyqtSignal(str)
+    rename_group_requested = pyqtSignal(str)
+    delete_group_requested = pyqtSignal(str)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -67,7 +75,7 @@ class ProteinChainManager(QWidget):
         self._paging = False
         self._docked: list[QWidget] = []
         root = QVBoxLayout(self)
-        root.setContentsMargins(4, 4, 4, 4)
+        root.setContentsMargins(4, 4, 4, 0)
         root.setSpacing(0)
 
         self.tree = QTreeWidget()
@@ -307,6 +315,7 @@ class ProteinChainManager(QWidget):
         *,
         filename: str = "",
         groups: list[tuple[str, str]] | None = None,
+        named_groups: list[NamedManagerGroup] | None = None,
     ) -> None:
         self._syncing = True
         self.tree.clear()
@@ -324,6 +333,28 @@ class ProteinChainManager(QWidget):
         else:
             by_sid[""] = list(rows)
             ordered = [("", filename or "Structure")]
+        by_id = {row.spec.component_id: row for row in rows}
+        file_names = {sid: name for sid, name in ordered}
+        multi_file = len(ordered) > 1
+        for group in named_groups or []:
+            live_rows = [by_id[cid] for cid in group.component_ids if cid in by_id]
+            folder = QTreeWidgetItem([group.name, str(len(live_rows)) if live_rows else ""])
+            folder.setData(0, _KIND_ROLE, USER_GROUP_KIND)
+            folder.setData(0, _GROUP_ROLE, group.group_id)
+            folder.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)
+            self.tree.addTopLevelItem(folder)
+            for row in live_rows:
+                extra = ""
+                if multi_file:
+                    extra = file_names.get(row.spec.structure_id, "")
+                child = self._make_component_item(
+                    row,
+                    extra_label=extra,
+                    group_id=group.group_id,
+                )
+                folder.addChild(child)
+            self._sync_group_check(folder)
+            folder.setExpanded(True)
         for sid, name in ordered:
             file_item = QTreeWidgetItem([name, ""])
             file_item.setData(0, _STRUCT_ROLE, sid)
@@ -340,42 +371,119 @@ class ProteinChainManager(QWidget):
                     parent.setData(0, _STRUCT_ROLE, sid)
                     file_item.addChild(parent)
                     chain_items[chain] = parent
-                count = (
-                    f"{row.spec.n_residues} res"
-                    if row.spec.kind in {"polymer", "water"}
-                    else f"{row.spec.n_atoms} at"
-                )
-                item = QTreeWidgetItem([row.spec.label, count])
-                item.setData(0, _ID_ROLE, row.spec.component_id)
-                item.setData(0, _STRUCT_ROLE, sid)
-                item.setData(0, _KIND_ROLE, row.spec.kind)
-                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)
-                item.setCheckState(0, Qt.Checked if row.visible else Qt.Unchecked)
-                item.setSelected(row.selected)
-                parent.addChild(item)
+                parent.addChild(self._make_component_item(row))
             file_item.setExpanded(True)
         self.tree.expandAll()
         self._syncing = False
+
+    def _make_component_item(
+        self,
+        row: _ComponentView,
+        *,
+        extra_label: str = "",
+        group_id: str = "",
+    ) -> QTreeWidgetItem:
+        label = row.spec.label
+        extra = (extra_label or "").strip()
+        if extra:
+            label = f"{label} · {extra}"
+        count = (
+            f"{row.spec.n_residues} res"
+            if row.spec.kind in {"polymer", "water"}
+            else f"{row.spec.n_atoms} at"
+        )
+        item = QTreeWidgetItem([label, count])
+        item.setData(0, _ID_ROLE, row.spec.component_id)
+        item.setData(0, _STRUCT_ROLE, row.spec.structure_id)
+        item.setData(0, _KIND_ROLE, row.spec.kind)
+        if group_id:
+            item.setData(0, _GROUP_ROLE, group_id)
+        item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)
+        item.setCheckState(0, Qt.Checked if row.visible else Qt.Unchecked)
+        item.setSelected(row.selected)
+        return item
 
     def apply_row_states(self, rows: list[_ComponentView]) -> None:
         """Update checks and selection without rebuilding the tree."""
         by_id = {r.spec.component_id: r for r in rows}
         self._syncing = True
         try:
+
+            def _walk(item: QTreeWidgetItem) -> None:
+                cid = item.data(0, _ID_ROLE)
+                row = by_id.get(cid) if cid else None
+                if row is not None:
+                    item.setCheckState(0, Qt.Checked if row.visible else Qt.Unchecked)
+                    item.setSelected(row.selected)
+                for i in range(item.childCount()):
+                    _walk(item.child(i))
+                if item.data(0, _KIND_ROLE) == USER_GROUP_KIND:
+                    self._sync_group_check(item)
+
             for i in range(self.tree.topLevelItemCount()):
-                file_item = self.tree.topLevelItem(i)
-                for j in range(file_item.childCount()):
-                    group = file_item.child(j)
-                    for k in range(group.childCount()):
-                        item = group.child(k)
-                        cid = item.data(0, _ID_ROLE)
-                        row = by_id.get(cid)
-                        if row is None:
-                            continue
-                        item.setCheckState(0, Qt.Checked if row.visible else Qt.Unchecked)
-                        item.setSelected(row.selected)
+                _walk(self.tree.topLevelItem(i))
         finally:
             self._syncing = False
+
+    def _sync_group_check(self, item: QTreeWidgetItem) -> None:
+        n = item.childCount()
+        if n == 0:
+            item.setCheckState(0, Qt.Unchecked)
+            return
+        checked = 0
+        unchecked = 0
+        for i in range(n):
+            state = item.child(i).checkState(0)
+            if state == Qt.Checked:
+                checked += 1
+            elif state == Qt.Unchecked:
+                unchecked += 1
+        if checked == n:
+            item.setCheckState(0, Qt.Checked)
+        elif unchecked == n:
+            item.setCheckState(0, Qt.Unchecked)
+        else:
+            item.setCheckState(0, Qt.PartiallyChecked)
+
+    def selected_items_are_groups_only(self) -> bool:
+        items = self.tree.selectedItems()
+        if not items:
+            return False
+        return all(item.data(0, _KIND_ROLE) == USER_GROUP_KIND for item in items)
+
+    def selected_user_group_ids(self) -> list[str]:
+        ids: list[str] = []
+        seen: set[str] = set()
+        for item in self.tree.selectedItems():
+            if item.data(0, _KIND_ROLE) != USER_GROUP_KIND:
+                continue
+            gid = item.data(0, _GROUP_ROLE)
+            if gid and gid not in seen:
+                seen.add(gid)
+                ids.append(gid)
+        return ids
+
+    def _named_group_names(self) -> list[str]:
+        names: list[str] = []
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            if item.data(0, _KIND_ROLE) == USER_GROUP_KIND:
+                names.append(item.text(0))
+        return names
+
+    def _group_membership_for_ids(self, ids: set[str]) -> list[tuple[str, str]]:
+        found: list[tuple[str, str]] = []
+        if not ids:
+            return found
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            if item.data(0, _KIND_ROLE) != USER_GROUP_KIND:
+                continue
+            gid = item.data(0, _GROUP_ROLE)
+            member_ids = {item.child(j).data(0, _ID_ROLE) for j in range(item.childCount())}
+            if gid and member_ids & ids:
+                found.append((gid, item.text(0)))
+        return found
 
     def _on_item_changed(self, item: QTreeWidgetItem, column: int) -> None:
         if self._syncing or column != 0:
@@ -384,9 +492,6 @@ class ProteinChainManager(QWidget):
         visible = item.checkState(0) != Qt.Unchecked
         if cid:
             self.visibility_changed.emit(cid, visible)
-            return
-        sid = item.data(0, _STRUCT_ROLE)
-        if not sid:
             return
         ids: list[str] = []
 
@@ -406,14 +511,69 @@ class ProteinChainManager(QWidget):
             return
         self.selection_changed.emit(self.selected_component_ids())
 
-    def _make_context_menu(self) -> QMenu:
+    def _prompt_new_group(self) -> None:
+        name, ok = QInputDialog.getText(self, "Add to Group", "Group name:")
+        name = (name or "").strip()
+        if ok and name:
+            self.add_to_group_requested.emit(name)
+
+    def _emit_delete_selected_groups(self) -> None:
+        for gid in self.selected_user_group_ids():
+            self.delete_group_requested.emit(gid)
+
+    def _make_context_menu(self, item: QTreeWidgetItem | None = None) -> QMenu:
         menu = QMenu(self)
+        if self.selected_items_are_groups_only():
+            gids = self.selected_user_group_ids()
+            gid = gids[0] if gids else ""
+            act_rename = menu.addAction("&Rename Group…")
+            act_rename.setToolTip("Change this group's name.")
+            act_rename.triggered.connect(lambda: self.rename_group_requested.emit(gid))
+            act_rename.setEnabled(len(gids) == 1)
+            act_remove = menu.addAction("Remove &Group")
+            act_remove.setToolTip("Ungroup these rows without deleting structures.")
+            act_remove.triggered.connect(self._emit_delete_selected_groups)
+            return menu
         act_delete = menu.addAction("&Delete")
         act_delete.setToolTip("Remove the Manager selection from the viewer.")
         act_delete.triggered.connect(self.delete_requested.emit)
         act_dup = menu.addAction("D&uplicate")
         act_dup.setToolTip("Copy the Manager selection as a new overlay structure.")
         act_dup.triggered.connect(self.duplicate_requested.emit)
+        menu.addSeparator()
+        add_menu = menu.addMenu("Add to &Group")
+        add_menu.setToolTip("Place the selection in a named Manager group.")
+        for name in self._named_group_names():
+            add_menu.addAction(name, lambda n=name: self.add_to_group_requested.emit(n))
+        if self._named_group_names():
+            add_menu.addSeparator()
+        act_new = add_menu.addAction("&New Group…")
+        act_new.setToolTip("Create a named group and add the selection to it.")
+        act_new.triggered.connect(self._prompt_new_group)
+        clicked_gid = item.data(0, _GROUP_ROLE) if item is not None else ""
+        clicked_cid = item.data(0, _ID_ROLE) if item is not None else ""
+        membership = self._group_membership_for_ids(set(self.selected_component_ids()))
+        if clicked_cid and clicked_gid:
+            act_ungroup = menu.addAction("Remove from &Group")
+            act_ungroup.setToolTip("Remove this row from the group without deleting it.")
+            act_ungroup.triggered.connect(
+                lambda: self.remove_from_group_requested.emit(clicked_gid)
+            )
+        elif membership:
+            if len(membership) == 1:
+                gid, name = membership[0]
+                act_ungroup = menu.addAction(f"Remove from Group ({name})")
+                act_ungroup.setToolTip("Remove the selection from this group.")
+                act_ungroup.triggered.connect(lambda: self.remove_from_group_requested.emit(gid))
+            else:
+                remove_menu = menu.addMenu("Remove from Group")
+                for gid, name in membership:
+                    remove_menu.addAction(
+                        name, lambda g=gid: self.remove_from_group_requested.emit(g)
+                    )
+                remove_menu.addAction(
+                    "All Groups", lambda: self.remove_from_group_requested.emit("")
+                )
         return menu
 
     def _on_context_menu(self, pos) -> None:
@@ -423,5 +583,5 @@ class ProteinChainManager(QWidget):
         if item not in self.tree.selectedItems():
             self.tree.clearSelection()
             item.setSelected(True)
-        menu = self._make_context_menu()
+        menu = self._make_context_menu(item)
         menu.exec_(self.tree.viewport().mapToGlobal(pos))

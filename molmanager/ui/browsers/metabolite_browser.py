@@ -22,16 +22,14 @@ from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 from PyQt5.QtCore import QEvent, Qt, QTimer
-from PyQt5.QtGui import QColor, QFont, QImage, QKeySequence, QPainter, QPixmap
+from PyQt5.QtGui import QColor, QFont, QImage, QPainter, QPixmap
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
-    QDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPushButton,
-    QShortcut,
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
@@ -62,9 +60,16 @@ from ..dockable_plot import (
     style_browser_nav_buttons,
     style_plot_footer_text_button,
 )
-from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_PREDICT_METABOLITES
 from ..widgets import NumericTableWidgetItem
+from .chrome import (
+    BrowserHostDialog,
+    apply_browser_body_layout,
+    install_browser_nav_shortcuts,
+    style_browser_data_table,
+    style_browser_preview_host,
+    style_browser_structure_label,
+)
 
 _THUMB_W = 120
 _THUMB_H = 100
@@ -253,8 +258,7 @@ class MetaboliteBrowserWidget(QWidget):
         self._selection_model = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        apply_browser_body_layout(root)
 
         self._meta = QLabel()
         self._meta.setAlignment(Qt.AlignCenter)
@@ -266,20 +270,15 @@ class MetaboliteBrowserWidget(QWidget):
             BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
         )
         self._preview_host.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._preview_host.setAttribute(Qt.WA_StyledBackground, True)
-        self._preview_host.setStyleSheet(
-            "background-color: #ffffff; border: 1px solid palette(mid); border-radius: 4px;"
-        )
+        style_browser_preview_host(self._preview_host)
         preview_ly = QVBoxLayout(self._preview_host)
         preview_ly.setContentsMargins(0, 0, 0, 0)
         preview_ly.setSpacing(0)
         self._struct_label = QLabel(self._preview_host)
-        self._struct_label.setAlignment(Qt.AlignCenter)
         self._struct_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._struct_label.setScaledContents(False)
         self._struct_label.setMargin(0)
         self._struct_label.setIndent(0)
-        self._struct_label.setStyleSheet("background-color: #ffffff; border: none; padding: 0px;")
+        style_browser_structure_label(self._struct_label)
         preview_ly.addWidget(self._struct_label, 1)
         root.addWidget(self._preview_host, 1)
 
@@ -293,6 +292,7 @@ class MetaboliteBrowserWidget(QWidget):
         self._table.setFixedHeight(_TABLE_MAX_HEIGHT)
         self._table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        style_browser_data_table(self._table)
         hdr = self._table.horizontalHeader()
         hdr.setSectionResizeMode(_COL_ROLE, QHeaderView.ResizeToContents)
         hdr.setSectionResizeMode(_COL_STRUCT, QHeaderView.ResizeToContents)
@@ -373,15 +373,12 @@ class MetaboliteBrowserWidget(QWidget):
         self._btn_last.clicked.connect(self._go_last)
         self._btn_select.clicked.connect(self._select_current_row)
 
-        for key, slot in (
-            (Qt.Key_Home, self._go_first),
-            (Qt.Key_Left, lambda: self._step(-1)),
-            (Qt.Key_Right, lambda: self._step(1)),
-            (Qt.Key_End, self._go_last),
-        ):
-            sc = QShortcut(QKeySequence(key), self)
-            sc.setContext(Qt.WidgetWithChildrenShortcut)
-            sc.activated.connect(slot)
+        install_browser_nav_shortcuts(
+            self,
+            go_first=self._go_first,
+            step=self._step,
+            go_last=self._go_last,
+        )
 
         self._resize_timer = QTimer(self)
         self._resize_timer.setSingleShot(True)
@@ -752,50 +749,14 @@ class MetaboliteBrowserWidget(QWidget):
         self._refresh_preview()
 
 
-class MetaboliteBrowserDialog(QDialog):
+class MetaboliteBrowserDialog(BrowserHostDialog):
     """Floating window hosting a :class:`MetaboliteBrowserWidget`."""
 
-    def __init__(self, parent: Any = None, *, panel: MetaboliteBrowserWidget | None = None):
-        super().__init__(parent)
-        self.parent_app = parent
-        self.setWindowTitle(f"{TOOL_PREDICT_METABOLITES} Browser")
-        self.setModal(False)
-        self.setWindowModality(Qt.NonModal)
-        self.setMinimumSize(640, 780)
-        self.resize(720, 900)
-        self._force_close = False
-
-        if panel is not None:
-            self._panel = panel
-            self._panel.setParent(self)
-            self._panel.rebind_parent_app(parent)
-            self._panel.show()
-        else:
-            self._panel = MetaboliteBrowserWidget(parent, self)
-
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.addWidget(self._panel, 1)
-        self._panel._sync_footer_chrome()
-        make_window_minimizable(self)
-        self.setModal(False)
-        self.setWindowModality(Qt.NonModal)
-
-    def showEvent(self, event) -> None:  # noqa: N802 — Qt API
-        super().showEvent(event)
-        panel = getattr(self, "_panel", None)
-        if panel is not None:
-            QTimer.singleShot(0, self._refresh_panel_preview)
-
-    def _refresh_panel_preview(self) -> None:
-        from ..qt_widget_utils import qobject_is_deleted
-
-        if qobject_is_deleted(self):
-            return
-        panel = getattr(self, "_panel", None)
-        if panel is None or qobject_is_deleted(panel):
-            return
-        panel._refresh_preview()
+    default_title = f"{TOOL_PREDICT_METABOLITES} Browser"
+    panel_cls = MetaboliteBrowserWidget
+    refresh_preview_on_show = True
+    min_size = (640, 780)
+    initial_size = (720, 900)
 
     def set_records(self, records: list[MetaboliteBrowseRecord]) -> None:
         panel = getattr(self, "_panel", None)
@@ -808,16 +769,3 @@ class MetaboliteBrowserDialog(QDialog):
         if panel is None:
             return False
         return bool(panel.jump_to_oid(oid))
-
-    def closeEvent(self, event) -> None:  # noqa: N802 — Qt API
-        from ..dockable_plot import handle_floating_plot_close_event
-
-        if getattr(self, "_panel", None) is not None and self._panel.parent() is not self:
-            self._force_close = True
-            self._panel = None
-        handle_floating_plot_close_event(
-            self,
-            event,
-            title="Close Browser",
-            message="Close this browser?",
-        )

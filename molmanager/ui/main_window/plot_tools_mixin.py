@@ -436,6 +436,7 @@ class PlotToolsMixin:
         """Track Data → Browser / Predict SOM windows after undock. Return True if handled."""
         from ..metabolite_browser import MetaboliteBrowserDialog
         from ..pose_browser import PoseBrowserDialog
+        from ..random_molecule_browser import RandomMoleculeBrowserDialog
         from ..selection_browser import SelectionBrowserDialog
         from ..som_browser import SomBrowserDialog
 
@@ -467,7 +468,28 @@ class PlotToolsMixin:
             except Exception:
                 pass
             return True
+        if isinstance(dlg, RandomMoleculeBrowserDialog):
+            self._random_molecule_browser_dialog = dlg
+            try:
+                dlg.destroyed.connect(self._on_random_molecule_browser_dialog_destroyed)
+            except Exception:
+                pass
+            return True
         return False
+
+    def _on_random_molecule_browser_dialog_destroyed(self, *_args) -> None:
+        from ..qt_widget_utils import qobject_is_deleted
+
+        if qobject_is_deleted(self):
+            return
+        try:
+            sender = self.sender()
+        except RuntimeError:
+            return
+        current = getattr(self, "_random_molecule_browser_dialog", None)
+        if sender is not None and current is not None and current is not sender:
+            return
+        self._random_molecule_browser_dialog = None
 
     def _register_floating_result_dialog(self, dlg) -> None:
         """Track undocked SALI/cliff/MMP/etc. windows for table↔plot selection sync."""

@@ -300,3 +300,10 @@ class AppLifecycleMixin:
                 store.close()
             except Exception:
                 log_swallowed_exception(logger, "sqlite_store.close failed during quit")
+        ensembles = getattr(self, "_confs_blocks_sidecar", None)
+        closer = getattr(ensembles, "close", None)
+        if callable(closer):
+            try:
+                closer()
+            except Exception:
+                log_swallowed_exception(logger, "ensemble_store.close failed during quit")

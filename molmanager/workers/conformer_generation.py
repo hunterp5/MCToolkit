@@ -29,7 +29,6 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 
 from ..config import load_config
-from ..confs_codec import format_confs_table_cell, pack_confs_cell
 from .chemistry_worker_common import (
     emit_tool_progress_throttled,
     is_gaff_force_field,
@@ -75,7 +74,7 @@ class ConformerGenParams:
 
     num_confs: int = 10
     energy_window_kcal: float = 10.0
-    force_field: str = "MMFF"
+    force_field: str = "MMFF94s"
     random_seed: int = 0xC0FFEE
     prune_rms_threshold: float = -1.0
     max_iterations: int = 200
@@ -101,7 +100,7 @@ class ConformerGenParams:
     def single_lowest_energy(
         cls,
         *,
-        force_field: str = "MMFF",
+        force_field: str = "MMFF94s",
         random_seed: int = 0xC0FFEE,
         prune_rms_threshold: float = -1.0,
         max_iterations: int = 200,
@@ -369,15 +368,12 @@ def run_conformer_generation(
     When ``params.align_pattern`` is set and at least two conformers remain, they are
     rigidly aligned on that substructure (same matching rules as Superpose).
 
-    Returns ``(mol_or_None, meta)``. The UI writes a ``confs`` cell via :func:`~molmanager.confs_codec.pack_confs_cell`
-    (metadata plus packed mol blocks when there are multiple conformers) and does **not** replace the row's
-    working molecule or redraw the Structure column.
+    Returns ``(mol_or_None, meta)``. The UI writes coordinates to the disk-backed ensemble
+    store and a short metadata cell in the ``confs`` column. It does **not** replace the
+    row's working molecule or redraw the Structure column.
 
     When ``cancel_event`` is set, minimization checks it between conformers (slower than the batch
     optimizers used when ``cancel_event`` is None). Embed is still a single RDKit call.
-
-    For very large ensembles or many rows, packing may truncate conformers to fit the cell size limit;
-    consider storing only a path or DB key in ``confs`` and keeping payloads on disk instead.
     """
     meta: dict = {
         "ok": False,
@@ -493,7 +489,7 @@ def run_conformer_generation(
     return m, meta
 
 
-def _conformer_row_task(task: tuple) -> tuple[int, Chem.Mol | None, str]:
+def _conformer_row_task(task: tuple) -> tuple[int, Chem.Mol | None, dict]:
     oid, mol, params = task[0], task[1], task[2]
     cancel_event = task[3] if len(task) > 3 else None
     try:
@@ -504,9 +500,9 @@ def _conformer_row_task(task: tuple) -> tuple[int, Chem.Mol | None, str]:
                 "n_requested": int(params.num_confs),
                 "seed": int(params.random_seed),
             }
-            return oid, None, format_confs_table_cell(meta)
+            return oid, None, meta
         new_m, meta = run_conformer_generation(mol, params, cancel_event=cancel_event)
-        return oid, new_m, pack_confs_cell(meta, new_m)
+        return oid, new_m, dict(meta)
     except Exception as e:
         logger.exception("ConformerGenerationWorker failed for oid=%s", oid)
         meta = {
@@ -515,7 +511,7 @@ def _conformer_row_task(task: tuple) -> tuple[int, Chem.Mol | None, str]:
             "n_requested": int(params.num_confs),
             "seed": int(params.random_seed),
         }
-        return oid, None, format_confs_table_cell(meta)
+        return oid, None, meta
 
 
 class ConformerGenerationWorker(QRunnable):

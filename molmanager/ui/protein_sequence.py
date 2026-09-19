@@ -320,7 +320,16 @@ class ProteinSequenceDialog(QDialog):
         return poly.residues[start:end]
 
     def selected_residue_selections(self) -> list[dict]:
-        return [res.selection() for res in self.selected_residues() if res.kind != "missing"]
+        return [
+            {
+                **res.selection(),
+                "structure_id": res.structure_id,
+                "kind": res.kind,
+                "resn": res.resn,
+            }
+            for res in self.selected_residues()
+            if res.kind != "missing"
+        ]
 
     def select_residue(
         self,
@@ -347,7 +356,16 @@ class ProteinSequenceDialog(QDialog):
                 self._syncing = False
                 self._update_status(poly, j, j + 1)
                 self.residue_selection_changed.emit(
-                    [] if res.kind == "missing" else [res.selection()]
+                    []
+                    if res.kind == "missing"
+                    else [
+                        {
+                            **res.selection(),
+                            "structure_id": res.structure_id,
+                            "kind": res.kind,
+                            "resn": res.resn,
+                        }
+                    ]
                 )
                 return
 

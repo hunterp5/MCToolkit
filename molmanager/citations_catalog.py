@@ -417,7 +417,8 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "rdkit_pharma3d",
                 "RDKit 3D pharmacophore features",
-                "Protein Viewer → Pharmacophore (From ligand) and Gnina pharmacophore maps.",
+                "Protein Viewer → Tools → Pharmacophore (From ligand), Gnina pose filtering, "
+                "and Tools → Conformations → Screen Pharmacophore.",
                 (
                     (
                         "Landrum, G. RDKit: Open-source cheminformatics. Zenodo.",
@@ -429,7 +430,10 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 notes=(
                     "Feature families from RDKit BaseFeatures.fdef (Donor, Acceptor, Aromatic, "
                     "Hydrophobe, LumpedHydrophobe, PosIonizable, NegIonizable, ZnBinder). "
-                    "MolManager stores spheres as JSON and maps them to Gnina --user_grid."
+                    "MolManager stores spheres as JSON. Docked poses are filtered in the "
+                    "protein frame (RDKit feature type + sphere radius). "
+                    "Ensemble screening matches RDKit feature types and pairwise distances "
+                    "(Exclusion volumes are skipped)."
                 ),
             ),
         ),
@@ -458,8 +462,9 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 LIC_APACHE2,
                 homepage="https://github.com/gnina/gnina",
                 notes=(
-                    "Pharmacophore constraints from Protein Viewer are applied as Gnina "
-                    "--user_grid AutoDock maps (--user_grid_lambda)."
+                    "After docking, MolManager keeps poses whose RDKit feature sites occupy "
+                    "the Protein Viewer pharmacophore spheres (protein coordinates). Gnina "
+                    "--user_grid occupancy maps are not used."
                 ),
             ),
             _t(
@@ -733,7 +738,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "pubchem",
                 "PubChem / PubChemPy",
-                "External → Query PubChem; Calculate Descriptors → Name (Common Name, Synonyms).",
+                "External → Query PubChem; Tools → Random → Molecule; Calculate Descriptors → Name (Common Name, Synonyms).",
                 (
                     (
                         "Kim, S.; et al. PubChem 2023 update. Nucleic Acids Res. 2023, 51, D1373–D1380.",
@@ -747,7 +752,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "chembl",
                 "ChEMBL",
-                "External → Query ChEMBL (`chembl_webresource_client`).",
+                "External → Query ChEMBL (`chembl_webresource_client`); Tools → Random → Molecule.",
                 (
                     (
                         "Zdrazil, B.; et al. The ChEMBL Database in 2023. Nucleic Acids Res. 2024, 52, D1180–D1192.",
@@ -757,6 +762,27 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 LIC_APACHE2,
                 homepage="https://www.ebi.ac.uk/chembl",
                 notes="ChEMBL data have their own terms of use (CC BY-SA for much of the database). The Python client is Apache-2.0.",
+            ),
+            _t(
+                "zinc",
+                "ZINC",
+                "Tools → Random → Molecule (ZINC source).",
+                (
+                    (
+                        "Tingle, B. I.; Tang, K. G.; Castanon, M.; et al. ZINC-22—A Free Multi-Billion-Scale "
+                        "Database of Tangible Compounds for Ligand Discovery. J. Chem. Inf. Model. 2023, "
+                        "63, 585–594.",
+                        "https://doi.org/10.1021/acs.jcim.2c01253",
+                    ),
+                    (
+                        "Irwin, J. J.; et al. ZINC20—A Free Ultralarge-Scale Chemical Database for "
+                        "Ligand Discovery. J. Chem. Inf. Model. 2020, 60, 6065–6073.",
+                        "https://doi.org/10.1021/acs.jcim.0c00675",
+                    ),
+                ),
+                ("ZINC terms of use", "https://zinc.docking.org"),
+                homepage="https://zinc.docking.org",
+                notes="Random substances via the public ZINC22 CartBlanche API. ZINC data have their own terms of use.",
             ),
             _t(
                 "surechembl",

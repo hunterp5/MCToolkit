@@ -94,6 +94,28 @@ class ConformersToolsMixin:
         d.accepted.connect(lambda *_, dlg=d: self._on_conforge_conformations_dialog_accepted(dlg))
         d.show()
 
+    def open_pharmacophore_screen(self, pharmacophore_path: str = ""):
+        if not self.headers or self._table_model.rowCount() == 0:
+            QMessageBox.information(
+                self,
+                "Screen Pharmacophore",
+                "Open a file or add rows so the table has molecules to screen.",
+            )
+            return None
+        from ..dialogs.pharmacophore_screen import PharmacophoreScreenDialog
+
+        path = (pharmacophore_path or "").strip()
+        if not path:
+            protein = getattr(self, "_live_protein_viewer", lambda: None)()
+            getter = getattr(protein, "pharmacophore_file_for_gnina", None) if protein else None
+            path = getter() if callable(getter) else ""
+        dlg = PharmacophoreScreenDialog(self, pharmacophore_path=path or "")
+        self._prepare_tool_dialog(dlg)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+        return dlg
+
     def _collect_mols_for_conformer_tools(
         self, *, only_selected: bool
     ) -> list[tuple[int, Chem.Mol]]:
@@ -137,7 +159,7 @@ class ConformersToolsMixin:
         from ...workers import StrainEnergyParams
 
         self._pending_strain_params = StrainEnergyParams(
-            force_field=str(params.force_field or "MMFF")
+            force_field=str(params.force_field or "MMFF94s")
         )
         ps = self._tool_progress_state
         self._begin_tool_progress("Generate conformations", n)
@@ -268,12 +290,7 @@ class ConformersToolsMixin:
             pass
         try:
             confs_col = self._next_packed_ensemble_column("confs")
-            pairs: list[tuple[int, str]] = []
-            for item in results:
-                if len(item) < 3:
-                    continue
-                pairs.append((int(item[0]), str(item[2] or "")))
-            self._write_packed_ensemble_cells(confs_col, pairs)
+            self._write_ensemble_worker_results(confs_col, results)
             if output_opts is not None and output_opts.add_to_table:
                 added_rows = self._append_generated_conformers_as_rows(results)
             if output_opts is not None and output_opts.save_to_file and output_opts.save_path:
@@ -404,20 +421,27 @@ class ConformersToolsMixin:
         allowed = self._selected_oids_set() if only_selected else None
         if self._abort_if_only_selected_but_empty(only_selected, allowed, "Superpose"):
             return
+        from ...storage import EnsembleStore, ensemble_db_path
+
         oids_list = self._all_oids_in_table_order()
         if allowed is not None:
             oids_list = [o for o in oids_list if o in allowed]
+        store = getattr(self, "_confs_blocks_sidecar", None)
+        db_path = str(ensemble_db_path(self) or "") or None
         data: list[tuple[int, str]] = []
         for o in oids_list:
             r = self.logical_row_for_oid(o)
             if r < 0:
                 continue
+            if isinstance(store, EnsembleStore) and (int(o), "confs") in store:
+                data.append((int(o), "confs"))
+                continue
             raw = self._table_model.backing_value_for_row_header(r, "confs")
-            sc = getattr(self, "_confs_blocks_sidecar", {}) or {}
+            sc = store if store is not None else {}
             full = rehydrate_v1_confs_cell(raw, "confs", int(o), sc)
             if unpack_confs_blocks_json_b64(full) is None:
                 continue
-            data.append((o, full))
+            data.append((int(o), full))
         if not data:
             QMessageBox.information(
                 self,
@@ -439,8 +463,10 @@ class ConformersToolsMixin:
         self._begin_tool_progress("Superpose", n)
         self.process_queue.enqueue(
             f"Superpose ({n} rows)",
-            lambda ev, d=data, p=params, sigs=self.signals, prog=ps: SuperposeConformersWorker(
-                d, p, sigs, cancel_event=ev, progress_state=prog
+            lambda ev, d=data, p=params, sigs=self.signals, prog=ps, db=db_path: (
+                SuperposeConformersWorker(
+                    d, p, sigs, cancel_event=ev, progress_state=prog, ensemble_db=db
+                )
             ),
         )
 
@@ -455,12 +481,7 @@ class ConformersToolsMixin:
             pass
         try:
             superpose_col = self._next_packed_ensemble_column("superpose")
-            pairs: list[tuple[int, str]] = []
-            for item in results:
-                if len(item) < 3:
-                    continue
-                pairs.append((int(item[0]), str(item[2] or "")))
-            self._write_packed_ensemble_cells(superpose_col, pairs)
+            self._write_ensemble_worker_results(superpose_col, results)
             self.schedule_calculate_global_bounds()
             self.table.setSortingEnabled(False)
         finally:
@@ -717,10 +738,11 @@ class ConformersToolsMixin:
         n_ok = 0
         opened = False
         for item in results:
-            if len(item) < 3:
+            if len(item) < 2:
                 continue
-            oid, mol, cell = int(item[0]), item[1], str(item[2] or "")
-            b64 = unpack_confs_blocks_json_b64(cell)
+            oid, mol = int(item[0]), item[1]
+            payload = item[2] if len(item) > 2 else None
+            b64 = unpack_confs_blocks_json_b64(payload) if isinstance(payload, str) else None
             if not b64 and mol is not None:
                 try:
                     if mol.GetNumConformers() >= 1:
@@ -755,3 +777,9 @@ class ConformersToolsMixin:
         from .conformer_writeback import write_packed_ensemble_cells
 
         return write_packed_ensemble_cells(self, column, pairs)
+
+    def _write_ensemble_worker_results(self, column: str, results: list) -> None:
+        """Write ``(oid, mol, meta)`` worker results into *column* without packed-cell strings."""
+        from .conformer_writeback import write_ensemble_worker_results
+
+        return write_ensemble_worker_results(self, column, results)

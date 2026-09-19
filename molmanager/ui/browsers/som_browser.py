@@ -25,7 +25,6 @@ from PyQt5.QtCore import QEvent, QRect, Qt, QTimer
 from PyQt5.QtGui import (
     QColor,
     QImage,
-    QKeySequence,
     QLinearGradient,
     QPainter,
     QPen,
@@ -34,12 +33,10 @@ from PyQt5.QtGui import (
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
-    QDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPushButton,
-    QShortcut,
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
@@ -66,17 +63,22 @@ from ...som_prediction import (
     som_probability_rgb,
 )
 from ..dockable_plot import (
-    PLOT_BODY_MARGINS,
-    PLOT_BODY_SPACING,
     discard_host_dialog_after_dock,
     make_add_to_main_button,
     make_send_window_button,
     add_centered_browser_nav,
     style_browser_nav_buttons,
 )
-from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_PREDICT_SOM
 from ..widgets import NumericTableWidgetItem
+from .chrome import (
+    BrowserHostDialog,
+    apply_browser_body_layout,
+    install_browser_nav_shortcuts,
+    style_browser_data_table,
+    style_browser_preview_host,
+    style_browser_structure_label,
+)
 
 
 @dataclass(frozen=True)
@@ -484,30 +486,24 @@ class SomBrowserWidget(QWidget):
         self._selection_model = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(*PLOT_BODY_MARGINS)
-        root.setSpacing(PLOT_BODY_SPACING)
+        apply_browser_body_layout(root)
 
         self._meta = QLabel()
         self._meta.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._meta.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
         self._struct_label = QLabel()
-        self._struct_label.setAlignment(Qt.AlignCenter)
         self._struct_label.setMinimumSize(
             browser_structure_preview_width() // 2,
             BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT // 2,
         )
         self._struct_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._struct_label.setScaledContents(False)
         self._struct_label.setMargin(0)
         self._struct_label.setIndent(0)
-        self._struct_label.setStyleSheet("background-color: #ffffff; border: none; padding: 0px;")
+        style_browser_structure_label(self._struct_label)
         self._preview_host = QWidget(self)
         self._preview_host.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._preview_host.setAttribute(Qt.WA_StyledBackground, True)
-        self._preview_host.setStyleSheet(
-            "background-color: #ffffff; border: 1px solid palette(mid);"
-        )
+        style_browser_preview_host(self._preview_host)
         self._color_scale = SomColorScaleWidget(self._preview_host)
         self._color_scale.setAutoFillBackground(True)
         pal = self._color_scale.palette()
@@ -533,6 +529,7 @@ class SomBrowserWidget(QWidget):
         self._atom_table.setMaximumHeight(180)
         self._atom_table.setFixedHeight(180)
         self._atom_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        style_browser_data_table(self._atom_table)
         self._atom_sort_header: str | None = None
         self._atom_sort_order = Qt.AscendingOrder
         self._atom_table.setSortingEnabled(True)
@@ -611,15 +608,12 @@ class SomBrowserWidget(QWidget):
         self._btn_last.clicked.connect(self._go_last)
         self._btn_select.clicked.connect(self._select_current_row)
 
-        for key, slot in (
-            (Qt.Key_Home, self._go_first),
-            (Qt.Key_Left, lambda: self._step(-1)),
-            (Qt.Key_Right, lambda: self._step(1)),
-            (Qt.Key_End, self._go_last),
-        ):
-            sc = QShortcut(QKeySequence(key), self)
-            sc.setContext(Qt.WidgetWithChildrenShortcut)
-            sc.activated.connect(slot)
+        install_browser_nav_shortcuts(
+            self,
+            go_first=self._go_first,
+            step=self._step,
+            go_last=self._go_last,
+        )
 
         self._resize_timer = QTimer(self)
         self._resize_timer.setSingleShot(True)
@@ -1021,67 +1015,17 @@ class SomBrowserWidget(QWidget):
         self._refresh_preview()
 
 
-class SomBrowserDialog(QDialog):
+class SomBrowserDialog(BrowserHostDialog):
     """Floating window hosting a :class:`SomBrowserWidget`."""
 
-    def __init__(self, parent: Any = None, *, panel: SomBrowserWidget | None = None):
-        super().__init__(parent)
-        self.parent_app = parent
-        self.setWindowTitle(f"{TOOL_PREDICT_SOM} Browser")
-        self.setModal(False)
-        self.setWindowModality(Qt.NonModal)
-        self.setMinimumSize(560, 640)
-        self.resize(640, 820)
-        self._force_close = False
-
-        if panel is not None:
-            self._panel = panel
-            self._panel.setParent(self)
-            self._panel.rebind_parent_app(parent)
-            self._panel.show()
-        else:
-            self._panel = SomBrowserWidget(parent, self)
-
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.addWidget(self._panel, 1)
-        self._panel._sync_footer_chrome()
-        make_window_minimizable(self)
-        self.setModal(False)
-        self.setWindowModality(Qt.NonModal)
-
-    def showEvent(self, event) -> None:  # noqa: N802 — Qt API
-        super().showEvent(event)
-        panel = getattr(self, "_panel", None)
-        if panel is not None:
-            QTimer.singleShot(0, self._refresh_panel_preview)
-
-    def _refresh_panel_preview(self) -> None:
-        from ..qt_widget_utils import qobject_is_deleted
-
-        if qobject_is_deleted(self):
-            return
-        panel = getattr(self, "_panel", None)
-        if panel is None or qobject_is_deleted(panel):
-            return
-        panel._refresh_preview()
+    default_title = f"{TOOL_PREDICT_SOM} Browser"
+    panel_cls = SomBrowserWidget
+    refresh_preview_on_show = True
+    min_size = (560, 640)
+    initial_size = (640, 820)
 
     def set_records(self, records: list[SomBrowseRecord]) -> None:
         panel = getattr(self, "_panel", None)
         if panel is None:
             return
         panel.set_records(records)
-
-    def closeEvent(self, event) -> None:  # noqa: N802 — Qt API
-        from ..dockable_plot import handle_floating_plot_close_event
-
-        if getattr(self, "_panel", None) is not None and self._panel.parent() is not self:
-            # Panel was docked into the workspace; just drop the husk reference.
-            self._force_close = True
-            self._panel = None
-        handle_floating_plot_close_event(
-            self,
-            event,
-            title="Close Browser",
-            message="Close this browser?",
-        )

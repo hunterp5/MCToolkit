@@ -229,6 +229,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Superpose",
                 "Align conformers or structures (Tools → Conformations → Superpose).",
             ),
+            _e(
+                "tools_pharmacophore_screen",
+                "Screen Pharmacophore",
+                "Screen Pharmacophore",
+                "Match packed conformation ensembles to a 3D pharmacophore JSON.",
+            ),
         ),
     ),
     GuideSection(
@@ -368,7 +374,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "tools_random_molecule",
                 "Random Molecule",
                 "Random Molecule",
-                "Generate random molecules into the table.",
+                "Fetch random molecules from ChEMBL, PubChem, or ZINC.",
             ),
         ),
     ),

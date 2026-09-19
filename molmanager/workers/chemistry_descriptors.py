@@ -443,6 +443,8 @@ class CalcWorker(QRunnable):
         cancel_event: threading.Event | None = None,
         progress_state=None,
         confs_by_idx: dict | None = None,
+        confs_col_by_idx: dict | None = None,
+        ensemble_db: str | None = None,
     ):
         super().__init__()
         self.data, self.disp_headers, self.int_fns, self.is_smiles, self.signals = (
@@ -455,6 +457,8 @@ class CalcWorker(QRunnable):
         self.cancel_event = cancel_event
         self.progress_state = progress_state
         self.confs_by_idx = confs_by_idx or {}
+        self.confs_col_by_idx = confs_col_by_idx or {}
+        self.ensemble_db = ensemble_db
 
     def run(self):
         smarts_cache = {}
@@ -482,6 +486,8 @@ class CalcWorker(QRunnable):
 
         need_3d = int_fns_need_3d(self.int_fns)
         mol3_by_idx: dict[int, Chem.Mol | None] = {}
+        from ..storage import ensemble_mol_for
+
         for idx, (i, item) in enumerate(self.data):
             packed = self.confs_by_idx.get(int(i))
             if self.is_smiles:
@@ -493,7 +499,13 @@ class CalcWorker(QRunnable):
                 mol = item
             prepared.append((i, mol))
             if need_3d:
-                mol3_by_idx[int(i)] = mol_for_3d_descriptors(mol, packed_cell=packed)
+                col = self.confs_col_by_idx.get(int(i))
+                ens = (
+                    ensemble_mol_for(self.ensemble_db, int(i), str(col), min_conformers=1)
+                    if self.ensemble_db and col
+                    else None
+                )
+                mol3_by_idx[int(i)] = mol_for_3d_descriptors(ens or mol, packed_cell=packed)
             if idx == 0 or idx + 1 >= nrows or (idx + 1) % prep_emit_step == 0:
                 _emit_prep_progress(idx + 1)
         _emit_prep_progress(len(prepared), force=True)

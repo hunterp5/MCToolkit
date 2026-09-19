@@ -34,7 +34,7 @@ from molmanager.workers import ConformerGenParams, run_conformer_generation
 
 def _simple_mol():
     m = Chem.MolFromSmiles("CCO")
-    AllChem.EmbedMolecule(m, randomSeed=0xf00d)
+    AllChem.EmbedMolecule(m, randomSeed=0xF00D)
     return m
 
 
@@ -74,3 +74,36 @@ def test_serialize_deserialize_sidecar_roundtrip():
     raw = serialize_confs_sidecar(store)
     back = deserialize_confs_sidecar(raw)
     assert back == store
+
+
+def test_serialize_ensemble_store_is_empty_json_map():
+    from molmanager.storage import EnsembleStore
+
+    store = EnsembleStore()
+    try:
+        store[(1, "confs")] = "YWFh"
+        assert serialize_confs_sidecar(store) == {}
+    finally:
+        store.close()
+
+
+def test_pack_confs_cell_unlimited_when_max_chars_zero():
+    from rdkit.Geometry import Point3D
+
+    from molmanager.confs_codec import CONFS_CELL_PACK_MAX_CHARS, format_confs_table_cell
+
+    mol = Chem.MolFromSmiles("CCO")
+    for i in range(6):
+        conf = Chem.Conformer(mol.GetNumAtoms())
+        conf.SetAtomPosition(0, Point3D(float(i), 0.0, 0.0))
+        conf.SetAtomPosition(1, Point3D(float(i) + 1.4, 0.0, 0.0))
+        conf.SetAtomPosition(2, Point3D(float(i) + 2.0, 1.1, 0.0))
+        mol.AddConformer(conf, assignId=True)
+    meta = {"ok": True, "n_kept": 6, "n_packed": 6}
+    packed = pack_confs_cell(meta, mol, max_chars=0)
+    assert CONFS_CELL_PACK_MAX_CHARS == 0
+    assert unpack_confs_blocks_json_b64(packed) is not None
+    assert mol_from_packed_confs_cell(packed, min_conformers=6) is not None
+    tiny = pack_confs_cell(meta, mol, max_chars=40)
+    assert unpack_confs_blocks_json_b64(tiny) is None
+    assert tiny == format_confs_table_cell(meta)

@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import base64
 import gzip
+import io
 import json
 import logging
 import math
+import zipfile
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,11 @@ SESSION_VERSION_CURRENT = 2
 SESSION_VERSIONS_SUPPORTED = frozenset({1, 2})
 
 _GZIP_MAGIC = b"\x1f\x8b"
+_ZIP_MAGIC = b"PK"
+SESSION_CMS_MEMBER = "session.cms"
+SESSION_ENSEMBLES_MEMBER = "ensembles.sqlite"
+# In-memory only: compact JSON must not serialize this bytes payload.
+SESSION_ENSEMBLES_KEY = "__ensembles_sqlite__"
 
 # Top-level keys that may be dropped when empty to shrink saved documents.
 _OMIT_IF_EMPTY = frozenset(
@@ -95,19 +102,53 @@ def _loads_json_bytes(raw: bytes) -> Any:
 
 
 def dumps_session_document(doc: dict[str, Any], *, gzip_compress: bool = True) -> bytes:
-    """Serialize a session document to bytes (gzip by default)."""
-    payload = _dumps_json_bytes(doc)
-    if not gzip_compress:
+    """Serialize a session document to bytes (gzip JSON, or zip with ensembles)."""
+    extra = None
+    payload_doc = doc
+    if isinstance(doc, dict) and SESSION_ENSEMBLES_KEY in doc:
+        extra = doc.get(SESSION_ENSEMBLES_KEY)
+        if not isinstance(extra, (bytes, bytearray)) or not extra:
+            extra = None
+        payload_doc = {k: v for k, v in doc.items() if k != SESSION_ENSEMBLES_KEY}
+    payload = _dumps_json_bytes(payload_doc)
+    if gzip_compress:
+        payload = gzip.compress(payload, compresslevel=6)
+    if not extra:
         return payload
-    return gzip.compress(payload, compresslevel=6)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as zf:
+        zf.writestr(SESSION_CMS_MEMBER, payload)
+        zf.writestr(SESSION_ENSEMBLES_MEMBER, bytes(extra))
+    return buf.getvalue()
+
+
+def _session_zip_payload(data: bytes) -> tuple[bytes, bytes | None]:
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        names = zf.namelist()
+        cms_name = None
+        if SESSION_CMS_MEMBER in names:
+            cms_name = SESSION_CMS_MEMBER
+        else:
+            cms_name = next(
+                (n for n in names if n.endswith(".cms") or n.endswith(".json")),
+                None,
+            )
+        if cms_name is None:
+            raise ValueError("Session zip is missing session.cms.")
+        cms = zf.read(cms_name)
+        ensembles = zf.read(SESSION_ENSEMBLES_MEMBER) if SESSION_ENSEMBLES_MEMBER in names else None
+    return cms, ensembles
 
 
 def loads_session_bytes(raw: bytes | str) -> dict[str, Any]:
-    """Parse session file bytes (gzip or plain JSON) into a dict."""
+    """Parse session file bytes (gzip JSON, zip bundle, or plain JSON) into a dict."""
     if isinstance(raw, str):
         data = raw.encode("utf-8")
     else:
         data = raw
+    ensembles = None
+    if data.startswith(_ZIP_MAGIC):
+        data, ensembles = _session_zip_payload(data)
     if data.startswith(_GZIP_MAGIC):
         try:
             data = gzip.decompress(data)
@@ -116,6 +157,8 @@ def loads_session_bytes(raw: bytes | str) -> dict[str, Any]:
     doc = _loads_json_bytes(data)
     if not isinstance(doc, dict):
         raise ValueError("Session root must be a JSON object.")
+    if ensembles:
+        doc[SESSION_ENSEMBLES_KEY] = ensembles
     return doc
 
 
@@ -256,6 +299,8 @@ def compact_session_document(doc: dict[str, Any]) -> dict[str, Any]:
             "structure_smiles",
             "structure_mols",
         ):
+            continue
+        if key == SESSION_ENSEMBLES_KEY:
             continue
         if key == "global_bounds":
             bounds = compact_global_bounds(value)

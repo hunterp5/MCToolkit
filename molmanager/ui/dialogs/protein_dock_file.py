@@ -55,7 +55,7 @@ _PREPARE_FMTS = _PREPARE_SOURCE_FMTS
 
 
 class ProteinDockFileDialog(ProteinStructureSourceMixin, QDialog):
-    """Options for Protein Viewer → Prepare → Dock File."""
+    """Options for Protein Viewer → Tools → Prepare → Dock File."""
 
     smina_prepared = pyqtSignal(object)
     _source_output_tag = "smina"

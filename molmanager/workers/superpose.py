@@ -32,7 +32,8 @@ from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
 from ..config import load_config
-from ..confs_codec import format_confs_table_cell, mol_from_packed_confs_cell, pack_confs_cell
+from ..confs_codec import mol_from_packed_confs_cell
+from ..storage import ensemble_mol_for
 from .chemistry_worker_common import emit_tool_progress_throttled
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
 from .superpose_conformers import run_superpose_conformers
@@ -65,40 +66,35 @@ __all__ = [
 ]
 
 
-def _superpose_row_task(task: tuple) -> tuple[int, Chem.Mol | None, str]:
-    oid, cell, params = task[0], task[1], task[2]
+def _looks_like_packed_cell(src: str) -> bool:
+    return (src or "").lstrip().startswith("{")
+
+
+def _superpose_row_task(task: tuple) -> tuple[int, Chem.Mol | None, dict]:
+    oid, src, params = task[0], task[1], task[2]
     cancel_event = task[3] if len(task) > 3 else None
+    db_path = task[4] if len(task) > 4 else None
     try:
         if cancel_event is not None and cancel_event.is_set():
-            return (
-                oid,
-                None,
-                format_confs_table_cell({"ok": False, "err": "cancelled", "op": "superpose"}),
-            )
-        mol = mol_from_packed_confs_cell(cell or "")
+            return oid, None, {"ok": False, "err": "cancelled", "op": "superpose"}
+        mol = None
+        if db_path and not _looks_like_packed_cell(str(src or "")):
+            mol = ensemble_mol_for(db_path, oid, str(src or ""), min_conformers=2)
         if mol is None:
-            return (
-                oid,
-                None,
-                format_confs_table_cell(
-                    {"ok": False, "err": "no_packed_conformers", "op": "superpose"}
-                ),
-            )
+            mol = mol_from_packed_confs_cell(src or "")
+        if mol is None:
+            return oid, None, {"ok": False, "err": "no_packed_conformers", "op": "superpose"}
         new_m, meta = run_superpose_conformers(mol, params, cancel_event=cancel_event)
         if new_m is None:
-            return oid, None, format_confs_table_cell(meta)
-        return oid, new_m, pack_confs_cell(meta, new_m)
+            return oid, None, dict(meta)
+        return oid, new_m, dict(meta)
     except Exception as e:
         logger.exception("SuperposeConformersWorker failed for oid=%s", oid)
-        return (
-            oid,
-            None,
-            format_confs_table_cell({"ok": False, "err": str(e)[:200], "op": "superpose"}),
-        )
+        return oid, None, {"ok": False, "err": str(e)[:200], "op": "superpose"}
 
 
 class SuperposeConformersWorker(QRunnable):
-    """Align conformers from packed ``confs`` cells into a new ``superpose`` column payload."""
+    """Align conformers from the ensemble store (or packed cells) into a ``superpose`` column."""
 
     def __init__(
         self,
@@ -107,6 +103,7 @@ class SuperposeConformersWorker(QRunnable):
         signals: WorkerSignals,
         cancel_event: threading.Event | None = None,
         progress_state=None,
+        ensemble_db: str | None = None,
     ):
         super().__init__()
         self.data = data
@@ -114,6 +111,7 @@ class SuperposeConformersWorker(QRunnable):
         self.signals = signals
         self.cancel_event = cancel_event
         self.progress_state = progress_state
+        self.ensemble_db = ensemble_db
 
     def run(self):
         nrows = len(self.data)
@@ -143,7 +141,7 @@ class SuperposeConformersWorker(QRunnable):
                 ex = ThreadPoolExecutor(max_workers=max_workers)
                 shutdown_cancel = False
                 try:
-                    row_tasks = [(*t, cancel_ev) for t in tasks]
+                    row_tasks = [(*t, cancel_ev, self.ensemble_db) for t in tasks]
                     pending = {ex.submit(_superpose_row_task, rt) for rt in row_tasks}
                     done_count = 0
                     while pending:
@@ -197,7 +195,7 @@ class SuperposeConformersWorker(QRunnable):
                     if cancel_ev is not None and cancel_ev.is_set():
                         cancelled = True
                         break
-                    results.append(_superpose_row_task((*t, cancel_ev)))
+                    results.append(_superpose_row_task((*t, cancel_ev, self.ensemble_db)))
                     done_count = done
                     emit_tool_progress_throttled(
                         self.signals,

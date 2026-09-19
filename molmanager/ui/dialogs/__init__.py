@@ -56,6 +56,7 @@ _EXPORTS: dict[str, str] = {
     "NeutralizeDialog": ".neutralize",
     "PKaPredictorDialog": ".pka",
     "PdbqtGeneratorDialog": ".pdbqt_generator",
+    "PharmacophoreScreenDialog": ".pharmacophore_screen",
     "PermeabilityPredictorDialog": ".permeability",
     "PlotDialog": "..plot",
     "PropertyDialog": ".properties",

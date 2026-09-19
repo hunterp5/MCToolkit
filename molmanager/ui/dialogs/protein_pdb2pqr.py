@@ -47,7 +47,7 @@ from .protein_source_picker import ProteinStructureSourceMixin
 
 
 class ProteinPdb2pqrDialog(ProteinStructureSourceMixin, QDialog):
-    """Options for Protein Viewer → Prepare → pdb2pqr."""
+    """Options for Protein Viewer → Tools → Prepare → pdb2pqr."""
 
     prepared = pyqtSignal(str)
     _source_output_tag = "protonated"

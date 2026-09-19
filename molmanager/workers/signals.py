@@ -107,6 +107,13 @@ class FPSimilaritySignals(QObject):
     failed = pyqtSignal(str)
 
 
+class PharmacophoreScreenSignals(QObject):
+    """Completion signals for :class:`PharmacophoreScreenWorker` (owned by the dialog)."""
+
+    finished = pyqtSignal(list)
+    failed = pyqtSignal(str)
+
+
 class DiverseSubsetSignals(QObject):
     """Completion signals for :class:`DiverseSubsetWorker` (owned by the dialog)."""
 

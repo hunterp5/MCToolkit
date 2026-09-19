@@ -24,7 +24,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PyQt5.QtCore import QByteArray
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
+from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
 from ..structure_components import (
     LoadedStructure,
@@ -41,9 +41,11 @@ from ..structure_components import (
 from .protein_viewer_models import (
     STRUCTURE_FILE_FILTER,
     STRUCTURE_SAVE_FILTER,
+    NamedManagerGroup,
     _ComponentView,
     _LoadedSlot,
     _component_state_key,
+    unscoped_component_id,
 )
 from .qt_widget_utils import qobject_is_deleted
 
@@ -104,13 +106,172 @@ class ProteinViewerIoMixin:
     def _refresh_manager(self) -> None:
         names = [slot.name for slot in self._slots]
         filename = ", ".join(names) if names else ""
-        self.manager.set_structure(self._rows, filename=filename, groups=self._manager_groups())
+        self.manager.set_structure(
+            self._rows,
+            filename=filename,
+            groups=self._manager_groups(),
+            named_groups=list(getattr(self, "_named_groups", []) or []),
+        )
         if len(names) == 1:
             self.setWindowTitle(f"Protein Viewer — {names[0]}")
         elif names:
             self.setWindowTitle(f"Protein Viewer — {len(names)} structures")
         else:
             self.setWindowTitle("Protein Viewer")
+
+    def _ensure_named_group(self, name: str) -> NamedManagerGroup:
+        groups = getattr(self, "_named_groups", None)
+        if groups is None:
+            self._named_groups = []
+            groups = self._named_groups
+        key = name.casefold()
+        for group in groups:
+            if group.name.casefold() == key:
+                return group
+        seq = int(getattr(self, "_group_seq", 0) or 0) + 1
+        self._group_seq = seq
+        group = NamedManagerGroup(group_id=f"grp{seq}", name=name, component_ids=[])
+        groups.append(group)
+        return group
+
+    def _on_add_to_group(self, name: str) -> None:
+        label = (name or "").strip()
+        if not label:
+            return
+        ids = self._selected_component_ids()
+        if not ids:
+            return
+        group = self._ensure_named_group(label)
+        seen = set(group.component_ids)
+        for cid in ids:
+            if cid not in seen:
+                group.component_ids.append(cid)
+                seen.add(cid)
+        self._refresh_manager()
+        self._mark_viewer_unsaved()
+
+    def _on_remove_from_group(self, group_id: str) -> None:
+        ids = set(self._selected_component_ids())
+        if not ids:
+            return
+        groups = getattr(self, "_named_groups", None) or []
+        changed = False
+        for group in groups:
+            if group_id and group.group_id != group_id:
+                continue
+            kept = [cid for cid in group.component_ids if cid not in ids]
+            if kept != group.component_ids:
+                group.component_ids = kept
+                changed = True
+        if not changed:
+            return
+        self._refresh_manager()
+        self._mark_viewer_unsaved()
+
+    def _on_rename_group(self, group_id: str) -> None:
+        groups = getattr(self, "_named_groups", None) or []
+        group = next((item for item in groups if item.group_id == group_id), None)
+        if group is None:
+            return
+        name, ok = QInputDialog.getText(self, "Rename Group", "Group name:", text=group.name)
+        name = (name or "").strip()
+        if not ok or not name or name == group.name:
+            return
+        group.name = name
+        self._refresh_manager()
+        self._mark_viewer_unsaved()
+
+    def _on_delete_group(self, group_id: str) -> None:
+        groups = getattr(self, "_named_groups", None) or []
+        kept = [group for group in groups if group.group_id != group_id]
+        if len(kept) == len(groups):
+            return
+        self._named_groups = kept
+        self._refresh_manager()
+        self._mark_viewer_unsaved()
+
+    def _named_groups_session_payload(self) -> list[dict]:
+        by_id = {row.spec.component_id: row for row in self._rows}
+        slots_by_sid = {slot.structure_id: slot for slot in self._slots}
+        payload: list[dict] = []
+        for group in getattr(self, "_named_groups", None) or []:
+            members: list[dict] = []
+            for cid in group.component_ids:
+                row = by_id.get(cid)
+                if row is None:
+                    continue
+                slot = slots_by_sid.get(row.spec.structure_id)
+                members.append(
+                    {
+                        "structure": slot.name if slot is not None else "",
+                        "componentId": unscoped_component_id(cid),
+                    }
+                )
+            payload.append(
+                {
+                    "id": group.group_id,
+                    "name": group.name,
+                    "members": members,
+                }
+            )
+        return payload
+
+    def _restore_named_groups(self, raw) -> None:
+        self._named_groups = []
+        self._group_seq = 0
+        if not isinstance(raw, list):
+            return
+        max_seq = 0
+        for spec in raw:
+            if not isinstance(spec, dict):
+                continue
+            name = str(spec.get("name") or "").strip()
+            if not name:
+                continue
+            gid = str(spec.get("id") or "").strip()
+            if not gid:
+                gid = f"grp{len(self._named_groups) + 1}"
+            if gid.startswith("grp"):
+                try:
+                    max_seq = max(max_seq, int(gid[3:]))
+                except ValueError:
+                    pass
+            ids: list[str] = []
+            seen: set[str] = set()
+            members = spec.get("members")
+            if not isinstance(members, list):
+                members = [
+                    {"structure": "", "componentId": str(cid)}
+                    for cid in spec.get("componentIds") or []
+                ]
+            for member in members:
+                if not isinstance(member, dict):
+                    continue
+                cid = self._live_component_id(
+                    str(member.get("structure") or ""),
+                    str(member.get("componentId") or ""),
+                )
+                if cid and cid not in seen:
+                    ids.append(cid)
+                    seen.add(cid)
+            self._named_groups.append(NamedManagerGroup(group_id=gid, name=name, component_ids=ids))
+        self._group_seq = max_seq
+
+    def _live_component_id(self, structure_name: str, unscoped: str) -> str:
+        want = (unscoped or "").strip()
+        if not want:
+            return ""
+        slots = list(self._slots)
+        if structure_name:
+            named = [slot for slot in slots if slot.name == structure_name]
+            if named:
+                slots = named
+        for slot in slots:
+            for row in slot.rows:
+                cid = row.spec.component_id
+                if cid == want or unscoped_component_id(cid) == want:
+                    return cid
+        return ""
 
     def _unique_slot_name(self, name: str) -> str:
         used = {slot.name for slot in self._slots}
@@ -565,6 +726,8 @@ class ProteinViewerIoMixin:
         ]
 
     def duplicate_selected(self) -> None:
+        if self.manager.selected_items_are_groups_only():
+            return
         ids = set(self._selected_component_ids())
         if not ids:
             return
@@ -635,6 +798,8 @@ class ProteinViewerIoMixin:
         self._slots = []
         if not keep_edit_history:
             self._clear_manager_delete_history()
+            self._named_groups = []
+            self._group_seq = 0
         self._sequence_chains = []
         self._residue_highlight = []
         self._set_atom_status("")
@@ -808,6 +973,7 @@ class ProteinViewerIoMixin:
             "dockingBox": self._docking_box_payload,
             "pharmacophore": self._ensure_pharmacophore().to_dict(),
             "pharmacophorePath": str(getattr(self, "_pharmacophore_path", None) or ""),
+            "namedGroups": self._named_groups_session_payload(),
             "residueHighlight": list(self._residue_highlight or []),
         }
         splitters: dict[str, list[int]] = {}
@@ -877,13 +1043,7 @@ class ProteinViewerIoMixin:
         hydrogens = str(state.get("hydrogens") or "polar")
         if hydrogens not in ("all", "polar", "none"):
             hydrogens = "polar"
-        target = {
-            "all": self._act_hydrogens_all,
-            "none": self._act_hydrogens_none,
-            "polar": self._act_hydrogens_polar,
-        }.get(hydrogens)
-        if target is not None:
-            target.setChecked(True)
+        self._set_hydrogen_mode(hydrogens)
         hbonds = state.get("hbonds") if isinstance(state.get("hbonds"), dict) else {}
         for act, key in (
             (self._act_hbond_protein, "protein"),
@@ -926,6 +1086,7 @@ class ProteinViewerIoMixin:
                     replace(row, style="ballstick") if row.spec.kind == "polymer" else row
                     for row in slot.rows
                 ]
+        self._restore_named_groups(state.get("namedGroups"))
         self._refresh_manager()
         self._refresh_sequence_chains()
         self._sync_render_menus_from_rows()

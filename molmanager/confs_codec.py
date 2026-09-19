@@ -33,8 +33,8 @@ CONFS_PACK_VERSION = 1
 CONFS_PACK_SIDECAR_VERSION = 2
 # Compact JSON-only summary (errors, counts without coordinates).
 CONFS_CELL_JSON_MAX = 2000
-# Packed cell (meta + base64 mol blocks) upper bound; truncate conformers if exceeded.
-CONFS_CELL_PACK_MAX_CHARS = 950_000
+# 0 = do not truncate packed ensembles (coordinates live in EnsembleStore).
+CONFS_CELL_PACK_MAX_CHARS = 0
 PACKED_ENSEMBLE_BASES = ("confs", "superpose", "poses")
 _PACKED_ENSEMBLE_HEADER_RE = re.compile(
     r"^(?:" + "|".join(PACKED_ENSEMBLE_BASES) + r")(?:_\d+| \(\d+\))?$",
@@ -222,7 +222,8 @@ def pack_mols_as_confs_cell(
         s = json.dumps(inner, separators=(",", ":"), ensure_ascii=True)
     except (TypeError, ValueError):
         return base
-    if len(s) <= max_chars:
+    limit = int(max_chars)
+    if limit <= 0 or len(s) <= limit:
         return s
     return base
 
@@ -235,6 +236,7 @@ def pack_confs_cell(
 
     Falls back to :func:`format_confs_table_cell` when there are no conformers or packing fails.
     A single minimized conformer is packed so the 3D viewer can load it.
+    When *max_chars* is 0 or negative, the payload is not truncated.
     """
     base = format_confs_table_cell(meta)
     if mol is None:
@@ -253,7 +255,8 @@ def pack_confs_cell(
     meta_out = {k: meta[k] for k in _META_KEYS if k in meta}
     inner: dict[str, Any] = {"v": CONFS_PACK_VERSION, "m": meta_out, "b": blocks_b64}
     s = json.dumps(inner, separators=(",", ":"), ensure_ascii=True)
-    if len(s) <= max_chars:
+    limit = int(max_chars)
+    if limit <= 0 or len(s) <= limit:
         return s
     try:
         blocks = json.loads(base64.b64decode(blocks_b64.encode("ascii")))
@@ -334,6 +337,16 @@ def demote_v1_cell_to_sidecar(cell_text: str, column_key: str) -> tuple[str, str
     return out, b
 
 
+def make_sidecar_cell(column_key: str, meta: dict | None = None) -> str:
+    """Short v2 table cell: metadata only; coordinates live in the ensemble store."""
+    payload = {
+        "v": CONFS_PACK_SIDECAR_VERSION,
+        "h": str(column_key),
+        "m": {k: meta[k] for k in _META_KEYS if meta and k in meta},
+    }
+    return json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
+
+
 def rehydrate_v1_confs_cell(
     cell_text: str,
     column_key: str,
@@ -394,7 +407,15 @@ def resolve_blocks_b64_for_viewer(
 
 
 def serialize_confs_sidecar(store: dict[tuple[int, str], str]) -> dict[str, str]:
-    """JSON-friendly dict for session documents (keys ``\"{oid}:{column}\"``)."""
+    """JSON-friendly dict for session documents (keys ``\"{oid}:{column}\"``).
+
+    :class:`~molmanager.storage.EnsembleStore` snapshots are stored as a SQLite
+    zip member instead of this JSON map.
+    """
+    from .storage.ensemble_store import EnsembleStore
+
+    if isinstance(store, EnsembleStore):
+        return {}
     out: dict[str, str] = {}
     for (oid, col), b64 in (store or {}).items():
         out[f"{int(oid)}:{str(col)}"] = str(b64)
