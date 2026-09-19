@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -26,271 +27,468 @@ import pandas as pd
 
 TaskKind = Literal["regression", "classification"]
 
+
+def _build_ridge(p: Mapping[str, Any]) -> Any:
+    from sklearn.linear_model import Ridge
+
+    return Ridge(alpha=float(p["alpha"]))
+
+
+def _build_lasso(p: Mapping[str, Any]) -> Any:
+    from sklearn.linear_model import Lasso
+
+    return Lasso(alpha=float(p["alpha"]), max_iter=int(p["max_iter"]), random_state=42)
+
+
+def _build_mlr(p: Mapping[str, Any]) -> Any:
+    from sklearn.linear_model import LinearRegression
+
+    return LinearRegression(fit_intercept=bool(p.get("fit_intercept", True)))
+
+
+def _build_pls(p: Mapping[str, Any]) -> Any:
+    from sklearn.cross_decomposition import PLSRegression
+
+    # n_components is capped at fit time by n_samples / n_features.
+    return PLSRegression(n_components=int(p["n_components"]), scale=False)
+
+
+def _build_knn(p: Mapping[str, Any]) -> Any:
+    from sklearn.neighbors import KNeighborsRegressor
+
+    return KNeighborsRegressor(
+        n_neighbors=int(p["n_neighbors"]),
+        weights=str(p.get("weights") or "distance"),
+        p=int(p.get("p", 2)),
+    )
+
+
+def _build_svr(p: Mapping[str, Any]) -> Any:
+    from sklearn.svm import SVR
+
+    return SVR(
+        kernel=str(p.get("kernel") or "rbf"),
+        C=float(p["C"]),
+        epsilon=float(p["epsilon"]),
+        gamma=str(p.get("gamma") or "scale"),
+    )
+
+
+def _build_logistic(p: Mapping[str, Any]) -> Any:
+    from sklearn.linear_model import LogisticRegression
+
+    penalty = str(p.get("penalty") or "l2")
+    kwargs: dict[str, Any] = {
+        "C": float(p["C"]),
+        "max_iter": int(p["max_iter"]),
+        "random_state": 42,
+    }
+    if penalty == "none":
+        kwargs["penalty"] = None
+    elif penalty == "l1":
+        kwargs["penalty"] = "l1"
+        kwargs["solver"] = "saga"
+    else:
+        kwargs["penalty"] = "l2"
+    return LogisticRegression(**kwargs)
+
+
+def _build_random_forest_regressor(p: Mapping[str, Any]) -> Any:
+    from sklearn.ensemble import RandomForestRegressor
+
+    return RandomForestRegressor(
+        n_estimators=int(p["n_estimators"]),
+        max_depth=_rf_max_depth(p),
+        min_samples_leaf=int(p.get("min_samples_leaf", 1)),
+        random_state=42,
+        n_jobs=-1,
+    )
+
+
+def _build_random_forest_classifier(p: Mapping[str, Any]) -> Any:
+    from sklearn.ensemble import RandomForestClassifier
+
+    return RandomForestClassifier(
+        n_estimators=int(p["n_estimators"]),
+        max_depth=_rf_max_depth(p),
+        min_samples_leaf=int(p.get("min_samples_leaf", 1)),
+        random_state=42,
+        n_jobs=-1,
+    )
+
+
+def _build_gradient_boosting_regressor(p: Mapping[str, Any]) -> Any:
+    from sklearn.ensemble import GradientBoostingRegressor
+
+    return GradientBoostingRegressor(
+        n_estimators=int(p["n_estimators"]),
+        learning_rate=float(p["learning_rate"]),
+        max_depth=int(p["max_depth"]),
+        random_state=42,
+    )
+
+
+def _build_gradient_boosting_classifier(p: Mapping[str, Any]) -> Any:
+    from sklearn.ensemble import GradientBoostingClassifier
+
+    return GradientBoostingClassifier(
+        n_estimators=int(p["n_estimators"]),
+        learning_rate=float(p["learning_rate"]),
+        max_depth=int(p["max_depth"]),
+        random_state=42,
+    )
+
+
+def _build_svm(p: Mapping[str, Any]) -> Any:
+    from sklearn.svm import SVC
+
+    return SVC(
+        kernel=str(p.get("kernel") or "linear"),
+        C=float(p["C"]),
+        gamma=str(p.get("gamma") or "scale"),
+        random_state=42,
+    )
+
+
+@dataclass(frozen=True)
+class QSARModelSpec:
+    """One QSAR algorithm: its label, tunable parameters, and estimator builders.
+
+    ``builders`` maps a task to the callable that turns merged hyperparameters
+    into an unfitted scikit-learn estimator; a key present for both tasks (for
+    example ``random_forest``) offers a regressor and a classifier variant.
+    ``params`` drives the hyperparameter form in the QSAR dialog, where each
+    entry supplies ``key``, ``label``, ``kind`` (float/int/choice/bool),
+    ``default`` and optional bounds, ``decimals``, ``choices`` or ``tooltip``.
+    """
+
+    key: str
+    label: str
+    builders: Mapping[TaskKind, Callable[[Mapping[str, Any]], Any]]
+    params: tuple[Mapping[str, Any], ...] = ()
+
+    def supports(self, task: TaskKind) -> bool:
+        return task in self.builders
+
+
+# Single source of truth for the algorithms MolManager offers. Order here is the
+# order the dialog's model combo shows, filtered per task.
+MODEL_SPECS: tuple[QSARModelSpec, ...] = (
+    QSARModelSpec(
+        key="ridge",
+        label="Ridge regression",
+        builders={"regression": _build_ridge},
+        params=(
+            {
+                "key": "alpha",
+                "label": "Alpha (L2)",
+                "kind": "float",
+                "default": 1.0,
+                "min": 1e-6,
+                "max": 1e6,
+                "decimals": 6,
+                "tooltip": "L2 regularization strength (larger = stronger shrinkage).",
+            },
+        ),
+    ),
+    QSARModelSpec(
+        key="lasso",
+        label="Lasso regression",
+        builders={"regression": _build_lasso},
+        params=(
+            {
+                "key": "alpha",
+                "label": "Alpha (L1)",
+                "kind": "float",
+                "default": 0.1,
+                "min": 1e-6,
+                "max": 100.0,
+                "decimals": 6,
+                "tooltip": "L1 regularization strength (larger = sparser coefficients).",
+            },
+            {
+                "key": "max_iter",
+                "label": "Max iterations",
+                "kind": "int",
+                "default": 5000,
+                "min": 100,
+                "max": 100000,
+            },
+        ),
+    ),
+    QSARModelSpec(
+        key="mlr",
+        label="Multiple linear regression (MLR)",
+        builders={"regression": _build_mlr},
+        params=(
+            {
+                "key": "fit_intercept",
+                "label": "Fit intercept",
+                "kind": "bool",
+                "default": True,
+                "tooltip": "Whether to calculate the intercept for this model.",
+            },
+        ),
+    ),
+    QSARModelSpec(
+        key="pls",
+        label="PLS regression",
+        builders={"regression": _build_pls},
+        params=(
+            {
+                "key": "n_components",
+                "label": "Components",
+                "kind": "int",
+                "default": 2,
+                "min": 1,
+                "max": 50,
+                "tooltip": "Latent components (capped at training samples/features during fit).",
+            },
+        ),
+    ),
+    QSARModelSpec(
+        key="knn",
+        label="k-nearest neighbors (KNN)",
+        builders={"regression": _build_knn},
+        params=(
+            {
+                "key": "n_neighbors",
+                "label": "Neighbors (k)",
+                "kind": "int",
+                "default": 5,
+                "min": 1,
+                "max": 200,
+                "tooltip": "Number of neighbors (capped below training-set size during fit).",
+            },
+            {
+                "key": "weights",
+                "label": "Weights",
+                "kind": "choice",
+                "default": "distance",
+                "choices": [("uniform", "Uniform"), ("distance", "Distance")],
+            },
+            {
+                "key": "p",
+                "label": "Minkowski p",
+                "kind": "int",
+                "default": 2,
+                "min": 1,
+                "max": 5,
+                "tooltip": "Distance metric power (1 = Manhattan, 2 = Euclidean).",
+            },
+        ),
+    ),
+    QSARModelSpec(
+        key="svr",
+        label="Support vector regression (SVR)",
+        builders={"regression": _build_svr},
+        params=(
+            {
+                "key": "kernel",
+                "label": "Kernel",
+                "kind": "choice",
+                "default": "rbf",
+                "choices": [
+                    ("rbf", "RBF"),
+                    ("linear", "Linear"),
+                    ("poly", "Polynomial"),
+                    ("sigmoid", "Sigmoid"),
+                ],
+            },
+            {
+                "key": "C",
+                "label": "C",
+                "kind": "float",
+                "default": 1.0,
+                "min": 1e-4,
+                "max": 1e4,
+                "decimals": 4,
+                "tooltip": "Regularization parameter (larger = less regularization).",
+            },
+            {
+                "key": "epsilon",
+                "label": "Epsilon",
+                "kind": "float",
+                "default": 0.1,
+                "min": 0.0,
+                "max": 10.0,
+                "decimals": 4,
+                "tooltip": "Epsilon-tube width within which no penalty is associated.",
+            },
+            {
+                "key": "gamma",
+                "label": "Gamma",
+                "kind": "choice",
+                "default": "scale",
+                "choices": [("scale", "scale"), ("auto", "auto")],
+                "tooltip": "Kernel coefficient for RBF / poly / sigmoid.",
+            },
+        ),
+    ),
+    QSARModelSpec(
+        key="logistic",
+        label="Logistic regression",
+        builders={"classification": _build_logistic},
+        params=(
+            {
+                "key": "C",
+                "label": "C (inverse regularization)",
+                "kind": "float",
+                "default": 1.0,
+                "min": 1e-4,
+                "max": 1e4,
+                "decimals": 4,
+            },
+            {
+                "key": "penalty",
+                "label": "Penalty",
+                "kind": "choice",
+                "default": "l2",
+                "choices": [("l2", "L2"), ("l1", "L1"), ("none", "None")],
+            },
+            {
+                "key": "max_iter",
+                "label": "Max iterations",
+                "kind": "int",
+                "default": 3000,
+                "min": 100,
+                "max": 50000,
+            },
+        ),
+    ),
+    QSARModelSpec(
+        key="random_forest",
+        label="Random forest",
+        builders={
+            "regression": _build_random_forest_regressor,
+            "classification": _build_random_forest_classifier,
+        },
+        params=(
+            {
+                "key": "n_estimators",
+                "label": "Trees",
+                "kind": "int",
+                "default": 200,
+                "min": 10,
+                "max": 2000,
+            },
+            {
+                "key": "max_depth",
+                "label": "Max depth (0 = none)",
+                "kind": "int",
+                "default": 0,
+                "min": 0,
+                "max": 100,
+                "tooltip": "Maximum tree depth; 0 means unlimited.",
+            },
+            {
+                "key": "min_samples_leaf",
+                "label": "Min samples / leaf",
+                "kind": "int",
+                "default": 1,
+                "min": 1,
+                "max": 100,
+            },
+        ),
+    ),
+    QSARModelSpec(
+        key="gradient_boosting",
+        label="Gradient boosting",
+        builders={
+            "regression": _build_gradient_boosting_regressor,
+            "classification": _build_gradient_boosting_classifier,
+        },
+        params=(
+            {
+                "key": "n_estimators",
+                "label": "Estimators",
+                "kind": "int",
+                "default": 100,
+                "min": 10,
+                "max": 2000,
+            },
+            {
+                "key": "learning_rate",
+                "label": "Learning rate",
+                "kind": "float",
+                "default": 0.1,
+                "min": 0.001,
+                "max": 1.0,
+                "decimals": 4,
+            },
+            {
+                "key": "max_depth",
+                "label": "Max depth",
+                "kind": "int",
+                "default": 3,
+                "min": 1,
+                "max": 20,
+            },
+        ),
+    ),
+    QSARModelSpec(
+        key="svm",
+        label="Support vector machine (SVM)",
+        builders={"classification": _build_svm},
+        params=(
+            {
+                "key": "kernel",
+                "label": "Kernel",
+                "kind": "choice",
+                "default": "linear",
+                "choices": [
+                    ("linear", "Linear"),
+                    ("rbf", "RBF"),
+                    ("poly", "Polynomial"),
+                    ("sigmoid", "Sigmoid"),
+                ],
+            },
+            {
+                "key": "C",
+                "label": "C",
+                "kind": "float",
+                "default": 1.0,
+                "min": 1e-4,
+                "max": 1e4,
+                "decimals": 4,
+            },
+            {
+                "key": "gamma",
+                "label": "Gamma",
+                "kind": "choice",
+                "default": "scale",
+                "choices": [("scale", "scale"), ("auto", "auto")],
+            },
+        ),
+    ),
+)
+
+MODELS_BY_KEY: dict[str, QSARModelSpec] = {spec.key: spec for spec in MODEL_SPECS}
+
+# Derived views kept for the dialog and existing callers.
 REGRESSION_MODELS: dict[str, str] = {
-    "ridge": "Ridge regression",
-    "lasso": "Lasso regression",
-    "mlr": "Multiple linear regression (MLR)",
-    "pls": "PLS regression",
-    "knn": "k-nearest neighbors (KNN)",
-    "svr": "Support vector regression (SVR)",
-    "random_forest": "Random forest",
-    "gradient_boosting": "Gradient boosting",
+    spec.key: spec.label for spec in MODEL_SPECS if spec.supports("regression")
 }
 CLASSIFICATION_MODELS: dict[str, str] = {
-    "logistic": "Logistic regression",
-    "random_forest": "Random forest",
-    "gradient_boosting": "Gradient boosting",
-    "svm": "Support vector machine (SVM)",
+    spec.key: spec.label for spec in MODEL_SPECS if spec.supports("classification")
 }
-
-# Tunable hyperparameters shown in the QSAR dialog (per algorithm key).
-# Each spec: key, label, kind (float|int|choice|bool), default, and optional bounds/choices.
 MODEL_PARAM_SPECS: dict[str, list[dict[str, Any]]] = {
-    "ridge": [
-        {
-            "key": "alpha",
-            "label": "Alpha (L2)",
-            "kind": "float",
-            "default": 1.0,
-            "min": 1e-6,
-            "max": 1e6,
-            "decimals": 6,
-            "tooltip": "L2 regularization strength (larger = stronger shrinkage).",
-        },
-    ],
-    "lasso": [
-        {
-            "key": "alpha",
-            "label": "Alpha (L1)",
-            "kind": "float",
-            "default": 0.1,
-            "min": 1e-6,
-            "max": 100.0,
-            "decimals": 6,
-            "tooltip": "L1 regularization strength (larger = sparser coefficients).",
-        },
-        {
-            "key": "max_iter",
-            "label": "Max iterations",
-            "kind": "int",
-            "default": 5000,
-            "min": 100,
-            "max": 100000,
-        },
-    ],
-    "mlr": [
-        {
-            "key": "fit_intercept",
-            "label": "Fit intercept",
-            "kind": "bool",
-            "default": True,
-            "tooltip": "Whether to calculate the intercept for this model.",
-        },
-    ],
-    "pls": [
-        {
-            "key": "n_components",
-            "label": "Components",
-            "kind": "int",
-            "default": 2,
-            "min": 1,
-            "max": 50,
-            "tooltip": "Latent components (capped at training samples/features during fit).",
-        },
-    ],
-    "knn": [
-        {
-            "key": "n_neighbors",
-            "label": "Neighbors (k)",
-            "kind": "int",
-            "default": 5,
-            "min": 1,
-            "max": 200,
-            "tooltip": "Number of neighbors (capped below training-set size during fit).",
-        },
-        {
-            "key": "weights",
-            "label": "Weights",
-            "kind": "choice",
-            "default": "distance",
-            "choices": [("uniform", "Uniform"), ("distance", "Distance")],
-        },
-        {
-            "key": "p",
-            "label": "Minkowski p",
-            "kind": "int",
-            "default": 2,
-            "min": 1,
-            "max": 5,
-            "tooltip": "Distance metric power (1 = Manhattan, 2 = Euclidean).",
-        },
-    ],
-    "svr": [
-        {
-            "key": "kernel",
-            "label": "Kernel",
-            "kind": "choice",
-            "default": "rbf",
-            "choices": [
-                ("rbf", "RBF"),
-                ("linear", "Linear"),
-                ("poly", "Polynomial"),
-                ("sigmoid", "Sigmoid"),
-            ],
-        },
-        {
-            "key": "C",
-            "label": "C",
-            "kind": "float",
-            "default": 1.0,
-            "min": 1e-4,
-            "max": 1e4,
-            "decimals": 4,
-            "tooltip": "Regularization parameter (larger = less regularization).",
-        },
-        {
-            "key": "epsilon",
-            "label": "Epsilon",
-            "kind": "float",
-            "default": 0.1,
-            "min": 0.0,
-            "max": 10.0,
-            "decimals": 4,
-            "tooltip": "Epsilon-tube width within which no penalty is associated.",
-        },
-        {
-            "key": "gamma",
-            "label": "Gamma",
-            "kind": "choice",
-            "default": "scale",
-            "choices": [("scale", "scale"), ("auto", "auto")],
-            "tooltip": "Kernel coefficient for RBF / poly / sigmoid.",
-        },
-    ],
-    "random_forest": [
-        {
-            "key": "n_estimators",
-            "label": "Trees",
-            "kind": "int",
-            "default": 200,
-            "min": 10,
-            "max": 2000,
-        },
-        {
-            "key": "max_depth",
-            "label": "Max depth (0 = none)",
-            "kind": "int",
-            "default": 0,
-            "min": 0,
-            "max": 100,
-            "tooltip": "Maximum tree depth; 0 means unlimited.",
-        },
-        {
-            "key": "min_samples_leaf",
-            "label": "Min samples / leaf",
-            "kind": "int",
-            "default": 1,
-            "min": 1,
-            "max": 100,
-        },
-    ],
-    "gradient_boosting": [
-        {
-            "key": "n_estimators",
-            "label": "Estimators",
-            "kind": "int",
-            "default": 100,
-            "min": 10,
-            "max": 2000,
-        },
-        {
-            "key": "learning_rate",
-            "label": "Learning rate",
-            "kind": "float",
-            "default": 0.1,
-            "min": 0.001,
-            "max": 1.0,
-            "decimals": 4,
-        },
-        {
-            "key": "max_depth",
-            "label": "Max depth",
-            "kind": "int",
-            "default": 3,
-            "min": 1,
-            "max": 20,
-        },
-    ],
-    "logistic": [
-        {
-            "key": "C",
-            "label": "C (inverse regularization)",
-            "kind": "float",
-            "default": 1.0,
-            "min": 1e-4,
-            "max": 1e4,
-            "decimals": 4,
-        },
-        {
-            "key": "penalty",
-            "label": "Penalty",
-            "kind": "choice",
-            "default": "l2",
-            "choices": [("l2", "L2"), ("l1", "L1"), ("none", "None")],
-        },
-        {
-            "key": "max_iter",
-            "label": "Max iterations",
-            "kind": "int",
-            "default": 3000,
-            "min": 100,
-            "max": 50000,
-        },
-    ],
-    "svm": [
-        {
-            "key": "kernel",
-            "label": "Kernel",
-            "kind": "choice",
-            "default": "linear",
-            "choices": [
-                ("linear", "Linear"),
-                ("rbf", "RBF"),
-                ("poly", "Polynomial"),
-                ("sigmoid", "Sigmoid"),
-            ],
-        },
-        {
-            "key": "C",
-            "label": "C",
-            "kind": "float",
-            "default": 1.0,
-            "min": 1e-4,
-            "max": 1e4,
-            "decimals": 4,
-        },
-        {
-            "key": "gamma",
-            "label": "Gamma",
-            "kind": "choice",
-            "default": "scale",
-            "choices": [("scale", "scale"), ("auto", "auto")],
-        },
-    ],
+    spec.key: [dict(param) for param in spec.params] for spec in MODEL_SPECS
 }
 
 
 def default_model_params(model_key: str) -> dict[str, Any]:
     """Default hyperparameter values for *model_key*."""
-    out: dict[str, Any] = {}
-    for spec in MODEL_PARAM_SPECS.get(str(model_key), []):
-        out[str(spec["key"])] = spec["default"]
-    return out
+    spec = MODELS_BY_KEY.get(str(model_key))
+    if spec is None:
+        return {}
+    return {str(param["key"]): param["default"] for param in spec.params}
 
 
 def param_specs_for_model(model_key: str) -> list[dict[str, Any]]:
     """Return UI parameter specs for *model_key* (may be empty)."""
-    return list(MODEL_PARAM_SPECS.get(str(model_key), []))
+    spec = MODELS_BY_KEY.get(str(model_key))
+    return [dict(param) for param in spec.params] if spec else []
 
 
 @dataclass(frozen=True)
@@ -401,112 +599,12 @@ def _make_model(
     model_key: str,
     params: dict[str, Any] | None = None,
 ) -> Any:
-    p = _merge_model_params(model_key, params)
-    if task == "regression":
-        if model_key == "ridge":
-            from sklearn.linear_model import Ridge
-
-            return Ridge(alpha=float(p["alpha"]))
-        if model_key == "lasso":
-            from sklearn.linear_model import Lasso
-
-            return Lasso(
-                alpha=float(p["alpha"]),
-                max_iter=int(p["max_iter"]),
-                random_state=42,
-            )
-        if model_key == "mlr":
-            from sklearn.linear_model import LinearRegression
-
-            return LinearRegression(fit_intercept=bool(p.get("fit_intercept", True)))
-        if model_key == "pls":
-            from sklearn.cross_decomposition import PLSRegression
-
-            # n_components is capped at fit time by n_samples / n_features.
-            return PLSRegression(n_components=int(p["n_components"]), scale=False)
-        if model_key == "knn":
-            from sklearn.neighbors import KNeighborsRegressor
-
-            return KNeighborsRegressor(
-                n_neighbors=int(p["n_neighbors"]),
-                weights=str(p.get("weights") or "distance"),
-                p=int(p.get("p", 2)),
-            )
-        if model_key == "svr":
-            from sklearn.svm import SVR
-
-            return SVR(
-                kernel=str(p.get("kernel") or "rbf"),
-                C=float(p["C"]),
-                epsilon=float(p["epsilon"]),
-                gamma=str(p.get("gamma") or "scale"),
-            )
-        if model_key == "random_forest":
-            from sklearn.ensemble import RandomForestRegressor
-
-            return RandomForestRegressor(
-                n_estimators=int(p["n_estimators"]),
-                max_depth=_rf_max_depth(p),
-                min_samples_leaf=int(p.get("min_samples_leaf", 1)),
-                random_state=42,
-                n_jobs=-1,
-            )
-        if model_key == "gradient_boosting":
-            from sklearn.ensemble import GradientBoostingRegressor
-
-            return GradientBoostingRegressor(
-                n_estimators=int(p["n_estimators"]),
-                learning_rate=float(p["learning_rate"]),
-                max_depth=int(p["max_depth"]),
-                random_state=42,
-            )
-        raise ValueError(f"Unknown regression model: {model_key}")
-    if model_key == "logistic":
-        from sklearn.linear_model import LogisticRegression
-
-        penalty = str(p.get("penalty") or "l2")
-        kwargs: dict[str, Any] = {
-            "C": float(p["C"]),
-            "max_iter": int(p["max_iter"]),
-            "random_state": 42,
-        }
-        if penalty == "none":
-            kwargs["penalty"] = None
-        elif penalty == "l1":
-            kwargs["penalty"] = "l1"
-            kwargs["solver"] = "saga"
-        else:
-            kwargs["penalty"] = "l2"
-        return LogisticRegression(**kwargs)
-    if model_key == "random_forest":
-        from sklearn.ensemble import RandomForestClassifier
-
-        return RandomForestClassifier(
-            n_estimators=int(p["n_estimators"]),
-            max_depth=_rf_max_depth(p),
-            min_samples_leaf=int(p.get("min_samples_leaf", 1)),
-            random_state=42,
-            n_jobs=-1,
-        )
-    if model_key == "gradient_boosting":
-        from sklearn.ensemble import GradientBoostingClassifier
-
-        return GradientBoostingClassifier(
-            n_estimators=int(p["n_estimators"]),
-            learning_rate=float(p["learning_rate"]),
-            max_depth=int(p["max_depth"]),
-            random_state=42,
-        )
-    if model_key == "svm":
-        from sklearn.svm import SVC
-
-        return SVC(
-            kernel=str(p.get("kernel") or "linear"),
-            C=float(p["C"]),
-            gamma=str(p.get("gamma") or "scale"),
-            random_state=42,
-        )
-    raise ValueError(f"Unknown classification model: {model_key}")
+    """Build an unfitted estimator for *model_key* from ``MODEL_SPECS``."""
+    spec = MODELS_BY_KEY.get(str(model_key))
+    build = spec.builders.get(task) if spec is not None else None
+    if build is None:
+        raise ValueError(f"Unknown {task} model: {model_key}")
+    return build(_merge_model_params(model_key, params))
 
 
 def _scale_fit(

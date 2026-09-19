@@ -23,10 +23,17 @@ import pandas as pd
 import pytest
 
 from molmanager.analysis.qsar_models import (
+    CLASSIFICATION_MODELS,
+    MODEL_PARAM_SPECS,
+    MODEL_SPECS,
+    MODELS_BY_KEY,
     REGRESSION_MODELS,
+    _make_model,
+    default_model_params,
     fit_qsar_model,
     infer_task_type,
     models_for_task,
+    param_specs_for_model,
     predict_qsar_rows,
 )
 
@@ -51,6 +58,48 @@ def test_regression_models_include_new_algorithms():
         "gradient_boosting",
     }
     assert set(REGRESSION_MODELS) == keys
+
+
+def test_model_specs_are_the_single_source_of_truth():
+    """The label, parameter and builder views must all derive from MODEL_SPECS."""
+    assert {spec.key for spec in MODEL_SPECS} == set(MODELS_BY_KEY)
+    assert len(MODELS_BY_KEY) == len(MODEL_SPECS), "duplicate model key in MODEL_SPECS"
+    assert set(MODEL_PARAM_SPECS) == set(MODELS_BY_KEY)
+    assert set(REGRESSION_MODELS) | set(CLASSIFICATION_MODELS) == set(MODELS_BY_KEY)
+
+    for spec in MODEL_SPECS:
+        assert spec.builders, f"{spec.key} declares no builder"
+        assert set(spec.builders) <= {"regression", "classification"}
+        param_keys = [str(param["key"]) for param in spec.params]
+        assert len(param_keys) == len(set(param_keys)), f"duplicate param key in {spec.key}"
+        for param in spec.params:
+            assert {"key", "label", "kind", "default"} <= set(param), spec.key
+            assert param["kind"] in {"float", "int", "choice", "bool"}, spec.key
+        assert set(default_model_params(spec.key)) == set(param_keys)
+        assert [s["key"] for s in param_specs_for_model(spec.key)] == param_keys
+
+
+def test_every_declared_model_is_buildable_for_its_task():
+    for task, table in (
+        ("regression", REGRESSION_MODELS),
+        ("classification", CLASSIFICATION_MODELS),
+    ):
+        for model_key in table:
+            estimator = _make_model(task, model_key)
+            assert hasattr(estimator, "fit"), f"{task}/{model_key} is not an estimator"
+
+
+def test_make_model_rejects_a_model_the_task_does_not_offer():
+    with pytest.raises(ValueError, match="Unknown regression model: logistic"):
+        _make_model("regression", "logistic")
+    with pytest.raises(ValueError, match="Unknown classification model: ridge"):
+        _make_model("classification", "ridge")
+
+
+def test_param_specs_are_copies_so_callers_cannot_mutate_the_registry():
+    specs = param_specs_for_model("ridge")
+    specs[0]["default"] = 999.0
+    assert param_specs_for_model("ridge")[0]["default"] == 1.0
 
 
 def _synthetic_regression_frame(n: int = 40, seed: int = 42) -> tuple[pd.DataFrame, list[int]]:
