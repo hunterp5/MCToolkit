@@ -18,12 +18,16 @@
 
 from __future__ import annotations
 
+import logging
+import weakref
 from collections.abc import Callable
 from typing import Any
 
 from PyQt5.QtWidgets import QWidget
 
 from .qt_widget_utils import qobject_is_deleted
+
+logger = logging.getLogger(__name__)
 
 
 def reuse_or_show_modeless_singleton(
@@ -77,17 +81,31 @@ def reuse_or_show_modeless_singleton(
     w = factory()
     setattr(host, attr_name, w)
 
-    def _on_destroyed(*_args, obj=w) -> None:
-        if qobject_is_deleted(host):
-            return
+    host_ref = weakref.ref(host)
+
+    def _on_destroyed(
+        *_args, obj=w, host_ref=host_ref, attr_name=attr_name, on_destroyed=on_destroyed
+    ) -> None:
+        """Forget the tracked widget, and never raise while doing it.
+
+        PyQt turns an exception escaping a slot into ``qFatal``, which aborts the process. This
+        slot runs at the worst possible moment: host, dialog, and this very closure form a
+        reference cycle, so the collector is what frees them, and destroying the host is what
+        emits ``destroyed`` in the first place. Holding the host weakly keeps it out of that
+        cycle, and binding the rest as defaults keeps them off closure cells the collector can
+        empty before this runs.
+        """
         try:
+            host = host_ref()
+            if host is None or qobject_is_deleted(host):
+                return
             if getattr(host, attr_name, None) is not obj:
                 return
             setattr(host, attr_name, None)
             if on_destroyed is not None:
                 on_destroyed()
-        except RuntimeError:
-            pass
+        except Exception:
+            logger.debug("Modeless singleton teardown slot failed", exc_info=True)
 
     w.destroyed.connect(_on_destroyed)
     if show:

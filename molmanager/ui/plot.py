@@ -44,7 +44,6 @@ from pathlib import Path
 
 from PyQt5.QtCore import QEvent, Qt, QTimer
 from PyQt5.QtWebChannel import QWebChannel
-from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -110,6 +109,7 @@ from .plot_shell_mixin import PlotShellMixin
 from .plot_size_controls import PlotSizeRangeControls
 from .plot_statistics_panel import PlotStatisticsPanel
 from .plot_style_mixin import PlotStyleMixin
+from .plot_web_surface import build_plot_web_view, no_web_surface
 
 
 class PlotWidget(
@@ -187,9 +187,8 @@ class PlotWidget(
         type_row.addWidget(self.plot_type_combo, 1)
         opts_root.addWidget(self._type_row_host)
 
-        self.web = QWebEngineView(self)
-        self.web.setMinimumHeight(420)
-        self.web.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.web = build_plot_web_view(self, minimum_height=420)
+        plot_surface = self.web if self.web is not None else no_web_surface(self)
 
         ctrl_wrap = QWidget(self)
         ctrl_root = QVBoxLayout(ctrl_wrap)
@@ -471,7 +470,7 @@ class PlotWidget(
             min_height=420,
         )
 
-        root.addWidget(self.web, 1)
+        root.addWidget(plot_surface, 1)
 
         self._footer_bar = QWidget(self)
         self._footer_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
@@ -508,10 +507,12 @@ class PlotWidget(
         self.setMinimumWidth(self.embedded_minimum_width())
 
         self._bridge = PlotBridge(self)
-        self._web_channel = QWebChannel(self.web.page())
-        self._web_channel.registerObject("chemBridge", self._bridge)
-        self.web.page().setWebChannel(self._web_channel)
-        self.web.loadFinished.connect(self._on_web_load_finished)
+        self._web_channel = None
+        if self.web is not None:
+            self._web_channel = QWebChannel(self.web.page())
+            self._web_channel.registerObject("chemBridge", self._bridge)
+            self.web.page().setWebChannel(self._web_channel)
+            self.web.loadFinished.connect(self._on_web_load_finished)
 
         self._plot_debounce = QTimer(self)
         self._plot_debounce.setSingleShot(True)

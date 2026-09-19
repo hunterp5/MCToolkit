@@ -82,6 +82,46 @@ def test_viewer_skips_webengine_under_offscreen(qapp, monkeypatch):  # noqa: ARG
         viewer.deleteLater()
 
 
+def test_interactive_plot_skips_webengine_under_offscreen(qapp, monkeypatch):  # noqa: ARG001
+    """The embedded plot must fall back instead of building a page the platform cannot host."""
+    from molmanager.ui.plotly_interactive_view import PlotlyInteractiveView
+
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    view = PlotlyInteractiveView()
+    try:
+        assert view.web is None
+        assert view._web_channel is None
+        assert view._web_ready is False
+    finally:
+        view.deleteLater()
+
+
+def test_no_module_scope_webengine_imports():
+    """WebEngine must only be imported inside functions, behind ``webengine_views_supported``.
+
+    A module-scope import settles WebEngine's initialization order for the whole process, which
+    decides whether a later unguarded view construction raises ``ImportError`` or aborts. That is
+    what let a plot widget kill the test suite from an unrelated test.
+    """
+    import ast
+    from pathlib import Path
+
+    import molmanager
+
+    package_root = Path(molmanager.__file__).parent
+    offenders: list[str] = []
+    for path in sorted(package_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Import, ast.ImportFrom)) or node.col_offset != 0:
+                continue
+            names = [alias.name for alias in node.names]
+            module = getattr(node, "module", None) or ""
+            if "QtWebEngine" in module or any("QtWebEngine" in name for name in names):
+                offenders.append(f"{path}:{node.lineno}")
+    assert offenders == [], f"import QtWebEngine inside a guarded function instead: {offenders}"
+
+
 def test_js_console_filters_shared_image_gpu_noise():
     assert _js_console_is_benign(
         "GL ERROR :GL_INVALID_OPERATION : DoEndSharedImageAccessCHROMIUM: "

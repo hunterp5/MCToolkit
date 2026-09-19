@@ -64,6 +64,8 @@ class PlotShellMixin:
         return mode in ("2D", "3D")
 
     def _load_plot_shell(self) -> None:
+        if self.web is None:
+            return
         from .plotly_shell import write_interactive_plot_shell
 
         write_interactive_plot_shell(self._plot_shell_path)
