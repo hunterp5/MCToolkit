@@ -21,11 +21,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from molmanager.ui.main_window.render_2d_mixin import Render2DMixin
+from molmanager.ui.table_build_render import TableBuildRender
 
 
-class _QueueHost(Render2DMixin):
+class _QueueHost(TableBuildRender):
     def __init__(self, *, running_title: str | None) -> None:
+        self._app = self
         self._render2d_batch_active = False
         self.process_queue = MagicMock()
         self._begin_calls: list[tuple] = []

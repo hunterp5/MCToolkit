@@ -14,22 +14,20 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Optional grouping (not a window base). Prep tools live on ``WorkspaceTools``."""
+"""Write x/y coordinates onto an RDKit 2D conformer."""
 
 from __future__ import annotations
 
-from ..table_build_render import TableBuildRender
-from .fast_prepare_tools_mixin import FastPrepareToolsMixin
-from .protonate_tools_mixin import ProtonateToolsMixin
-from .structure_edit_mixin import StructureEditMixin
-from .structure_writeback_mixin import StructureWritebackMixin
+from collections.abc import Sequence
 
 
-class PrepareStructuresMixin(
-    ProtonateToolsMixin,
-    FastPrepareToolsMixin,
-    StructureEditMixin,
-    TableBuildRender,
-    StructureWritebackMixin,
-):
-    """Compat grouping only. Render 2D is ``TableBuildPipeline``; prep tools are ``WorkspaceTools``."""
+def set_conformer_xy(conf, xs: Sequence[float], ys: Sequence[float]) -> bool:
+    """Set planar coordinates on *conf*. Returns False if RDKit Geometry is unavailable."""
+    try:
+        from rdkit.Geometry import Point3D
+    except ImportError:
+        return False
+    n = conf.GetNumAtoms()
+    for i in range(n):
+        conf.SetAtomPosition(i, Point3D(float(xs[i]), float(ys[i]), 0.0))
+    return True

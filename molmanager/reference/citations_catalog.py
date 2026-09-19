@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..app_identity import APP_DISPLAY_NAME
+
 # Official license texts (not restated in full here).
 LIC_GPL3 = ("GNU GPL v3", "https://www.gnu.org/licenses/gpl-3.0.html")
 LIC_GPL2 = ("GNU GPL v2", "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html")
@@ -33,7 +35,7 @@ LIC_PYTORCH = ("BSD-style (PyTorch)", "https://github.com/pytorch/pytorch/blob/m
 
 @dataclass(frozen=True)
 class ToolCitation:
-    """One external library, service, or method used by MolManager."""
+    """One external library, service, or method used by MCtoolkit."""
 
     tool_id: str
     name: str
@@ -80,12 +82,12 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
         (
             _t(
                 "molmanager",
-                "MolManager",
+                APP_DISPLAY_NAME,
                 "Desktop chemical table workspace (this program).",
                 (),
                 LIC_GPL3,
                 homepage="https://github.com/hunterp5/MolManager",
-                notes="Copyright © 2026 Hunter Picard. Full text in the LICENSE file shipped with MolManager.",
+                notes=f"Copyright © 2026 Hunter Picard. Full text in the LICENSE file shipped with {APP_DISPLAY_NAME}.",
             ),
         ),
     ),
@@ -257,7 +259,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 ),
                 LIC_MIT,
                 homepage="https://github.com/Xundrug/MolGpKa",
-                notes="See molmanager/resources/unipka/NOTICE.md. These files are third-party data, not MolManager GPL source.",
+                notes="See molmanager/resources/unipka/NOTICE.md. These files are third-party data, not MCtoolkit GPL source.",
             ),
             _t(
                 "fame3r",
@@ -296,7 +298,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     "GNU LGPL v3. Place the JAR plus database/ and supportfiles/ next to it "
                     "(or set MOLMANAGER_BIOTRANSFORMER_JAR). Commercial redistribution of "
                     "BioTransformer resources requires permission from the authors. Java must "
-                    "be on PATH. Environmental microbial predictions are not offered in MolManager."
+                    "be on PATH. Environmental microbial predictions are not offered in MCtoolkit."
                 ),
             ),
             _t(
@@ -340,7 +342,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 ),
                 LIC_GPL3,
                 homepage="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3368654/",
-                notes="Score implemented in MolManager (this GPL program) using RDKit descriptors plus Uni-pKa ionization.",
+                notes="Score implemented in MCtoolkit (this GPL program) using RDKit descriptors plus Uni-pKa ionization.",
             ),
             _t(
                 "esol",
@@ -354,7 +356,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Published ESOL model, implemented in MolManager (this GPL program).",
+                notes="Published ESOL model, implemented in MCtoolkit (this GPL program).",
             ),
             _t(
                 "qed",
@@ -397,7 +399,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Implemented in MolManager; ionization from Uni-pKa. Values ≤ 14 are often associated with higher oral/PK success in bRo5 space.",
+                notes="Implemented in MCtoolkit; ionization from Uni-pKa. Values ≤ 14 are often associated with higher oral/PK success in bRo5 space.",
             ),
             _t(
                 "pharm2d_gobbi",
@@ -430,7 +432,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 notes=(
                     "Feature families from RDKit BaseFeatures.fdef (Donor, Acceptor, Aromatic, "
                     "Hydrophobe, LumpedHydrophobe, PosIonizable, NegIonizable, ZnBinder). "
-                    "MolManager stores spheres as JSON. Docked poses are filtered in the "
+                    f"{APP_DISPLAY_NAME} stores spheres as JSON. Docked poses are filtered in the "
                     "protein frame (RDKit feature type + sphere radius). "
                     "Ensemble screening matches RDKit feature types and pairwise distances "
                     "(Exclusion volumes are skipped)."
@@ -462,7 +464,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 LIC_APACHE2,
                 homepage="https://github.com/gnina/gnina",
                 notes=(
-                    "After docking, MolManager keeps poses whose RDKit feature sites occupy "
+                    "After docking, MCtoolkit keeps poses whose RDKit feature sites occupy "
                     "the Protein Viewer pharmacophore spheres (protein coordinates). Gnina "
                     "--user_grid occupancy maps are not used."
                 ),
@@ -612,7 +614,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 homepage="https://github.com/chemosim-lab/ProLIF",
                 notes=(
                     "Optional docking extra (`pip install prolif`). Intramolecular protein and "
-                    "ligand hydrogen bonds still use MolManager's geometric detector. "
+                    "ligand hydrogen bonds still use MCtoolkit's geometric detector. "
                     "Protein–ligand H-bonds fall back to that detector when ProLIF is missing "
                     "or hydrogens are absent. Pose Browser overlays recompute ProLIF against "
                     "the receptor only (cached protein molecule; crystal ligand ignored)."
@@ -664,7 +666,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "som",
                 "Self-organizing map (Kohonen)",
-                "Data → Dimensionality Reduction → Self-Organizing Map (NumPy implementation in MolManager).",
+                "Data → Dimensionality Reduction → Self-Organizing Map (NumPy implementation in MCtoolkit).",
                 (
                     (
                         "Kohonen, T. Self-Organized Formation of Topologically Correct Feature Maps. "
@@ -673,7 +675,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Algorithm citation; the MolManager SOM code is part of this GPL program.",
+                notes="Algorithm citation; the MCtoolkit SOM code is part of this GPL program.",
             ),
             _t(
                 "plotly",
@@ -700,7 +702,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Region boundaries from the publication SI; descriptors via RDKit. Plot implemented in MolManager.",
+                notes="Region boundaries from the publication SI; descriptors via RDKit. Plot implemented in MCtoolkit.",
             ),
             _t(
                 "golden_triangle",
@@ -714,7 +716,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Plot implemented in MolManager (LogP −2 to 5, MW 200–450 Da, apex near 1.5 / 450).",
+                notes="Plot implemented in MCtoolkit (LogP −2 to 5, MW 200–450 Da, apex near 1.5 / 450).",
             ),
             _t(
                 "sali",
@@ -728,7 +730,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="SALI = |Δactivity| / (1 − similarity). Implemented in MolManager using RDKit fingerprints.",
+                notes="SALI = |Δactivity| / (1 − similarity). Implemented in MCtoolkit using RDKit fingerprints.",
             ),
         ),
     ),
@@ -958,7 +960,7 @@ def tool_citation_html_fragment(tool: ToolCitation) -> str:
         f"{papers_block}"
         f"<h3>License</h3>"
         f'<p>Licensing agreement: <a href="{tool.license_url}">{_escape(tool.license_name)}</a>. '
-        "MolManager links the official license rather than reproducing the full legal text here. "
+        f"{APP_DISPLAY_NAME} links the official license rather than reproducing the full legal text here. "
         "Install the upstream package or open the URL for the binding agreement.</p>"
         f"{home}{notes}"
     )

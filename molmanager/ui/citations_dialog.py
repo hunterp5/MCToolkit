@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Help → Citations: papers and licenses for tools used in MolManager."""
+"""Help → Citations: papers and licenses for tools used in MCtoolkit."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QTextBrowser,
 )
 
+from ..app_identity import window_title
 from ..reference.citations_catalog import (
     CITATION_SECTIONS,
     iter_tool_citations,
@@ -107,7 +108,7 @@ def open_citations_dialog(parent: QWidget | None, tool_id: str | None = None) ->
                 host._citations_dialog = None
 
     dlg = QDialog(parent)
-    dlg.setWindowTitle("MolManager — Citations")
+    dlg.setWindowTitle(window_title("Citations"))
     dlg.resize(900, 620)
     dlg.setModal(False)
     dlg.setWindowModality(Qt.NonModal)
@@ -163,9 +164,9 @@ def _show_citations_dialog(dlg: QDialog, tool_id: str) -> None:
         pal = dlg.palette() if QApplication.instance() is not None else None
         browser.setHtml(citation_html(tool_id, pal))
     if tool is not None:
-        dlg.setWindowTitle(f"MolManager — Citations: {tool.name}")
+        dlg.setWindowTitle(window_title(f"Citations: {tool.name}"))
     else:
-        dlg.setWindowTitle("MolManager — Citations")
+        dlg.setWindowTitle(window_title("Citations"))
     if lst is not None:
         for i in range(lst.count()):
             it = lst.item(i)

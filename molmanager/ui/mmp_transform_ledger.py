@@ -22,7 +22,7 @@ import logging
 from typing import Any
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
+from PySide6.QtGui import QColor, QImage, QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractScrollArea,
@@ -388,7 +388,7 @@ class MmpTransformLedgerDialog(QDialog):
         painter = QPainter(out)
         try:
             painter.drawPixmap(0, 0, left)
-            painter.setPen(self.palette().color(self.palette().WindowText))
+            painter.setPen(self.palette().color(QPalette.WindowText))
             painter.drawText(_FRAG_W, 0, _ARROW_W, _FRAG_H, Qt.AlignCenter, "→")
             painter.drawPixmap(_FRAG_W + _ARROW_W, 0, right)
         finally:

@@ -38,6 +38,7 @@ from typing import Any, Literal
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
+from ..app_identity import http_user_agent
 from ..chem.structure_2d_depiction import configure_mol_drawer, structure_cairo_dimensions
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ DEFAULT_THRESHOLD = 0.3
 DEFAULT_BATCH_SIZE = 10
 DEFAULT_POLL_INTERVAL_S = 2.0
 DEFAULT_JOB_TIMEOUT_S = 600.0
-_USER_AGENT = "MolManager/1.0 (FAME3R SOM; local desktop app)"
+_USER_AGENT = http_user_agent("FAME3R SOM")
 SOM_CANCELLED_ERROR = "Cancelled."
 
 MetabolismSubset = Literal["all", "phase1", "phase2", "cyp"]

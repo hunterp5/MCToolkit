@@ -18,16 +18,16 @@
 
 from __future__ import annotations
 
-from .ingest_load_mixin import IngestLoadMixin
-from .render2d_results_mixin import Render2DResultsMixin
-from .sqlite_rebuild_mixin import SqliteRebuildMixin
-from .structure_layout_mixin import StructureLayoutMixin
+from ..table_build_ingest import TableBuildIngest
+from ..table_build_layout import TableBuildLayout
+from ..table_build_render_results import TableBuildRenderResults
+from ..table_build_sqlite import TableBuildSqlite
 
 
 class IngestRenderMixin(
-    IngestLoadMixin,
-    SqliteRebuildMixin,
-    StructureLayoutMixin,
-    Render2DResultsMixin,
+    TableBuildIngest,
+    TableBuildSqlite,
+    TableBuildLayout,
+    TableBuildRenderResults,
 ):
     """Optional grouping. ``ChemistryWorkspaceWindow`` uses ``TableBuildPipeline`` instead of this MRO composite."""

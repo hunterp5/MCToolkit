@@ -1,6 +1,6 @@
-# MolManager
+# MCtoolkit
 
-MolManager is a desktop application for working with chemical structures in a spreadsheet-style table. You can open SDF, SMILES, and CSV files; draw structures; calculate descriptors; cluster compounds; dock ligands; and more. It is built with **Python**, **PySide6**, and **RDKit**.
+MCtoolkit is a desktop application for working with chemical structures in a spreadsheet-style table. You can open SDF, SMILES, and CSV files; draw structures; calculate descriptors; cluster compounds; dock ligands; and more. It is built with **Python**, **PySide6**, and **RDKit**. The importable Python package is still named ``molmanager``; after ``pip install -e .`` you can launch with ``mctoolkit`` or ``python -m molmanager``.
 
 This guide walks you through installation from scratch. It assumes you are new to Python and the command line. Follow the steps in order for your operating system.
 
@@ -11,9 +11,9 @@ This guide walks you through installation from scratch. It assumes you are new t
 | Requirement | Details |
 |-------------|---------|
 | **Computer** | Windows 10 or later, macOS 10.15+, or a recent Linux distribution |
-| **Internet** | Required to download Python, MolManager, and dependencies |
+| **Internet** | Required to download Python, MCtoolkit, and dependencies |
 | **Disk space** | About 1–2 GB for a basic install; more if you add optional machine-learning tools (pKa prediction, permeability models) |
-| **Python** | Version **3.10**, **3.11**, or **3.12** (**3.11 is recommended**). Do **not** use 3.13 or newer — MolManager pins NumPy 1.x (PyTorch 2.5 / UMAP), and NumPy 1.26 has no Windows wheels for those versions, so pip tries to compile NumPy and fails without Visual Studio |
+| **Python** | Version **3.10**, **3.11**, or **3.12** (**3.11 is recommended**). Do **not** use 3.13 or newer — MCtoolkit pins NumPy 1.x (PyTorch 2.5 / UMAP), and NumPy 1.26 has no Windows wheels for those versions, so pip tries to compile NumPy and fails without Visual Studio |
 
 You do **not** need to know how to program. You will copy and paste a few commands into a terminal window.
 
@@ -21,7 +21,7 @@ You do **not** need to know how to program. You will copy and paste a few comman
 
 ## Part 1 — Install Python
 
-Python is the language MolManager is written in. You need it installed before anything else.
+Python is the language MCtoolkit is written in. You need it installed before anything else.
 
 ### Windows
 
@@ -77,17 +77,17 @@ python3 --version
 
 ---
 
-## Part 2 — Download MolManager
+## Part 2 — Download MCtoolkit
 
-You need a copy of the MolManager project on your computer.
+You need a copy of the MCtoolkit project on your computer.
 
 ### Option A — Download as a ZIP (simplest)
 
-1. Go to the MolManager repository on GitHub.
+1. Go to the MCtoolkit repository on GitHub.
 2. Click the green **Code** button, then **Download ZIP**.
 3. Extract the ZIP to a folder you will remember, for example:
-   - Windows: `C:\Users\YourName\Documents\MolManager`
-   - macOS/Linux: `~/Documents/MolManager`
+   - Windows: `C:\Users\YourName\Documents\MCtoolkit`
+   - macOS/Linux: `~/Documents/MCtoolkit`
 
 ### Option B — Clone with Git (if you use Git)
 
@@ -96,11 +96,11 @@ git clone https://github.com/hunterp5/MolManager.git
 cd MolManager
 ```
 
-All remaining steps assume your terminal is **inside the MolManager folder** (the folder that contains `README.md`, `requirements.txt`, and the `molmanager` subfolder).
+All remaining steps assume your terminal is **inside the MCtoolkit folder** (the folder that contains `README.md`, `requirements.txt`, and the `molmanager` subfolder).
 
 **Windows — open a terminal in that folder**
 
-1. Open File Explorer and navigate to the MolManager folder.
+1. Open File Explorer and navigate to the MCtoolkit folder.
 2. Click the address bar, type `powershell`, and press **Enter**.
 
    A PowerShell window opens already pointed at the right folder.
@@ -108,7 +108,7 @@ All remaining steps assume your terminal is **inside the MolManager folder** (th
 **macOS / Linux**
 
 ```bash
-cd ~/Documents/MolManager
+cd ~/Documents/MCtoolkit
 ```
 
 (replace the path with wherever you extracted or cloned the project)
@@ -117,15 +117,15 @@ cd ~/Documents/MolManager
 
 ## Part 3 — What is a virtual environment?
 
-Before installing MolManager, you will create a **Python virtual environment** (often called a **venv**).
+Before installing MCtoolkit, you will create a **Python virtual environment** (often called a **venv**).
 
 Think of it as a private toolbox for this one application:
 
-- All of MolManager’s dependencies are installed **inside** that toolbox.
+- All of MCtoolkit’s dependencies are installed **inside** that toolbox.
 - They do not mix with other Python programs on your computer.
 - You can delete the toolbox (the `.venv` folder) without affecting anything else.
 
-You will create the venv once, activate it whenever you work with MolManager, and install packages into it. The folder is named `.venv` and lives inside the MolManager project directory.
+You will create the venv once, activate it whenever you work with MCtoolkit, and install packages into it. The folder is named `.venv` and lives inside the MCtoolkit project directory.
 
 ---
 
@@ -157,7 +157,7 @@ This creates a `.venv` folder. It may take a minute. You only need to run this c
 
 ## Part 5 — Activate the virtual environment
 
-You must **activate** the venv every time you open a **new** terminal window before installing or running MolManager. Activation tells the terminal to use the Python inside `.venv`.
+You must **activate** the venv every time you open a **new** terminal window before installing or running MCtoolkit. Activation tells the terminal to use the Python inside `.venv`.
 
 ### Windows (PowerShell)
 
@@ -176,7 +176,7 @@ Then try activating again.
 **Success looks like this:** your prompt starts with `(.venv)`, for example:
 
 ```text
-(.venv) PS C:\Users\You\Documents\MolManager>
+(.venv) PS C:\Users\You\Documents\MCtoolkit>
 ```
 
 ### Windows (Command Prompt)
@@ -193,13 +193,13 @@ source .venv/bin/activate
 
 Your prompt should show `(.venv)` at the beginning.
 
-> **Remember:** If you close the terminal or open a new one later, run the activate command again before starting MolManager.
+> **Remember:** If you close the terminal or open a new one later, run the activate command again before starting MCtoolkit.
 
 ---
 
-## Part 6 — Install MolManager and its dependencies
+## Part 6 — Install MCtoolkit and its dependencies
 
-With the virtual environment **active** (`(.venv)` visible in your prompt), run these commands **in order** from the MolManager project folder.
+With the virtual environment **active** (`(.venv)` visible in your prompt), run these commands **in order** from the MCtoolkit project folder.
 
 ### Step 6a — Upgrade pip
 
@@ -233,9 +233,9 @@ pip install -r requirements.txt
 
 See [docs/PACKAGING.md](docs/PACKAGING.md) for install profiles and release versioning.
 
-### Step 6c — Register the MolManager application
+### Step 6c — Register the MCtoolkit application
 
-This step installs the MolManager program itself so you can launch it with `python -m molmanager`:
+This step installs the MCtoolkit program itself so you can launch it with `mctoolkit` or `python -m molmanager`:
 
 ```bash
 pip install -e .
@@ -261,26 +261,27 @@ The `-e` means “editable”: if you update the source code later, you do not n
 bash scripts/install_pytorch_pka.sh
 ```
 
-Restart MolManager after this step. The guided optional-setup script (`bootstrap_optional_tools`) also runs this automatically.
+Restart MCtoolkit after this step. The guided optional-setup script (`bootstrap_optional_tools`) also runs this automatically.
 
 ---
 
-## Part 7 — Start MolManager
+## Part 7 — Start MCtoolkit
 
 Make sure the virtual environment is still active (`(.venv)` in your prompt), then run:
 
 ```bash
-python -m molmanager
+mctoolkit
+# or: python -m molmanager
 ```
 
-The MolManager window should open. Use **File → Open File** to load an SDF, SMILES, or CSV file.
+The MCtoolkit window should open. Use **File → Open File** to load an SDF, SMILES, or CSV file.
 
-### Starting MolManager later (after you closed the terminal)
+### Starting MCtoolkit later (after you closed the terminal)
 
-Every time you want to use MolManager:
+Every time you want to use MCtoolkit:
 
 1. Open PowerShell or Terminal.
-2. Go to the MolManager folder (`cd` to the project directory).
+2. Go to the MCtoolkit folder (`cd` to the project directory).
 3. Activate the venv (Part 5).
 4. Run `python -m molmanager`.
 
@@ -318,7 +319,7 @@ Distance-geometry ensembles remain **Tools → Conformations → Generate → St
 
 **Tools → Conformations → Generate → CONFORGE…** uses CONFORGE from [CDPKit](https://cdpkit.org).
 
-On **Windows with Python 3.11**, `pip install cdpkit` (and `pip install -e ".[conforge]"`) will try to compile from source and fail — PyPI has wheels for Windows 3.10/3.12/3.14, not 3.11. Install the CDPKit **MSVC** package from [GitHub Releases](https://github.com/molinfo-vienna/CDPKit/releases), then Browse to `confgen.exe` (usually `C:\Program Files\CDPKit\Bin\confgen.exe`) or add that `Bin` folder to PATH. MolManager also looks in `Program Files\CDPKit\Bin` automatically.
+On **Windows with Python 3.11**, `pip install cdpkit` (and `pip install -e ".[conforge]"`) will try to compile from source and fail — PyPI has wheels for Windows 3.10/3.12/3.14, not 3.11. Install the CDPKit **MSVC** package from [GitHub Releases](https://github.com/molinfo-vienna/CDPKit/releases), then Browse to `confgen.exe` (usually `C:\Program Files\CDPKit\Bin\confgen.exe`) or add that `Bin` folder to PATH. MCtoolkit also looks in `Program Files\CDPKit\Bin` automatically.
 
 On **Linux/macOS**, `pip install cdpkit` uses a wheel when one exists for your Python version. You can still use a `confgen` binary from PATH, `resources/bin/<platform>/`, or Browse.
 
@@ -376,13 +377,13 @@ Then activate the venv again.
 
 ### NumPy Meson / “Unknown compiler” / `vswhere.exe` (Windows)
 
-Pip is trying to **compile** NumPy from source. That happens when the venv is Python **3.13 or 3.14**: MolManager pins **NumPy 1.x** (PyTorch 2.5 / UMAP), and NumPy 1.26 has no pre-built Windows wheels for 3.13+.
+Pip is trying to **compile** NumPy from source. That happens when the venv is Python **3.13 or 3.14**: MCtoolkit pins **NumPy 1.x** (PyTorch 2.5 / UMAP), and NumPy 1.26 has no pre-built Windows wheels for 3.13+.
 
 Do **not** install Visual Studio to “fix” this. Recreate the venv with Python 3.11:
 
 1. Check the version: `python --version` (or `py -0p` to list installs).
 2. Install [Python 3.11](https://www.python.org/downloads/release/python-3119/) if needed (check **Add python.exe to PATH**).
-3. From the MolManager folder, delete `.venv`, then:
+3. From the MCtoolkit folder, delete `.venv`, then:
 
 ```powershell
 py -3.11 -m venv .venv
@@ -394,7 +395,7 @@ pip install -e .
 
 ### RDKit or NumPy errors (`_ARRAY_API`, import failures)
 
-MolManager needs the official **`rdkit`** package (**2025.9 or newer**), not the obsolete **`rdkit-pypi`** name (last release 2022.9.5). Both install into the same `rdkit` import path, so an old `rdkit-pypi` copy will shadow newer wheels — `import rdkit` then reports 2022.x even if `pip show rdkit` lists 2026.
+MCtoolkit needs the official **`rdkit`** package (**2025.9 or newer**), not the obsolete **`rdkit-pypi`** name (last release 2022.9.5). Both install into the same `rdkit` import path, so an old `rdkit-pypi` copy will shadow newer wheels — `import rdkit` then reports 2022.x even if `pip show rdkit` lists 2026.
 
 Use this project's **`.venv`**, not a global conda/base Python that has other chemistry tools. Then:
 
@@ -403,13 +404,13 @@ pip uninstall rdkit-pypi
 pip install -r requirements.txt --force-reinstall
 ```
 
-MolManager still pins **NumPy 1.x** because PyTorch 2.5 and UMAP/Numba are more reliable on 1.26 than on NumPy 2. That is independent of RDKit (2025.9+ supports NumPy 2).
+MCtoolkit still pins **NumPy 1.x** because PyTorch 2.5 and UMAP/Numba are more reliable on 1.26 than on NumPy 2. That is independent of RDKit (2025.9+ supports NumPy 2).
 
 If wheels still fail on your system, use **conda** for RDKit and pip for the rest:
 
 ```bash
-conda create -n molmanager python=3.11
-conda activate molmanager
+conda create -n mctoolkit python=3.11
+conda activate mctoolkit
 conda install -c conda-forge "rdkit>=2025.09.1" pyside6
 pip install -r requirements.txt
 pip install -e .
@@ -429,11 +430,11 @@ pip install -e .
 
 ### pKa / PyTorch conflicts
 
-Use **one** environment only. Run `scripts\install_pytorch_pka.ps1` or `bash scripts/install_pytorch_pka.sh` in the same venv where MolManager is installed (CUDA is selected automatically when `nvidia-smi` sees a GPU). Do not install **admet-ai** in that environment.
+Use **one** environment only. Run `scripts\install_pytorch_pka.ps1` or `bash scripts/install_pytorch_pka.sh` in the same venv where MCtoolkit is installed (CUDA is selected automatically when `nvidia-smi` sees a GPU). Do not install **admet-ai** in that environment.
 
 ### Apple Silicon (M1/M2/M3 Mac)
 
-Core MolManager runs natively. If pKa fails on Apple Silicon, run `bash scripts/install_pytorch_pka.sh` to reinstall the CPU PyTorch stack from `requirements.txt`.
+Core MCtoolkit runs natively. If pKa fails on Apple Silicon, run `bash scripts/install_pytorch_pka.sh` to reinstall the CPU PyTorch stack from `requirements.txt`.
 
 ---
 
@@ -500,7 +501,7 @@ Optional settings for power users and IT deployments:
 | `MOLMANAGER_PG_CONNECT_TIMEOUT` | PostgreSQL connect timeout seconds (default `30`) |
 | `MOLMANAGER_SQLITE_BACKEND_PAGE_SIZE` | SQLite cache page size for filters (default `5000`) |
 | `MOLMANAGER_DISABLE_CUSTOM_CALC` | Set to `1` / `true` to disable Tools → Custom Calculator |
-| `MOLMANAGER_LOG_DIR` | Directory for rotating `molmanager.log` (platform default under user app data / state) |
+| `MOLMANAGER_LOG_DIR` | Directory for rotating `mctoolkit.log` (platform default under user app data / state) |
 | `MOLMANAGER_LOG_TO_FILE` | Set to `0` / `false` to disable file logging (console only) |
 | `MOLMANAGER_BUNDLE_DIR` | Folder containing optional `gnina` / `vina` binaries |
 | `MOLMANAGER_BIOTRANSFORMER_JAR` | Path to the BioTransformer JAR (`btkb/` or `database/`, and `supportfiles/`, must be siblings of the JAR) |
@@ -509,7 +510,7 @@ Optional settings for power users and IT deployments:
 
 **Legacy env aliases:** `CHEMMANAGER_*` variables are still mapped to `MOLMANAGER_*` when the new name is unset, with a deprecation warning. Prefer `MOLMANAGER_*` only.
 
-**Logs:** MolManager writes a rotating log file (default on) and shows the path in the crash dialog on uncaught exceptions.
+**Logs:** MCtoolkit writes a rotating log file (default on) and shows the path in the crash dialog on uncaught exceptions.
 **SQL URLs in logs:** at `DEBUG`, connection URLs are logged with credentials redacted.
 
 ---
@@ -571,7 +572,7 @@ python scripts/benchmark_pka.py samples/fda_approved_physprops_v2.sdf --limit 32
 
 ## Stereochemistry and structures
 
-MolManager (RDKit + the 2D sketcher) handles **tetrahedral** stereo and **alkene E/Z** from 2D layout. It does not automatically enumerate tautomers or atropisomers. See `docs/STEREO_AND_ISOMERISM.md` and `docs/VALENCE_BONDS_AND_AROMATICITY.md` before changing structure-related code.
+MCtoolkit (RDKit + the 2D sketcher) handles **tetrahedral** stereo and **alkene E/Z** from 2D layout. It does not automatically enumerate tautomers or atropisomers. See `docs/STEREO_AND_ISOMERISM.md` and `docs/VALENCE_BONDS_AND_AROMATICITY.md` before changing structure-related code.
 
 ---
 
@@ -579,7 +580,7 @@ MolManager (RDKit + the 2D sketcher) handles **tetrahedral** stereo and **alkene
 
 Copyright (C) 2026 Hunter Picard
 
-MolManager is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+MCtoolkit is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 

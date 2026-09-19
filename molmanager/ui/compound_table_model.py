@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from PySide6.QtCore import QAbstractItemModel, QAbstractTableModel, QModelIndex, QSize, Qt
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSize, Qt
 from PySide6.QtGui import QColor, QPixmap
 
 from ..table.column_color_compute import ColumnColorRule
@@ -647,9 +647,11 @@ class CompoundTableModel(
         else:
             key = key_auto
 
-        self.layoutAboutToBeChanged.emit([], QAbstractItemModel.VerticalSortHint)
+        # PySide6's default overloads take no args; the QList+hint form needs an
+        # explicit C++ signature key. No-arg still refreshes the view after sort.
+        self.layoutAboutToBeChanged.emit()
         self._rows.sort(key=key, reverse=rev)
-        self.layoutChanged.emit([], QAbstractItemModel.VerticalSortHint)
+        self.layoutChanged.emit()
         self._rebuild_oid_index()
 
     def all_oids_in_order(self) -> list[int]:

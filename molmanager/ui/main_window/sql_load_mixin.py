@@ -28,7 +28,7 @@ from contextlib import nullcontext
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-
+from ...app_identity import APP_DISPLAY_NAME
 from ...platform_support.config import load_config
 from ...storage import load_mols_from_parse_result
 from ...services.sql_load_policy import engine_kwargs_for_sql_load, sql_looks_destructive
@@ -96,7 +96,7 @@ class SqlLoadMixin:
                 self,
                 "Destructive SQL",
                 "This SQL looks like it may modify the database (INSERT/UPDATE/DELETE/DROP/…). "
-                "MolManager is meant for loading query results into the table.\n\n"
+                f"{APP_DISPLAY_NAME} is meant for loading query results into the table.\n\n"
                 "Continue and run this statement anyway?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,

@@ -55,3 +55,19 @@ def test_layout_tile_emits_chosen(qapp):
     tile.chosen.connect(chosen.append)
     tile.chosen.emit("table_only")
     assert chosen == ["table_only"]
+
+
+def test_layout_tile_paint_uses_qpalette_color_roles(qapp):  # noqa: ARG001
+    """PySide6 palettes have no instance attributes like ``Mid``; painting must use QPalette roles."""
+    from PySide6.QtCore import QSize
+
+    tile = LayoutPreviewTile("table_stack", "Table + stacked plots", selected=True)
+    tile.resize(QSize(220, 180))
+    pix = tile.grab()
+    assert not pix.isNull()
+    assert pix.width() > 0
+    dlg = WorkspaceLayoutPickerDialog(None, current_layout_id=LAYOUT_TABLE_STACK)
+    dlg.resize(680, 420)
+    shot = dlg.grab()
+    assert not shot.isNull()
+    dlg.close()

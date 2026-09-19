@@ -21,11 +21,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from PySide6.QtCore import QSettings
 from PySide6.QtGui import QKeySequence, QAction
 
-_SETTINGS_ORG = "MolManager"
-_SETTINGS_APP = "MolManager"
+from ..app_identity import qt_settings
+
 _SETTINGS_KEY_HOTKEYS = "gui/hotkeys"
 
 
@@ -52,8 +51,8 @@ HOTKEY_SPECS: tuple[HotkeySpec, ...] = (
     HotkeySpec("edit.invert_selection", "Invert Selection", "Edit", ()),
     HotkeySpec("edit.clear_selection", "Clear Selection", "Edit", ("Ctrl+Shift+D",)),
     HotkeySpec("edit.clear_table", "Clear Table…", "Edit", ("Ctrl+Shift+Backspace",)),
-    HotkeySpec("tools.search", "Search…", "Tools", ("Ctrl+F",)),
-    HotkeySpec("tools.toggle_filter_panel", "Toggle Filter Panel", "Tools", ("Ctrl+Shift+L",)),
+    HotkeySpec("tools.search", "Search…", "Data", ("Ctrl+F",)),
+    HotkeySpec("tools.toggle_filter_panel", "Toggle Filter Panel", "Data", ("Ctrl+Shift+L",)),
     HotkeySpec("tools.calculate_descriptors", "Calculate Descriptors…", "Tools", ()),
     HotkeySpec("tools.sketcher", "Sketcher…", "Tools", ()),
     HotkeySpec("tools.calculator", "Calculator…", "Tools", ()),
@@ -82,7 +81,7 @@ def default_shortcuts(action_id: str) -> list[str]:
 
 def load_hotkey_overrides() -> dict[str, list[str]]:
     """User overrides: action_id → shortcut strings (empty list = explicitly unbound)."""
-    raw = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SETTINGS_KEY_HOTKEYS, "")
+    raw = qt_settings().value(_SETTINGS_KEY_HOTKEYS, "")
     if not raw:
         return {}
     try:
@@ -109,14 +108,14 @@ def save_hotkey_overrides(overrides: dict[str, list[str]]) -> None:
     for spec in HOTKEY_SPECS:
         if spec.action_id in overrides:
             payload[spec.action_id] = overrides[spec.action_id]
-    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(
+    qt_settings().setValue(
         _SETTINGS_KEY_HOTKEYS,
         json.dumps(payload),
     )
 
 
 def clear_hotkey_overrides() -> None:
-    QSettings(_SETTINGS_ORG, _SETTINGS_APP).remove(_SETTINGS_KEY_HOTKEYS)
+    qt_settings().remove(_SETTINGS_KEY_HOTKEYS)
 
 
 def _normalize_shortcut_list(raw: list[str]) -> list[str]:

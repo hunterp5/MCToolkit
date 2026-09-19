@@ -30,6 +30,7 @@ from typing import Any, Callable
 from rdkit import Chem
 from rdkit.Chem import Lipinski, rdMolDescriptors
 
+from ..app_identity import http_user_agent
 from .chembl_random_compounds import RandomChemblMolecule, fetch_random_chembl_molecules
 
 SOURCE_CHEMBL = "chembl"
@@ -51,7 +52,7 @@ _SOURCE_ALIASES = {
     "zinc22": SOURCE_ZINC,
 }
 
-_USER_AGENT = "MolManager/1.0 (random molecule sample; local desktop app)"
+_USER_AGENT = http_user_agent("random molecule sample")
 _EUTILS_ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 _PUG_CID_PROPERTY = (
     "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cids}/property/"

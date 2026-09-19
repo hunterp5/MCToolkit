@@ -66,6 +66,23 @@ def test_on_table_data_changed_ignores_structure_paint(qapp):  # noqa: ARG001
     assert host.n == 1
 
 
+def test_on_table_header_data_changed_accepts_orientation_enum(qapp):  # noqa: ARG001
+    from PySide6.QtCore import Qt
+
+    class _Host:
+        def __init__(self) -> None:
+            self.n = 0
+
+        def refresh_axis_columns(self) -> None:
+            self.n += 1
+
+    host = _Host()
+    PlotWidget._on_table_header_data_changed(host, Qt.Horizontal, 0, 0)
+    assert host.n == 1
+    PlotWidget._on_table_header_data_changed(host, Qt.Vertical, 0, 0)
+    assert host.n == 1
+
+
 def test_set_axis_combo_items_optional_none(qapp):
     combo = QComboBox()
     PlotWidget._set_axis_combo_items(combo, ["MW", "LogP"], previous=AXIS_NONE, allow_none=True)

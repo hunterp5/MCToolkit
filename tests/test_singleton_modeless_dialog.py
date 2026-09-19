@@ -20,10 +20,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from molmanager.ui.singleton_modeless_dialog import reuse_or_show_modeless_singleton
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget
-
-from molmanager.ui.singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 _MAIN_WINDOW = Path(__file__).resolve().parents[1] / "molmanager" / "ui" / "main_window"
 
@@ -247,10 +246,15 @@ def test_dimension_reduction_singleton_attrs_match_session_bookkeeping() -> None
 
     derived = {f"_{kind}_dialog" for kind in DIMRED_FLOATING_DIALOGS}
     assert derived == {"_pca_dialog", "_tsne_dialog", "_umap_dialog", "_som_dialog"}
-    for name in ("session_plots_mixin.py", "plot_tools_mixin.py"):
-        text = (_MAIN_WINDOW / name).read_text(encoding="utf-8")
+    ui = Path(__file__).resolve().parents[1] / "molmanager" / "ui"
+    paths = (
+        ui / "session_plots.py",
+        ui / "main_window" / "plot_tools_mixin.py",
+    )
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
         for attr in sorted(derived):
-            assert f'"{attr}"' in text, f"{name} no longer tracks {attr}"
+            assert f'"{attr}"' in text, f"{path.name} no longer tracks {attr}"
 
 
 def test_helper_call_sites_omit_boilerplate_clearers() -> None:

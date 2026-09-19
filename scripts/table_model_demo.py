@@ -44,7 +44,7 @@ def run_table_model_demo() -> int:
         model.append_row(oid=100 + i, cells={"SMILES": smi, "MW": str(50 + i * 13)})
 
     w = QMainWindow()
-    w.setWindowTitle("MolManager — QAbstractTableModel prototype")
+    w.setWindowTitle("MCtoolkit — QAbstractTableModel prototype")
     cw = QWidget()
     ly = QVBoxLayout(cw)
     view = CompoundTableView()

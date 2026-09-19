@@ -28,27 +28,36 @@ import time
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
-from ...conformers.conformer_column_codec import serialize_confs_sidecar
-from ...ionization.microstate_cache import serialize_ionization_sidecar
-from ...services.filter_config import cfg_column
-from ...table.session_codec import (
+from ..app_identity import (
+    SESSION_INVALID_MESSAGE,
+    SESSION_OPEN_FILTER,
+    SESSION_SAVE_FILTER,
+    SESSION_TEMP_DIR_NAME,
+)
+from ..analysis.mmp_session import serialize_mmp_ledger_payload
+from ..chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
+from ..conformers.conformer_column_codec import serialize_confs_sidecar
+from ..docking.pose_file_io import serialize_dock_results_payload
+from ..ionization.microstate_cache import serialize_ionization_sidecar
+from ..services.filter_config import cfg_column
+from ..storage import EnsembleStore
+from ..table.session_codec import (
+    SESSION_ENSEMBLES_KEY,
     compact_global_bounds,
     compact_session_document,
     dumps_session_document,
     encode_mol_blob_b64,
     expand_session_document,
     loads_session_bytes,
-    SESSION_ENSEMBLES_KEY,
     session_format_ok,
     session_version_ok,
 )
-from ...chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
-from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
+from .widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
 
 logger = logging.getLogger(__name__)
 
 
-class SessionSaveMixin:
+class SessionSave:
     def _session_format_ok(self, fmt: object) -> bool:
         return session_format_ok(fmt)
 
@@ -56,37 +65,38 @@ class SessionSaveMixin:
         return session_version_ok(version)
 
     def new_session(self) -> None:
-        """Launch a new MolManager instance with nothing loaded."""
+        """Launch a new instance of the app with nothing loaded."""
+        # Keep ``python -m molmanager``; only the window chrome is MCtoolkit.
         try:
             subprocess.Popen([sys.executable, "-m", "molmanager"], close_fds=True)
         except Exception as e:
-            QMessageBox.warning(self, "New Session", str(e))
+            QMessageBox.warning(self._app, "New Session", str(e))
 
     def duplicate_session(self) -> None:
-        """Launch a new MolManager instance with the current table state."""
+        """Launch a new instance of the app with the current table state."""
         try:
             path = self._write_session_bundle_file()
             subprocess.Popen(
                 [sys.executable, "-m", "molmanager", "--load-session", path], close_fds=True
             )
         except Exception as e:
-            QMessageBox.warning(self, "Duplicate Session", str(e))
+            QMessageBox.warning(self._app, "Duplicate Session", str(e))
 
     def _write_session_csv(self) -> str:
         """Serialize current table to a session CSV (includes all columns except Structure image)."""
-        if not self.headers or self._table_model.rowCount() == 0:
+        if not self._app.headers or self._app._table_model.rowCount() == 0:
             # Still create an empty session file.
             heads = ["SMILES"]
         else:
             # Ensure SMILES is first for readability.
-            heads = [h for h in self.headers if h not in ("ID_HIDDEN", "Structure")]
+            heads = [h for h in self._app.headers if h not in ("ID_HIDDEN", "Structure")]
             if "SMILES" in heads:
                 heads.remove("SMILES")
                 heads.insert(0, "SMILES")
             else:
                 heads.insert(0, "SMILES")
 
-        session_dir = os.path.join(tempfile.gettempdir(), "MolManagerSessions")
+        session_dir = os.path.join(tempfile.gettempdir(), SESSION_TEMP_DIR_NAME)
         os.makedirs(session_dir, exist_ok=True)
         fname = f"session_{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}.csv"
         out_path = os.path.join(session_dir, fname)
@@ -96,16 +106,16 @@ class SessionSaveMixin:
         with open(out_path, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=heads)
             w.writeheader()
-            for r in range(self._table_model.rowCount()):
+            for r in range(self._app._table_model.rowCount()):
                 row: dict[str, str] = {}
                 # Prefer existing SMILES cell; fall back to RDKit mol if present.
                 smi = ""
-                if "SMILES" in self.headers:
-                    smi = self._table_cell_text(r, self.headers.index("SMILES"))
+                if "SMILES" in self._app.headers:
+                    smi = self._app.cell_text(r, self._app.headers.index("SMILES"))
                 if not smi:
-                    idr = self._table_model.cell_text(r, 0)
+                    idr = self._app._table_model.cell_text(r, 0)
                     if idr.isdigit():
-                        mol = self._mol_for_structure_row(r)
+                        mol = self._app._mol_for_structure_row(r)
                         if mol is not None:
                             smi = mol_to_canonical_smiles(mol)
                 row["SMILES"] = smi
@@ -113,8 +123,8 @@ class SessionSaveMixin:
                 for h in heads:
                     if h == "SMILES":
                         continue
-                    if h in self.headers:
-                        row[h] = self._export_cell_text(r, self.headers.index(h))
+                    if h in self._app.headers:
+                        row[h] = self._app._export_cell_text(r, self._app.headers.index(h))
                     else:
                         row[h] = ""
                 w.writerow(row)
@@ -123,7 +133,7 @@ class SessionSaveMixin:
 
     def _write_session_bundle_file(self) -> str:
         """Write a full session bundle (.cms JSON) under the temp session directory."""
-        session_dir = os.path.join(tempfile.gettempdir(), "MolManagerSessions")
+        session_dir = os.path.join(tempfile.gettempdir(), SESSION_TEMP_DIR_NAME)
         os.makedirs(session_dir, exist_ok=True)
         fname = f"session_{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}.cms"
         out_path = os.path.join(session_dir, fname)
@@ -132,13 +142,13 @@ class SessionSaveMixin:
         return out_path
 
     def _build_session_document(self, *, oids: set[int] | None = None) -> dict:
-        hh = self.table.horizontalHeader()
-        n = self._table_model.columnCount()
+        hh = self._app.table.horizontalHeader()
+        n = self._app._table_model.columnCount()
         logical_order = sorted(range(n), key=lambda lg: hh.visualIndex(lg)) if n else []
         sort_col = None
         sort_asc = True
         sort_mode = None
-        ss = getattr(self, "_session_sort", None)
+        ss = getattr(self._app, "_session_sort", None)
         if isinstance(ss, dict) and ss.get("column") is not None:
             sc = ss["column"]
             if isinstance(sc, int) and 0 <= sc < n:
@@ -148,30 +158,30 @@ class SessionSaveMixin:
         rows_out: list[dict] = []
         structure_smiles: list[str] = []
         structure_mols: list[str] = []
-        n_rows = self._table_model.rowCount()
-        smiles_col = "SMILES" in self.headers
+        n_rows = self._app._table_model.rowCount()
+        smiles_col = "SMILES" in self._app.headers
         want = oids
         for r in range(n_rows):
-            oid = int(self._table_model.row_oid(r))
+            oid = int(self._app._table_model.row_oid(r))
             if want is not None and oid not in want:
                 continue
             cells: dict[str, str] = {}
-            for ci, h in enumerate(self.headers):
+            for ci, h in enumerate(self._app.headers):
                 if h in ("ID_HIDDEN", "Structure"):
                     continue
-                if self._table_model.is_pixmap_data_column(h):
-                    cells[h] = self._table_model.backing_value_for_row_header(r, h)
+                if self._app._table_model.is_pixmap_data_column(h):
+                    cells[h] = self._app._table_model.backing_value_for_row_header(r, h)
                 else:
-                    cells[h] = self._table_cell_text(r, ci)
+                    cells[h] = self._app.cell_text(r, ci)
             mol = None
             blob = None
-            getter = getattr(self.mols, "blob_for", None)
+            getter = getattr(self._app.mols, "blob_for", None)
             if callable(getter):
                 blob = getter(oid)
             if not blob:
-                mol = self.mols.get(oid)
+                mol = self._app.mols.get(oid)
                 if mol is None:
-                    mol = self._mol_for_structure_row(r)
+                    mol = self._app._mol_for_structure_row(r)
                 blob = mol_graph_binary(mol)
             structure_mols.append(encode_mol_blob_b64(blob))
             smi = str(cells.get("SMILES") or "").strip() if smiles_col else ""
@@ -179,15 +189,15 @@ class SessionSaveMixin:
                 structure_smiles.append(smi)
             else:
                 if mol is None and blob:
-                    mol = self.mols.get(oid)
+                    mol = self._app.mols.get(oid)
                     if mol is None:
-                        mol = self._mol_for_structure_row(r)
+                        mol = self._app._mol_for_structure_row(r)
                 structure_smiles.append(mol_to_canonical_smiles(mol) if mol is not None else "")
                 if smiles_col and mol is not None and not (cells.get("SMILES") or "").strip():
                     cells["SMILES"] = structure_smiles[-1]
             rows_out.append({"id": oid, "cells": cells})
         filters_out: list[dict] = []
-        for f in self.filters:
+        for f in self._app.filters:
             if isinstance(f, SubstructureFilterCard):
                 cfg = f.get_cfg()
                 filters_out.append(
@@ -242,22 +252,24 @@ class SessionSaveMixin:
         doc = {
             "format": self._SESSION_FORMAT,
             "version": self._SESSION_VERSION,
-            "headers": list(self.headers),
+            "headers": list(self._app.headers),
             "rows": rows_out,
             "structure_smiles": structure_smiles,
             "structure_mols": structure_mols,
-            "global_bounds": compact_global_bounds(getattr(self, "global_bounds", None)),
-            "next_oid": int(self.next_oid),
-            "zoomed_ids": sorted(int(x) for x in self.zoomed_ids if want is None or int(x) in want),
-            "structure_field_override": getattr(self, "_structure_field_override", None),
-            "filter_panel_visible": bool(self.f_panel.isVisible()),
+            "global_bounds": compact_global_bounds(getattr(self._app, "global_bounds", None)),
+            "next_oid": int(self._app.next_oid),
+            "zoomed_ids": sorted(
+                int(x) for x in self._app.zoomed_ids if want is None or int(x) in want
+            ),
+            "structure_field_override": getattr(self._app, "_structure_field_override", None),
+            "filter_panel_visible": bool(self._app.f_panel.isVisible()),
             "workspace_layout": (
-                self._workspace_layout.collect_splitter_sizes()
-                if getattr(self, "_workspace_layout", None) is not None
+                self._app._workspace_layout.collect_splitter_sizes()
+                if getattr(self._app, "_workspace_layout", None) is not None
                 else None
             ),
             "plot_panel_visible": True,
-            "plot_panel_width": (self._plot_panel_splitter_sizes() or [0, 0])[1],
+            "plot_panel_width": (self._app._plot_panel_splitter_sizes() or [0, 0])[1],
             "docked_plots": self._collect_docked_plots(),
             "floating_plots": self._collect_floating_plots(),
             "table_layout": self._collect_table_layout(),
@@ -266,9 +278,11 @@ class SessionSaveMixin:
             "sort_column": sort_col,
             "sort_ascending": sort_asc,
             "sort_mode": sort_mode,
-            "column_colors": self._table_model.export_column_color_rules(),
+            "column_colors": self._app._table_model.export_column_color_rules(),
             "logarithmic_columns": sorted(
-                h for h in getattr(self, "_logarithmic_columns", set()) if h in self.headers
+                h
+                for h in getattr(self._app, "_logarithmic_columns", set())
+                if h in self._app.headers
             ),
             "confs_sidecar": serialize_confs_sidecar(self._confs_sidecar_for_session(want)),
             "som_browse": self._session_som_browse_payload(oids=want),
@@ -277,7 +291,7 @@ class SessionSaveMixin:
             "dock_results": self._session_dock_results_payload(oids=want),
             "protein_viewer": self._collect_protein_viewer(),
         }
-        collect_search = getattr(self, "collect_table_search_session", None)
+        collect_search = getattr(self._app, "collect_table_search_session", None)
         if callable(collect_search):
             search_payload = collect_search()
             if search_payload:
@@ -289,9 +303,7 @@ class SessionSaveMixin:
         return out
 
     def _confs_sidecar_for_session(self, oids: set[int] | None) -> dict[tuple[int, str], str]:
-        from ...storage import EnsembleStore
-
-        store = getattr(self, "_confs_blocks_sidecar", None)
+        store = getattr(self._app, "_confs_blocks_sidecar", None)
         if store is None or isinstance(store, EnsembleStore):
             return {}
         if oids is None:
@@ -299,9 +311,7 @@ class SessionSaveMixin:
         return {k: v for k, v in store.items() if int(k[0]) in oids}
 
     def _ensembles_sqlite_for_session(self, oids: set[int] | None) -> bytes | None:
-        from ...storage import EnsembleStore
-
-        store = getattr(self, "_confs_blocks_sidecar", None)
+        store = getattr(self._app, "_confs_blocks_sidecar", None)
         if not isinstance(store, EnsembleStore) or len(store) == 0:
             return None
         if oids is not None and not any(int(k[0]) in oids for k in store):
@@ -311,11 +321,11 @@ class SessionSaveMixin:
 
     def _session_som_browse_payload(self, *, oids: set[int] | None = None) -> list[dict]:
         """Atom-level SOM maps for session restore (redraws table images on open)."""
-        from ..som_browser import records_from_table, serialize_som_browse_records
+        from .som_browser import records_from_table, serialize_som_browse_records
 
-        records = list(getattr(self, "_som_browse_records", None) or ())
+        records = list(getattr(self._app, "_som_browse_records", None) or ())
         if not records:
-            records = records_from_table(self)
+            records = records_from_table(self._app)
         payload = serialize_som_browse_records(records)
         if oids is None:
             return payload
@@ -331,24 +341,20 @@ class SessionSaveMixin:
 
     def _session_mmp_ledger_payload(self) -> dict | None:
         """Last MMP run for Transform Ledger reopen after session open."""
-        from ...analysis.mmp_session import serialize_mmp_ledger_payload
-
         return serialize_mmp_ledger_payload(
-            getattr(self, "_mmp_last_pairs", None),
-            activity_column=str(getattr(self, "_mmp_last_activity_column", "") or ""),
+            getattr(self._app, "_mmp_last_pairs", None),
+            activity_column=str(getattr(self._app, "_mmp_last_activity_column", "") or ""),
         )
 
     def _session_dock_results_payload(self, *, oids: set[int] | None = None) -> dict | None:
         """Last docking run for Pose Browser reopen after session open."""
-        from ...docking.pose_file_io import serialize_dock_results_payload
-
         return serialize_dock_results_payload(
-            getattr(self, "_last_dock_results", None),
+            getattr(self._app, "_last_dock_results", None),
             oids=oids,
         )
 
     def _collect_protein_viewer(self) -> dict | None:
-        payload = getattr(self, "_protein_viewer_session", None)
+        payload = getattr(self._app, "_protein_viewer_session", None)
         if not isinstance(payload, dict) or not payload.get("structures"):
             return None
         try:
@@ -360,10 +366,10 @@ class SessionSaveMixin:
     def commit_protein_viewer_session(self, payload: dict | None) -> None:
         """Store a Protein Viewer snapshot for the next File → Session → Save Session."""
         if isinstance(payload, dict) and payload.get("structures"):
-            self._protein_viewer_session = json.loads(json.dumps(payload))
+            self._app._protein_viewer_session = json.loads(json.dumps(payload))
         else:
-            self._protein_viewer_session = None
-        mark = getattr(self, "_mark_session_dirty", None)
+            self._app._protein_viewer_session = None
+        mark = getattr(self._app, "_mark_session_dirty", None)
         if callable(mark):
             mark()
 
@@ -378,10 +384,10 @@ class SessionSaveMixin:
 
     def save_selected_to_session(self) -> bool:
         """Write a new ``.cms`` that contains only the currently selected table rows."""
-        oids = {int(o) for o in self._selected_oids_set()}
+        oids = {int(o) for o in self._app._selected_oids_set()}
         if not oids:
             QMessageBox.information(
-                self,
+                self._app,
                 "Save Selected to Session",
                 "No rows are selected. Select one or more rows in the table first.",
             )
@@ -401,9 +407,7 @@ class SessionSaveMixin:
         clear_dirty: bool,
         status_prefix: str,
     ) -> bool:
-        path, _ = QFileDialog.getSaveFileName(
-            self, dialog_title, "", "MolManager Session (*.cms);;JSON (*.json)"
-        )
+        path, _ = QFileDialog.getSaveFileName(self._app, dialog_title, "", SESSION_SAVE_FILTER)
         if not path:
             return False
         low = path.lower()
@@ -412,23 +416,23 @@ class SessionSaveMixin:
         try:
             with open(path, "wb") as f:
                 f.write(dumps_session_document(document))
-            self.status_label.setText(f"{status_prefix} {path}")
+            self._app.status_label.setText(f"{status_prefix} {path}")
             if clear_dirty:
-                clear = getattr(self, "_clear_session_dirty", None)
+                clear = getattr(self._app, "_clear_session_dirty", None)
                 if callable(clear):
                     clear()
             return True
         except Exception as e:
             logger.exception("Save session failed: %s", path)
-            QMessageBox.warning(self, dialog_title, str(e))
+            QMessageBox.warning(self._app, dialog_title, str(e))
             return False
 
     def open_session_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
-            self,
+            self._app,
             "Open Session",
             "",
-            "MolManager Session (*.cms *.json);;Legacy session CSV (*.csv);;All files (*.*)",
+            SESSION_OPEN_FILTER,
         )
         if not path:
             return
@@ -444,21 +448,21 @@ class SessionSaveMixin:
             d = expand_session_document(loads_session_bytes(raw))
         except Exception as e:
             logger.exception("Open session: could not read %s", path)
-            QMessageBox.warning(self, "Open Session", f"Could not read file: {e}")
+            QMessageBox.warning(self._app, "Open Session", f"Could not read file: {e}")
             return False
         if not self._session_format_ok(d.get("format")) or not self._session_version_ok(
             d.get("version")
         ):
             QMessageBox.warning(
-                self,
+                self._app,
                 "Open Session",
-                "Not a MolManager session file (expected .cms / version 1–2).",
+                SESSION_INVALID_MESSAGE,
             )
             return False
         try:
             self._apply_session_document(d)
         except Exception as e:
             logger.exception("Open session: apply failed for %s", path)
-            QMessageBox.warning(self, "Open Session", str(e))
+            QMessageBox.warning(self._app, "Open Session", str(e))
             return False
         return True

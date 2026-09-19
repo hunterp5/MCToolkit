@@ -24,12 +24,13 @@ import traceback
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from ..app_identity import APP_DISPLAY_NAME, LOG_DIR_NAME, LOG_DIR_SLUG, LOG_FILE_NAME, window_title
 from .config import load_config
 from .session_log import ensure_session_log_handler
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
-_LOG_FILE_NAME = "molmanager.log"
+_LOG_FILE_NAME = LOG_FILE_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -43,19 +44,19 @@ def active_log_file() -> Path | None:
 
 
 def default_log_dir() -> Path:
-    """Platform user-data directory for MolManager log files."""
+    """Platform user-data directory for MCtoolkit log files."""
     override = (os.environ.get("MOLMANAGER_LOG_DIR") or "").strip()
     if override:
         return Path(override).expanduser()
     if sys.platform == "win32":
         base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-        return Path(base) / "MolManager" / "logs"
+        return Path(base) / LOG_DIR_NAME / "logs"
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Logs" / "MolManager"
+        return Path.home() / "Library" / "Logs" / LOG_DIR_NAME
     xdg = (os.environ.get("XDG_STATE_HOME") or "").strip()
     if xdg:
-        return Path(xdg) / "molmanager" / "logs"
-    return Path.home() / ".local" / "state" / "molmanager" / "logs"
+        return Path(xdg) / LOG_DIR_SLUG / "logs"
+    return Path.home() / ".local" / "state" / LOG_DIR_SLUG / "logs"
 
 
 def configure_app_logging() -> Path | None:
@@ -127,7 +128,7 @@ def format_crash_message(exc_type, exc_value, log_path: Path | None) -> str:
     """User-facing crash text including optional log path."""
     detail = f"{getattr(exc_type, '__name__', type(exc_type).__name__)}: {exc_value}"
     lines = [
-        "MolManager encountered an unexpected error and may be unstable.",
+        f"{APP_DISPLAY_NAME} encountered an unexpected error and may be unstable.",
         "",
         detail,
     ]
@@ -162,7 +163,7 @@ def install_crash_excepthook(*, log_path: Path | None = None) -> None:
             if app is not None:
                 QMessageBox.critical(
                     None,
-                    "MolManager — unexpected error",
+                    window_title("unexpected error"),
                     format_crash_message(exc_type, exc_value, resolved),
                 )
         except Exception:

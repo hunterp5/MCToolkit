@@ -174,10 +174,10 @@ def main() -> None:
             return wrapped
 
         setattr(session_codec, name, make_codec())
-        # session_save_mixin/session_restore_mixin import these by name.
+        # session_save/session_restore import these by name.
         for mod_name in (
-            "molmanager.ui.main_window.session_save_mixin",
-            "molmanager.ui.main_window.session_restore_mixin",
+            "molmanager.ui.session_save",
+            "molmanager.ui.session_restore",
         ):
             mod = sys.modules.get(mod_name)
             if mod is not None and hasattr(mod, name):

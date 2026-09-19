@@ -471,65 +471,6 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             tooltips_visible=True,
         ),
         SEPARATOR,
-        submenu(
-            "&Filter",
-            action(
-                "Toggle Panel",
-                "toggle_filter_panel",
-                hotkey="tools.toggle_filter_panel",
-                attr="_act_toggle_filter_panel",
-                add_to_window=True,
-                tooltip="Show or hide the filter panel (Ctrl+Shift+L).",
-            ),
-            SEPARATOR,
-            action(
-                "Add Substructure",
-                "add_substructure_filter_card",
-                tooltip="Add a filter card that matches a SMARTS substructure in the Structure column.",
-            ),
-            action(
-                "Add Slider",
-                "add_filter_card",
-                tooltip="Add a numeric range slider filter for a column.",
-            ),
-            action(
-                "Add Text",
-                "add_text_filter_card",
-                tooltip="Add a text contains / equals filter for a column.",
-            ),
-            action(
-                "Add Category",
-                "add_category_filter_card",
-                tooltip="Add a categorical multi-select filter for a column.",
-            ),
-            SEPARATOR,
-            action(
-                "Enable All Filters",
-                "enable_all_filters_keep_panel",
-                tooltip="Turn on every filter card in the panel.",
-            ),
-            action(
-                "Disable All Filters",
-                "disable_all_filters_keep_panel",
-                tooltip=(
-                    "Turn off every filter card. Cards stay in the panel; use On on each card "
-                    "to enable again."
-                ),
-            ),
-            action(
-                "Delete All Filters",
-                "delete_all_filters_from_panel",
-                tooltip="Remove every filter card from the panel.",
-            ),
-            tooltips_visible=True,
-        ),
-        action(
-            "&Search…",
-            "toggle_table_search_panel",
-            hotkey="tools.search",
-            tooltip="Open or hide the in-table search panel (Ctrl+F). Queries stay until deleted with −.",
-        ),
-        SEPARATOR,
         action(
             "&Sketcher…",
             "open_sketcher",
@@ -682,6 +623,66 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             tooltip="Open the selection browser to review and act on selected rows. "
             "Right-click a structure for Browser; settings pick RDKit 2D, 3Dmol 2D, or 3Dmol 3D.",
         ),
+        SEPARATOR,
+        submenu(
+            "&Filter",
+            action(
+                "Toggle Panel",
+                "toggle_filter_panel",
+                hotkey="tools.toggle_filter_panel",
+                attr="_act_toggle_filter_panel",
+                add_to_window=True,
+                tooltip="Show or hide the filter panel (Ctrl+Shift+L).",
+            ),
+            SEPARATOR,
+            action(
+                "Add Substructure",
+                "add_substructure_filter_card",
+                tooltip="Add a filter card that matches a SMARTS substructure in the Structure column.",
+            ),
+            action(
+                "Add Slider",
+                "add_filter_card",
+                tooltip="Add a numeric range slider filter for a column.",
+            ),
+            action(
+                "Add Text",
+                "add_text_filter_card",
+                tooltip="Add a text contains / equals filter for a column.",
+            ),
+            action(
+                "Add Category",
+                "add_category_filter_card",
+                tooltip="Add a categorical multi-select filter for a column.",
+            ),
+            SEPARATOR,
+            action(
+                "Enable All Filters",
+                "enable_all_filters_keep_panel",
+                tooltip="Turn on every filter card in the panel.",
+            ),
+            action(
+                "Disable All Filters",
+                "disable_all_filters_keep_panel",
+                tooltip=(
+                    "Turn off every filter card. Cards stay in the panel; use On on each card "
+                    "to enable again."
+                ),
+            ),
+            action(
+                "Delete All Filters",
+                "delete_all_filters_from_panel",
+                tooltip="Remove every filter card from the panel.",
+            ),
+            tooltips_visible=True,
+        ),
+        action(
+            "&Search…",
+            "toggle_table_search_panel",
+            hotkey="tools.search",
+            tooltip="Open or hide the in-table search panel (Ctrl+F). Queries stay until deleted with −.",
+        ),
+        tooltips_visible=True,
     ),
     submenu(
         "E&xternal",
@@ -700,7 +701,7 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             hotkey="help.user_guides",
             attr="_act_user_guide",
             add_to_window=True,
-            tooltip="Open MolManager help (F1).",
+            tooltip="Open MCtoolkit help (F1).",
         ),
         action(
             "&Citations",
@@ -708,7 +709,7 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             hotkey="help.citations",
             attr="_act_citations",
             add_to_window=True,
-            tooltip="Open papers and licenses for tools used in MolManager.",
+            tooltip="Open papers and licenses for tools used in MCtoolkit.",
         ),
         attr="_help_menu",
     ),

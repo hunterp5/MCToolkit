@@ -23,7 +23,7 @@ from contextlib import suppress
 from PySide6.QtCore import QByteArray
 
 
-class SessionTableLayoutMixin:
+class SessionTableLayout:
     @staticmethod
     def _header_state_b64(header) -> str | None:
         if header is None:
@@ -52,30 +52,30 @@ class SessionTableLayoutMixin:
         hidden: list[str] = []
         hh = None
         try:
-            hh = self.table.horizontalHeader()
+            hh = self._app.table.horizontalHeader()
         except RuntimeError:
             hh = None
         updates = False
         try:
-            updates = bool(self.table.updatesEnabled())
-            self.table.setUpdatesEnabled(False)
+            updates = bool(self._app.table.updatesEnabled())
+            self._app.table.setUpdatesEnabled(False)
         except RuntimeError:
             pass
         try:
-            for i, h in enumerate(self.headers):
+            for i, h in enumerate(self._app.headers):
                 if not h:
                     continue
                 was_hidden = False
                 try:
-                    was_hidden = bool(self.table.isColumnHidden(i))
+                    was_hidden = bool(self._app.table.isColumnHidden(i))
                     if was_hidden and i != 0 and hh is not None:
                         hh.showSection(i)
-                    width = int(self.table.columnWidth(i))
+                    width = int(self._app.table.columnWidth(i))
                 except RuntimeError:
                     width = 0
                 if was_hidden:
                     with suppress(RuntimeError):
-                        self.table.setColumnHidden(i, True)
+                        self._app.table.setColumnHidden(i, True)
                     if i != 0:
                         hidden.append(h)
                 if width > 0 and h != "ID_HIDDEN":
@@ -83,11 +83,11 @@ class SessionTableLayoutMixin:
         finally:
             if updates:
                 with suppress(RuntimeError):
-                    self.table.setUpdatesEnabled(True)
+                    self._app.table.setUpdatesEnabled(True)
         default_h = None
         vh = None
         try:
-            vh = self.table.verticalHeader()
+            vh = self._app.table.verticalHeader()
             if vh is not None:
                 default_h = int(vh.defaultSectionSize())
         except RuntimeError:
@@ -95,8 +95,8 @@ class SessionTableLayoutMixin:
         scroll_v = None
         scroll_h = None
         try:
-            vbar = self.table.verticalScrollBar()
-            hbar = self.table.horizontalScrollBar()
+            vbar = self._app.table.verticalScrollBar()
+            hbar = self._app.table.horizontalScrollBar()
             if vbar is not None:
                 scroll_v = int(vbar.value())
             if hbar is not None:
@@ -106,14 +106,14 @@ class SessionTableLayoutMixin:
         payload = {
             "column_widths": widths,
             "hidden_columns": hidden,
-            "pixmap_columns": self._table_model.pixmap_data_column_headers(),
+            "pixmap_columns": self._app._table_model.pixmap_data_column_headers(),
             "default_row_height": default_h,
             "hheader_state": self._header_state_b64(hh),
             "vheader_state": self._header_state_b64(vh),
             "scroll_vertical": scroll_v,
             "scroll_horizontal": scroll_h,
         }
-        mgr = getattr(self, "_workspace_layout", None)
+        mgr = getattr(self._app, "_workspace_layout", None)
         if mgr is not None:
             with suppress(RuntimeError):
                 payload["workspace"] = mgr.collect_splitter_sizes()
@@ -123,14 +123,14 @@ class SessionTableLayoutMixin:
         if not isinstance(payload, dict):
             return
         try:
-            hh = self.table.horizontalHeader()
+            hh = self._app.table.horizontalHeader()
         except RuntimeError:
             hh = None
         self._restore_header_state_b64(hh, payload.get("hheader_state"))
         widths = payload.get("column_widths")
         if isinstance(widths, dict):
             for name, raw in widths.items():
-                if not isinstance(name, str) or name not in self.headers:
+                if not isinstance(name, str) or name not in self._app.headers:
                     continue
                 try:
                     width = int(raw)
@@ -138,27 +138,31 @@ class SessionTableLayoutMixin:
                     continue
                 if width <= 0:
                     continue
-                col = self.headers.index(name)
+                col = self._app.headers.index(name)
                 with suppress(RuntimeError):
-                    self.table.setColumnWidth(col, width)
+                    self._app.table.setColumnWidth(col, width)
         hidden = payload.get("hidden_columns")
         if isinstance(hidden, list):
             for name in hidden:
-                if not isinstance(name, str) or name not in self.headers or name == "ID_HIDDEN":
+                if (
+                    not isinstance(name, str)
+                    or name not in self._app.headers
+                    or name == "ID_HIDDEN"
+                ):
                     continue
                 with suppress(RuntimeError):
-                    self.table.setColumnHidden(self.headers.index(name), True)
+                    self._app.table.setColumnHidden(self._app.headers.index(name), True)
         pix_cols = payload.get("pixmap_columns")
         if isinstance(pix_cols, list):
             for name in pix_cols:
                 if (
                     isinstance(name, str)
-                    and name in self.headers
+                    and name in self._app.headers
                     and name not in ("ID_HIDDEN", "Structure")
                 ):
-                    self._table_model.register_pixmap_column(name)
+                    self._app._table_model.register_pixmap_column(name)
         try:
-            vh = self.table.verticalHeader()
+            vh = self._app.table.verticalHeader()
         except RuntimeError:
             vh = None
         self._restore_header_state_b64(vh, payload.get("vheader_state"))
@@ -174,10 +178,10 @@ class SessionTableLayoutMixin:
             except RuntimeError:
                 pass
         with suppress(RuntimeError):
-            self.table.setColumnHidden(0, True)
+            self._app.table.setColumnHidden(0, True)
         try:
-            vbar = self.table.verticalScrollBar()
-            hbar = self.table.horizontalScrollBar()
+            vbar = self._app.table.verticalScrollBar()
+            hbar = self._app.table.horizontalScrollBar()
             sv = payload.get("scroll_vertical")
             sh = payload.get("scroll_horizontal")
             if vbar is not None and isinstance(sv, (int, float)):
@@ -188,8 +192,8 @@ class SessionTableLayoutMixin:
             pass
 
     def _restore_column_visual_order(self, logical_order: list[int]) -> None:
-        h = self.table.horizontalHeader()
-        n = self._table_model.columnCount()
+        h = self._app.table.horizontalHeader()
+        n = self._app._table_model.columnCount()
         if not logical_order or len(logical_order) != n:
             return
         if any(not isinstance(x, int) or x < 0 or x >= n for x in logical_order):
@@ -201,10 +205,10 @@ class SessionTableLayoutMixin:
 
     def _restore_pending_workspace_layout(self) -> None:
         """Re-apply saved splitter ratios after the workspace has a real size."""
-        pending = getattr(self, "_pending_session_workspace_layout", None)
+        pending = getattr(self._app, "_pending_session_workspace_layout", None)
         if not isinstance(pending, dict):
             return
-        mgr = getattr(self, "_workspace_layout", None)
+        mgr = getattr(self._app, "_workspace_layout", None)
         if mgr is None:
             return
         lid = pending.get("layout_id")
@@ -217,21 +221,23 @@ class SessionTableLayoutMixin:
     def _restore_session_table_chrome(self, payload: object | None = None) -> None:
         """Re-apply saved table layout and column order after other session side effects."""
         layout = (
-            payload if payload is not None else getattr(self, "_pending_session_table_layout", None)
+            payload
+            if payload is not None
+            else getattr(self._app, "_pending_session_table_layout", None)
         )
         if layout is not None:
             self._restore_table_layout(layout)
-        co = getattr(self, "_pending_session_column_order", None)
+        co = getattr(self._app, "_pending_session_column_order", None)
         if isinstance(co, list):
             with suppress(TypeError, ValueError):
                 self._restore_column_visual_order([int(x) for x in co])
-        apply_font = getattr(self, "_apply_table_font", None)
+        apply_font = getattr(self._app, "_apply_table_font", None)
         if callable(apply_font):
             apply_font()
 
     def _finish_deferred_session_workspace_restore(self) -> None:
         self._restore_pending_workspace_layout()
         self._restore_session_table_chrome()
-        self._pending_session_table_layout = None
-        self._pending_session_column_order = None
-        self._pending_session_workspace_layout = None
+        self._app._pending_session_table_layout = None
+        self._app._pending_session_column_order = None
+        self._app._pending_session_workspace_layout = None

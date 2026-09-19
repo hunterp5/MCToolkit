@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QImage, QPainter, QPixmap
+from PySide6.QtGui import QImage, QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
@@ -206,7 +206,7 @@ class MmpBrowserDialog(PairBrowserDialog):
         painter = QPainter(out)
         try:
             painter.drawPixmap(0, 0, left)
-            painter.setPen(self.palette().color(self.palette().WindowText))
+            painter.setPen(self.palette().color(QPalette.WindowText))
             painter.drawText(frag_w, 0, arrow_w, frag_h, Qt.AlignCenter, "→")
             painter.drawPixmap(frag_w + arrow_w, 0, right)
         finally:

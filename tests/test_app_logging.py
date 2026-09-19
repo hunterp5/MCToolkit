@@ -46,7 +46,7 @@ def test_configure_app_logging_writes_file(monkeypatch, tmp_path: Path):
 
     path = configure_app_logging()
     assert path is not None
-    assert path == tmp_path / "molmanager.log"
+    assert path == tmp_path / "mctoolkit.log"
     assert active_log_file() == path
 
     from molmanager.platform_support.session_log import SessionLogHandler, session_log_buffer
@@ -77,6 +77,7 @@ def test_configure_app_logging_can_disable_file(monkeypatch, tmp_path: Path):
 
 
 def test_format_crash_message_includes_log_path(tmp_path: Path):
-    msg = format_crash_message(ValueError, ValueError("boom"), tmp_path / "molmanager.log")
+    msg = format_crash_message(ValueError, ValueError("boom"), tmp_path / "mctoolkit.log")
     assert "ValueError: boom" in msg
-    assert "molmanager.log" in msg
+    assert "mctoolkit.log" in msg
+    assert "MCtoolkit" in msg

@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Encode/decode MolManager ``.cms`` session documents (compact v2 + gzip)."""
+"""Encode/decode MCtoolkit ``.cms`` session documents (compact v2 + gzip)."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 SESSION_FORMAT = "molmanager_session"
 SESSION_FORMAT_ALIASES = frozenset(
-    {"molmanager_session", "MOLMANAGER_session", "chemmanager_session"}
+    {"molmanager_session", "MOLMANAGER_session", "chemmanager_session", "mctoolkit_session"}
 )
 SESSION_VERSION_CURRENT = 2
 SESSION_VERSIONS_SUPPORTED = frozenset({1, 2})

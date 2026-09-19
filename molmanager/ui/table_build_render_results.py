@@ -24,25 +24,25 @@ from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication
 
-from ...platform_support.config import load_config
-from ...table.structure_depiction_layout import (
+from ..platform_support.config import load_config
+from ..storage.structure_render_store import StructureRenderStore
+from ..table.structure_depiction_layout import (
     STRUCTURE_COLUMN_HORIZONTAL_PADDING,
     structure_depict_height,
     structure_depict_width,
     structure_row_default_height,
 )
-from ...storage.structure_render_store import StructureRenderStore
-from ..structure_pixmap import pixmap_from_structure_render_png
-from ..strings import TOOL_RENDER_2D
+from .strings import TOOL_RENDER_2D
+from .structure_pixmap import pixmap_from_structure_render_png
 
 
-class Render2DResultsMixin:
+class TableBuildRenderResults:
     def _render2d_batch_session_accepted(self, batch_session) -> bool:
         """False when a render result belongs to a superseded / cancelled batch."""
         rs = 0 if batch_session is None else int(batch_session)
         if rs == 0:
             return True
-        cur = getattr(self, "_render2d_accept_session", None)
+        cur = getattr(self._app, "_render2d_accept_session", None)
         return cur is not None and rs == cur
 
     def on_render2d_rows_ready(self, rows, batch_session) -> None:
@@ -53,10 +53,10 @@ class Render2DResultsMixin:
         """
         if not rows or not self._render2d_batch_session_accepted(batch_session):
             return
-        pending = self._render2d_pending
+        pending = self._app._render2d_pending
         for oid, img, success, w, h in rows:
             oid = int(oid)
-            if success and self._resolve_structure_row_for_oid(oid) != -1:
+            if success and self._app._resolve_structure_row_for_oid(oid) != -1:
                 pending[oid] = (bytes(img), True, int(w), int(h))
             else:
                 pending[oid] = (b"", False, int(w), int(h))
@@ -64,29 +64,32 @@ class Render2DResultsMixin:
 
     def _advance_render2d_batch_progress(self, n_done: int) -> None:
         """Report render progress and finish the batch once every row has landed."""
-        if not getattr(self, "_import_progress_active", False) or self._import_render_goal <= 0:
+        if (
+            not getattr(self._app, "_import_progress_active", False)
+            or self._app._import_render_goal <= 0
+        ):
             return
-        self._import_render_done += int(n_done)
-        done = min(self._import_render_done, self._import_render_goal)
-        total_g = self._import_render_goal
+        self._app._import_render_done += int(n_done)
+        done = min(self._app._import_render_done, self._app._import_render_goal)
+        total_g = self._app._import_render_goal
         sharing = bool(getattr(self, "_render2d_shares_ui_with_queue_job", lambda: False)())
-        if getattr(self, "_render2d_batch_active", False):
+        if getattr(self._app, "_render2d_batch_active", False):
             now = time.monotonic()
-            last_t = float(getattr(self, "_render2d_progress_last_emit", 0.0))
-            last_d = int(getattr(self, "_render2d_progress_last_done", 0))
+            last_t = float(getattr(self._app, "_render2d_progress_last_emit", 0.0))
+            last_d = int(getattr(self._app, "_render2d_progress_last_done", 0))
             step = max(1, total_g // 50)
             if done <= 1 or done >= total_g or (done - last_d) >= step or (now - last_t) >= 0.12:
-                self._render2d_progress_last_emit = now
-                self._render2d_progress_last_done = done
+                self._app._render2d_progress_last_emit = now
+                self._app._render2d_progress_last_done = done
                 if not sharing:
-                    self._on_tool_progress(TOOL_RENDER_2D, done, total_g)
+                    self._app._on_tool_progress(TOOL_RENDER_2D, done, total_g)
         elif not sharing:
-            self._on_tool_progress(TOOL_RENDER_2D, done, total_g)
-        if self._import_render_done >= self._import_render_goal:
-            self._import_progress_active = False
+            self._app._on_tool_progress(TOOL_RENDER_2D, done, total_g)
+        if self._app._import_render_done >= self._app._import_render_goal:
+            self._app._import_progress_active = False
             if not sharing:
-                self._clear_tool_progress()
-                self.status_label.setText("Ready")
+                self._app._clear_tool_progress()
+                self._app.status_label.setText("Ready")
             self._flush_render2d_batch_results()
             self._restore_render2d_batch_environment()
 
@@ -94,57 +97,59 @@ class Render2DResultsMixin:
         if not self._render2d_batch_session_accepted(batch_session):
             return
 
-        row = self._resolve_structure_row_for_oid(int(idx))
+        row = self._app._resolve_structure_row_for_oid(int(idx))
         oid = int(idx)
-        pix_target = getattr(self, "_render2d_pixmap_target", None)
-        batch = getattr(self, "_render2d_batch_active", False)
+        pix_target = getattr(self._app, "_render2d_pixmap_target", None)
+        batch = getattr(self._app, "_render2d_batch_active", False)
         if success and row != -1:
             if batch:
-                self._render2d_pending[oid] = (bytes(img), True, int(w), int(h))
+                self._app._render2d_pending[oid] = (bytes(img), True, int(w), int(h))
             else:
                 pm = pixmap_from_structure_render_png(img, w, h)
                 if pix_target:
-                    if getattr(self, "_render2d_column_pixmap_mode", True):
-                        self._table_model.register_pixmap_column(pix_target)
-                        self._table_model.set_column_pixmap(oid, pix_target, pm)
+                    if getattr(self._app, "_render2d_column_pixmap_mode", True):
+                        self._app._table_model.register_pixmap_column(pix_target)
+                        self._app._table_model.set_column_pixmap(oid, pix_target, pm)
                     else:
-                        self._table_model.set_cell_pixmap(oid, pix_target, pm)
+                        self._app._table_model.set_cell_pixmap(oid, pix_target, pm)
                 else:
-                    self._table_model.set_structure_pixmap(oid, pm)
-                if self.table.rowHeight(row) != h:
-                    self.table.setRowHeight(row, h)
+                    self._app._table_model.set_structure_pixmap(oid, pm)
+                if self._app.table.rowHeight(row) != h:
+                    self._app.table.setRowHeight(row, h)
                 if pix_target:
                     self._sync_data_pixmap_column_width(pix_target, pm, w)
                 else:
                     self._sync_structure_column_width_for_pixmap(pm, w)
                 if props:
                     updates = {
-                        name: str(props.get(name, "")) for name in self.headers[2:] if name in props
+                        name: str(props.get(name, ""))
+                        for name in self._app.headers[2:]
+                        if name in props
                     }
                     if updates:
-                        self._table_model.set_cell_text_batch(oid, updates)
-                if not pix_target and oid not in self.zoomed_ids:
+                        self._app._table_model.set_cell_text_batch(oid, updates)
+                if not pix_target and oid not in self._app.zoomed_ids:
                     self._sync_structure_column_width_for_zoom_state()
         else:
             if batch:
-                self._render2d_pending[oid] = (b"", False, int(w), int(h))
+                self._app._render2d_pending[oid] = (b"", False, int(w), int(h))
 
         self._advance_render2d_batch_progress(1)
 
     def _resize_columns_after_render2d(self, pix_target: str | None) -> None:
         """Set structure / pixmap column width from depict size (O(1), safe for huge tables)."""
         # Session restore owns column widths until chrome is fully reapplied.
-        if getattr(self, "_pending_session_table_layout", None):
+        if getattr(self._app, "_pending_session_table_layout", None):
             return
         pad = STRUCTURE_COLUMN_HORIZONTAL_PADDING
-        hint = int(getattr(self, "_render2d_flush_max_width", 0) or 0)
-        self._render2d_flush_max_width = 0
+        hint = int(getattr(self._app, "_render2d_flush_max_width", 0) or 0)
+        self._app._render2d_flush_max_width = 0
         need = max(1, max(int(structure_depict_width()), hint) + pad)
         try:
             if pix_target:
-                col = self.headers.index(pix_target)
-                if self.table.columnWidth(col) < need:
-                    self.table.setColumnWidth(col, need)
+                col = self._app.headers.index(pix_target)
+                if self._app.table.columnWidth(col) < need:
+                    self._app.table.setColumnWidth(col, need)
             else:
                 self._sync_structure_column_width_for_pixmap(
                     None, max(int(structure_depict_width()), hint)
@@ -159,27 +164,27 @@ class Render2DResultsMixin:
         return count >= int(cfg.structure_render_lazy_min_rows)
 
     def _ensure_structure_lazy_scroll_hook(self) -> None:
-        if getattr(self, "_structure_lazy_scroll_hooked", False):
+        if getattr(self._app, "_structure_lazy_scroll_hooked", False):
             return
         try:
-            self.table.verticalScrollBar().valueChanged.connect(self._on_structure_lazy_scroll)
-            self._structure_lazy_scroll_hooked = True
+            self._app.table.verticalScrollBar().valueChanged.connect(self._on_structure_lazy_scroll)
+            self._app._structure_lazy_scroll_hooked = True
         except Exception:
             pass
 
     def _on_structure_lazy_scroll(self, *_args) -> None:
-        if not self._table_model.structure_png_store_active():
+        if not self._app._table_model.structure_png_store_active():
             return
         self._refresh_visible_structure_cells()
 
     def _refresh_visible_structure_cells(self) -> None:
         """Repaint only viewport-visible Structure cells (lazy PNG cache)."""
-        src = self._table_model
+        src = self._app._table_model
         if src.rowCount() <= 0:
             return
-        view = self.table
+        view = self._app.table
         proxy = view.model()
-        src = self._table_model
+        src = self._app._table_model
         try:
             vr0 = view.rowAt(0)
             vr1 = view.rowAt(max(0, view.viewport().height() - 1))
@@ -218,23 +223,23 @@ class Render2DResultsMixin:
 
     def _flush_render2d_batch_results(self) -> None:
         """Apply buffered PNGs in slices so the GUI thread stays responsive."""
-        if not getattr(self, "_render2d_batch_active", False):
+        if not getattr(self._app, "_render2d_batch_active", False):
             return
-        pix_target = getattr(self, "_render2d_pixmap_target", None)
-        column_pixmap_mode = getattr(self, "_render2d_column_pixmap_mode", True)
-        lazy_structure = bool(getattr(self, "_render2d_lazy_flush", False)) and not pix_target
+        pix_target = getattr(self._app, "_render2d_pixmap_target", None)
+        column_pixmap_mode = getattr(self._app, "_render2d_column_pixmap_mode", True)
+        lazy_structure = bool(getattr(self._app, "_render2d_lazy_flush", False)) and not pix_target
 
-        queue = getattr(self, "_render2d_eager_flush_queue", None)
+        queue = getattr(self._app, "_render2d_eager_flush_queue", None)
         if queue is None:
-            self._render2d_accept_session = None
-            ordered = list(getattr(self, "_render2d_batch_oids_ordered", []) or [])
-            pending = getattr(self, "_render2d_pending", None) or {}
+            self._app._render2d_accept_session = None
+            ordered = list(getattr(self._app, "_render2d_batch_oids_ordered", []) or [])
+            pending = getattr(self._app, "_render2d_pending", None) or {}
             if pix_target and column_pixmap_mode:
-                self._table_model.register_pixmap_column(pix_target)
+                self._app._table_model.register_pixmap_column(pix_target)
             set_pixmap = (
-                self._table_model.set_column_pixmap
+                self._app._table_model.set_column_pixmap
                 if column_pixmap_mode
-                else self._table_model.set_cell_pixmap
+                else self._app._table_model.set_cell_pixmap
             )
             if lazy_structure:
                 cfg = load_config()
@@ -257,22 +262,22 @@ class Render2DResultsMixin:
                 )
                 if png_items:
                     store.ingest_batch(png_items)
-                self._render2d_flush_max_width = max(
+                self._app._render2d_flush_max_width = max(
                     (int(rec[2]) for rec in pending.values() if rec and rec[1]),
                     default=0,
                 )
-                self._table_model.set_structure_png_store(store)
+                self._app._table_model.set_structure_png_store(store)
                 self._ensure_structure_lazy_scroll_hook()
-                self._render2d_eager_flush_queue = []
-                self._render2d_eager_flush_idx = 0
-                self._render2d_eager_uniform_height = False
+                self._app._render2d_eager_flush_queue = []
+                self._app._render2d_eager_flush_idx = 0
+                self._app._render2d_eager_uniform_height = False
             else:
                 eager: list[tuple[int, QPixmap | None]] = []
                 cfg = load_config()
                 set_uniform_height = len(ordered) >= cfg.structure_render_lazy_min_rows
                 max_w = 0
                 for oid in ordered:
-                    row = self._resolve_structure_row_for_oid(int(oid))
+                    row = self._app._resolve_structure_row_for_oid(int(oid))
                     rec = pending.get(oid)
                     if not rec:
                         if pix_target:
@@ -294,30 +299,32 @@ class Render2DResultsMixin:
                         set_pixmap(oid, pix_target, pm)
                     else:
                         eager.append((int(oid), pm))
-                    if row >= 0 and not set_uniform_height and self.table.rowHeight(row) != rh:
-                        self.table.setRowHeight(row, rh)
-                self._render2d_flush_max_width = max_w
-                self._render2d_eager_flush_queue = eager if not pix_target else []
-                self._render2d_eager_flush_idx = 0
-                self._render2d_eager_uniform_height = bool(set_uniform_height and not pix_target)
+                    if row >= 0 and not set_uniform_height and self._app.table.rowHeight(row) != rh:
+                        self._app.table.setRowHeight(row, rh)
+                self._app._render2d_flush_max_width = max_w
+                self._app._render2d_eager_flush_queue = eager if not pix_target else []
+                self._app._render2d_eager_flush_idx = 0
+                self._app._render2d_eager_uniform_height = bool(
+                    set_uniform_height and not pix_target
+                )
 
-        queue = getattr(self, "_render2d_eager_flush_queue", None) or []
-        idx = int(getattr(self, "_render2d_eager_flush_idx", 0))
+        queue = getattr(self._app, "_render2d_eager_flush_queue", None) or []
+        idx = int(getattr(self._app, "_render2d_eager_flush_idx", 0))
         if queue and idx < len(queue):
             chunk = 120
             try:
-                self.table.setUpdatesEnabled(False)
+                self._app.table.setUpdatesEnabled(False)
             except Exception:
                 pass
             try:
                 slice_items = queue[idx : idx + chunk]
-                self._table_model.apply_structure_pixmaps_batch(slice_items, emit=False)
+                self._app._table_model.apply_structure_pixmaps_batch(slice_items, emit=False)
             finally:
                 try:
-                    self.table.setUpdatesEnabled(True)
+                    self._app.table.setUpdatesEnabled(True)
                 except Exception:
                     pass
-            self._render2d_eager_flush_idx = idx + len(slice_items)
+            self._app._render2d_eager_flush_idx = idx + len(slice_items)
             QTimer.singleShot(0, self._flush_render2d_batch_results)
             app = QApplication.instance()
             if app is not None:
@@ -325,10 +332,10 @@ class Render2DResultsMixin:
             return
 
         if queue and not pix_target:
-            self._table_model.notify_structure_column_changed()
-        if getattr(self, "_render2d_eager_uniform_height", False):
+            self._app._table_model.notify_structure_column_changed()
+        if getattr(self._app, "_render2d_eager_uniform_height", False):
             default_rh = structure_row_default_height()
-            vh = self.table.verticalHeader()
+            vh = self._app.table.verticalHeader()
             try:
                 vh.setSectionResizeMode(vh.Fixed)
                 vh.setDefaultSectionSize(default_rh)
@@ -337,32 +344,32 @@ class Render2DResultsMixin:
         if lazy_structure:
             self._refresh_visible_structure_cells()
 
-        self._render2d_pending = {}
-        self._render2d_batch_oids_ordered = []
-        self._render2d_snapshot = None
-        self._render2d_lazy_flush = False
-        self._render2d_eager_flush_queue = None
-        self._render2d_eager_flush_idx = 0
-        self._render2d_eager_uniform_height = False
+        self._app._render2d_pending = {}
+        self._app._render2d_batch_oids_ordered = []
+        self._app._render2d_snapshot = None
+        self._app._render2d_lazy_flush = False
+        self._app._render2d_eager_flush_queue = None
+        self._app._render2d_eager_flush_idx = 0
+        self._app._render2d_eager_uniform_height = False
 
     def on_cell_double_click(self, view_row, c):
         if c != 1:
             return
         src_row = self._view_row_to_source_row(view_row)
-        t0 = self._table_model.cell_text(src_row, 0)
+        t0 = self._app._table_model.cell_text(src_row, 0)
         if not t0.isdigit():
             return
         oid = int(t0)
-        mol = self._mol_for_structure_row(src_row)
+        mol = self._app._mol_for_structure_row(src_row)
         if mol is None:
-            self.status_label.setText("No structure available for this row.")
+            self._app.status_label.setText("No structure available for this row.")
             return
-        if oid in self.zoomed_ids:
-            self.zoomed_ids.remove(oid)
+        if oid in self._app.zoomed_ids:
+            self._app.zoomed_ids.remove(oid)
             if self._try_restore_structure_zoom_out(oid, view_row):
                 return
             w, h = structure_depict_width(), structure_depict_height()
         else:
-            self.zoomed_ids.add(oid)
+            self._app.zoomed_ids.add(oid)
             w, h = structure_depict_width() * 2, structure_depict_height() * 2
-        self.start_render_worker(oid, mol, w, h)
+        self._app.start_render_worker(oid, mol, w, h)

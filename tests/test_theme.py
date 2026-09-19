@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import os
+
 from molmanager.ui.theme import (
     THEME_CUSTOM,
     THEME_DARK,
@@ -41,11 +43,14 @@ def _isolate_theme_settings(tmp_path, monkeypatch) -> None:
     """Point theme QSettings at a temp INI so tests do not touch the real profile."""
     from PySide6.QtCore import QSettings
 
-    ini = str(tmp_path / "molmanager_theme_test.ini")
+    ini = str(tmp_path / "mctoolkit_theme_test.ini")
     monkeypatch.setattr(
-        "molmanager.ui.theme.QSettings",
+        "molmanager.app_identity.QSettings",
         lambda *_a, **_k: QSettings(ini, QSettings.IniFormat),
     )
+    from molmanager.app_identity import reset_settings_migration_for_tests
+
+    reset_settings_migration_for_tests()
 
 
 def test_theme_save_and_load(tmp_path, monkeypatch):
@@ -321,6 +326,21 @@ def test_table_font_resizes_main_window_headers(qapp, tmp_path, monkeypatch):
     w._set_table_font_pt(8, persist=False)
     assert int(w.table.horizontalHeader().height()) == h_small
     w.deleteLater()
+
+
+def test_windows_caption_platform_disables_dark_frames(monkeypatch):
+    monkeypatch.setattr("molmanager.platform_support.qt_windows_caption.sys.platform", "win32")
+    from molmanager.platform_support.qt_windows_caption import (
+        configure_windows_native_caption_platform,
+    )
+
+    monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
+    assert configure_windows_native_caption_platform() == "windows:darkmode=0"
+    monkeypatch.setenv("QT_QPA_PLATFORM", "windows:dpiawareness=2")
+    assert configure_windows_native_caption_platform() == "windows:dpiawareness=2:darkmode=0"
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    assert configure_windows_native_caption_platform() is None
+    assert os.environ.get("QT_QPA_PLATFORM") == "offscreen"
 
 
 def test_ensure_fusion_style_is_idempotent(qapp):

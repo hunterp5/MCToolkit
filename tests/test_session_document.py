@@ -21,11 +21,11 @@ from __future__ import annotations
 import json
 
 import pytest
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
+from molmanager.ui.session_plots import SessionPlots
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from rdkit import Chem
-
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
 _MINI_PDB = """\
 ATOM      1  N   MET A   1      27.340  24.430   2.614  1.00  0.00           N
@@ -183,8 +183,8 @@ def test_session_roundtrip_restores_saved_filter_bounds(qapp, monkeypatch):  # n
 
 
 def test_session_rows_parse_prefers_mol_binary_over_smiles(qapp):  # noqa: ARG001
-    from molmanager.table.session_codec import encode_mol_blob_b64
     from molmanager.chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
+    from molmanager.table.session_codec import encode_mol_blob_b64
     from molmanager.workers.session_rows_parse import (
         SessionRowsParseResult,
         SessionRowsParseSignals,
@@ -755,9 +755,8 @@ def test_session_roundtrip_restores_table_layout(qapp, monkeypatch) -> None:  # 
 
 
 def test_session_roundtrip_restores_docked_plotter(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PySide6.QtWidgets import QWidget
-
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
         def __init__(self, state: dict | None = None) -> None:
@@ -784,7 +783,7 @@ def test_session_roundtrip_restores_docked_plotter(qapp, monkeypatch) -> None:  
         restored.append(w)
         return w
 
-    monkeypatch.setattr(ChemistryWorkspaceWindow, "_restore_docked_plot_widget", fake_restore)
+    monkeypatch.setattr(SessionPlots, "_restore_docked_plot_widget", fake_restore)
     monkeypatch.setattr(
         ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
@@ -820,9 +819,8 @@ def test_session_roundtrip_restores_docked_plotter(qapp, monkeypatch) -> None:  
 
 
 def test_session_roundtrip_keeps_side_by_side_layout(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PySide6.QtWidgets import QWidget
-
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE, LAYOUT_TABLE_STACK
+    from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
         def __init__(self, label: str = "a") -> None:
@@ -844,7 +842,7 @@ def test_session_roundtrip_keeps_side_by_side_layout(qapp, monkeypatch) -> None:
         restored.append(w)
         return w
 
-    monkeypatch.setattr(ChemistryWorkspaceWindow, "_restore_docked_plot_widget", fake_restore)
+    monkeypatch.setattr(SessionPlots, "_restore_docked_plot_widget", fake_restore)
     monkeypatch.setattr(
         ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
@@ -887,9 +885,8 @@ def test_session_roundtrip_keeps_side_by_side_layout(qapp, monkeypatch) -> None:
 
 
 def test_session_roundtrip_keeps_split_view_not_stacked(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PySide6.QtWidgets import QWidget
-
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
+    from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
         def collect_session_state(self) -> dict:
@@ -901,7 +898,7 @@ def test_session_roundtrip_keeps_split_view_not_stacked(qapp, monkeypatch) -> No
     def fake_restore(self, spec):  # noqa: ARG001
         return FakePlot()
 
-    monkeypatch.setattr(ChemistryWorkspaceWindow, "_restore_docked_plot_widget", fake_restore)
+    monkeypatch.setattr(SessionPlots, "_restore_docked_plot_widget", fake_restore)
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
@@ -934,9 +931,8 @@ def test_session_roundtrip_keeps_split_view_not_stacked(qapp, monkeypatch) -> No
 
 
 def test_session_save_after_closing_stacked_pane_is_split_view(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PySide6.QtWidgets import QWidget
-
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
+    from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
         def collect_session_state(self) -> dict:
@@ -946,7 +942,7 @@ def test_session_save_after_closing_stacked_pane_is_split_view(qapp, monkeypatch
             return None
 
     monkeypatch.setattr(
-        ChemistryWorkspaceWindow,
+        SessionPlots,
         "_restore_docked_plot_widget",
         lambda self, spec: FakePlot(),
     )
@@ -1026,9 +1022,8 @@ def test_session_roundtrip_restores_workspace_splitter(qapp, monkeypatch) -> Non
 
 
 def test_session_open_clears_previous_docked_plots(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PySide6.QtWidgets import QWidget
-
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
         def collect_session_state(self) -> dict:
@@ -1038,7 +1033,7 @@ def test_session_open_clears_previous_docked_plots(qapp, monkeypatch) -> None:  
             return None
 
     monkeypatch.setattr(
-        ChemistryWorkspaceWindow,
+        SessionPlots,
         "_restore_docked_plot_widget",
         lambda self, spec: FakePlot(),  # noqa: ARG005
     )
@@ -1075,9 +1070,8 @@ def test_session_open_clears_previous_docked_plots(qapp, monkeypatch) -> None:  
 
 
 def test_session_roundtrip_preserves_pane_title_and_active_page(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PySide6.QtWidgets import QWidget
-
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
         def __init__(self, label: str) -> None:
@@ -1102,7 +1096,7 @@ def test_session_roundtrip_preserves_pane_title_and_active_page(qapp, monkeypatc
         restored.append(w)
         return w
 
-    monkeypatch.setattr(ChemistryWorkspaceWindow, "_restore_docked_plot_widget", fake_restore)
+    monkeypatch.setattr(SessionPlots, "_restore_docked_plot_widget", fake_restore)
     monkeypatch.setattr(
         ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
@@ -1139,9 +1133,8 @@ def test_session_roundtrip_preserves_pane_title_and_active_page(qapp, monkeypatc
 
 
 def test_session_roundtrip_restores_floating_plots(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PySide6.QtWidgets import QDialog, QWidget
-
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE, LAYOUT_TABLE_STACK
+    from PySide6.QtWidgets import QDialog, QWidget
 
     class FakePlot(QWidget):
         def __init__(self, label: str = "a") -> None:
@@ -1172,7 +1165,7 @@ def test_session_roundtrip_restores_floating_plots(qapp, monkeypatch) -> None:  
         restored.append(w)
         return w
 
-    monkeypatch.setattr(ChemistryWorkspaceWindow, "_restore_docked_plot_widget", fake_restore)
+    monkeypatch.setattr(SessionPlots, "_restore_docked_plot_widget", fake_restore)
     monkeypatch.setattr(
         ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
@@ -1206,9 +1199,8 @@ def test_session_roundtrip_restores_floating_plots(qapp, monkeypatch) -> None:  
 
 
 def test_session_restore_dispatches_analysis_plot_kind(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from PySide6.QtWidgets import QWidget
-
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from PySide6.QtWidgets import QWidget
 
     class FakeSali(QWidget):
         def collect_session_state(self) -> dict:

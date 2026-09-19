@@ -21,6 +21,8 @@ from __future__ import annotations
 import importlib.metadata
 import logging
 
+from ..app_identity import APP_DISPLAY_NAME
+
 logger = logging.getLogger(__name__)
 
 # Keep in sync with rdkit>=… in pyproject.toml / requirements*.txt.
@@ -67,7 +69,7 @@ def unsupported_rdkit_message(version: str) -> str:
     """Human-readable install hint when the imported RDKit is too old."""
     required = ".".join(str(part) for part in MIN_RDKIT_VERSION)
     lines = [
-        f"MolManager requires RDKit {required} or newer; this environment imported {version}.",
+        f"{APP_DISPLAY_NAME} requires RDKit {required} or newer; this environment imported {version}.",
         "Install the official PyPI package named 'rdkit' (not 'rdkit-pypi', which stopped at 2022.9.5):",
         "  pip uninstall rdkit-pypi",
         "  pip install -r requirements.txt",

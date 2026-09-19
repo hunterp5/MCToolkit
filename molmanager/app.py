@@ -19,7 +19,9 @@ import os
 import sys
 
 from .platform_support.qt_webengine_flags import configure_qtwebengine_quiet_logs
+from .platform_support.qt_windows_caption import configure_windows_native_caption_platform
 
+configure_windows_native_caption_platform()
 configure_qtwebengine_quiet_logs()
 
 from PySide6.QtCore import QTimer  # noqa: E402
@@ -27,6 +29,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
+from .app_identity import apply_qt_application_identity  # noqa: E402
 from .platform_support.app_logging import configure_app_logging, install_crash_excepthook  # noqa: E402
 from .platform_support.rdkit_runtime_setup import configure_rdkit_for_desktop_app  # noqa: E402
 from .ui.main_window import ChemistryWorkspaceWindow  # noqa: E402
@@ -54,7 +57,7 @@ def _preload_qt_webengine() -> None:
 
 
 def _argv_for_qt(argv: list[str]) -> tuple[list[str], str | None, str | None]:
-    """Remove MolManager-only flags so ``QApplication`` does not see unknown options."""
+    """Remove MCtoolkit-only flags so ``QApplication`` does not see unknown options."""
     out: list[str] = [argv[0]] if argv else []
     load_session: str | None = None
     open_file: str | None = None
@@ -100,12 +103,15 @@ def main(argv: list[str] | None = None) -> int:
     _preload_qt_webengine()
     argv_qt, load_session, open_file = _argv_for_qt(list(argv))
     app = QApplication(argv_qt)
+    apply_qt_application_identity(app)
     bootstrap_application_gui(app)
 
     w = ChemistryWorkspaceWindow()
     w.show()
     from .platform_support.qt_webengine_flags import schedule_qtwebengine_prewarm
+    from .platform_support.qt_windows_caption import apply_classic_native_captions
 
+    apply_classic_native_captions(app)
     schedule_qtwebengine_prewarm()
     if load_session:
         try:

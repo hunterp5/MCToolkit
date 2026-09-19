@@ -26,9 +26,11 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from ..app_identity import http_user_agent
+
 _CHEMBL_MOLECULE_JSON = "https://www.ebi.ac.uk/chembl/api/data/molecule.json"
 _DEFAULT_MAX_CHEMBL_NUM = 6_200_000
-_USER_AGENT = "MolManager/1.0 (random ChEMBL sample; local desktop app)"
+_USER_AGENT = http_user_agent("random ChEMBL sample")
 
 
 @dataclass(frozen=True)

@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSettings
+from ..app_identity import qt_settings
 
 # Default RDKit draw → QPixmap size for 2D structure images.
 DEFAULT_STRUCTURE_DEPICT_WIDTH = 210
@@ -49,8 +49,6 @@ REACTION_DEPICT_WIDTH_MULTIPLIER = 3
 # Same inset as molecules so the reaction arrow is not clipped.
 REACTION_DEPICT_PADDING = 0.05
 
-_SETTINGS_ORG = "MolManager"
-_SETTINGS_APP = "MolManager"
 _SETTINGS_KEY_STRUCTURE_WIDTH = "structure/depict_width"
 _SETTINGS_KEY_STRUCTURE_HEIGHT = "structure/depict_height"
 
@@ -97,7 +95,7 @@ def reaction_depict_size(*, zoomed: bool = False) -> tuple[int, int]:
 
 def load_saved_structure_depict_size() -> tuple[int, int]:
     """Return saved depiction size, or defaults when unset."""
-    settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    settings = qt_settings()
     try:
         w = int(settings.value(_SETTINGS_KEY_STRUCTURE_WIDTH, 0))
     except (TypeError, ValueError):
@@ -119,7 +117,7 @@ def set_structure_depict_size(width: int, height: int, *, persist: bool = True) 
     _RUNTIME_WIDTH = w
     _RUNTIME_HEIGHT = h
     if persist:
-        settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+        settings = qt_settings()
         settings.setValue(_SETTINGS_KEY_STRUCTURE_WIDTH, w)
         settings.setValue(_SETTINGS_KEY_STRUCTURE_HEIGHT, h)
     return w, h

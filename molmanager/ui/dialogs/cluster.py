@@ -310,7 +310,7 @@ class ClusterDialog(QDialog):
         self._opt_stack.setCurrentIndex(self._method_pages.get(key, 0))
 
     def _on_exploratory_toggled(self, state: int) -> None:
-        ex = state == int(Qt.Checked)
+        ex = state == Qt.Checked
         self._explore_panel.setVisible(ex)
         self._single_method_widget.setVisible(not ex)
         self.explore_table.setVisible(ex and self.explore_table.rowCount() > 0)

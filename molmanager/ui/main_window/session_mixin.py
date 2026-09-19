@@ -19,22 +19,22 @@
 from __future__ import annotations
 
 from ...table.session_codec import SESSION_VERSION_CURRENT
-from .session_csv_mixin import SessionCsvMixin
-from .session_plots_mixin import SessionPlotsMixin
-from .session_restore_mixin import SessionRestoreMixin
-from .session_save_mixin import SessionSaveMixin
-from .session_table_layout_mixin import SessionTableLayoutMixin
+from ..session_csv import SessionCsv
+from ..session_plots import SessionPlots
+from ..session_restore import SessionRestore
+from ..session_save import SessionSave
+from ..session_table_layout import SessionTableLayout
 
 
 class SessionMixin(
-    SessionSaveMixin,
-    SessionTableLayoutMixin,
-    SessionPlotsMixin,
-    SessionRestoreMixin,
-    SessionCsvMixin,
+    SessionSave,
+    SessionTableLayout,
+    SessionPlots,
+    SessionRestore,
+    SessionCsv,
 ):
     _SESSION_FORMAT = "molmanager_session"
     _SESSION_FORMAT_ALIASES = frozenset(
-        {"molmanager_session", "MOLMANAGER_session", "chemmanager_session"}
+        {"molmanager_session", "MOLMANAGER_session", "chemmanager_session", "mctoolkit_session"}
     )
     _SESSION_VERSION = SESSION_VERSION_CURRENT

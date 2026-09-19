@@ -106,7 +106,7 @@ def test_save_session_clears_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
     monkeypatch.setattr(
         QFileDialog,
         "getSaveFileName",
-        lambda *args, **kwargs: (str(out), "MolManager Session (*.cms)"),
+        lambda *args, **kwargs: (str(out), "MCtoolkit Session (*.cms)"),
     )
     assert w.save_session_as() is True
     assert not w._session_has_unsaved_changes()
@@ -144,7 +144,7 @@ def test_save_selected_to_session_writes_subset_without_clearing_dirty(qapp, mon
     monkeypatch.setattr(
         QFileDialog,
         "getSaveFileName",
-        lambda *args, **kwargs: (str(out), "MolManager Session (*.cms)"),
+        lambda *args, **kwargs: (str(out), "MCtoolkit Session (*.cms)"),
     )
     assert w.save_selected_to_session() is True
     assert w._session_has_unsaved_changes()
@@ -562,6 +562,92 @@ def test_header_select_all_uses_visible_rows_only(qapp):  # noqa: ARG001
     w.close()
 
 
+def test_header_select_all_unfiltered_chunked_oid_path(qapp, monkeypatch):  # noqa: ARG001
+    """Select All with no filter uses the chunked OID path once the table is large enough."""
+    from types import SimpleNamespace
+
+    w = ChemistryWorkspaceWindow()
+    _seed_two_rows(w)
+    monkeypatch.setattr(
+        "molmanager.ui.table_session_selection.load_config",
+        lambda: SimpleNamespace(
+            table_selection_oid_override_min=1,
+            table_selection_chunk_rows=2000,
+        ),
+    )
+    assert w._visible_source_row_indices() is None
+    w._select_all_rows()
+    qapp.processEvents()
+    assert w._selected_oids_set() == {0, 1}
+    w.close()
+
+
+def test_header_context_menu_select_and_sort_actions(qapp):  # noqa: ARG001
+    w = ChemistryWorkspaceWindow()
+    _seed_two_rows(w)
+    mw = w.headers.index("MW")
+    menu = w._create_header_context_menu(mw)
+    assert menu is not None
+    names = {a.objectName() for a in menu.actions() if a.objectName()}
+    select_menu = qt_submenu(menu, "Select")
+    names.update(a.objectName() for a in select_menu.actions() if a.objectName())
+    sort_menu = qt_submenu(menu, "Sort")
+    for sub in sort_menu.actions():
+        child = sub.menu()
+        if child is not None:
+            names.update(a.objectName() for a in child.actions() if a.objectName())
+    assert names >= {
+        "header_select_column",
+        "header_select_all",
+        "header_select_first_occurrence",
+        "header_select_empty",
+        "header_sort_num_asc",
+        "header_sort_num_desc",
+        "header_sort_alpha_asc",
+        "header_sort_alpha_desc",
+        "header_search",
+        "header_color",
+        "header_rename",
+        "header_duplicate",
+        "header_delete",
+        "header_logarithmic",
+        "header_precision",
+    }
+
+    w._select_column(mw)
+    qapp.processEvents()
+    w._select_all_rows()
+    qapp.processEvents()
+    assert w._selected_oids_set() == {0, 1}
+    w._select_first_occurrence_per_distinct_value(mw)
+    qapp.processEvents()
+    assert w._selected_oids_set() == {0, 1}
+    w._select_empty_cells_in_column(mw)
+    qapp.processEvents()
+    assert w._selected_oids_set() == set()
+    w._apply_table_sort(mw, True, "numeric")
+    assert [w._table_model.row_oid(i) for i in range(2)] == [1, 0]
+    w._apply_table_sort(mw, False, "alphabetic")
+    assert [w._table_model.row_oid(i) for i in range(2)] == [0, 1]
+    w.open_table_search_with_column(mw)
+    assert w._search_criterion_rows
+    w._toggle_column_logarithmic("MW")
+    assert "MW" in w._logarithmic_columns
+    w.close()
+
+
+def test_structure_header_select_first_occurrence_and_empty(qapp):  # noqa: ARG001
+    w = ChemistryWorkspaceWindow()
+    _seed_two_rows(w)
+    w._select_first_occurrence_per_distinct_structure()
+    qapp.processEvents()
+    assert w._selected_oids_set() == {0, 1}
+    w._select_empty_structure_cells()
+    qapp.processEvents()
+    assert w._selected_oids_set() == set()
+    w.close()
+
+
 def test_plot_clear_selection_drops_header_select_highlight(qapp):  # noqa: ARG001
     from molmanager.ui.plot_table_sync import clear_table_selection_from_plot
 
@@ -885,6 +971,13 @@ def test_data_menu_nests_medchem_with_dimensionality_reduction(qapp):  # noqa: A
     assert "UMAP Visualization…" not in data_labels
     assert "Self-Organizing Map…" not in data_labels
     assert data_labels.index("Dimensionality Reduction") == data_labels.index("MedChem") + 1
+    assert data_labels[-2:] == ["Filter", "Search…"]
+    assert "Filter" not in tools_labels
+    assert "Search…" not in tools_labels
+    filt = qt_submenu(data, "Filter")
+    assert [a.text().replace("&", "") for a in filt.actions() if not a.isSeparator()][0] == (
+        "Toggle Panel"
+    )
     medchem = qt_submenu(data, "MedChem")
     assert [a.text().replace("&", "") for a in medchem.actions()] == [
         "BOILED-Egg plot…",

@@ -21,20 +21,20 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 
-from ..compound_table_model import CompoundTableModel
-from ...table.structure_depiction_layout import (
+from ..table.structure_depiction_layout import (
     STRUCTURE_COLUMN_HORIZONTAL_PADDING,
     structure_column_minimum_width,
     structure_depict_height,
     structure_depict_width,
     structure_row_default_height,
 )
+from .compound_table_model import CompoundTableModel
 
 
-class StructureLayoutMixin:
+class TableBuildLayout:
     def _view_row_to_source_row(self, view_row: int) -> int:
         """Map a table view row index to the source ``CompoundTableModel`` row."""
-        proxy = getattr(self, "_filter_proxy_model", None)
+        proxy = getattr(self._app, "_filter_proxy_model", None)
         if proxy is not None:
             src = proxy.mapToSource(proxy.index(int(view_row), 0))
             if src.isValid():
@@ -43,25 +43,25 @@ class StructureLayoutMixin:
 
     def apply_structure_table_layout(self) -> None:
         """Sync Structure column row/column chrome to the current depiction size."""
-        if not hasattr(self, "table") or self.table is None:
+        if not hasattr(self._app, "table") or self._app.table is None:
             return
         row_h = structure_row_default_height()
         col = CompoundTableModel.STRUCTURE_COL
-        vh = self.table.verticalHeader()
+        vh = self._app.table.verticalHeader()
         if vh is not None:
             vh.setDefaultSectionSize(row_h)
-        zoomed = bool(getattr(self, "zoomed_ids", None))
+        zoomed = bool(getattr(self._app, "zoomed_ids", None))
         min_col = structure_column_minimum_width(zoomed=zoomed)
-        self.table.set_structure_column_minimum_width(min_col)
-        if int(self.table.columnWidth(col)) < min_col:
-            self.table.setColumnWidth(col, min_col)
-        if hasattr(self, "_table_model") and self._table_model is not None:
-            self._table_model.notify_structure_column_changed()
-        self.table.viewport().update()
+        self._app.table.set_structure_column_minimum_width(min_col)
+        if int(self._app.table.columnWidth(col)) < min_col:
+            self._app.table.setColumnWidth(col, min_col)
+        if hasattr(self._app, "_table_model") and self._app._table_model is not None:
+            self._app._table_model.notify_structure_column_changed()
+        self._app.table.viewport().update()
 
     def apply_structure_depict_size(self, width: int, height: int, *, persist: bool = True) -> None:
         """Apply depiction size from Settings and optionally re-render the Structure column."""
-        from ...table.structure_depiction_layout import set_structure_depict_size
+        from ..table.structure_depiction_layout import set_structure_depict_size
 
         set_structure_depict_size(width, height, persist=persist)
         self.apply_structure_table_layout()
@@ -70,22 +70,25 @@ class StructureLayoutMixin:
 
     def rerender_structure_column_for_new_size(self) -> None:
         """Re-draw Structure cells after depiction size changed in Settings."""
-        if not hasattr(self, "_table_model") or self._table_model.rowCount() <= 0:
-            if hasattr(self, "_table_model") and self._table_model is not None:
-                self._table_model.notify_structure_column_changed()
+        if not hasattr(self._app, "_table_model") or self._app._table_model.rowCount() <= 0:
+            if hasattr(self._app, "_table_model") and self._app._table_model is not None:
+                self._app._table_model.notify_structure_column_changed()
             return
-        if getattr(self, "_render2d_batch_active", False) or self.process_queue.has_running_job():
-            if hasattr(self, "status_label"):
-                self.status_label.setText(
+        if (
+            getattr(self._app, "_render2d_batch_active", False)
+            or self._app.process_queue.has_running_job()
+        ):
+            if hasattr(self._app, "status_label"):
+                self._app.status_label.setText(
                     "2D render size saved. Re-draw structures when the current job finishes."
                 )
             return
-        self.zoomed_ids.clear()
+        self._app.zoomed_ids.clear()
         w, h = structure_depict_width(), structure_depict_height()
         renders, row_by_oid = self._build_render2d_tasks_in_table_order("Structure", w, h, None)
-        self._table_model.clear_structure_png_store()
+        self._app._table_model.clear_structure_png_store()
         if not renders:
-            self._table_model.notify_structure_column_changed()
+            self._app._table_model.notify_structure_column_changed()
             return
         self._start_render_2d_batch(
             renders,
@@ -97,21 +100,21 @@ class StructureLayoutMixin:
 
     def _sync_structure_column_width_for_zoom_state(self) -> None:
         """Set Structure column width from zoom state (O(1), no full-table scan)."""
-        zoomed = bool(getattr(self, "zoomed_ids", None))
+        zoomed = bool(getattr(self._app, "zoomed_ids", None))
         need = structure_column_minimum_width(zoomed=zoomed)
-        self.table.set_structure_column_minimum_width(need)
+        self._app.table.set_structure_column_minimum_width(need)
         col = CompoundTableModel.STRUCTURE_COL
-        if int(self.table.columnWidth(col)) != need:
-            self.table.setColumnWidth(col, need)
+        if int(self._app.table.columnWidth(col)) != need:
+            self._app.table.setColumnWidth(col, need)
 
     def _normal_structure_pixmap_for_oid(self, oid: int) -> QPixmap | None:
         """Best-effort 1× depiction: PNG store, else scale down the in-memory pixmap."""
-        store = self._table_model._structure_png_store
+        store = self._app._table_model._structure_png_store
         if store is not None and store.has_png(oid):
             pm = store.pixmap(oid)
             if pm is not None and not pm.isNull():
                 return pm
-        current = self._table_model.structure_pixmap_for_oid(oid)
+        current = self._app._table_model.structure_pixmap_for_oid(oid)
         if current is None or current.isNull():
             return None
         w, h = structure_depict_width(), structure_depict_height()
@@ -124,8 +127,8 @@ class StructureLayoutMixin:
         pm = self._normal_structure_pixmap_for_oid(oid)
         if pm is None or pm.isNull():
             return False
-        self._table_model.set_structure_pixmap(oid, pm)
-        self.table.setRowHeight(int(view_row), structure_depict_height())
+        self._app._table_model.set_structure_pixmap(oid, pm)
+        self._app.table.setRowHeight(int(view_row), structure_depict_height())
         self._sync_structure_column_width_for_zoom_state()
         return True
 
@@ -135,22 +138,22 @@ class StructureLayoutMixin:
         pad = STRUCTURE_COLUMN_HORIZONTAL_PADDING
         pix_w = int(pm.width()) if pm is not None and not pm.isNull() else int(fallback_w)
         need = max(1, pix_w + pad)
-        cur = int(self.table.columnWidth(col))
+        cur = int(self._app.table.columnWidth(col))
         if need > cur:
-            self.table.setColumnWidth(col, need)
-        if need > self.table.structure_column_minimum_width():
-            self.table.set_structure_column_minimum_width(need)
+            self._app.table.setColumnWidth(col, need)
+        if need > self._app.table.structure_column_minimum_width():
+            self._app.table.set_structure_column_minimum_width(need)
 
     def _sync_data_pixmap_column_width(
         self, header_name: str, pm: QPixmap | None, fallback_w: int
     ) -> None:
         try:
-            col = self.headers.index(header_name)
+            col = self._app.headers.index(header_name)
         except ValueError:
             return
         pad = STRUCTURE_COLUMN_HORIZONTAL_PADDING
         pix_w = int(pm.width()) if pm is not None and not pm.isNull() else int(fallback_w)
         need = max(1, pix_w + pad)
-        cur = int(self.table.columnWidth(col))
+        cur = int(self._app.table.columnWidth(col))
         if need > cur:
-            self.table.setColumnWidth(col, need)
+            self._app.table.setColumnWidth(col, need)

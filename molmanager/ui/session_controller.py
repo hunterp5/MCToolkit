@@ -18,28 +18,114 @@
 
 from __future__ import annotations
 
-from .app_kernel import AppKernel, bind_mixin_methods
-from .main_window.session_csv_mixin import SessionCsvMixin
-from .main_window.session_plots_mixin import SessionPlotsMixin
-from .main_window.session_restore_mixin import SessionRestoreMixin
-from .main_window.session_save_mixin import SessionSaveMixin
-from .main_window.session_table_layout_mixin import SessionTableLayoutMixin
+from typing import Any, Protocol
+
+from ..table.session_codec import SESSION_VERSION_CURRENT
+from .app_roles import (
+    JobScheduler,
+    ProgressChrome,
+    SessionState,
+    StoreAccess,
+    TableData,
+    TableSelection,
+)
+from .session_csv import SessionCsv
+from .session_plots import SessionPlots
+from .session_restore import SessionRestore
+from .session_save import SessionSave
+from .session_table_layout import SessionTableLayout
 
 
-class SessionController:
-    """Session document collect/restore. Kernel holds sqlite, table, and plot hosts.
+class SessionLoadState(Protocol):
+    """Parse/restore generation and the in-flight chunked-load contexts."""
 
-    Legacy ``bind_mixin_methods`` still supplies the mixin body. New methods: ``self._app``.
+    _session_parse_busy: bool
+    _session_restore_ctx: dict | None
+    _session_finalize_ctx: dict | None
+    _csv_session_ctx: dict | None
+    _session_load_generation: int
+    _session_mutation_paused: bool
+    _session_awaiting_ready: bool
+    _session_waiting_for_render: bool
+
+
+class SessionPendingState(Protocol):
+    """Deferred chrome, layout, and follow-up flags until the workspace reveals."""
+
+    _pending_session_clean_on_ready: bool
+    _pending_session_column_order: list | None
+    _pending_session_som_browse: Any
+    _pending_session_table_layout: dict | None
+    _pending_session_workspace_layout: Any
+    _session_hold_workspace_surfaces: bool
+    _session_plot_wait_deadline: float
+    _session_search_want_visible: bool
+
+
+class SessionSurfaceState(Protocol):
+    """Live plot/protein hosts and table chrome the session document round-trips."""
+
+    _protein_viewer_dialog: Any
+    _protein_viewer_session: Any
+    _plot_dialogs: list
+    _floating_result_dialogs: list
+    _plot_panel_splitter_sizes: Any
+    _logarithmic_columns: set
+    _workspace_layout: Any
+    _session_sort: Any
+
+
+class SessionWindowOps(Protocol):
+    """Window/other-collaborator methods session save/restore still call."""
+
+    def _filterable_data_column_names(self) -> list[str]: ...
+    def _export_cell_text(self, row: int, col: int) -> str: ...
+    def _register_plot_dialog(self, dlg: Any) -> None: ...
+    def _bind_undocked_browser_dialog(self, dlg: Any) -> bool: ...
+    def _register_floating_result_dialog(self, dlg: Any) -> None: ...
+    def _sync_filter_panel_scroll_content(self) -> None: ...
+
+
+class SessionHost(
+    TableData,
+    TableSelection,
+    ProgressChrome,
+    SessionState,
+    JobScheduler,
+    StoreAccess,
+    SessionLoadState,
+    SessionPendingState,
+    SessionSurfaceState,
+    SessionWindowOps,
+    Protocol,
+):
+    """What session collect/restore needs from the window.
+
+    Kernel table/progress/session/job/store members stay on the window, as do the
+    plot/protein dialog handles the session document round-trips. Dimensionality-
+    reduction dialog leftovers are reached with getattr.
     """
 
-    def __init__(self, app: AppKernel) -> None:
+    def clear_all(self) -> None: ...
+    def apply_filters(self) -> None: ...
+    def calculate_global_bounds(self, *args: Any, **kwargs: Any) -> None: ...
+    def chemistry_tool_structure_sources(self) -> list[str]: ...
+
+
+class SessionController(
+    SessionSave,
+    SessionTableLayout,
+    SessionPlots,
+    SessionRestore,
+    SessionCsv,
+):
+    """Session document collect/restore. Kernel holds sqlite, table, and plot hosts."""
+
+    _SESSION_FORMAT = "molmanager_session"
+    _SESSION_FORMAT_ALIASES = frozenset(
+        {"molmanager_session", "MOLMANAGER_session", "chemmanager_session", "mctoolkit_session"}
+    )
+    _SESSION_VERSION = SESSION_VERSION_CURRENT
+
+    def __init__(self, app: SessionHost) -> None:
         self._app = app
-        bind_mixin_methods(
-            self,
-            app,
-            SessionSaveMixin,
-            SessionTableLayoutMixin,
-            SessionPlotsMixin,
-            SessionRestoreMixin,
-            SessionCsvMixin,
-        )

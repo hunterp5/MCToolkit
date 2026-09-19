@@ -1,6 +1,6 @@
 # Sketcher
 
-The Sketcher is an interactive molecule editor for drawing, editing, and inserting structures into the MolManager workflow.
+The Sketcher is an interactive molecule editor for drawing, editing, and inserting structures into the MCtoolkit workflow.
 
 ## Goal
 

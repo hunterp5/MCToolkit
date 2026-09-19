@@ -8,7 +8,7 @@ Find rows matching one or more textual or structural criteria quickly, then sele
 
 ## When to use
 
-Use for ad-hoc lookup (ID, name fragment, SMARTS) when a standing filter card is unnecessary.
+Open **Data → Search**. Use for ad-hoc lookup (ID, name fragment, SMARTS) when a standing filter card is unnecessary.
 
 ## Inputs / scope
 

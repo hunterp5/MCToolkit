@@ -652,9 +652,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         if color_col == "(none)":
             color_col = None
 
-        # Keep Plot Options up on the first run (no empty plot window yet).
-        if self._plot_window_is_visible():
-            hide_plot_options_dialog(self._opts_dialog)
+        hide_plot_options_dialog(self._opts_dialog)
         self._job_running = True
         self.run_btn.setEnabled(False)
         self.summary_text.setPlainText("Computing…")

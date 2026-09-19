@@ -21,6 +21,7 @@ from __future__ import annotations
 import math
 from typing import Sequence
 
+from ...chem.rdkit_conformer_xy import set_conformer_xy
 
 _HETERO = frozenset(
     {
@@ -707,12 +708,7 @@ def apply_iupac_orientation_to_conformer(
     xs, ys = apply_iupac_orientation(
         xs, ys, elements=elements, bonds=bonds, bond_orders=bond_orders
     )
-    try:
-        from rdkit.Geometry import Point3D
-    except Exception:
-        return
-    for i in range(na):
-        conf.SetAtomPosition(i, Point3D(xs[i], ys[i], 0.0))
+    set_conformer_xy(conf, xs, ys)
 
 
 def resolve_layout_overlaps_on_conformer(
@@ -729,9 +725,4 @@ def resolve_layout_overlaps_on_conformer(
     xs, ys = resolve_layout_overlaps(
         xs, ys, elements=elements, bonds=bonds, bond_orders=bond_orders
     )
-    try:
-        from rdkit.Geometry import Point3D
-    except Exception:
-        return
-    for i in range(na):
-        conf.SetAtomPosition(i, Point3D(xs[i], ys[i], 0.0))
+    set_conformer_xy(conf, xs, ys)

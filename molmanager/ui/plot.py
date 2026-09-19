@@ -637,7 +637,7 @@ class PlotWidget(
         self.refresh_axis_columns()
 
     def _on_table_header_data_changed(self, orientation, first: int, last: int) -> None:
-        if int(orientation) == Qt.Horizontal:
+        if orientation == Qt.Horizontal:
             self.refresh_axis_columns()
 
     def refresh_axis_columns(self) -> None:

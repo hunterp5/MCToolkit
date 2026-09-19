@@ -98,10 +98,10 @@ print('OK: torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'unipka
 if torch.cuda.is_available():
     print('GPU:', torch.cuda.get_device_name(0))
 elif os.environ.get('MOLMANAGER_REQUIRE_CUDA') == '1':
-    sys.exit('CUDA was requested but torch.cuda.is_available() is False. Close MolManager if it is running and retry.')
+    sys.exit('CUDA was requested but torch.cuda.is_available() is False. Close MCtoolkit if it is running and retry.')
 "@
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-Write-Host "`nDone. First pKa run downloads Uni-pKa weights (unipka-download-model). Run MolManager with this same Python."
+Write-Host "`nDone. First pKa run downloads Uni-pKa weights (unipka-download-model). Run MCtoolkit with this same Python."

@@ -8,7 +8,7 @@ Narrow the library to chemically or numerically interesting subsets without dele
 
 ## When to use
 
-Use during hit triage, before scoped exports, or whenever you need reusable constraints (e.g. MW range + SMARTS).
+Open **Data → Filter**. Use during hit triage, before scoped exports, or whenever you need reusable constraints (e.g. MW range + SMARTS).
 
 ## Inputs / scope
 

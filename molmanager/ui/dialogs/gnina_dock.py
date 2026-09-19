@@ -272,8 +272,8 @@ class GninaDockDialog(QDialog):
         self.edit_pharmacophore = QLineEdit()
         self.edit_pharmacophore.setPlaceholderText("pharmacophore.json (optional)")
         self.edit_pharmacophore.setToolTip(
-            "MolManager pharmacophore JSON from Protein Viewer → Tools → Pharmacophore. "
-            "Docking itself is unchanged (CNN/Vina). After poses are written, MolManager "
+            "MCtoolkit pharmacophore JSON from Protein Viewer → Tools → Pharmacophore. "
+            "Docking itself is unchanged (CNN/Vina). After poses are written, MCtoolkit "
             "keeps only those whose RDKit feature sites sit in the query spheres "
             "(protein frame). Exclusion spheres reject poses with a heavy atom inside."
         )

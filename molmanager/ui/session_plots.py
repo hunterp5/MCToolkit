@@ -23,16 +23,16 @@ import logging
 
 from PySide6.QtCore import QByteArray
 
-from ..qt_widget_utils import qobject_is_deleted
+from .qt_widget_utils import qobject_is_deleted
 
 logger = logging.getLogger(__name__)
 
 
-class SessionPlotsMixin:
+class SessionPlots:
     def _close_live_protein_viewer(self) -> None:
-        dlg = getattr(self, "_protein_viewer_dialog", None)
+        dlg = getattr(self._app, "_protein_viewer_dialog", None)
         if dlg is None or qobject_is_deleted(dlg):
-            self._protein_viewer_dialog = None
+            self._app._protein_viewer_dialog = None
             return
         try:
             dlg._suppress_close_prompt = True
@@ -47,26 +47,26 @@ class SessionPlotsMixin:
             dlg.setParent(None)
         except RuntimeError:
             pass
-        self._protein_viewer_dialog = None
+        self._app._protein_viewer_dialog = None
 
     def _discard_protein_viewer(self) -> None:
-        self._protein_viewer_session = None
+        self._app._protein_viewer_session = None
         self._close_live_protein_viewer()
 
     def _restore_protein_viewer(self, payload: object) -> None:
         """Keep the snapshot only; the window is rebuilt when Protein → Viewer opens."""
         self._close_live_protein_viewer()
         if not isinstance(payload, dict) or not payload.get("structures"):
-            self._protein_viewer_session = None
+            self._app._protein_viewer_session = None
             return
         try:
-            self._protein_viewer_session = json.loads(json.dumps(payload))
+            self._app._protein_viewer_session = json.loads(json.dumps(payload))
         except (TypeError, ValueError):
             logger.exception("Skipping Protein Viewer restore with invalid session state")
-            self._protein_viewer_session = None
+            self._app._protein_viewer_session = None
 
     def _apply_committed_protein_viewer_session(self, dlg) -> None:
-        payload = getattr(self, "_protein_viewer_session", None)
+        payload = getattr(self._app, "_protein_viewer_session", None)
         if not isinstance(payload, dict) or not payload.get("structures"):
             return
         apply_state = getattr(dlg, "apply_session_state", None)
@@ -79,7 +79,7 @@ class SessionPlotsMixin:
 
     def _collect_docked_plots(self) -> dict:
         """Docked plot widgets keyed by workspace pane (Plotter and analysis maps)."""
-        mgr = getattr(self, "_workspace_layout", None)
+        mgr = getattr(self._app, "_workspace_layout", None)
         if mgr is None:
             return {"panes": [], "preferred_pane_id": None, "layout_id": None}
         panes_out: list[dict] = []
@@ -147,9 +147,9 @@ class SessionPlotsMixin:
             seen.add(key)
             hosts.append(dlg)
 
-        for dlg in list(getattr(self, "_plot_dialogs", []) or []):
+        for dlg in list(getattr(self._app, "_plot_dialogs", []) or []):
             add(dlg)
-        for dlg in list(getattr(self, "_floating_result_dialogs", []) or []):
+        for dlg in list(getattr(self._app, "_floating_result_dialogs", []) or []):
             add(dlg)
         for attr in (
             "_pca_dialog",
@@ -167,7 +167,7 @@ class SessionPlotsMixin:
             "_metabolite_browser_dialog",
             "_molecule_3d_viewer_dialog",
         ):
-            add(getattr(self, attr, None))
+            add(getattr(self._app, attr, None))
         return hosts
 
     @staticmethod
@@ -245,8 +245,8 @@ class SessionPlotsMixin:
                 dlg.setParent(None)
             except RuntimeError:
                 pass
-        self._plot_dialogs = []
-        self._floating_result_dialogs = []
+        self._app._plot_dialogs = []
+        self._app._floating_result_dialogs = []
         for attr in (
             "_pca_dialog",
             "_tsne_dialog",
@@ -263,12 +263,12 @@ class SessionPlotsMixin:
             "_metabolite_browser_dialog",
             "_molecule_3d_viewer_dialog",
         ):
-            if getattr(self, attr, None) is not None:
-                setattr(self, attr, None)
+            if getattr(self._app, attr, None) is not None:
+                setattr(self._app, attr, None)
 
     def _discard_docked_plot_widgets(self) -> None:
         """Detach and delete docked plot widgets so a session restore starts clean."""
-        mgr = getattr(self, "_workspace_layout", None)
+        mgr = getattr(self._app, "_workspace_layout", None)
         if mgr is None:
             return
         widgets = []
@@ -283,9 +283,9 @@ class SessionPlotsMixin:
                 pass
 
     def _restore_docked_plot_widget(self, spec: dict):
-        from ..docked_plot_session import restore_docked_plot_widget
+        from .docked_plot_session import restore_docked_plot_widget
 
-        return restore_docked_plot_widget(self, spec)
+        return restore_docked_plot_widget(self._app, spec)
 
     def _workspace_layout_payload_from_session_doc(self, doc: object) -> dict | None:
         """Workspace splitter snapshot: top-level key, else copy inside table_layout."""
@@ -310,7 +310,7 @@ class SessionPlotsMixin:
         self, docked_payload: object, panes_data: list
     ) -> str | None:
         """Pick the workspace layout id to use when restoring docked plots."""
-        from .workspace_layout import (
+        from .main_window.workspace_layout import (
             LAYOUT_PRESETS,
             LAYOUT_TABLE_SIDE,
             LAYOUT_TABLE_SINGLE,
@@ -319,7 +319,7 @@ class SessionPlotsMixin:
         known = {p[0] for p in LAYOUT_PRESETS}
         candidates: list[str] = []
         for source in (
-            getattr(self, "_pending_session_workspace_layout", None),
+            getattr(self._app, "_pending_session_workspace_layout", None),
             docked_payload if isinstance(docked_payload, dict) else None,
         ):
             if not isinstance(source, dict):
@@ -352,7 +352,7 @@ class SessionPlotsMixin:
         """Re-open undocked plot windows from session state."""
         if not isinstance(payload, list) or not payload:
             return
-        from ..dockable_plot import plot_widget_display_title
+        from .dockable_plot import plot_widget_display_title
 
         for spec in payload:
             if not isinstance(spec, dict):
@@ -369,7 +369,7 @@ class SessionPlotsMixin:
                     pass
                 continue
             try:
-                dlg = factory(self)
+                dlg = factory(self._app)
             except Exception:
                 logger.exception("Failed to recreate floating plot from session")
                 try:
@@ -378,7 +378,7 @@ class SessionPlotsMixin:
                 except RuntimeError:
                     pass
                 continue
-            prepare = getattr(self, "_prepare_tool_dialog", None)
+            prepare = getattr(self._app, "_prepare_tool_dialog", None)
             if callable(prepare):
                 prepare(dlg)
             # Prefer plotter registration without importing PlotDialog (WebEngine).
@@ -386,9 +386,9 @@ class SessionPlotsMixin:
                 getattr(dlg, "_plot_widget", None) is not None
                 and getattr(dlg, "_panel", None) is None
             ):
-                self._register_plot_dialog(dlg)
-            elif not self._bind_undocked_browser_dialog(dlg):
-                self._register_floating_result_dialog(dlg)
+                self._app._register_plot_dialog(dlg)
+            elif not self._app._bind_undocked_browser_dialog(dlg):
+                self._app._register_floating_result_dialog(dlg)
             title = spec.get("display_title") or spec.get("window_title")
             if isinstance(title, str) and title.strip():
                 try:
@@ -411,7 +411,7 @@ class SessionPlotsMixin:
             if callable(sync):
                 sync()
             try:
-                if getattr(self, "_session_hold_workspace_surfaces", False):
+                if getattr(self._app, "_session_hold_workspace_surfaces", False):
                     widget.hide()
                     dlg.hide()
                 else:
@@ -421,7 +421,7 @@ class SessionPlotsMixin:
                 pass
 
     def _restore_docked_plots(self, payload: object) -> None:
-        mgr = getattr(self, "_workspace_layout", None)
+        mgr = getattr(self._app, "_workspace_layout", None)
         if mgr is None:
             return
         panes_data = payload.get("panes") if isinstance(payload, dict) else None
@@ -486,7 +486,7 @@ class SessionPlotsMixin:
             if not widgets:
                 continue
             for widget in widgets:
-                wire = getattr(self, "_wire_docked_plot_widget", None)
+                wire = getattr(self._app, "_wire_docked_plot_widget", None)
                 if callable(wire):
                     wire(widget)
             try:
@@ -502,6 +502,6 @@ class SessionPlotsMixin:
         # Re-assert saved workspace layout in case docking hooks changed it.
         if saved_layout and mgr.layout_id != saved_layout:
             mgr.apply_layout(saved_layout, preserve_plots=True)
-        show = getattr(self, "show_docked_plot_panel", None)
+        show = getattr(self._app, "show_docked_plot_panel", None)
         if callable(show):
             show()

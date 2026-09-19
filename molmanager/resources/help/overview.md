@@ -1,6 +1,6 @@
 # Overview
 
-MolManager is a desktop chemical table workspace for loading, preparing, analyzing, and exporting small-molecule data with RDKit-backed structure tools.
+MCtoolkit is a desktop chemical table workspace for loading, preparing, analyzing, and exporting small-molecule data with RDKit-backed structure tools.
 
 ## Goal
 
@@ -20,7 +20,7 @@ Works on the current session table (structures plus property columns). Most tool
 - **Edit** - undo/redo, clipboard, and selection commands.
 - **Tools** - prepare structures, fingerprints, docking helpers, design tools, predictors (pKa, permeability, SOM), random generators.
 - **Protein** - 3D structure viewer for PDB, mmCIF, and related crystallographic files, plus **Sequence** for MAFFT multiple-sequence alignment.
-- **Data** - statistics, plotter, MedChem plots, dimensionality reduction, QSAR, MPO.
+- **Data** - statistics, plotter, MedChem plots, dimensionality reduction, QSAR, MPO, filters, and table search.
 - **External** - SQL, PubChem, ChEMBL, patents.
 - **Settings** - theme, fonts, hotkeys, WSL executable for Linux-only tools.
 - **Layout** - rearrange or restore workspace panes.

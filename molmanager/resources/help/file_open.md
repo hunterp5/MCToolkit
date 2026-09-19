@@ -4,7 +4,7 @@ Open File loads a molecule, reaction, or data file into a new or current workspa
 
 ## Goal
 
-Bring an external library into MolManager as the working compound table with structures and properties ready for tools.
+Bring an external library into MCtoolkit as the working compound table with structures and properties ready for tools.
 
 ## When to use
 

@@ -1,4 +1,4 @@
-# Contributing to MolManager
+# Contributing to MCtoolkit
 
 This document is the versioned source of project coding standards for humans and CI.
 Cursor-specific copies live under [`.cursor/rules/`](../.cursor/rules/) (tracked in git).
@@ -7,7 +7,7 @@ Cursor-specific copies live under [`.cursor/rules/`](../.cursor/rules/) (tracked
 
 ### Copyright headers
 
-- Every **new** first-party source file must include the standard MolManager GPL copyright header.
+- Every **new** first-party source file must include the standard GPL copyright header (the block still names MolManager; see `.cursor/rules/copyright-headers.mdc`).
 - Keep a shebang as line 1 when present; put the header immediately below it.
 - Do **not** add the header to vendored/third-party assets (e.g. `molmanager/ui/static/`).
 - Full header text: [`.cursor/rules/copyright-headers.mdc`](../.cursor/rules/copyright-headers.mdc).
@@ -133,7 +133,7 @@ What is known, measured on one unchanged tree over eight runs:
 
 - Aborts cluster in `tests/test_protein_viewer.py` (three of six), but one landed in
   `tests/test_fast_prepare_pipeline.py`, so the victim test is not the cause.
-- There is no Python traceback, and the faulthandler dump holds no MolManager frames. This is
+- There is no Python traceback, and the faulthandler dump holds no MCtoolkit frames. This is
   native state, not an error in the test that happened to be running.
 - Capture mode is not a reliable workaround. Three `--capture=sys` runs passed and a fourth
   aborted; `--capture=sys` is still the configured default because an fd-captured abort throws the

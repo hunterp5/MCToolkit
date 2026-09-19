@@ -396,8 +396,6 @@ _PREFERRED_BIOTRANSFORMER_JARS = (
     "BioTransformer3.0.jar",
 )
 _KB_DIR_NAMES = ("database", "bkdb", "btkb")
-_SETTINGS_ORG = "MolManager"
-_SETTINGS_APP = "MolManager"
 _SETTINGS_KEY_BIOTRANSFORMER_JAR = "tools/biotransformer_jar"
 
 
@@ -427,18 +425,18 @@ def _first_biotransformer_jar(directory: Path) -> Path | None:
 def configured_biotransformer_jar_text() -> str:
     """User-picked JAR path from QSettings (empty when unset)."""
     try:
-        from PySide6.QtCore import QSettings
+        from ..app_identity import qt_settings
     except ImportError:
         return ""
-    raw = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SETTINGS_KEY_BIOTRANSFORMER_JAR, "")
+    raw = qt_settings().value(_SETTINGS_KEY_BIOTRANSFORMER_JAR, "")
     return str(raw or "").strip()
 
 
 def set_configured_biotransformer_jar(path: str | Path | None) -> None:
     """Persist a user-picked BioTransformer JAR, or clear the setting when ``path`` is empty."""
-    from PySide6.QtCore import QSettings
+    from ..app_identity import qt_settings
 
-    settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    settings = qt_settings()
     text = str(path or "").strip()
     if not text:
         settings.remove(_SETTINGS_KEY_BIOTRANSFORMER_JAR)

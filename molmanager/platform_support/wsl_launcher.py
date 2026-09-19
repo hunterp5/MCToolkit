@@ -32,25 +32,19 @@ from contextlib import suppress
 from pathlib import Path
 from shutil import which
 
-_SETTINGS_ORG = "MolManager"
-_SETTINGS_APP = "MolManager"
+from ..app_identity import qt_settings
+
 _SETTINGS_KEY_WSL = "tools/wsl_executable"
 _CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
 def _settings_value() -> str:
-    try:
-        from PySide6.QtCore import QSettings
-    except ImportError:
-        return ""
-    raw = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SETTINGS_KEY_WSL, "")
+    raw = qt_settings().value(_SETTINGS_KEY_WSL, "")
     return str(raw or "").strip()
 
 
 def _set_settings_value(path: str) -> None:
-    from PySide6.QtCore import QSettings
-
-    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_WSL, str(path or "").strip())
+    qt_settings().setValue(_SETTINGS_KEY_WSL, str(path or "").strip())
 
 
 def default_wsl_executable() -> str:

@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QPainter, QPalette, QPen
 from PySide6.QtWidgets import (
     QDialog,
     QGridLayout,
@@ -92,21 +92,23 @@ class LayoutPreviewTile(QWidget):
         painter.setRenderHint(QPainter.Antialiasing, True)
         pal = self.palette()
         border = (
-            pal.color(pal.Highlight) if (self._selected or self._hovered) else pal.color(pal.Mid)
+            pal.color(QPalette.Highlight)
+            if (self._selected or self._hovered)
+            else pal.color(QPalette.Mid)
         )
         width = 2.5 if (self._selected or self._hovered) else 1.0
         frame = QRectF(1.5, 1.5, self.width() - 3.0, self.height() - 3.0)
         painter.setPen(QPen(border, width))
-        bg = pal.color(pal.Base)
+        bg = pal.color(QPalette.Base)
         if self._hovered:
-            bg = QColor(pal.color(pal.AlternateBase))
+            bg = QColor(pal.color(QPalette.AlternateBase))
         painter.setBrush(bg)
         painter.drawRoundedRect(frame, 6, 6)
 
         diagram = QRectF(14, 12, self.width() - 28, self.height() - 44)
         self._paint_diagram(painter, diagram)
 
-        painter.setPen(pal.color(pal.Text))
+        painter.setPen(pal.color(QPalette.Text))
         font = QFont(self.font())
         font.setPointSize(max(9, font.pointSize()))
         painter.setFont(font)
@@ -115,22 +117,22 @@ class LayoutPreviewTile(QWidget):
 
     def _paint_diagram(self, painter: QPainter, rect: QRectF) -> None:
         pal = self.palette()
-        table = QColor(pal.color(pal.Button))
-        plot = QColor(pal.color(pal.Highlight))
+        table = QColor(pal.color(QPalette.Button))
+        plot = QColor(pal.color(QPalette.Highlight))
         plot.setAlpha(110)
         gap = 4.0
-        painter.setPen(QPen(pal.color(pal.Mid), 1.0))
+        painter.setPen(QPen(pal.color(QPalette.Mid), 1.0))
 
         def fill_rect(r: QRectF, color: QColor, text: str) -> None:
             painter.setBrush(color)
             painter.drawRoundedRect(r, 3, 3)
-            painter.setPen(pal.color(pal.Text))
+            painter.setPen(pal.color(QPalette.Text))
             f = QFont(self.font())
             f.setBold(True)
             f.setPointSize(max(8, f.pointSize() - 1))
             painter.setFont(f)
             painter.drawText(r, Qt.AlignCenter, text)
-            painter.setPen(QPen(pal.color(pal.Mid), 1.0))
+            painter.setPen(QPen(pal.color(QPalette.Mid), 1.0))
 
         lid = self.layout_id
         if lid == "table_only":

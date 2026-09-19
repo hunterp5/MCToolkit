@@ -19,14 +19,13 @@
 from __future__ import annotations
 
 import pytest
-from rdkit import Chem
-
 from molmanager.platform_support.config import load_config
 from molmanager.workers.load_render import (
     Render2DBatchProcessWorker,
     _mp_render_structure_batch,
     render2d_process_worker_count,
 )
+from rdkit import Chem
 
 SMILES = ["CCO", "c1ccccc1", "CC(=O)Oc1ccccc1C(=O)O"]
 
@@ -141,8 +140,9 @@ class _App:
     """Minimal stand-in exposing only what the batched render handler touches."""
 
     def __init__(self, rows_in_table: set[int], goal: int):
-        from molmanager.ui.main_window.render2d_results_mixin import Render2DResultsMixin
+        from molmanager.ui.table_build_render_results import TableBuildRenderResults
 
+        self._app = self
         self._rows = rows_in_table
         self._render2d_pending: dict = {}
         self._render2d_accept_session = 7
@@ -154,7 +154,7 @@ class _App:
         self.flushed = False
         self.restored = False
         self.status_label = type("L", (), {"setText": lambda _s, _t: None})()
-        self._cls = Render2DResultsMixin
+        self._cls = TableBuildRenderResults
 
     # Bound mixin methods under test.
     def _render2d_batch_session_accepted(self, s):

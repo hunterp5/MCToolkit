@@ -22,18 +22,17 @@ import colorsys
 import json
 import random
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication, QWidget
+
+from ..app_identity import qt_settings
 
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
 THEME_GROOVY = "groovy"
 THEME_CUSTOM = "custom"  # legacy single custom id; migrated to named themes
 THEME_CUSTOM_PREFIX = "custom:"
-
-_SETTINGS_ORG = "MolManager"
-_SETTINGS_APP = "MolManager"
 _SETTINGS_KEY_THEME = "gui/theme"
 _SETTINGS_KEY_CUSTOM_PALETTE = "gui/custom_palette"  # legacy single palette
 _SETTINGS_KEY_CUSTOM_THEMES = "gui/custom_themes"
@@ -112,7 +111,7 @@ def default_table_font_pt() -> int:
 
 
 def _load_saved_font_pt(key: str) -> int:
-    raw = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(key, 0)
+    raw = qt_settings().value(key, 0)
     try:
         pt = int(raw)
     except (TypeError, ValueError):
@@ -128,7 +127,7 @@ def load_saved_table_font_pt() -> int:
 
 
 def save_table_font_pt(pt: int) -> None:
-    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_TABLE_FONT_PT, int(pt))
+    qt_settings().setValue(_SETTINGS_KEY_TABLE_FONT_PT, int(pt))
 
 
 def _normalize_table_align_h(value: object) -> str:
@@ -175,7 +174,7 @@ def table_text_alignment_flags() -> int:
 
 def load_saved_table_text_alignment() -> tuple[str, str]:
     """Saved table text alignment, or left/center when unset."""
-    settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    settings = qt_settings()
     h = _normalize_table_align_h(settings.value(_SETTINGS_KEY_TABLE_ALIGN_H, DEFAULT_TABLE_ALIGN_H))
     v = _normalize_table_align_v(settings.value(_SETTINGS_KEY_TABLE_ALIGN_V, DEFAULT_TABLE_ALIGN_V))
     return h, v
@@ -191,7 +190,7 @@ def set_table_text_alignment(
     _RUNTIME_TABLE_ALIGN_H = h
     _RUNTIME_TABLE_ALIGN_V = v
     if persist:
-        settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+        settings = qt_settings()
         settings.setValue(_SETTINGS_KEY_TABLE_ALIGN_H, h)
         settings.setValue(_SETTINGS_KEY_TABLE_ALIGN_V, v)
     return h, v
@@ -203,12 +202,12 @@ def load_saved_app_font_pt() -> int:
 
 
 def save_app_font_pt(pt: int) -> None:
-    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_APP_FONT_PT, int(pt))
+    qt_settings().setValue(_SETTINGS_KEY_APP_FONT_PT, int(pt))
 
 
 def load_status_bar_visible() -> bool:
     """Whether the main-window status bar (messages and memory) is shown."""
-    raw = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SETTINGS_KEY_STATUS_BAR, True)
+    raw = qt_settings().value(_SETTINGS_KEY_STATUS_BAR, True)
     if isinstance(raw, bool):
         return raw
     if isinstance(raw, (int, float)):
@@ -220,7 +219,7 @@ def load_status_bar_visible() -> bool:
 
 
 def save_status_bar_visible(visible: bool) -> None:
-    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_STATUS_BAR, bool(visible))
+    qt_settings().setValue(_SETTINGS_KEY_STATUS_BAR, bool(visible))
 
 
 def apply_application_font_pt(pt: int) -> int:
@@ -262,15 +261,16 @@ def ensure_fusion_style(app: QApplication | None = None) -> bool:
 
 
 def _qt_color_scheme_for_theme(theme: str) -> object | None:
-    """Qt 6 Fusion follows the OS scheme unless we pin Light/Dark/Unknown."""
+    """Qt 6 Fusion follows the OS scheme unless we pin a value.
+
+    Light/Dark also recolor native Windows title bars (black captions). PyQt5
+    never did that — captions stayed the classic light frame. Use Unknown so
+    Fusion reads our QPalette and ``qt_windows_caption`` keeps the old chrome.
+    """
+    del theme
     scheme = getattr(Qt, "ColorScheme", None)
     if scheme is None:
         return None
-    name = _normalize_theme_name(theme)
-    if name == THEME_DARK:
-        return scheme.Dark
-    if name == THEME_LIGHT:
-        return scheme.Light
     return scheme.Unknown
 
 
@@ -304,8 +304,10 @@ def bootstrap_application_gui(app: QApplication | None = None) -> None:
     ensure_fusion_style(app)
     apply_application_font_pt(load_saved_app_font_pt())
     from .qt_widget_utils import install_unfocused_wheel_passthrough
+    from ..platform_support.qt_windows_caption import install_classic_native_captions
 
     install_unfocused_wheel_passthrough(app)
+    install_classic_native_captions(app)
 
 
 def is_custom_theme_id(theme: str | None) -> bool:
@@ -352,7 +354,7 @@ def _normalize_theme_name(theme: str | None) -> str:
 
 def load_saved_theme_name() -> str:
     """Return the user's saved GUI theme, or light when none has been chosen yet."""
-    settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    settings = qt_settings()
     if not settings.contains(_SETTINGS_KEY_THEME):
         return THEME_LIGHT
     name = _normalize_theme_name(str(settings.value(_SETTINGS_KEY_THEME) or ""))
@@ -365,7 +367,7 @@ def load_saved_theme_name() -> str:
 
 def save_theme_name(theme: str) -> None:
     name = _normalize_theme_name(theme)
-    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_THEME, name)
+    qt_settings().setValue(_SETTINGS_KEY_THEME, name)
 
 
 def default_custom_palette_colors() -> dict[str, str]:
@@ -393,7 +395,7 @@ def _normalize_palette_colors(colors: dict | None) -> dict[str, str]:
 
 def _load_legacy_custom_palette_dict() -> dict[str, str] | None:
     """Parse the legacy single-palette QSettings key, or None if unset/invalid."""
-    settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    settings = qt_settings()
     if not settings.contains(_SETTINGS_KEY_CUSTOM_PALETTE):
         return None
     raw = settings.value(_SETTINGS_KEY_CUSTOM_PALETTE, "")
@@ -415,7 +417,7 @@ def _load_legacy_custom_palette_dict() -> dict[str, str] | None:
 
 
 def _read_custom_themes_raw() -> dict[str, dict[str, str]]:
-    settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    settings = qt_settings()
     raw = settings.value(_SETTINGS_KEY_CUSTOM_THEMES, "")
     data: dict | None = None
     if isinstance(raw, dict):
@@ -441,7 +443,7 @@ def _read_custom_themes_raw() -> dict[str, dict[str, str]]:
 
 def _write_custom_themes_raw(themes: dict[str, dict[str, str]]) -> None:
     payload = {name: _normalize_palette_colors(colors) for name, colors in themes.items()}
-    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(
+    qt_settings().setValue(
         _SETTINGS_KEY_CUSTOM_THEMES,
         json.dumps(payload, separators=(",", ":"), sort_keys=True),
     )
@@ -498,7 +500,7 @@ def load_saved_custom_palette_colors() -> dict[str, str]:
 def save_custom_palette_colors(colors: dict[str, str]) -> dict[str, str]:
     """Persist colors to the legacy single-palette key (does not add a menu theme)."""
     base = _normalize_palette_colors(colors)
-    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(
+    qt_settings().setValue(
         _SETTINGS_KEY_CUSTOM_PALETTE,
         json.dumps(base, separators=(",", ":"), sort_keys=True),
     )
@@ -699,7 +701,8 @@ def _light_palette() -> QPalette:
         return QPalette(_FUSION_LIGHT_PALETTE)
     # Qt 6 Fusion's standardPalette() follows the OS scheme; pin Light so this
     # stays the same Fusion light chrome the PyQt5 app used.
-    light_scheme = _qt_color_scheme_for_theme(THEME_LIGHT)
+    scheme = getattr(Qt, "ColorScheme", None)
+    light_scheme = scheme.Light if scheme is not None else None
     hints = QGuiApplication.styleHints()
     getter = getattr(hints, "colorScheme", None)
     previous = getter() if getter is not None else None
@@ -857,6 +860,9 @@ def refresh_open_windows_theme(app: QApplication | None = None) -> None:
         except RuntimeError:
             # Widget deleted between listing and update.
             continue
+    from ..platform_support.qt_windows_caption import apply_classic_native_captions
+
+    apply_classic_native_captions(app)
 
 
 def apply_application_theme(app: QApplication | None, theme: str) -> str:

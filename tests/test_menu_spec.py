@@ -129,3 +129,15 @@ def test_help_follows_settings():
     help_menu = find_submenu(MAIN_WINDOW_MENUS, "Help")
     assert menu_outline(help_menu.items) == ["User Guide", "Citations"]
     assert help_menu.attr == "_help_menu"
+
+
+def test_data_menu_filter_and_search_group_is_last():
+    tools = find_submenu(MAIN_WINDOW_MENUS, "Tools")
+    tools_labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(tools.items)]
+    assert "Filter" not in tools_labels
+    assert "Search…" not in tools_labels
+    data = find_submenu(MAIN_WINDOW_MENUS, "Data")
+    labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(data.items)]
+    assert labels[-3:] == ["", "Filter", "Search…"]
+    filt = find_submenu(data.items, "Filter")
+    assert menu_outline(filt.items)[0] == "Toggle Panel"

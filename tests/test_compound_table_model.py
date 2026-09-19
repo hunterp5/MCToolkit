@@ -91,6 +91,51 @@ def test_set_cell_text_batch_updates_row(model: CompoundTableModel):
     assert model.cell_text(0, mwi) == "44.1"
 
 
+def test_sort_emits_layout_change_without_hint_args(model: CompoundTableModel):
+    """PySide6 layoutAboutToBeChanged/layoutChanged default overloads take no args."""
+    model.append_row(1, {"SMILES": "CC", "MW": "30.07"})
+    model.append_row(2, {"SMILES": "C", "MW": "16.04"})
+    model.append_row(3, {"SMILES": "CCC", "MW": "44.10"})
+    mw = model._headers.index("MW")
+    model.sort(mw, Qt.AscendingOrder, sort_kind="numeric")
+    assert [model.row_oid(i) for i in range(3)] == [2, 1, 3]
+    model.sort(mw, Qt.DescendingOrder, sort_kind="numeric")
+    assert [model.row_oid(i) for i in range(3)] == [3, 1, 2]
+
+
+def test_rename_header_at_accepts_pyside6_orientation_enum(model: CompoundTableModel):
+    """headerDataChanged passes Qt.Orientation; int(orientation) raises on PySide6."""
+    model.append_row(1, {"SMILES": "C", "MW": "16"})
+    seen: list[object] = []
+
+    def _on_header(orientation, first, last) -> None:
+        assert orientation == Qt.Horizontal
+        seen.append((orientation, first, last))
+
+    model.headerDataChanged.connect(_on_header)
+    mw = model._headers.index("MW")
+    model.rename_header_at(mw, "MolWt")
+    assert model._headers[mw] == "MolWt"
+    assert seen == [(Qt.Horizontal, mw, mw)]
+
+
+def test_search_header_changed_compares_orientation_enum(qapp):  # noqa: ARG001
+    from molmanager.ui.main_window.table_search_mixin import TableSearchMixin
+
+    class _Host(TableSearchMixin):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def _refresh_table_search_column_combos(self) -> None:
+            self.calls += 1
+
+    host = _Host()
+    host._on_table_search_header_changed(Qt.Horizontal)
+    assert host.calls == 1
+    host._on_table_search_header_changed(Qt.Vertical)
+    assert host.calls == 1
+
+
 def test_set_backing_text_updates_pixmap_column(qapp):  # noqa: ARG001
     model = CompoundTableModel(["ID_HIDDEN", "Structure", "Protonated"])
     model.append_row(1, {"Protonated": "CC(=O)O"})

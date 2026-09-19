@@ -71,23 +71,6 @@ class ProcessesDialog(QDialog):
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         jobs_ly.addWidget(self._table, 1)
 
-        row = QHBoxLayout()
-        self._btn_cancel = QPushButton("Cancel")
-        self._btn_cancel.setToolTip(
-            "Apply to the selected row: stop a running job (cooperative), end Render 2D, "
-            "stop Gnina docking, or remove a queued job from the line without running it."
-        )
-        self._btn_clear = QPushButton("Clear queue")
-        self._btn_clear.setToolTip(
-            "Remove all jobs waiting to run (does not stop the current job)."
-        )
-        self._btn_refresh = QPushButton("Refresh")
-        row.addWidget(self._btn_cancel)
-        row.addWidget(self._btn_clear)
-        row.addStretch()
-        row.addWidget(self._btn_refresh)
-        jobs_ly.addLayout(row)
-
         self._log = SessionLogPanel()
         splitter.addWidget(jobs)
         splitter.addWidget(self._log)
@@ -97,9 +80,23 @@ class ProcessesDialog(QDialog):
         splitter.setSizes([240, 420])
         root.addWidget(splitter, 1)
 
+        row = QHBoxLayout()
+        self._btn_cancel = QPushButton("Cancel Job")
+        self._btn_cancel.setToolTip(
+            "Apply to the selected row: stop a running job (cooperative), end Render 2D, "
+            "stop Gnina docking, or remove a queued job from the line without running it."
+        )
+        self._btn_clear = QPushButton("Clear Queue")
+        self._btn_clear.setToolTip(
+            "Remove all jobs waiting to run (does not stop the current job)."
+        )
+        row.addWidget(self._btn_cancel)
+        row.addWidget(self._btn_clear)
+        row.addStretch()
+        root.addLayout(row)
+
         self._btn_cancel.clicked.connect(self._on_cancel)
         self._btn_clear.clicked.connect(self._on_clear_queue)
-        self._btn_refresh.clicked.connect(self._reload)
         self._table.itemSelectionChanged.connect(self._update_cancel_enabled)
 
         hub = getattr(self._app, "background_activity", None)

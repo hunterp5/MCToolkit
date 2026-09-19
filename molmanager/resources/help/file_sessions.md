@@ -1,6 +1,6 @@
 # Sessions
 
-Sessions let you open, save, create, and duplicate MolManager project states so table data and related workspace context can be revisited later. All session commands live under **File → Session**.
+Sessions let you open, save, create, and duplicate MCtoolkit project states so table data and related workspace context can be revisited later. All session commands live under **File → Session**.
 
 ## Goal
 
@@ -34,7 +34,7 @@ The current in-memory table and session metadata. Open loads from a saved sessio
 
 - Checkpoint before protonation or fragment disconnection.
 - Duplicate a parent library for separate MPO vs QSAR tracks.
-- Hand a saved session to a collaborator with the same MolManager version.
+- Hand a saved session to a collaborator with the same MCtoolkit version.
 
 ## Tips and limits
 

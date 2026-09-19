@@ -1,4 +1,4 @@
-# MolManager architecture
+# MCtoolkit architecture
 
 Desktop chemistry table manager: **PySide6** UI, **RDKit** structures, optional **PyTorch** tools (pKa, permeability).
 
@@ -116,13 +116,13 @@ values measured when the ratchet landed and may only go **down**
 
 | Counter | Frozen at | What it measures |
 |---------|-----------|------------------|
-| `window_typed_params` | 77 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
-| `modules_taking_the_window` | 27 | Modules with at least one such parameter |
-| `private_cross_module_access` | 73 | `app._x` / `self._app._x` where `_x` is **not** declared in any `ui/` protocol |
-| `deferred_intra_package_imports` | 589 | First-party imports nested in function bodies, i.e. import cycles |
-| `mixin_modules` | 71 | `*_mixin.py` files |
-| `bind_mixin_methods_sites` | 3 | Legacy binds where a collaborator runs mixin bodies with the window as `self` |
-| `rdkit_in_ui_modules` | 39 | Qt modules importing RDKit — chemistry living in the UI |
+| `window_typed_params` | 76 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
+| `modules_taking_the_window` | 26 | Modules with at least one such parameter |
+| `private_cross_module_access` | 49 | `app._x` / `self._app._x` where `_x` is **not** declared in any `ui/` protocol |
+| `deferred_intra_package_imports` | 588 | First-party imports nested in function bodies, i.e. import cycles |
+| `mixin_modules` | 61 | `*_mixin.py` files |
+| `bind_mixin_methods_sites` | 1 | Legacy binds where a collaborator runs mixin bodies with the window as `self` |
+| `rdkit_in_ui_modules` | 38 | Qt modules importing RDKit — chemistry living in the UI |
 | `app_kernel_members` | 31 | `AppKernel` surface, roles included |
 
 `private_cross_module_access` deliberately ignores members declared in a role or host protocol.
@@ -212,7 +212,7 @@ turns that tree into Qt widgets. Add tools to the spec; do not grow `AppMenuMixi
 
 ## Mixins vs composition
 
-A mixin is shared behavior used by **more than one** class. Almost all MolManager
+A mixin is shared behavior used by **more than one** class. Almost all MCtoolkit
 `*_mixin.py` modules fail that test: they are method bags for a single host
 (`ChemistryWorkspaceWindow`, `PlotWidget`, `CompoundTableModel`, `ProteinViewerDialog`,
 `Molecule3DViewerWidget`). State is created on the host `__init__`.
@@ -235,9 +235,9 @@ A mixin is shared behavior used by **more than one** class. Almost all MolManage
 - Add empty composite mixins (`ChemistryMixin`-style).
 - Treat mixin MRO order as architecture. `QMainWindow` precedes remaining mixins, so Qt virtuals such as `closeEvent` must be declared on the shell (delegating into `AppLifecycleMixin`). Mixin implementations that need the C++ base should call `QMainWindow.closeEvent` explicitly rather than `super()`.
 
-`bind_mixin_methods` is a **legacy bridge**: it copies mixin functions onto a collaborator but still invokes them with the window as `self`. Three collaborators still use it (`TableBuildPipeline`, `SessionController`, `WorkspaceTools`); convert bodies to `self._app` when touching that code.
+`bind_mixin_methods` is a **legacy bridge**: it copies mixin functions onto a collaborator but still invokes them with the window as `self`. One collaborator still uses it (`WorkspaceTools`); convert bodies to `self._app` when touching that code.
 
-`ToolDialogScope`, `TableWriteService`, and `TableSession` show the conversion, and it is four steps: move the mixin bodies onto the
+`ToolDialogScope`, `TableWriteService`, `TableSession`, `TableBuildPipeline`, and `SessionController` show the conversion, and it is four steps: move the mixin bodies onto the
 collaborator rewriting window `self` to `self._app`, move mixin-owned state out of the window
 `__init__` and into the collaborator, declare a host protocol for what is left, then point
 `install_window_forwards` at the collaborator class instead of the deleted mixin. Call sites do not
@@ -387,7 +387,8 @@ Fingerprint session cache is an LRU capped by `fingerprint_cache_max_entries`
 
 Ligand 3D viewer: `ui/mol_viewer_3d.py` re-exports. HTML/JS assembly is
 `ui/mol_3d_html.py` (shared `assemble_3dmol_shell_page`), RDKit 2D/3D prep is
-`chem/mol_3d_prepare.py` (re-exported from `ui/mol_3d_prepare.py`), Qt widgets are `ui/mol_3d_widget.py` (conformer nav + dock chrome mixins), and the floating
+`chem/mol_3d_prepare.py` (re-exported from `ui/mol_3d_prepare.py`), planar
+conformer XY writes are `chem/rdkit_conformer_xy.py`, Qt widgets are `ui/mol_3d_widget.py` (conformer nav + dock chrome mixins), and the floating
 dialog/openers are `ui/mol_3d_dialog.py`. The sketcher embed is `ui/mol_3d_embed.py`;
 strain-energy table fill is `ui/mol_3d_strain.py`. Protein viewer: `ui/protein_viewer.py`
 re-exports; HTML is `ui/protein_viewer_html.py` (init script: `ui/protein_viewer.js`), canvas is `ui/protein_embed.py`,

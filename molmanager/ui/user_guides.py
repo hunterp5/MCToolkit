@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""In-app User Manual for MolManager (TOC + Markdown topic loader)."""
+"""In-app User Manual for MCtoolkit (TOC + Markdown topic loader)."""
 
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QTextBrowser,
 )
 
+from ..app_identity import APP_DISPLAY_NAME, window_title
 from ..reference.help_markdown import (
     load_help_markdown,
     markdown_to_html_fragment,
@@ -74,7 +75,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "overview",
                 "Overview",
                 "Overview",
-                "What MolManager is and how the main window is organized.",
+                f"What {APP_DISPLAY_NAME} is and how the main window is organized.",
             ),
             _e(
                 "processes",
@@ -591,7 +592,7 @@ def open_user_guide_dialog(parent: QWidget | None, guide_id: str | None = "overv
                 host._user_guide_dialog = None
 
     dlg = QDialog(parent)
-    dlg.setWindowTitle("MolManager — Help")
+    dlg.setWindowTitle(window_title("Help"))
     dlg.resize(900, 620)
     dlg.setModal(False)
     dlg.setWindowModality(Qt.NonModal)
@@ -645,9 +646,9 @@ def _show_guide_dialog(dlg: QDialog, guide_id: str) -> None:
         browser.setHtml(guide_html(guide_id, dlg.palette()))
     entry = guide_entry(guide_id)
     if entry is not None:
-        dlg.setWindowTitle(f"MolManager — Help: {entry.menu_label}")
+        dlg.setWindowTitle(window_title(f"Help: {entry.menu_label}"))
     else:
-        dlg.setWindowTitle("MolManager — Help")
+        dlg.setWindowTitle(window_title("Help"))
     if lst is not None:
         for i in range(lst.count()):
             it = lst.item(i)

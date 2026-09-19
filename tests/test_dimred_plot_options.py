@@ -56,6 +56,38 @@ def test_present_initial_ui_shows_plot_when_result_exists(qapp):
         qapp.processEvents()
 
 
+def test_run_hides_plot_options_when_calculations_start(qapp):
+    dlg = PCADialog(None)
+    try:
+        panel = dlg._panel
+        panel.present_initial_ui()
+        qapp.processEvents()
+        assert panel._opts_dialog.isVisible()
+
+        class _Status:
+            def setText(self, _text: str) -> None:
+                return None
+
+        class _App:
+            status_label = _Status()
+
+            def _selected_oids_set(self):
+                return set()
+
+        panel.parent_app = _App()
+        panel.fp_combo.setCurrentIndex(1)
+        panel._launch_dimred_job = lambda _prep: None
+        panel._on_run()
+        qapp.processEvents()
+        assert not panel._opts_dialog.isVisible()
+        assert panel._job_running is True
+    finally:
+        panel._opts_dialog.hide()
+        dlg.close()
+        dlg.deleteLater()
+        qapp.processEvents()
+
+
 def test_reveal_plot_window_hides_options(qapp):
     dlg = PCADialog(None)
     try:

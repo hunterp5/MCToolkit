@@ -1,6 +1,6 @@
 # Existing silent-exception sites for BLE001, S110, and SIM105.
 # Shrink this list when a file is cleaned; never add files.
-# ratchet-max-files = 224
+# ratchet-max-files = 223
 
 [lint.per-file-ignores]
 "molmanager/analysis/activity_cliff_analysis.py" = ["BLE001"]
@@ -110,19 +110,19 @@
 "molmanager/ui/main_window/dock_tools_mixin.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/main_window/external_records_mixin.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/main_window/ingest_export_mixin.py" = ["BLE001"]
-"molmanager/ui/main_window/ingest_load_mixin.py" = ["BLE001", "S110", "SIM105"]
+"molmanager/ui/table_build_ingest.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/main_window/mpo_mixin.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/main_window/plot_pane.py" = ["BLE001", "SIM105"]
 "molmanager/ui/main_window/plot_tools_mixin.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/main_window/predict_tools_mixin.py" = ["BLE001", "SIM105"]
-"molmanager/ui/main_window/render2d_results_mixin.py" = ["BLE001", "S110", "SIM105"]
-"molmanager/ui/main_window/render_2d_mixin.py" = ["BLE001", "S110", "SIM105"]
-"molmanager/ui/main_window/session_csv_mixin.py" = ["BLE001", "S110", "SIM105"]
-"molmanager/ui/main_window/session_plots_mixin.py" = ["BLE001", "S110", "SIM105"]
-"molmanager/ui/main_window/session_restore_mixin.py" = ["BLE001", "S110", "SIM105"]
-"molmanager/ui/main_window/session_save_mixin.py" = ["BLE001"]
+"molmanager/ui/table_build_render_results.py" = ["BLE001", "S110", "SIM105"]
+"molmanager/ui/table_build_render.py" = ["BLE001", "S110", "SIM105"]
+"molmanager/ui/session_csv.py" = ["BLE001", "S110", "SIM105"]
+"molmanager/ui/session_plots.py" = ["BLE001", "S110", "SIM105"]
+"molmanager/ui/session_restore.py" = ["BLE001", "S110", "SIM105"]
+"molmanager/ui/session_save.py" = ["BLE001"]
 "molmanager/ui/main_window/sql_load_mixin.py" = ["BLE001", "S110", "SIM105"]
-"molmanager/ui/main_window/sqlite_rebuild_mixin.py" = ["BLE001", "S110", "SIM105"]
+"molmanager/ui/table_build_sqlite.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/main_window/structure_writeback_mixin.py" = ["BLE001"]
 "molmanager/ui/main_window/table_calc_mixin.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/main_window/table_edit_mixin.py" = ["BLE001", "S110", "SIM105"]
@@ -156,7 +156,6 @@
 "molmanager/ui/sali_map.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/ui/singleton_modeless_dialog.py" = ["BLE001", "S110"]
 "molmanager/ui/sketcher/dialog.py" = ["BLE001", "S110", "SIM105"]
-"molmanager/ui/sketcher/iupac_orient.py" = ["BLE001"]
 "molmanager/ui/sketcher/iupac_style.py" = ["BLE001", "S110"]
 "molmanager/ui/sketcher/physical_properties.py" = ["BLE001"]
 "molmanager/ui/sketcher/sketch_rdkit.py" = ["BLE001", "S110", "SIM105"]

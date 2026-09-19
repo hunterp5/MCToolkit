@@ -12,7 +12,7 @@ Use whenever a tool starts a background worker, when the UI feels busy, when you
 
 ## Inputs / scope
 
-Applies to jobs launched from the current session. Scope of each job (all rows vs selected) was chosen in the tool dialog that started it. The in-memory log covers the current MolManager process and is not saved with the session.
+Applies to jobs launched from the current session. Scope of each job (all rows vs selected) was chosen in the tool dialog that started it. The in-memory log covers the current MCtoolkit process and is not saved with the session.
 
 ## Options
 

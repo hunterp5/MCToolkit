@@ -21,6 +21,8 @@ UI and worker modules import from here so users can open DOIs and read the origi
 
 from __future__ import annotations
 
+from ..app_identity import APP_DISPLAY_NAME
+
 # --- Plain-text blocks (for logs, tooltips, or copying) ---------------------------------
 
 UNIPKA = (
@@ -88,7 +90,7 @@ BOILED_EGG = (
 GOLDEN_TRIANGLE = (
     "Golden triangle (LogP vs MW): multiparameter oral / CNS drug-likeness triangle commonly used in "
     "medicinal chemistry (e.g. Johnson et al., Drug Discov. Today 2011, 16(1-2), 65–72). "
-    "MolManager draws LogP −2 to 5 and MW 200–450 Da with apex near (1.5, 450)."
+    f"{APP_DISPLAY_NAME} draws LogP −2 to 5 and MW 200–450 Da with apex near (1.5, 450)."
 )
 
 GNN_MTL_PERMEABILITY = (
@@ -296,7 +298,7 @@ def systematic_conformations_dialog_footer_html() -> str:
         '<a href="https://doi.org/10.1186/1758-2946-3-8">O\'Boyle et al., J. Cheminform. 2011</a>. '
         "Systematic torsion driving with RMSD and energy cutoffs (not RDKit ETKDG). "
         "Requires Open Babel (<code>obabel</code> or the Python bindings). "
-        "Confab needs a 3D starting geometry; MolManager embeds with ETKDG when the ligand is 2D. "
+        f"Confab needs a 3D starting geometry; {APP_DISPLAY_NAME} embeds with ETKDG when the ligand is 2D. "
         "Energies in the results window are vacuum MMFF/UFF totals, not protein-bound ΔG.</small>"
     )
 

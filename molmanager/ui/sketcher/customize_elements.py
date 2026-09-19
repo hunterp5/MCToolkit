@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -35,14 +35,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...app_identity import qt_settings
 from .constants import (
     ELEMENT_FAMILY_GROUPS,
     SKETCH_ELEMENT_SYMBOLS,
     TOOLBAR_ELEMENT_SYMBOLS,
 )
 
-_SETTINGS_ORG = "MolManager"
-_SETTINGS_APP = "MolManager"
 _SETTINGS_KEY_ELEMENTS = "sketcher/toolbar_elements"
 
 
@@ -85,7 +84,7 @@ def normalize_toolbar_element_symbols(symbols: Sequence[str]) -> list[str]:
 
 def load_toolbar_element_symbols() -> list[str]:
     """Load persisted left-panel elements, or the built-in defaults."""
-    raw = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SETTINGS_KEY_ELEMENTS, None)
+    raw = qt_settings().value(_SETTINGS_KEY_ELEMENTS, None)
     if raw is None or raw == "":
         return default_toolbar_element_symbols()
     if isinstance(raw, str):
@@ -99,7 +98,7 @@ def load_toolbar_element_symbols() -> list[str]:
 
 def save_toolbar_element_symbols(symbols: Sequence[str]) -> None:
     ordered = normalize_toolbar_element_symbols(symbols)
-    QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY_ELEMENTS, ",".join(ordered))
+    qt_settings().setValue(_SETTINGS_KEY_ELEMENTS, ",".join(ordered))
 
 
 def element_groups_for_symbols(

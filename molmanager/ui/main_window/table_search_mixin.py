@@ -128,7 +128,7 @@ class TableSearchMixin:
         self._refresh_table_search_column_combos()
 
     def _on_table_search_header_changed(self, orientation, *_args) -> None:
-        if int(orientation) == Qt.Horizontal:
+        if orientation == Qt.Horizontal:
             self._refresh_table_search_column_combos()
 
     def _refresh_table_search_column_combos(self) -> None:

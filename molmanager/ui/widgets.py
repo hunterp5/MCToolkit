@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Small reusable widgets; filter cards live in :mod:`MolManager.ui.filters.cards`."""
+"""Small reusable widgets; filter cards live in :mod:`molmanager.ui.filters.cards`."""
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QTableWidgetItem

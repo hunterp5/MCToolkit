@@ -19,24 +19,20 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
-from PySide6.QtCore import QTimer, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QPalette, QTextCharFormat, QTextCursor
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QColor, QPalette, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPlainTextEdit,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
-from ..platform_support.app_logging import active_log_file
 from ..platform_support.session_log import (
     SessionLogEntry,
     ensure_session_log_handler,
@@ -107,24 +103,6 @@ class SessionLogPanel(QWidget):
         )
         root.addWidget(self._view, 1)
 
-        row = QHBoxLayout()
-        self._btn_copy = QPushButton("Copy")
-        self._btn_copy.setToolTip("Copy the visible log text.")
-        self._btn_clear = QPushButton("Clear")
-        self._btn_clear.setToolTip(
-            "Clear the in-memory session log (does not delete the log file)."
-        )
-        self._btn_open = QPushButton("Open log file")
-        self._btn_open.setToolTip("Open the rotating log file in the default editor.")
-        row.addWidget(self._btn_copy)
-        row.addWidget(self._btn_clear)
-        row.addWidget(self._btn_open)
-        row.addStretch()
-        root.addLayout(row)
-
-        self._btn_copy.clicked.connect(self._on_copy)
-        self._btn_clear.clicked.connect(self._on_clear)
-        self._btn_open.clicked.connect(self._on_open_file)
         self._level.currentIndexChanged.connect(self._on_filters_changed)
         self._search.textChanged.connect(self._on_filters_changed)
 
@@ -135,7 +113,6 @@ class SessionLogPanel(QWidget):
         self._timer.timeout.connect(self._pull_new)
 
         self._reload()
-        self._sync_open_enabled()
 
     def showEvent(self, event) -> None:  # noqa: N802 — Qt API name
         super().showEvent(event)
@@ -197,7 +174,6 @@ class SessionLogPanel(QWidget):
             if self._entry_visible(entry):
                 self._append_entry(entry)
         self._scroll_to_end_if_needed()
-        self._sync_open_enabled()
 
     def _pull_new(self) -> None:
         entries, seq, generation = session_log_buffer().snapshot(since_seq=self._shown_seq)
@@ -214,32 +190,3 @@ class SessionLogPanel(QWidget):
 
     def _on_filters_changed(self, *_args) -> None:
         self._reload()
-
-    def _on_copy(self) -> None:
-        self._view.selectAll()
-        self._view.copy()
-        cursor = self._view.textCursor()
-        cursor.clearSelection()
-        cursor.movePosition(QTextCursor.End)
-        self._view.setTextCursor(cursor)
-
-    def _on_clear(self) -> None:
-        session_log_buffer().clear()
-        self._reload()
-
-    def _sync_open_enabled(self) -> None:
-        path = active_log_file()
-        self._btn_open.setEnabled(path is not None and Path(path).is_file())
-
-    def _on_open_file(self) -> None:
-        path = active_log_file()
-        if path is None or not Path(path).is_file():
-            QMessageBox.information(
-                self,
-                "Log file",
-                "No log file is available. File logging may be disabled.",
-            )
-            self._sync_open_enabled()
-            return
-        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
-            QMessageBox.warning(self, "Log file", f"Could not open:\n{path}")

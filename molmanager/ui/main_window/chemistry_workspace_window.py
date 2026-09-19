@@ -18,7 +18,7 @@ import logging
 import sys
 import threading
 
-from PySide6.QtCore import QThreadPool, QTimer, Qt, Slot
+from PySide6.QtCore import Qt, QThreadPool, QTimer, Slot
 from PySide6.QtGui import QCloseEvent, QUndoStack
 from PySide6.QtWidgets import (
     QApplication,
@@ -34,10 +34,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...app_identity import APP_DISPLAY_NAME
 from ...platform_support.config import load_config
 from ...platform_support.session_log import ensure_session_log_handler
-from ..app_log_dialog import StatusLogLabel
 from ...table.session_codec import SESSION_VERSION_CURRENT
+from ..app_log_dialog import StatusLogLabel
 
 logger = logging.getLogger(__name__)
 from ...platform_support.performance_tracking import PerformanceTracker
@@ -53,10 +54,10 @@ from ...workers import (
 from ..app_kernel import install_window_forwards
 from ..background_activity import BackgroundActivityHub
 from ..compound_table_model import (
+    STRUCTURE_COLUMN_HORIZONTAL_PADDING,
     CompoundTableModel,
     CompoundTableView,
     StructureDelegate,
-    STRUCTURE_COLUMN_HORIZONTAL_PADDING,
     structure_column_minimum_width,
     structure_depict_height,
     structure_depict_width,
@@ -64,13 +65,25 @@ from ..compound_table_model import (
 )
 from ..filter_proxy_model import FilterProxyModel
 from ..filters.cards import FilterCardsHost
+from ..gui_settings_mixin import GuiSettingsMixin
+from ..process_queue import ProcessQueueManager
 from ..progress_controller import ProgressController
 from ..session_controller import SessionController
+from ..session_csv import SessionCsv
+from ..session_plots import SessionPlots
+from ..session_restore import SessionRestore
+from ..session_save import SessionSave
+from ..session_table_layout import SessionTableLayout
+from ..table_build_ingest import TableBuildIngest
+from ..table_build_layout import TableBuildLayout
 from ..table_build_pipeline import TableBuildPipeline
+from ..table_build_render import TableBuildRender
+from ..table_build_render_results import TableBuildRenderResults
+from ..table_build_sqlite import TableBuildSqlite
 from ..table_selection_delegate import RowHighlightDelegate
-from ..process_queue import ProcessQueueManager
 from ..table_session import TableSession, TableSessionChemistry, TableSessionSelection
 from ..table_write_service import TableWriteService
+from ..theme import bootstrap_application_gui
 from ..tool_dialog_scope import ToolDialogScope
 from ..workspace_tools import WorkspaceTools
 from .activity_cliff_mixin import ActivityCliffMixin
@@ -85,7 +98,6 @@ from .external_records_mixin import ExternalRecordsMixin
 from .fast_prepare_tools_mixin import FastPrepareToolsMixin
 from .fragment_tools_mixin import FragmentToolsMixin
 from .ingest_export_mixin import IngestExportMixin
-from .ingest_load_mixin import IngestLoadMixin
 from .medchem_space_mixin import MedChemSpaceMixin
 from .mmp_mixin import MmpMixin
 from .mmp_neighborhood_mixin import MmpNeighborhoodMixin
@@ -95,25 +107,13 @@ from .predict_tools_mixin import PredictToolsMixin
 from .protonate_tools_mixin import ProtonateToolsMixin
 from .qsar_mixin import QsarMixin
 from .reaction_tools_mixin import ReactionToolsMixin
-from .render_2d_mixin import Render2DMixin
-from .render2d_results_mixin import Render2DResultsMixin
 from .sali_mixin import SaliMixin
-from .session_csv_mixin import SessionCsvMixin
-from .session_plots_mixin import SessionPlotsMixin
-from .session_restore_mixin import SessionRestoreMixin
-from .session_save_mixin import SessionSaveMixin
-from .session_table_layout_mixin import SessionTableLayoutMixin
 from .sql_load_mixin import SqlLoadMixin
-from .sqlite_rebuild_mixin import SqliteRebuildMixin
 from .structure_edit_mixin import StructureEditMixin
-from .structure_layout_mixin import StructureLayoutMixin
 from .structure_writeback_mixin import StructureWritebackMixin
 from .table_calc_mixin import TableCalcMixin
 from .table_ui_mixin import TableUIMixin
 from .viewer_openers_mixin import ViewerOpenersMixin
-from ..gui_settings_mixin import GuiSettingsMixin
-from ..theme import bootstrap_application_gui
-
 
 _FILTER_PANEL_BTN_H = 28
 _FILTER_PANEL_BTN_SPACING = 6
@@ -185,13 +185,13 @@ class ChemistryWorkspaceWindow(
 
     _SESSION_FORMAT = "molmanager_session"
     _SESSION_FORMAT_ALIASES = frozenset(
-        {"molmanager_session", "MOLMANAGER_session", "chemmanager_session"}
+        {"molmanager_session", "MOLMANAGER_session", "chemmanager_session", "mctoolkit_session"}
     )
     _SESSION_VERSION = SESSION_VERSION_CURRENT
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("MolManager")
+        self.setWindowTitle(APP_DISPLAY_NAME)
         # Avoid modal exit prompts during pytest teardown / headless runs.
         self._suppress_exit_session_prompt = "pytest" in sys.modules
         # Unsaved workspace vs last save / successful open (file or session).
@@ -652,7 +652,7 @@ class ChemistryWorkspaceWindow(
         self._memory_status_label = QLabel("")
         self._memory_status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._memory_status_label.setToolTip(
-            "MolManager process resident memory (working set). "
+            f"{APP_DISPLAY_NAME} process resident memory (working set). "
             "Background render worker processes are not included."
         )
         status_row.addWidget(self.status_label, 1)
@@ -688,22 +688,22 @@ install_window_forwards(
     ChemistryWorkspaceWindow,
     "build_pipeline",
     (
-        IngestLoadMixin,
-        SqliteRebuildMixin,
-        StructureLayoutMixin,
-        Render2DMixin,
-        Render2DResultsMixin,
+        TableBuildIngest,
+        TableBuildSqlite,
+        TableBuildLayout,
+        TableBuildRender,
+        TableBuildRenderResults,
     ),
 )
 install_window_forwards(
     ChemistryWorkspaceWindow,
     "session",
     (
-        SessionSaveMixin,
-        SessionTableLayoutMixin,
-        SessionPlotsMixin,
-        SessionRestoreMixin,
-        SessionCsvMixin,
+        SessionSave,
+        SessionTableLayout,
+        SessionPlots,
+        SessionRestore,
+        SessionCsv,
     ),
 )
 install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.cluster", (ClusterMixin,))

@@ -26,6 +26,7 @@ import zipfile
 from collections.abc import Callable
 from pathlib import Path
 
+from ..app_identity import http_user_agent
 from ..platform_support.bundled_paths import (
     biotransformer_layout_errors,
     biotransformer_models_dir,
@@ -35,7 +36,7 @@ from ..platform_support.bundled_paths import (
 BITBUCKET_GIT = "https://bitbucket.org/wishartlab/biotransformer3.0jar.git"
 BITBUCKET_ZIP = "https://bitbucket.org/wishartlab/biotransformer3.0jar/get/master.zip"
 _SKIP_NAMES = frozenset({".git", ".gitignore", ".project", "README.md"})
-_USER_AGENT = "MolManager/0.1 (BioTransformer bootstrap)"
+_USER_AGENT = http_user_agent("BioTransformer bootstrap")
 
 ProgressFn = Callable[[str], None]
 

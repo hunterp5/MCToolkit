@@ -104,4 +104,9 @@ def test_processes_dialog_embeds_session_log(qapp):  # noqa: ARG001
     splitter = dlg.layout().itemAt(0).widget()
     assert splitter.widget(0) is not dlg._log
     assert splitter.widget(1) is dlg._log
+    assert dlg.layout().itemAt(1).layout() is not None
+    assert dlg._btn_cancel.text() == "Cancel Job"
+    assert dlg._btn_clear.text() == "Clear Queue"
+    assert not hasattr(dlg, "_btn_refresh")
+    assert not hasattr(dlg._log, "_btn_copy")
     dlg.close()
