@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 from PyQt5.QtCore import Qt
 
 from ..analysis_job_support import ensure_table_ready_for_tool, report_cancellable_job_failure
@@ -56,10 +58,8 @@ class ClusterMixin:
         def _reenable_run() -> None:
             dlg = getattr(self, "_cluster_dialog", None)
             if dlg is not None:
-                try:
+                with suppress(RuntimeError):
                     dlg.enable_run_after_job()
-                except RuntimeError:
-                    pass
 
         report_cancellable_job_failure(
             self,
@@ -75,7 +75,5 @@ class ClusterMixin:
         self.status_label.setText("Ready.")
         dlg = getattr(self, "_cluster_dialog", None)
         if dlg is not None:
-            try:
+            with suppress(RuntimeError):
                 dlg.fill_explore_results(results)
-            except RuntimeError:
-                pass

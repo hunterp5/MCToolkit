@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QPushButton, QVBoxLayout, QWidget
 
@@ -233,7 +235,5 @@ def hide_plot_options_dialog(dialog: QDialog | None) -> None:
     """Hide a plot-options dialog if it is open."""
     if dialog is None:
         return
-    try:
+    with suppress(RuntimeError):
         dialog.hide()
-    except RuntimeError:
-        pass

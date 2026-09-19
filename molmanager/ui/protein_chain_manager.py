@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
@@ -155,10 +156,8 @@ class ProteinChainManager(QWidget):
         self._stack.addWidget(widget)
         self._docked.append(widget)
         widget.show()
-        try:
+        with suppress(TypeError):
             widget.destroyed.connect(self._on_docked_destroyed)
-        except TypeError:
-            pass
         return self.show_widget(widget)
 
     def undock_widget(self, widget: QWidget | None) -> bool:
@@ -170,10 +169,8 @@ class ProteinChainManager(QWidget):
             return False
         if widget not in self._docked:
             return False
-        try:
+        with suppress(TypeError):
             widget.destroyed.disconnect(self._on_docked_destroyed)
-        except TypeError:
-            pass
         self._remove_docked_page(widget)
         widget.setParent(None)
         return True
@@ -225,10 +222,8 @@ class ProteinChainManager(QWidget):
             self._remove_docked_page(sender)
 
     def _remove_docked_page(self, widget: QWidget) -> None:
-        try:
+        with suppress(ValueError):
             self._docked.remove(widget)
-        except ValueError:
-            pass
         idx = self._stack.indexOf(widget)
         if idx >= 0:
             self._stack.removeWidget(widget)

@@ -27,7 +27,8 @@ python -m ruff format molmanager tests scripts
 ```
 
 CI gates on `ruff check` (correctness / undefined-name rules plus unused imports and locals:
-`E9`, `F63`, `F7`, `F82`, `F401`, `F841`) and `ruff format --check`.
+`E9`, `F63`, `F7`, `F82`, `F401`, `F841`, plus the silent-exception ratchet `BLE001`, `S110`,
+`SIM105`) and `ruff format --check`.
 
 ### Naming conventions
 
@@ -41,6 +42,7 @@ CI gates on `ruff check` (correctness / undefined-name rules plus unused imports
 - Keep the UI responsive by offloading heavy work off the GUI thread (`ProcessQueueManager`, `QThreadPool`, workers).
 - Keep changes cohesive; avoid drive-by refactors unless required.
 - New tools: dialog → worker (if heavy) → `WorkspaceTools` or collaborator + window forward → tests. Do **not** add mixin bases to `ChemistryWorkspaceWindow`. See [ARCHITECTURE.md](ARCHITECTURE.md) (Mixins vs composition).
+- New menubar items go in `molmanager/ui/main_window/menu_spec.py` (plain data). `init_menubar` only installs that tree. See [ARCHITECTURE.md](ARCHITECTURE.md) (Main window).
 - Put "can this run / what should happen next" decisions in `molmanager/workflows/`: plain-data arguments in, result object out, no Qt. The UI adapter renders the result. See [ARCHITECTURE.md](ARCHITECTURE.md) (Workflow layer).
 - Most `*_mixin.py` files are file-splits of one host class. True mixins (shared by multiple classes) are filter-card chrome and `ProteinStructureSourceMixin` only.
 - New collaborator methods use `self._app`. `bind_mixin_methods` is a legacy bridge.
@@ -48,11 +50,15 @@ CI gates on `ruff check` (correctness / undefined-name rules plus unused imports
 ### Exception handling
 
 - Prefer narrow `except` clauses and re-raise unexpected failures.
-- Do not use bare `except Exception: pass` for non-fatal paths without logging.
-- Use `molmanager.platform_support.exception_policy.log_swallowed_exception` when intentionally swallowing an error
-  (best-effort UI/progress/shutdown helpers).
-- Large sketcher/RDKit call sites still contain many defensive catches; convert them as those
-  modules are touched.
+- Do not use `except Exception: pass`. For a specific, expected failure use
+  `contextlib.suppress(SomeError)` or handle the error. For a non-fatal path that must catch
+  `Exception`, call `molmanager.platform_support.exception_policy.log_swallowed_exception` and add
+  `# noqa: BLE001` with a short reason (worker/process boundary, Qt object already deleted, and
+  similar).
+- New `except Exception` / `try-except-pass` in files that are not on the allowlist fail CI
+  (`BLE001`, `S110`, `SIM105`). Existing sites are listed in [`ruff.exception-ratchet.toml`](../ruff.exception-ratchet.toml).
+  When you clean a file, delete its line there, decrement `ratchet-max-files`, and lower
+  `EXCEPTION_RATCHET_MAX_FILES` in `tests/test_exception_ratchet.py`. Never add files.
 - File logging is on by default (`molmanager/platform_support/app_logging.py`); override with `MOLMANAGER_LOG_DIR`,
   disable with `MOLMANAGER_LOG_TO_FILE=0`. Uncaught exceptions show a crash dialog with the log path.
 

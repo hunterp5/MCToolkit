@@ -1,0 +1,131 @@
+# This file is part of MolManager.
+# Copyright (C) 2026 Hunter Picard
+#
+# MolManager is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# MolManager is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+
+"""Qt-free tests for the declarative main-window menu tree."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from molmanager.ui.main_window.menu_spec import (
+    MAIN_WINDOW_MENUS,
+    find_submenu,
+    menu_outline,
+)
+
+_MENU_SPEC = (
+    Path(__file__).resolve().parents[1] / "molmanager" / "ui" / "main_window" / "menu_spec.py"
+)
+
+
+def test_menu_spec_source_does_not_import_qt():
+    text = _MENU_SPEC.read_text(encoding="utf-8")
+    assert "PyQt5" not in text
+    assert "QtWidgets" not in text
+
+
+def test_top_level_menu_order():
+    labels = []
+    for item in MAIN_WINDOW_MENUS:
+        outline = menu_outline((item,))[0]
+        if isinstance(outline, dict):
+            labels.extend(outline.keys())
+        else:
+            labels.append(outline)
+    assert labels == [
+        "File",
+        "Edit",
+        "Tools",
+        "Protein",
+        "Data",
+        "External",
+        "Settings",
+        "Help",
+    ]
+
+
+def test_file_session_submenu_outline():
+    file_menu = find_submenu(MAIN_WINDOW_MENUS, "File")
+    labels = menu_outline(file_menu.items)
+    assert "Session" in [x if isinstance(x, str) else next(iter(x)) for x in labels]
+    session = find_submenu(file_menu.items, "Session")
+    assert menu_outline(session.items) == [
+        "Open Session…",
+        "Save Session…",
+        "Save Selected to Session…",
+        "New Session",
+        "Duplicate Session",
+    ]
+
+
+def test_conformations_menu_outline():
+    tools = find_submenu(MAIN_WINDOW_MENUS, "Tools")
+    labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(tools.items)]
+    assert "Generate Conformations" not in labels
+    assert "Conformations" in labels
+    assert not any(lbl.startswith("Superpose") for lbl in labels)
+    conf = find_submenu(tools.items, "Conformations")
+    assert menu_outline(conf.items) == [
+        {"Generate": ["Stochastic…", "Systematic…", "CONFORGE…"]},
+        "",
+        "Superpose…",
+        "Screen Pharmacophore…",
+    ]
+
+
+def test_prepare_structures_nests_protonate_and_hydrogens():
+    tools = find_submenu(MAIN_WINDOW_MENUS, "Tools")
+    prepare = find_submenu(tools.items, "Prepare Structures")
+    labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(prepare.items)]
+    assert "Add Explicit Hydrogens…" not in labels
+    assert "Explicit Hydrogens" in labels
+    assert "Protonate" in labels
+    assert labels.index("Protonate") == labels.index("Disconnect Largest Fragments…") + 1
+    protonate = find_submenu(prepare.items, "Protonate")
+    assert menu_outline(protonate.items) == ["Protonate…", "Generate Protomers…", "Neutralize…"]
+    hydrogens = find_submenu(prepare.items, "Explicit Hydrogens")
+    assert menu_outline(hydrogens.items) == ["Add…", "Remove…"]
+
+
+def test_reaction_menu_outline():
+    tools = find_submenu(MAIN_WINDOW_MENUS, "Tools")
+    labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(tools.items)]
+    assert "R-Group Decomposition" not in labels
+    assert "Reaction Based Enumeration…" not in labels
+    assert "Reaction" in labels
+    reaction = find_submenu(tools.items, "Reaction")
+    rxn_labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(reaction.items)]
+    assert rxn_labels.index("Extract…") < rxn_labels.index("R-Group Decomposition")
+    decomp = find_submenu(reaction.items, "R-Group Decomposition")
+    assert menu_outline(decomp.items) == [
+        "Core-Based Decomposition…",
+        "BRICS Decomposition…",
+        "BRICS Recomposition…",
+        "RECAP Decomposition…",
+        "RECAP Recomposition…",
+    ]
+
+
+def test_help_follows_settings():
+    labels = []
+    for item in MAIN_WINDOW_MENUS:
+        outline = menu_outline((item,))[0]
+        labels.append(next(iter(outline)) if isinstance(outline, dict) else outline)
+    assert labels[-1] == "Help"
+    assert labels[-2] == "Settings"
+    help_menu = find_submenu(MAIN_WINDOW_MENUS, "Help")
+    assert menu_outline(help_menu.items) == ["User Guide", "Citations"]
+    assert help_menu.attr == "_help_menu"

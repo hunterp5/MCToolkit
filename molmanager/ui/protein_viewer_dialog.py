@@ -81,6 +81,10 @@ class ProteinViewerDialog(
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self._init_viewer_state(parent)
+        self._build_viewer_ui()
+
+    def _init_viewer_state(self, parent) -> None:
         self.setWindowTitle("Protein Viewer")
         self.resize(1180, 760)
         make_window_minimizable(self)
@@ -158,6 +162,7 @@ class ProteinViewerDialog(
                 getattr(parent, "_suppress_exit_session_prompt", self._suppress_close_prompt)
             )
 
+    def _build_viewer_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)

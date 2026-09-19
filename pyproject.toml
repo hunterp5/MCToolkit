@@ -72,6 +72,7 @@ include = ["molmanager*"]
 molmanager = [
     "ui/static/*",
     "ui/plotly_shell.html",
+    "ui/protein_viewer.js",
     "resources/README.md",
     "resources/help/**/*.md",
     "resources/unipka/**",
@@ -84,12 +85,15 @@ molmanager = [
 target-version = "py310"
 line-length = 100
 src = ["molmanager", "tests", "scripts"]
+extend = "ruff.exception-ratchet.toml"
 extend-exclude = [
     "molmanager/ui/static",
 ]
 
 [tool.ruff.lint]
-# Correctness plus unused import/variable hygiene.
+# Correctness, unused import/variable hygiene, and a silent-exception ratchet.
+# BLE001 / S110 / SIM105 apply to new files immediately. Existing offenders live
+# in ruff.exception-ratchet.toml and drop off that list as they are cleaned.
 select = [
     "E9",
     "F63",
@@ -97,4 +101,7 @@ select = [
     "F82",
     "F401",
     "F841",
+    "BLE001",
+    "S110",
+    "SIM105",
 ]

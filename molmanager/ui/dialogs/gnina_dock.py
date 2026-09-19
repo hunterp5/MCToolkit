@@ -150,6 +150,10 @@ class GninaDockDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._init_dock_state(parent)
+        self._build_dock_ui()
+
+    def _init_dock_state(self, parent) -> None:
         self._main_window = parent
         self.setWindowTitle("Dock — Gnina")
         self.setModal(False)
@@ -184,6 +188,7 @@ class GninaDockDialog(QDialog):
         self._validation_ligand_path = ""
         self._validation_pose_mols: list = []
 
+    def _build_dock_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(6)

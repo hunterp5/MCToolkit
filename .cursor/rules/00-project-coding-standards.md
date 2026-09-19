@@ -27,8 +27,11 @@ These rules apply to all new or modified code in this repository.
 - Fix problems at the **cause**, not at the symptom.
 - Keep UI responsive by offloading heavy work off the GUI thread.
 - Keep changes cohesive; avoid drive-by refactors unless required.
-- Prefer narrow `except` clauses. Do not use `except Exception: pass` without logging;
-  use `molmanager.exception_policy.log_swallowed_exception` for intentional swallows.
+- Prefer narrow `except` clauses. Do not use `except Exception: pass`.
+- Intentional swallows: `molmanager.platform_support.exception_policy.log_swallowed_exception`
+  plus `# noqa: BLE001` when catching `Exception`.
+- New silent/blind `except` fails CI (`BLE001`, `S110`, `SIM105`). Existing files are in
+  `ruff.exception-ratchet.toml`; remove a file from that list when it is clean. Never add files.
 
 ### Mixins vs composition
 

@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 from PyQt5.QtCore import QRect, QSize, Qt, QTimer
 from PyQt5.QtGui import QColor, QFont, QFontMetrics, QPalette, QPixmap
 from PyQt5.QtWidgets import (
@@ -429,10 +431,8 @@ class CompoundTableView(QTableView):
         self.setHorizontalHeader(hh)
         # QTableView connects sectionPressed → _q_selectColumn, which selects the
         # column from row 0 and scrolls there before our click handler runs.
-        try:
+        with suppress(TypeError):
             hh.sectionPressed.disconnect()
-        except TypeError:
-            pass
         self.setSortingEnabled(False)
         self._compound_model = None
         self._structure_column_min_width = structure_column_minimum_width()

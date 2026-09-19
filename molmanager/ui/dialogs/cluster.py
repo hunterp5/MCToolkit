@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtWidgets import (
@@ -290,10 +292,8 @@ class ClusterDialog(QDialog):
         pa = self.parent_app
         if pa is None:
             return
-        try:
+        with suppress(TypeError):
             pa.process_queue.thread_finished.disconnect(self._on_process_queue_thread_finished)
-        except TypeError:
-            pass
 
     def _on_process_queue_thread_finished(self, job_id: str) -> None:
         if job_id != self._active_cluster_job_id:

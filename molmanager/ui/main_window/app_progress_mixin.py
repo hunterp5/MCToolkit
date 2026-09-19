@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 
 from PyQt5.QtCore import QTimer
 
@@ -222,10 +223,8 @@ class AppProgressMixin:
         ):
             detail = getattr(self, "_loading_detail", None)
             if detail is not None:
-                try:
+                with suppress(RuntimeError):
                     detail.setText(text)
-                except RuntimeError:
-                    pass
         hub = getattr(self, "background_activity", None)
         if hub is not None:
             hub.notify_changed()

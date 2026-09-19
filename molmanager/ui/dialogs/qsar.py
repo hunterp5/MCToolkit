@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 from PyQt5.QtCore import Qt
@@ -523,10 +524,8 @@ class QSARDialog(QDialog):
         pa = self.parent_app
         if pa is None:
             return
-        try:
+        with suppress(TypeError):
             pa.process_queue.thread_finished.disconnect(self._on_process_queue_thread_finished)
-        except TypeError:
-            pass
 
     def _on_process_queue_thread_finished(self, job_id: str) -> None:
         if job_id != self._active_qsar_job_id or not self._job_running:

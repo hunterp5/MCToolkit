@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Callable
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
@@ -182,12 +183,10 @@ class WorkspaceLayoutManager(QWidget):
             sizes[key] = vals
             total = float(sum(vals)) or 1.0
             ratios[key] = [float(v) / total for v in vals]
-            try:
+            with suppress(RuntimeError):
                 orientations[key] = (
                     "horizontal" if sp.orientation() == Qt.Horizontal else "vertical"
                 )
-            except RuntimeError:
-                pass
         return {
             "layout_id": self.session_layout_id(),
             "sizes": sizes,
@@ -239,10 +238,8 @@ class WorkspaceLayoutManager(QWidget):
                 continue
             vals = sizes_map.get(key)
             if isinstance(vals, list) and len(vals) == count:
-                try:
+                with suppress(RuntimeError, TypeError, ValueError):
                     sp.setSizes([max(0, int(v)) for v in vals])
-                except (RuntimeError, TypeError, ValueError):
-                    pass
         if sizes_map or ratios_map:
             # Saved sizes win over the deferred equal-quadrant pass from apply_layout.
             self._cancel_pending_equalize()
@@ -397,14 +394,10 @@ class WorkspaceLayoutManager(QWidget):
         self.pane_close_requested.emit(pane)
 
     def _wire_pane(self, pane: PlotPane) -> None:
-        try:
+        with suppress(TypeError):
             pane.activated.disconnect(self._on_pane_activated)
-        except TypeError:
-            pass
-        try:
+        with suppress(TypeError):
             pane.close_requested.disconnect(self._on_pane_close_requested)
-        except TypeError:
-            pass
         pane.activated.connect(self._on_pane_activated)
         pane.close_requested.connect(self._on_pane_close_requested)
 

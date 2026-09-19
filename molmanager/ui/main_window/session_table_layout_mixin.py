@@ -18,14 +18,9 @@
 
 from __future__ import annotations
 
-import logging
+from contextlib import suppress
 
-from PyQt5.QtCore import QByteArray, QTimer, Qt
-from PyQt5.QtWidgets import QApplication
-
-from ..qt_widget_utils import qobject_is_deleted
-
-logger = logging.getLogger(__name__)
+from PyQt5.QtCore import QByteArray
 
 
 class SessionTableLayoutMixin:
@@ -79,20 +74,16 @@ class SessionTableLayoutMixin:
                 except RuntimeError:
                     width = 0
                 if was_hidden:
-                    try:
+                    with suppress(RuntimeError):
                         self.table.setColumnHidden(i, True)
-                    except RuntimeError:
-                        pass
                     if i != 0:
                         hidden.append(h)
                 if width > 0 and h != "ID_HIDDEN":
                     widths[h] = width
         finally:
             if updates:
-                try:
+                with suppress(RuntimeError):
                     self.table.setUpdatesEnabled(True)
-                except RuntimeError:
-                    pass
         default_h = None
         vh = None
         try:
@@ -124,10 +115,8 @@ class SessionTableLayoutMixin:
         }
         mgr = getattr(self, "_workspace_layout", None)
         if mgr is not None:
-            try:
+            with suppress(RuntimeError):
                 payload["workspace"] = mgr.collect_splitter_sizes()
-            except RuntimeError:
-                pass
         return payload
 
     def _restore_table_layout(self, payload: object) -> None:
@@ -150,19 +139,15 @@ class SessionTableLayoutMixin:
                 if width <= 0:
                     continue
                 col = self.headers.index(name)
-                try:
+                with suppress(RuntimeError):
                     self.table.setColumnWidth(col, width)
-                except RuntimeError:
-                    pass
         hidden = payload.get("hidden_columns")
         if isinstance(hidden, list):
             for name in hidden:
                 if not isinstance(name, str) or name not in self.headers or name == "ID_HIDDEN":
                     continue
-                try:
+                with suppress(RuntimeError):
                     self.table.setColumnHidden(self.headers.index(name), True)
-                except RuntimeError:
-                    pass
         pix_cols = payload.get("pixmap_columns")
         if isinstance(pix_cols, list):
             for name in pix_cols:
@@ -188,10 +173,8 @@ class SessionTableLayoutMixin:
                     vh.setDefaultSectionSize(row_h)
             except RuntimeError:
                 pass
-        try:
+        with suppress(RuntimeError):
             self.table.setColumnHidden(0, True)
-        except RuntimeError:
-            pass
         try:
             vbar = self.table.verticalScrollBar()
             hbar = self.table.horizontalScrollBar()
@@ -226,14 +209,10 @@ class SessionTableLayoutMixin:
             return
         lid = pending.get("layout_id")
         if isinstance(lid, str) and lid and mgr.layout_id != lid:
-            try:
+            with suppress(RuntimeError):
                 mgr.apply_layout(lid, preserve_plots=True)
-            except RuntimeError:
-                pass
-        try:
+        with suppress(RuntimeError):
             mgr.restore_splitter_sizes(pending)
-        except RuntimeError:
-            pass
 
     def _restore_session_table_chrome(self, payload: object | None = None) -> None:
         """Re-apply saved table layout and column order after other session side effects."""
@@ -244,10 +223,8 @@ class SessionTableLayoutMixin:
             self._restore_table_layout(layout)
         co = getattr(self, "_pending_session_column_order", None)
         if isinstance(co, list):
-            try:
+            with suppress(TypeError, ValueError):
                 self._restore_column_visual_order([int(x) for x in co])
-            except (TypeError, ValueError):
-                pass
         apply_font = getattr(self, "_apply_table_font", None)
         if callable(apply_font):
             apply_font()

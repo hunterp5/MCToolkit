@@ -93,7 +93,10 @@ class ProteinPrepareDialog(ProteinStructureSourceMixin, QDialog):
         self.setWindowTitle("Fast Prepare")
         self.setMinimumWidth(500)
         self.resize(540, 640)
+        self._build_prepare_ui()
+        self._wire_prepare_ui()
 
+    def _build_prepare_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(6)
@@ -397,6 +400,7 @@ class ProteinPrepareDialog(ProteinStructureSourceMixin, QDialog):
         scroll.setWidget(host)
         root.addWidget(scroll, 1)
 
+    def _wire_prepare_ui(self) -> None:
         self.chk_repair.toggled.connect(self._sync_repair_options)
         self.chk_protonate.toggled.connect(self._sync_ligand_options)
         self.chk_include_ligand.toggled.connect(self._sync_ligand_options)
@@ -431,7 +435,7 @@ class ProteinPrepareDialog(ProteinStructureSourceMixin, QDialog):
         self.btn_close = QPushButton("Close")
         self.btn_close.clicked.connect(self.close)
         btn_row.addWidget(self.btn_close)
-        root.addLayout(btn_row)
+        self.layout().addLayout(btn_row)
 
         self._signals = ProteinPrepareSignals(self)
         self._signals.finished.connect(self._on_finished)

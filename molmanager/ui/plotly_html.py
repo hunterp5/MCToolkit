@@ -26,8 +26,6 @@ from plotly.io import to_json as plotly_to_json
 from plotly.offline import get_plotlyjs
 
 from ..plotting.plotly_legend import (
-    finalize_plot_legend,
-    legend_name_is_utility,
     suppress_utility_legend_entries,
 )
 

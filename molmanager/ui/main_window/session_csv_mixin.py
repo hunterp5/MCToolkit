@@ -20,15 +20,12 @@ from __future__ import annotations
 
 import logging
 import sys
-import time
 
 from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtWidgets import QMessageBox
 
-from ...platform_support.config import load_config
 from ...storage import load_mols_from_parse_result
-from ..qt_widget_utils import qobject_is_deleted
-from ..strings import LOADING_DETAIL_SESSION, loaded_session_status
+from ..strings import LOADING_DETAIL_SESSION
 from ..threadpool_access import start_runnable_on_app_pool
 from ...workers.session_rows_parse import (
     CsvSessionParseResult,

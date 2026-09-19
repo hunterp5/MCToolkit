@@ -16,6 +16,8 @@
 
 """Shared filter-card chrome, drag/drop host, and enable/invert controls."""
 
+from contextlib import suppress
+
 from PyQt5.QtCore import QEvent, QMimeData, QPoint, Qt
 from PyQt5.QtGui import QDrag
 from PyQt5.QtWidgets import (
@@ -359,10 +361,8 @@ class _FilterCardEnableInvertMixin:
             return
         self._title_edit = None
         edit.blockSignals(True)
-        try:
+        with suppress(TypeError):
             edit.editingFinished.disconnect(self._fc_commit_title_edit)
-        except TypeError:
-            pass
         new = (edit.text() or "").strip() or self._filter_title_fallback
         self._title_label.setText(new)
         self._filter_title_fallback = new
@@ -375,10 +375,8 @@ class _FilterCardEnableInvertMixin:
         if edit is None:
             return
         edit.blockSignals(True)
-        try:
+        with suppress(TypeError):
             edit.editingFinished.disconnect(self._fc_commit_title_edit)
-        except TypeError:
-            pass
         self._title_host_lyt.replaceWidget(edit, self._title_label)
         edit.deleteLater()
         self._title_edit = None

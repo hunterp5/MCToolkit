@@ -135,7 +135,10 @@ class PlotWidget(
     def __init__(self, parent_app=None):
         super().__init__(None)
         self.parent_app = parent_app
+        self._init_plot_state()
+        self._build_plot_ui()
 
+    def _init_plot_state(self) -> None:
         self._plot_shell_path = (
             Path(tempfile.gettempdir()) / f"MOLMANAGER_plot_shell_{id(self)}.html"
         )
@@ -159,6 +162,7 @@ class PlotWidget(
         self._heat_y_edges: list[float] = []
         self._radar_oids: list[int] = []
 
+    def _build_plot_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(*PLOT_BODY_MARGINS)
         root.setSpacing(PLOT_BODY_SPACING)
@@ -251,7 +255,7 @@ class PlotWidget(
         self._set_axis_combo_items(self.y_combo, cols, previous=y_default, allow_none=True)
         self._populate_optional_axis_combo(self.z_combo, cols, AXIS_NONE)
 
-        n_sel = len(parent_app._selected_logical_rows()) if parent_app is not None else 0
+        n_sel = len(self.parent_app._selected_logical_rows()) if self.parent_app is not None else 0
         self._plot_scope_has_selection = n_sel > 0
         self.only_selected_cb = QCheckBox("Selected Rows Only")
         self._only_selected_scope_prefix = "Selected Rows Only"
@@ -528,6 +532,7 @@ class PlotWidget(
         self._reload_color_columns()
         self._refresh_radar_spoke_columns()
         self._on_axis_change()
+        parent_app = self.parent_app
         if parent_app is not None:
             model = parent_app._table_model
             model.rowsRemoved.connect(self._on_table_rows_changed)

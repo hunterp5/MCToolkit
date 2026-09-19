@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from molmanager.protein.structure_components import (
     add_cif_chem_bond,
     add_pdb_conect,
@@ -469,6 +471,22 @@ def test_delete_cif_atoms_and_chem_bonds():
     assert any(row[:2] == ["C80", "O81"] and row[2] == 2 for row in tables["LIG"])
     cleared = remove_cif_chem_bond(added, "LIG", "O81", "C80")
     assert "LIG" not in parse_cif_chem_comp_bonds(cleared)
+
+
+def test_protein_viewer_init_script_lives_in_js_file():
+    from molmanager.ui import protein_viewer_html
+
+    py_path = Path(protein_viewer_html.__file__)
+    js_path = py_path.with_name("protein_viewer.js")
+    py = py_path.read_text(encoding="utf-8")
+    js = js_path.read_text(encoding="utf-8")
+    assert "function molmanagerInitView" in js
+    assert "molmanagerSetProteinPayload" in js
+    assert "__RESET_JS__" in js
+    assert "molmanagerSetProteinPayload" not in py
+    html = build_protein_viewer_html()
+    assert "molmanagerSetProteinPayload" in html
+    assert "__RESET_JS__" not in html
 
 
 def test_build_protein_viewer_html_has_setters():

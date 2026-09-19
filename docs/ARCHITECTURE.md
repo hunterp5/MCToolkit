@@ -127,6 +127,10 @@ window as one-line forwards so dialogs and tests keep calling `app.on_calc_finis
 | `ProcessQueueManager` | `ui/process_queue.py` | Serial heavy tools |
 | `BackgroundActivityHub` | `ui/background_activity.py` | Processes dialog |
 
+The main menubar is data in `ui/main_window/menu_spec.py`. `menu_builder.install_menu_specs`
+turns that tree into Qt widgets. Add tools to the spec; do not grow `AppMenuMixin.init_menubar`.
+`tests/test_menu_spec.py` asserts structure without constructing a window.
+
 ## Mixins vs composition
 
 A mixin is shared behavior used by **more than one** class. Almost all MolManager
@@ -285,7 +289,7 @@ Ligand 3D viewer: `ui/mol_viewer_3d.py` re-exports. HTML/JS assembly is
 `ui/mol_3d_prepare.py`, Qt widgets are `ui/mol_3d_widget.py` (conformer nav + dock chrome mixins), and the floating
 dialog/openers are `ui/mol_3d_dialog.py`. The sketcher embed is `ui/mol_3d_embed.py`;
 strain-energy table fill is `ui/mol_3d_strain.py`. Protein viewer: `ui/protein_viewer.py`
-re-exports; HTML is `ui/protein_viewer_html.py`, canvas is `ui/protein_embed.py`,
+re-exports; HTML is `ui/protein_viewer_html.py` (init script: `ui/protein_viewer.js`), canvas is `ui/protein_embed.py`,
 chain list is `ui/protein_chain_manager.py`. The window (`ui/protein_viewer_dialog.py`) is a file-split (IO/session, render-style/H-bond, sequence).
 Crystallographic inventory: `structure_components.py` re-exports types, CIF IO,
 chain inventory, and atoms/pocket helpers.

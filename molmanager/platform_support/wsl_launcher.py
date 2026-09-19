@@ -28,6 +28,7 @@ import shlex
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from pathlib import Path
 from shutil import which
 
@@ -174,10 +175,8 @@ def run_linux_tool(
     *work_dir* (or Linux-absolute paths).
     """
     work = Path(work_dir)
-    try:
+    with suppress(OSError):
         work = work.resolve()
-    except OSError:
-        pass
     work.mkdir(parents=True, exist_ok=True)
     quoted = " ".join(shlex.quote(str(a)) for a in args)
     if sys.platform.startswith("win"):
