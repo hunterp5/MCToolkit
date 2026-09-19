@@ -33,6 +33,34 @@ def _reset_worker_global_state() -> None:
     ppu._SHUTDOWN.clear()
 
 
+@pytest.fixture(autouse=True)
+def _destroy_leftover_widgets() -> None:
+    """Destroy the widgets a test leaves behind, while no Qt code is on the stack.
+
+    A window graph is cyclic — collaborators hold the window, signal connections hold bound
+    methods — so closing a window frees nothing and the cycle collector ends up owning a live Qt
+    tree. It then frees that tree at whatever allocation trips its threshold, which has meant
+    inside another widget's constructor. Leaked windows are also not passive: ``setFont`` and
+    friends walk every live widget, so one half-destroyed leftover corrupts an unrelated test.
+    """
+    yield
+    from PyQt5 import sip
+    from PyQt5.QtCore import QEvent
+    from PyQt5.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if app is None:
+        return
+    # Drain first. Callbacks already queued with ``QTimer.singleShot(0, ...)`` capture the window
+    # and assume it outlives them, so deleting before they run turns them into use-after-free.
+    for _ in range(3):
+        app.processEvents()
+    for widget in list(app.topLevelWidgets()):
+        if not sip.isdeleted(widget):
+            widget.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+
+
 @pytest.fixture(scope="session")
 def qapp():
     """Single QApplication for the test session."""

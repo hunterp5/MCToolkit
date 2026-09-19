@@ -34,6 +34,7 @@ from ...services.table_selection import (
     structure_row_is_empty,
 )
 from ...chem.molecule_conversion import looks_like_mol_block
+from ..qt_widget_utils import qobject_is_deleted
 from ..table_selection import item_selection_for_view_rows, merge_sorted_row_indices
 
 # Sentinel: visible source-row cache is empty (distinct from cached ``None`` = all rows visible).
@@ -169,6 +170,11 @@ class TableSelectionMixin:
         frozen = scroll_pos if preserve_scroll else None
 
         def _apply() -> None:
+            # This runs a tick later, by which point the window may be gone: a test has ended, or
+            # the cycle collector has freed it. Touching the table then reaches freed C++ memory
+            # and takes the process down instead of raising.
+            if qobject_is_deleted(self) or qobject_is_deleted(self.table):
+                return
             try:
                 if anchor_rows and not preserve_scroll:
                     first = min(anchor_rows)

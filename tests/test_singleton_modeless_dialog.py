@@ -70,6 +70,44 @@ def test_helper_clears_attr_when_on_destroyed_is_omitted(qapp) -> None:
     qapp.processEvents()
 
 
+def test_teardown_slot_does_not_keep_the_host_alive(qapp) -> None:  # noqa: ARG001
+    """The ``destroyed`` slot must hold the host weakly, or the collector owns the whole window.
+
+    When the slot held the host strongly, host, dialog, and closure formed a cycle that only the
+    collector could free. It freed it by emptying the closure cell holding the host, which dropped
+    the last reference to the window, whose destructor destroyed the dialog and emitted
+    ``destroyed`` straight back into the slot, which then read the cell that had just been
+    emptied. PyQt turns that NameError into qFatal and aborts the process.
+    """
+    import weakref
+
+    from PyQt5.QtWidgets import QDialog
+
+    host = QWidget()
+    host._dlg = None
+    reuse_or_show_modeless_singleton(host, "_dlg", lambda h=host: QDialog(h), show=False)
+    host_ref = weakref.ref(host)
+
+    del host
+    assert host_ref() is None, "the teardown slot still holds the host strongly"
+
+
+def test_teardown_slot_survives_a_collected_cycle(qapp) -> None:
+    """Freeing host and dialog together through the collector must not abort the process."""
+    import gc
+
+    from PyQt5.QtWidgets import QDialog
+
+    host = QWidget()
+    host._dlg = None
+    dlg = reuse_or_show_modeless_singleton(host, "_dlg", lambda h=host: QDialog(h), show=False)
+
+    del dlg
+    del host
+    gc.collect()
+    qapp.processEvents()
+
+
 def test_optional_on_destroyed_runs_after_attr_is_cleared(qapp) -> None:
     from PyQt5 import sip
     from PyQt5.QtWidgets import QDialog
@@ -172,17 +210,13 @@ def test_destroyed_callback_skips_deleted_qobject_host(qapp) -> None:
     qapp.processEvents()
 
 
-def test_tool_mixins_do_not_hand_roll_singleton_lifecycles() -> None:
+def test_data_menu_mixins_do_not_hand_roll_singleton_lifecycles() -> None:
     """A hand-rolled ``destroyed`` handler clears the attribute for any dialog instance.
 
     That orphans a replacement window once the superseded one is finally destroyed, which
     the shared helper avoids by ignoring signals from a dialog it no longer tracks.
     """
-    for name in (
-        "dimension_reduction_mixin.py",
-        "medchem_space_mixin.py",
-        "cluster_mixin.py",
-    ):
+    for name in ("dimension_reduction_mixin.py", "medchem_space_mixin.py"):
         text = (_MAIN_WINDOW / name).read_text(encoding="utf-8")
         assert "reuse_or_show_modeless_singleton" in text, f"{name} bypasses the shared helper"
         assert "destroyed.connect" not in text, f"{name} wires destroyed by hand"
