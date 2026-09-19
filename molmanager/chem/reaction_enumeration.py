@@ -22,6 +22,7 @@ import csv
 import json
 import threading
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -50,6 +51,25 @@ class ReactionPreset:
 
 
 @dataclass(frozen=True)
+class ReactionEnumerationRequest:
+    """Inputs for one reaction-enumeration job (dialog → worker)."""
+
+    reaction_name: str
+    rxn_smarts: str
+    reactant_1_mode: str
+    reactant_2_mode: str
+    reactant_file_1: str
+    reactant_file_2: str
+    reactant_smiles_1: str
+    reactant_smiles_2: str
+    max_products: int
+    output_filters: str
+    add_to_table: bool
+    save_to_file: bool
+    save_path: str | None
+
+
+@dataclass(frozen=True)
 class ReactionEnumerationJobResult:
     """Worker output consumed by the main window."""
 
@@ -74,7 +94,7 @@ def load_reaction_presets() -> list[ReactionPreset]:
         return [_fallback_custom_preset()]
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
         return [_fallback_custom_preset()]
     out: list[ReactionPreset] = []
     for item in raw.get("presets") or []:
@@ -190,6 +210,24 @@ def load_reactant_pool(
     raise ValueError(f"Unsupported reactant input mode: {source!r}")
 
 
+def load_reactant_pools(
+    request: ReactionEnumerationRequest,
+) -> tuple[list[Chem.Mol], list[Chem.Mol]]:
+    """Load both reactant pools described by *request*."""
+    return (
+        load_reactant_pool(
+            source=request.reactant_1_mode,
+            file_path=request.reactant_file_1,
+            smiles_text=request.reactant_smiles_1,
+        ),
+        load_reactant_pool(
+            source=request.reactant_2_mode,
+            file_path=request.reactant_file_2,
+            smiles_text=request.reactant_smiles_2,
+        ),
+    )
+
+
 def load_reactant_molecules(path: str | Path) -> list[Chem.Mol]:
     """Load reactant structures from SDF, SMILES text, or CSV."""
     p = Path(path).expanduser()
@@ -216,10 +254,10 @@ def _canonical_smiles(mol: Chem.Mol) -> str | None:
     try:
         Chem.SanitizeMol(mol)
         return Chem.MolToSmiles(mol)
-    except Exception:
+    except (ValueError, RuntimeError):
         try:
             return Chem.MolToSmiles(mol, canonical=True)
-        except Exception:
+        except (ValueError, RuntimeError):
             return None
 
 
@@ -238,12 +276,10 @@ def write_product_smiles_to_sdf(
             mol = Chem.MolFromSmiles(text)
             if mol is None:
                 continue
-            try:
+            with suppress(RuntimeError, ValueError, TypeError):
                 mol.SetProp("_Name", f"product_{i + 1}")
                 mol.SetProp("SMILES", text)
                 mol.SetProp("Reaction", reaction_name)
-            except Exception:
-                pass
             writer.write(mol)
             written += 1
     finally:
@@ -310,7 +346,7 @@ def enumerate_reaction(
                 return list(products), skipped, False
             try:
                 outcomes = rxn.RunReactants((mol_a, mol_b))
-            except Exception:
+            except (RuntimeError, ValueError, TypeError):
                 skipped += 1
                 continue
             for outcome in outcomes:

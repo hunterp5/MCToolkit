@@ -8,27 +8,31 @@
 #
 # MolManager is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
 """Reaction-based enumeration worker (Tools menu)."""
 
 from __future__ import annotations
 
 import threading
+from contextlib import suppress
 
 from PyQt5.QtCore import QRunnable
 
 from ..chem.reaction_enumeration import (
     ReactionEnumerationJobResult,
+    ReactionEnumerationRequest,
     enumerate_reaction,
-    load_reactant_pool,
+    load_reactant_pools,
     write_product_smiles_to_sdf,
 )
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
+
+_JOB_ERRORS = (ValueError, RuntimeError, OSError, TypeError)
 
 
 class ReactionEnumerationWorker(QRunnable):
@@ -36,19 +40,7 @@ class ReactionEnumerationWorker(QRunnable):
 
     def __init__(
         self,
-        rxn_smarts: str,
-        reaction_name: str,
-        reactant_1_mode: str,
-        reactant_2_mode: str,
-        reactant_file_1: str,
-        reactant_file_2: str,
-        reactant_smiles_1: str,
-        reactant_smiles_2: str,
-        max_products: int,
-        output_filters: str,
-        add_to_table: bool,
-        save_to_file: bool,
-        save_path: str | None,
+        request: ReactionEnumerationRequest,
         tool_title: str,
         signals: WorkerSignals,
         *,
@@ -56,19 +48,7 @@ class ReactionEnumerationWorker(QRunnable):
         progress_state=None,
     ):
         super().__init__()
-        self.rxn_smarts = str(rxn_smarts or "")
-        self.reaction_name = str(reaction_name or "Reaction")
-        self.reactant_1_mode = str(reactant_1_mode or "file")
-        self.reactant_2_mode = str(reactant_2_mode or "file")
-        self.reactant_file_1 = str(reactant_file_1 or "")
-        self.reactant_file_2 = str(reactant_file_2 or "")
-        self.reactant_smiles_1 = str(reactant_smiles_1 or "")
-        self.reactant_smiles_2 = str(reactant_smiles_2 or "")
-        self.max_products = int(max_products)
-        self.output_filters = str(output_filters or "")
-        self.add_to_table = bool(add_to_table)
-        self.save_to_file = bool(save_to_file)
-        self.save_path = (save_path or "").strip() or None
+        self.request = request
         self.tool_title = tool_title
         self.signals = signals
         self.cancel_event = cancel_event
@@ -81,8 +61,9 @@ class ReactionEnumerationWorker(QRunnable):
             return
         from ..platform_support.tool_progress import report_tool_progress
 
+        req = self.request
         label = self.tool_title
-        target = max(1, int(self.max_products))
+        target = max(1, int(req.max_products))
         throttle = [0, 0.0]
 
         def on_progress(accepted: int, cap: int, examined: int) -> None:
@@ -108,31 +89,16 @@ class ReactionEnumerationWorker(QRunnable):
             self._finish_cancelled([], 0)
             return
         try:
-            pool_a = load_reactant_pool(
-                source=self.reactant_1_mode,
-                file_path=self.reactant_file_1,
-                smiles_text=self.reactant_smiles_1,
-            )
-            pool_b = load_reactant_pool(
-                source=self.reactant_2_mode,
-                file_path=self.reactant_file_2,
-                smiles_text=self.reactant_smiles_2,
-            )
+            pool_a, pool_b = load_reactant_pools(req)
             products, skipped, cancelled = enumerate_reaction(
-                self.rxn_smarts,
+                req.rxn_smarts,
                 [pool_a, pool_b],
-                max_products=self.max_products,
-                output_filters=self.output_filters,
+                max_products=req.max_products,
+                output_filters=req.output_filters,
                 cancel_event=ev,
                 progress_callback=on_progress,
             )
-        except ValueError as exc:
-            if ev is not None and ev.is_set():
-                self._finish_cancelled([], 0)
-                return
-            self._emit_failed(str(exc) or exc.__class__.__name__)
-            return
-        except Exception as exc:
+        except _JOB_ERRORS as exc:
             if ev is not None and ev.is_set():
                 self._finish_cancelled([], 0)
                 return
@@ -141,17 +107,11 @@ class ReactionEnumerationWorker(QRunnable):
         if cancelled or (ev is not None and ev.is_set()):
             self._finish_cancelled(products, skipped)
             return
-        written = 0
-        if self.save_to_file and self.save_path and products:
-            try:
-                written = write_product_smiles_to_sdf(
-                    self.save_path,
-                    products,
-                    self.reaction_name,
-                )
-            except Exception as exc:
-                self._emit_failed(str(exc) or exc.__class__.__name__)
-                return
+        try:
+            written = self._write_products(products)
+        except _JOB_ERRORS as exc:
+            self._emit_failed(str(exc) or exc.__class__.__name__)
+            return
         report_tool_progress(
             message=label,
             done=target,
@@ -160,60 +120,48 @@ class ReactionEnumerationWorker(QRunnable):
             signals=self.signals,
             force_signal=True,
         )
-        result = ReactionEnumerationJobResult(
+        self._emit_finished(self._result(products, skipped, written))
+
+    def _write_products(self, products: list[str]) -> int:
+        req = self.request
+        if not (req.save_to_file and req.save_path and products):
+            return 0
+        return write_product_smiles_to_sdf(req.save_path, products, req.reaction_name)
+
+    def _result(
+        self, products: list[str], skipped: int, written: int
+    ) -> ReactionEnumerationJobResult:
+        req = self.request
+        return ReactionEnumerationJobResult(
             products=list(products),
-            reaction_name=self.reaction_name,
+            reaction_name=req.reaction_name,
             skipped=int(skipped),
-            add_to_table=self.add_to_table,
-            save_to_file=self.save_to_file,
-            save_path=self.save_path,
+            add_to_table=req.add_to_table,
+            save_to_file=req.save_to_file,
+            save_path=req.save_path,
             written_count=int(written),
         )
-        try:
-            self.signals.reaction_enum_finished.emit(result)
-        except Exception:
-            pass
 
     def _emit_failed(self, message: str) -> None:
-        try:
+        with suppress(RuntimeError, TypeError):
             self.signals.reaction_enum_failed.emit(message, self.tool_title)
-        except Exception:
-            pass
+
+    def _emit_finished(self, result: ReactionEnumerationJobResult) -> None:
+        with suppress(RuntimeError, TypeError):
+            self.signals.reaction_enum_finished.emit(result)
 
     def _finish_cancelled(self, products: list[str], skipped: int) -> None:
         kept = [str(smi) for smi in products if (smi or "").strip()]
         written = 0
-        if self.save_to_file and self.save_path and kept:
-            try:
-                written = write_product_smiles_to_sdf(
-                    self.save_path,
-                    kept,
-                    self.reaction_name,
-                )
-            except Exception:
-                written = 0
+        with suppress(*_JOB_ERRORS):
+            written = self._write_products(kept)
         if kept:
             emit_partial_results_if_cancelled(
                 self.signals,
                 self.tool_title,
                 len(kept),
-                self.max_products,
+                self.request.max_products,
                 True,
             )
-            result = ReactionEnumerationJobResult(
-                products=kept,
-                reaction_name=self.reaction_name,
-                skipped=int(skipped),
-                add_to_table=self.add_to_table,
-                save_to_file=self.save_to_file,
-                save_path=self.save_path,
-                written_count=int(written),
-            )
-            try:
-                self.signals.reaction_enum_finished.emit(result)
-            except Exception:
-                pass
-        try:
-            self.signals.reaction_enum_failed.emit("Cancelled.", self.tool_title)
-        except Exception:
-            pass
+            self._emit_finished(self._result(kept, skipped, written))
+        self._emit_failed("Cancelled.")

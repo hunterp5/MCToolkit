@@ -346,6 +346,7 @@ Heavy chemistry jobs are split by concern (compat re-exports remain in `workers/
 | `workers/superpose_rmsd.py` | Per-conformer RMSD |
 | `workers/strain_energy.py` | Strain energy + overlay helpers |
 | `workers/chemistry_calc.py` | Custom calculator (AST `calculator_expressions`) |
+| `workers/reaction_enumeration.py` | Two-reactant `RunReactants` job; request lives in `chem/reaction_enumeration.py` |
 | `workers/chemistry_worker_common.py` | Shared progress throttling and force-field names |
 
 Pure helpers live under `molmanager/services/` (e.g. `chemistry_columns.py`, `sql_load_policy.py`,

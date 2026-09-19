@@ -18,8 +18,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -45,33 +43,17 @@ from ...chem.fragment_recomposition_filters import (
     recomposition_filter_property_help,
 )
 from ...chem.reaction_enumeration import (
+    ReactionEnumerationRequest,
     load_reaction_presets,
     load_reactant_molecules_from_smiles_text,
     validate_reaction_smarts,
 )
 from ...chem.reaction_file_io import load_reaction_smarts_from_rxn_path
+from ...platform_support.config import load_config
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_REACTION_ENUMERATION
 
-
-@dataclass(frozen=True)
-class ReactionEnumerationDialogParams:
-    """Arguments collected from :class:`ReactionEnumerationDialog`."""
-
-    reaction_name: str
-    rxn_smarts: str
-    reactant_1_mode: str
-    reactant_2_mode: str
-    reactant_file_1: str
-    reactant_file_2: str
-    reactant_smiles_1: str
-    reactant_smiles_2: str
-    max_products: int
-    output_filters: str
-    add_to_table: bool
-    save_to_file: bool
-    save_path: str | None
-    tool_title: str
+ReactionEnumerationDialogParams = ReactionEnumerationRequest
 
 
 class ReactionEnumerationOutputPanel(QWidget):
@@ -245,11 +227,20 @@ class ReactionEnumerationDialog(QDialog):
 
     def __init__(self, parent=None, initial_smarts: str = ""):
         super().__init__(parent)
+        self._init_enum_state()
+        self._build_enum_ui()
+        self._wire_enum_ui()
+        self._on_preset_changed(self.preset_combo.currentIndex())
+        if (initial_smarts or "").strip():
+            self._apply_loaded_smarts((initial_smarts or "").strip())
+
+    def _init_enum_state(self) -> None:
         self._presets = load_reaction_presets()
         self.setWindowTitle(TOOL_REACTION_ENUMERATION)
         self.setMinimumWidth(520)
         self.resize(560, 0)
 
+    def _build_enum_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 8)
         root.setSpacing(8)
@@ -258,7 +249,6 @@ class ReactionEnumerationDialog(QDialog):
         self.preset_combo = QComboBox()
         for preset in self._presets:
             self.preset_combo.addItem(preset.name, preset.id)
-        self.preset_combo.currentIndexChanged.connect(self._on_preset_changed)
         form.addRow("Reaction:", self.preset_combo)
 
         self.preset_desc = QLabel()
@@ -275,7 +265,6 @@ class ReactionEnumerationDialog(QDialog):
         smarts_row.addWidget(self.smarts_edit, 1)
         self.load_rxn_btn = QPushButton("Load RXN…")
         self.load_rxn_btn.setToolTip("Fill Reaction SMARTS from an MDL .rxn or .rdf file.")
-        self.load_rxn_btn.clicked.connect(self._browse_rxn)
         smarts_row.addWidget(self.load_rxn_btn)
         form.addRow("Reaction SMARTS:", smarts_row)
         root.addLayout(form)
@@ -290,8 +279,6 @@ class ReactionEnumerationDialog(QDialog):
 
         limits_form = QFormLayout()
         self.max_products_sb = QSpinBox()
-        from ...platform_support.config import load_config
-
         max_prod_cap = int(load_config().memory_guard_enum_max_products)
         self.max_products_sb.setRange(1, max_prod_cap)
         self.max_products_sb.setValue(min(2000, max_prod_cap))
@@ -320,15 +307,15 @@ class ReactionEnumerationDialog(QDialog):
         out_lyt.addWidget(self.output_panel)
         root.addWidget(out_box)
 
-        box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        box.accepted.connect(self._on_accept)
-        box.rejected.connect(self.reject)
-        root.addWidget(box)
-        make_window_minimizable(self)
+        self._button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        root.addWidget(self._button_box)
 
-        self._on_preset_changed(self.preset_combo.currentIndex())
-        if (initial_smarts or "").strip():
-            self._apply_loaded_smarts((initial_smarts or "").strip())
+    def _wire_enum_ui(self) -> None:
+        self.preset_combo.currentIndexChanged.connect(self._on_preset_changed)
+        self.load_rxn_btn.clicked.connect(self._browse_rxn)
+        self._button_box.accepted.connect(self._on_accept)
+        self._button_box.rejected.connect(self.reject)
+        make_window_minimizable(self)
 
     def _select_custom_preset(self) -> None:
         for i, preset in enumerate(self._presets):
@@ -400,12 +387,12 @@ class ReactionEnumerationDialog(QDialog):
             return
         self.accept()
 
-    def params(self) -> ReactionEnumerationDialogParams:
+    def params(self) -> ReactionEnumerationRequest:
         preset = self._current_preset()
         add_to_table, save_to_file, save_path = self.output_panel.options()
         mode1, file1, smiles1 = self.reactant1_panel.values()
         mode2, file2, smiles2 = self.reactant2_panel.values()
-        return ReactionEnumerationDialogParams(
+        return ReactionEnumerationRequest(
             reaction_name=preset.name,
             rxn_smarts=(self.smarts_edit.text() or "").strip(),
             reactant_1_mode=mode1,
@@ -419,5 +406,4 @@ class ReactionEnumerationDialog(QDialog):
             add_to_table=add_to_table,
             save_to_file=save_to_file,
             save_path=save_path,
-            tool_title=TOOL_REACTION_ENUMERATION,
         )

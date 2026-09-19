@@ -120,3 +120,60 @@ def test_reaction_enumeration_dialog_accepts_initial_smarts(qapp):  # noqa: ARG0
     assert dlg.smarts_edit.text() == smarts
     assert dlg.load_rxn_btn.text().startswith("Load RXN")
     dlg.close()
+
+
+def test_dialog_params_are_chem_request(qapp):  # noqa: ARG001
+    from molmanager.chem.reaction_enumeration import ReactionEnumerationRequest
+    from molmanager.ui.dialogs.reaction_enumeration import (
+        ReactionEnumerationDialog,
+        ReactionEnumerationDialogParams,
+    )
+
+    assert ReactionEnumerationDialogParams is ReactionEnumerationRequest
+    dlg = ReactionEnumerationDialog()
+    dlg.reactant1_panel.smiles_edit.setPlainText("CC(=O)O")
+    dlg.reactant1_panel.mode_combo.setCurrentIndex(1)
+    dlg.reactant2_panel.smiles_edit.setPlainText("CN")
+    dlg.reactant2_panel.mode_combo.setCurrentIndex(1)
+    p = dlg.params()
+    assert isinstance(p, ReactionEnumerationRequest)
+    assert not hasattr(p, "tool_title")
+    assert p.reactant_1_mode == "smiles"
+    dlg.close()
+
+
+def test_load_reactant_pools_from_request() -> None:
+    from molmanager.chem.reaction_enumeration import (
+        ReactionEnumerationRequest,
+        load_reactant_pools,
+    )
+
+    req = ReactionEnumerationRequest(
+        reaction_name="Amide",
+        rxn_smarts="[C:1](=[O:2])-[OH;D1].[N;H2,H1]>>[C:1](=[O:2])-[N]",
+        reactant_1_mode="smiles",
+        reactant_2_mode="smiles",
+        reactant_file_1="",
+        reactant_file_2="",
+        reactant_smiles_1="CC(=O)O",
+        reactant_smiles_2="CN",
+        max_products=10,
+        output_filters="",
+        add_to_table=True,
+        save_to_file=False,
+        save_path=None,
+    )
+    pool_a, pool_b = load_reactant_pools(req)
+    assert len(pool_a) == 1
+    assert len(pool_b) == 1
+
+
+def test_load_reaction_presets_invalid_json(tmp_path, monkeypatch) -> None:
+    from molmanager.chem import reaction_enumeration as reenum
+
+    bad = tmp_path / "presets.json"
+    bad.write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(reenum, "reaction_presets_path", lambda: bad)
+    presets = reenum.load_reaction_presets()
+    assert len(presets) == 1
+    assert presets[0].id == "custom"

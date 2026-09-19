@@ -140,27 +140,15 @@ class ReactionToolsMixin:
 
         guard = check_product_enumeration(p.max_products)
         if not guard.ok:
-            QMessageBox.warning(self, p.tool_title, guard.message)
+            QMessageBox.warning(self, TOOL_REACTION_ENUMERATION, guard.message)
             return
         ps = self._tool_progress_state
-        self._begin_tool_progress(p.tool_title, p.max_products)
+        self._begin_tool_progress(TOOL_REACTION_ENUMERATION, p.max_products)
         self.process_queue.enqueue(
-            f"{p.tool_title} ({p.reaction_name})",
-            lambda ev, pp=p, sigs=self.signals, prog=ps: ReactionEnumerationWorker(
-                pp.rxn_smarts,
-                pp.reaction_name,
-                pp.reactant_1_mode,
-                pp.reactant_2_mode,
-                pp.reactant_file_1,
-                pp.reactant_file_2,
-                pp.reactant_smiles_1,
-                pp.reactant_smiles_2,
-                pp.max_products,
-                pp.output_filters,
-                pp.add_to_table,
-                pp.save_to_file,
-                pp.save_path,
-                pp.tool_title,
+            f"{TOOL_REACTION_ENUMERATION} ({p.reaction_name})",
+            lambda ev, req=p, sigs=self.signals, prog=ps: ReactionEnumerationWorker(
+                req,
+                TOOL_REACTION_ENUMERATION,
                 sigs,
                 cancel_event=ev,
                 progress_state=prog,

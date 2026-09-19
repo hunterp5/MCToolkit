@@ -1,6 +1,6 @@
 # Existing silent-exception sites for BLE001, S110, and SIM105.
 # Shrink this list when a file is cleaned; never add files.
-# ratchet-max-files = 227
+# ratchet-max-files = 225
 
 [lint.per-file-ignores]
 "molmanager/analysis/activity_cliff_analysis.py" = ["BLE001"]
@@ -15,7 +15,6 @@
 "molmanager/chem/fragment_recomposition_filters.py" = ["BLE001"]
 "molmanager/chem/molecule_conversion.py" = ["BLE001", "S110"]
 "molmanager/chem/rdkit_fingerprints.py" = ["BLE001"]
-"molmanager/chem/reaction_enumeration.py" = ["BLE001", "S110"]
 "molmanager/chem/reaction_extract.py" = ["BLE001"]
 "molmanager/chem/reaction_file_io.py" = ["BLE001"]
 "molmanager/chem/smarts_macropatterns.py" = ["BLE001"]
@@ -210,7 +209,6 @@
 "molmanager/workers/protomer_generator.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/workers/protonate_worker.py" = ["BLE001", "S110"]
 "molmanager/workers/qsar_worker.py" = ["BLE001"]
-"molmanager/workers/reaction_enumeration.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/workers/rgroup_decomposition.py" = ["BLE001", "S110", "SIM105"]
 "molmanager/workers/sali_worker.py" = ["BLE001"]
 "molmanager/workers/session_rows_parse.py" = ["BLE001", "S110", "SIM105"]
