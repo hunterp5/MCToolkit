@@ -26,10 +26,13 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+from ..app_identity import APP_DISPLAY_NAME
+
 FORMAT_ID = "molmanager.protein.pharmacophore"
 FORMAT_VERSION = 1
 PHARMACOPHORE_FILE_FILTER = (
-    "Pharmacophore (*.json *.mph4);;JSON (*.json);;MolManager pharmacophore (*.mph4);;"
+    "Pharmacophore (*.json *.mph4);;JSON (*.json);;"
+    f"{APP_DISPLAY_NAME} pharmacophore (*.mph4);;"
     "All files (*.*)"
 )
 
@@ -325,7 +328,7 @@ def pharmacophore_from_dict(raw: Any) -> Pharmacophore:
 
 
 def load_pharmacophore(path: str | os.PathLike[str]) -> Pharmacophore:
-    """Read a MolManager pharmacophore JSON file."""
+    """Read a pharmacophore JSON file."""
     text = Path(path).read_text(encoding="utf-8")
     try:
         raw = json.loads(text)
@@ -335,7 +338,7 @@ def load_pharmacophore(path: str | os.PathLike[str]) -> Pharmacophore:
 
 
 def save_pharmacophore(path: str | os.PathLike[str], pharmacophore: Pharmacophore) -> None:
-    """Write a MolManager pharmacophore JSON file."""
+    """Write a pharmacophore JSON file."""
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(pharmacophore.to_dict(), indent=2) + "\n", encoding="utf-8")

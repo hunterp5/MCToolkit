@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
 
 from rdkit import Chem
 
+from ..app_identity import APP_DISPLAY_NAME
 from ..platform_support.qt_webengine_flags import webengine_views_supported
 from .dockable_plot import (
     PLOT_BODY_MARGINS,
@@ -462,7 +463,7 @@ class Molecule3DViewerWidget(Mol3DConfMixin, Mol3DChromeMixin, QWidget):
         )
         if not callable(export_fn):
             self._set_viewer_status(
-                "Export failed: open the viewer from the main MolManager window."
+                f"Export failed: open the viewer from the main {APP_DISPLAY_NAME} window."
             )
             return
         idx = 0

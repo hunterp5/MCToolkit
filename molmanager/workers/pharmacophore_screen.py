@@ -89,7 +89,7 @@ def _mp_screen_row(args: tuple) -> tuple[int, bool | None, float, float | None, 
 
 
 class PharmacophoreScreenWorker(QRunnable):
-    """Screen packed ensembles against a MolManager pharmacophore JSON object."""
+    """Screen packed ensembles against a pharmacophore JSON object."""
 
     def __init__(
         self,

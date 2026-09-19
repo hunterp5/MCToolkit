@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..app_identity import APP_DISPLAY_NAME
 from ..platform_support.session_log import record_ui_log
 from ..protein.structure_components import PolymerChain, cif_viewer_bond_tables
 from .protein_chain_manager import ProteinChainManager
@@ -184,7 +185,7 @@ class ProteinViewerDialog(
         file_menu.addAction(act_save)
         act_save_session = QAction("Save to Session", self, triggered=self.save_viewer_to_session)
         act_save_session.setToolTip(
-            "Write the current Protein Viewer into the open MolManager session. "
+            f"Write the current Protein Viewer into the open {APP_DISPLAY_NAME} session. "
             "Closing without this leaves the session unchanged."
         )
         file_menu.addAction(act_save_session)

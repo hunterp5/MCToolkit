@@ -26,6 +26,7 @@ from pathlib import Path
 from PySide6.QtCore import QByteArray
 from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
+from ..app_identity import APP_DISPLAY_NAME
 from ..protein.structure_components import (
     LoadedStructure,
     component_id_for_atom,
@@ -854,7 +855,7 @@ class ProteinViewerIoMixin:
         self._session_dirty = True
 
     def save_viewer_to_session(self) -> bool:
-        """Commit the live viewer into the current MolManager session snapshot."""
+        """Commit the live viewer into the current session snapshot."""
         parent = self.parent()
         commit = getattr(parent, "commit_protein_viewer_session", None)
         state = self.collect_session_state()
@@ -888,7 +889,7 @@ class ProteinViewerIoMixin:
         reply = QMessageBox.question(
             self,
             "Save to Session",
-            "Save the Protein Viewer to the current MolManager session before closing?",
+            f"Save the Protein Viewer to the current {APP_DISPLAY_NAME} session before closing?",
             QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
             QMessageBox.Save,
         )

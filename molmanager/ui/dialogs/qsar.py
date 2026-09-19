@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...app_identity import APP_DISPLAY_NAME
 from ...analysis.qsar_models import (
     CLASSIFICATION_MODELS,
     REGRESSION_MODELS,
@@ -224,7 +225,7 @@ class QSARDialog(QDialog):
         self.results_text.setPlaceholderText(
             "Configure activity and features, then click Train & evaluate.\n\n"
             "Select numeric descriptor columns (e.g. MW, LogP) and/or 2D fingerprints. "
-            "Requires scikit-learn (included with MolManager dependencies)."
+            f"Requires scikit-learn (included with {APP_DISPLAY_NAME} dependencies)."
         )
         right_lyt.addWidget(self.results_text, 1)
         splitter.addWidget(right)
