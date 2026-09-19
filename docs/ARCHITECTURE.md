@@ -250,6 +250,7 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 - **Dock host:** `ui/plot_dock_host.py` (`PlotDockHost`) owns dock/undock, panel width, and pane close; `PlotToolsMixin` delegates the public API
 - **PCA / radar / dimred:** `ui/plotly_interactive_view.py`; dimred panel is `ui/dialogs/dimred_panel.py` (`DockableResultPlotPanel`), method dialogs stay in `ui/dialogs/dimensionality_reduction.py`
 - **MedChem space:** `ui/dialogs/medchem_space.py` (`MedChemPlotPanel` also subclasses `DockableResultPlotPanel`)
+- **Table → DataFrame:** `ui/table_dataframe.py` (Statistics, QSAR, MMP, dimred, and medchem-space; not the Statistics dialog module)
 - **Shared helpers:** `ui/plot_table_sync.py` (selection mapping, clear override); `ui/plotly_shell.py` + `ui/plotly_shell.html` (interactive Plotly HTML/JS for Plotter + Plotly views)
 - **Result maps:** `ui/result_plot_panel.py` (`DockableResultPlotPanel`) is the shared dock chrome for SALI / MMP / cliffs / dimred / MedChem
 - **Docked-plot chrome:** `ui/dockable_plot.py` re-exports glyphs, floating titles, footer buttons, and pane embed (`dockable_plot_glyphs.py`, `_title.py`, `_chrome.py`, `_embed.py`)

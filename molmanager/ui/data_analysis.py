@@ -14,19 +14,25 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Compatibility re-export; prefer ``molmanager.ui.dialogs.data_analysis``."""
+"""Compatibility re-export.
+
+Table helpers: ``molmanager.ui.table_dataframe``. Statistics dialog:
+``molmanager.ui.dialogs.data_analysis``.
+"""
 
 from __future__ import annotations
 
+from .table_dataframe import (
+    iter_scoped_table_analysis_rows,
+    numeric_subset,
+    selected_table_column_headers,
+    table_to_dataframe,
+)
 from .dialogs.data_analysis import (
     DataAnalysisDialog,
     _outlier_mask_iqr,
     _outlier_mask_modified_z,
     _outlier_mask_zscore,
-    iter_scoped_table_analysis_rows,
-    numeric_subset,
-    selected_table_column_headers,
-    table_to_dataframe,
 )
 
 __all__ = [

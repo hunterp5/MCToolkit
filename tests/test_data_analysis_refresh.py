@@ -196,3 +196,23 @@ def test_select_in_table_preserves_column_choice(qapp):  # noqa: ARG001
     dlg._select_last_outliers_in_main_table()
     assert selected == [[3]]
     assert dlg.outlier_col.currentText() == "MW"
+
+
+def test_table_dataframe_source_does_not_import_statistics_ui() -> None:
+    """QSAR / MMP / dimred / medchem-space must not construct the Statistics dialog to get a DataFrame."""
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "molmanager" / "ui" / "table_dataframe.py"
+    text = path.read_text(encoding="utf-8")
+    assert "PyQt5" not in text
+    assert "QDialog" not in text
+    assert "DataAnalysisDialog" not in text
+    for rel in (
+        "molmanager/ui/dialogs/qsar.py",
+        "molmanager/ui/dialogs/mmp.py",
+        "molmanager/ui/dialogs/dimred_panel.py",
+        "molmanager/ui/dialogs/medchem_space.py",
+    ):
+        src = (Path(__file__).resolve().parents[1] / rel).read_text(encoding="utf-8")
+        assert "from .data_analysis import" not in src
+        assert "table_dataframe" in src

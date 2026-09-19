@@ -52,7 +52,7 @@ from ...analysis.dimensionality_reduction import (
 )
 from ...workers import SIMILARITY_FP_TYPE_LABELS
 from ...workers.dimensionality_reduction import DimensionReductionSignals, DimensionReductionWorker
-from .data_analysis import numeric_subset, table_to_dataframe
+from ..table_dataframe import numeric_subset, table_to_dataframe
 from ...plotting.plot_marker_color import (
     color_values_are_numeric,
     normalize_color_column,

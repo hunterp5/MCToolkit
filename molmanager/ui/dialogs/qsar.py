@@ -53,7 +53,7 @@ from ...analysis.qsar_models import (
 )
 from ...workers import SIMILARITY_FP_TYPE_LABELS
 from ...workers.qsar_worker import QSARSignals, QSARPredictWorker, QSARTrainWorker
-from .data_analysis import numeric_subset, table_to_dataframe
+from ..table_dataframe import numeric_subset, table_to_dataframe
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 from .mmp import select_preferred_activity_column
 from .scope import selection_scope_checked
