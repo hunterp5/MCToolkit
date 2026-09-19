@@ -69,6 +69,7 @@ class Render2DResultsMixin:
         self._import_render_done += int(n_done)
         done = min(self._import_render_done, self._import_render_goal)
         total_g = self._import_render_goal
+        sharing = bool(getattr(self, "_render2d_shares_ui_with_queue_job", lambda: False)())
         if getattr(self, "_render2d_batch_active", False):
             now = time.monotonic()
             last_t = float(getattr(self, "_render2d_progress_last_emit", 0.0))
@@ -77,13 +78,15 @@ class Render2DResultsMixin:
             if done <= 1 or done >= total_g or (done - last_d) >= step or (now - last_t) >= 0.12:
                 self._render2d_progress_last_emit = now
                 self._render2d_progress_last_done = done
-                self._on_tool_progress(TOOL_RENDER_2D, done, total_g)
-        else:
+                if not sharing:
+                    self._on_tool_progress(TOOL_RENDER_2D, done, total_g)
+        elif not sharing:
             self._on_tool_progress(TOOL_RENDER_2D, done, total_g)
         if self._import_render_done >= self._import_render_goal:
             self._import_progress_active = False
-            self._clear_tool_progress()
-            self.status_label.setText("Ready")
+            if not sharing:
+                self._clear_tool_progress()
+                self.status_label.setText("Ready")
             self._flush_render2d_batch_results()
             self._restore_render2d_batch_environment()
 

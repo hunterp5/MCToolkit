@@ -67,7 +67,8 @@ class BackgroundActivityHub(QObject):
             if pq is None:
                 return False
             snap = pq.snapshot()
-        return bool(snap.get("running"))
+        title = str((snap.get("running") or {}).get("title") or "")
+        return "render 2d" in title.lower()
 
     def current_tool_progress_text(self) -> str:
         """Formatted tool progress, independent of the status-bar label."""
@@ -150,11 +151,18 @@ class BackgroundActivityHub(QObject):
 
         progress = self.current_tool_progress_text()
         if progress:
+            prefer = next(
+                (i for i, meta in enumerate(metas) if meta.get("kind") == "pq_running"),
+                None,
+            )
             assigned = False
-            for meta in metas:
+            for i, meta in enumerate(metas):
                 kind = meta.get("kind")
                 if kind == "pq_queued":
                     meta["progress"] = ""
+                    continue
+                if prefer is not None:
+                    meta["progress"] = progress if i == prefer else ""
                     continue
                 if not assigned:
                     meta["progress"] = progress
@@ -196,7 +204,7 @@ class BackgroundActivityHub(QObject):
             return (("Cancel", "Gnina is not running."), None)
 
         if kind == "pq_running":
-            if self.render2d_batch_active():
+            if self.render2d_batch_active() and self._render2d_on_process_queue():
                 cancel = getattr(app, "cancel_render_2d_batch", None)
                 if callable(cancel) and cancel():
                     return (None, "Render 2D cancelled.")

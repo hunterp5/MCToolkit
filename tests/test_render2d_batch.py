@@ -215,6 +215,20 @@ def test_batched_handler_marks_rows_missing_from_table_as_failed() -> None:
     assert app._import_render_done == 2
 
 
+def test_batched_handler_does_not_steal_progress_when_sharing_queue_job() -> None:
+    app = _App(rows_in_table={1}, goal=1)
+    app._render2d_shares_ui_with_queue_job = lambda: True
+    app.cleared = False
+    app._clear_tool_progress = lambda: setattr(app, "cleared", True)
+    texts: list[str] = []
+    app.status_label = type("L", (), {"setText": lambda _s, t: texts.append(t)})()
+    app.on_render2d_rows_ready(_png_rows([1]), 7)
+    assert app.flushed and app.restored
+    assert app.progress == []
+    assert app.cleared is False
+    assert texts == []
+
+
 @pytest.mark.parametrize("rows", [[], None])
 def test_batched_handler_tolerates_empty_payload(rows) -> None:
     app = _App(rows_in_table={1}, goal=1)

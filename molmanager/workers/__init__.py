@@ -87,6 +87,7 @@ from .load_render import (
     Render2DBatchHeldJob,
     Render2DBatchProcessWorker,
     RenderWorker,
+    STRUCTURE_PAYLOAD_TAG,
     UniversalLoadWorker,
     DisconnectFragmentsWorker,
 )
@@ -166,6 +167,7 @@ __all__ = [
     "Render2DBatchHeldJob",
     "Render2DBatchProcessWorker",
     "RenderWorker",
+    "STRUCTURE_PAYLOAD_TAG",
     "RGroupDecompositionWorker",
     "SqliteRebuildSignals",
     "SqliteRebuildWorker",

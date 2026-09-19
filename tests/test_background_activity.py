@@ -98,6 +98,39 @@ def test_processes_view_includes_tool_progress_on_running_job(qapp) -> None:  # 
     assert metas[1]["progress"] == ""
 
 
+def test_processes_view_keeps_tool_progress_on_serial_job_when_render2d_overlays(
+    qapp,
+) -> None:  # noqa: ARG001
+    state = ToolProgressState()
+    state.begin("CONFORGE conformations", 10)
+    state.update("CONFORGE conformations", 3, 10)
+    app = SimpleNamespace(
+        process_queue=_FakeProcessQueue(
+            {
+                "running": {
+                    "job_id": "cfg01",
+                    "title": "CONFORGE conformations (10 structures)",
+                    "status": "Running",
+                    "cancellable": True,
+                },
+                "queued": [],
+                "fast_running": [],
+            }
+        ),
+        render2d_batch_active=lambda: True,
+        _background_jobs={},
+        _tool_progress_state=state,
+    )
+    hub = BackgroundActivityHub(app, qapp)
+    rows, metas = hub.processes_view_rows()
+    assert rows[0][1] == "(render-2d)"
+    assert metas[0]["kind"] == "render2d"
+    assert metas[0]["progress"] == ""
+    assert metas[1]["kind"] == "pq_running"
+    assert "CONFORGE" in metas[1]["progress"]
+    assert "3/10" in metas[1]["progress"]
+
+
 def test_try_cancel_pq_running_render2d_uses_batch_cancel(qapp) -> None:  # noqa: ARG001
     cancelled = {"ok": False}
 
@@ -106,7 +139,9 @@ def test_try_cancel_pq_running_render2d_uses_batch_cancel(qapp) -> None:  # noqa
         return True
 
     app = SimpleNamespace(
-        process_queue=_FakeProcessQueue({"running": {"job_id": "x"}}),
+        process_queue=_FakeProcessQueue(
+            {"running": {"job_id": "x", "title": "render 2D (12 rows)"}}
+        ),
         cancel_render_2d_batch=cancel_render_2d_batch,
         render2d_batch_active=lambda: True,
     )
@@ -116,6 +151,38 @@ def test_try_cancel_pq_running_render2d_uses_batch_cancel(qapp) -> None:  # noqa
     assert dialog_info is None
     assert status == "Render 2D cancelled."
     assert cancelled["ok"]
+
+
+def test_try_cancel_pq_running_leaves_overlay_render2d_alone(qapp) -> None:  # noqa: ARG001
+    cancelled = {"render": False, "queue": False}
+
+    class _Queue(_FakeProcessQueue):
+        def cancel_running(self) -> bool:
+            cancelled["queue"] = True
+            return True
+
+    def cancel_render_2d_batch() -> bool:
+        cancelled["render"] = True
+        return True
+
+    app = SimpleNamespace(
+        process_queue=_Queue(
+            {
+                "running": {
+                    "job_id": "cfg01",
+                    "title": "CONFORGE conformations (10 structures)",
+                }
+            }
+        ),
+        cancel_render_2d_batch=cancel_render_2d_batch,
+        render2d_batch_active=lambda: True,
+    )
+    hub = BackgroundActivityHub(app, qapp)
+    dialog_info, status = hub.try_cancel_row({"kind": "pq_running", "job_id": "cfg01"})
+    assert dialog_info is None
+    assert status == "Cancelling…"
+    assert cancelled["queue"] is True
+    assert cancelled["render"] is False
 
 
 def test_try_cancel_background_job(qapp) -> None:  # noqa: ARG001

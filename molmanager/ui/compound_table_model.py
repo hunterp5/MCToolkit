@@ -671,6 +671,29 @@ class CompoundTableModel(
             return ""
         return self._rows[row].values.get(h, "") or ""
 
+    def analysis_column_texts(
+        self, headers: list[str], rows: list[int] | None = None
+    ) -> dict[str, list[str]]:
+        """Stripped cell text per data column for *rows* (all rows when ``None``).
+
+        Same values as :meth:`cell_text` plus the pixmap-column backing fallback that analysis
+        tools rely on, but read straight off the row store. Whole-table DataFrame builds used to
+        cost one Python call per cell, which dominated session restore on wide tables.
+        """
+        try:
+            picked = self._rows if rows is None else [self._rows[r] for r in rows]
+        except IndexError:
+            picked = [self._rows[r] for r in (rows or []) if 0 <= r < len(self._rows)]
+        out: dict[str, list[str]] = {}
+        for col, name in enumerate(headers):
+            if col >= len(self._headers) or col == self.STRUCTURE_COL or name == "Structure":
+                continue
+            if col == 0:
+                out[name] = [str(row.oid) for row in picked]
+                continue
+            out[name] = [(row.values.get(name, "") or "").strip() for row in picked]
+        return out
+
     def value_for_header(self, row: int, header_name: str) -> str:
         """Raw string cell for a data column (no QModelIndex); empty if unknown column."""
         if row < 0 or row >= len(self._rows):

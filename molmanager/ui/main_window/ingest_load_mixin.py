@@ -163,16 +163,35 @@ class IngestLoadMixin:
                 new_rows.append((oid, dict(cells)))
             return
         override_field = getattr(self, "_structure_field_override", None)
+        # Structures go to the store in one write per batch; see ``_ingest_store_mol``.
+        batch: list | None = [] if callable(getattr(self.mols, "ingest_structures", None)) else None
         for item in items:
             blob, cells = self._split_ingest_item(item)
+            source_blob = blob if isinstance(blob, (bytes, bytearray)) else None
             if override_field:
                 m, precomputed = self._resolve_override_ingest_mol(blob, cells, override_field)
+                if precomputed is None:
+                    # The override parsed a different column, so the worker blob is not this mol.
+                    source_blob = None
             else:
                 m = self._coerce_ingest_mol(blob)
                 precomputed = cells
             oid = self.next_oid
             self.next_oid += 1
-            new_rows.append((oid, self._ingest_store_mol(oid, m, precomputed_cells=precomputed)))
+            new_rows.append(
+                (
+                    oid,
+                    self._ingest_store_mol(
+                        oid,
+                        m,
+                        precomputed_cells=precomputed,
+                        source_blob=source_blob,
+                        batch=batch,
+                    ),
+                )
+            )
+        if batch:
+            self.mols.ingest_structures(batch)
 
     def _resolve_override_ingest_mol(self, blob, cells, field: str):
         """Apply a structure-column override during ingest, reading the field from the cell dict.
@@ -206,7 +225,13 @@ class IngestLoadMixin:
         return item
 
     def _ingest_store_mol(
-        self, oid: int, mol: Chem.Mol, precomputed_cells: dict[str, str] | None = None
+        self,
+        oid: int,
+        mol: Chem.Mol,
+        precomputed_cells: dict[str, str] | None = None,
+        *,
+        source_blob: bytes | None = None,
+        batch: list | None = None,
     ) -> dict[str, str]:
         """
         Store *mol* for row *oid*.
@@ -216,6 +241,10 @@ class IngestLoadMixin:
 
         *precomputed_cells* are row cells built off the GUI thread by the load worker; when
         provided they are used verbatim (avoids re-reading every property on the GUI thread).
+
+        *batch*, when given, collects ``(oid, mol, blob, smiles)`` for one bulk store write
+        instead of a per-row insert. *source_blob* is the load worker's already-serialized
+        structure, reused so ingest never re-pickles a molecule the worker just pickled.
         """
         cells = (
             dict(precomputed_cells)
@@ -240,11 +269,34 @@ class IngestLoadMixin:
             sc.store_mol(int(oid), "confs", mol)
             light = make_sidecar_cell("confs", meta)
             depict = prepare_mol_2d(mol)
-            self.mols[oid] = depict if depict is not None else mol
+            # The depiction is a fresh 2D copy, so the worker blob does not describe it.
+            self._ingest_remember_mol(
+                oid, depict if depict is not None else mol, None, cells, batch
+            )
             cells["confs"] = light
             return cells
-        self.mols[oid] = mol
+        self._ingest_remember_mol(oid, mol, source_blob, cells, batch)
         return cells
+
+    def _ingest_remember_mol(
+        self,
+        oid: int,
+        mol: Chem.Mol | None,
+        source_blob: bytes | None,
+        cells: dict[str, str],
+        batch: list | None,
+    ) -> None:
+        """Hand one ingested structure to the molecule store, batched when the store supports it."""
+        if batch is None:
+            self.mols[oid] = mol
+            return
+        if mol is None:
+            return
+        # The store keeps connection tables only. The worker blob matches that byte for byte
+        # when the molecule carries no conformers; otherwise it has coordinates to strip.
+        if source_blob is not None and mol.GetNumConformers():
+            source_blob = None
+        batch.append((int(oid), mol, source_blob, str(cells.get("SMILES") or "")))
 
     def on_file_loaded(self, mols_list, headers, is_first, is_last):
         # Append batch to pending queue and schedule incremental processing

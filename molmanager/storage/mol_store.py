@@ -184,6 +184,18 @@ class MolStore(MutableMapping[int, Chem.Mol]):
             return None
         return bytes(row[0])
 
+    def iter_structure_payloads(self) -> Iterator[tuple[int, bytes | None, str]]:
+        """Yield ``(oid, blob, smiles)`` for every stored row in a single scan.
+
+        Batch 2D rendering re-serializes each structure for its subprocesses anyway, so
+        hydrating molecules through :meth:`__getitem__` would pay RDKit twice per row and
+        thrash the LRU on top of one SQLite query per oid.
+        """
+        self._flush()
+        cursor = self._conn.execute("SELECT oid, blob, smiles FROM mols ORDER BY oid")
+        for oid, blob, smiles in cursor:
+            yield int(oid), (bytes(blob) if blob else None), (smiles or "")
+
     def ingest_jobs(self, jobs: Iterable[tuple[int, bytes | None, str]]) -> None:
         """Persist session (oid, blob, smiles) rows without constructing molecules."""
         rows: list[tuple[int, bytes | None, str | None]] = []
@@ -201,6 +213,21 @@ class MolStore(MutableMapping[int, Chem.Mol]):
             rows,
         )
         self._conn.commit()
+
+    def ingest_structures(
+        self, rows: Iterable[tuple[int, Chem.Mol | None, bytes | None, str]]
+    ) -> None:
+        """Write many ``(oid, mol, blob, smiles)`` structures in one statement.
+
+        File ingest already holds the load worker's pickle and the row's SMILES cell, so the
+        per-row :meth:`__setitem__` path would re-serialize and re-canonicalize every molecule
+        on the GUI thread to recreate values it was handed.
+        """
+        jobs: list[tuple[int, bytes | None, str]] = []
+        for oid, mol, blob, smiles in rows:
+            payload = bytes(blob) if blob else (_mol_blob(mol) if mol is not None else None)
+            jobs.append((int(oid), payload, smiles))
+        self.ingest_jobs(jobs)
 
     def ingest_blobs(self, blobs: Mapping[int, bytes]) -> None:
         jobs = ((int(oid), blob, "") for oid, blob in blobs.items() if blob)

@@ -33,7 +33,11 @@ from ...table.structure_depiction_layout import (
 )
 from ...chem.reaction_file_io import looks_like_reaction_smarts, parse_reaction_smarts
 from ...chem.structure_2d_depiction import ReactionDrawSpec
-from ...workers import Render2DBatchHeldJob, Render2DBatchProcessWorker
+from ...workers import (
+    STRUCTURE_PAYLOAD_TAG,
+    Render2DBatchHeldJob,
+    Render2DBatchProcessWorker,
+)
 from ..strings import TOOL_RENDER_2D
 
 
@@ -44,26 +48,45 @@ class Render2DMixin:
         base_h: int,
         allowed_oids: set[int] | None = None,
     ) -> tuple[list, dict[int, int]]:
-        """Build render tasks from ``self.mols`` (O(n) with O(1) row lookup; used after file/SQL ingest)."""
+        """Build render tasks from ``self.mols`` (O(n) with O(1) row lookup; used after file/SQL ingest).
+
+        Structures stay serialized. The render subprocesses rebuild each one themselves, so
+        hydrating RDKit mols here only to re-pickle them in the worker costs seconds of GUI
+        freeze on large tables.
+        """
         renders: list = []
         row_by_oid: dict[int, int] = {}
-        for oid in list(self.mols):
-            if allowed_oids is not None and int(oid) not in allowed_oids:
+        row_for_oid = self._table_model.logical_row_for_oid
+        zoom_w, zoom_h = structure_depict_width() * 2, structure_depict_height() * 2
+        for oid, payload in self._iter_render2d_structure_payloads():
+            if allowed_oids is not None and oid not in allowed_oids:
                 continue
-            mol = self.mols.get(int(oid))
-            if mol is None:
-                continue
-            row = self._table_model.logical_row_for_oid(int(oid))
+            row = row_for_oid(oid)
             if row < 0:
                 continue
-            rw, rh = (
-                (structure_depict_width() * 2, structure_depict_height() * 2)
-                if int(oid) in self.zoomed_ids
-                else (base_w, base_h)
-            )
-            renders.append((int(oid), mol, rw, rh))
-            row_by_oid[int(oid)] = row
+            rw, rh = (zoom_w, zoom_h) if oid in self.zoomed_ids else (base_w, base_h)
+            renders.append((oid, payload, rw, rh))
+            row_by_oid[oid] = row
         return renders, row_by_oid
+
+    def _iter_render2d_structure_payloads(self):
+        """Yield ``(oid, payload)`` for every stored structure, preferring unhydrated payloads.
+
+        ``payload`` is a :data:`STRUCTURE_PAYLOAD_TAG` tuple when the store can hand over raw
+        bytes, otherwise a live mol (plain-dict stores used by tests and older sessions).
+        """
+        store = self.mols
+        bulk = getattr(store, "iter_structure_payloads", None)
+        if not callable(bulk):
+            for oid in list(store):
+                mol = store.get(int(oid))
+                if mol is not None:
+                    yield int(oid), mol
+            return
+        for oid, blob, smiles in bulk():
+            if not blob and not smiles:
+                continue
+            yield oid, (STRUCTURE_PAYLOAD_TAG, blob or b"", smiles.encode("utf-8"))
 
     def _build_render2d_tasks_in_table_order(
         self,
@@ -233,6 +256,19 @@ class Render2DMixin:
         if callable(on_session):
             on_session()
 
+    def _running_process_queue_title(self) -> str:
+        """Title of the serial process-queue job, or ``""`` if none is running."""
+        pq = getattr(self, "process_queue", None)
+        if pq is None or not pq.has_running_job():
+            return ""
+        snap = pq.snapshot() if hasattr(pq, "snapshot") else {}
+        return str((snap.get("running") or {}).get("title") or "")
+
+    def _render2d_shares_ui_with_queue_job(self) -> bool:
+        """True when Render 2D is drawing while another serial tool owns the status line."""
+        title = self._running_process_queue_title()
+        return bool(title) and "render 2d" not in title.lower()
+
     def cancel_render_2d_batch(self) -> bool:
         """Stop a Tools → Render 2D batch: no further chunks, workers skip drawing if not started."""
         if not self._render2d_batch_active:
@@ -271,7 +307,8 @@ class Render2DMixin:
         self._render2d_eager_flush_idx = 0
         self._render2d_eager_uniform_height = False
         self._import_progress_active = False
-        self._clear_tool_progress()
+        if not self._render2d_shares_ui_with_queue_job():
+            self._clear_tool_progress()
         self._restore_render2d_batch_environment()
         return True
 
@@ -282,11 +319,11 @@ class Render2DMixin:
                 self, TOOL_RENDER_2D, "Load a table with at least one row first."
             )
             return
-        if self._render2d_batch_active or self.process_queue.has_running_job():
+        if self._render2d_batch_active:
             QMessageBox.warning(
                 self,
                 TOOL_RENDER_2D,
-                "A render or background tool is already running. Wait for it to finish or cancel it from Processes.",
+                "A 2D render is already running. Wait for it to finish or cancel it from Processes.",
             )
             return
         candidates = self.chemistry_tool_structure_sources()
@@ -304,7 +341,8 @@ class Render2DMixin:
         allowed_oids = self._selected_oids_set() if only_selected else None
         if self._abort_if_only_selected_but_empty(only_selected, allowed_oids, TOOL_RENDER_2D):
             return
-        self.status_label.setText(f"{TOOL_RENDER_2D}: collecting structures…")
+        if not self._render2d_shares_ui_with_queue_job():
+            self.status_label.setText(f"{TOOL_RENDER_2D}: collecting structures…")
         base_w, base_h = structure_depict_width(), structure_depict_height()
         renders, row_by_oid = self._build_render2d_tasks_in_table_order(
             src, base_w, base_h, allowed_oids
@@ -330,8 +368,21 @@ class Render2DMixin:
         column_pixmap_mode: bool = True,
         queue_title_prefix: str = "",
     ) -> None:
-        """Queue batch 2D renders on the serial process queue (waits behind other tools)."""
+        """Start a batch 2D render.
+
+        When the serial process queue is idle, the job is queued (and typically starts
+        immediately). When another tool is already running, the render starts off-queue
+        so structures can be drawn without waiting for that tool to finish.
+        """
         if getattr(self, "_render2d_batch_active", False):
+            return
+        if self._render2d_shares_ui_with_queue_job():
+            self._begin_render2d_batch_impl(
+                renders,
+                row_by_oid,
+                src,
+                column_pixmap_mode=column_pixmap_mode,
+            )
             return
         title = f"{queue_title_prefix}render 2D ({len(renders)} rows)".strip()
         payload = (renders, row_by_oid, src, column_pixmap_mode)
@@ -409,7 +460,8 @@ class Render2DMixin:
         self._import_progress_active = True
         self._import_render_goal = len(renders)
         self._import_render_done = 0
-        self._on_tool_progress(TOOL_RENDER_2D, 0, len(renders))
+        if not self._render2d_shares_ui_with_queue_job():
+            self._on_tool_progress(TOOL_RENDER_2D, 0, len(renders))
         self._render2d_cancel_event = (
             cancel_event if cancel_event is not None else threading.Event()
         )
@@ -467,11 +519,11 @@ class Render2DMixin:
                 self, TOOL_RENDER_2D, "Load a table with at least one row first."
             )
             return
-        if self._render2d_batch_active or self.process_queue.has_running_job():
+        if self._render2d_batch_active:
             QMessageBox.warning(
                 self,
                 TOOL_RENDER_2D,
-                "A render or background tool is already running. Wait for it to finish or cancel it from Processes.",
+                "A 2D render is already running. Wait for it to finish or cancel it from Processes.",
             )
             return
         if row < 0 or row >= self._table_model.rowCount():

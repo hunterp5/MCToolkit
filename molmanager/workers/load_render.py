@@ -51,6 +51,7 @@ from ..table.table_file_formats import (
     logical_suffix,
     open_text_maybe_gzip,
 )
+from ..conformers.conformer_column_codec import mol_has_3d_coordinates
 from ..chem.fragment_disconnect import largest_fragment_and_rest
 from ..chem.structure_2d_depiction import (
     ReactionDrawSpec,
@@ -70,6 +71,11 @@ from ..platform_support.tool_progress import ToolProgressState, report_tool_prog
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
 
 logger = logging.getLogger(__name__)
+
+# Tags for serialized Render 2D payloads. Keeping structures in these forms lets the GUI
+# thread hand rows straight to the child processes without building RDKit mols first.
+REACTION_PAYLOAD_TAG = "rxn"
+STRUCTURE_PAYLOAD_TAG = "mol"
 
 
 def _emit_structure_tool_progress(
@@ -99,7 +105,14 @@ def mol_to_ingest_blob(mol: "Chem.Mol") -> bytes:
     are intentionally *not* pickled here: they travel in the accompanying cell dict (the table is the
     source of truth for property values), and dropping them makes serialize/rebuild ~4x faster and
     the payload ~10x smaller.
+
+    Depiction-only 2D conformers are dropped here as well. The molecule store keeps connection
+    tables, so shipping those coordinates only made the GUI thread strip them one row at a time.
+    3D coordinates are kept: ingest packs them into the ``confs`` sidecar.
     """
+    if mol.GetNumConformers() and not mol_has_3d_coordinates(mol):
+        mol = Chem.Mol(mol)
+        mol.RemoveAllConformers()
     return mol.ToBinary()
 
 
@@ -119,7 +132,8 @@ def _mp_render_structure_batch(args: tuple) -> list[tuple]:
     moves that ceiling so extra cores actually help. Batch renders never read mol properties, so
     rows are ``(oid, png, ok, w, h)``.
 
-    Each item is ``(oid, mol_bytes)`` or ``(oid, ("rxn", smarts_bytes))``.
+    Each item is ``(oid, mol_bytes)``, ``(oid, (REACTION_PAYLOAD_TAG, smarts_bytes))``, or
+    ``(oid, (STRUCTURE_PAYLOAD_TAG, mol_bytes, smiles_bytes))``.
     """
     items, w, h = args
     width, height = int(w), int(h)
@@ -131,16 +145,45 @@ def _mp_render_structure_batch(args: tuple) -> list[tuple]:
             out.append((oid, b"", False, width, height))
             continue
         try:
-            if isinstance(payload, tuple) and payload and payload[0] == "rxn":
-                raw = payload[1]
-                smarts = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
-                png = render_reaction_png(smarts, width, height)
+            if isinstance(payload, tuple) and payload[0] == REACTION_PAYLOAD_TAG:
+                png = render_reaction_png(_as_text(payload[1]), width, height)
+            elif isinstance(payload, tuple) and payload[0] == STRUCTURE_PAYLOAD_TAG:
+                mol = _mol_from_render_payload(payload[1], _as_text(payload[2]))
+                if mol is None:
+                    out.append((oid, b"", False, width, height))
+                    continue
+                png = render_molecule_png(mol, width, height)
             else:
                 png = render_molecule_png(Chem.Mol(payload), width, height)
             out.append((oid, png, True, width, height))
         except Exception:
             out.append((oid, b"", False, width, height))
     return out
+
+
+def _as_text(raw) -> str:
+    return raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw or "")
+
+
+def _mol_from_render_payload(blob, smiles: str):
+    """Rebuild a structure from its stored pickle, falling back to SMILES.
+
+    The fallback matters for sessions written by a newer RDKit, whose pickles this build
+    cannot read; without it those rows would silently render blank.
+    """
+    if blob:
+        try:
+            mol = Chem.Mol(bytes(blob))
+        except Exception:
+            mol = None
+        if mol is not None:
+            return mol
+    if not smiles:
+        return None
+    try:
+        return Chem.MolFromSmiles(smiles)
+    except Exception:
+        return None
 
 
 def render2d_process_worker_count() -> int:
@@ -226,7 +269,11 @@ class Render2DBatchProcessWorker(QRunnable):
             if ev is not None and ev.is_set():
                 break
             if isinstance(mol, ReactionDrawSpec):
-                blob: bytes | tuple = ("rxn", mol.smarts.encode("utf-8"))
+                blob: bytes | tuple = (REACTION_PAYLOAD_TAG, mol.smarts.encode("utf-8"))
+            elif isinstance(mol, tuple):
+                blob = mol
+            elif isinstance(mol, (bytes, bytearray)):
+                blob = bytes(mol)
             else:
                 try:
                     blob = mol.ToBinary() if mol is not None else b""

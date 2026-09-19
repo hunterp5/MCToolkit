@@ -129,7 +129,7 @@ class ProcessesDialog(QDialog):
             self._btn_cancel.setEnabled(active)
         elif m.get("kind") == "pq_running":
             hub = getattr(self._app, "background_activity", None)
-            if hub is not None and hub.render2d_batch_active():
+            if hub is not None and hub.render2d_batch_active() and hub._render2d_on_process_queue():
                 self._btn_cancel.setEnabled(True)
             else:
                 self._btn_cancel.setEnabled(bool(m.get("cancellable")))

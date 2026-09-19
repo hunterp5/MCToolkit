@@ -52,7 +52,7 @@ from ...analysis.dimensionality_reduction import (
 )
 from ...workers import SIMILARITY_FP_TYPE_LABELS
 from ...workers.dimensionality_reduction import DimensionReductionSignals, DimensionReductionWorker
-from ..table_dataframe import numeric_subset, table_to_dataframe
+from ..table_dataframe import scoped_table_column_names, table_to_dataframe
 from ...plotting.plot_marker_color import (
     color_values_are_numeric,
     normalize_color_column,
@@ -482,16 +482,15 @@ class DimensionReductionPanel(DockableResultPlotPanel):
                 return
             self._refresh_structure_sources()
             only_sel = selection_scope_checked(self)
-            df, _rows = table_to_dataframe(
+            all_cols, numeric_cols = scoped_table_column_names(
                 self.parent_app, visible_only=False, only_selected=only_sel
             )
-            num = numeric_subset(df, exclude_id=True)
-            for col in num.columns:
+            for col in numeric_cols:
                 item = QListWidgetItem(col)
                 item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                 item.setCheckState(Qt.Unchecked)
                 self.column_list.addItem(item)
-            for col in df.columns:
+            for col in all_cols:
                 if col != "ID_HIDDEN":
                     self.color_combo.addItem(col)
                     self.size_combo.addItem(col)
