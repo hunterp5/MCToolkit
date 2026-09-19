@@ -103,3 +103,27 @@ def test_score_mpo_row_end_to_end():
     assert evaluate_desirability(2.0, specs[1]) == pytest.approx(1.0)
     assert format_score(0.5, decimals=2) == "0.50"
     assert format_score(None) == ""
+
+
+def test_numeric_columns_and_bounds_from_dict_and_tuple() -> None:
+    from types import SimpleNamespace
+
+    from molmanager.ui.dialogs.mpo_scoring import _numeric_columns_and_bounds
+
+    parent = SimpleNamespace(
+        global_bounds={"MW": {"min": 1, "max": 10}, "LogP": (0, 5), "empty": {"min": 3, "max": 3}}
+    )
+    cols, bounds = _numeric_columns_and_bounds(parent)
+    assert cols == ["LogP", "MW", "empty"]
+    assert bounds["MW"] == (1.0, 10.0)
+    assert bounds["LogP"] == (0.0, 5.0)
+    assert bounds["empty"] == (3.0, 4.0)
+
+
+def test_mpo_dialog_constructs_without_parent(qapp) -> None:  # noqa: ARG001
+    from molmanager.ui.dialogs.mpo_scoring import MPOScoringDialog
+
+    dlg = MPOScoringDialog(None)
+    assert dlg.out_edit.text() == "MPO_Score"
+    assert dlg.add_btn.isEnabled() is False
+    dlg.close()

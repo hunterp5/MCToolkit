@@ -90,6 +90,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
         self._method = method
         self._have_selection = n_sel > 0
+        self._initial_selected_row_count = n_sel
         self._job_running = False
         self._last_result: DimensionReductionResult | None = None
         super().__init__(
@@ -104,7 +105,18 @@ class DimensionReductionPanel(DockableResultPlotPanel):
             pair_encoding=False,
             defer_initial_reload=True,
         )
+        self._build_dimred_ui(parent)
+        self._wire_dimred_ui(parent)
+        self._refresh_structure_sources()
+        self._reload_columns()
+        self._on_fp_selection_changed()
+        self._update_spectrum_controls()
+        self._update_size_controls()
+        self._finish_layout()
+        self.setMinimumWidth(self.embedded_minimum_width())
 
+    def _build_dimred_ui(self, parent: ChemistryWorkspaceWindow | None) -> None:
+        n_sel = self._initial_selected_row_count
         if _HAS_WEB and parent is not None:
             self._plot_view = PlotlyInteractiveView(parent, self)
             self._plot_view.setMinimumHeight(420)
@@ -138,7 +150,6 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         self.fp_combo.setToolTip(
             "None: numeric columns only. Otherwise concatenate a 2D fingerprint bit vector."
         )
-        self.fp_combo.currentIndexChanged.connect(self._on_fp_selection_changed)
         fp_row.addWidget(self.fp_combo, 1)
         src_ly.addLayout(fp_row)
         struct_row = QHBoxLayout()
@@ -159,7 +170,6 @@ class DimensionReductionPanel(DockableResultPlotPanel):
             self.only_selected_cb.setText(f"{self._only_selected_scope_prefix} ({n_sel} row(s))")
         else:
             self.only_selected_cb.setEnabled(False)
-        self.only_selected_cb.stateChanged.connect(self._reload_columns)
         self._opts_form.addRow(self.only_selected_cb)
 
         self._build_method_options(self._opts_form)
@@ -178,7 +188,6 @@ class DimensionReductionPanel(DockableResultPlotPanel):
                 "before t-SNE / UMAP / SOM. On by default: faster, and local neighborhoods "
                 "are usually preserved. Turn off to embed the raw features."
             )
-            self._pca_preprocess_cb.toggled.connect(self._sync_pca_preprocess_controls)
             self._opts_form.addRow(self._pca_preprocess_cb)
 
             self._pca_dim_spin = QSpinBox()
@@ -208,14 +217,12 @@ class DimensionReductionPanel(DockableResultPlotPanel):
                 "Scale each kept component to unit variance (sklearn whiten)."
             )
             self._opts_form.addRow(self._pca_whiten_cb)
-            self._sync_pca_preprocess_controls()
 
         trail = self._trailing_opts_layout
         run_row = QHBoxLayout()
         run_row.setContentsMargins(0, 10, 0, 6)
         run_row.addStretch()
         self.run_btn = QPushButton(self._run_button_label())
-        self.run_btn.clicked.connect(self._on_run)
         self.run_btn.setMinimumWidth(160)
         self.run_btn.setStyleSheet("QPushButton { padding: 8px 28px; }")
         run_row.addWidget(self.run_btn)
@@ -229,18 +236,17 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         trail.addWidget(QLabel("Results"))
         trail.addWidget(self.summary_text)
 
+    def _wire_dimred_ui(self, parent: ChemistryWorkspaceWindow | None) -> None:
+        self.fp_combo.currentIndexChanged.connect(self._on_fp_selection_changed)
+        self.only_selected_cb.stateChanged.connect(self._reload_columns)
+        if self._pca_preprocess_cb is not None:
+            self._pca_preprocess_cb.toggled.connect(self._sync_pca_preprocess_controls)
+            self._sync_pca_preprocess_controls()
+        self.run_btn.clicked.connect(self._on_run)
         host = parent if parent is not None else self
         self._signals = DimensionReductionSignals(host)
         self._signals.finished.connect(self._on_finished, Qt.QueuedConnection)
         self._signals.failed.connect(self._on_failed, Qt.QueuedConnection)
-
-        self._refresh_structure_sources()
-        self._reload_columns()
-        self._on_fp_selection_changed()
-        self._update_spectrum_controls()
-        self._update_size_controls()
-        self._finish_layout()
-        self.setMinimumWidth(self.embedded_minimum_width())
 
     def _ui_parent(self) -> QWidget:
         """Parent for alerts: Plot Options if open, else the visible plot window."""

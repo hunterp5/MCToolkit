@@ -68,24 +68,30 @@ class QSARDialog(QDialog):
     def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent)
         self.parent_app = parent
+        self._init_qsar_state(parent)
+        self._build_qsar_ui()
+        self._wire_qsar_ui()
+        self._reload_columns()
+        self._on_fp_toggled()
+        self._on_task_changed(self.task_combo.currentIndex())
+
+    def _init_qsar_state(self, parent: ChemistryWorkspaceWindow | None) -> None:
         self.setWindowTitle("QSAR")
         self.setMinimumSize(720, 560)
         self.resize(900, 680)
         make_window_minimizable(self)
-
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
         self._have_selection = n_sel > 0
+        self._initial_selected_row_count = n_sel
         self._fit_result: QSARFitResult | None = None
         self._job_running = False
         self._active_progress_label = "QSAR"
         self._active_qsar_job_id: str | None = None
         self._param_widgets: dict[str, QWidget] = {}
-
         self._signals = QSARSignals(self)
-        self._signals.train_finished.connect(self._on_train_finished, Qt.QueuedConnection)
-        self._signals.predict_finished.connect(self._on_predict_finished, Qt.QueuedConnection)
-        self._signals.failed.connect(self._on_failed, Qt.QueuedConnection)
 
+    def _build_qsar_ui(self) -> None:
+        n_sel = self._initial_selected_row_count
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         splitter = QSplitter(Qt.Horizontal)
@@ -100,7 +106,6 @@ class QSARDialog(QDialog):
         scope = QHBoxLayout()
         self.chk_visible = QCheckBox("Visible Rows Only")
         self.chk_visible.setChecked(True)
-        self.chk_visible.stateChanged.connect(self._reload_columns)
         scope.addWidget(self.chk_visible)
         self.only_selected_cb = QCheckBox("Selected Rows Only")
         self._only_selected_scope_prefix = "Selected Rows Only"
@@ -108,11 +113,9 @@ class QSARDialog(QDialog):
             self.only_selected_cb.setText(f"{self._only_selected_scope_prefix} ({n_sel} row(s))")
         else:
             self.only_selected_cb.setEnabled(False)
-        self.only_selected_cb.stateChanged.connect(self._reload_columns)
         scope.addWidget(self.only_selected_cb)
         scope.addStretch()
         self.btn_refresh = QPushButton("Refresh columns")
-        self.btn_refresh.clicked.connect(self._reload_columns)
         scope.addWidget(self.btn_refresh)
         left_lyt.addLayout(scope)
 
@@ -126,7 +129,6 @@ class QSARDialog(QDialog):
         self.task_combo.setToolTip(
             "Auto picks classification when activity has few discrete values; otherwise regression."
         )
-        self.task_combo.currentIndexChanged.connect(self._on_task_changed)
         data_form.addRow("Task:", self.task_combo)
         left_lyt.addWidget(data_grp)
 
@@ -136,7 +138,6 @@ class QSARDialog(QDialog):
         self.include_fp_cb.setToolTip(
             "Concatenate a full fingerprint bit vector with any selected numeric columns."
         )
-        self.include_fp_cb.stateChanged.connect(self._on_fp_toggled)
         feat_lyt.addWidget(self.include_fp_cb)
 
         fp_row = QHBoxLayout()
@@ -154,9 +155,7 @@ class QSARDialog(QDialog):
 
         col_btns = QHBoxLayout()
         self._btn_col_all = QPushButton("All")
-        self._btn_col_all.clicked.connect(self._select_all_columns)
         self._btn_col_none = QPushButton("None")
-        self._btn_col_none.clicked.connect(self._clear_column_checks)
         col_btns.addWidget(self._btn_col_all)
         col_btns.addWidget(self._btn_col_none)
         col_btns.addStretch()
@@ -171,7 +170,6 @@ class QSARDialog(QDialog):
         model_grp = QGroupBox("Model")
         model_form = QFormLayout(model_grp)
         self.model_combo = QComboBox()
-        self.model_combo.currentIndexChanged.connect(self._rebuild_model_params)
         model_form.addRow("Algorithm:", self.model_combo)
         self.train_frac_spin = QDoubleSpinBox()
         self.train_frac_spin.setRange(0.5, 0.95)
@@ -206,11 +204,9 @@ class QSARDialog(QDialog):
 
         btn_row = QHBoxLayout()
         self.train_btn = QPushButton("Train & evaluate")
-        self.train_btn.clicked.connect(self._on_train)
         btn_row.addWidget(self.train_btn)
         self.predict_btn = QPushButton("Add predictions to table")
         self.predict_btn.setEnabled(False)
-        self.predict_btn.clicked.connect(self._on_predict)
         btn_row.addWidget(self.predict_btn)
         btn_row.addStretch()
         left_lyt.addLayout(btn_row)
@@ -235,9 +231,20 @@ class QSARDialog(QDialog):
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 1)
 
-        self._reload_columns()
-        self._on_fp_toggled()
-        self._on_task_changed(self.task_combo.currentIndex())
+    def _wire_qsar_ui(self) -> None:
+        self._signals.train_finished.connect(self._on_train_finished, Qt.QueuedConnection)
+        self._signals.predict_finished.connect(self._on_predict_finished, Qt.QueuedConnection)
+        self._signals.failed.connect(self._on_failed, Qt.QueuedConnection)
+        self.chk_visible.stateChanged.connect(self._reload_columns)
+        self.only_selected_cb.stateChanged.connect(self._reload_columns)
+        self.btn_refresh.clicked.connect(self._reload_columns)
+        self.task_combo.currentIndexChanged.connect(self._on_task_changed)
+        self.include_fp_cb.stateChanged.connect(self._on_fp_toggled)
+        self._btn_col_all.clicked.connect(self._select_all_columns)
+        self._btn_col_none.clicked.connect(self._clear_column_checks)
+        self.model_combo.currentIndexChanged.connect(self._rebuild_model_params)
+        self.train_btn.clicked.connect(self._on_train)
+        self.predict_btn.clicked.connect(self._on_predict)
 
     def _clear_param_form(self) -> None:
         while self._param_form.rowCount():

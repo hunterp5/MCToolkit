@@ -68,6 +68,36 @@ _COMBINE_LABELS: tuple[tuple[str, CombineMethod], ...] = (
 )
 
 
+def _numeric_columns_and_bounds(
+    parent: ChemistryWorkspaceWindow | None,
+) -> tuple[list[str], dict[str, tuple[float, float]]]:
+    """Sorted numeric headers and (min, max) from the window's global_bounds."""
+    bounds = getattr(parent, "global_bounds", None) or {}
+    columns = sorted(str(k) for k in bounds.keys())
+    parsed: dict[str, tuple[float, float]] = {}
+    for k, meta in bounds.items():
+        lo, hi = 0.0, 1.0
+        if isinstance(meta, dict):
+            try:
+                lo = float(meta.get("min", 0.0))
+            except (TypeError, ValueError):
+                lo = 0.0
+            try:
+                hi = float(meta.get("max", 1.0))
+            except (TypeError, ValueError):
+                hi = 1.0
+        elif isinstance(meta, (tuple, list)) and len(meta) >= 2:
+            try:
+                lo = float(meta[0])
+                hi = float(meta[1])
+            except (TypeError, ValueError):
+                lo, hi = 0.0, 1.0
+        if not (hi > lo):
+            hi = lo + 1.0
+        parsed[str(k)] = (lo, hi)
+    return columns, parsed
+
+
 @dataclass
 class _CriterionDraft:
     column: str
@@ -127,40 +157,28 @@ class MPOScoringDialog(QDialog):
     def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent)
         self.parent_app = parent
+        self._init_mpo_state(parent)
+        self._build_mpo_ui()
+        self._wire_mpo_ui()
+        self._set_editor_enabled(False)
+        if not self._numeric_columns:
+            self.add_btn.setEnabled(False)
+            self.prop_combo.setEnabled(False)
+
+    def _init_mpo_state(self, parent: ChemistryWorkspaceWindow | None) -> None:
         self.setWindowTitle("MPO Scoring")
         self.setMinimumWidth(560)
         self.resize(620, 520)
         make_window_minimizable(self)
-
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
         self._have_selection = n_sel > 0
+        self._initial_selected_row_count = n_sel
         self._drafts: list[_CriterionDraft] = []
         self._updating = False
+        self._numeric_columns, self._bounds = _numeric_columns_and_bounds(parent)
 
-        bounds = getattr(parent, "global_bounds", None) or {}
-        self._numeric_columns = sorted(str(k) for k in bounds.keys())
-        self._bounds: dict[str, tuple[float, float]] = {}
-        for k, meta in bounds.items():
-            lo, hi = 0.0, 1.0
-            if isinstance(meta, dict):
-                try:
-                    lo = float(meta.get("min", 0.0))
-                except (TypeError, ValueError):
-                    lo = 0.0
-                try:
-                    hi = float(meta.get("max", 1.0))
-                except (TypeError, ValueError):
-                    hi = 1.0
-            elif isinstance(meta, (tuple, list)) and len(meta) >= 2:
-                try:
-                    lo = float(meta[0])
-                    hi = float(meta[1])
-                except (TypeError, ValueError):
-                    lo, hi = 0.0, 1.0
-            if not (hi > lo):
-                hi = lo + 1.0
-            self._bounds[str(k)] = (lo, hi)
-
+    def _build_mpo_ui(self) -> None:
+        n_sel = self._initial_selected_row_count
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 8)
         root.setSpacing(8)
@@ -190,7 +208,6 @@ class MPOScoringDialog(QDialog):
         top.addRow("Decimals:", self.decimals_sb)
         root.addLayout(top)
 
-        # Criteria list + add/remove
         crit_box = QGroupBox("Property criteria")
         crit_lyt = QVBoxLayout(crit_box)
         row = QHBoxLayout()
@@ -199,32 +216,26 @@ class MPOScoringDialog(QDialog):
         self.prop_combo.setToolTip("Numeric table columns available for desirability scoring.")
         row.addWidget(self.prop_combo, 1)
         self.add_btn = QPushButton("Add")
-        self.add_btn.clicked.connect(self._on_add)
         row.addWidget(self.add_btn)
         self.remove_btn = QPushButton("Remove")
-        self.remove_btn.clicked.connect(self._on_remove)
         row.addWidget(self.remove_btn)
         crit_lyt.addLayout(row)
 
         self.list_w = QListWidget()
-        self.list_w.currentRowChanged.connect(self._on_select)
         crit_lyt.addWidget(self.list_w, 1)
         root.addWidget(crit_box, 1)
 
-        # Editor
         edit_box = QGroupBox("Selected criterion")
         self.edit_form = QFormLayout(edit_box)
 
         self.kind_combo = QComboBox()
         for label, _k in _KIND_LABELS:
             self.kind_combo.addItem(label)
-        self.kind_combo.currentIndexChanged.connect(self._on_editor_changed)
         self.edit_form.addRow("Function:", self.kind_combo)
 
         self.dir_combo = QComboBox()
         for label, _d in _DIR_LABELS:
             self.dir_combo.addItem(label)
-        self.dir_combo.currentIndexChanged.connect(self._on_editor_changed)
         self.edit_form.addRow("Goal:", self.dir_combo)
 
         self.low_sb = QDoubleSpinBox()
@@ -236,15 +247,12 @@ class MPOScoringDialog(QDialog):
         for sb in (self.low_sb, self.high_sb, self.target_sb, self.center_sb):
             sb.setDecimals(6)
             sb.setRange(-1e12, 1e12)
-            sb.valueChanged.connect(self._on_editor_changed)
         self.sigma_sb.setDecimals(6)
         self.sigma_sb.setRange(1e-12, 1e12)
         self.sigma_sb.setValue(1.0)
-        self.sigma_sb.valueChanged.connect(self._on_editor_changed)
         self.weight_sb.setDecimals(4)
         self.weight_sb.setRange(0.0, 1e6)
         self.weight_sb.setValue(1.0)
-        self.weight_sb.valueChanged.connect(self._on_editor_changed)
 
         self._low_row = self.edit_form.rowCount()
         self.edit_form.addRow("Low:", self.low_sb)
@@ -268,15 +276,26 @@ class MPOScoringDialog(QDialog):
             self.only_selected_cb.setEnabled(False)
         root.addWidget(self.only_selected_cb)
 
-        box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        box.accepted.connect(self._on_accept)
-        box.rejected.connect(self.reject)
-        root.addWidget(box)
+        self._button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        root.addWidget(self._button_box)
 
-        self._set_editor_enabled(False)
-        if not self._numeric_columns:
-            self.add_btn.setEnabled(False)
-            self.prop_combo.setEnabled(False)
+    def _wire_mpo_ui(self) -> None:
+        self.add_btn.clicked.connect(self._on_add)
+        self.remove_btn.clicked.connect(self._on_remove)
+        self.list_w.currentRowChanged.connect(self._on_select)
+        self.kind_combo.currentIndexChanged.connect(self._on_editor_changed)
+        self.dir_combo.currentIndexChanged.connect(self._on_editor_changed)
+        for sb in (
+            self.low_sb,
+            self.high_sb,
+            self.target_sb,
+            self.center_sb,
+            self.sigma_sb,
+            self.weight_sb,
+        ):
+            sb.valueChanged.connect(self._on_editor_changed)
+        self._button_box.accepted.connect(self._on_accept)
+        self._button_box.rejected.connect(self.reject)
 
     def only_selected_rows(self) -> bool:
         return selection_scope_checked(self)

@@ -305,6 +305,7 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 - **Statistics:** `analysis/table_statistics.py` is Qt-free (outliers, curve fit, hypothesis tests); `ui/dialogs/data_analysis.py` is the shell; tab widgets live in `ui/dialogs/data_analysis_tabs.py`
 - **MMP:** `analysis/mmp_analysis.py` is pair/transform core; session ledger payloads live in `mmp_session.py`, table write-back in `mmp_table.py`, pair-atom highlights in `mmp_depict.py`
 - **Split / Join columns:** shared delimiter combo + custom field in `ui/dialogs/delimiter_picker.py`
+- **Data-menu constructors:** QSAR, MPO Scoring, and the dimred panel `__init__` only orchestrate `_init_*_state` / `_build_*_ui` / `_wire_*_ui` (same pattern as Statistics and Fast Prepare)
 - **Shared helpers:** `ui/plot_table_sync.py` (selection mapping, clear override); `ui/plotly_shell.py` + `ui/plotly_shell.html` (interactive Plotly HTML/JS for Plotter + Plotly views)
 - **Result maps:** `ui/result_plot_panel.py` (`DockableResultPlotPanel`) is the shared dock chrome for SALI / MMP / cliffs / dimred / MedChem
 - **Docked-plot chrome:** `ui/dockable_plot.py` re-exports glyphs, floating titles, footer buttons, and pane embed (`dockable_plot_glyphs.py`, `_title.py`, `_chrome.py`, `_embed.py`)
