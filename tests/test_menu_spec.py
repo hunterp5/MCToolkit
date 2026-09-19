@@ -51,7 +51,6 @@ def test_top_level_menu_order():
         "Tools",
         "Protein",
         "Data",
-        "External",
         "Settings",
         "Help",
     ]
@@ -113,6 +112,22 @@ def test_utilities_menu_outline():
     ]
 
 
+def test_query_database_menu_outline():
+    tools = find_submenu(MAIN_WINDOW_MENUS, "Tools")
+    labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(tools.items)]
+    assert "External" not in labels
+    assert "Query Database" in labels
+    assert labels.index("Query Database") == labels.index("Utilities") + 1
+    query = find_submenu(tools.items, "Query Database")
+    assert menu_outline(query.items) == [
+        "PubChem…",
+        "ChEMBL…",
+        "Patents…",
+        "",
+        "SQL…",
+    ]
+
+
 def test_reaction_menu_outline():
     tools = find_submenu(MAIN_WINDOW_MENUS, "Tools")
     labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(tools.items)]
@@ -163,7 +178,9 @@ def test_data_menu_plot_submenu_titles():
     assert "Dimensionality Reduction" not in labels
     assert "MedChem Plots" in labels
     assert "DimRed Plots" in labels
+    assert "Plotter…" in labels
     assert labels.index("DimRed Plots") == labels.index("MedChem Plots") + 1
+    assert labels.index("Plotter…") == labels.index("DimRed Plots") + 1
     medchem = find_submenu(data.items, "MedChem Plots")
     assert menu_outline(medchem.items) == ["BOILED-Egg plot…", "Golden Triangle plot…"]
     dimred = find_submenu(data.items, "DimRed Plots")

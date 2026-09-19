@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from contextlib import suppress
 from typing import Any
 
 from .mmp_analysis import MmpPair
@@ -85,21 +84,3 @@ def deserialize_mmp_ledger_payload(raw: Any) -> tuple[list[MmpPair], str]:
         except (KeyError, TypeError, ValueError):
             continue
     return pairs, activity_column
-
-
-def restore_mmp_ledger_for_session(app: Any, payload: Any = None) -> int:
-    """Restore last MMP run into ``app`` so Transform Ledger can reopen after Open Session."""
-    pairs, activity_column = deserialize_mmp_ledger_payload(payload)
-    try:
-        app._mmp_last_pairs = list(pairs)
-        app._mmp_last_activity_column = str(activity_column or "")
-    except (AttributeError, TypeError, RuntimeError):
-        return 0
-    dlg = getattr(app, "_mmp_ledger_dialog", None)
-    if dlg is not None and pairs:
-        with suppress(RuntimeError, TypeError, AttributeError):
-            dlg.set_pairs(pairs, activity_column=activity_column)
-    elif dlg is not None and not pairs:
-        with suppress(RuntimeError):
-            dlg.close()
-    return len(pairs)

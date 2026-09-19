@@ -20,36 +20,39 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 
-from ..analysis_job_support import (
+from .analysis_job_support import (
     ensure_activity_analysis_ready,
     finish_analysis_pairs,
     report_analysis_failure,
     show_activity_tool_dialog,
     start_scoped_activity_job,
 )
-from ..strings import TOOL_SALI_MAP
-from ...workers import SaliAnalysisWorker
-from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
+from .strings import TOOL_SALI_MAP
+from ..workers import SaliAnalysisWorker
+from .singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 
-class SaliMixin:
+class SaliTools:
+    def __init__(self, app) -> None:
+        self._app = app
+
     def open_sali_dialog(self) -> None:
         activity_cols = ensure_activity_analysis_ready(
-            self,
+            self._app,
             TOOL_SALI_MAP,
             missing_activity_message="SALI requires at least one numeric activity/property column.",
         )
         if not activity_cols:
             return
-        from ..dialogs.sali import SaliDialog
+        from .dialogs.sali import SaliDialog
 
         d = SaliDialog(
-            structure_sources=self.chemistry_tool_structure_sources(),
+            structure_sources=self._app.chemistry_tool_structure_sources(),
             activity_columns=activity_cols,
-            selected_row_count=len(self._selected_logical_rows()),
-            parent=self,
+            selected_row_count=len(self._app._selected_logical_rows()),
+            parent=self._app,
         )
-        show_activity_tool_dialog(self, d, on_accepted=self._on_sali_dialog_accepted)
+        show_activity_tool_dialog(self._app, d, on_accepted=self._on_sali_dialog_accepted)
 
     def _on_sali_dialog_accepted(self, d) -> None:
         p = d.params()
@@ -69,7 +72,7 @@ class SaliMixin:
             )
 
         start_scoped_activity_job(
-            self,
+            self._app,
             tool_label=TOOL_SALI_MAP,
             structure_source=p.structure_source,
             activity_column=p.activity_column,
@@ -79,7 +82,7 @@ class SaliMixin:
 
     def on_sali_finished(self, points, activity_column: str, fp_choice: str, metric: str) -> None:
         points = finish_analysis_pairs(
-            self,
+            self._app,
             TOOL_SALI_MAP,
             points,
             empty_message="No pairs met the current similarity / activity-difference filters.",
@@ -92,10 +95,10 @@ class SaliMixin:
             fp_choice=fp_choice,
             metric=metric,
         )
-        self.status_label.setText(f"SALI: {len(points)} pair(s).")
+        self._app.status_label.setText(f"SALI: {len(points)} pair(s).")
 
     def on_sali_failed(self, message: str) -> None:
-        report_analysis_failure(self, TOOL_SALI_MAP, message, fallback="SALI analysis failed.")
+        report_analysis_failure(self._app, TOOL_SALI_MAP, message, fallback="SALI analysis failed.")
 
     def _open_sali_map(
         self,
@@ -105,11 +108,11 @@ class SaliMixin:
         fp_choice: str = "",
         metric: str = "Tanimoto",
     ) -> None:
-        from ..sali_map import SaliMapDialog
+        from .sali_map import SaliMapDialog
 
         def _factory():
             dlg = SaliMapDialog(
-                self,
+                self._app,
                 points,
                 activity_column=activity_column,
                 fp_choice=fp_choice,
@@ -128,7 +131,7 @@ class SaliMixin:
             )
 
         reuse_or_show_modeless_singleton(
-            self,
+            self._app,
             "_sali_map_dialog",
             _factory,
             on_reused_visible=_on_reused,
@@ -143,11 +146,11 @@ class SaliMixin:
         metric: str = "Tanimoto",
         start_index: int = 0,
     ) -> None:
-        from ..sali_browser import SaliBrowserDialog
+        from .sali_browser import SaliBrowserDialog
 
         def _factory():
             dlg = SaliBrowserDialog(
-                self,
+                self._app,
                 points,
                 activity_column=activity_column,
                 fp_choice=fp_choice,
@@ -168,7 +171,7 @@ class SaliMixin:
             )
 
         reuse_or_show_modeless_singleton(
-            self,
+            self._app,
             "_sali_browser_dialog",
             _factory,
             on_reused_visible=_on_reused,

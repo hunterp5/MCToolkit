@@ -116,13 +116,13 @@ values measured when the ratchet landed and may only go **down**
 
 | Counter | Frozen at | What it measures |
 |---------|-----------|------------------|
-| `window_typed_params` | 74 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
-| `modules_taking_the_window` | 25 | Modules with at least one such parameter |
-| `private_cross_module_access` | 46 | `app._x` / `self._app._x` where `_x` is **not** declared in any `ui/` protocol |
-| `deferred_intra_package_imports` | 588 | First-party imports nested in function bodies, i.e. import cycles |
-| `mixin_modules` | 52 | `*_mixin.py` files |
+| `window_typed_params` | 59 | Parameters annotated `app: AppKernel` / `app: Any` — code taking the whole window |
+| `modules_taking_the_window` | 21 | Modules with at least one such parameter |
+| `private_cross_module_access` | 44 | `app._x` / `self._app._x` where `_x` is **not** declared in any `ui/` protocol |
+| `deferred_intra_package_imports` | 584 | First-party imports nested in function bodies, i.e. import cycles |
+| `mixin_modules` | 48 | `*_mixin.py` files |
 | `bind_mixin_methods_sites` | 0 | Legacy binds where a collaborator runs mixin bodies with the window as `self` |
-| `rdkit_in_ui_modules` | 7 | Qt modules importing RDKit — chemistry living in the UI |
+| `rdkit_in_ui_modules` | 2 | Qt modules importing RDKit — chemistry living in the UI |
 | `app_kernel_members` | 31 | `AppKernel` surface, roles included |
 
 `private_cross_module_access` deliberately ignores members declared in a role or host protocol.
@@ -175,7 +175,7 @@ window as one-line forwards so dialogs and tests keep calling `app.on_calc_finis
 | `TableSession` | `ui/table_session.py` | Selection, chemistry-column lookup, sticky visible-row cache (`TableSessionSelection` / `TableSessionChemistry`) |
 | `TableBuildPipeline` | `ui/table_build_pipeline.py` | Ingest chunks, SQLite rebuild, Render 2D batch/results (`QObject` child) |
 | `SessionController` | `ui/session_controller.py` | `.cms` save/restore, table layout, session plots, legacy CSV |
-| `WorkspaceTools` | `ui/workspace_tools.py` | Lazy cluster / dimred / QSAR / MPO / medchem / structure-prep collaborators |
+| `WorkspaceTools` | `ui/workspace_tools.py` | Lazy cluster / dimred / QSAR / MPO / medchem / MMP / SALI / structure-prep collaborators |
 | `PlotDockHost` | `ui/plot_dock_host.py` | Dock/undock plot panes |
 | `ProcessQueueManager` | `ui/process_queue.py` | Serial heavy tools |
 | `BackgroundActivityHub` | `ui/background_activity.py` | Processes dialog |
@@ -199,8 +199,9 @@ to land in a named role and no single role may exceed 8 members.
 
 Annotate a collaborator with the roles it actually reads, not `AppKernel`. When a collaborator
 needs window forwards that are not kernel members, declare a host protocol next to it that
-extends the relevant role — `ToolScopeHost` in `ui/tool_dialog_scope.py` is the reference. That
-keeps the extra coupling visible in one place so it can be removed later.
+extends the relevant role — `ToolScopeHost` in `ui/tool_dialog_scope.py` and `AnalysisJobHost`
+in `ui/analysis_job_support.py` are the references. That keeps the extra coupling visible in
+one place so it can be removed later.
 
 Because the roles are the declared contract, the facade has to satisfy them for real: a member no
 implementation provides is a bug, not a note-to-self. Do not paper over a missing attribute with
@@ -253,11 +254,11 @@ moved onto `TableWriteService` with `TableWriteHost`, and filter/plot/search chr
 constructed. Splitting by what fits the cap is the intended way to make partial progress; forwards
 let both halves answer on the window, so callers never see the seam.
 
-New tools go through `ui/analysis_job_support.py` (which uses `tool_dialog_scope`) and kernel
-methods — do not add mixin bases to `ChemistryWorkspaceWindow`.
+New tools go through `ui/analysis_job_support.py` (`AnalysisJobHost`, which uses `tool_dialog_scope`)
+and kernel methods — do not add mixin bases to `ChemistryWorkspaceWindow`.
 
 Remaining mixins on the window MRO are UI adapters that still talk to widgets directly
-(`AppMenuMixin`, `TableUIMixin` edit/search/filters, MMP/SALI, dock,
+(`AppMenuMixin`, `TableUIMixin` edit/search/filters, dock,
 predict, `GuiSettingsMixin`). Empty composition roots (`ChemistryMixin`, `SessionMixin`,
 `IngestRenderMixin`, `PrepareStructuresMixin`, `ConformersDescriptorsMixin`,
 `ToolsSqlPredictMixin`) are optional groupings only; they are **not** bases of
@@ -273,7 +274,7 @@ predict, `GuiSettingsMixin`). Empty composition roots (`ChemistryMixin`, `Sessio
 
 **Tool writeback:** `on_calc_finished` inserts columns immediately, then for large result sets chunks `apply_columns_values_bulk` / `set_column_text_by_oids` with `Writing results…` status; coloring and bounds run after the last chunk (`on_complete` for Protonate/fragment/SOM follow-ups). Fingerprint similarity uses the same chunked fill for large tables.
 
-Tool mixins that remain on the window (fragments, MMP/SALI, dock, predict) are thin adapters over `analysis_job_support` and the kernel. Structure-prep (protonate, Fast Prepare, disconnect/neutralize/explicit H) lives on `WorkspaceTools.structure_prep`. Ingest/render/sqlite live on `TableBuildPipeline`; column writeback on `TableWriteService`.
+Tool mixins that remain on the window (fragments, dock, predict) are thin adapters over `analysis_job_support` and the kernel. MMP / SALI / activity cliffs / pair network live on `WorkspaceTools`. Structure-prep (protonate, Fast Prepare, disconnect/neutralize/explicit H) lives on `WorkspaceTools.structure_prep`. Ingest/render/sqlite live on `TableBuildPipeline`; column writeback on `TableWriteService`.
 
 **Filter bounds:** bulk load/ingest calls `schedule_calculate_global_bounds()` (debounced); undo calls `calculate_global_bounds()` immediately when filter cards need fresh min/max. Session restore installs saved `global_bounds` when present and otherwise scans immediately.
 
@@ -362,10 +363,13 @@ Pure helpers live under `molmanager/services/` (e.g. `chemistry_columns.py`, `sq
 MMP / Activity Cliff / Pair Network / SALI share `ui/analysis_job_support.py` for scoped
 activity-record prep, process-queue enqueue (`start_scoped_activity_job`), dialog open/finish
 helpers (`ensure_activity_analysis_ready`, `finish_analysis_pairs`, `report_analysis_failure`).
-Cluster / pKa / SOM / protomer / permeability reuse the same module for table readiness
-(`ensure_table_ready_for_tool`), structure-scoped mol collect (`prepare_scoped_structure_mols`),
-enqueue (`enqueue_process_queue_job` / `start_scoped_structure_job`), and cancellable failure
-reporting (`report_cancellable_job_failure`). Tool adapters and dialogs stay thin over those helpers.
+Those helpers take `AnalysisJobHost`, not `AppKernel`. Browser MMP/SALI/selection previews and
+the Transform Ledger draw through `chem.structure_2d_depiction.render_molecule_png` (Qt wrap is
+`ui/browsers/chrome.pixmap_from_mol`). Cluster / pKa / SOM / protomer / permeability reuse the same
+module for table readiness (`ensure_table_ready_for_tool`), structure-scoped mol collect
+(`prepare_scoped_structure_mols`), enqueue (`enqueue_process_queue_job` /
+`start_scoped_structure_job`), and cancellable failure reporting
+(`report_cancellable_job_failure`). Tool adapters and dialogs stay thin over those helpers.
 
 Filter visibility changes invalidate a sticky `_visible_source_rows_cache` used by
 plot replot (so debounced Plotter rebuilds do not rematerialize proxy maps per host).

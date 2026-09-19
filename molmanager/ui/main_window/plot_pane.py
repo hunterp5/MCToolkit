@@ -371,6 +371,7 @@ class PlotPane(QFrame):
             for old in list(self._pages):
                 self._uninstall_activate_filter(old)
                 self._stack.removeWidget(old)
+                old.hide()
                 old.setParent(None)
                 unembed_from_plot_pane(old)
             self._pages = []
@@ -427,6 +428,7 @@ class PlotPane(QFrame):
         self._pages.remove(widget)
         self._stack.removeWidget(widget)
         try:
+            widget.hide()
             widget.setParent(None)
         except RuntimeError:
             pass

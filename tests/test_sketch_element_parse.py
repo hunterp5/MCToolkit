@@ -35,3 +35,16 @@ def test_parse_atom_symbol_wildcard_star_only() -> None:
     assert _parse_atom_symbol_input("*") == ("*", None)
     assert _parse_atom_symbol_input("?") is None
     assert _parse_atom_symbol_input("Au") == ("Au", None)
+
+
+def test_sketch_valence_helpers_match_common_elements() -> None:
+    from molmanager.chem.sketch_atoms import (
+        sketch_default_valence,
+        sketch_max_valence,
+        sketch_valence_list,
+    )
+
+    assert sketch_valence_list("H") == [1]
+    assert sketch_default_valence("C") == 4
+    assert sketch_max_valence("S") >= 6
+    assert sketch_default_valence("S") == 2

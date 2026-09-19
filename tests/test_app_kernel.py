@@ -36,7 +36,6 @@ from molmanager.ui.filters.filter_cards_mixin import FilterCardsMixin
 from molmanager.ui.filters.filter_substructure_mixin import FilterSubstructureMixin
 from molmanager.ui.filters.panel_mixin import FilterPanelMixin
 from molmanager.ui.gui_settings_mixin import GuiSettingsMixin
-from molmanager.ui.main_window.activity_cliff_mixin import ActivityCliffMixin
 from molmanager.ui.main_window.app_lifecycle_mixin import AppLifecycleMixin
 from molmanager.ui.main_window.app_menu_mixin import AppMenuMixin
 from molmanager.ui.main_window.conformers_tools_mixin import ConformersToolsMixin
@@ -45,12 +44,9 @@ from molmanager.ui.main_window.dock_tools_mixin import DockToolsMixin
 from molmanager.ui.main_window.external_records_mixin import ExternalRecordsMixin
 from molmanager.ui.main_window.fragment_tools_mixin import FragmentToolsMixin
 from molmanager.ui.main_window.ingest_export_mixin import IngestExportMixin
-from molmanager.ui.main_window.mmp_mixin import MmpMixin
-from molmanager.ui.main_window.mmp_neighborhood_mixin import MmpNeighborhoodMixin
 from molmanager.ui.main_window.plot_tools_mixin import PlotToolsMixin
 from molmanager.ui.main_window.predict_tools_mixin import PredictToolsMixin
 from molmanager.ui.main_window.reaction_tools_mixin import ReactionToolsMixin
-from molmanager.ui.main_window.sali_mixin import SaliMixin
 from molmanager.ui.main_window.sql_load_mixin import SqlLoadMixin
 from molmanager.ui.main_window.table_calc_mixin import TableCalcMixin
 from molmanager.ui.main_window.table_edit_mixin import TableEditMixin
@@ -64,7 +60,6 @@ from molmanager.ui.tool_dialog_scope import ToolScopeHost
 # Frozen allowlist: adding a ChemistryWorkspaceWindow mixin base must fail this set.
 _ALLOWED_WINDOW_MIXIN_BASES = frozenset(
     {
-        ActivityCliffMixin,
         AppLifecycleMixin,
         AppMenuMixin,
         ConformersToolsMixin,
@@ -79,12 +74,9 @@ _ALLOWED_WINDOW_MIXIN_BASES = frozenset(
         FragmentToolsMixin,
         GuiSettingsMixin,
         IngestExportMixin,
-        MmpMixin,
-        MmpNeighborhoodMixin,
         PlotToolsMixin,
         PredictToolsMixin,
         ReactionToolsMixin,
-        SaliMixin,
         SqlLoadMixin,
         TableCalcMixin,
         TableEditMixin,
@@ -194,10 +186,14 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
     from molmanager.ui.main_window.chemistry_mixin import ChemistryMixin
     from molmanager.ui.main_window.session_mixin import SessionMixin
     from molmanager.ui.workspace_cluster import ClusterTools
+    from molmanager.ui.workspace_activity_cliff import ActivityCliffTools
     from molmanager.ui.workspace_fast_prepare import FastPrepareTools
+    from molmanager.ui.workspace_mmp import MmpTools
+    from molmanager.ui.workspace_mmp_neighborhood import MmpNeighborhoodTools
     from molmanager.ui.workspace_mpo import MpoTools
     from molmanager.ui.workspace_protonate import ProtonateTools
     from molmanager.ui.workspace_qsar import QsarTools
+    from molmanager.ui.workspace_sali import SaliTools
     from molmanager.ui.workspace_structure_edit import StructureEditTools
     from molmanager.ui.workspace_structure_writeback import StructureWritebackTools
 
@@ -216,6 +212,10 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
         ClusterTools,
         QsarTools,
         MpoTools,
+        MmpTools,
+        MmpNeighborhoodTools,
+        ActivityCliffTools,
+        SaliTools,
         ProtonateTools,
         FastPrepareTools,
         StructureEditTools,

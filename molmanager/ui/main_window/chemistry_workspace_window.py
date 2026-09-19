@@ -89,13 +89,16 @@ from ..workspace_cluster import ClusterTools
 from ..workspace_dimred import DimensionReductionTools
 from ..workspace_fast_prepare import FastPrepareTools
 from ..workspace_medchem import MedChemSpaceTools
+from ..workspace_mmp import MmpTools
+from ..workspace_mmp_neighborhood import MmpNeighborhoodTools
+from ..workspace_activity_cliff import ActivityCliffTools
 from ..workspace_mpo import MpoTools
 from ..workspace_protonate import ProtonateTools
 from ..workspace_qsar import QsarTools
+from ..workspace_sali import SaliTools
 from ..workspace_structure_edit import StructureEditTools
 from ..workspace_structure_writeback import StructureWritebackTools
 from ..workspace_tools import WorkspaceTools
-from .activity_cliff_mixin import ActivityCliffMixin
 from .app_lifecycle_mixin import AppLifecycleMixin
 from .app_menu_mixin import AppMenuMixin
 from .conformers_tools_mixin import ConformersToolsMixin
@@ -104,12 +107,9 @@ from .dock_tools_mixin import DockToolsMixin
 from .external_records_mixin import ExternalRecordsMixin
 from .fragment_tools_mixin import FragmentToolsMixin
 from .ingest_export_mixin import IngestExportMixin
-from .mmp_mixin import MmpMixin
-from .mmp_neighborhood_mixin import MmpNeighborhoodMixin
 from .plot_tools_mixin import PlotToolsMixin
 from .predict_tools_mixin import PredictToolsMixin
 from .reaction_tools_mixin import ReactionToolsMixin
-from .sali_mixin import SaliMixin
 from .sql_load_mixin import SqlLoadMixin
 from .table_calc_mixin import TableCalcMixin
 from .table_ui_mixin import TableUIMixin
@@ -158,10 +158,6 @@ class ChemistryWorkspaceWindow(
     ConformersToolsMixin,
     DescriptorsToolsMixin,
     FragmentToolsMixin,
-    MmpMixin,
-    ActivityCliffMixin,
-    MmpNeighborhoodMixin,
-    SaliMixin,
     ReactionToolsMixin,
     TableCalcMixin,
     ViewerOpenersMixin,
@@ -715,6 +711,14 @@ install_window_forwards(
 )
 install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.qsar", (QsarTools,))
 install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.mpo", (MpoTools,))
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.mmp", (MmpTools,))
+install_window_forwards(
+    ChemistryWorkspaceWindow, "workspace_tools.mmp_neighborhood", (MmpNeighborhoodTools,)
+)
+install_window_forwards(
+    ChemistryWorkspaceWindow, "workspace_tools.activity_cliff", (ActivityCliffTools,)
+)
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.sali", (SaliTools,))
 install_window_forwards(
     ChemistryWorkspaceWindow,
     "workspace_tools.structure_prep",

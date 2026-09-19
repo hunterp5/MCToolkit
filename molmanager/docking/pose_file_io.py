@@ -630,41 +630,6 @@ def deserialize_dock_results_payload(raw: Any) -> dict[str, Any] | None:
     }
 
 
-def restore_dock_results_for_session(app: Any, payload: Any = None) -> int:
-    """Restore last docking run so Pose Browser can reopen after Open Session."""
-    snap = deserialize_dock_results_payload(payload)
-    mols = list((snap or {}).get("mols") or [])
-    title = str((snap or {}).get("title") or "Pose browser")
-    rec = (snap or {}).get("receptor_path") if snap else None
-    xtal = (snap or {}).get("crystal_path") if snap else None
-    if not mols:
-        loader = getattr(app, "_mols_from_table_pose_columns", None)
-        if callable(loader):
-            try:
-                mols = list(loader() or [])
-            except Exception:
-                logger.exception("Failed to rebuild dock poses from table columns")
-                mols = []
-    store = getattr(app, "_store_last_dock_results", None)
-    if callable(store):
-        store(mols, title=title, receptor_path=rec, crystal_path=xtal)
-        return len(mols)
-    try:
-        app._last_dock_results = (
-            {
-                "mols": mols,
-                "title": title,
-                "receptor_path": rec,
-                "crystal_path": xtal,
-            }
-            if mols
-            else None
-        )
-    except Exception:
-        return 0
-    return len(mols)
-
-
 def write_pose_mols_sdf(mols: list[Chem.Mol], path: str | Path) -> int:
     """Write pose molecules (with SD properties) to *path*. Returns records written."""
     from rdkit.Chem import SDWriter

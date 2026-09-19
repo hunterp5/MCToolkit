@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 import logging
 import sys
 import time
@@ -25,7 +26,9 @@ import time
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+from ..analysis.mmp_session import deserialize_mmp_ledger_payload
 from ..conformers.conformer_column_codec import deserialize_confs_sidecar
+from ..docking.pose_file_io import deserialize_dock_results_payload
 from ..ionization.microstate_cache import restore_ionization_sidecar
 from ..platform_support.config import load_config
 from ..storage import ensure_confs_sidecar, load_mols_from_parse_result, reset_mol_store
@@ -475,6 +478,57 @@ class SessionRestore:
         if getattr(self._app, "_sqlite_store", None) is not None:
             self._app._sqlite_store_dirty = True
 
+    def _restore_mmp_ledger(self, payload) -> int:
+        """Restore last MMP run so Transform Ledger can reopen after Open Session."""
+        pairs, activity_column = deserialize_mmp_ledger_payload(payload)
+        try:
+            self._app._mmp_last_pairs = list(pairs)
+            self._app._mmp_last_activity_column = str(activity_column or "")
+        except (AttributeError, TypeError, RuntimeError):
+            return 0
+        dlg = getattr(self._app, "_mmp_ledger_dialog", None)
+        if dlg is not None and pairs:
+            with suppress(RuntimeError, TypeError, AttributeError):
+                dlg.set_pairs(pairs, activity_column=activity_column)
+        elif dlg is not None and not pairs:
+            with suppress(RuntimeError):
+                dlg.close()
+        return len(pairs)
+
+    def _restore_dock_results(self, payload) -> int:
+        """Restore last docking run so Pose Browser can reopen after Open Session."""
+        snap = deserialize_dock_results_payload(payload)
+        mols = list((snap or {}).get("mols") or [])
+        title = str((snap or {}).get("title") or "Pose browser")
+        rec = (snap or {}).get("receptor_path") if snap else None
+        xtal = (snap or {}).get("crystal_path") if snap else None
+        if not mols:
+            loader = getattr(self._app, "_mols_from_table_pose_columns", None)
+            if callable(loader):
+                try:
+                    mols = list(loader() or [])
+                except Exception:
+                    logger.exception("Failed to rebuild dock poses from table columns")
+                    mols = []
+        store = getattr(self._app, "_store_last_dock_results", None)
+        if callable(store):
+            store(mols, title=title, receptor_path=rec, crystal_path=xtal)
+            return len(mols)
+        try:
+            self._app._last_dock_results = (
+                {
+                    "mols": mols,
+                    "title": title,
+                    "receptor_path": rec,
+                    "crystal_path": xtal,
+                }
+                if mols
+                else None
+            )
+        except Exception:
+            return 0
+        return len(mols)
+
     def _finalize_session_sidecars_and_reveal(self, doc: dict) -> None:
         cs = ensure_confs_sidecar(self._app)
         blob = doc.get(SESSION_ENSEMBLES_KEY)
@@ -485,12 +539,8 @@ class SessionRestore:
             cs.update(side)
         self._app._pending_session_som_browse = doc.get("som_browse")
         restore_ionization_sidecar(doc.get("ionization_sidecar"))
-        from ..analysis.mmp_session import restore_mmp_ledger_for_session
-
-        restore_mmp_ledger_for_session(self._app, doc.get("mmp_ledger"))
-        from ..docking.pose_file_io import restore_dock_results_for_session
-
-        restore_dock_results_for_session(self._app, doc.get("dock_results"))
+        self._restore_mmp_ledger(doc.get("mmp_ledger"))
+        self._restore_dock_results(doc.get("dock_results"))
         self._app._pending_session_table_layout = doc.get("table_layout")
         self._restore_table_layout(self._app._pending_session_table_layout)
         restore_search = getattr(self._app, "restore_table_search_session", None)

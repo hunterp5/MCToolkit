@@ -23,16 +23,43 @@ process-queue wiring stays in one place (AnalysisJobRunner pattern without a hea
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, Protocol
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QMessageBox
 
 from ..services.activity_records import build_oid_mol_activity_records, parse_activity_float
 from ..workflows.tool_readiness import ToolBlocker, plan_activity_analysis, plan_table_readiness
+from .app_roles import JobScheduler, ProgressChrome, TableData, TableSelection
 from .tool_dialog_scope import abort_if_only_selected_but_empty, prepare_tool_dialog
 
 WorkerFactory = Callable[..., Any]
+
+
+class AnalysisJobOps(Protocol):
+    """Window forwards scoped analysis jobs need beyond the kernel roles."""
+
+    def logical_row_for_oid(self, oid: int) -> int: ...
+    def cell_text(self, row: int, col: int) -> str: ...
+    def collect_scoped_table_mols(
+        self, src: str, *, only_selected: bool = False, only_visible: bool = False
+    ) -> list[tuple[int, object]]: ...
+    def _clear_tool_progress(self, *, status_message: str | None = None) -> None: ...
+
+
+class AnalysisJobHost(
+    TableData,
+    TableSelection,
+    ProgressChrome,
+    JobScheduler,
+    AnalysisJobOps,
+    Protocol,
+):
+    """What MMP / SALI / cluster / predict enqueue helpers read from the window.
+
+    Dialog show/abort still go through ``tool_dialog_scope`` via getattr.
+    """
+
 
 _BLOCKER_TEXT = {
     ToolBlocker.NO_TABLE: "Open a file or start a session first.",
@@ -41,7 +68,7 @@ _BLOCKER_TEXT = {
 
 
 def activity_value_for_table_oid(
-    app: Any,
+    app: AnalysisJobHost,
     oid: int,
     *,
     activity_column: str,
@@ -58,7 +85,7 @@ def activity_value_for_table_oid(
 
 
 def ensure_table_ready_for_tool(
-    app: Any,
+    app: AnalysisJobHost,
     tool_label: str,
     *,
     require_rows: bool = False,
@@ -77,7 +104,7 @@ def ensure_table_ready_for_tool(
 
 
 def ensure_activity_analysis_ready(
-    app: Any,
+    app: AnalysisJobHost,
     tool_label: str,
     *,
     missing_activity_message: str,
@@ -102,7 +129,7 @@ def ensure_activity_analysis_ready(
 
 
 def show_activity_tool_dialog(
-    app: Any,
+    app: AnalysisJobHost,
     dialog: QDialog,
     *,
     on_accepted: Callable[[QDialog], None],
@@ -115,7 +142,7 @@ def show_activity_tool_dialog(
 
 
 def prepare_scoped_structure_mols(
-    app: Any,
+    app: AnalysisJobHost,
     *,
     tool_label: str,
     structure_source: str,
@@ -150,7 +177,7 @@ def prepare_scoped_structure_mols(
 
 
 def prepare_scoped_activity_mol_records(
-    app: Any,
+    app: AnalysisJobHost,
     *,
     tool_label: str,
     structure_source: str,
@@ -207,7 +234,7 @@ def prepare_scoped_activity_mol_records(
 
 
 def enqueue_process_queue_job(
-    app: Any,
+    app: AnalysisJobHost,
     tool_label: str,
     n_items: int,
     factory: Callable,
@@ -224,7 +251,7 @@ def enqueue_process_queue_job(
 
 
 def start_scoped_structure_job(
-    app: Any,
+    app: AnalysisJobHost,
     *,
     tool_label: str,
     structure_source: str,
@@ -268,7 +295,7 @@ def start_scoped_structure_job(
 
 
 def start_scoped_activity_job(
-    app: Any,
+    app: AnalysisJobHost,
     *,
     tool_label: str,
     structure_source: str,
@@ -308,7 +335,7 @@ def start_scoped_activity_job(
 
 
 def finish_analysis_pairs(
-    app: Any,
+    app: AnalysisJobHost,
     tool_label: str,
     pairs: Sequence[Any] | None,
     *,
@@ -325,7 +352,7 @@ def finish_analysis_pairs(
 
 
 def report_analysis_failure(
-    app: Any,
+    app: AnalysisJobHost,
     tool_label: str,
     message: str,
     *,
@@ -338,7 +365,7 @@ def report_analysis_failure(
 
 
 def report_cancellable_job_failure(
-    app: Any,
+    app: AnalysisJobHost,
     tool_label: str,
     message: str,
     *,

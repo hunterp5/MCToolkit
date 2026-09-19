@@ -26,8 +26,14 @@ from collections import deque
 from dataclasses import dataclass
 
 _MAX_ENTRIES = 10_000
-_PROGRESS_PCT_RE = re.compile(r"\((\d+)%\)\s*$")
 _READY_STATUS = frozenset({"Ready", "Ready."})
+_PROGRESS_BUCKET = 10
+_STATUS_HEARTBEAT_S = 2.0
+_EM_PROGRESS_RE = re.compile(
+    r"—\s*(?P<done>[\d,]+)/(?P<total>[\d,]+)\s*\((?P<pct>\d+)%\)\s*$"
+)
+_BARE_PCT_RE = re.compile(r"\((?P<pct>\d+)%\)\s*$")
+_COUNT_PROGRESS_RE = re.compile(r"\((?P<done>[\d,]+)/(?P<total>[\d,]+)\)\s*$")
 
 
 @dataclass(frozen=True)
@@ -168,30 +174,70 @@ def record_ui_log(
     logging.getLogger(name).log(int(level), "%s", text, extra={"mm_session_skip": True})
 
 
-def should_record_status_text(text: str, last_recorded: str | None) -> bool:
+def _parse_int(raw: str) -> int:
+    return int((raw or "0").replace(",", ""))
+
+
+def progress_head_and_pct(text: str) -> tuple[str, int | None]:
+    """Stable status prefix and 0–100 percent when the line is a progress update."""
+    t = (text or "").strip()
+    match = _EM_PROGRESS_RE.search(t)
+    if match is not None:
+        return t[: match.start()].rstrip(" —"), int(match.group("pct"))
+    match = _BARE_PCT_RE.search(t)
+    if match is not None:
+        return t[: match.start()].rstrip(), int(match.group("pct"))
+    match = _COUNT_PROGRESS_RE.search(t)
+    if match is not None:
+        done = _parse_int(match.group("done"))
+        total = _parse_int(match.group("total")) or 1
+        pct = min(100, int(100 * done / total))
+        return t[: match.start()].rstrip(), pct
+    return t, None
+
+
+def should_record_status_text(
+    text: str,
+    last_recorded: str | None,
+    *,
+    elapsed_s: float | None = None,
+) -> bool:
     """
     True when a status-bar string is worth keeping in the session log.
 
-    Skips idle Ready text, consecutive duplicates, and in-between progress percents
-    so chunked jobs do not flood the log. Start (0%) and finish (100%) still record.
+    Skips idle Ready text and consecutive duplicates. Progress lines record on
+    first sight, 0%, 100%, a change of tool/phase, every 10% bucket, and a
+    heartbeat so a long job is not silent between buckets.
     """
     t = (text or "").strip()
     if not t or t in _READY_STATUS:
         return False
     if last_recorded is not None and t == last_recorded:
         return False
-    match = _PROGRESS_PCT_RE.search(t)
-    if match is not None:
-        pct = int(match.group(1))
-        if pct not in (0, 100):
-            return False
-    return True
+    head, pct = progress_head_and_pct(t)
+    if pct is None:
+        return True
+    if last_recorded is None or pct in (0, 100):
+        return True
+    last_head, last_pct = progress_head_and_pct(last_recorded)
+    if last_pct is None or head != last_head:
+        return True
+    if pct // _PROGRESS_BUCKET != last_pct // _PROGRESS_BUCKET:
+        return True
+    if elapsed_s is not None and elapsed_s >= _STATUS_HEARTBEAT_S:
+        return True
+    return False
 
 
-def record_status_log(message: str, last_recorded: str | None) -> str | None:
+def record_status_log(
+    message: str,
+    last_recorded: str | None,
+    *,
+    elapsed_s: float | None = None,
+) -> str | None:
     """Append a status-bar line when ``should_record_status_text``; return the new last text."""
     t = (message or "").strip()
-    if not should_record_status_text(t, last_recorded):
+    if not should_record_status_text(t, last_recorded, elapsed_s=elapsed_s):
         return last_recorded
     session_log_buffer().add(
         levelno=logging.INFO,

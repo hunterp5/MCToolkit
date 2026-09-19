@@ -189,3 +189,19 @@ def kekulize_for_sketch_orders(mol: Chem.Mol) -> None:
             a_dst.SetIsAromatic(False)
     except Exception:
         pass
+
+
+def sanitize_mol_for_sketch_cip(mol: Chem.Mol) -> None:
+    """Looser sanitize so CIP ranking can run on a sketched mol."""
+    try:
+        mol.UpdatePropertyCache(strict=False)
+    except Exception:
+        pass
+    try:
+        Chem.SanitizeMol(
+            mol,
+            sanitizeOps=Chem.SanitizeFlags.SANITIZE_PROPERTIES
+            | Chem.SanitizeFlags.SANITIZE_SYMMRINGS,
+        )
+    except Exception:
+        pass

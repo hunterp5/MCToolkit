@@ -24,7 +24,7 @@ Needs network access to PubChem. Queries start from identifiers/SMILES/structure
 
 ## Workflow
 
-1. Open **PubChem** from **External**.
+1. Open **Tools → Query Database → PubChem**.
 2. Enter the query (ID or structure-based search as offered).
 3. Review returned compounds.
 4. Add useful rows to the main table and annotate source.

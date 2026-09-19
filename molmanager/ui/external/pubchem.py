@@ -303,7 +303,7 @@ class PubChemDialog(QDialog):
     ):
         super().__init__(parent)
         self.parent_app = parent
-        self.setWindowTitle("External — PubChem query")
+        self.setWindowTitle("Query Database — PubChem query")
         self.resize(820, 560)
         self._last: list[PubChemResult] = []
         self._worker: _PubChemBatchWorker | None = None

@@ -18,10 +18,9 @@ Works on the current session table (structures plus property columns). Most tool
 
 - **File** - open/import data, sessions, export, selection browser.
 - **Edit** - undo/redo, clipboard, and selection commands.
-- **Tools** - prepare structures, fingerprints, docking helpers, design tools, predictors (pKa, permeability, SOM), random generators.
+- **Tools** - prepare structures, fingerprints, docking helpers, design tools, predictors (pKa, permeability, SOM), random generators, and **Query Database** (SQL, PubChem, ChEMBL, patents).
 - **Protein** - 3D structure viewer for PDB, mmCIF, and related crystallographic files, plus **Sequence** for MAFFT multiple-sequence alignment.
 - **Data** - statistics, plotter, MedChem plots, dimensionality reduction, QSAR, MPO, filters, and table search.
-- **External** - SQL, PubChem, ChEMBL, patents.
 - **Settings** - theme, fonts, hotkeys, WSL executable for Linux-only tools.
 - **Layout** - rearrange or restore workspace panes.
 - **Processes** - inspect running/queued background jobs and the session log (tool output, status history, warnings).
@@ -31,7 +30,7 @@ Works on the current session table (structures plus property columns). Most tool
 
 1. Load or open a session with structures in the table.
 2. Optionally filter or select the rows you care about.
-3. Run a tool from **Tools** / **Data** / **External**; watch **Processes** for long jobs and the transcript below the job table.
+3. Run a tool from **Tools** / **Data**; watch **Processes** for long jobs and the transcript below the job table.
 4. Inspect new columns, plots, or docked panes; export or save the session.
 
 ## Use cases

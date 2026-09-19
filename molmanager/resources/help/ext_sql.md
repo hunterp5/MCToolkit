@@ -23,10 +23,11 @@ Requires a reachable database and a valid SQL query returning tabular columns; s
 
 ## Workflow
 
-1. Configure connection details.
-2. Write and run a SQL query limited to what you need.
-3. Load results into the table.
-4. Assign structure sources and proceed with MCToolkit tools.
+1. Open **Tools → Query Database → SQL…**.
+2. Configure connection details.
+3. Write and run a SQL query limited to what you need.
+4. Load results into the table.
+5. Assign structure sources and proceed with MCToolkit tools.
 
 ## Use cases
 

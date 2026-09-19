@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Lazy leaf-tool collaborators (cluster, dimred, QSAR, MPO, medchem, structure-prep).
+"""Lazy leaf-tool collaborators (cluster, dimred, QSAR, MPO, medchem, MMP/SALI, structure-prep).
 
 Importing this module does not import the tool bodies or their dialogs.
 First use of a property constructs that collaborator with the window as ``self._app``.
@@ -102,6 +102,13 @@ class WorkspaceNeutralizeState(Protocol):
     _neutralize_no_render_2d: bool
 
 
+class WorkspaceMmpState(Protocol):
+    """Last MMP run so Transform Ledger can reopen in this session."""
+
+    _mmp_last_pairs: Any
+    _mmp_last_activity_column: str
+
+
 class WorkspaceToolsHost(
     TableData,
     TableSelection,
@@ -115,6 +122,7 @@ class WorkspaceToolsHost(
     WorkspaceDisconnectState,
     WorkspaceHydrogenState,
     WorkspaceNeutralizeState,
+    WorkspaceMmpState,
     Protocol,
 ):
     """What lazy workspace tools need from the window.
@@ -190,6 +198,14 @@ class WorkspaceTools:
             app, lambda: _load("molmanager.ui.workspace_qsar", "QsarTools")
         )
         self.mpo = _LazyCollaborator(app, lambda: _load("molmanager.ui.workspace_mpo", "MpoTools"))
+        self.mmp = _LazyCollaborator(app, lambda: _load("molmanager.ui.workspace_mmp", "MmpTools"))
+        self.mmp_neighborhood = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_mmp_neighborhood", "MmpNeighborhoodTools")
+        )
+        self.activity_cliff = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_activity_cliff", "ActivityCliffTools")
+        )
+        self.sali = _LazyCollaborator(app, lambda: _load("molmanager.ui.workspace_sali", "SaliTools"))
         self.structure_prep = _LazyCollaborator(app, _load_structure_prep)
 
 

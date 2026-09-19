@@ -41,7 +41,7 @@ def test_session_log_panel_shows_ui_and_status_lines(qapp):  # noqa: ARG001
     text = panel._view.toPlainText()
     assert "Starting pdb2pqr" in text
     assert "0/8 (0%)" in text
-    assert "4/8 (50%)" not in text
+    assert "4/8 (50%)" in text
     assert "100%)" in text
     panel._search.setText("pdb2pqr")
     filtered = panel._view.toPlainText()

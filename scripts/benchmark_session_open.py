@@ -136,6 +136,8 @@ def main() -> None:
         "_discard_docked_plot_widgets",
         "_deferred_session_post_load_follow_up",
         "_reveal_table_after_session_prep",
+        "_restore_mmp_ledger",
+        "_restore_dock_results",
     ):
         if hasattr(win, name):
             wrap(win, name)
@@ -146,8 +148,6 @@ def main() -> None:
     import importlib
 
     for mod_path, fn_name in (
-        ("molmanager.analysis.mmp_session", "restore_mmp_ledger_for_session"),
-        ("molmanager.docking.pose_file_io", "restore_dock_results_for_session"),
         ("molmanager.ui.som_browser", "restore_som_maps_for_session"),
         ("molmanager.ionization.microstate_cache", "restore_ionization_sidecar"),
     ):

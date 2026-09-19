@@ -740,7 +740,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "pubchem",
                 "PubChem / PubChemPy",
-                "External → Query PubChem; Tools → Utilities → Random → Molecule; Calculate Descriptors → Name (Common Name, Synonyms).",
+                "Tools → Query Database → PubChem; Tools → Utilities → Random → Molecule; Calculate Descriptors → Name (Common Name, Synonyms).",
                 (
                     (
                         "Kim, S.; et al. PubChem 2023 update. Nucleic Acids Res. 2023, 51, D1373–D1380.",
@@ -754,7 +754,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "chembl",
                 "ChEMBL",
-                "External → Query ChEMBL (`chembl_webresource_client`); Tools → Utilities → Random → Molecule.",
+                "Tools → Query Database → ChEMBL (`chembl_webresource_client`); Tools → Utilities → Random → Molecule.",
                 (
                     (
                         "Zdrazil, B.; et al. The ChEMBL Database in 2023. Nucleic Acids Res. 2024, 52, D1180–D1192.",
@@ -789,7 +789,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "surechembl",
                 "SureChEMBL",
-                "External → Query Patents.",
+                "Tools → Query Database → Patents.",
                 (
                     (
                         "Papadatos, G.; et al. SureChEMBL: a large-scale, chemically annotated patent document database. "

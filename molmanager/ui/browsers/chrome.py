@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...chem.structure_2d_depiction import render_molecule_png
 from ...table.structure_depiction_layout import (
     BROWSER_STRUCTURE_PREVIEW_MIN_HEIGHT,
     BROWSER_STRUCTURE_PREVIEW_MIN_WIDTH,
@@ -166,14 +167,31 @@ def make_pair_prop_box(parent: QWidget | None = None) -> tuple[QGroupBox, QFormL
     return box, form
 
 
-def configure_browser_mol_drawer(drawer: Any, width: int) -> None:
-    """Apply the shared RDKit drawer theme when the helper is available."""
+def pixmap_from_mol(
+    mol: Any,
+    width: int,
+    height: int,
+    *,
+    highlight_atoms: list[int] | None = None,
+    background_rgba: tuple[float, float, float, float] | None = None,
+) -> QPixmap | None:
+    """Render *mol* to a ``QPixmap`` via ``chem.structure_2d_depiction`` (no RDKit in the caller)."""
+    if mol is None:
+        return None
     try:
-        from ...chem.structure_2d_depiction import configure_mol_drawer as cfg
-
-        cfg(drawer, width)
+        png = render_molecule_png(
+            mol,
+            int(width),
+            int(height),
+            highlight_atoms=highlight_atoms,
+            background_rgba=background_rgba,
+        )
     except Exception:
-        pass
+        return None
+    if not png:
+        return None
+    pm = QPixmap.fromImage(QImage.fromData(png))
+    return None if pm.isNull() else pm
 
 
 def install_browser_nav_shortcuts(

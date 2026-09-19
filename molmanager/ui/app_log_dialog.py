@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QColor, QPalette, QTextCharFormat, QTextCursor
@@ -56,10 +57,17 @@ class StatusLogLabel(QLabel):
     def __init__(self, text: str = "", parent=None) -> None:
         super().__init__(text, parent)
         self._last_recorded_status: str | None = None
+        self._last_recorded_mono: float = 0.0
 
     def setText(self, text: str) -> None:  # noqa: N802 — Qt API name
         super().setText(text)
-        self._last_recorded_status = record_status_log(text, self._last_recorded_status)
+        prev = self._last_recorded_status
+        now = time.monotonic()
+        elapsed = None if prev is None else now - self._last_recorded_mono
+        new_last = record_status_log(text, prev, elapsed_s=elapsed)
+        if new_last != prev:
+            self._last_recorded_mono = now
+        self._last_recorded_status = new_last
 
 
 class SessionLogPanel(QWidget):
@@ -118,7 +126,7 @@ class SessionLogPanel(QWidget):
         self._shown_seq = 0
         self._generation = -1
         self._timer = QTimer(self)
-        self._timer.setInterval(250)
+        self._timer.setInterval(100)
         self._timer.timeout.connect(self._pull_new)
 
         self._reload()

@@ -474,6 +474,15 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             ),
             tooltips_visible=True,
         ),
+        submenu(
+            "Query &Database",
+            action("PubChem…", "open_pubchem"),
+            action("ChEMBL…", "open_chembl"),
+            action("Patents…", "open_patent_query"),
+            SEPARATOR,
+            action("SQL…", "open_external_db"),
+            tooltips_visible=True,
+        ),
         SEPARATOR,
         action(
             "&Sketcher…",
@@ -598,13 +607,6 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             ),
         ),
         SEPARATOR,
-        action(
-            "&Plotter…",
-            "open_plot",
-            hotkey="data.plotter",
-            tooltip="Open the plotter or show the docked plot panel.",
-        ),
-        SEPARATOR,
         submenu(
             "&MedChem Plots",
             action("BOILED-Egg plot…", "open_boiled_egg_plot"),
@@ -618,6 +620,12 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             action("UMAP Visualization…", "open_umap_dialog"),
             action("Self-Organizing Map…", "open_som_dialog"),
             tooltips_visible=True,
+        ),
+        action(
+            "&Plotter…",
+            "open_plot",
+            hotkey="data.plotter",
+            tooltip="Open the plotter or show the docked plot panel.",
         ),
         SEPARATOR,
         action(
@@ -687,14 +695,6 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             tooltip="Open or hide the in-table search panel (Ctrl+F). Queries stay until deleted with −.",
         ),
         tooltips_visible=True,
-    ),
-    submenu(
-        "E&xternal",
-        action("Connect to SQL database…", "open_external_db"),
-        SEPARATOR,
-        action("Query PubChem…", "open_pubchem"),
-        action("Query ChEMBL…", "open_chembl"),
-        action("Query Patents…", "open_patent_query"),
     ),
     SETTINGS,
     submenu(

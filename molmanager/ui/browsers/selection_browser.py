@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QEvent, QItemSelectionModel, QSize, Qt, QTimer
-from PySide6.QtGui import QBrush, QFont, QIcon, QImage, QPixmap
+from PySide6.QtGui import QBrush, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -63,6 +63,7 @@ from .chrome import (
     apply_browser_body_layout,
     floating_browser_minimum_width,
     install_browser_nav_shortcuts,
+    pixmap_from_mol,
     style_browser_data_table,
     style_browser_preview_host,
     style_browser_structure_label,
@@ -956,10 +957,6 @@ class SelectionBrowserWidget(QWidget):
         return max(1, int(lw * dpr)), max(1, int(lh * dpr)), dpr
 
     def _render_preview_pixmap(self, logical_row: int, pw: int, ph: int) -> QPixmap | None:
-        try:
-            from rdkit.Chem.Draw import rdMolDraw2D
-        except Exception:
-            return None
         app = self._app
         try:
             oid = int(app._table_model.row_oid(logical_row))
@@ -972,20 +969,15 @@ class SelectionBrowserWidget(QWidget):
         mol = getattr(app, "mols", {}).get(oid)
         if mol is None:
             return None
-        try:
-            d = rdMolDraw2D.MolDraw2DCairo(pw, ph)
-            opts = d.drawOptions()
-            # Keep molecule canvas white to match the preview host background.
-            opts.setBackgroundColour((1.0, 1.0, 1.0, 1.0))
-            rdMolDraw2D.PrepareAndDrawMolecule(d, mol)
-            d.FinishDrawing()
-            img = QImage.fromData(d.GetDrawingText())
-            pm = QPixmap.fromImage(img)
-            if not pm.isNull():
-                self._preview_pix_cache[cache_key] = pm
-                return pm
-        except Exception:
-            return None
+        pm = pixmap_from_mol(
+            mol,
+            pw,
+            ph,
+            background_rgba=(1.0, 1.0, 1.0, 1.0),
+        )
+        if pm is not None and not pm.isNull():
+            self._preview_pix_cache[cache_key] = pm
+            return pm
         return None
 
     def _update_preview_3dmol(self, logical_row: int) -> None:

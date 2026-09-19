@@ -99,7 +99,7 @@ class PatentQueryDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
-        self.setWindowTitle("External — Query Patents (SureChEMBL)")
+        self.setWindowTitle("Query Database — Patents (SureChEMBL)")
         self.resize(780, 520)
         self._last: list[PatentSearchHit] = []
         self._worker: _PatentSearchWorker | None = None

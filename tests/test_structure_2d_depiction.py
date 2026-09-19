@@ -64,6 +64,22 @@ def test_render_molecule_png_native_resolution() -> None:
     assert int.from_bytes(png[20:24], "big") == STRUCTURE_DEPICT_HEIGHT
 
 
+def test_render_molecule_png_highlight_atoms_still_png() -> None:
+    from rdkit import Chem
+
+    mol = Chem.MolFromSmiles("c1ccccc1")
+    plain = render_molecule_png(mol, STRUCTURE_DEPICT_WIDTH, STRUCTURE_DEPICT_HEIGHT)
+    highlighted = render_molecule_png(
+        mol,
+        STRUCTURE_DEPICT_WIDTH,
+        STRUCTURE_DEPICT_HEIGHT,
+        highlight_atoms=[0, 1],
+    )
+    assert isinstance(highlighted, (bytes, bytearray))
+    assert len(highlighted) > 100
+    assert highlighted != plain
+
+
 def test_table_bond_line_width_constant() -> None:
     assert STRUCTURE_DEPICT_BOND_LINE_WIDTH < 2.0
 

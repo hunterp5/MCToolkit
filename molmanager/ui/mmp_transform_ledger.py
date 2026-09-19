@@ -22,7 +22,7 @@ import logging
 from typing import Any
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPalette, QPixmap
+from PySide6.QtGui import QColor, QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractScrollArea,
@@ -39,9 +39,6 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QVBoxLayout,
 )
-from rdkit import Chem
-from rdkit.Chem.Draw import rdMolDraw2D
-
 from ..analysis.mmp_analysis import (
     MmpPair,
     TransformSummary,
@@ -49,6 +46,8 @@ from ..analysis.mmp_analysis import (
     pairs_for_summary,
     pairs_involving_oid,
 )
+from ..chem.molecule_conversion import mol_from_smiles
+from .browsers.chrome import pixmap_from_mol
 from .qt_widget_utils import make_window_minimizable
 from .widgets import NumericTableWidgetItem
 
@@ -109,15 +108,6 @@ class _LedgerStructureDelegate(QStyledItemDelegate):
         if opt.state & QStyle.State_Selected:
             painter.fillRect(opt.rect, QColor(0, 120, 215, 48))
         painter.restore()
-
-
-def _try_configure_drawer(drawer, width: int) -> None:
-    try:
-        from ..chem.structure_2d_depiction import configure_mol_drawer as cfg
-
-        cfg(drawer, width)
-    except Exception:
-        pass
 
 
 def _fmt_delta(value: float) -> str:
@@ -402,10 +392,7 @@ class MmpTransformLedgerDialog(QDialog):
         cached = self._preview_cache.get(cache_key)
         if cached is not None and not cached.isNull():
             return cached
-        try:
-            mol = Chem.MolFromSmiles(smiles)
-        except Exception:
-            mol = None
+        mol = mol_from_smiles(smiles)
         if mol is None:
             return None
         pm = self._render_mol(mol, pw, ph)
@@ -413,16 +400,8 @@ class MmpTransformLedgerDialog(QDialog):
             self._preview_cache[cache_key] = pm
         return pm
 
-    def _render_mol(self, mol: Chem.Mol, pw: int, ph: int) -> QPixmap | None:
-        try:
-            drawer = rdMolDraw2D.MolDraw2DCairo(pw, ph)
-            _try_configure_drawer(drawer, pw)
-            rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
-            drawer.FinishDrawing()
-            img = QImage.fromData(drawer.GetDrawingText())
-            return QPixmap.fromImage(img)
-        except Exception:
-            return None
+    def _render_mol(self, mol, pw: int, ph: int) -> QPixmap | None:
+        return pixmap_from_mol(mol, pw, ph)
 
     def _apply_filter(self, _text: str = "") -> None:
         prev = self._selected_key()

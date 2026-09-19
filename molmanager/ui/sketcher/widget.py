@@ -42,7 +42,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from rdkit import Chem
+from ...chem.sketch_atoms import sketch_default_valence, sketch_max_valence, sketch_valence_list
+from ...chem.sketch_mol import sanitize_mol_for_sketch_cip
 
 from .alkene_stereo import infer_alkene_ez_for_sketch_mol
 from .bonds import (
@@ -877,40 +878,11 @@ class SketchWidget(
     # ---------- Valence checks ----------
     def _valence_list_for_element(self, element: str) -> list[int]:
         """RDKit allowed valences for *element* (ascending), or empty if unknown."""
-        if element in ("H", "D", "T"):
-            return [1]
-        try:
-            pt = Chem.GetPeriodicTable()
-            an = pt.GetAtomicNumber(element)
-            if an <= 0:
-                return []
-            return sorted({int(v) for v in pt.GetValenceList(an) if int(v) > 0})
-        except Exception:
-            return []
+        return sketch_valence_list(element)
 
     def _default_valence(self, element: str) -> int:
         """Common / lowest preferred valence (e.g. S=2), not the hypervalent maximum."""
-        if element in ("H", "D", "T"):
-            return 1
-        try:
-            pt = Chem.GetPeriodicTable()
-            an = pt.GetAtomicNumber(element)
-            if an > 0:
-                dv = pt.GetDefaultValence(an)
-                if dv > 0:
-                    return int(dv)
-        except Exception:
-            pass
-        vlist = self._valence_list_for_element(element)
-        if vlist:
-            return min(vlist)
-        if element in ("Na", "K", "Rb", "Cs", "Li"):
-            return 1
-        if element in ("Mg", "Ca", "Sr", "Ba"):
-            return 2
-        if element in ("Zn", "Cd", "Hg", "Cu", "Ag", "Au", "Ni", "Pd", "Pt", "Co"):
-            return 4
-        return 4
+        return sketch_default_valence(element)
 
     def _max_valence(self, element: str) -> int:
         """
@@ -920,31 +892,7 @@ class SketchWidget(
         phosphates (P=5/7) are legal. Do **not** use this for implicit-H counts —
         see ``_target_valence_for_implicit_h``.
         """
-        if element in ("H", "D", "T"):
-            return 1
-        vlist = self._valence_list_for_element(element)
-        if vlist:
-            return max(vlist)
-        try:
-            pt = Chem.GetPeriodicTable()
-            an = pt.GetAtomicNumber(element)
-            if an > 0:
-                dv = pt.GetDefaultValence(an)
-                if dv > 0:
-                    return int(dv)
-        except Exception:
-            pass
-        if element in ("Na", "K", "Rb", "Cs", "Li"):
-            return 1
-        if element in ("Mg", "Ca", "Sr", "Ba"):
-            return 2
-        if element in ("Zn", "Cd", "Hg", "Cu", "Ag", "Au", "Ni", "Pd", "Pt", "Co"):
-            return 4
-        if element in ("P", "As"):
-            return 5
-        if element in ("S", "Se", "Te"):
-            return 6
-        return 8
+        return sketch_max_valence(element)
 
     def _target_valence_for_implicit_h(self, element: str, bond_sum: int, fc: int) -> int:
         """
@@ -1009,18 +957,7 @@ class SketchWidget(
             mol, sk2rd = out
             if mol is None or mol.GetNumAtoms() == 0:
                 return
-            try:
-                mol.UpdatePropertyCache(strict=False)
-            except Exception:
-                pass
-            try:
-                Chem.SanitizeMol(
-                    mol,
-                    sanitizeOps=Chem.SanitizeFlags.SANITIZE_PROPERTIES
-                    | Chem.SanitizeFlags.SANITIZE_SYMMRINGS,
-                )
-            except Exception:
-                pass
+            sanitize_mol_for_sketch_cip(mol)
             inv = {v: k for k, v in sk2rd.items()}
             # Atoms that already have a wedge/hash tip (legal drawn stereo).
             stereo_tip_ids: set[int] = set()

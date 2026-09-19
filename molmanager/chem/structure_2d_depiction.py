@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from rdkit import Chem
@@ -57,12 +58,32 @@ def _apply_table_draw_options(drawer: rdMolDraw2D.MolDraw2DCairo, target_w: int)
     configure_mol_drawer(drawer, target_w)
 
 
-def render_molecule_png(mol: Chem.Mol, target_w: int, target_h: int) -> bytes:
-    """Draw *mol* to PNG bytes at the requested table / zoom size."""
+def render_molecule_png(
+    mol: Chem.Mol,
+    target_w: int,
+    target_h: int,
+    *,
+    highlight_atoms: Sequence[int] | None = None,
+    highlight_color: tuple[float, float, float] = (0.95, 0.55, 0.15),
+    background_rgba: tuple[float, float, float, float] | None = None,
+) -> bytes:
+    """Draw *mol* to PNG bytes at the requested table / zoom / browser size."""
     cw, ch = structure_cairo_dimensions(target_w, target_h)
     drawer = rdMolDraw2D.MolDraw2DCairo(int(cw), int(ch))
     configure_mol_drawer(drawer, int(cw))
-    rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
+    if background_rgba is not None:
+        drawer.drawOptions().setBackgroundColour(background_rgba)
+    highlight_set = {int(i) for i in (highlight_atoms or [])}
+    if highlight_set:
+        colors = {i: highlight_color for i in highlight_set}
+        rdMolDraw2D.PrepareAndDrawMolecule(
+            drawer,
+            mol,
+            highlightAtoms=list(highlight_set),
+            highlightAtomColors=colors,
+        )
+    else:
+        rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
     drawer.FinishDrawing()
     return drawer.GetDrawingText()
 

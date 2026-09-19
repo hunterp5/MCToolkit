@@ -467,7 +467,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "11 — External data",
+        "11 — Query Database",
         (
             _e(
                 "ext_sql", "SQL Database", "SQL Database", "Load query results from a SQL database."

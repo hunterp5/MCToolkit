@@ -36,15 +36,37 @@ def setup_function() -> None:
     session_log_buffer().clear()
 
 
-def test_should_record_status_skips_ready_and_mid_progress():
+def test_should_record_status_skips_ready_and_samples_progress():
     assert not should_record_status_text("Ready", None)
     assert not should_record_status_text("Ready.", None)
     assert not should_record_status_text("", None)
-    assert should_record_status_text("Protonate: collecting… — 0/10 (0%)", None)
-    assert not should_record_status_text("Protonate: collecting… — 5/10 (50%)", None)
-    assert should_record_status_text("Protonate: collecting… — 10/10 (100%)", None)
+    start = "Protonate: collecting… — 0/10 (0%)"
+    mid = "Protonate: collecting… — 5/10 (50%)"
+    near = "Protonate: collecting… — 5/10 (52%)"
+    done = "Protonate: collecting… — 10/10 (100%)"
+    assert should_record_status_text(start, None)
+    assert should_record_status_text(mid, start)
+    assert not should_record_status_text(
+        "Protonate: collecting… — 5/10 (51%)",
+        mid,
+    )
+    assert should_record_status_text(near, mid, elapsed_s=2.0)
+    assert should_record_status_text(done, mid)
+    assert should_record_status_text(
+        "Writing results… — 0/8 (0%)",
+        done,
+    )
     assert not should_record_status_text("Deleted 3 row(s).", "Deleted 3 row(s).")
     assert should_record_status_text("Deleted 3 row(s).", None)
+    assert should_record_status_text("Writing results… (512/10,000)", None)
+    assert not should_record_status_text(
+        "Writing results… (600/10,000)",
+        "Writing results… (512/10,000)",
+    )
+    assert should_record_status_text(
+        "Writing results… (2,000/10,000)",
+        "Writing results… (512/10,000)",
+    )
 
 
 def test_record_status_log_dedupes():

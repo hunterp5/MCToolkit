@@ -18,16 +18,16 @@
 
 from __future__ import annotations
 
-from .activity_cliff_mixin import ActivityCliffMixin
+from ..workspace_activity_cliff import ActivityCliffTools
+from ..workspace_mmp import MmpTools
+from ..workspace_mmp_neighborhood import MmpNeighborhoodTools
+from ..workspace_sali import SaliTools
 from .conformers_descriptors_mixin import ConformersDescriptorsMixin
 from .fragment_tools_mixin import FragmentToolsMixin
 from .ingest_render_mixin import IngestRenderMixin
-from .mmp_mixin import MmpMixin
-from .mmp_neighborhood_mixin import MmpNeighborhoodMixin
 from .plot_tools_mixin import PlotToolsMixin
 from .prepare_structures_mixin import PrepareStructuresMixin
 from .reaction_tools_mixin import ReactionToolsMixin
-from .sali_mixin import SaliMixin
 from .tools_sql_predict_mixin import ToolsSqlPredictMixin
 
 
@@ -37,10 +37,10 @@ class ChemistryMixin(
     PrepareStructuresMixin,
     ConformersDescriptorsMixin,
     FragmentToolsMixin,
-    MmpMixin,
-    ActivityCliffMixin,
-    MmpNeighborhoodMixin,
-    SaliMixin,
+    MmpTools,
+    ActivityCliffTools,
+    MmpNeighborhoodTools,
+    SaliTools,
     ReactionToolsMixin,
     ToolsSqlPredictMixin,
 ):

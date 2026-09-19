@@ -975,6 +975,7 @@ def test_data_menu_nests_medchem_with_dimensionality_reduction(qapp):  # noqa: A
     assert "UMAP Visualization…" not in data_labels
     assert "Self-Organizing Map…" not in data_labels
     assert data_labels.index("DimRed Plots") == data_labels.index("MedChem Plots") + 1
+    assert data_labels.index("Plotter…") == data_labels.index("DimRed Plots") + 1
     assert data_labels[-2:] == ["Filter", "Search…"]
     assert "Filter" not in tools_labels
     assert "Search…" not in tools_labels

@@ -42,7 +42,7 @@ class ExternalDBDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
-        self.setWindowTitle("External — load SQL data")
+        self.setWindowTitle("Query Database — load SQL data")
         self.resize(760, 520)
 
         root = QVBoxLayout(self)
@@ -164,17 +164,17 @@ class ExternalDBDialog(QDialog):
             return
         url = self.url.text().strip()
         if not url:
-            QMessageBox.warning(self, "External", "Enter a SQLAlchemy URL.")
+            QMessageBox.warning(self, "Query Database", "Enter a SQLAlchemy URL.")
             return
 
         is_query = self.rb_query.isChecked()
         query = self.query.toPlainText().strip() if is_query else ""
         table = self.table_name.text().strip() if not is_query else ""
         if is_query and not query:
-            QMessageBox.warning(self, "External", "Enter a SQL query.")
+            QMessageBox.warning(self, "Query Database", "Enter a SQL query.")
             return
         if (not is_query) and not table:
-            QMessageBox.warning(self, "External", "Enter a table name.")
+            QMessageBox.warning(self, "Query Database", "Enter a table name.")
             return
 
         try:
@@ -188,7 +188,7 @@ class ExternalDBDialog(QDialog):
                 read_only=bool(self.chk_read_only.isChecked()),
             )
         except Exception as e:
-            QMessageBox.critical(self, "External", str(e))
+            QMessageBox.critical(self, "Query Database", str(e))
             return
 
         self.accept()

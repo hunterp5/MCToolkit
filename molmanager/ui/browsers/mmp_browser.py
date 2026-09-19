@@ -21,15 +21,14 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QImage, QPainter, QPalette, QPixmap
+from PySide6.QtGui import QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
-from rdkit import Chem
-from rdkit.Chem.Draw import rdMolDraw2D
 
 from ...analysis.mmp_analysis import MmpPair, canonicalize_pair_direction
 from ...analysis.mmp_depict import highlight_atoms_for_pair
 from ...analysis.mmp_table import assemble_mmp_table_annotations
-from .chrome import configure_browser_mol_drawer, style_browser_emphasis_label
+from ...chem.molecule_conversion import mol_from_smiles
+from .chrome import pixmap_from_mol, style_browser_emphasis_label
 from .pair_browser import PairBrowserDialog
 
 
@@ -224,10 +223,7 @@ class MmpBrowserDialog(PairBrowserDialog):
         cached = self._preview_cache.get(cache_key)
         if cached is not None and not cached.isNull():
             return cached
-        try:
-            mol = Chem.MolFromSmiles(smiles)
-        except Exception:
-            mol = None
+        mol = mol_from_smiles(smiles)
         if mol is None:
             return None
         pm = self._render_highlighted(mol, pw, ph, [])
@@ -246,16 +242,13 @@ class MmpBrowserDialog(PairBrowserDialog):
         self._highlight_cache[key] = (ha, hb)
         return ha, hb
 
-    def _mol_for_oid(self, oid: int, fallback_smiles: str) -> Chem.Mol | None:
+    def _mol_for_oid(self, oid: int, fallback_smiles: str):
         app = self._app
         mol = None
         if app is not None:
             mol = getattr(app, "mols", {}).get(oid)
         if mol is None and fallback_smiles:
-            try:
-                mol = Chem.MolFromSmiles(fallback_smiles)
-            except Exception:
-                mol = None
+            mol = mol_from_smiles(fallback_smiles)
         return mol
 
     def _update_molecule_panel(
@@ -302,27 +295,9 @@ class MmpBrowserDialog(PairBrowserDialog):
 
     def _render_highlighted(
         self,
-        mol: Chem.Mol,
+        mol,
         pw: int,
         ph: int,
         highlight_atoms: list[int],
     ) -> QPixmap | None:
-        try:
-            drawer = rdMolDraw2D.MolDraw2DCairo(pw, ph)
-            configure_browser_mol_drawer(drawer, pw)
-            highlight_set = set(int(i) for i in highlight_atoms)
-            colors = {i: (0.95, 0.55, 0.15) for i in highlight_set}
-            if highlight_set:
-                rdMolDraw2D.PrepareAndDrawMolecule(
-                    drawer,
-                    mol,
-                    highlightAtoms=list(highlight_set),
-                    highlightAtomColors=colors,
-                )
-            else:
-                rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
-            drawer.FinishDrawing()
-            img = QImage.fromData(drawer.GetDrawingText())
-            return QPixmap.fromImage(img)
-        except Exception:
-            return None
+        return pixmap_from_mol(mol, pw, ph, highlight_atoms=highlight_atoms)

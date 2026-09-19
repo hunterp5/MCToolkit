@@ -45,6 +45,13 @@ def qapp():
     return app
 
 
+def _is_visible(widget) -> bool:
+    try:
+        return bool(widget.isVisible())
+    except RuntimeError:
+        return False
+
+
 def _manager(qapp) -> WorkspaceLayoutManager:
     table = QWidget()
     mgr = WorkspaceLayoutManager(table)
@@ -544,6 +551,93 @@ def test_layout_freeze_restores_updates(qapp):
     assert mgr.updatesEnabled() is True
     assert parent.updatesEnabled() is True
     assert mgr._layout_freeze_depth == 0
+
+
+def test_layout_swap_does_not_disable_parent_updates(qapp):
+    parent = QWidget()
+    table = QWidget()
+    mgr = WorkspaceLayoutManager(table, parent)
+    parent.resize(800, 600)
+    parent.show()
+    qapp.processEvents()
+    recorded: list[bool] = []
+    real = parent.setUpdatesEnabled
+
+    def _spy(enabled: bool) -> None:
+        recorded.append(bool(enabled))
+        real(enabled)
+
+    parent.setUpdatesEnabled = _spy  # type: ignore[method-assign]
+    mgr.apply_layout(LAYOUT_TABLE_STACK, preserve_plots=False)
+    mgr.apply_layout(LAYOUT_TABLE_ONLY, preserve_plots=False)
+    qapp.processEvents()
+    assert False not in recorded
+    assert parent.updatesEnabled() is True
+    parent.close()
+
+
+def test_table_only_leaves_no_visible_plot_chrome(qapp):
+    from PySide6.QtWidgets import QSplitterHandle
+
+    table = QWidget()
+    mgr = WorkspaceLayoutManager(table)
+    mgr.apply_layout(LAYOUT_TABLE_STACK, preserve_plots=False)
+    mgr.resize(800, 600)
+    mgr.show()
+    qapp.processEvents()
+    mgr.apply_layout(LAYOUT_TABLE_ONLY, preserve_plots=False)
+    qapp.processEvents()
+    assert mgr.plot_panes() == []
+    assert mgr._splitters == []
+    assert [p for p in mgr.findChildren(PlotPane) if p.isVisible()] == []
+    assert [h for h in mgr.findChildren(QSplitterHandle) if h.isVisible()] == []
+    mgr.close()
+
+
+def test_layout_switch_only_shows_live_splitter_handles(qapp):
+    from PySide6.QtWidgets import QSplitterHandle
+
+    table = QWidget()
+    mgr = WorkspaceLayoutManager(table)
+    mgr.apply_layout(LAYOUT_TABLE_STACK, preserve_plots=False)
+    mgr.resize(800, 600)
+    mgr.show()
+    qapp.processEvents()
+    old_panes = list(mgr.plot_panes())
+    mgr.apply_layout(LAYOUT_TABLE_SINGLE, preserve_plots=False)
+    qapp.processEvents()
+    live_splitters = set(mgr._splitters)
+    visible_handles = [h for h in mgr.findChildren(QSplitterHandle) if h.isVisible()]
+    assert visible_handles
+    for handle in visible_handles:
+        assert handle.parentWidget() in live_splitters
+    live_panes = mgr.plot_panes()
+    assert len(live_panes) == 1
+    assert live_panes[0].isVisible()
+    assert live_panes[0]._header.isVisible()
+    assert live_panes[0] not in old_panes
+    leftover = [p for p in old_panes if p is not live_panes[0] and _is_visible(p)]
+    assert leftover == []
+    mgr.close()
+
+
+def test_remove_pane_hides_closed_pane_chrome(qapp):
+    from PySide6.QtWidgets import QSplitterHandle
+
+    mgr = _manager(qapp)
+    mgr.resize(800, 600)
+    mgr.show()
+    qapp.processEvents()
+    closed = mgr.plot_panes()[1]
+    assert mgr.remove_pane(closed) is True
+    qapp.processEvents()
+    assert closed not in mgr.plot_panes()
+    assert not _is_visible(closed)
+    live = set(mgr._splitters)
+    for handle in mgr.findChildren(QSplitterHandle):
+        if handle.isVisible():
+            assert handle.parentWidget() in live
+    mgr.close()
 
 
 def test_dock_fits_wide_widget_to_existing_splitter_sizes(qapp):

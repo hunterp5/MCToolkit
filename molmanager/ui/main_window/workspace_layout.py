@@ -22,10 +22,11 @@ import warnings
 from contextlib import suppress
 from typing import Callable
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QSizePolicy,
     QSplitter,
+    QSplitterHandle,
     QVBoxLayout,
     QWidget,
 )
@@ -51,13 +52,37 @@ LAYOUT_PRESETS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _detach_hidden(widget: QWidget) -> None:
-    """Unparent ``widget`` without flashing it as a top-level window."""
+def _reparent_hidden(widget: QWidget, host: QWidget | None) -> None:
+    """Move ``widget`` under ``host`` (or unparent) without flashing a window."""
     try:
         widget.hide()
-        widget.setParent(None)
+        widget.setParent(host)
+        widget.hide()
     except RuntimeError:
         return
+
+
+def _hide_discarded_chrome(widget: QWidget) -> None:
+    """Hide splitter handles and plot-pane chrome before the old tree is dropped."""
+    with suppress(RuntimeError):
+        widget.hide()
+    try:
+        handles = widget.findChildren(QSplitterHandle)
+        panes = widget.findChildren(PlotPane)
+    except RuntimeError:
+        return
+    for child in (*handles, *panes):
+        with suppress(RuntimeError):
+            child.hide()
+        header = getattr(child, "_header", None)
+        if header is not None:
+            with suppress(RuntimeError):
+                header.hide()
+
+
+def _flush_deferred_deletes() -> None:
+    with suppress(RuntimeError):
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 def _equalize_splitter(splitter: QSplitter) -> None:
@@ -97,12 +122,16 @@ class WorkspaceLayoutManager(QWidget):
         self._splitters: list[QSplitter] = []
         self._equalize_token = 0
         self._layout_freeze_depth = 0
-        self._layout_freeze_parent: QWidget | None = None
         self._root_ly = QVBoxLayout(self)
         self._root_ly.setContentsMargins(0, 0, 0, 0)
         self._root_ly.setSpacing(0)
         self._workspace_root: QWidget | None = None
+        self.setAutoFillBackground(True)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._graveyard = QWidget(self)
+        self._graveyard.hide()
+        self._graveyard.setAttribute(Qt.WA_DontShowOnScreen, True)
+        self._graveyard.resize(0, 0)
         self.apply_layout(DEFAULT_LAYOUT_ID, preserve_plots=False)
 
     @property
@@ -276,23 +305,37 @@ class WorkspaceLayoutManager(QWidget):
         if layout_id not in {p[0] for p in LAYOUT_PRESETS}:
             layout_id = DEFAULT_LAYOUT_ID
 
+        kept_stacks = self._release_current_workspace(preserve_plots=preserve_plots)
         self._begin_layout_freeze()
         try:
-            return self._apply_layout_now(
+            return self._build_layout_now(
                 layout_id,
-                preserve_plots=preserve_plots,
+                kept_stacks=kept_stacks,
                 on_extra_plot=on_extra_plot,
             )
         finally:
             self._end_layout_freeze()
 
-    def _apply_layout_now(
-        self,
-        layout_id: str,
-        *,
-        preserve_plots: bool,
-        on_extra_plot: Callable[[QWidget], None] | None,
-    ) -> list[QWidget]:
+    def _stash(self, widget: QWidget) -> None:
+        """Park a reused widget in the hidden graveyard (never a top-level window)."""
+        _reparent_hidden(widget, self._graveyard)
+
+    def _discard_workspace_root(self, old_root: QWidget) -> None:
+        _hide_discarded_chrome(old_root)
+        with suppress(RuntimeError):
+            self._root_ly.removeWidget(old_root)
+        _reparent_hidden(old_root, self._graveyard)
+        with suppress(RuntimeError):
+            old_root.deleteLater()
+
+    def _release_current_workspace(
+        self, *, preserve_plots: bool
+    ) -> list[tuple[list[QWidget], int]]:
+        """Hide and park the current tree so leftover handles/headers cannot linger.
+
+        Painting stays enabled here: freezing the parent backing store during hide
+        leaves splitter handles, pane headers, and native plot views on screen.
+        """
         kept_stacks: list[tuple[list[QWidget], int]] = []
         if preserve_plots:
             for pane in self._panes:
@@ -302,24 +345,30 @@ class WorkspaceLayoutManager(QWidget):
 
         old_root = self._workspace_root
         if old_root is not None:
-            old_root.hide()
+            _hide_discarded_chrome(old_root)
 
-        # Hide before unparenting so Qt does not promote them to top-level windows.
-        _detach_hidden(self._table_area)
+        self._stash(self._table_area)
+        for pane in list(self._panes):
+            pane.set_plot_widget(None)
         for widgets, _idx in kept_stacks:
-            for w in widgets:
-                _detach_hidden(w)
-        for p in self._panes:
-            p.set_plot_widget(None)
+            for widget in widgets:
+                self._stash(widget)
 
         if old_root is not None:
-            self._root_ly.removeWidget(old_root)
-            old_root.setParent(None)
-            old_root.deleteLater()
+            self._discard_workspace_root(old_root)
             self._workspace_root = None
 
         self._splitters.clear()
         self._panes.clear()
+        return kept_stacks
+
+    def _build_layout_now(
+        self,
+        layout_id: str,
+        *,
+        kept_stacks: list[tuple[list[QWidget], int]],
+        on_extra_plot: Callable[[QWidget], None] | None,
+    ) -> list[QWidget]:
         self._layout_id = layout_id
 
         if layout_id == LAYOUT_TABLE_ONLY:
@@ -367,16 +416,10 @@ class WorkspaceLayoutManager(QWidget):
         return extras
 
     def _begin_layout_freeze(self) -> None:
-        """Suppress intermediate paints while the splitter tree is rebuilt."""
+        """Suppress paints of this widget while the new splitter tree is inserted."""
         depth = int(getattr(self, "_layout_freeze_depth", 0))
         if depth == 0:
             self.setUpdatesEnabled(False)
-            parent = self.parentWidget()
-            if parent is not None and not parent.isWindow():
-                parent.setUpdatesEnabled(False)
-                self._layout_freeze_parent = parent
-            else:
-                self._layout_freeze_parent = None
         self._layout_freeze_depth = depth + 1
 
     def _end_layout_freeze(self) -> None:
@@ -384,15 +427,24 @@ class WorkspaceLayoutManager(QWidget):
         self._layout_freeze_depth = depth
         if depth:
             return
-        parent = getattr(self, "_layout_freeze_parent", None)
-        self._layout_freeze_parent = None
         with suppress(RuntimeError):
             self.setUpdatesEnabled(True)
-        if parent is not None:
-            with suppress(RuntimeError):
-                parent.setUpdatesEnabled(True)
+        _flush_deferred_deletes()
+        self._repaint_workspace()
+        QTimer.singleShot(0, self._repaint_workspace)
+
+    def _repaint_workspace(self) -> None:
+        """Erase stale backing-store pixels after a splitter tree swap."""
         with suppress(RuntimeError):
             self.update()
+        parent = self.parentWidget()
+        if parent is not None:
+            with suppress(RuntimeError):
+                parent.update()
+        win = self.window()
+        if win is not None:
+            with suppress(RuntimeError):
+                win.update()
 
     def _splitter_containing(self, widget: QWidget) -> QSplitter | None:
         for splitter in self._splitters:
@@ -405,11 +457,7 @@ class WorkspaceLayoutManager(QWidget):
         """Remove a plot pane from the splitter tree (plots must already be detached)."""
         if pane not in self._panes:
             return False
-        self._begin_layout_freeze()
-        try:
-            return self._remove_pane_now(pane)
-        finally:
-            self._end_layout_freeze()
+        return self._remove_pane_now(pane)
 
     def _remove_pane_now(self, pane: PlotPane) -> bool:
         if pane not in self._panes:
@@ -419,7 +467,7 @@ class WorkspaceLayoutManager(QWidget):
             self._panes.remove(pane)
             if self._preferred_pane_id == pane.pane_id:
                 self._preferred_pane_id = None
-            _detach_hidden(pane)
+            self._stash(pane)
             pane.deleteLater()
             self.apply_layout(LAYOUT_TABLE_ONLY, preserve_plots=False)
             return True
@@ -442,24 +490,29 @@ class WorkspaceLayoutManager(QWidget):
         if self._preferred_pane_id == pane.pane_id:
             self._preferred_pane_id = None
 
+        pane.hide()
         pane.set_plot_widgets([])
         self._panes.remove(pane)
-        _detach_hidden(pane)
+        self._stash(pane)
         pane.deleteLater()
 
-        remaining = splitter.count()
-        if remaining > 0 and removed_size > 0:
-            new_sizes = [int(s) for s in splitter.sizes()]
-            target = min(index, remaining - 1)
-            new_sizes[target] = max(0, new_sizes[target] + removed_size)
-            splitter.setSizes(new_sizes)
+        self._begin_layout_freeze()
+        try:
+            remaining = splitter.count()
+            if remaining > 0 and removed_size > 0:
+                new_sizes = [int(s) for s in splitter.sizes()]
+                target = min(index, remaining - 1)
+                new_sizes[target] = max(0, new_sizes[target] + removed_size)
+                splitter.setSizes(new_sizes)
 
-        pref = self.preferred_pane()
-        self.set_preferred_pane(pref)
-        # Closing one of two stacked/side panes looks like split view; persist it that way.
-        if len(self._panes) == 1 and self._layout_id != LAYOUT_TABLE_SINGLE:
-            self.apply_layout(LAYOUT_TABLE_SINGLE, preserve_plots=True)
-        return True
+            pref = self.preferred_pane()
+            self.set_preferred_pane(pref)
+            # Closing one of two stacked/side panes looks like split view; persist it that way.
+            if len(self._panes) == 1 and self._layout_id != LAYOUT_TABLE_SINGLE:
+                self.apply_layout(LAYOUT_TABLE_SINGLE, preserve_plots=True)
+            return True
+        finally:
+            self._end_layout_freeze()
 
     def _on_pane_activated(self, pane: PlotPane) -> None:
         self.set_preferred_pane(pane)
@@ -478,7 +531,7 @@ class WorkspaceLayoutManager(QWidget):
         pane.close_requested.connect(self._on_pane_close_requested)
 
     def _new_pane(self, index: int) -> PlotPane:
-        pane = PlotPane(f"pane_{index}", self)
+        pane = PlotPane(f"pane_{index}")
         self._panes.append(pane)
         self._wire_pane(pane)
         return pane
@@ -525,8 +578,7 @@ class WorkspaceLayoutManager(QWidget):
         outer.setChildrenCollapsible(False)
         outer.addWidget(self._table_area)
         if n_panes <= 1 or plot_orientation is None:
-            pane = self._new_pane(0)
-            outer.addWidget(pane)
+            outer.addWidget(self._new_pane(0))
             outer.setStretchFactor(0, 1)
             outer.setStretchFactor(1, 1)
             outer.setSizes([700, PLOT_PANEL_DEFAULT_WIDTH])

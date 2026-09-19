@@ -259,3 +259,71 @@ def sketch_oxidation_state(
     if nonbonding % 2 == 1:
         nonbonding -= 1
     return int(valence_e - nonbonding - assigned)
+
+
+def sketch_valence_list(element: str) -> list[int]:
+    """RDKit allowed valences for *element* (ascending), or empty if unknown."""
+    if element in ("H", "D", "T"):
+        return [1]
+    try:
+        pt = Chem.GetPeriodicTable()
+        an = pt.GetAtomicNumber(element)
+        if an <= 0:
+            return []
+        return sorted({int(v) for v in pt.GetValenceList(an) if int(v) > 0})
+    except Exception:
+        return []
+
+
+def sketch_default_valence(element: str) -> int:
+    """Common / lowest preferred valence (e.g. S=2), not the hypervalent maximum."""
+    if element in ("H", "D", "T"):
+        return 1
+    try:
+        pt = Chem.GetPeriodicTable()
+        an = pt.GetAtomicNumber(element)
+        if an > 0:
+            dv = pt.GetDefaultValence(an)
+            if dv > 0:
+                return int(dv)
+    except Exception:
+        pass
+    vlist = sketch_valence_list(element)
+    if vlist:
+        return min(vlist)
+    if element in ("Na", "K", "Rb", "Cs", "Li"):
+        return 1
+    if element in ("Mg", "Ca", "Sr", "Ba"):
+        return 2
+    if element in ("Zn", "Cd", "Hg", "Cu", "Ag", "Au", "Ni", "Pd", "Pt", "Co"):
+        return 4
+    return 4
+
+
+def sketch_max_valence(element: str) -> int:
+    """Maximum allowed sum of incident bond orders (validation ceiling)."""
+    if element in ("H", "D", "T"):
+        return 1
+    vlist = sketch_valence_list(element)
+    if vlist:
+        return max(vlist)
+    try:
+        pt = Chem.GetPeriodicTable()
+        an = pt.GetAtomicNumber(element)
+        if an > 0:
+            dv = pt.GetDefaultValence(an)
+            if dv > 0:
+                return int(dv)
+    except Exception:
+        pass
+    if element in ("Na", "K", "Rb", "Cs", "Li"):
+        return 1
+    if element in ("Mg", "Ca", "Sr", "Ba"):
+        return 2
+    if element in ("Zn", "Cd", "Hg", "Cu", "Ag", "Au", "Ni", "Pd", "Pt", "Co"):
+        return 4
+    if element in ("P", "As"):
+        return 5
+    if element in ("S", "Se", "Te"):
+        return 6
+    return 8

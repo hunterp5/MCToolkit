@@ -21,13 +21,11 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QLabel, QVBoxLayout
-from rdkit import Chem
-from rdkit.Chem.Draw import rdMolDraw2D
 
 from ...analysis.sali_analysis import SaliPoint
-from .chrome import configure_browser_mol_drawer, style_browser_emphasis_label
+from .chrome import pixmap_from_mol, style_browser_emphasis_label
 from .pair_browser import PairBrowserDialog
 
 
@@ -182,7 +180,7 @@ class SaliBrowserDialog(PairBrowserDialog):
         self._refresh_previews()
         self._update_property_values()
 
-    def _mol_for_oid(self, oid: int) -> Chem.Mol | None:
+    def _mol_for_oid(self, oid: int):
         app = self._app
         if app is None:
             return None
@@ -226,13 +224,5 @@ class SaliBrowserDialog(PairBrowserDialog):
         label.setPixmap(pm)
         label.setText("")
 
-    def _render_mol(self, mol: Chem.Mol, pw: int, ph: int) -> QPixmap | None:
-        try:
-            drawer = rdMolDraw2D.MolDraw2DCairo(pw, ph)
-            configure_browser_mol_drawer(drawer, pw)
-            rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
-            drawer.FinishDrawing()
-            img = QImage.fromData(drawer.GetDrawingText())
-            return QPixmap.fromImage(img)
-        except Exception:
-            return None
+    def _render_mol(self, mol, pw: int, ph: int) -> QPixmap | None:
+        return pixmap_from_mol(mol, pw, ph)
