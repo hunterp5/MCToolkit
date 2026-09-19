@@ -70,19 +70,6 @@ class ExternalRecordsMixin:
             self._on_patent_query_dialog_destroyed,
         )
 
-    def _ensure_columns(self, col_names: list[str]) -> None:
-        """Ensure the table has these headers (adds columns to the right if needed)."""
-        if not self.headers:
-            self.headers = ["ID_HIDDEN", "Structure", "SMILES"]
-            self._table_model.set_headers(list(self.headers))
-            self.table.setColumnHidden(0, True)
-        existing = {h: i for i, h in enumerate(self.headers)}
-        to_add = [h for h in col_names if h not in existing]
-        if to_add:
-            col_at = len(self.headers)
-            self.headers.extend(to_add)
-            self._table_model.insert_columns_at(col_at, to_add, None)
-
     def add_row_from_external_record(self, smiles: str, fields: dict[str, str]) -> None:
         """Append a row with SMILES + additional fields; render structure when possible."""
         smiles = (smiles or "").strip()
@@ -314,3 +301,15 @@ class ExternalRecordsMixin:
             except AttributeError:
                 pass
         self.add_rows_from_external_records_batch(records, render_structures=render_structures)
+
+    def _on_external_db_dialog_destroyed(self):
+        self._external_db_dialog = None
+
+    def _on_pubchem_dialog_destroyed(self):
+        self._pubchem_dialog = None
+
+    def _on_chembl_dialog_destroyed(self):
+        self._chembl_dialog = None
+
+    def _on_patent_query_dialog_destroyed(self):
+        self._patent_query_dialog = None

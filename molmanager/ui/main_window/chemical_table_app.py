@@ -36,6 +36,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ...config import load_config
+from ...session_codec import SESSION_VERSION_CURRENT
 
 logger = logging.getLogger(__name__)
 from ...performance import PerformanceTracker
@@ -48,6 +49,7 @@ from ...workers import (
     SubstructureFilterSignals,
     WorkerSignals,
 )
+from ..app_kernel import install_window_forwards
 from ..background_activity import BackgroundActivityHub
 from ..compound_table_model import (
     CompoundTableModel,
@@ -61,20 +63,57 @@ from ..compound_table_model import (
 )
 from ..filter_proxy_model import FilterProxyModel
 from ..filters.cards import FilterCardsHost
+from ..progress_controller import ProgressController
+from ..session_controller import SessionController
+from ..table_build_pipeline import TableBuildPipeline
 from ..table_selection_delegate import RowHighlightDelegate
 from ..process_queue import ProcessQueueManager
-from .cluster_mixin import ClusterMixin
-from .dimension_reduction_mixin import DimensionReductionMixin
-from .medchem_space_mixin import MedChemSpaceMixin
-from .qsar_mixin import QsarMixin
-from .mpo_mixin import MpoMixin
+from ..table_session import TableSession
+from ..table_write_service import TableWriteService
+from ..tool_dialog_scope import ToolDialogScope, ToolDialogScopeMixin
+from ..workspace_tools import WorkspaceTools
+from .activity_cliff_mixin import ActivityCliffMixin
 from .app_lifecycle_mixin import AppLifecycleMixin
 from .app_menu_mixin import AppMenuMixin
 from .app_progress_mixin import AppProgressMixin
-from .session_mixin import SessionMixin
-from .table_ui_mixin import TableUIMixin
+from .cluster_mixin import ClusterMixin
+from .column_write_mixin import ColumnWriteMixin
+from .conformers_tools_mixin import ConformersToolsMixin
+from .descriptors_tools_mixin import DescriptorsToolsMixin
+from .dimension_reduction_mixin import DimensionReductionMixin
+from .dock_tools_mixin import DockToolsMixin
+from .external_records_mixin import ExternalRecordsMixin
+from .fast_prepare_tools_mixin import FastPrepareToolsMixin
+from .fragment_tools_mixin import FragmentToolsMixin
 from .ingest_export_mixin import IngestExportMixin
-from .chemistry_mixin import ChemistryMixin
+from .ingest_load_mixin import IngestLoadMixin
+from .medchem_space_mixin import MedChemSpaceMixin
+from .mmp_mixin import MmpMixin
+from .mmp_neighborhood_mixin import MmpNeighborhoodMixin
+from .mpo_mixin import MpoMixin
+from .plot_tools_mixin import PlotToolsMixin
+from .predict_tools_mixin import PredictToolsMixin
+from .protonate_tools_mixin import ProtonateToolsMixin
+from .qsar_mixin import QsarMixin
+from .reaction_tools_mixin import ReactionToolsMixin
+from .render_2d_mixin import Render2DMixin
+from .render2d_results_mixin import Render2DResultsMixin
+from .sali_mixin import SaliMixin
+from .session_csv_mixin import SessionCsvMixin
+from .session_plots_mixin import SessionPlotsMixin
+from .session_restore_mixin import SessionRestoreMixin
+from .session_save_mixin import SessionSaveMixin
+from .session_table_layout_mixin import SessionTableLayoutMixin
+from .sql_load_mixin import SqlLoadMixin
+from .sqlite_rebuild_mixin import SqliteRebuildMixin
+from .structure_edit_mixin import StructureEditMixin
+from .structure_layout_mixin import StructureLayoutMixin
+from .structure_writeback_mixin import StructureWritebackMixin
+from .table_calc_mixin import TableCalcMixin
+from .table_chemistry_access_mixin import TableChemistryAccessMixin
+from .table_selection_mixin import TableSelectionMixin
+from .table_ui_mixin import TableUIMixin
+from .viewer_openers_mixin import ViewerOpenersMixin
 from ..gui_settings_mixin import GuiSettingsMixin
 from ..theme import bootstrap_application_gui
 
@@ -114,27 +153,44 @@ class _FilterCardsScrollArea(QScrollArea):
 
 class ChemicalTableApp(
     QMainWindow,
-    SessionMixin,
     AppLifecycleMixin,
-    AppProgressMixin,
     AppMenuMixin,
     TableUIMixin,
     IngestExportMixin,
-    ChemistryMixin,
-    ClusterMixin,
-    DimensionReductionMixin,
-    MedChemSpaceMixin,
-    QsarMixin,
-    MpoMixin,
+    PlotToolsMixin,
+    ProtonateToolsMixin,
+    FastPrepareToolsMixin,
+    StructureEditMixin,
+    StructureWritebackMixin,
+    ConformersToolsMixin,
+    DescriptorsToolsMixin,
+    FragmentToolsMixin,
+    MmpMixin,
+    ActivityCliffMixin,
+    MmpNeighborhoodMixin,
+    SaliMixin,
+    ReactionToolsMixin,
+    TableCalcMixin,
+    ViewerOpenersMixin,
+    ExternalRecordsMixin,
+    DockToolsMixin,
+    SqlLoadMixin,
+    PredictToolsMixin,
     GuiSettingsMixin,
 ):
-    """Main PyQt window: compound table, structure column, tools, and RDKit-backed chemistry.
+    """Main window facade: table workspace, tools, and kernel-backed collaborators.
 
     Each row stores **one explicit structure** (connectivity + stereo as encoded). Isomerism scope
     (E/Z, R/S, tautomers, atropisomers, diastereomers) is summarized for developers in
     ``docs/STEREO_AND_ISOMERISM.md``. Valence, bond order, aromaticity handling, and atom typing in
     the sketcher are summarized in ``docs/VALENCE_BONDS_AND_AROMATICITY.md``.
     """
+
+    _SESSION_FORMAT = "molmanager_session"
+    _SESSION_FORMAT_ALIASES = frozenset(
+        {"molmanager_session", "MOLMANAGER_session", "chemmanager_session"}
+    )
+    _SESSION_VERSION = SESSION_VERSION_CURRENT
 
     def __init__(self):
         super().__init__()
@@ -167,6 +223,13 @@ class ChemicalTableApp(
         self._logarithmic_columns: set[str] = set()
         self.zoomed_ids = set()
         self.signals = WorkerSignals()
+        self.progress = ProgressController(self)
+        self.tool_scope = ToolDialogScope(self)
+        self.table_write = TableWriteService(self)
+        self.table_session = TableSession(self)
+        self.build_pipeline = TableBuildPipeline(self)
+        self.session = SessionController(self)
+        self.workspace_tools = WorkspaceTools(self)
         _qc = Qt.QueuedConnection
         self.signals.mols_loaded.connect(self.on_file_loaded, _qc)
         self.signals.structure_source_probe.connect(self._on_structure_source_probe, _qc)
@@ -623,3 +686,42 @@ class ChemicalTableApp(
     def _on_table_double_clicked(self, index) -> None:
         if index.isValid():
             self.on_cell_double_click(index.row(), index.column())
+
+
+install_window_forwards(ChemicalTableApp, "progress", (AppProgressMixin,))
+install_window_forwards(ChemicalTableApp, "tool_scope", (ToolDialogScopeMixin,))
+install_window_forwards(ChemicalTableApp, "table_write", (ColumnWriteMixin,))
+install_window_forwards(
+    ChemicalTableApp,
+    "table_session",
+    (TableSelectionMixin, TableChemistryAccessMixin),
+)
+install_window_forwards(
+    ChemicalTableApp,
+    "build_pipeline",
+    (
+        IngestLoadMixin,
+        SqliteRebuildMixin,
+        StructureLayoutMixin,
+        Render2DMixin,
+        Render2DResultsMixin,
+    ),
+)
+install_window_forwards(
+    ChemicalTableApp,
+    "session",
+    (
+        SessionSaveMixin,
+        SessionTableLayoutMixin,
+        SessionPlotsMixin,
+        SessionRestoreMixin,
+        SessionCsvMixin,
+    ),
+)
+install_window_forwards(ChemicalTableApp, "workspace_tools.cluster", (ClusterMixin,))
+install_window_forwards(
+    ChemicalTableApp, "workspace_tools.dimension_reduction", (DimensionReductionMixin,)
+)
+install_window_forwards(ChemicalTableApp, "workspace_tools.medchem_space", (MedChemSpaceMixin,))
+install_window_forwards(ChemicalTableApp, "workspace_tools.qsar", (QsarMixin,))
+install_window_forwards(ChemicalTableApp, "workspace_tools.mpo", (MpoMixin,))

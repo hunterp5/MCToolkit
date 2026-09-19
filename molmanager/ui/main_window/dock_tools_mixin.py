@@ -581,3 +581,12 @@ class DockToolsMixin:
         )
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
         self._prepare_tool_dialog(dlg)
+
+    def _on_smina_dock_dialog_destroyed(self):
+        self._smina_dock_dialog = None
+
+    def _on_pdbqt_generator_dialog_destroyed(self):
+        self._pdbqt_generator_dialog = None
+
+    def _on_pdb_fixer_dialog_destroyed(self):
+        self._pdb_fixer_dialog = None

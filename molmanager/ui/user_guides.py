@@ -29,9 +29,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QListWidget,
     QListWidgetItem,
-    QPushButton,
     QTextBrowser,
-    QVBoxLayout,
 )
 
 from ..help_markdown import load_help_markdown, markdown_to_html_fragment, missing_topic_html
@@ -586,8 +584,7 @@ def open_user_guide_dialog(parent: QWidget | None, guide_id: str | None = "overv
     dlg.setModal(False)
     dlg.setWindowModality(Qt.NonModal)
 
-    outer = QVBoxLayout(dlg)
-    content = QHBoxLayout()
+    content = QHBoxLayout(dlg)
     lst = QListWidget()
     lst.setMinimumWidth(280)
     _populate_guide_list(lst, select_guide_id=topic)
@@ -596,11 +593,6 @@ def open_user_guide_dialog(parent: QWidget | None, guide_id: str | None = "overv
     browser.setOpenExternalLinks(True)
     content.addWidget(lst)
     content.addWidget(browser, 1)
-    outer.addLayout(content)
-
-    close_btn = QPushButton("Close")
-    close_btn.clicked.connect(dlg.close)
-    outer.addWidget(close_btn)
 
     dlg._guide_list = lst  # type: ignore[attr-defined]
     dlg._guide_browser = browser  # type: ignore[attr-defined]

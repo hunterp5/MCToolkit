@@ -20,9 +20,6 @@ from __future__ import annotations
 
 import logging
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog
-
 logger = logging.getLogger(__name__)
 
 
@@ -118,43 +115,6 @@ class PlotToolsMixin:
     def undock_plot_to_window(self, plot_widget=None) -> bool:
         return self.plot_dock.undock_plot_to_window(plot_widget)
 
-    def _sync_dialog_only_selected_scope(
-        self, dialog: QDialog, *, selected_count: int | None = None
-    ) -> None:
-        """Refresh a tool dialog's scope checkbox label/count from the current table selection."""
-        cb = getattr(dialog, "only_selected_cb", None)
-        if cb is None:
-            return
-        try:
-            from PyQt5 import sip
-
-            if sip.isdeleted(cb):
-                return
-        except Exception:
-            pass
-        prefix = getattr(dialog, "_only_selected_scope_prefix", "Selected Rows Only")
-        if selected_count is None:
-            count_fn = getattr(self, "_selected_row_count_fast", None)
-            n = int(count_fn()) if callable(count_fn) else len(self._selected_logical_rows())
-        else:
-            n = int(selected_count)
-        try:
-            if n > 0:
-                cb.setEnabled(True)
-                cb.setText(f"{prefix} ({n} row(s))")
-            else:
-                cb.setEnabled(False)
-                cb.setChecked(False)
-                cb.setText(prefix)
-        except RuntimeError:
-            return
-
-    def _prepare_tool_dialog(self, dialog: QDialog) -> None:
-        """Let the main table stay interactive and keep scope UI in sync while the dialog is open."""
-        dialog.setModal(False)
-        dialog.setWindowModality(Qt.NonModal)
-        self._attach_tool_scope_sync(dialog, on_finished_signal=dialog.finished)
-
     def _prepare_tool_plot(self, plot_widget) -> None:
         """Keep docked plot scope UI in sync with table selection changes."""
         self._attach_tool_scope_sync(plot_widget, on_finished_signal=plot_widget.destroyed)
@@ -227,23 +187,6 @@ class PlotToolsMixin:
                     refresh()
                 except RuntimeError:
                     pass
-
-    def _refresh_attached_tool_scope_labels(self) -> None:
-        """Update all open tool/plot scope checkboxes once per selection fan-out."""
-        count_fn = getattr(self, "_selected_row_count_fast", None)
-        n = int(count_fn()) if callable(count_fn) else len(self._selected_logical_rows())
-        alive: list = []
-        for target in list(getattr(self, "_scope_sync_targets", [])):
-            try:
-                from PyQt5 import sip
-
-                if sip.isdeleted(target):
-                    continue
-            except Exception:
-                pass
-            alive.append(target)
-            self._sync_dialog_only_selected_scope(target, selected_count=n)
-        self._scope_sync_targets = alive
 
     def _sync_active_plots_from_table_selection(self) -> None:
         from ..plot_table_sync import selected_oids_for_plot
@@ -392,45 +335,6 @@ class PlotToolsMixin:
         d = PlotDialog(self)
         self._prepare_tool_dialog(d)
         return d
-
-    def _attach_tool_scope_sync(self, target, *, on_finished_signal) -> None:
-        """Wire table selection changes to a dialog/plot ``only_selected_cb`` until teardown."""
-        if getattr(target, "only_selected_cb", None) is None:
-            return
-        prior = getattr(target, "_scope_sync_disconnect", None)
-        if callable(prior):
-            prior()
-        if not hasattr(self, "_scope_sync_targets"):
-            self._scope_sync_targets = []
-        if target not in self._scope_sync_targets:
-            self._scope_sync_targets.append(target)
-        self._sync_dialog_only_selected_scope(target)
-        sm = self.table.selectionModel()
-        if sm is None:
-            return
-
-        def on_sel_changed(*_args):
-            # Scope labels refresh once in the coalesced plot fan-out (avoids N× row scans).
-            self._schedule_sync_active_plots_from_table_selection()
-
-        sm.selectionChanged.connect(on_sel_changed)
-
-        def teardown(*_args):
-            try:
-                from PyQt5 import sip
-
-                if sm is not None and not sip.isdeleted(sm):
-                    sm.selectionChanged.disconnect(on_sel_changed)
-            except (TypeError, RuntimeError):
-                pass
-            try:
-                self._scope_sync_targets.remove(target)
-            except (ValueError, AttributeError):
-                pass
-            target._scope_sync_disconnect = None
-
-        on_finished_signal.connect(teardown)
-        target._scope_sync_disconnect = teardown
 
     def _bind_undocked_browser_dialog(self, dlg) -> bool:
         """Track Data → Browser / Predict SOM windows after undock. Return True if handled."""

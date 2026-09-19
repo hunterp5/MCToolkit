@@ -10,20 +10,34 @@ flowchart TB
     app[molmanager.app:main]
   end
   subgraph window [Main window]
-    CTA[ChemicalTableApp]
+    CTA[ChemicalTableApp facade]
+    PROG[ProgressController]
+    SCOPE[ToolDialogScope]
+    WRITE[TableWriteService]
+    TS[TableSession]
+    BUILD[TableBuildPipeline]
+    SESS[SessionController]
+    TOOLS[WorkspaceTools]
     CTM[CompoundTableModel]
     FPM[FilterProxyModel]
     PQ[ProcessQueueManager]
     HUB[BackgroundActivityHub]
   end
   subgraph data [Data]
-    mols[mols dict]
+    mols[MolStore]
     sqlite[SqliteTableStore]
   end
   subgraph workers [Workers]
     W[molmanager.workers.*]
   end
   app --> CTA
+  CTA --> PROG
+  CTA --> SCOPE
+  CTA --> WRITE
+  CTA --> TS
+  CTA --> BUILD
+  CTA --> SESS
+  CTA --> TOOLS
   CTA --> CTM
   CTM --> FPM
   CTA --> PQ
@@ -36,33 +50,36 @@ flowchart TB
 
 ## Main window (`molmanager/ui/main_window/`)
 
-`ChemicalTableApp` composes mixins (multiple inheritance):
+`ChemicalTableApp` is a **QMainWindow facade** over an explicit GUI-thread kernel
+(`molmanager/ui/app_kernel.py`: `AppKernel`) and collaborators. Public methods stay on the
+window as one-line forwards so dialogs and tests keep calling `app.on_calc_finished`,
+`app._begin_tool_progress`, `app._selected_oids_set`, etc. Mixin files remain the
+implementation bodies; they are **not** all on the window MRO.
 
-| Mixin | Responsibility |
-|--------|----------------|
-| `SessionMixin` | Open/save `.cms` sessions; legacy CSV import (composes session_* mixins) |
-| `SessionSaveMixin` | Document build, File open/save/new/duplicate |
-| `SessionTableLayoutMixin` | Header/layout chrome collect/restore |
-| `SessionPlotsMixin` | Docked/floating plot + protein viewer session state |
-| `SessionRestoreMixin` | CMS async restore, finalize steps, workspace reveal |
-| `SessionCsvMixin` | Legacy CSV session load |
-| `AppLifecycleMixin` | Session dirty / SQLite mirror / close-shutdown |
-| `AppProgressMixin` | Status chrome and tool-progress UI |
-| `AppMenuMixin` | Menubar, dock-results chrome, workspace dialog openers |
-| `TableUIMixin` | Column color/sort, `clear_all`, confs sidecar, selection browser (composes table mixins) |
-| `TableSelectionMixin` | Row/column selection, visibility cache, OID override / chunked select |
-| `TableChemistryAccessMixin` | Molecule lookup, chemistry-tool source columns, OID→row |
-| `TableEditMixin` | Copy/paste, chunked delete/clear cells |
-| `TableMenuMixin` | Column/row/cell context menus, log/precision column transforms |
-| `IngestExportMixin` | File/SQL ingest, export |
-| `ChemistryMixin` | Composite tools mixin (see sub-mixins below) |
-| `ClusterMixin` | Clustering dialogs |
-| `DimensionReductionMixin` | PCA / t-SNE / UMAP docking |
-| `MedChemSpaceMixin` | MedChem space plot |
-| `QsarMixin` | QSAR entry points |
-| `GuiSettingsMixin` | Persisted UI settings |
+| Collaborator | Module | Owns |
+|--------------|--------|------|
+| `ProgressController` | `ui/progress_controller.py` | Status chrome, `_begin_tool_progress` / `_finish_tool_progress` |
+| `ToolDialogScope` | `ui/tool_dialog_scope.py` | Modeless tool dialogs, selected-rows-only scope, empty-selection abort |
+| `TableWriteService` | `ui/table_write_service.py` | `on_calc_finished`, unique column names, `_ensure_columns` |
+| `TableSession` | `ui/table_session.py` | Selection, chemistry-column lookup, sticky visible-row cache |
+| `TableBuildPipeline` | `ui/table_build_pipeline.py` | Ingest chunks, SQLite rebuild, Render 2D batch/results (`QObject` child) |
+| `SessionController` | `ui/session_controller.py` | `.cms` save/restore, table layout, session plots, legacy CSV |
+| `WorkspaceTools` | `ui/workspace_tools.py` | Lazy cluster / dimred / QSAR / MPO / medchem adapters |
+| `PlotDockHost` | `ui/plot_dock_host.py` | Dock/undock plot panes |
+| `ProcessQueueManager` | `ui/process_queue.py` | Serial heavy tools |
+| `BackgroundActivityHub` | `ui/background_activity.py` | Processes dialog |
 
-`QMainWindow` precedes mixins in the MRO, so Qt virtuals such as `closeEvent` must be declared on `ChemicalTableApp` (delegating into the mixin). Mixin implementations that need the C++ base should call `QMainWindow.closeEvent` explicitly rather than `super()`.
+New tools go through `ui/analysis_job_support.py` (which uses `tool_dialog_scope`) and kernel
+methods — do not add mixin bases to `ChemicalTableApp`.
+
+Remaining mixins on the window MRO are UI adapters that still talk to widgets directly
+(`AppMenuMixin`, `TableUIMixin` edit/search/filters, structure-prep tools, MMP/SALI, dock,
+predict, `GuiSettingsMixin`). Empty composition roots (`ChemistryMixin`, `SessionMixin`,
+`IngestRenderMixin`, `PrepareStructuresMixin`, `ConformersDescriptorsMixin`,
+`ToolsSqlPredictMixin`) are optional groupings only; they are **not** bases of
+`ChemicalTableApp`.
+
+`QMainWindow` precedes remaining mixins in the MRO, so Qt virtuals such as `closeEvent` must be declared on `ChemicalTableApp` (delegating into `AppLifecycleMixin`). Mixin implementations that need the C++ base should call `QMainWindow.closeEvent` explicitly rather than `super()`.
 
 **Processes Cancel:** `BackgroundActivityHub.try_cancel_row` handles `background` jobs via `cancel_background_job()` when a cancel callable was registered with `register_background_job(..., cancel=…)`. Filter apply, substructure filter, dimred, and MedChem Space register cancel callables.
 
@@ -74,18 +91,7 @@ flowchart TB
 
 **Tool writeback:** `on_calc_finished` inserts columns immediately, then for large result sets chunks `apply_columns_values_bulk` / `set_column_text_by_oids` with `Writing results…` status; coloring and bounds run after the last chunk (`on_complete` for Protonate/fragment/SOM follow-ups). Fingerprint similarity uses the same chunked fill for large tables.
 
-`ChemistryMixin` composes (same MRO order):
-
-| Sub-mixin | Responsibility |
-|-----------|----------------|
-| `PlotToolsMixin` | Plot↔table sync, floating plot dialogs; docks via `PlotDockHost` |
-| `IngestRenderMixin` | Composite: file ingest, SQLite rebuild, structure layout, Render 2D results |
-| `PrepareStructuresMixin` | Composite: protonate, Fast Prepare, disconnect/neutralize/Hs, Render 2D |
-| `ConformersDescriptorsMixin` | Composite: conformers/superpose, descriptors, column writeback |
-| `FragmentToolsMixin` | BRICS/RECAP/R-group fragment tools |
-| `MmpMixin` | Matched molecular pair (MMP / rdMMPA) analysis |
-| `ReactionToolsMixin` | Reaction-based enumeration |
-| `ToolsSqlPredictMixin` | Composite: table calc, viewers, external records, dock, SQL load, predictors |
+Tool mixins that remain on the window (structure prep, fragments, MMP/SALI, dock, predict) are thin adapters over `analysis_job_support` and the kernel. Ingest/render/sqlite live on `TableBuildPipeline`; column writeback on `TableWriteService`.
 
 **Filter bounds:** bulk load/ingest calls `schedule_calculate_global_bounds()` (debounced); undo calls `calculate_global_bounds()` immediately when filter cards need fresh min/max. Session restore installs saved `global_bounds` when present and otherwise scans immediately.
 
@@ -98,7 +104,7 @@ flowchart TB
 - **Helpers:** `services/numeric_bounds.py` (filter slider min/max scans);
   `column_color_compute.py` (gradient / categorical RGB).
 - **Filtered view:** `FilterProxyModel` hides rows by OID set (`set_visible_oids`), not per-row `setRowHidden`.
-- **Selection:** Qt selection + `_selected_oids_override` for large selections (tools/plots use `_selected_oids_set()`); logic lives in `TableSelectionMixin`.
+- **Selection:** Qt selection + `_selected_oids_override` for large selections (tools/plots use `_selected_oids_set()`); logic lives in `TableSession` (`TableSelectionMixin` body).
 - **SQLite mirror:** `SqliteTableStore` powers text/numeric filter pushdown and column search at 100k+ rows. Rebuilt in chunks on the GUI thread, then `SqliteRebuildWorker` builds the DB file.
 
 ## Background work
@@ -138,7 +144,7 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
    Protein Prepare, Gnina dock, and Data Analysis live there; shims remain at the old `ui/`
    paths. Package `__init__` loads exports lazily so submodule imports do not pull Qt WebEngine.
 2. Worker under `molmanager/workers/` if work is heavy.
-3. Wire menu action in `chemical_table_app.py` / `chemistry_mixin.py`.
+3. Wire the menu action on `ChemicalTableApp` (thin forward to a collaborator or existing tool mixin). Do **not** add a new mixin base to the window class.
 4. Long jobs: `process_queue.enqueue` + `_begin_tool_progress` / `report_tool_progress`.
 5. Short threadpool jobs: `register_background_job` / `unregister_background_job`.
 6. Tests under `tests/` (unit tests avoid full GUI where possible).
@@ -204,12 +210,9 @@ chain list is `ui/protein_chain_manager.py`. The window (`ui/protein_viewer_dial
 composes IO/session, render-style/H-bond, and sequence mixins.
 Crystallographic inventory: `structure_components.py` re-exports types, CIF IO,
 chain inventory, and atoms/pocket helpers.
-`ConformersDescriptorsMixin` composes conformer tools, descriptor writeback, and
-shared column-name/bounds helpers.
-`PrepareStructuresMixin` composes protonate, Fast Prepare, structure-edit
-(disconnect/neutralize/explicit H), Render 2D, and shared mol writeback.
-`IngestRenderMixin` composes file ingest, SQLite rebuild, structure layout, and
-Render 2D result flush.
+`TableWriteService` owns descriptor/tool column writeback and unique header naming.
+Structure-prep tools (protonate, Fast Prepare, disconnect/neutralize/explicit H) stay as
+window mixins; Render 2D start/flush lives on `TableBuildPipeline` with ingest and SQLite rebuild.
 Protein Prepare runtime: `workers/protein_prepare_runtime.py` orchestrates;
 IO/residue maps are `protein_prepare_io.py`, pdb2pqr is `protein_prepare_pdb2pqr.py`,
 AmberTools GAFF/GAFF2 (WSL on Windows) is `protein_prepare_amber.py`,

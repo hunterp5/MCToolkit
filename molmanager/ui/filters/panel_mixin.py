@@ -30,7 +30,9 @@ class FilterPanelMixin(
     FilterSubstructureMixin,
     FilterBoundsMixin,
 ):
-    """Expects ``headers``, ``_table_model``, ``table``, ``mols``, ``filters``, ``f_panel``,
-    ``f_container``, ``global_bounds``, ``status_label``, ``threadpool``, ``_apply_filters_timer``,
-    and optional ``_substructure_filter_signals`` on ``self`` (provided by ``ChemicalTableApp``).
+    """Expects the :class:`~molmanager.ui.app_kernel.AppKernel` surface on ``self``
+    (``headers``, ``_table_model``, ``table``, ``mols``, ``filters``, ``f_panel``,
+    ``f_container``, ``global_bounds``, ``status_label``, ``threadpool``,
+    ``_apply_filters_timer``, optional ``_substructure_filter_signals``), provided by
+    ``ChemicalTableApp``.
     """

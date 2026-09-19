@@ -23,7 +23,7 @@ import time
 from contextlib import nullcontext
 
 from PyQt5.QtCore import QEventLoop, QTimer
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtWidgets import QApplication
 
 from rdkit import Chem
 
@@ -41,19 +41,6 @@ logger = logging.getLogger(__name__)
 
 
 class IngestLoadMixin:
-    def _abort_if_only_selected_but_empty(
-        self, only_selected: bool, allowed: set | frozenset | None, title: str
-    ) -> bool:
-        """Return True if the user should stop (warning shown for empty selection)."""
-        if only_selected and not allowed:
-            QMessageBox.warning(
-                self,
-                title,
-                "\u201cSelected Rows Only\u201d is checked but nothing is selected.",
-            )
-            return True
-        return False
-
     def _on_structure_source_probe(self, headers: list) -> None:
         """Worker paused after first record; pick structure column before bulk read."""
         incoming = list(headers)

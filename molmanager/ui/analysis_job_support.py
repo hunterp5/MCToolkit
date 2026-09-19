@@ -30,6 +30,7 @@ from PyQt5.QtWidgets import QDialog, QMessageBox
 from rdkit import Chem
 
 from ..services.activity_records import build_oid_mol_activity_records, parse_activity_float
+from .tool_dialog_scope import abort_if_only_selected_but_empty, prepare_tool_dialog
 
 WorkerFactory = Callable[..., Any]
 
@@ -47,9 +48,7 @@ def activity_value_for_table_oid(
         return None
     raw = (app._table_cell_text(row, activity_col_index) or "").strip()
     if not raw:
-        raw = (
-            app._table_model.backing_value_for_row_header(row, activity_column) or ""
-        ).strip()
+        raw = (app._table_model.backing_value_for_row_header(row, activity_column) or "").strip()
     return parse_activity_float(raw)
 
 
@@ -108,7 +107,7 @@ def show_activity_tool_dialog(
     on_accepted: Callable[[QDialog], None],
 ) -> None:
     """Standard modeless tool-dialog show + accepted handoff."""
-    app._prepare_tool_dialog(dialog)
+    prepare_tool_dialog(app, dialog)
     dialog.setAttribute(Qt.WA_DeleteOnClose, True)
     dialog.accepted.connect(lambda *_, dlg=dialog: on_accepted(dlg))
     dialog.show()
@@ -128,19 +127,14 @@ def prepare_scoped_structure_mols(
 
     Returns ``None`` after informing the user when the job should not start.
     """
-    if app._abort_if_only_selected_but_empty(
-        only_selected, app._selected_oids_set(), tool_label
-    ):
+    if abort_if_only_selected_but_empty(app, only_selected, app._selected_oids_set(), tool_label):
         return None
-    mol_data = app.collect_scoped_table_mols(
-        structure_source, only_selected=only_selected
-    )
+    mol_data = app.collect_scoped_table_mols(structure_source, only_selected=only_selected)
     if not mol_data:
         QMessageBox.information(
             app,
             tool_label,
-            empty_message
-            or "No valid structures were found for the selected source and scope.",
+            empty_message or "No valid structures were found for the selected source and scope.",
         )
         return None
     if len(mol_data) < int(min_mols):
@@ -167,9 +161,7 @@ def prepare_scoped_activity_mol_records(
 
     Returns ``None`` after informing the user when the job should not start.
     """
-    if app._abort_if_only_selected_but_empty(
-        only_selected, app._selected_oids_set(), tool_label
-    ):
+    if abort_if_only_selected_but_empty(app, only_selected, app._selected_oids_set(), tool_label):
         return None
     if not activity_column or str(activity_column).startswith("("):
         QMessageBox.information(app, tool_label, "Select a numeric activity column.")
@@ -182,9 +174,7 @@ def prepare_scoped_activity_mol_records(
         )
         return None
 
-    mol_data = app.collect_scoped_table_mols(
-        structure_source, only_selected=only_selected
-    )
+    mol_data = app.collect_scoped_table_mols(structure_source, only_selected=only_selected)
     if not mol_data:
         QMessageBox.information(
             app,

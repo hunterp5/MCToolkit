@@ -14,22 +14,17 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Composite: protonate, Fast Prepare, structure edits, and Render 2D."""
+"""Chunked chemistry-tool column writeback and unique header naming."""
 
 from __future__ import annotations
 
-from .fast_prepare_tools_mixin import FastPrepareToolsMixin
-from .protonate_tools_mixin import ProtonateToolsMixin
-from .render_2d_mixin import Render2DMixin
-from .structure_edit_mixin import StructureEditMixin
-from .structure_writeback_mixin import StructureWritebackMixin
+from .app_kernel import AppKernel, bind_mixin_methods
+from .main_window.column_write_mixin import ColumnWriteMixin
 
 
-class PrepareStructuresMixin(
-    ProtonateToolsMixin,
-    FastPrepareToolsMixin,
-    StructureEditMixin,
-    Render2DMixin,
-    StructureWritebackMixin,
-):
-    """Optional grouping. Render 2D lives on ``TableBuildPipeline``; prep tools stay on the window."""
+class TableWriteService:
+    """Owns ``on_calc_finished`` / column insert naming; mutates the kernel table."""
+
+    def __init__(self, app: AppKernel) -> None:
+        self._app = app
+        bind_mixin_methods(self, app, ColumnWriteMixin)

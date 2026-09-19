@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Main window package: ``ChemicalTableApp`` composes table, session, ingest, and chemistry mixins."""
+"""Main window package: ``ChemicalTableApp`` is a QMainWindow facade over kernel collaborators."""
 
 from .chemical_table_app import ChemicalTableApp
 

@@ -28,9 +28,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QListWidget,
     QListWidgetItem,
-    QPushButton,
     QTextBrowser,
-    QVBoxLayout,
 )
 
 from ..citations_catalog import (
@@ -113,8 +111,7 @@ def open_citations_dialog(parent: QWidget | None, tool_id: str | None = None) ->
     dlg.setModal(False)
     dlg.setWindowModality(Qt.NonModal)
 
-    outer = QVBoxLayout(dlg)
-    content = QHBoxLayout()
+    content = QHBoxLayout(dlg)
     lst = QListWidget()
     lst.setMinimumWidth(280)
     _populate_citation_list(lst, select_tool_id=topic)
@@ -123,11 +120,6 @@ def open_citations_dialog(parent: QWidget | None, tool_id: str | None = None) ->
     browser.setOpenExternalLinks(True)
     content.addWidget(lst)
     content.addWidget(browser, 1)
-    outer.addLayout(content)
-
-    close_btn = QPushButton("Close")
-    close_btn.clicked.connect(dlg.close)
-    outer.addWidget(close_btn)
 
     dlg._citation_list = lst  # type: ignore[attr-defined]
     dlg._citation_browser = browser  # type: ignore[attr-defined]

@@ -40,18 +40,14 @@ from ...utils import (
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
 from ..filters import FilterPanelMixin
-from .table_chemistry_access_mixin import TableChemistryAccessMixin
 from .table_edit_mixin import TableEditMixin
 from .table_menu_mixin import TableMenuMixin
 from .table_search_mixin import TableSearchMixin
-from .table_selection_mixin import TableSelectionMixin
 
 logger = logging.getLogger(__name__)
 
 
 class TableUIMixin(
-    TableSelectionMixin,
-    TableChemistryAccessMixin,
     TableEditMixin,
     TableMenuMixin,
     TableSearchMixin,

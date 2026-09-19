@@ -141,7 +141,7 @@ class _App:
     """Minimal stand-in exposing only what the batched render handler touches."""
 
     def __init__(self, rows_in_table: set[int], goal: int):
-        from molmanager.ui.main_window.ingest_render_mixin import IngestRenderMixin
+        from molmanager.ui.main_window.render2d_results_mixin import Render2DResultsMixin
 
         self._rows = rows_in_table
         self._render2d_pending: dict = {}
@@ -154,7 +154,7 @@ class _App:
         self.flushed = False
         self.restored = False
         self.status_label = type("L", (), {"setText": lambda _s, _t: None})()
-        self._cls = IngestRenderMixin
+        self._cls = Render2DResultsMixin
 
     # Bound mixin methods under test.
     def _render2d_batch_session_accepted(self, s):

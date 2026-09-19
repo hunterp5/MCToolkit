@@ -30,4 +30,4 @@ class IngestRenderMixin(
     StructureLayoutMixin,
     Render2DResultsMixin,
 ):
-    """Composite kept for ChemicalTableApp MRO."""
+    """Optional grouping. ``ChemicalTableApp`` uses ``TableBuildPipeline`` instead of this MRO composite."""

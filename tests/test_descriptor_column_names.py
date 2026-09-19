@@ -18,10 +18,10 @@
 
 from __future__ import annotations
 
-from molmanager.ui.main_window.chemistry_mixin import ChemistryMixin
+from molmanager.ui.main_window.column_write_mixin import ColumnWriteMixin
 
 
-class _Host(ChemistryMixin):
+class _Host(ColumnWriteMixin):
     def __init__(self, headers: list[str]) -> None:
         self.headers = list(headers)
 

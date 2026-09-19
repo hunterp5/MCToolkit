@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 
-from .column_write_mixin import ColumnWriteMixin
 from .conformers_tools_mixin import ConformersToolsMixin
 from .descriptors_tools_mixin import DescriptorsToolsMixin
 
@@ -28,6 +27,5 @@ from .descriptors_tools_mixin import DescriptorsToolsMixin
 class ConformersDescriptorsMixin(
     ConformersToolsMixin,
     DescriptorsToolsMixin,
-    ColumnWriteMixin,
 ):
-    """Composite kept for ChemicalTableApp MRO."""
+    """Optional grouping. Writeback is ``TableWriteService``; these tools stay on the window."""

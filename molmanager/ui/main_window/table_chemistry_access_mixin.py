@@ -340,27 +340,6 @@ class TableChemistryAccessMixin:
         nm = self._mol_from_structure_text(raw)
         return nm if nm is not None else mol
 
-    def _on_external_db_dialog_destroyed(self):
-        self._external_db_dialog = None
-
-    def _on_pubchem_dialog_destroyed(self):
-        self._pubchem_dialog = None
-
-    def _on_chembl_dialog_destroyed(self):
-        self._chembl_dialog = None
-
-    def _on_patent_query_dialog_destroyed(self):
-        self._patent_query_dialog = None
-
-    def _on_smina_dock_dialog_destroyed(self):
-        self._smina_dock_dialog = None
-
-    def _on_pdbqt_generator_dialog_destroyed(self):
-        self._pdbqt_generator_dialog = None
-
-    def _on_pdb_fixer_dialog_destroyed(self):
-        self._pdb_fixer_dialog = None
-
     def logical_row_for_oid(self, oid: int) -> int:
         """Return the logical table row for a compound OID, or -1 if missing."""
         return self._table_model.logical_row_for_oid(int(oid))
