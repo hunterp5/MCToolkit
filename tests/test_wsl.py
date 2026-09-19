@@ -81,9 +81,9 @@ def test_wsl_settings_dialog_saves_path(qapp, monkeypatch, tmp_path):  # noqa: A
 
 
 def test_settings_menu_has_wsl(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
     settings = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Settings")
     labels = [a.text().replace("&", "") for a in settings.actions() if not a.isSeparator()]

@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 import molmanager
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
 
 def test_package_version():
@@ -132,8 +132,8 @@ def test_smina_dock_dialog_constructible(qapp):  # noqa: ARG001
     d.close()
 
 
-def test_chemical_table_app_constructible(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+def test_chemistry_workspace_window_constructible(qapp):  # noqa: ARG001
+    w = ChemistryWorkspaceWindow()
     assert w.windowTitle()
     assert w._table_model is not None
     assert w._sqlite_store is not None
@@ -143,7 +143,7 @@ def test_app_table_search_selects_matching_row(qapp):  # noqa: ARG001
     """Integration: table + search bar selects every cell in rows whose column matches the query."""
     from rdkit import Chem
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
@@ -178,7 +178,7 @@ def test_app_table_search_selects_matching_row(qapp):  # noqa: ARG001
 
 def test_app_table_search_works_when_sqlite_index_stale(qapp):  # noqa: ARG001
     """Large tables must not require a second Enter while the SQLite mirror rebuilds."""
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "Note"]
     w._table_model.set_headers(list(w.headers))
     for i in range(6000):
@@ -206,7 +206,7 @@ def test_app_table_search_works_when_sqlite_index_stale(qapp):  # noqa: ARG001
 def test_search_minus_deletes_last_row_and_toggle_keeps_query(qapp):  # noqa: ARG001
     from rdkit import Chem
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
@@ -242,7 +242,7 @@ def test_table_chemistry_context_menu_column_eligibility(qapp):  # noqa: ARG001
     """Chemistry context actions apply to Structure / SMILES-like columns and parseable cells."""
     from rdkit import Chem
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
@@ -271,7 +271,7 @@ def test_pixmap_structure_column_context_chemistry(qapp):  # noqa: ARG001
     parent_smi = Chem.MolToSmiles(parent, canonical=True)
     anion_smi = Chem.MolToSmiles(anion, canonical=True)
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Protonated", "SOM Map"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": parent_smi, "Protonated": anion_smi, "SOM Map": ""})
@@ -333,7 +333,7 @@ def test_canonical_structure_keys_for_dedup(qapp):  # noqa: ARG001
     t = morgan_tanimoto_to_query("CCO", "CC")
     assert t is not None and 0.0 < t < 1.0
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC"})

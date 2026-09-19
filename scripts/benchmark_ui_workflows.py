@@ -39,7 +39,7 @@ from molmanager.session_codec import (
     loads_session_bytes,
 )
 from molmanager.ui.filters.cards import SubstructureFilterCard, TextFilterCard
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.workers.export_worker import ExportWorker
 
 
@@ -76,7 +76,7 @@ def _write_session_csv(path: Path, n_rows: int) -> None:
             )
 
 
-def _drain_session(app: ChemicalTableApp) -> None:
+def _drain_session(app: ChemistryWorkspaceWindow) -> None:
     drain = getattr(app, "_drain_pending_session_load", None)
     if callable(drain):
         drain()
@@ -87,7 +87,7 @@ def _drain_session(app: ChemicalTableApp) -> None:
             qapp.processEvents()
 
 
-def _build_export_snapshot(app: ChemicalTableApp) -> dict[int, dict[str, str]]:
+def _build_export_snapshot(app: ChemistryWorkspaceWindow) -> dict[int, dict[str, str]]:
     cols = [h for h in app.headers if h not in ("ID_HIDDEN", "Structure")]
     h_map = {h: i for i, h in enumerate(app.headers)}
     out: dict[int, dict[str, str]] = {}
@@ -98,7 +98,7 @@ def _build_export_snapshot(app: ChemicalTableApp) -> dict[int, dict[str, str]]:
 
 
 def _bench_one(scale: int) -> dict[str, float]:
-    app = ChemicalTableApp()
+    app = ChemistryWorkspaceWindow()
     # Measure load/filter/export; skip auto Render 2D so drain does not wait on paint.
     app._try_auto_render_all_structures_after_ingest = lambda: False
     tmp_dir = Path(tempfile.mkdtemp(prefix="MOLMANAGER_ui_bench_"))
@@ -235,7 +235,7 @@ def _print_stats(label: str, samples: list[dict[str, float]], keys: tuple[str, .
 
 def _bench_cms_file(cms_path: Path) -> dict[str, float]:
     """Time Open Session on an existing .cms (decode vs apply+drain)."""
-    app = ChemicalTableApp()
+    app = ChemistryWorkspaceWindow()
     app._try_auto_render_all_structures_after_ingest = lambda: False
 
     tracemalloc.start()

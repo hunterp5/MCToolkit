@@ -295,10 +295,10 @@ def test_is_metabolite_column_header_and_parse_smiles() -> None:
 
 
 def test_metabolite_records_from_table(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.metabolite_browser import records_from_table
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = [
         "ID_HIDDEN",
         "Structure",

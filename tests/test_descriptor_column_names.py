@@ -39,9 +39,9 @@ def test_unique_table_column_names_dedupes_batch() -> None:
 
 
 def test_on_calc_finished_does_not_replace_existing_column(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "LogP"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"LogP": "1.23"})
@@ -62,9 +62,9 @@ def test_on_calc_finished_does_not_replace_existing_column(qapp):  # noqa: ARG00
 
 
 def test_on_calc_finished_colors_qed_score(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {})
@@ -83,9 +83,9 @@ def test_on_calc_finished_colors_qed_score(qapp):  # noqa: ARG001
 
 
 def test_on_calc_finished_updates_pka_and_pi_in_place(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "pKa", "pI"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"pKa": "4.76", "pI": "N/A"})
@@ -106,9 +106,9 @@ def test_on_calc_finished_updates_pka_and_pi_in_place(qapp):  # noqa: ARG001
 
 
 def test_on_calc_finished_chunks_large_write(qapp, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_rows_batch([(i, {}) for i in range(4)])

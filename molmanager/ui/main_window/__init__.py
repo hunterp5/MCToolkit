@@ -14,8 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Main window package: ``ChemicalTableApp`` is a QMainWindow facade over kernel collaborators."""
+"""Main window package: ``ChemistryWorkspaceWindow`` is a QMainWindow facade over kernel collaborators."""
 
-from .chemical_table_app import ChemicalTableApp
+from .chemistry_workspace_window import ChemistryWorkspaceWindow
 
-__all__ = ["ChemicalTableApp"]
+__all__ = ["ChemistryWorkspaceWindow"]

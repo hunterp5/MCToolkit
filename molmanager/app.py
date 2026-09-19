@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 from .app_logging import configure_app_logging, install_crash_excepthook  # noqa: E402
 from .rdkit_env import configure_rdkit_for_desktop_app  # noqa: E402
-from .ui.main_window import ChemicalTableApp  # noqa: E402
+from .ui.main_window import ChemistryWorkspaceWindow  # noqa: E402
 from .ui.theme import bootstrap_application_gui  # noqa: E402
 
 
@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication(argv_qt)
     bootstrap_application_gui(app)
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.show()
     from .qt_webengine import schedule_qtwebengine_prewarm
 

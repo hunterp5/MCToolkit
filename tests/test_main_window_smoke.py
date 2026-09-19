@@ -20,10 +20,10 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
 
-def _seed_two_rows(w: ChemicalTableApp) -> None:
+def _seed_two_rows(w: ChemistryWorkspaceWindow) -> None:
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO", "MW": "46.07"})
@@ -34,7 +34,7 @@ def _seed_two_rows(w: ChemicalTableApp) -> None:
 
 
 def test_clear_all_resets_table_and_ingest_flags(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._selected_oids_override = frozenset({0})
     w._set_ingest_loading(True)
@@ -53,7 +53,7 @@ def test_exit_save_prompt_skipped_when_clean(qapp, monkeypatch):  # noqa: ARG001
     from PyQt5.QtGui import QCloseEvent
     from PyQt5.QtWidgets import QMessageBox
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w._suppress_exit_session_prompt = False
     assert not w._session_has_unsaved_changes()
 
@@ -74,7 +74,7 @@ def test_exit_save_prompt_shown_when_dirty(qapp, monkeypatch):  # noqa: ARG001
     from PyQt5.QtGui import QCloseEvent
     from PyQt5.QtWidgets import QMessageBox
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w._suppress_exit_session_prompt = False
     _seed_two_rows(w)
     w._mark_session_dirty()
@@ -97,7 +97,7 @@ def test_exit_save_prompt_shown_when_dirty(qapp, monkeypatch):  # noqa: ARG001
 def test_save_session_clears_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
     from PyQt5.QtWidgets import QFileDialog
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._mark_session_dirty()
     out = tmp_path / "t.cms"
@@ -111,7 +111,7 @@ def test_save_session_clears_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
 
 
 def test_file_session_submenu_lists_session_actions(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
     file_menu = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "File")
     file_labels = [a.text().replace("&", "") for a in file_menu.actions() if a.text().strip()]
@@ -136,7 +136,7 @@ def test_save_selected_to_session_writes_subset_without_clearing_dirty(qapp, mon
 
     from molmanager.session_codec import expand_session_document, loads_session_bytes
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._selected_oids_override = frozenset({1})
     w._mark_session_dirty()
@@ -155,7 +155,7 @@ def test_save_selected_to_session_writes_subset_without_clearing_dirty(qapp, mon
 def test_save_selected_to_session_requires_selection(qapp, monkeypatch):  # noqa: ARG001
     from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     seen: dict[str, str] = {}
 
@@ -176,11 +176,11 @@ def test_save_selected_to_session_requires_selection(qapp, monkeypatch):  # noqa
 
 def test_session_load_uses_loading_page_then_reveals(qapp, monkeypatch):  # noqa: ARG001
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         lambda self: False,
     )
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     doc = {
         "format": "molmanager_session",
         "version": w._SESSION_VERSION,
@@ -224,11 +224,11 @@ def test_session_load_reveals_before_auto_render_finishes(qapp, monkeypatch):  #
         return True
 
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         fake_render,
     )
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     doc = {
         "format": "molmanager_session",
         "version": w._SESSION_VERSION,
@@ -246,7 +246,7 @@ def test_session_load_reveals_before_auto_render_finishes(qapp, monkeypatch):  #
 
 
 def test_session_overlay_keeps_plot_restore_over_render2d_progress(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w._set_ingest_loading(True)
     w._set_workspace_stack_index(0)
     w._session_awaiting_ready = True
@@ -270,11 +270,11 @@ def test_file_ingest_reveals_before_auto_render_finishes(qapp, monkeypatch):  # 
         return True
 
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         fake_render,
     )
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._set_ingest_loading(True)
     w._ingest_prep_before_reveal = True
@@ -298,11 +298,11 @@ def test_file_ingest_reveals_immediately_when_auto_render_skipped(qapp, monkeypa
         return False
 
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         fake_render,
     )
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._set_ingest_loading(True)
     w._ingest_prep_before_reveal = True
@@ -324,11 +324,11 @@ def test_file_ingest_reveals_during_large_auto_render(qapp, monkeypatch):  # noq
         return True
 
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         fake_render,
     )
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._set_ingest_loading(True)
     w._ingest_prep_before_reveal = True
@@ -344,7 +344,7 @@ def test_file_ingest_reveals_during_large_auto_render(qapp, monkeypatch):  # noq
 def test_file_ingest_progress_updates_loading_overlay(qapp, monkeypatch):  # noqa: ARG001
     monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
     monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._set_ingest_loading(True)
     w._set_workspace_stack_index(0)
@@ -360,7 +360,7 @@ def test_file_ingest_progress_updates_loading_overlay(qapp, monkeypatch):  # noq
 
 
 def test_search_open_does_not_inset_filter_cards(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.f_panel.setVisible(True)
     w._search_panel.setVisible(True)
     w._search_panel.resize(400, 64)
@@ -372,7 +372,7 @@ def test_search_open_does_not_inset_filter_cards(qapp):  # noqa: ARG001
 
 
 def test_select_table_oids_updates_selection_set(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
 
     n = w.select_table_oids({1})
@@ -384,7 +384,7 @@ def test_select_table_oids_updates_selection_set(qapp):  # noqa: ARG001
 
 
 def test_selected_oids_override_preferred(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w.select_table_oids({0})
     qapp.processEvents()
@@ -397,7 +397,7 @@ def test_column_header_click_keeps_table_scroll(qapp):  # noqa: ARG001
     from PyQt5.QtCore import QPoint, Qt
     from PyQt5.QtTest import QTest
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     for i in range(80):
@@ -434,7 +434,7 @@ def test_column_header_click_keeps_table_scroll(qapp):  # noqa: ARG001
 def test_delete_selection_kind_rows_columns_cells(qapp):  # noqa: ARG001
     from PyQt5.QtCore import QItemSelectionModel
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     assert w._delete_selection_kind() == "empty"
 
@@ -466,7 +466,7 @@ def test_delete_selection_clears_cells_after_confirm(qapp, monkeypatch):  # noqa
     from PyQt5.QtWidgets import QMessageBox
 
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     sm = w.table.selectionModel()
     view = w.table.model()
@@ -480,7 +480,7 @@ def test_delete_selection_deletes_column_after_confirm(qapp, monkeypatch):  # no
     from PyQt5.QtWidgets import QMessageBox
 
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._select_columns([3])
     w.edit_delete_selection()
@@ -492,7 +492,7 @@ def test_delete_selection_both_can_choose_columns(qapp, monkeypatch):  # noqa: A
     from PyQt5.QtWidgets import QMessageBox
 
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._selected_oids_override = frozenset({0})
     w._select_columns([3])
@@ -506,7 +506,7 @@ def test_delete_selection_both_can_choose_rows(qapp, monkeypatch):  # noqa: ARG0
     from PyQt5.QtWidgets import QMessageBox
 
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._selected_oids_override = frozenset({0})
     w._select_columns([3])
@@ -518,7 +518,7 @@ def test_delete_selection_both_can_choose_rows(qapp, monkeypatch):  # noqa: ARG0
 
 
 def test_chemistry_tool_structure_sources_smoke(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
 
     sources = w.chemistry_tool_structure_sources()
@@ -529,7 +529,7 @@ def test_chemistry_tool_structure_sources_smoke(qapp):  # noqa: ARG001
 
 
 def test_structure_header_menu_offers_duplicate_not_rename(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     menu = w._create_header_context_menu(1)
     assert menu is not None
@@ -547,7 +547,7 @@ def test_structure_header_menu_offers_duplicate_not_rename(qapp):  # noqa: ARG00
 def test_header_select_all_uses_visible_rows_only(qapp):  # noqa: ARG001
     from molmanager.ui.widgets import FilterCard
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w.calculate_global_bounds()
     card = FilterCard(list(w.global_bounds.keys()), w, initial_property="MW")
@@ -565,7 +565,7 @@ def test_header_select_all_uses_visible_rows_only(qapp):  # noqa: ARG001
 def test_plot_clear_selection_drops_header_select_highlight(qapp):  # noqa: ARG001
     from molmanager.ui.plot_table_sync import clear_table_selection_from_plot
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._select_first_occurrence_per_distinct_structure()
     qapp.processEvents()
@@ -590,7 +590,7 @@ def test_duplicate_structure_column_is_chemistry_source(qapp):  # noqa: ARG001
     from molmanager.ui.compound_table_model import CompoundTableModel
     from molmanager.ui.main_window.table_undo_commands import UndoDuplicateColumnCommand
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     struct_w = structure_column_minimum_width() + 40
     w.table.setColumnWidth(CompoundTableModel.STRUCTURE_COL, struct_w)
@@ -611,7 +611,7 @@ def test_duplicate_structure_column_is_chemistry_source(qapp):  # noqa: ARG001
 def test_new_window_and_file_load_use_table_only_layout(qapp):  # noqa: ARG001
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_ONLY, LAYOUT_TABLE_STACK
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     assert w._workspace_layout.layout_id == LAYOUT_TABLE_ONLY
     w.apply_workspace_layout(LAYOUT_TABLE_STACK)
     assert w._workspace_layout.layout_id == LAYOUT_TABLE_STACK
@@ -622,7 +622,7 @@ def test_new_window_and_file_load_use_table_only_layout(qapp):  # noqa: ARG001
 def test_docking_from_table_only_uses_split_view(qapp):  # noqa: ARG001
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_ONLY, LAYOUT_TABLE_SINGLE
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     assert w._workspace_layout.layout_id == LAYOUT_TABLE_ONLY
     pane = w._target_plot_pane()
     assert pane is not None
@@ -636,7 +636,7 @@ def test_close_docked_plot_closes_without_prompt(qapp, monkeypatch):  # noqa: AR
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.apply_workspace_layout(LAYOUT_TABLE_SINGLE)
     pane = w._workspace_layout.plot_panes()[0]
     plot = QLabel("plot")
@@ -659,7 +659,7 @@ def test_close_plot_pane_prompts_when_occupied(qapp, monkeypatch):  # noqa: ARG0
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.apply_workspace_layout(LAYOUT_TABLE_SINGLE)
     pane = w._workspace_layout.plot_panes()[0]
     w._workspace_layout.dock_into_pane(pane, QLabel("plot"))
@@ -686,7 +686,7 @@ def test_close_empty_plot_pane_skips_prompt(qapp, monkeypatch):  # noqa: ARG001
 
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.apply_workspace_layout(LAYOUT_TABLE_SIDE)
     pane = w._workspace_layout.plot_panes()[1]
     assert pane.is_empty()
@@ -708,7 +708,7 @@ def test_close_empty_plot_pane_skips_prompt(qapp, monkeypatch):  # noqa: ARG001
 
 
 def test_clear_all_re_enables_menubar_after_ingest(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     mb = w.menuBar()
     file_menu = next(a.menu() for a in mb.actions() if a.menu() is not None)
@@ -725,7 +725,7 @@ def test_status_memory_tracker_starts_before_window_shown(qapp, monkeypatch):  #
     """Polling must start during __init__; isVisible() is False until show()."""
     monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
     monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     assert not w.isVisible()
     assert not w._status_host.isHidden()
     assert w._memory_status_timer.isActive()
@@ -737,7 +737,7 @@ def test_status_and_memory_labels_use_smaller_font(qapp, monkeypatch):  # noqa: 
 
     monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
     monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     app_pt = int(w._app_font_pt or default_app_font_pt())
     expected = status_bar_font_pt(app_pt)
     assert w.status_label.font().pointSize() == expected
@@ -751,7 +751,7 @@ def test_status_and_memory_labels_use_smaller_font(qapp, monkeypatch):  # noqa: 
 def test_status_memory_tracker_stops_when_status_bar_hidden(qapp, monkeypatch):  # noqa: ARG001
     monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
     monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w._apply_status_bar_visible(False, persist=False)
     assert w._status_host.isHidden()
     assert not w._memory_status_timer.isActive()
@@ -761,7 +761,7 @@ def test_status_memory_tracker_stops_when_status_bar_hidden(qapp, monkeypatch): 
 
 
 def test_pka_prediction_writes_pi_only_when_requested(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._on_pka_prediction_finished([(0, "4.76", "N/A")], False)
     assert "pKa" in w.headers
@@ -773,7 +773,7 @@ def test_pka_prediction_writes_pi_only_when_requested(qapp):  # noqa: ARG001
 
 
 def test_tools_menu_nests_superpose_under_conformations(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
     tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
     labels = [a.text().replace("&", "") for a in tools.actions()]
@@ -793,7 +793,7 @@ def test_tools_menu_nests_superpose_under_conformations(qapp):  # noqa: ARG001
 
 
 def test_prepare_structures_nests_explicit_hydrogens(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
     tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
     prepare = next(
@@ -820,7 +820,7 @@ def test_prepare_structures_nests_explicit_hydrogens(qapp):  # noqa: ARG001
 
 
 def test_tools_menu_nests_reaction_tools(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
     tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
     labels = [a.text().replace("&", "") for a in tools.actions()]
@@ -842,7 +842,7 @@ def test_tools_menu_nests_reaction_tools(qapp):  # noqa: ARG001
 
 
 def test_data_menu_nests_analyze_and_split_under_table(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
     data = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Data")
     labels = [a.text().replace("&", "") for a in data.actions()]
@@ -858,7 +858,7 @@ def test_data_menu_nests_analyze_and_split_under_table(qapp):  # noqa: ARG001
 
 
 def test_add_blank_row_and_column_on_empty_table(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.add_blank_table_row(3)
     assert w.headers[:2] == ["ID_HIDDEN", "Structure"]
     assert w._table_model.rowCount() == 3
@@ -876,7 +876,7 @@ def test_add_blank_row_and_column_on_empty_table(qapp):  # noqa: ARG001
 
 
 def test_data_menu_nests_medchem_with_dimensionality_reduction(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
     tools = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Tools")
     tools_labels = [a.text().replace("&", "") for a in tools.actions()]

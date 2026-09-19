@@ -263,10 +263,10 @@ def test_application_theme_updates_table_header_palette(qapp, tmp_path, monkeypa
     from PyQt5.QtGui import QPalette
     from PyQt5.QtWidgets import QApplication
 
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.theme import apply_application_theme
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     apply_application_theme(QApplication.instance(), THEME_LIGHT)
     light = QApplication.instance().palette().color(QPalette.Button)
     apply_application_theme(QApplication.instance(), THEME_DARK)
@@ -283,9 +283,9 @@ def test_application_theme_updates_table_header_palette(qapp, tmp_path, monkeypa
 
 def test_table_font_resizes_main_window_headers(qapp, tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w._set_table_font_pt(8, persist=False)
     h_small = int(w.table.horizontalHeader().height())
     w_small = int(w.table.verticalHeader().width())
@@ -320,10 +320,10 @@ def test_apply_application_theme_preserves_app_font_pt(qapp, tmp_path, monkeypat
 
 def test_gui_theme_switch_does_not_resize_fonts(qapp, tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.theme import apply_application_font_pt
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w._set_app_font_pt(14, persist=False)
     w._set_table_font_pt(14, persist=False)
     header_h = int(w.table.horizontalHeader().height())

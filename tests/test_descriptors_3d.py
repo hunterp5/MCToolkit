@@ -191,9 +191,9 @@ def test_all_3d_keys_have_dialog_items_and_fns():
 
 def test_packed_confs_from_ingest_structure_column(qapp):  # noqa: ARG001
     from molmanager.storage import ensemble_mol_for
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w.table.setColumnHidden(0, True)

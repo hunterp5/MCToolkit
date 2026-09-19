@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.plot_hover import (
     hover_card_payload,
     hover_cards_payload,
@@ -42,7 +42,7 @@ def test_resolve_default_hover_columns():
 
 
 def test_hover_lines_and_structure_png(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Name", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO", "Name": "ethanol", "MW": "46.07"})
@@ -68,7 +68,7 @@ def test_hover_lines_and_structure_png(qapp):  # noqa: ARG001
 
 
 def test_hover_cards_payload_multi(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Name"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO", "Name": "ethanol"})

@@ -20,12 +20,12 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.property_columns_panel import PropertyColumnsPanel
 
 
 def test_property_columns_panel_defaults_and_oid_values(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Name", "MW", "TPSA", "cLogP"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(
@@ -125,7 +125,7 @@ def test_3d_viewer_property_timer_survives_widget_delete(qapp) -> None:
     from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget, prepare_mol_3d
     from molmanager.ui.qt_widget_utils import qobject_is_deleted
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO"})

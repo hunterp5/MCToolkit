@@ -34,7 +34,7 @@ from molmanager.column_split import (
     split_column_values,
     unescape_custom_delimiter,
 )
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.strings import TOOL_SPLIT_COLUMN
 
 
@@ -76,7 +76,7 @@ def test_output_names_and_padding() -> None:
 
 
 def test_split_column_writes_new_headers(qapp) -> None:  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Tags"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO", "Tags": "acid, base"})
@@ -123,7 +123,7 @@ def test_apply_keep_mode_largest_smallest() -> None:
 
 
 def test_split_column_writes_largest_value(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Scores"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO", "Scores": "1.2, 8.5, 3"})

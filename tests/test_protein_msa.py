@@ -134,9 +134,9 @@ def test_resolve_bundled_mafft_nested_folder(tmp_path, monkeypatch):
 
 def test_protein_menu_has_viewer_and_sequence(qapp):  # noqa: ARG001
     from molmanager.ui.dialogs.protein_sequence_msa import ProteinSequenceMsaDialog
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     protein_menu = next(
         a.menu() for a in w.menuBar().actions() if a.text().replace("&", "") == "Protein"
     )

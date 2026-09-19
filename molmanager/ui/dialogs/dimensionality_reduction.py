@@ -34,7 +34,7 @@ from ..qt_widget_utils import make_window_minimizable
 from .dimred_panel import DimensionReductionPanel
 
 if TYPE_CHECKING:
-    from ..main_window import ChemicalTableApp
+    from ..main_window import ChemistryWorkspaceWindow
 
 
 class DimensionReductionDialog(QDialog):
@@ -42,7 +42,7 @@ class DimensionReductionDialog(QDialog):
 
     def __init__(
         self,
-        parent: ChemicalTableApp | None,
+        parent: ChemistryWorkspaceWindow | None,
         *,
         panel: DimensionReductionPanel,
     ):
@@ -74,7 +74,7 @@ class DimensionReductionDialog(QDialog):
 class PCAPlotPanel(DimensionReductionPanel):
     """Principal component analysis on numeric table columns."""
 
-    def __init__(self, parent: ChemicalTableApp | None = None):
+    def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent, window_title="Principal Component Analysis", method="pca")
 
     def _build_method_options(self, form: QFormLayout) -> None:
@@ -100,7 +100,7 @@ class PCAPlotPanel(DimensionReductionPanel):
 class PCADialog(DimensionReductionDialog):
     def __init__(
         self,
-        parent: ChemicalTableApp | None = None,
+        parent: ChemistryWorkspaceWindow | None = None,
         *,
         panel: DimensionReductionPanel | None = None,
     ):
@@ -110,7 +110,7 @@ class PCADialog(DimensionReductionDialog):
 class TSNEPlotPanel(DimensionReductionPanel):
     """t-SNE embedding of numeric table columns."""
 
-    def __init__(self, parent: ChemicalTableApp | None = None):
+    def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent, window_title="t-SNE Visualization", method="tsne")
 
     def _build_method_options(self, form: QFormLayout) -> None:
@@ -175,7 +175,7 @@ class TSNEPlotPanel(DimensionReductionPanel):
 class TSNEVisualizationDialog(DimensionReductionDialog):
     def __init__(
         self,
-        parent: ChemicalTableApp | None = None,
+        parent: ChemistryWorkspaceWindow | None = None,
         *,
         panel: DimensionReductionPanel | None = None,
     ):
@@ -185,7 +185,7 @@ class TSNEVisualizationDialog(DimensionReductionDialog):
 class UMAPPlotPanel(DimensionReductionPanel):
     """UMAP embedding of numeric table columns or fingerprints."""
 
-    def __init__(self, parent: ChemicalTableApp | None = None):
+    def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent, window_title="UMAP Visualization", method="umap")
 
     def _build_method_options(self, form: QFormLayout) -> None:
@@ -247,7 +247,7 @@ class UMAPPlotPanel(DimensionReductionPanel):
 class UMAPVisualizationDialog(DimensionReductionDialog):
     def __init__(
         self,
-        parent: ChemicalTableApp | None = None,
+        parent: ChemistryWorkspaceWindow | None = None,
         *,
         panel: DimensionReductionPanel | None = None,
     ):
@@ -257,7 +257,7 @@ class UMAPVisualizationDialog(DimensionReductionDialog):
 class SOMPlotPanel(DimensionReductionPanel):
     """Kohonen self-organizing map of numeric columns and/or fingerprints."""
 
-    def __init__(self, parent: ChemicalTableApp | None = None):
+    def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent, window_title="Self-Organizing Map", method="som")
 
     def _build_method_options(self, form: QFormLayout) -> None:
@@ -360,7 +360,7 @@ class SOMPlotPanel(DimensionReductionPanel):
 class SOMVisualizationDialog(DimensionReductionDialog):
     def __init__(
         self,
-        parent: ChemicalTableApp | None = None,
+        parent: ChemistryWorkspaceWindow | None = None,
         *,
         panel: DimensionReductionPanel | None = None,
     ):
@@ -383,7 +383,7 @@ _DIMRED_PANELS = {
 
 
 def dimension_reduction_panel_from_session(
-    parent_app: ChemicalTableApp | None,
+    parent_app: ChemistryWorkspaceWindow | None,
     state: dict | None,
 ) -> DimensionReductionPanel:
     method = "pca"

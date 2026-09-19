@@ -25,7 +25,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
 _MINI_PDB = """\
 ATOM      1  N   MET A   1      27.340  24.430   2.614  1.00  0.00           N
@@ -41,7 +41,7 @@ END
 def _skip_session_auto_render(monkeypatch) -> None:
     """Session tests restore table chrome; skip the async 2D render that hangs teardown."""
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         lambda self: False,
     )
@@ -54,7 +54,7 @@ def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
         loads_session_bytes,
     )
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
@@ -92,7 +92,7 @@ def test_build_session_document_keeps_only_selected_oids(qapp):  # noqa: ARG001
         loads_session_bytes,
     )
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
@@ -115,7 +115,7 @@ def test_build_session_document_keeps_only_selected_oids(qapp):  # noqa: ARG001
 
 
 def test_apply_session_document_restores_row(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
@@ -124,7 +124,7 @@ def test_apply_session_document_restores_row(qapp):  # noqa: ARG001
 
     doc = w._build_session_document()
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
 
     assert w2.headers[:4] == ["ID_HIDDEN", "Structure", "SMILES", "Note"]
@@ -139,7 +139,7 @@ def test_session_roundtrip_restores_mol_from_binary_not_smiles(qapp):  # noqa: A
     from molmanager.utils import mol_to_canonical_smiles
 
     parent = Chem.MolFromSmiles("CCN")
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCN"})
@@ -152,14 +152,14 @@ def test_session_roundtrip_restores_mol_from_binary_not_smiles(qapp):  # noqa: A
     if isinstance(values, list) and values and isinstance(values[0], list):
         values[0][0] = "not-a-smiles"
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     assert 0 in w2.mols
     assert mol_to_canonical_smiles(w2.mols[0]) == mol_to_canonical_smiles(parent)
 
 
 def test_session_roundtrip_restores_saved_filter_bounds(qapp, monkeypatch):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO", "MW": "46.1"})
@@ -175,8 +175,8 @@ def test_session_roundtrip_restores_saved_filter_bounds(qapp, monkeypatch):  # n
     def boom(self, *args, **kwargs):
         raise AssertionError("session restore should use saved global_bounds")
 
-    monkeypatch.setattr(ChemicalTableApp, "calculate_global_bounds", boom)
-    w2 = ChemicalTableApp()
+    monkeypatch.setattr(ChemistryWorkspaceWindow, "calculate_global_bounds", boom)
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     assert "MW" in w2.global_bounds
     assert w2.global_bounds["MW"]["max"] == pytest.approx(float(w.global_bounds["MW"]["max"]))
@@ -225,7 +225,7 @@ def test_decode_session_mols_prefers_blob_over_smiles():
 
 
 def test_session_gui_chunk_covers_typical_library(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     assert w._session_gui_chunk_size() >= 4096
 
 
@@ -234,7 +234,7 @@ def test_session_plots_ready_without_waiting_for_webengine(qapp):  # noqa: ARG00
         _web_ready = False
         _pending_payload_json = "{}"
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w._iter_active_plot_hosts = lambda: [_Host()]
     assert w._session_plots_ready_for_reveal() is True
     assert w._session_plot_host_waiting_for_web(_Host()) is True
@@ -246,7 +246,7 @@ def test_session_roundtrip_keeps_structure_independent_of_protonated(qapp):  # n
 
     parent = Chem.MolFromSmiles("CCN")
     ionized = "CC[NH3+]"
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "Protonated"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"Protonated": ionized})
@@ -260,7 +260,7 @@ def test_session_roundtrip_keeps_structure_independent_of_protonated(qapp):  # n
     layout = doc.get("table_layout") or {}
     assert "Protonated" in (layout.get("pixmap_columns") or [])
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     assert 0 in w2.mols
     restored = mol_to_canonical_smiles(w2.mols[0])
@@ -277,7 +277,7 @@ def test_session_roundtrip_keeps_structure_independent_of_protonated(qapp):  # n
 
 
 def test_mol_for_structure_row_ignores_protonated_without_cached_mol(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "Protonated"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"Protonated": "CC[NH3+]"})
@@ -296,7 +296,7 @@ def test_legacy_session_without_structure_smiles_does_not_use_protonated(qapp): 
         "values": [["CC[NH3+]"]],
         "next_oid": 1,
     }
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w._apply_session_document(compact)
     assert w._table_model.rowCount() == 1
     assert 0 not in w.mols or w.mols.get(0) is None
@@ -311,7 +311,7 @@ def test_session_restore_render_tasks_keep_neutral_structure(qapp):  # noqa: ARG
     from molmanager.utils import mol_to_canonical_smiles
 
     parent = Chem.MolFromSmiles("CCN")
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "Protonated"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"Protonated": "CC[NH3+]"})
@@ -319,7 +319,7 @@ def test_session_restore_render_tasks_keep_neutral_structure(qapp):  # noqa: ARG
     w.next_oid = 1
     doc = w._build_session_document()
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     renders, _ = w2._build_render2d_tasks_in_table_order("Structure", 80, 80, None)
     assert renders
@@ -330,7 +330,7 @@ def test_session_restore_render_tasks_keep_neutral_structure(qapp):  # noqa: ARG
 
 def test_apply_legacy_v1_session_document(qapp):  # noqa: ARG001
     """Plain uncompressed version-1 documents still open."""
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     v1 = {
         "format": "molmanager_session",
         "version": 1,
@@ -346,7 +346,7 @@ def test_apply_legacy_v1_session_document(qapp):  # noqa: ARG001
 
 
 def test_session_document_roundtrip_restores_column_coloring(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "MW": "10"})
@@ -363,7 +363,7 @@ def test_session_document_roundtrip_restores_column_coloring(qapp):  # noqa: ARG
     )
     doc = w._build_session_document()
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     mwi = w2.headers.index("MW")
     c0 = w2._table_model.data(w2._table_model.index(0, mwi), Qt.BackgroundRole)
@@ -376,7 +376,7 @@ def test_session_document_roundtrip_restores_column_coloring(qapp):  # noqa: ARG
 
 
 def test_session_document_roundtrip_restores_logarithmic_columns(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "MW": "2"})
@@ -384,7 +384,7 @@ def test_session_document_roundtrip_restores_logarithmic_columns(qapp):  # noqa:
     doc = w._build_session_document()
     assert doc["logarithmic_columns"] == ["MW"]
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     assert "MW" in w2._logarithmic_columns
 
@@ -398,7 +398,7 @@ def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
     )
     from molmanager.ui.som_browser import SomBrowseRecord, records_from_table
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = [
         "ID_HIDDEN",
         "Structure",
@@ -439,7 +439,7 @@ def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
     assert doc["som_browse"][0]["smiles"] == "CCO"
     assert doc["som_browse"][0]["atoms"][0]["atom_id"] == 0
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     assert w2._table_model.is_pixmap_data_column(SOM_MAP_COLUMN)
     pm = w2._table_model.column_pixmap_copy(7, SOM_MAP_COLUMN)
@@ -467,7 +467,7 @@ def test_session_roundtrip_restores_mmp_ledger(qapp):  # noqa: ARG001
         sidechain_a="Cl[*:1]",
         sidechain_b="F[*:1]",
     )
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MMP_Partners"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(1, {"SMILES": "Clc1ccccc1", "MMP_Partners": "2"})
@@ -480,7 +480,7 @@ def test_session_roundtrip_restores_mmp_ledger(qapp):  # noqa: ARG001
     assert doc["mmp_ledger"]["activity_column"] == "IC50"
     assert doc["mmp_ledger"]["pairs"][0]["oid_a"] == 1
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     restored = list(getattr(w2, "_mmp_last_pairs", None) or [])
     assert len(restored) == 1
@@ -512,7 +512,7 @@ def test_session_roundtrip_restores_dock_results(qapp, monkeypatch) -> None:  # 
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO"})
@@ -543,7 +543,7 @@ def test_session_roundtrip_restores_dock_results(qapp, monkeypatch) -> None:  # 
     sidecar = doc.get("confs_sidecar") or {}
     assert any(str(k).endswith(":poses") for k in sidecar) or doc.get("__ensembles_sqlite__")
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     assert w2._live_pose_browser() is None
     assert w2._act_dock_viewer.isEnabled() is True
@@ -576,7 +576,7 @@ def test_session_roundtrip_restores_pose_browser_from_table_poses(qapp, monkeypa
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO"})
@@ -592,7 +592,7 @@ def test_session_roundtrip_restores_pose_browser_from_table_poses(qapp, monkeypa
     doc = w._build_session_document()
     assert "dock_results" not in doc
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     assert w2._act_dock_viewer.isEnabled() is True
     win = w2.open_dock_results_viewer()
@@ -607,7 +607,7 @@ def test_session_roundtrip_restores_pose_browser_from_table_poses(qapp, monkeypa
 def test_build_session_document_keeps_selected_dock_results(qapp):  # noqa: ARG001
     from molmanager.services.column_labels import COLUMN_PARENT_OID
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO"})
@@ -644,7 +644,7 @@ def test_session_roundtrip_restores_ionization_cache(qapp, monkeypatch) -> None:
             microstates=(PicklableIonizationMicrostate("CCO", 0, 0.0, mol.ToBinary()),),
             macro_pkas=(15.9,),
         )
-        w = ChemicalTableApp()
+        w = ChemistryWorkspaceWindow()
         w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
         w._table_model.set_headers(list(w.headers))
         w._table_model.append_row(0, {"SMILES": "CCO"})
@@ -657,7 +657,7 @@ def test_session_roundtrip_restores_ionization_cache(qapp, monkeypatch) -> None:
         wire = json.dumps(doc)
         doc2 = json.loads(wire)
 
-        w2 = ChemicalTableApp()
+        w2 = ChemistryWorkspaceWindow()
         w2._apply_session_document(doc2)
         hit, cached = mc.lookup(key)
         assert hit is True
@@ -677,7 +677,7 @@ def test_apply_session_document_auto_renders_like_file_ingest(qapp, monkeypatch)
     """Opening a session queues the same auto 2D render used after file ingest."""
     calls: list[int] = []
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO"})
@@ -685,7 +685,7 @@ def test_apply_session_document_auto_renders_like_file_ingest(qapp, monkeypatch)
     w.next_oid = 1
     doc = w._build_session_document()
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
 
     def fake_auto_render(self) -> bool:
         if self is w2:
@@ -693,7 +693,7 @@ def test_apply_session_document_auto_renders_like_file_ingest(qapp, monkeypatch)
         return False
 
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         fake_auto_render,
     )
@@ -705,11 +705,11 @@ def test_apply_session_document_auto_renders_like_file_ingest(qapp, monkeypatch)
 
 def test_session_roundtrip_restores_table_layout(qapp, monkeypatch) -> None:  # noqa: ARG001
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         lambda self: False,
     )
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
@@ -729,7 +729,7 @@ def test_session_roundtrip_restores_table_layout(qapp, monkeypatch) -> None:  # 
     assert "MW" in layout["hidden_columns"]
     assert "ID_HIDDEN" not in layout["hidden_columns"]
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2.resize(900, 400)
     w2.show()
     qapp.processEvents()
@@ -779,14 +779,14 @@ def test_session_roundtrip_restores_docked_plotter(qapp, monkeypatch) -> None:  
         restored.append(w)
         return w
 
-    monkeypatch.setattr(ChemicalTableApp, "_restore_docked_plot_widget", fake_restore)
+    monkeypatch.setattr(ChemistryWorkspaceWindow, "_restore_docked_plot_widget", fake_restore)
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         lambda self: False,
     )
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW", "LogP"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "MW": "30", "LogP": "1.2"})
@@ -804,7 +804,7 @@ def test_session_roundtrip_restores_docked_plotter(qapp, monkeypatch) -> None:  
     wire = json.dumps(doc)
     doc2 = json.loads(wire)
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc2)
     assert restored
     docked = list(w2.iter_docked_plot_widgets())
@@ -839,14 +839,14 @@ def test_session_roundtrip_keeps_side_by_side_layout(qapp, monkeypatch) -> None:
         restored.append(w)
         return w
 
-    monkeypatch.setattr(ChemicalTableApp, "_restore_docked_plot_widget", fake_restore)
+    monkeypatch.setattr(ChemistryWorkspaceWindow, "_restore_docked_plot_widget", fake_restore)
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         lambda self: False,
     )
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
@@ -868,13 +868,13 @@ def test_session_roundtrip_keeps_side_by_side_layout(qapp, monkeypatch) -> None:
         "ratios": doc["workspace_layout"]["ratios"],
     }
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2.apply_workspace_layout(LAYOUT_TABLE_STACK)  # wrong layout before open
     w2._apply_session_document(doc)
     assert w2._workspace_layout.layout_id == LAYOUT_TABLE_SIDE
     assert len(w2._workspace_layout.plot_panes()) == 2
 
-    w3 = ChemicalTableApp()
+    w3 = ChemistryWorkspaceWindow()
     w3.apply_workspace_layout(LAYOUT_TABLE_STACK)
     w3._apply_session_document(doc_fallback)
     assert w3._workspace_layout.layout_id == LAYOUT_TABLE_SIDE
@@ -896,9 +896,9 @@ def test_session_roundtrip_keeps_split_view_not_stacked(qapp, monkeypatch) -> No
     def fake_restore(self, spec):  # noqa: ARG001
         return FakePlot()
 
-    monkeypatch.setattr(ChemicalTableApp, "_restore_docked_plot_widget", fake_restore)
+    monkeypatch.setattr(ChemistryWorkspaceWindow, "_restore_docked_plot_widget", fake_restore)
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
@@ -912,7 +912,7 @@ def test_session_roundtrip_keeps_split_view_not_stacked(qapp, monkeypatch) -> No
     assert doc["table_layout"]["workspace"]["layout_id"] == LAYOUT_TABLE_SINGLE
     assert len(doc["docked_plots"]["panes"]) == 1
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2.apply_workspace_layout(LAYOUT_TABLE_STACK)
     assert w2._workspace_layout.layout_id == LAYOUT_TABLE_STACK
     w2._apply_session_document(doc)
@@ -921,7 +921,7 @@ def test_session_roundtrip_keeps_split_view_not_stacked(qapp, monkeypatch) -> No
 
     doc_embedded = json.loads(json.dumps(doc))
     doc_embedded.pop("workspace_layout", None)
-    w3 = ChemicalTableApp()
+    w3 = ChemistryWorkspaceWindow()
     w3.apply_workspace_layout(LAYOUT_TABLE_STACK)
     w3._apply_session_document(doc_embedded)
     assert w3._workspace_layout.layout_id == LAYOUT_TABLE_SINGLE
@@ -941,12 +941,12 @@ def test_session_save_after_closing_stacked_pane_is_split_view(qapp, monkeypatch
             return None
 
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_restore_docked_plot_widget",
         lambda self, spec: FakePlot(),
     )
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
@@ -962,7 +962,7 @@ def test_session_save_after_closing_stacked_pane_is_split_view(qapp, monkeypatch
     assert doc["table_layout"]["workspace"]["layout_id"] == LAYOUT_TABLE_SINGLE
     assert doc["docked_plots"]["layout_id"] == LAYOUT_TABLE_SINGLE
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2.apply_workspace_layout(LAYOUT_TABLE_STACK)
     w2._apply_session_document(doc)
     assert w2._workspace_layout.layout_id == LAYOUT_TABLE_SINGLE
@@ -973,11 +973,11 @@ def test_session_roundtrip_restores_workspace_splitter(qapp, monkeypatch) -> Non
     from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         lambda self: False,
     )
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
@@ -1003,7 +1003,7 @@ def test_session_roundtrip_restores_workspace_splitter(qapp, monkeypatch) -> Non
     want_table = saved_sizes[0] / saved_total
     want_plot = saved_sizes[1] / saved_total
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2.resize(1000, 600)
     w2.show()
     qapp.processEvents()
@@ -1033,17 +1033,17 @@ def test_session_open_clears_previous_docked_plots(qapp, monkeypatch) -> None:  
             return None
 
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_restore_docked_plot_widget",
         lambda self, spec: FakePlot(),  # noqa: ARG005
     )
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         lambda self: False,
     )
 
-    leftover_host = ChemicalTableApp()
+    leftover_host = ChemistryWorkspaceWindow()
     leftover_host.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     leftover_host._table_model.set_headers(list(leftover_host.headers))
     leftover_host._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
@@ -1055,7 +1055,7 @@ def test_session_open_clears_previous_docked_plots(qapp, monkeypatch) -> None:  
     )
     assert list(leftover_host.iter_docked_plot_widgets())
 
-    source = ChemicalTableApp()
+    source = ChemistryWorkspaceWindow()
     source.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     source._table_model.set_headers(list(source.headers))
     source._table_model.append_row(0, {"SMILES": "CCO"})
@@ -1097,14 +1097,14 @@ def test_session_roundtrip_preserves_pane_title_and_active_page(qapp, monkeypatc
         restored.append(w)
         return w
 
-    monkeypatch.setattr(ChemicalTableApp, "_restore_docked_plot_widget", fake_restore)
+    monkeypatch.setattr(ChemistryWorkspaceWindow, "_restore_docked_plot_widget", fake_restore)
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         lambda self: False,
     )
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
@@ -1124,7 +1124,7 @@ def test_session_roundtrip_preserves_pane_title_and_active_page(qapp, monkeypatc
     assert pane_spec["plots"][0]["display_title"] == "Custom pane"
     assert len(pane_spec["plots"]) == 2
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     panes = w2._workspace_layout.plot_panes()
     assert panes[0].page_index() == 1
@@ -1167,14 +1167,14 @@ def test_session_roundtrip_restores_floating_plots(qapp, monkeypatch) -> None:  
         restored.append(w)
         return w
 
-    monkeypatch.setattr(ChemicalTableApp, "_restore_docked_plot_widget", fake_restore)
+    monkeypatch.setattr(ChemistryWorkspaceWindow, "_restore_docked_plot_widget", fake_restore)
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         lambda self: False,
     )
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "MW": "30"})
@@ -1190,7 +1190,7 @@ def test_session_roundtrip_restores_floating_plots(qapp, monkeypatch) -> None:  
     assert len(doc["floating_plots"]) == 1
     assert doc["floating_plots"][0]["display_title"] == "Floating A"
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2.apply_workspace_layout(LAYOUT_TABLE_STACK)
     w2._apply_session_document(doc)
     assert w2._workspace_layout.layout_id == LAYOUT_TABLE_SIDE
@@ -1233,12 +1233,12 @@ def test_session_restore_dispatches_analysis_plot_kind(qapp, monkeypatch) -> Non
         sali_map.SaliMapPanel, "from_session_state", classmethod(fake_sali_from_session)
     )
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         lambda self: False,
     )
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "pIC50"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "pIC50": "7"})
@@ -1249,7 +1249,7 @@ def test_session_restore_dispatches_analysis_plot_kind(qapp, monkeypatch) -> Non
     doc = w._build_session_document()
     assert doc["docked_plots"]["panes"][0]["plots"][0]["kind"] == "sali_map"
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     assert created
     assert created[0].get("activity_column") == "pIC50"
@@ -1257,7 +1257,7 @@ def test_session_restore_dispatches_analysis_plot_kind(qapp, monkeypatch) -> Non
 
 
 def test_session_omits_idle_table_search(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
@@ -1271,7 +1271,7 @@ def test_session_omits_idle_table_search(qapp):  # noqa: ARG001
 def test_session_document_roundtrip_table_search(qapp):  # noqa: ARG001
     from molmanager.session_codec import expand_session_document
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane"})
@@ -1309,7 +1309,7 @@ def test_session_document_roundtrip_table_search(qapp):  # noqa: ARG001
     assert criteria[1]["query"] == '"CC"'
     assert criteria[1]["glue"] == "or"
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     assert not w2._search_panel.isHidden()
     assert len(w2._search_criterion_rows) == 2
@@ -1331,7 +1331,7 @@ def test_session_roundtrip_restores_protein_viewer(qapp, tmp_path) -> None:  # n
     first.write_text(_MINI_PDB, encoding="utf-8")
     second.write_text(_MINI_PDB.replace("MET", "SER").replace("M  ", "S  "), encoding="utf-8")
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     dlg = w.open_protein_viewer()
@@ -1346,7 +1346,7 @@ def test_session_roundtrip_restores_protein_viewer(qapp, tmp_path) -> None:  # n
     assert isinstance(pv, dict)
     assert [s["name"] for s in pv["structures"]] == ["first.pdb", "second.pdb"]
 
-    w2 = ChemicalTableApp()
+    w2 = ChemistryWorkspaceWindow()
     w2._apply_session_document(doc)
     assert w2._protein_viewer_dialog is None
     assert [s["name"] for s in w2._collect_protein_viewer()["structures"]] == [

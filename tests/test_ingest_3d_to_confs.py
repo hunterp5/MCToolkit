@@ -27,7 +27,7 @@ from molmanager.confs_codec import (
     rehydrate_v1_confs_cell,
     resolve_blocks_b64_for_viewer,
 )
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.mol_viewer_3d import prepare_mol_2d
 
 
@@ -50,7 +50,7 @@ def test_mol_has_3d_coordinates_detects_z():
 
 
 def test_ingest_store_mol_demotes_3d_to_confs(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w.table.setColumnHidden(0, True)

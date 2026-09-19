@@ -45,7 +45,7 @@ from .plot_table_sync import (
 from .plotly_html import figure_payload_json
 
 if TYPE_CHECKING:
-    from .main_window import ChemicalTableApp
+    from .main_window import ChemistryWorkspaceWindow
 
 
 class _PlotBridge(QObject):
@@ -79,7 +79,7 @@ class _PlotBridge(QObject):
 class PlotlyInteractiveView(QWidget):
     """Plotly scatter with lasso/click selection synced to the compound table."""
 
-    def __init__(self, parent_app: ChemicalTableApp | None = None, parent: QWidget | None = None) -> None:
+    def __init__(self, parent_app: ChemistryWorkspaceWindow | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.parent_app = parent_app
         self._plot_shell_path = Path(tempfile.gettempdir()) / f"MOLMANAGER_plot_shell_{id(self)}.html"

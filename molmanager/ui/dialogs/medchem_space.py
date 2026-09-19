@@ -63,7 +63,7 @@ from ..result_plot_panel import DockableResultPlotPanel
 from .scope import selection_scope_checked
 
 if TYPE_CHECKING:
-    from ..main_window import ChemicalTableApp
+    from ..main_window import ChemistryWorkspaceWindow
 
 try:
     from PyQt5.QtWebEngineWidgets import QWebEngineView  # noqa: F401
@@ -84,7 +84,7 @@ class MedChemPlotPanel(DockableResultPlotPanel):
 
     def __init__(
         self,
-        parent_app: ChemicalTableApp | None,
+        parent_app: ChemistryWorkspaceWindow | None,
         *,
         plot_kind: MedChemPlotKind,
         window_title: str,
@@ -259,7 +259,7 @@ class MedChemPlotPanel(DockableResultPlotPanel):
     def from_session_state(cls, parent_app, state: dict | None) -> "MedChemPlotPanel":
         return medchem_plot_panel_from_session(parent_app, state)
 
-    def create_floating_dialog(self, parent_app: ChemicalTableApp) -> MedChemSpaceDialog:
+    def create_floating_dialog(self, parent_app: ChemistryWorkspaceWindow) -> MedChemSpaceDialog:
         """Re-open this panel in a floating window after undocking from the main table."""
         return MedChemSpaceDialog(
             parent_app,
@@ -918,7 +918,7 @@ class MedChemPlotPanel(DockableResultPlotPanel):
 
 
 def medchem_plot_panel_from_session(
-    parent_app: ChemicalTableApp | None,
+    parent_app: ChemistryWorkspaceWindow | None,
     state: dict | None,
 ) -> MedChemPlotPanel:
     plot_kind: MedChemPlotKind = "boiled_egg"
@@ -945,7 +945,7 @@ class MedChemSpaceDialog(QDialog):
 
     def __init__(
         self,
-        parent: ChemicalTableApp | None,
+        parent: ChemistryWorkspaceWindow | None,
         *,
         plot_kind: MedChemPlotKind,
         window_title: str,

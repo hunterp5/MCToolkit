@@ -30,7 +30,7 @@ from molmanager.column_join import (
     resolve_join_delimiter,
     unescape_join_delimiter,
 )
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.strings import TOOL_JOIN_COLUMNS
 
 
@@ -65,7 +65,7 @@ def test_default_join_output_name() -> None:
 
 
 def test_join_columns_writes_new_header(qapp) -> None:  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "First", "Last"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO", "First": "acid", "Last": "base"})

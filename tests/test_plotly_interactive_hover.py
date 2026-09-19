@@ -22,12 +22,12 @@ import json
 
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.plotly_interactive_view import PlotlyInteractiveView
 
 
 def test_interactive_view_hover_card_json(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Name", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO", "Name": "ethanol", "MW": "46.07"})

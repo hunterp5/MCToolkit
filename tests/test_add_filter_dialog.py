@@ -22,11 +22,11 @@ from PyQt5.QtWidgets import QDialog
 from rdkit import Chem
 
 from molmanager.ui.dialogs.add_filter import FILTER_TYPE_CHOICES, AddFilterDialog
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.widgets import SubstructureFilterCard
 
 
-def _src_row_visible(w: ChemicalTableApp, source_row: int) -> bool:
+def _src_row_visible(w: ChemistryWorkspaceWindow, source_row: int) -> bool:
     return w._is_source_row_visible(source_row)
 
 
@@ -55,7 +55,7 @@ def test_substructure_card_structure_source_roundtrip(qapp):  # noqa: ARG001
 
 
 def test_substructure_filter_uses_selected_structure_source(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "AltSMILES"]
     w._table_model.set_headers(list(w.headers))
     # Structure mols are ethane; AltSMILES holds benzene for row 0.

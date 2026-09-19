@@ -93,9 +93,9 @@ def test_schedule_sqlite_rebuild_writes_off_gui(qapp, tmp_path):  # noqa: ARG001
 
     from PyQt5.QtWidgets import QApplication
 
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_rows_batch(

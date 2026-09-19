@@ -20,11 +20,11 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
 
 
-def _setup_two_row_mw_table(w: ChemicalTableApp) -> FilterCard:
+def _setup_two_row_mw_table(w: ChemistryWorkspaceWindow) -> FilterCard:
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "C", "MW": "10"})
@@ -39,13 +39,13 @@ def _setup_two_row_mw_table(w: ChemicalTableApp) -> FilterCard:
     return card
 
 
-def _src_row_visible(w: ChemicalTableApp, source_row: int) -> bool:
+def _src_row_visible(w: ChemistryWorkspaceWindow, source_row: int) -> bool:
     """Proxy-aware visibility check for tests."""
     return w._is_source_row_visible(source_row)
 
 
 def test_numeric_range_filter_hides_row_outside_bounds(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _setup_two_row_mw_table(w)
     w._apply_filters_impl_sync(None)
     assert _src_row_visible(w, 0) is True
@@ -53,7 +53,7 @@ def test_numeric_range_filter_hides_row_outside_bounds(qapp):  # noqa: ARG001
 
 
 def test_text_filter_partial_substring(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Note": "ethane lot"})
@@ -73,7 +73,7 @@ def test_text_filter_partial_substring(qapp):  # noqa: ARG001
 
 
 def test_text_filter_enable_btn_highlighted_when_on(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w.calculate_global_bounds()
@@ -83,7 +83,7 @@ def test_text_filter_enable_btn_highlighted_when_on(qapp):  # noqa: ARG001
 
 
 def test_category_filter_enable_btn_highlighted_when_on(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Phase"]
     w._table_model.set_headers(list(w.headers))
     w.calculate_global_bounds()
@@ -93,7 +93,7 @@ def test_category_filter_enable_btn_highlighted_when_on(qapp):  # noqa: ARG001
 
 
 def test_category_filter_defaults_to_all_selected(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Phase"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Phase": "prep"})
@@ -112,7 +112,7 @@ def test_category_filter_defaults_to_all_selected(qapp):  # noqa: ARG001
 
 
 def test_category_filter_all_button_selects_every_value(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Phase"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Phase": "prep"})
@@ -131,7 +131,7 @@ def test_category_filter_all_button_selects_every_value(qapp):  # noqa: ARG001
 
 
 def test_category_filter_only_checked_values_visible(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Phase"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC", "Phase": "prep"})
@@ -149,7 +149,7 @@ def test_category_filter_only_checked_values_visible(qapp):  # noqa: ARG001
 
 
 def test_substructure_sync_benzene_smarts_hides_non_aromatic(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "c1ccccc1"})
@@ -167,7 +167,7 @@ def test_substructure_sync_benzene_smarts_hides_non_aromatic(qapp):  # noqa: ARG
 
 
 def test_substructure_invalid_smarts_sets_status(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CC"})
@@ -183,7 +183,7 @@ def test_substructure_invalid_smarts_sets_status(qapp):  # noqa: ARG001
 
 def test_async_sqlite_filter_apply_hides_rows(qapp, monkeypatch, tmp_path):  # noqa: ARG001
     monkeypatch.setenv("MOLMANAGER_FILTER_ASYNC_MIN_ROWS", "2")
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     for i, mw in enumerate(("10", "50", "30")):
@@ -206,7 +206,7 @@ def test_async_sqlite_filter_apply_hides_rows(qapp, monkeypatch, tmp_path):  # n
 
 def test_substructure_async_handoff_hides_rows(qapp, monkeypatch):  # noqa: ARG001
     monkeypatch.setenv("MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS", "64")
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     for i in range(70):
@@ -229,7 +229,7 @@ def test_substructure_async_handoff_hides_rows(qapp, monkeypatch):  # noqa: ARG0
 def test_substructure_async_without_smiles_column_uses_mols(qapp, monkeypatch):  # noqa: ARG001
     """Async path must match via in-memory mols when no SMILES column exists (e.g. SDF)."""
     monkeypatch.setenv("MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS", "64")
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "Name"]
     w._table_model.set_headers(list(w.headers))
     for i in range(70):
@@ -254,7 +254,7 @@ def test_substructure_async_without_smiles_column_uses_mols(qapp, monkeypatch): 
 def test_substructure_async_multi_card_handoff(qapp, monkeypatch):  # noqa: ARG001
     """Two SMARTS cards at async scale must finish off-thread without GUI match_mol."""
     monkeypatch.setenv("MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS", "64")
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     for i in range(70):
@@ -287,7 +287,7 @@ def test_reorder_filter_card_updates_list_and_layout(qapp):  # noqa: ARG001
 
     from molmanager.ui.filters.cards import FilterCardsHost, filter_card_drop_index
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w.calculate_global_bounds()
@@ -320,7 +320,7 @@ def test_reorder_filter_card_updates_list_and_layout(qapp):  # noqa: ARG001
 def test_filter_card_default_titles_and_rename(qapp):  # noqa: ARG001
     from molmanager.ui.filters.cards import next_default_filter_title
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w.calculate_global_bounds()

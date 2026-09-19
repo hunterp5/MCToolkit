@@ -27,7 +27,7 @@ from molmanager.confs_codec import (
     rehydrate_v1_confs_cell,
     resolve_blocks_b64_for_viewer,
 )
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
 
 def _two_conf_ethanol():
@@ -37,7 +37,7 @@ def _two_conf_ethanol():
 
 
 def test_export_conformer_viewer_to_table_writes_2d_structure_and_confs(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     mol = _two_conf_ethanol()
     blocks = conformer_mol_blocks_b64_json(mol)
     overlay = {

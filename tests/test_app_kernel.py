@@ -63,15 +63,15 @@ def test_install_window_forwards_delegates_to_collaborator() -> None:
     assert w.collab.n == 1
 
 
-def test_chemical_table_app_collaborators_and_mro(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa: ARG001
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.main_window.chemistry_mixin import ChemistryMixin
     from molmanager.ui.main_window.cluster_mixin import ClusterMixin
     from molmanager.ui.main_window.mpo_mixin import MpoMixin
     from molmanager.ui.main_window.qsar_mixin import QsarMixin
     from molmanager.ui.main_window.session_mixin import SessionMixin
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     assert w.progress is not None
     assert w.tool_scope is not None
     assert w.table_write is not None
@@ -113,9 +113,9 @@ def test_wrap_mixin_callable_drops_qt_triggered_bool() -> None:
 def test_qsar_menu_action_opens_with_triggered_bool(qapp) -> None:  # noqa: ARG001
     from rdkit import Chem
 
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO", "MW": "46.07"})

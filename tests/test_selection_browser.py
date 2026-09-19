@@ -21,11 +21,11 @@ from __future__ import annotations
 from PyQt5.QtWidgets import QSizePolicy
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.selection_browser import SelectionBrowserWidget
 
 
-def _seed_row(app: ChemicalTableApp) -> None:
+def _seed_row(app: ChemistryWorkspaceWindow) -> None:
     app.headers = ["ID_HIDDEN", "Structure", "SMILES", "Name", "MW"]
     app._table_model.set_headers(list(app.headers))
     app._table_model.append_row(0, {"SMILES": "CCO", "Name": "ethanol", "MW": "46.07"})
@@ -34,7 +34,7 @@ def _seed_row(app: ChemicalTableApp) -> None:
 
 
 def test_selection_browser_shows_current_row_table(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_row(w)
     panel = SelectionBrowserWidget(w)
     assert getattr(panel, "_prop_panel", None) is None
@@ -55,7 +55,7 @@ def test_selection_browser_shows_current_row_table(qapp):  # noqa: ARG001
 
 
 def test_selection_browser_row_table_follows_navigation(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_row(w)
     w._table_model.append_row(1, {"SMILES": "CCC", "Name": "propane", "MW": "44.10"})
     w.mols[1] = Chem.MolFromSmiles("CCC")
@@ -72,7 +72,7 @@ def test_selection_browser_row_table_follows_navigation(qapp):  # noqa: ARG001
 
 
 def test_selection_browser_row_table_keeps_size_while_navigating(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_row(w)
     w._table_model.append_row(
         1,
@@ -98,7 +98,7 @@ def test_selection_browser_row_table_keeps_size_while_navigating(qapp):  # noqa:
 
 
 def test_selection_browser_caption_in_header_bar(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_row(w)
     panel = SelectionBrowserWidget(w)
     panel._cb_only_selected.setChecked(False)

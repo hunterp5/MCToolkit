@@ -25,7 +25,7 @@ pytest.importorskip("PyQt5.QtWidgets")
 from PyQt5.QtCore import QItemSelectionModel
 from PyQt5.QtWidgets import QApplication
 
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.table_clipboard import format_tsv_grid, parse_tsv_grid, tsv_grid_is_block
 
 
@@ -43,7 +43,7 @@ def test_parse_tsv_grid_pads_ragged_rows() -> None:
     assert parse_tsv_grid("a\tb\nc") == [["a", "b"], ["c", ""]]
 
 
-def _seed_grid(w: ChemicalTableApp) -> None:
+def _seed_grid(w: ChemistryWorkspaceWindow) -> None:
     w.headers = ["ID_HIDDEN", "Structure", "A", "B", "C"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"A": "a1", "B": "b1", "C": ""})
@@ -52,7 +52,7 @@ def _seed_grid(w: ChemicalTableApp) -> None:
     w.next_oid = 3
 
 
-def _select_source_cells(w: ChemicalTableApp, cells: list[tuple[int, int]]) -> None:
+def _select_source_cells(w: ChemistryWorkspaceWindow, cells: list[tuple[int, int]]) -> None:
     sm = w.table.selectionModel()
     proxy = getattr(w, "_filter_proxy_model", None)
     use_proxy = proxy is not None and w.table.model() is proxy
@@ -69,7 +69,7 @@ def _select_source_cells(w: ChemicalTableApp, cells: list[tuple[int, int]]) -> N
 
 
 def test_copy_rectangular_block_to_clipboard(qapp) -> None:  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_grid(w)
     _select_source_cells(w, [(0, 2), (0, 3), (1, 2), (1, 3)])
     w.edit_copy()
@@ -77,7 +77,7 @@ def test_copy_rectangular_block_to_clipboard(qapp) -> None:  # noqa: ARG001
 
 
 def test_paste_block_from_top_left_into_empty_cells(qapp) -> None:  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_grid(w)
     QApplication.clipboard().setText("x\ty\nxx\tyy")
     w.edit_paste(origin=(2, 2), block_mode="multi", overwrite=True)
@@ -89,7 +89,7 @@ def test_paste_block_from_top_left_into_empty_cells(qapp) -> None:  # noqa: ARG0
 
 
 def test_paste_block_overwrite_can_be_cancelled(qapp) -> None:  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_grid(w)
     QApplication.clipboard().setText("z\tw")
     w.edit_paste(origin=(0, 2), block_mode="multi", overwrite=False)
@@ -99,7 +99,7 @@ def test_paste_block_overwrite_can_be_cancelled(qapp) -> None:  # noqa: ARG001
 
 
 def test_paste_block_overwrite_proceeds_when_confirmed(qapp) -> None:  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_grid(w)
     QApplication.clipboard().setText("z\tw")
     w.edit_paste(origin=(0, 2), block_mode="multi", overwrite=True)
@@ -108,7 +108,7 @@ def test_paste_block_overwrite_proceeds_when_confirmed(qapp) -> None:  # noqa: A
 
 
 def test_paste_block_single_cell_keeps_tsv(qapp) -> None:  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_grid(w)
     QApplication.clipboard().setText("x\ty\nxx\tyy")
     w.edit_paste(origin=(2, 2), block_mode="single")
@@ -117,7 +117,7 @@ def test_paste_block_single_cell_keeps_tsv(qapp) -> None:  # noqa: ARG001
 
 
 def test_paste_block_undo_restores_cells(qapp) -> None:  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_grid(w)
     QApplication.clipboard().setText("p\tq")
     w.edit_paste(origin=(2, 2), block_mode="multi", overwrite=True)
@@ -130,7 +130,7 @@ def test_paste_block_undo_restores_cells(qapp) -> None:  # noqa: ARG001
 def test_paste_block_skips_invalid_structure_cells(qapp) -> None:  # noqa: ARG001
     from rdkit import Chem
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _seed_grid(w)
     w.mols[0] = Chem.MolFromSmiles("CC")
     QApplication.clipboard().setText("not-a-mol\tnew")

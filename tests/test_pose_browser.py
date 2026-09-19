@@ -113,7 +113,7 @@ def test_add_dock_poses_keeps_crystal_in_manager(qapp, tmp_path):  # noqa: ARG00
 
 
 def test_prepare_viewer_adds_crystal_when_receptor_is_apo(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
     apo = tmp_path / "apo.pdb"
@@ -126,7 +126,7 @@ def test_prepare_viewer_adds_crystal_when_receptor_is_apo(qapp, tmp_path):  # no
         "HETATM    1  C1  LIG Z   1       4.000   0.000   0.000  1.00  0.00           C\nEND\n",
         encoding="utf-8",
     )
-    parent = ChemicalTableApp()
+    parent = ChemistryWorkspaceWindow()
     viewer = ProteinViewerDialog(parent)
     parent._protein_viewer_dialog = viewer
     parent._prepare_protein_viewer_for_poses(viewer, str(apo), crystal_path=str(xtal))
@@ -140,7 +140,7 @@ def test_prepare_viewer_adds_crystal_when_receptor_is_apo(qapp, tmp_path):  # no
 
 def test_pose_browser_overlays_open_protein_viewer(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.protein_embed import ProteinEmbedView
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
@@ -154,7 +154,7 @@ def test_pose_browser_overlays_open_protein_viewer(qapp, tmp_path, monkeypatch):
         "END\n",
         encoding="utf-8",
     )
-    parent = ChemicalTableApp()
+    parent = ChemistryWorkspaceWindow()
     viewer = ProteinViewerDialog(parent)
     parent._protein_viewer_dialog = viewer
     viewer.load_structure_path(rec)
@@ -214,7 +214,7 @@ def test_pose_browser_overlays_open_protein_viewer(qapp, tmp_path, monkeypatch):
 
 def test_closed_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.protein_embed import ProteinEmbedView
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
@@ -227,7 +227,7 @@ def test_closed_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp
         "END\n",
         encoding="utf-8",
     )
-    parent = ChemicalTableApp()
+    parent = ChemistryWorkspaceWindow()
     viewer = parent.open_protein_viewer()
     viewer.load_structure_path(rec)
     parent.open_dock_results_window(
@@ -264,7 +264,7 @@ def test_closed_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp
 
 def test_hidden_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.protein_embed import ProteinEmbedView
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
@@ -277,7 +277,7 @@ def test_hidden_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp
         "END\n",
         encoding="utf-8",
     )
-    parent = ChemicalTableApp()
+    parent = ChemistryWorkspaceWindow()
     viewer = parent.open_protein_viewer()
     viewer.load_structure_path(rec)
     parent.open_dock_results_window(
@@ -317,9 +317,9 @@ def test_hidden_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp
 def test_write_dock_poses_to_table_packs_parent_row(qapp):  # noqa: ARG001
     from molmanager.confs_codec import mol_from_packed_confs_cell, rehydrate_v1_confs_cell
     from molmanager.services.column_labels import COLUMN_PARENT_OID
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO"})
@@ -343,9 +343,9 @@ def test_write_dock_poses_to_table_packs_parent_row(qapp):  # noqa: ARG001
 
 def test_write_dock_poses_to_table_adds_row_for_file_ligand(qapp):  # noqa: ARG001
     from molmanager.confs_codec import mol_from_packed_confs_cell, rehydrate_v1_confs_cell
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w.next_oid = 0

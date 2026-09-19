@@ -151,7 +151,7 @@ class _FilterCardsScrollArea(QScrollArea):
             self._host.setMaximumWidth(max(1, vp.width()))
 
 
-class ChemicalTableApp(
+class ChemistryWorkspaceWindow(
     QMainWindow,
     AppLifecycleMixin,
     AppMenuMixin,
@@ -688,16 +688,16 @@ class ChemicalTableApp(
             self.on_cell_double_click(index.row(), index.column())
 
 
-install_window_forwards(ChemicalTableApp, "progress", (AppProgressMixin,))
-install_window_forwards(ChemicalTableApp, "tool_scope", (ToolDialogScopeMixin,))
-install_window_forwards(ChemicalTableApp, "table_write", (ColumnWriteMixin,))
+install_window_forwards(ChemistryWorkspaceWindow, "progress", (AppProgressMixin,))
+install_window_forwards(ChemistryWorkspaceWindow, "tool_scope", (ToolDialogScopeMixin,))
+install_window_forwards(ChemistryWorkspaceWindow, "table_write", (ColumnWriteMixin,))
 install_window_forwards(
-    ChemicalTableApp,
+    ChemistryWorkspaceWindow,
     "table_session",
     (TableSelectionMixin, TableChemistryAccessMixin),
 )
 install_window_forwards(
-    ChemicalTableApp,
+    ChemistryWorkspaceWindow,
     "build_pipeline",
     (
         IngestLoadMixin,
@@ -708,7 +708,7 @@ install_window_forwards(
     ),
 )
 install_window_forwards(
-    ChemicalTableApp,
+    ChemistryWorkspaceWindow,
     "session",
     (
         SessionSaveMixin,
@@ -718,10 +718,12 @@ install_window_forwards(
         SessionCsvMixin,
     ),
 )
-install_window_forwards(ChemicalTableApp, "workspace_tools.cluster", (ClusterMixin,))
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.cluster", (ClusterMixin,))
 install_window_forwards(
-    ChemicalTableApp, "workspace_tools.dimension_reduction", (DimensionReductionMixin,)
+    ChemistryWorkspaceWindow, "workspace_tools.dimension_reduction", (DimensionReductionMixin,)
 )
-install_window_forwards(ChemicalTableApp, "workspace_tools.medchem_space", (MedChemSpaceMixin,))
-install_window_forwards(ChemicalTableApp, "workspace_tools.qsar", (QsarMixin,))
-install_window_forwards(ChemicalTableApp, "workspace_tools.mpo", (MpoMixin,))
+install_window_forwards(
+    ChemistryWorkspaceWindow, "workspace_tools.medchem_space", (MedChemSpaceMixin,)
+)
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.qsar", (QsarMixin,))
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.mpo", (MpoMixin,))

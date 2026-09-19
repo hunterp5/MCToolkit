@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Session dirty tracking, SQLite mirror, close/shutdown for ChemicalTableApp."""
+"""Session dirty tracking, SQLite mirror, close/shutdown for ChemistryWorkspaceWindow."""
 
 from __future__ import annotations
 

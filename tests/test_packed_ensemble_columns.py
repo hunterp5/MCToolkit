@@ -45,9 +45,9 @@ def _packed_cell(tag: str) -> str:
 
 
 def _app_with_row(headers: list[str], cells: dict[str, str]):
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = list(headers)
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, dict(cells))

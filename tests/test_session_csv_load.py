@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.workers.session_rows_parse import CsvSessionParseResult, CsvSessionParseWorker
 from molmanager.workers.session_rows_parse import SessionRowsParseSignals
 
@@ -32,7 +32,7 @@ from molmanager.workers.session_rows_parse import SessionRowsParseSignals
 @pytest.fixture(autouse=True)
 def _skip_session_auto_render(monkeypatch) -> None:
     monkeypatch.setattr(
-        ChemicalTableApp,
+        ChemistryWorkspaceWindow,
         "_try_auto_render_all_structures_after_ingest",
         lambda self: False,
     )
@@ -70,7 +70,7 @@ def test_load_session_csv_builds_table(qapp, tmp_path: Path) -> None:  # noqa: A
         writer.writerow({"SMILES": "CCO", "MW": "46.07", "Note": "a"})
         writer.writerow({"SMILES": "c1ccccc1", "MW": "78.11", "Note": "b"})
 
-    win = ChemicalTableApp()
+    win = ChemistryWorkspaceWindow()
     win.load_session_csv(str(path))
 
     assert win.headers[:5] == ["ID_HIDDEN", "Structure", "SMILES", "MW", "Note"]

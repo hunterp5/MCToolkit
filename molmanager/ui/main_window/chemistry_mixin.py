@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Composite grouping of chemistry mixins (not on ChemicalTableApp MRO)."""
+"""Composite grouping of chemistry mixins (not on ChemistryWorkspaceWindow MRO)."""
 
 from __future__ import annotations
 
@@ -44,4 +44,4 @@ class ChemistryMixin(
     ReactionToolsMixin,
     ToolsSqlPredictMixin,
 ):
-    """Optional grouping of chemistry mixins. ``ChemicalTableApp`` no longer inherits this."""
+    """Optional grouping of chemistry mixins. ``ChemistryWorkspaceWindow`` no longer inherits this."""

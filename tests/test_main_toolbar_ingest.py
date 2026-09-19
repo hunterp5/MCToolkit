@@ -20,11 +20,11 @@ from __future__ import annotations
 
 from PyQt5.QtCore import Qt
 
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
 
 def test_main_toolbar_disabled_while_ingest_loading(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
     file_menu = next(a.menu() for a in mb.actions() if a.menu() is not None)
 
@@ -50,7 +50,7 @@ def test_main_toolbar_disabled_while_ingest_loading(qapp):  # noqa: ARG001
 
 
 def test_help_is_menubar_dropdown_after_settings(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     mb = w.menuBar()
     labels = [a.text().replace("&", "") for a in mb.actions() if a.text()]
     assert labels[-1] == "Help"
@@ -69,7 +69,7 @@ def test_help_is_menubar_dropdown_after_settings(qapp):  # noqa: ARG001
 
 
 def test_main_window_table_sits_flush_under_menubar(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     ly = w.centralWidget().layout()
     m = ly.contentsMargins()
     assert (m.left(), m.top(), m.right(), m.bottom()) == (0, 0, 0, 0)

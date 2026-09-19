@@ -43,9 +43,9 @@ def test_range_slider_clamps_and_orders_values(qapp):
 def test_filter_card_uses_single_range_slider(qapp):  # noqa: ARG001
     from molmanager.ui.filters.cards import FilterCard
     from molmanager.ui.filters.range_slider import RangeSlider
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.global_bounds = {"MW": {"min": 100.0, "max": 500.0, "is_int": False}}
     card = FilterCard(["MW"], w, initial_property="MW")
     assert isinstance(card.range_slider, RangeSlider)

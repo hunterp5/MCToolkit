@@ -66,7 +66,7 @@ from ..result_plot_panel import DockableResultPlotPanel
 from .scope import selection_scope_checked
 
 if TYPE_CHECKING:
-    from ..main_window import ChemicalTableApp
+    from ..main_window import ChemistryWorkspaceWindow
 
 try:
     from PyQt5.QtWebEngineWidgets import QWebEngineView  # noqa: F401
@@ -84,7 +84,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
     DIMRED_SESSION_KIND = "dimension_reduction"
     owns_docked_plot_actions = True
 
-    def __init__(self, parent: ChemicalTableApp | None, *, window_title: str, method: str):
+    def __init__(self, parent: ChemistryWorkspaceWindow | None, *, window_title: str, method: str):
         from .dimensionality_reduction import DimensionReductionDialog
 
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
@@ -296,7 +296,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         elif self.parent_app is not None:
             self.parent_app.clear_table_selection()
 
-    def create_floating_dialog(self, parent_app: ChemicalTableApp) -> QDialog:
+    def create_floating_dialog(self, parent_app: ChemistryWorkspaceWindow) -> QDialog:
         """Re-open this panel in a floating window after undocking from the main table."""
         from .dimensionality_reduction import _DIMRED_FLOATING_DIALOGS
 

@@ -10,7 +10,7 @@ flowchart TB
     app[molmanager.app:main]
   end
   subgraph window [Main window]
-    CTA[ChemicalTableApp facade]
+    CTA[ChemistryWorkspaceWindow facade]
     PROG[ProgressController]
     SCOPE[ToolDialogScope]
     WRITE[TableWriteService]
@@ -50,7 +50,7 @@ flowchart TB
 
 ## Main window (`molmanager/ui/main_window/`)
 
-`ChemicalTableApp` is a **QMainWindow facade** over an explicit GUI-thread kernel
+`ChemistryWorkspaceWindow` is a **QMainWindow facade** over an explicit GUI-thread kernel
 (`molmanager/ui/app_kernel.py`: `AppKernel`) and collaborators. Public methods stay on the
 window as one-line forwards so dialogs and tests keep calling `app.on_calc_finished`,
 `app._begin_tool_progress`, `app._selected_oids_set`, etc. Mixin files remain the
@@ -70,16 +70,16 @@ implementation bodies; they are **not** all on the window MRO.
 | `BackgroundActivityHub` | `ui/background_activity.py` | Processes dialog |
 
 New tools go through `ui/analysis_job_support.py` (which uses `tool_dialog_scope`) and kernel
-methods — do not add mixin bases to `ChemicalTableApp`.
+methods — do not add mixin bases to `ChemistryWorkspaceWindow`.
 
 Remaining mixins on the window MRO are UI adapters that still talk to widgets directly
 (`AppMenuMixin`, `TableUIMixin` edit/search/filters, structure-prep tools, MMP/SALI, dock,
 predict, `GuiSettingsMixin`). Empty composition roots (`ChemistryMixin`, `SessionMixin`,
 `IngestRenderMixin`, `PrepareStructuresMixin`, `ConformersDescriptorsMixin`,
 `ToolsSqlPredictMixin`) are optional groupings only; they are **not** bases of
-`ChemicalTableApp`.
+`ChemistryWorkspaceWindow`.
 
-`QMainWindow` precedes remaining mixins in the MRO, so Qt virtuals such as `closeEvent` must be declared on `ChemicalTableApp` (delegating into `AppLifecycleMixin`). Mixin implementations that need the C++ base should call `QMainWindow.closeEvent` explicitly rather than `super()`.
+`QMainWindow` precedes remaining mixins in the MRO, so Qt virtuals such as `closeEvent` must be declared on `ChemistryWorkspaceWindow` (delegating into `AppLifecycleMixin`). Mixin implementations that need the C++ base should call `QMainWindow.closeEvent` explicitly rather than `super()`.
 
 **Processes Cancel:** `BackgroundActivityHub.try_cancel_row` handles `background` jobs via `cancel_background_job()` when a cancel callable was registered with `register_background_job(..., cancel=…)`. Filter apply, substructure filter, dimred, and MedChem Space register cancel callables.
 
@@ -144,7 +144,7 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
    Protein Prepare, Gnina dock, and Data Analysis live there; shims remain at the old `ui/`
    paths. Package `__init__` loads exports lazily so submodule imports do not pull Qt WebEngine.
 2. Worker under `molmanager/workers/` if work is heavy.
-3. Wire the menu action on `ChemicalTableApp` (thin forward to a collaborator or existing tool mixin). Do **not** add a new mixin base to the window class.
+3. Wire the menu action on `ChemistryWorkspaceWindow` (thin forward to a collaborator or existing tool mixin). Do **not** add a new mixin base to the window class.
 4. Long jobs: `process_queue.enqueue` + `_begin_tool_progress` / `report_tool_progress`.
 5. Short threadpool jobs: `register_background_job` / `unregister_background_job`.
 6. Tests under `tests/` (unit tests avoid full GUI where possible).

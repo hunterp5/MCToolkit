@@ -29,7 +29,7 @@ from molmanager.reaction_extract import (
     split_side_components,
 )
 from molmanager.rxn_io import RXN_SMARTS_HEADER
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.strings import TOOL_REACTION_EXTRACT
 
 _ETHANOL = "CCO.O>>CC=O"
@@ -88,7 +88,7 @@ def test_preferred_reaction_source_column() -> None:
 
 
 def test_extract_writes_new_headers(qapp) -> None:  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", RXN_SMARTS_HEADER]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {RXN_SMARTS_HEADER: _ETHANOL})
@@ -125,7 +125,7 @@ def test_extract_writes_new_headers(qapp) -> None:  # noqa: ARG001
 def test_extract_dialog_defaults_to_reaction_smarts(qapp) -> None:  # noqa: ARG001
     from molmanager.ui.dialogs.reaction_extract import ReactionExtractDialog
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", RXN_SMARTS_HEADER]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "", RXN_SMARTS_HEADER: _ETHANOL})

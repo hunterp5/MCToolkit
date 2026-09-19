@@ -37,9 +37,9 @@ def _live_pose_panel(parent, win):
 
 
 def test_dock_menu_includes_smina(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     assert hasattr(w, "open_gnina_dock")
     assert hasattr(w, "open_smina_dock")
     assert not hasattr(w, "open_easydock")
@@ -118,9 +118,9 @@ def test_dock_menu_includes_smina(qapp):  # noqa: ARG001
 def test_predict_viewers_enable_when_table_has_results(qapp):  # noqa: ARG001
     from molmanager.biotransformer import METABOLITE_SMILES_COLUMN
     from molmanager.som_prediction import SOM_MAP_COLUMN
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w._sync_predict_viewer_actions()
     assert w._act_som_viewer.isEnabled() is False
     assert w._act_metabolite_viewer.isEnabled() is False
@@ -143,7 +143,7 @@ def test_open_dock_results_window_lists_smina_fields(qapp, tmp_path, monkeypatch
 
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
     from molmanager.ui.dockable_plot_title import plot_widget_display_title
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.pose_browser import PoseBrowserWidget
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
@@ -165,7 +165,7 @@ def test_open_dock_results_window_lists_smina_fields(qapp, tmp_path, monkeypatch
         "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00  0.00     0.000 C \n",
         encoding="utf-8",
     )
-    parent = ChemicalTableApp()
+    parent = ChemistryWorkspaceWindow()
     win = parent.open_dock_results_window([mol], title="Dock results", receptor_path=str(rec))
     assert win is not None
     panel = parent._live_pose_browser()
@@ -214,7 +214,7 @@ def test_dock_viewer_reopens_closed_results_window(qapp, tmp_path, monkeypatch):
     from rdkit.Geometry import Point3D
 
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
 
@@ -231,7 +231,7 @@ def test_dock_viewer_reopens_closed_results_window(qapp, tmp_path, monkeypatch):
         "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00  0.00     0.000 C \n",
         encoding="utf-8",
     )
-    parent = ChemicalTableApp()
+    parent = ChemistryWorkspaceWindow()
     try:
         assert parent._act_dock_viewer.isEnabled() is False
         win = parent.open_dock_results_window([mol], title="Dock results", receptor_path=str(rec))
@@ -274,7 +274,7 @@ def _pose_mol(smiles: str, affinity: str, x: float, *, name: str | None = None):
 
 def test_pose_browser_table_lists_poses_for_one_ligand(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
     rec = tmp_path / "rec.pdbqt"
@@ -282,7 +282,7 @@ def test_pose_browser_table_lists_poses_for_one_ligand(qapp, tmp_path, monkeypat
         "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00  0.00     0.000 C \n",
         encoding="utf-8",
     )
-    parent = ChemicalTableApp()
+    parent = ChemistryWorkspaceWindow()
     try:
         panel = parent.open_dock_results_window(
             [_pose_mol("CCO", "-8.100", 1.0), _pose_mol("CCO", "-6.400", 4.0)],
@@ -308,7 +308,7 @@ def test_pose_browser_table_lists_poses_for_one_ligand(qapp, tmp_path, monkeypat
 
 def test_pose_browser_nav_steps_ligand_groups(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.pose_browser import PoseBrowserDialog
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
@@ -317,7 +317,7 @@ def test_pose_browser_nav_steps_ligand_groups(qapp, tmp_path, monkeypatch):  # n
         "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00  0.00     0.000 C \n",
         encoding="utf-8",
     )
-    parent = ChemicalTableApp()
+    parent = ChemistryWorkspaceWindow()
     try:
         panel = parent.open_dock_results_window(
             [
@@ -351,7 +351,7 @@ def test_pose_browser_table_has_horizontal_scrollbar(qapp, tmp_path, monkeypatch
     from PyQt5.QtCore import Qt
 
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
     rec = tmp_path / "rec.pdbqt"
@@ -373,7 +373,7 @@ def test_pose_browser_table_has_horizontal_scrollbar(qapp, tmp_path, monkeypatch
         ("CNNvariance_pose", "0.040"),
     ):
         mol.SetProp(key, val)
-    parent = ChemicalTableApp()
+    parent = ChemistryWorkspaceWindow()
     try:
         panel = parent.open_dock_results_window(
             [mol],
@@ -399,7 +399,7 @@ def test_pose_browser_table_has_horizontal_scrollbar(qapp, tmp_path, monkeypatch
 
 def test_pose_browser_table_sorts_highest_first_on_header_click(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
     rec = tmp_path / "rec.pdbqt"
@@ -407,7 +407,7 @@ def test_pose_browser_table_sorts_highest_first_on_header_click(qapp, tmp_path, 
         "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00  0.00     0.000 C \n",
         encoding="utf-8",
     )
-    parent = ChemicalTableApp()
+    parent = ChemistryWorkspaceWindow()
     try:
         panel = parent.open_dock_results_window(
             [

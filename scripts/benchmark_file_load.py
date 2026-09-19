@@ -50,10 +50,10 @@ def main() -> None:
     if args.no_render:
         os.environ["MOLMANAGER_AUTO_RENDER_2D_MAX_ROWS"] = "0"
 
-    from molmanager.ui.main_window.chemical_table_app import ChemicalTableApp
+    from molmanager.ui.main_window.chemistry_workspace_window import ChemistryWorkspaceWindow
 
     app = QApplication.instance() or QApplication(sys.argv)
-    win = ChemicalTableApp()
+    win = ChemistryWorkspaceWindow()
 
     # Use a private, fresh SQLite cache so runs are reproducible and never blocked by a stale
     # shared temp DB left by a previous load.

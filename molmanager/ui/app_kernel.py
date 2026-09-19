@@ -16,7 +16,7 @@
 
 """GUI-thread kernel protocol and mixin-to-collaborator binding.
 
-``ChemicalTableApp`` stays a thin ``QMainWindow`` facade. Collaborators share this
+``ChemistryWorkspaceWindow`` stays a thin ``QMainWindow`` facade. Collaborators share this
 kernel (stores, table, pools, timers) and must not copy row data. See
 ``docs/ARCHITECTURE.md``.
 """
@@ -34,7 +34,7 @@ from PyQt5.QtWidgets import QTableView, QUndoStack
 class AppKernel(Protocol):
     """Shared GUI-thread context for main-window collaborators.
 
-    Implementations are ``QMainWindow`` facades (``ChemicalTableApp``). Attribute
+    Implementations are ``QMainWindow`` facades (``ChemistryWorkspaceWindow``). Attribute
     names match the historical window ``self`` so mixin bodies can run against
     the kernel without copying ``MolStore`` / table rows.
     """

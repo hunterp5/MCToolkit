@@ -397,10 +397,10 @@ def test_pharmacophore_screen_dialog_closes_when_run_starts(qapp, tmp_path, monk
     from molmanager.confs_codec import pack_confs_cell
     from molmanager.pharmacophore import save_pharmacophore
     from molmanager.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     mol = _ethanol_3d()
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "confs"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO", "confs": pack_confs_cell({"n": 1}, mol)})
@@ -421,9 +421,9 @@ def test_pharmacophore_screen_dialog_closes_when_run_starts(qapp, tmp_path, monk
 def test_pharmacophore_screen_selects_hits_in_table(qapp):  # noqa: ARG001
     pytest.importorskip("PyQt5.QtWidgets")
     from molmanager.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO"})

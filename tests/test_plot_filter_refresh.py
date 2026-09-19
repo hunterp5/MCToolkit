@@ -26,12 +26,12 @@ from molmanager.dimensionality_reduction import (
     DimensionReductionResult,
     subset_dimension_reduction_result,
 )
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.plot_table_sync import visible_oids_for_plot
 from molmanager.ui.widgets import FilterCard
 
 
-def _setup_two_row_mw_table(w: ChemicalTableApp) -> None:
+def _setup_two_row_mw_table(w: ChemistryWorkspaceWindow) -> None:
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "C", "MW": "10"})
@@ -61,7 +61,7 @@ class _CountingPlotHost(QWidget):
 
 
 def test_visible_oids_follow_numeric_filter(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _setup_two_row_mw_table(w)
     assert w._visible_oids_set() is None
     w._apply_filters_impl_sync(None)
@@ -71,7 +71,7 @@ def test_visible_oids_follow_numeric_filter(qapp):  # noqa: ARG001
 
 
 def test_visible_source_rows_follow_filter(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _setup_two_row_mw_table(w)
     assert w._visible_source_row_indices() is None
     w._apply_filters_impl_sync(None)
@@ -80,7 +80,7 @@ def test_visible_source_rows_follow_filter(qapp):  # noqa: ARG001
 
 
 def test_replot_walks_plot_hosts_not_just_selection_views(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     host = _CountingPlotHost()
     w._plot_dialogs = [_FakePlotDialog(host)]
     w._replot_active_plots()
@@ -89,7 +89,7 @@ def test_replot_walks_plot_hosts_not_just_selection_views(qapp):  # noqa: ARG001
 
 
 def test_replot_restores_ready_status_when_idle(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     host = _CountingPlotHost()
     w._plot_dialogs = [_FakePlotDialog(host)]
     w.status_label.setText("Calculate descriptors — 10/10 (100%)")
@@ -99,7 +99,7 @@ def test_replot_restores_ready_status_when_idle(qapp):  # noqa: ARG001
 
 
 def test_replot_keeps_status_while_tool_progress_active(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     host = _CountingPlotHost()
     w._plot_dialogs = [_FakePlotDialog(host)]
     w._tool_progress_state.begin("Calculate descriptors", 10)
@@ -112,7 +112,7 @@ def test_replot_keeps_status_while_tool_progress_active(qapp):  # noqa: ARG001
 
 
 def test_visible_source_rows_cache_reused_until_invalidated(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _setup_two_row_mw_table(w)
     w._apply_filters_impl_sync(None)
     first = w._visible_source_row_indices()
@@ -127,7 +127,7 @@ def test_visible_source_rows_cache_reused_until_invalidated(qapp):  # noqa: ARG0
 
 
 def test_unchanged_filter_visibility_skips_forced_replot(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _setup_two_row_mw_table(w)
     w._apply_filters_impl_sync(None)
     w._plot_replot_timer.stop()
@@ -137,7 +137,7 @@ def test_unchanged_filter_visibility_skips_forced_replot(qapp):  # noqa: ARG001
 
 
 def test_structure_paint_data_change_does_not_schedule_replot(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "C", "MW": "10"})
@@ -150,7 +150,7 @@ def test_structure_paint_data_change_does_not_schedule_replot(qapp):  # noqa: AR
 
 
 def test_filter_apply_replots_even_during_background_job(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _setup_two_row_mw_table(w)
     w._background_job_ui_depth = 1
     w._plot_replot_timer.stop()
@@ -184,7 +184,7 @@ def test_subset_dimension_reduction_result_keeps_visible_oids() -> None:
 def test_embedding_collect_ignores_table_filter(qapp):  # noqa: ARG001
     from molmanager.ui.data_analysis import table_to_dataframe
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     _setup_two_row_mw_table(w)
     w._apply_filters_impl_sync(None)
     assert w._visible_oids_set() == frozenset({0})

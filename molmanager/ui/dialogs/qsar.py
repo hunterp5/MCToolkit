@@ -58,13 +58,13 @@ from .mmp import select_preferred_activity_column
 from .scope import selection_scope_checked
 
 if TYPE_CHECKING:
-    from ..main_window import ChemicalTableApp
+    from ..main_window import ChemistryWorkspaceWindow
 
 
 class QSARDialog(QDialog):
     """Train ML models on table activity vs descriptors or fingerprints; write predictions to the table."""
 
-    def __init__(self, parent: ChemicalTableApp | None = None):
+    def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent)
         self.parent_app = parent
         self.setWindowTitle("QSAR")

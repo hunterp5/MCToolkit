@@ -37,7 +37,7 @@ def _plot_dialog_and_widget_types():
 
 
 class PlotDockHost:
-    """Owns docked-plot lifecycle for :class:`~molmanager.ui.main_window.ChemicalTableApp`.
+    """Owns docked-plot lifecycle for :class:`~molmanager.ui.main_window.ChemistryWorkspaceWindow`.
 
     Public entry points remain on the main window (via :class:`PlotToolsMixin`) so
     existing callers keep working; this object holds the implementation.

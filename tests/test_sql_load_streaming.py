@@ -20,7 +20,7 @@ import sqlite3
 
 import pytest
 
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
 
 def test_load_from_sql_streaming_sqlite(tmp_path, qapp):
@@ -36,7 +36,7 @@ def test_load_from_sql_streaming_sqlite(tmp_path, qapp):
     finally:
         con.close()
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     url = "sqlite:///" + str(db_path).replace("\\", "/")
     w.load_from_sql(
         url=url,
@@ -70,7 +70,7 @@ def test_load_from_sql_rejects_destructive_when_read_only(tmp_path, qapp):  # no
     finally:
         con.close()
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     url = "sqlite:///" + str(db_path).replace("\\", "/")
     with pytest.raises(ValueError, match="modify the database"):
         w.load_from_sql(

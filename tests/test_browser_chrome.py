@@ -57,10 +57,10 @@ def test_pair_browsers_share_pair_shell():
 
 
 def test_canvas_browsers_use_shared_preview_theme(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     widgets = (
-        SelectionBrowserWidget(ChemicalTableApp()),
+        SelectionBrowserWidget(ChemistryWorkspaceWindow()),
         SomBrowserWidget(None),
         MetaboliteBrowserWidget(None),
         RandomMoleculeBrowserWidget(None),

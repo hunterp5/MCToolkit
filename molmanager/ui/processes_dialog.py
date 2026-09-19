@@ -37,11 +37,11 @@ from PyQt5.QtWidgets import (
 from .qt_widget_utils import make_window_minimizable
 
 if TYPE_CHECKING:
-    from .main_window import ChemicalTableApp
+    from .main_window import ChemistryWorkspaceWindow
 
 
 class ProcessesDialog(QDialog):
-    def __init__(self, parent: ChemicalTableApp | None = None):
+    def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent)
         self._app: Any = parent
         self.setWindowTitle("Processes")

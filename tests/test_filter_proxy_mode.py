@@ -21,11 +21,11 @@ from PyQt5.QtCore import Qt
 from molmanager.ui.compound_table_model import CompoundTableModel
 from molmanager.ui.filter_proxy_model import FilterProxyModel
 from molmanager.ui.filters.cards import TextFilterCard
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
 
 def test_proxy_filter_mode_reduces_visible_rows(qapp):  # noqa: ARG001
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_rows_batch(

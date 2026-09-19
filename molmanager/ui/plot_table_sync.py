@@ -26,13 +26,13 @@ from PyQt5.QtWidgets import QAbstractItemView
 from .table_selection import item_selection_for_view_rows
 
 if TYPE_CHECKING:
-    from .main_window import ChemicalTableApp
+    from .main_window import ChemistryWorkspaceWindow
 
 # Coalesce rapid plot→table updates (lasso echo / additive clicks).
 _PLOT_TABLE_SELECT_DEBOUNCE_MS = 60
 
 
-def visible_oids_for_plot(app: ChemicalTableApp | None) -> frozenset[int] | None:
+def visible_oids_for_plot(app: ChemistryWorkspaceWindow | None) -> frozenset[int] | None:
     """OIDs currently shown by table filters. ``None`` means every row is visible."""
     if app is None:
         return None
@@ -67,7 +67,7 @@ def run_javascript_set_selection(
     page.runJavaScript(f"window.molmanagerSetSelection({json.dumps(list(point_indices))});")
 
 
-def selected_oids_for_plot(parent_app: ChemicalTableApp) -> set[int]:
+def selected_oids_for_plot(parent_app: ChemistryWorkspaceWindow) -> set[int]:
     """
     OIDs that should drive plot highlighting — matches what the table shows as selected.
 
@@ -146,7 +146,7 @@ def point_indices_for_oids(
 
 
 def source_rows_for_point_indices(
-    parent_app: ChemicalTableApp,
+    parent_app: ChemistryWorkspaceWindow,
     plotted_oids: list[int],
     point_indices: list[int],
     *,
@@ -168,7 +168,7 @@ def source_rows_for_point_indices(
     return sorted(set(rows))
 
 
-def _source_rows_already_selected(parent_app: ChemicalTableApp, source_rows: list[int]) -> bool:
+def _source_rows_already_selected(parent_app: ChemistryWorkspaceWindow, source_rows: list[int]) -> bool:
     """True when the table already reflects this source-row selection."""
     uniq = sorted({int(r) for r in source_rows})
     override = getattr(parent_app, "_selected_oids_override", None)
@@ -190,7 +190,7 @@ def _source_rows_already_selected(parent_app: ChemicalTableApp, source_rows: lis
 
 
 def _apply_table_selection_now(
-    parent_app: ChemicalTableApp,
+    parent_app: ChemistryWorkspaceWindow,
     source_rows: list[int],
     *,
     scroll: bool,
@@ -240,7 +240,7 @@ def _apply_table_selection_now(
     table.viewport().update()
 
 
-def _scroll_table_to_first_source_row(parent_app: ChemicalTableApp, source_rows: list[int]) -> None:
+def _scroll_table_to_first_source_row(parent_app: ChemistryWorkspaceWindow, source_rows: list[int]) -> None:
     if not source_rows:
         return
     view_rows = parent_app._source_rows_to_view_rows(source_rows[:1])
@@ -257,7 +257,7 @@ def _scroll_table_to_first_source_row(parent_app: ChemicalTableApp, source_rows:
 
 
 def apply_table_selection_for_source_rows(
-    parent_app: ChemicalTableApp,
+    parent_app: ChemistryWorkspaceWindow,
     source_rows: list[int],
     *,
     scroll: bool = True,
@@ -296,7 +296,7 @@ def apply_table_selection_for_source_rows(
     timer.start(_PLOT_TABLE_SELECT_DEBOUNCE_MS)
 
 
-def clear_table_selection_from_plot(parent_app: ChemicalTableApp) -> None:
+def clear_table_selection_from_plot(parent_app: ChemistryWorkspaceWindow) -> None:
     """Clear Qt, logical, and highlight selection when a plot deselects."""
     timer = getattr(parent_app, "_plot_table_select_timer", None)
     if timer is not None:

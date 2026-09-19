@@ -121,11 +121,11 @@ def test_ensemble_mol_for_reads_sqlite_path():
 
 def test_write_ensemble_worker_results_stores_mol(qapp):  # noqa: ARG001
     from molmanager.confs_codec import unpack_confs_blocks_json_b64
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.main_window.conformer_writeback import write_ensemble_worker_results
 
     mol = _ethanol_ensemble(2)
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "confs"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO", "confs": ""})

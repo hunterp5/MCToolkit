@@ -603,7 +603,7 @@ def test_protein_viewer_canvas_load_overlay_nests(qapp):  # noqa: ARG001
 
 
 def test_open_protein_viewer_shows_before_session_restore(qapp, tmp_path, monkeypatch):
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.protein_embed import ProteinEmbedView
     from molmanager.ui.protein_viewer import ProteinViewerDialog
 
@@ -611,7 +611,7 @@ def test_open_protein_viewer_shows_before_session_restore(qapp, tmp_path, monkey
 
     src = tmp_path / "mini.pdb"
     src.write_text(_MINI_PDB, encoding="utf-8")
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     seed = w.open_protein_viewer()
     seed.add_structure_path(src, refit=True)
     assert seed.save_viewer_to_session() is True
@@ -639,11 +639,11 @@ def test_open_protein_viewer_shows_before_session_restore(qapp, tmp_path, monkey
 
 
 def test_open_protein_viewer_empty_releases_start_overlay(qapp, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
     from molmanager.ui.protein_embed import ProteinEmbedView
 
     monkeypatch.setattr(ProteinEmbedView, "_ensure_web", lambda self: None)
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     dlg = w.open_protein_viewer()
     assert dlg is not None
     assert dlg.isVisible() is True
@@ -873,9 +873,9 @@ def test_protein_viewer_html_draws_heteroatom_polar_hydrogens():
 
 
 def test_protein_menu_opens_viewer(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     labels = [a.text().replace("&", "") for a in w.menuBar().actions()]
     assert "Protein" in labels
     protein_menu = next(
@@ -1933,11 +1933,11 @@ def test_collect_session_state_keeps_manager_rows(qapp, tmp_path):  # noqa: ARG0
 
 
 def test_save_to_session_is_required_for_cms(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     src = tmp_path / "mini.pdb"
     src.write_text(_MINI_PDB, encoding="utf-8")
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     dlg = w.open_protein_viewer()
     dlg.add_structure_path(src, refit=True)
     assert w._collect_protein_viewer() is None
@@ -1954,13 +1954,13 @@ def test_close_without_save_to_session_discards_live_viewer(qapp, tmp_path, monk
     from PyQt5.QtGui import QCloseEvent
     from PyQt5.QtWidgets import QMessageBox
 
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     first = tmp_path / "first.pdb"
     second = tmp_path / "second.pdb"
     first.write_text(_MINI_PDB, encoding="utf-8")
     second.write_text(_MINI_PDB.replace("MET", "SER").replace("M  ", "S  "), encoding="utf-8")
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     dlg = w.open_protein_viewer()
     dlg._suppress_close_prompt = False
     dlg.add_structure_path(first, refit=True)
@@ -1987,11 +1987,11 @@ def test_close_save_to_session_commits_live_viewer(qapp, tmp_path, monkeypatch):
     from PyQt5.QtGui import QCloseEvent
     from PyQt5.QtWidgets import QMessageBox
 
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     src = tmp_path / "live.pdb"
     src.write_text(_MINI_PDB, encoding="utf-8")
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     dlg = w.open_protein_viewer()
     dlg._suppress_close_prompt = False
     dlg.add_structure_path(src, refit=True)
@@ -2008,11 +2008,11 @@ def test_close_cancel_keeps_protein_viewer_open(qapp, tmp_path, monkeypatch):
     from PyQt5.QtGui import QCloseEvent
     from PyQt5.QtWidgets import QMessageBox
 
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
     src = tmp_path / "mini.pdb"
     src.write_text(_MINI_PDB, encoding="utf-8")
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     dlg = w.open_protein_viewer()
     dlg._suppress_close_prompt = False
     dlg.add_structure_path(src, refit=True)

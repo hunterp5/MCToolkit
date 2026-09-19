@@ -34,5 +34,5 @@ class FilterPanelMixin(
     (``headers``, ``_table_model``, ``table``, ``mols``, ``filters``, ``f_panel``,
     ``f_container``, ``global_bounds``, ``status_label``, ``threadpool``,
     ``_apply_filters_timer``, optional ``_substructure_filter_signals``), provided by
-    ``ChemicalTableApp``.
+    ``ChemistryWorkspaceWindow``.
     """

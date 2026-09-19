@@ -50,7 +50,7 @@ from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
 if TYPE_CHECKING:
-    from ..main_window import ChemicalTableApp
+    from ..main_window import ChemistryWorkspaceWindow
 
 _KIND_LABELS: tuple[tuple[str, DesirabilityKind], ...] = (
     ("Linear", "linear"),
@@ -124,7 +124,7 @@ class MPOScoringDialogParams:
 class MPOScoringDialog(QDialog):
     """Configure per-property desirabilities and write an overall MPO score column."""
 
-    def __init__(self, parent: ChemicalTableApp | None = None):
+    def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent)
         self.parent_app = parent
         self.setWindowTitle("MPO Scoring")

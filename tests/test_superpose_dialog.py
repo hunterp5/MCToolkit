@@ -95,9 +95,9 @@ def test_open_superpose_keeps_table_selectable(qapp):  # noqa: ARG001
     from PyQt5.QtCore import Qt
     from PyQt5.QtWidgets import QAbstractItemView
 
-    from molmanager.ui.main_window import ChemicalTableApp
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
 
-    w = ChemicalTableApp()
+    w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
     w._table_model.append_row(0, {"SMILES": "CCO"})

@@ -53,7 +53,7 @@ from molmanager.session_codec import expand_session_document, loads_session_byte
 from molmanager.structure_atoms import parse_structure_atoms, pocket_view_plan
 from molmanager.structure_cif import _parse_cif_loops, cif_viewer_bond_tables
 from molmanager.structure_inventory import parse_polymer_sequences, parse_structure_components
-from molmanager.ui.main_window import ChemicalTableApp
+from molmanager.ui.main_window import ChemistryWorkspaceWindow
 from molmanager.ui.protein_embed import ProteinEmbedView
 from molmanager.ui.protein_viewer import ProteinViewerDialog
 
@@ -148,7 +148,7 @@ def _bench_viewer_restore(state: dict, runs: int) -> None:
 
 def _bench_open_from_app(cms_path: Path) -> None:
     print("\nOpen Protein Viewer after session payload is in memory", flush=True)
-    app = ChemicalTableApp()
+    app = ChemistryWorkspaceWindow()
     try:
         app._try_auto_render_all_structures_after_ingest = lambda: False
         t0 = time.perf_counter()

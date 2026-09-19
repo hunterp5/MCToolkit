@@ -51,11 +51,11 @@ from PyQt5.QtWidgets import (
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 
 if TYPE_CHECKING:
-    from ..main_window import ChemicalTableApp
+    from ..main_window import ChemistryWorkspaceWindow
 
 
 def iter_scoped_table_analysis_rows(
-    app: ChemicalTableApp,
+    app: ChemistryWorkspaceWindow,
     *,
     visible_only: bool = True,
     only_selected: bool = False,
@@ -98,7 +98,7 @@ def iter_scoped_table_analysis_rows(
 
 
 def table_to_dataframe(
-    app: ChemicalTableApp,
+    app: ChemistryWorkspaceWindow,
     *,
     visible_only: bool = True,
     only_selected: bool = False,
@@ -114,7 +114,7 @@ def table_to_dataframe(
     return pd.DataFrame(rows), source_rows
 
 
-def selected_table_column_headers(app: ChemicalTableApp) -> list[str]:
+def selected_table_column_headers(app: ChemistryWorkspaceWindow) -> list[str]:
     """Distinct data-column header names currently spanned by the main-table selection."""
     sm = app.table.selectionModel()
     if sm is None or not app.headers:
@@ -208,7 +208,7 @@ def _outlier_mask_modified_z(v: np.ndarray, *, threshold: float = 3.5) -> np.nda
 class DataAnalysisDialog(QDialog):
     """Summarize, correlate, detect outliers, fit curves, and run tests on numeric columns."""
 
-    def __init__(self, parent: ChemicalTableApp | None = None):
+    def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent)
         self.parent_app = parent
         self.setWindowTitle("Statistics")
