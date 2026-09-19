@@ -25,6 +25,7 @@ import pytest
 from molmanager.platform_support.rdkit_runtime_setup import (
     MIN_RDKIT_VERSION,
     parse_rdkit_version,
+    rdkit_version_tuple,
     require_supported_rdkit,
     unsupported_rdkit_message,
 )
@@ -38,6 +39,9 @@ def test_parse_rdkit_version_zero_padded_and_short():
 
 
 def test_require_supported_rdkit_accepts_installed_build():
+    installed = rdkit_version_tuple()
+    if installed < MIN_RDKIT_VERSION:
+        pytest.skip(f"this interpreter imported RDKit {installed}; need {MIN_RDKIT_VERSION}")
     require_supported_rdkit()
 
 

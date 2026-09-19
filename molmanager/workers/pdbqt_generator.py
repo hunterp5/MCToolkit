@@ -39,6 +39,7 @@ _MEEKO_KEY_HINTS = re.compile(
     r"([A-Za-z]*:-?\d+[A-Za-z]?)",
     re.I,
 )
+_MEEKO_PAIR_KEYS = re.compile(r"\(([A-Za-z]*:-?\d+[A-Za-z]?),\s*([A-Za-z]*:-?\d+[A-Za-z]?)\)")
 _MEEKO_SKIP_ROUNDS = 48
 
 _MEEKO_MISSING = "Meeko is required to generate PDBQT. Install with: pip install meeko"
@@ -277,18 +278,22 @@ def _meeko_residue_keys(*texts: str) -> list[str]:
     """Residue keys Meeko mentions in errors or warnings (``A:913``, ``:42``)."""
     keys: list[str] = []
     seen: set[str] = set()
+
+    def _add(key: str) -> None:
+        key = key.strip().rstrip(".,;:")
+        if key and key not in seen:
+            seen.add(key)
+            keys.append(key)
+
     for text in texts:
         for match in _MEEKO_KEY_HINTS.finditer(text or ""):
-            key = match.group(1).strip().rstrip(".,;:")
-            if key and key not in seen:
-                seen.add(key)
-                keys.append(key)
+            _add(match.group(1))
         fail = _MEEKO_RES_FAIL.search(text or "")
         if fail:
-            key = fail.group(1).strip().rstrip(".,;:")
-            if key and key not in seen:
-                seen.add(key)
-                keys.append(key)
+            _add(fail.group(1))
+        for match in _MEEKO_PAIR_KEYS.finditer(text or ""):
+            _add(match.group(1))
+            _add(match.group(2))
     return keys
 
 
@@ -411,6 +416,9 @@ def _write_receptor_pdbqt_file(pdb_path: Path, out_path: Path) -> tuple[str | No
         logger.exception("Meeko PDBQT write failed")
         return str(exc) or "Meeko could not write receptor PDBQT.", ignored
     if not (rigid_pdbqt or "").strip():
+        if ignored:
+            listed = ", ".join(ignored)
+            return f"Meeko produced an empty receptor PDBQT (ignored residues: {listed}).", ignored
         return "Meeko produced an empty receptor PDBQT.", ignored
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(rigid_pdbqt, encoding="utf-8")

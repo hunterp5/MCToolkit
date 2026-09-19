@@ -41,6 +41,7 @@ def test_interactive_view_hover_card_json(qapp):  # noqa: ARG001
     view.plotted_oids = [0, 1]
     view._hover_show_structure = True
     view._hover_persist = True
+    view._hover_columns = None
 
     one = json.loads(view._hover_card_json_for_point(0))
     assert one["count"] == 1

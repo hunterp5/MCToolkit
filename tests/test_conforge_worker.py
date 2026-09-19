@@ -91,4 +91,4 @@ def test_conforge_worker_missing_backend(qapp, monkeypatch):  # noqa: ARG001
     oid, out_mol, cell = captured[0][0]
     assert oid == 1
     assert out_mol is None
-    assert "conforge_unavailable" in cell
+    assert cell.get("err") == "conforge_unavailable"

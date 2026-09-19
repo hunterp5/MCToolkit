@@ -782,7 +782,7 @@ def test_tools_menu_nests_superpose_under_conformations(qapp):  # noqa: ARG001
     assert not any(lbl.startswith("Superpose") for lbl in labels)
     conf = next(a.menu() for a in tools.actions() if a.text().replace("&", "") == "Conformations")
     conf_labels = [a.text().replace("&", "") for a in conf.actions()]
-    assert conf_labels == ["Generate", "", "Superpose…"]
+    assert conf_labels == ["Generate", "", "Superpose…", "Screen Pharmacophore…"]
     gen = next(a.menu() for a in conf.actions() if a.text().replace("&", "") == "Generate")
     assert [a.text().replace("&", "") for a in gen.actions()] == [
         "Stochastic…",

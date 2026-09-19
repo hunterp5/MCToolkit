@@ -265,6 +265,9 @@ def test_meeko_failed_residue_key_and_strip():
         "matched with excess inter-residue bond(s): A:914\n"
         "matched with excess inter-residue bond(s): A:946",
     ) == ["A:914", "A:946"]
+    assert _meeko_residue_keys(
+        "Expected 6 paddings for (A:912, A:913) with bonds [(0, 4)], but got 2"
+    ) == ["A:912", "A:913"]
     pdb = (
         "ATOM      1  N   TYR A 912      -1.000   0.000   0.000  1.00  0.00           N\n"
         "ATOM      2  N   GLU A 913      -3.578  23.811 -24.665  1.00  0.00           N\n"
@@ -287,16 +290,20 @@ def test_write_receptor_pdbqt_protonated_glu_slice(tmp_path):
     if not src.is_file():
         pytest.skip("6bbu_fixed_protonated.cif sample missing")
     text = src.read_text(encoding="utf-8")
+    # A three-residue cut is all termini to Meeko and writes nothing. Keep a short
+    # peptide window around protonated GLU 913 so skipped loop residues are not
+    # the entire receptor.
     atoms = [
         a
         for a in parse_structure_atoms(text, "cif")
-        if a.chain == "A" and a.resi in {"912", "913", "914"}
+        if a.chain == "A" and a.resi.isdigit() and 908 <= int(a.resi) <= 924
     ]
     assert any(a.resn == "GLU" and a.resi == "913" for a in atoms)
     pdb_path = tmp_path / "glu913.pdb"
     pdb_path.write_text(_pdb_from_atoms(atoms), encoding="utf-8")
     out = tmp_path / "glu913.pdbqt"
-    err, _ignored = _write_receptor_pdbqt_file(pdb_path, out)
+    err, ignored = _write_receptor_pdbqt_file(pdb_path, out)
     assert err is None
+    assert isinstance(ignored, list)
     assert out.is_file()
     assert out.stat().st_size > 100
