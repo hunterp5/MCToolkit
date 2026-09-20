@@ -173,10 +173,12 @@ window as one-line forwards so dialogs and tests keep calling `app.on_calc_finis
 | `ToolDialogScope` | `ui/tool_dialog_scope.py` | Modeless tool dialogs, selected-rows-only scope, empty-selection abort |
 | `TableWriteService` | `ui/table_write_service.py` | Column writeback: unique names, inserts, chunked `on_calc_finished` |
 | `TableSession` | `ui/table_session.py` | Selection, chemistry-column lookup, sticky visible-row cache (`TableSessionSelection` / `TableSessionChemistry`) |
-| `TableBuildPipeline` | `ui/table_build_pipeline.py` | Ingest chunks, SQLite rebuild, Render 2D batch/results (`QObject` child) |
+| `TableBuildPipeline` | `ui/table_build_pipeline.py` | Ingest chunks, SQLite rebuild, Render 2D, Open/Import/Export (`QObject` child) |
 | `SessionController` | `ui/session_controller.py` | `.cms` save/restore, table layout, session plots, legacy CSV |
-| `WorkspaceTools` | `ui/workspace_tools.py` | Lazy cluster / dimred / QSAR / MPO / medchem / MMP / SALI / structure-prep collaborators |
+| `WorkspaceTools` | `ui/workspace_tools.py` | Lazy cluster / dimred / QSAR / MPO / medchem / MMP / SALI / structure-prep / leaf-tool collaborators |
+| `FilterPanel` | `ui/filters/filter_panel.py` | Filter cards, apply, substructure, bounds |
 | `PlotDockHost` | `ui/plot_dock_host.py` | Dock/undock plot panes |
+| `PlotSync` | `ui/workspace_plot.py` | Table↔plot selection sync and floating plot dialogs |
 | `ProcessQueueManager` | `ui/process_queue.py` | Serial heavy tools |
 | `BackgroundActivityHub` | `ui/background_activity.py` | Processes dialog |
 | `SessionLogBuffer` | `platform_support/session_log.py` | In-memory session log (Processes dialog) |
@@ -257,24 +259,26 @@ let both halves answer on the window, so callers never see the seam.
 New tools go through `ui/analysis_job_support.py` (`AnalysisJobHost`, which uses `tool_dialog_scope`)
 and kernel methods — do not add mixin bases to `ChemistryWorkspaceWindow`.
 
-Remaining mixins on the window MRO are UI adapters that still talk to widgets directly
-(`AppMenuMixin`, `TableUIMixin` edit/search/filters, dock,
-predict, `GuiSettingsMixin`). Empty composition roots (`ChemistryMixin`, `SessionMixin`,
-`IngestRenderMixin`, `PrepareStructuresMixin`, `ConformersDescriptorsMixin`,
-`ToolsSqlPredictMixin`) are optional groupings only; they are **not** bases of
-`ChemistryWorkspaceWindow`.
+Remaining mixins on the window MRO are shell chrome only
+(`AppLifecycleMixin`, `AppMenuMixin`, `TableUIMixin` edit/search/menu, `GuiSettingsMixin`).
+Filter cards/apply/bounds live on `FilterPanel`; Open/Import/Export live on `TableBuildExport`
+(`TableBuildPipeline`); plot dock/sync live on `PlotDockHost` + `PlotSync`. Do not add empty
+composite mixins. Do not bulk-rename leftover widget `*_mixin.py` files (plot, table-model,
+protein-viewer, mol-3d); those are size splits of one widget. Do not sweep `ui/` into feature
+folders — group files only when that feature is already extracted. Sketcher RDKit
+(`ui/sketcher/sketch_rdkit.py`) stays until that widget is being edited.
 
 **Processes Cancel:** `BackgroundActivityHub.try_cancel_row` handles `background` jobs via `cancel_background_job()` when a cancel callable was registered with `register_background_job(..., cancel=…)`. Filter apply, substructure filter, dimred, and MedChem Space register cancel callables.
 
 **Progress chrome (UX Phase 1):** Prepare-structure tools, QSAR train/predict, PDBFixer/PDBQT, dimred, and SQL load pages call `_begin_tool_progress` / `report_tool_progress` / `_finish_tool_progress`. Plot rebuilds register a short-lived Processes row (`Updating plot`) and set status to `Plot: collecting…` before series collect. Render 2D and auto-ingest 2D set status before task collection.
 
-**SQL load:** `SqlLoadWorker` fetches rows and runs `MolFromSmiles` off the GUI thread; `ToolsSqlPredictMixin` applies prepared rows in budgeted `append_rows_batch` chunks. Cancellable via Processes (`register_background_job`).
+**SQL load:** `SqlLoadWorker` fetches rows and runs `MolFromSmiles` off the GUI thread; `SqlLoadTools` applies prepared rows in budgeted `append_rows_batch` chunks. Cancellable via Processes (`register_background_job`).
 
 **SQLite mirror rebuild:** GUI only chunk-exports cell text into memory; `SqliteRebuildWorker` streams inserts + oid index off the GUI (`Indexing table…` progress). Sync `_rebuild_sqlite_store_from_model` remains for tiny/test paths.
 
 **Tool writeback:** `on_calc_finished` inserts columns immediately, then for large result sets chunks `apply_columns_values_bulk` / `set_column_text_by_oids` with `Writing results…` status; coloring and bounds run after the last chunk (`on_complete` for Protonate/fragment/SOM follow-ups). Fingerprint similarity uses the same chunked fill for large tables.
 
-Tool mixins that remain on the window (fragments, dock, predict) are thin adapters over `analysis_job_support` and the kernel. MMP / SALI / activity cliffs / pair network live on `WorkspaceTools`. Structure-prep (protonate, Fast Prepare, disconnect/neutralize/explicit H) lives on `WorkspaceTools.structure_prep`. Ingest/render/sqlite live on `TableBuildPipeline`; column writeback on `TableWriteService`.
+Leaf tools (fragments, dock, predict, descriptors, conformers, SQL load, viewers, table calc, reactions, external records) live on `WorkspaceTools`. MMP / SALI / activity cliffs / pair network and structure-prep already did. Ingest/render/sqlite/export live on `TableBuildPipeline`; column writeback on `TableWriteService`; filters on `FilterPanel`.
 
 **Filter bounds:** bulk load/ingest calls `schedule_calculate_global_bounds()` (debounced); undo calls `calculate_global_bounds()` immediately when filter cards need fresh min/max. Session restore installs saved `global_bounds` when present and otherwise scans immediately.
 
@@ -304,7 +308,7 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 ## Plots and table sync
 
 - **Plotter:** `ui/plot.py` (`PlotWidget`)
-- **Dock host:** `ui/plot_dock_host.py` (`PlotDockHost`) owns dock/undock, panel width, and pane close; `PlotToolsMixin` delegates the public API
+- **Dock host:** `ui/plot_dock_host.py` (`PlotDockHost`) owns dock/undock, panel width, and pane close; `PlotSync` (`ui/workspace_plot.py`) owns table↔plot selection sync and floating dialog tracking
 - **PCA / radar / dimred:** `ui/plotly_interactive_view.py`; dimred panel is `ui/dialogs/dimred_panel.py` (`DockableResultPlotPanel`), method dialogs stay in `ui/dialogs/dimensionality_reduction.py`
 - **MedChem space:** `ui/dialogs/medchem_space.py` (`MedChemPlotPanel` also subclasses `DockableResultPlotPanel`)
 - **Table → DataFrame:** `ui/table_dataframe.py` (Statistics, QSAR, MMP, dimred, and medchem-space)
@@ -317,8 +321,8 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 - **Docked-plot chrome:** `ui/dockable_plot.py` re-exports glyphs, floating titles, footer buttons, and pane embed (`dockable_plot_glyphs.py`, `_title.py`, `_chrome.py`, `_embed.py`)
 - **Workspace panes:** `ui/main_window/plot_pane.py` (`PlotPane`); `ui/main_window/workspace_layout.py` (`WorkspaceLayoutManager`)
 - **Result browsers:** `ui/browsers/` (SOM, selection, MMP, SALI, metabolites) with shims at `ui/*_browser.py`
-- **Filters:** `FilterPanelMixin` is a file-split of the window filter panel (cards/apply/substructure/bounds) under `ui/filters/`. True mixins are card chrome only (`card_chrome.py`); `cards.py` is the barrel.
-- **Conformer writeback:** `ui/main_window/conformer_writeback.py` (table append / packed ensemble / superpose mol lookup); `ConformersToolsMixin` stays the UI adapter
+- **Filters:** `FilterPanel` (`ui/filters/filter_panel.py`) owns cards/apply/substructure/bounds. True mixins are card chrome only (`card_chrome.py`); `cards.py` is the barrel.
+- **Conformer writeback:** `ui/main_window/conformer_writeback.py` (table append / packed ensemble / superpose mol lookup); `ConformersTools` is the UI adapter
 - **Table → plot:** debounced `_schedule_sync_active_plots_from_table_selection`
 - **Plot → table:** `apply_table_selection_for_source_rows`
 - **Filters / edits:** `_schedule_active_plots_replot` after filter apply; `dataChanged` on model for open plots

@@ -14,18 +14,21 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-
-"""Compat grouping only. Writeback is ``TableWriteService``; tools remain window file-splits."""
+"""SQL-load row mapping helpers with no Qt."""
 
 from __future__ import annotations
 
+from typing import Any
 
-from .conformers_tools_mixin import ConformersToolsMixin
-from .descriptors_tools_mixin import DescriptorsToolsMixin
+from ..chem.molecule_conversion import mol_blob_from_smiles
+
+__all__ = ["cells_from_sql_mapping", "mol_blob_from_smiles"]
 
 
-class ConformersDescriptorsMixin(
-    ConformersToolsMixin,
-    DescriptorsToolsMixin,
-):
-    """Optional grouping. Writeback is ``TableWriteService``; these tools are leftover window bases."""
+def cells_from_sql_mapping(cols: list[str], mapping: Any) -> dict[str, str]:
+    """Stringify one SQLAlchemy row mapping into table cells."""
+    row_cells: dict[str, str] = {}
+    for c in cols:
+        v = mapping.get(c)
+        row_cells[c] = "" if v is None else str(v)
+    return row_cells

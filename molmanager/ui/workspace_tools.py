@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Lazy leaf-tool collaborators (cluster, dimred, QSAR, MPO, medchem, MMP/SALI, structure-prep).
+"""Lazy leaf-tool collaborators (cluster, dimred, QSAR, MPO, medchem, MMP/SALI, structure-prep, viewers, calc, fragments, reactions, descriptors, conformers, SQL, dock, predict).
 
 Importing this module does not import the tool bodies or their dialogs.
 First use of a property constructs that collaborator with the window as ``self._app``.
@@ -207,6 +207,36 @@ class WorkspaceTools:
         )
         self.sali = _LazyCollaborator(app, lambda: _load("molmanager.ui.workspace_sali", "SaliTools"))
         self.structure_prep = _LazyCollaborator(app, _load_structure_prep)
+        self.viewers = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_viewers", "ViewerOpenersTools")
+        )
+        self.external = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_external", "ExternalRecordsTools")
+        )
+        self.table_calc = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_table_calc", "TableCalcTools")
+        )
+        self.fragment = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_fragment", "FragmentTools")
+        )
+        self.reaction = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_reaction", "ReactionTools")
+        )
+        self.descriptors = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_descriptors", "DescriptorsTools")
+        )
+        self.conformers = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_conformers", "ConformersTools")
+        )
+        self.sql_load = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_sql_load", "SqlLoadTools")
+        )
+        self.dock = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_dock", "DockTools")
+        )
+        self.predict = _LazyCollaborator(
+            app, lambda: _load("molmanager.ui.workspace_predict", "PredictTools")
+        )
 
 
 def _load(module: str, name: str):

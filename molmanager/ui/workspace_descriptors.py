@@ -14,45 +14,46 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-
 """Descriptor calculation dialogs (writeback is ``TableWriteService``)."""
 
 from __future__ import annotations
-
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QMessageBox,
-)
-
-from ...workers.chemistry_descriptors import CalcDescriptorsRequest, CalcWorker
+from PySide6.QtWidgets import QMessageBox
+from .analysis_job_support import ensure_table_ready_for_tool
+from ..workers.chemistry_descriptors import CalcDescriptorsRequest, CalcWorker
 
 
-class DescriptorsToolsMixin:
+class DescriptorsTools:
+    def __init__(self, app) -> None:
+        self._app = app
+
     def open_calc(self):
-        if not self.headers:
+        if not ensure_table_ready_for_tool(self._app, "Calculate Descriptors"):
             return
-        from ..dialogs import PropertyDialog
+        from .dialogs import PropertyDialog
 
-        desc_src_cols = self.chemistry_tool_structure_sources()
-        d = PropertyDialog(desc_src_cols, len(self._selected_logical_rows()), self)
-        self._prepare_tool_dialog(d)
+        desc_src_cols = self._app.chemistry_tool_structure_sources()
+        d = PropertyDialog(desc_src_cols, len(self._app._selected_logical_rows()), self._app)
+        self._app._prepare_tool_dialog(d)
         d.setAttribute(Qt.WA_DeleteOnClose, True)
         d.accepted.connect(lambda *_, dlg=d: self._on_calc_descriptors_dialog_accepted(dlg))
         d.show()
 
     def _on_calc_descriptors_dialog_accepted(self, d) -> None:
-        from ...descriptors.descriptors_3d import int_fns_need_3d
+        from ..descriptors.descriptors_3d import int_fns_need_3d
 
         disp, fns = d.get_selected()
-        calc_headers = self._unique_table_column_names(disp)
+        calc_headers = self._app._unique_table_column_names(disp)
         src = d.src_combo.currentText()
         is_s = src != "Structure"
-        s_idx = self.headers.index(src)
+        s_idx = self._app.headers.index(src)
         only_selected = d.only_selected_rows()
-        allowed = self._selected_oids_set() if only_selected else None
-        if self._abort_if_only_selected_but_empty(only_selected, allowed, "Calculate Descriptors"):
+        allowed = self._app._selected_oids_set() if only_selected else None
+        if self._app._abort_if_only_selected_but_empty(
+            only_selected, allowed, "Calculate Descriptors"
+        ):
             return
-        oids_list = self._all_oids_in_table_order()
+        oids_list = self._app._all_oids_in_table_order()
         if allowed is not None:
             oids_list = [o for o in oids_list if o in allowed]
         packed_confs, confs_cols, ensemble_db = (
@@ -63,28 +64,25 @@ class DescriptorsToolsMixin:
         if not is_s:
             data = []
             for o in oids_list:
-                r = self.logical_row_for_oid(o)
-                m = self.mols.get(o) if r >= 0 else None
+                r = self._app.logical_row_for_oid(o)
+                m = self._app.mols.get(o) if r >= 0 else None
                 if m is None and r >= 0:
-                    m = self._mol_for_structure_row(r)
+                    m = self._app._mol_for_structure_row(r)
                 if m is not None:
                     data.append((o, m))
         else:
             data = [
-                (o, self._table_cell_text(self.logical_row_for_oid(o), s_idx)) for o in oids_list
+                (o, self._app._table_cell_text(self._app.logical_row_for_oid(o), s_idx))
+                for o in oids_list
             ]
         if not data:
             QMessageBox.information(
-                self,
-                "Calculate Descriptors",
-                "No rows to process for this scope and source.",
+                self._app, "Calculate Descriptors", "No rows to process for this scope and source."
             )
-            self.status_label.setText("Ready.")
+            self._app.status_label.setText("Ready.")
             return
-
-        ps = self._tool_progress_state
-        self._begin_tool_progress("Calculate descriptors", len(data))
-
+        ps = self._app._tool_progress_state
+        self._app._begin_tool_progress("Calculate descriptors", len(data))
         req = CalcDescriptorsRequest(
             data=data,
             disp_headers=calc_headers,
@@ -96,53 +94,47 @@ class DescriptorsToolsMixin:
         )
 
         def _make_calc_worker(ev, request=req):
-            return CalcWorker(
-                request,
-                self.signals,
-                cancel_event=ev,
-                progress_state=ps,
-            )
+            return CalcWorker(request, self._app.signals, cancel_event=ev, progress_state=ps)
 
-        self.process_queue.enqueue(
-            f"Calculate descriptors ({len(data)} rows)",
-            _make_calc_worker,
+        self._app.process_queue.enqueue(
+            f"Calculate descriptors ({len(data)} rows)", _make_calc_worker
         )
 
     def _ensemble_inputs_for_descriptor_job(
         self, oids, src: str
     ) -> tuple[dict[int, str], dict[int, str], str | None]:
         """Packed-cell fallback map, column map, and ensemble DB path for 3D descriptors."""
-        from ...conformers.conformer_column_codec import (
+        from ..conformers.conformer_column_codec import (
             rehydrate_v1_confs_cell,
             unpack_confs_blocks_json_b64,
         )
-        from ...storage import EnsembleStore, ensemble_db_path
+        from ..storage import EnsembleStore, ensemble_db_path
 
         preferred: list[str] = []
         src_h = (src or "").strip()
-        if src_h in ("confs", "superpose") and src_h in self.headers:
+        if src_h in ("confs", "superpose") and src_h in self._app.headers:
             preferred.append(src_h)
         for col in ("confs", "superpose"):
-            if col not in preferred and col in self.headers:
+            if col not in preferred and col in self._app.headers:
                 preferred.append(col)
         if not preferred:
-            return {}, {}, None
-        sc = getattr(self, "_confs_blocks_sidecar", None)
-        db = str(ensemble_db_path(self) or "") or None
+            return ({}, {}, None)
+        sc = getattr(self._app, "_confs_blocks_sidecar", None)
+        db = str(ensemble_db_path(self._app) or "") or None
         packed: dict[int, str] = {}
         cols: dict[int, str] = {}
         mapping = sc if sc is not None else {}
         for oid in oids:
-            r = self.logical_row_for_oid(int(oid))
+            r = self._app.logical_row_for_oid(int(oid))
             if r < 0:
                 continue
             for col in preferred:
                 if isinstance(sc, EnsembleStore) and (int(oid), col) in sc:
                     cols[int(oid)] = col
                     break
-                raw = self._table_model.backing_value_for_row_header(r, col)
+                raw = self._app._table_model.backing_value_for_row_header(r, col)
                 full = rehydrate_v1_confs_cell(raw, col, int(oid), mapping)
                 if unpack_confs_blocks_json_b64(full):
                     packed[int(oid)] = full
                     break
-        return packed, cols, db
+        return (packed, cols, db)

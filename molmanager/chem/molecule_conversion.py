@@ -379,6 +379,18 @@ def mol_from_smiles(text: str):
         del blocker
 
 
+def mol_blob_from_smiles(smiles: str) -> bytes | None:
+    """Parse *smiles* to an RDKit pickle, or ``None`` when the string is invalid."""
+    mol = mol_from_smiles(smiles)
+    if mol is None:
+        return None
+    try:
+        blob = mol.ToBinary()
+    except Exception:
+        return None
+    return bytes(blob) if blob else None
+
+
 def mol_from_smarts(text: str):
     """Parse *text* as SMARTS. Returns ``None`` when RDKit rejects it."""
     smarts = (text or "").strip()

@@ -30,30 +30,13 @@ from molmanager.ui.app_kernel import (
     install_window_forwards,
     wrap_mixin_callable,
 )
-from molmanager.ui.filters.filter_apply_mixin import FilterApplyMixin
-from molmanager.ui.filters.filter_bounds_mixin import FilterBoundsMixin
-from molmanager.ui.filters.filter_cards_mixin import FilterCardsMixin
-from molmanager.ui.filters.filter_substructure_mixin import FilterSubstructureMixin
-from molmanager.ui.filters.panel_mixin import FilterPanelMixin
 from molmanager.ui.gui_settings_mixin import GuiSettingsMixin
 from molmanager.ui.main_window.app_lifecycle_mixin import AppLifecycleMixin
 from molmanager.ui.main_window.app_menu_mixin import AppMenuMixin
-from molmanager.ui.main_window.conformers_tools_mixin import ConformersToolsMixin
-from molmanager.ui.main_window.descriptors_tools_mixin import DescriptorsToolsMixin
-from molmanager.ui.main_window.dock_tools_mixin import DockToolsMixin
-from molmanager.ui.main_window.external_records_mixin import ExternalRecordsMixin
-from molmanager.ui.main_window.fragment_tools_mixin import FragmentToolsMixin
-from molmanager.ui.main_window.ingest_export_mixin import IngestExportMixin
-from molmanager.ui.main_window.plot_tools_mixin import PlotToolsMixin
-from molmanager.ui.main_window.predict_tools_mixin import PredictToolsMixin
-from molmanager.ui.main_window.reaction_tools_mixin import ReactionToolsMixin
-from molmanager.ui.main_window.sql_load_mixin import SqlLoadMixin
-from molmanager.ui.main_window.table_calc_mixin import TableCalcMixin
 from molmanager.ui.main_window.table_edit_mixin import TableEditMixin
 from molmanager.ui.main_window.table_menu_mixin import TableMenuMixin
 from molmanager.ui.main_window.table_search_mixin import TableSearchMixin
 from molmanager.ui.main_window.table_ui_mixin import TableUIMixin
-from molmanager.ui.main_window.viewer_openers_mixin import ViewerOpenersMixin
 from molmanager.ui.table_write_service import TableWriteHost, TableWriteService
 from molmanager.ui.tool_dialog_scope import ToolScopeHost
 
@@ -62,28 +45,11 @@ _ALLOWED_WINDOW_MIXIN_BASES = frozenset(
     {
         AppLifecycleMixin,
         AppMenuMixin,
-        ConformersToolsMixin,
-        DescriptorsToolsMixin,
-        DockToolsMixin,
-        ExternalRecordsMixin,
-        FilterApplyMixin,
-        FilterBoundsMixin,
-        FilterCardsMixin,
-        FilterPanelMixin,
-        FilterSubstructureMixin,
-        FragmentToolsMixin,
         GuiSettingsMixin,
-        IngestExportMixin,
-        PlotToolsMixin,
-        PredictToolsMixin,
-        ReactionToolsMixin,
-        SqlLoadMixin,
-        TableCalcMixin,
         TableEditMixin,
         TableMenuMixin,
         TableSearchMixin,
         TableUIMixin,
-        ViewerOpenersMixin,
     }
 )
 
@@ -183,19 +149,30 @@ def test_lazy_collaborator_constructs_class_and_drops_triggered_bool() -> None:
 
 def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa: ARG001
     from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.main_window.chemistry_mixin import ChemistryMixin
-    from molmanager.ui.main_window.session_mixin import SessionMixin
     from molmanager.ui.workspace_cluster import ClusterTools
     from molmanager.ui.workspace_activity_cliff import ActivityCliffTools
+    from molmanager.ui.workspace_conformers import ConformersTools
+    from molmanager.ui.workspace_descriptors import DescriptorsTools
+    from molmanager.ui.workspace_dock import DockTools
+    from molmanager.ui.workspace_external import ExternalRecordsTools
     from molmanager.ui.workspace_fast_prepare import FastPrepareTools
+    from molmanager.ui.workspace_fragment import FragmentTools
     from molmanager.ui.workspace_mmp import MmpTools
     from molmanager.ui.workspace_mmp_neighborhood import MmpNeighborhoodTools
     from molmanager.ui.workspace_mpo import MpoTools
+    from molmanager.ui.workspace_predict import PredictTools
     from molmanager.ui.workspace_protonate import ProtonateTools
     from molmanager.ui.workspace_qsar import QsarTools
+    from molmanager.ui.workspace_reaction import ReactionTools
     from molmanager.ui.workspace_sali import SaliTools
+    from molmanager.ui.workspace_sql_load import SqlLoadTools
     from molmanager.ui.workspace_structure_edit import StructureEditTools
     from molmanager.ui.workspace_structure_writeback import StructureWritebackTools
+    from molmanager.ui.workspace_table_calc import TableCalcTools
+    from molmanager.ui.workspace_viewers import ViewerOpenersTools
+    from molmanager.ui.filters.filter_panel import FilterPanel
+    from molmanager.ui.table_build_export import TableBuildExport
+    from molmanager.ui.workspace_plot import PlotSync
 
     w = ChemistryWorkspaceWindow()
     assert w.progress is not None
@@ -205,10 +182,11 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
     assert w.build_pipeline is not None
     assert w.session is not None
     assert w.workspace_tools is not None
+    assert w.filter_panel is not None
+    assert w.plot_sync is not None
+    assert w.plot_dock is not None
     mro = type(w).mro()
     off_mro = (
-        ChemistryMixin,
-        SessionMixin,
         ClusterTools,
         QsarTools,
         MpoTools,
@@ -220,6 +198,19 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
         FastPrepareTools,
         StructureEditTools,
         StructureWritebackTools,
+        ViewerOpenersTools,
+        ExternalRecordsTools,
+        TableCalcTools,
+        FragmentTools,
+        ReactionTools,
+        DescriptorsTools,
+        ConformersTools,
+        SqlLoadTools,
+        DockTools,
+        PredictTools,
+        FilterPanel,
+        TableBuildExport,
+        PlotSync,
     )
     for cls in off_mro:
         assert cls not in mro
@@ -235,6 +226,9 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
     assert hasattr(w, "_ensure_columns")
     assert hasattr(w, "_abort_if_only_selected_but_empty")
     assert hasattr(w, "open_cluster_dialog")
+    assert hasattr(w, "apply_filters")
+    assert hasattr(w, "open_file_dialog")
+    assert hasattr(w, "dock_plot_widget")
     assert hasattr(w, "_open_dimension_reduction_dialog")
     assert hasattr(w, "run_protonate")
     assert hasattr(w, "run_fast_prepare")

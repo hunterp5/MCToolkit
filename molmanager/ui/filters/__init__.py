@@ -8,13 +8,13 @@
 #
 # MolManager is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
-"""Filter panel mixin and filter card widgets."""
+"""Filter panel collaborator and filter card widgets."""
 
 from .cards import (
     CategoryFilterCard,
@@ -25,13 +25,13 @@ from .cards import (
     filter_card_drop_index,
     next_default_filter_title,
 )
-from .panel_mixin import FilterPanelMixin
+from .filter_panel import FilterPanel
 
 __all__ = [
     "CategoryFilterCard",
     "FilterCard",
     "FilterCardsHost",
-    "FilterPanelMixin",
+    "FilterPanel",
     "SubstructureFilterCard",
     "TextFilterCard",
     "filter_card_drop_index",

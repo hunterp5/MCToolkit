@@ -1,11 +1,11 @@
 {
   "note": "Coupling counters frozen by tests/test_architecture_ratchet.py. These may only go down. Re-freeze with: python scripts/architecture_metrics.py --write-baseline",
   "counters": {
-    "window_typed_params": 59,
-    "modules_taking_the_window": 21,
-    "private_cross_module_access": 44,
-    "deferred_intra_package_imports": 584,
-    "mixin_modules": 48,
+    "window_typed_params": 40,
+    "modules_taking_the_window": 19,
+    "private_cross_module_access": 28,
+    "deferred_intra_package_imports": 583,
+    "mixin_modules": 25,
     "bind_mixin_methods_sites": 0,
     "rdkit_in_ui_modules": 2,
     "app_kernel_members": 31
@@ -17,11 +17,11 @@
     "protocols_over_member_cap": 0
   },
   "tracked": {
-    "declared_private_kernel_members": 150,
-    "ui_loc_share_pct": 63.0,
-    "ui_loc": 94597,
-    "package_loc": 150228,
+    "declared_private_kernel_members": 237,
+    "ui_loc_share_pct": 62.9,
+    "ui_loc": 94544,
+    "package_loc": 150258,
     "gui_dependent_test_modules": 145,
-    "test_modules": 231
+    "test_modules": 232
   }
 }

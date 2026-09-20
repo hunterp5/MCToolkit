@@ -8,32 +8,31 @@
 #
 # MolManager is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
 """BRICS/RECAP/R-group fragment tools."""
 
 from __future__ import annotations
 
 import logging
+from typing import Protocol
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QMessageBox,
-)
-
-from ..strings import (
+from PySide6.QtWidgets import QMessageBox
+from .analysis_job_support import ensure_table_ready_for_tool
+from .strings import (
     TOOL_BRICS_DECOMP,
     TOOL_BRICS_RECOMP,
     TOOL_CORE_DECOMP,
     TOOL_RECAP_DECOMP,
     TOOL_RECAP_RECOMP,
 )
-from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
-from ...workers import (
+from ..table.structure_depiction_layout import structure_depict_height, structure_depict_width
+from ..workers import (
     FragmentDecompositionWorker,
     FragmentRecompositionWorker,
     RGroupDecompositionWorker,
@@ -42,20 +41,26 @@ from ...workers import (
 logger = logging.getLogger(__name__)
 
 
-class FragmentToolsMixin:
-    def open_core_based_decomposition(self) -> None:
-        if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(
-                self,
-                TOOL_CORE_DECOMP,
-                "Load a table with at least one row first.",
-            )
-            return
-        candidates = self.chemistry_tool_structure_sources()
-        from ..dialogs import CoreBasedDecompositionDialog
+class FragmentDecompState(Protocol):
+    """Whether fragment SMILES columns should auto-render after decomposition."""
 
-        d = CoreBasedDecompositionDialog(candidates, len(self._selected_logical_rows()), self)
-        self._prepare_tool_dialog(d)
+    _fragment_decomp_render_2d_after: bool
+
+
+class FragmentTools:
+    def __init__(self, app) -> None:
+        self._app = app
+
+    def open_core_based_decomposition(self) -> None:
+        if not ensure_table_ready_for_tool(self._app, TOOL_CORE_DECOMP, require_rows=True):
+            return
+        candidates = self._app.chemistry_tool_structure_sources()
+        from .dialogs import CoreBasedDecompositionDialog
+
+        d = CoreBasedDecompositionDialog(
+            candidates, len(self._app._selected_logical_rows()), self._app
+        )
+        self._app._prepare_tool_dialog(d)
         d.setAttribute(Qt.WA_DeleteOnClose, True)
         d.accepted.connect(lambda *_, dlg=d: self._on_core_based_decomposition_dialog_accepted(dlg))
         d.show()
@@ -63,24 +68,24 @@ class FragmentToolsMixin:
     def _on_core_based_decomposition_dialog_accepted(self, d) -> None:
         p = d.params()
         only_selected = d.only_selected_rows()
-        allowed = self._selected_oids_set() if only_selected else None
-        if self._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_CORE_DECOMP):
+        allowed = self._app._selected_oids_set() if only_selected else None
+        if self._app._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_CORE_DECOMP):
             return
         src = p.structure_source
-        data = self.collect_scoped_table_mols(src, only_selected=only_selected)
+        data = self._app.collect_scoped_table_mols(src, only_selected=only_selected)
         if not data:
             QMessageBox.information(
-                self,
+                self._app,
                 TOOL_CORE_DECOMP,
                 "No valid structures were found for the selected source and scope.",
             )
-            self.status_label.setText("Ready.")
+            self._app.status_label.setText("Ready.")
             return
-        ps = self._tool_progress_state
-        self._begin_tool_progress("Core-based decomposition", len(data))
-        self.process_queue.enqueue(
+        ps = self._app._tool_progress_state
+        self._app._begin_tool_progress("Core-based decomposition", len(data))
+        self._app.process_queue.enqueue(
             f"Core-based decomposition ({len(data)} rows)",
-            lambda ev, dt=data, pp=p, sigs=self.signals, prog=ps: RGroupDecompositionWorker(
+            lambda ev, dt=data, pp=p, sigs=self._app.signals, prog=ps: RGroupDecompositionWorker(
                 dt,
                 pp.core_query,
                 pp.column_prefix,
@@ -94,52 +99,41 @@ class FragmentToolsMixin:
         )
 
     def on_rgroup_decomp_finished(self, res, col_headers: list) -> None:
-        self.on_calc_finished(res, col_headers, progress_label=TOOL_CORE_DECOMP)
+        self._app.on_calc_finished(res, col_headers, progress_label=TOOL_CORE_DECOMP)
 
     def on_rgroup_decomp_failed(self, message: str) -> None:
-        self._clear_tool_progress()
-        self.status_label.setText("Ready.")
-        QMessageBox.warning(self, TOOL_CORE_DECOMP, message or "Core-based decomposition failed.")
+        self._app._clear_tool_progress()
+        self._app.status_label.setText("Ready.")
+        QMessageBox.warning(
+            self._app, TOOL_CORE_DECOMP, message or "Core-based decomposition failed."
+        )
 
     def open_brics_decomposition(self) -> None:
         self._open_fragment_decomposition_dialog(
-            method="brics",
-            window_title=TOOL_BRICS_DECOMP,
-            default_prefix="BRICS",
+            method="brics", window_title=TOOL_BRICS_DECOMP, default_prefix="BRICS"
         )
 
     def open_recap_decomposition(self) -> None:
         self._open_fragment_decomposition_dialog(
-            method="recap",
-            window_title=TOOL_RECAP_DECOMP,
-            default_prefix="RECAP",
+            method="recap", window_title=TOOL_RECAP_DECOMP, default_prefix="RECAP"
         )
 
     def _open_fragment_decomposition_dialog(
-        self,
-        *,
-        method: str,
-        window_title: str,
-        default_prefix: str,
+        self, *, method: str, window_title: str, default_prefix: str
     ) -> None:
-        if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(
-                self,
-                window_title,
-                "Load a table with at least one row first.",
-            )
+        if not ensure_table_ready_for_tool(self._app, window_title, require_rows=True):
             return
-        from ..dialogs import FragmentDecompositionDialog
+        from .dialogs import FragmentDecompositionDialog
 
         d = FragmentDecompositionDialog(
             window_title=window_title,
             default_prefix=default_prefix,
             method=method,
-            structure_sources=self.chemistry_tool_structure_sources(),
-            selected_row_count=len(self._selected_logical_rows()),
-            parent=self,
+            structure_sources=self._app.chemistry_tool_structure_sources(),
+            selected_row_count=len(self._app._selected_logical_rows()),
+            parent=self._app,
         )
-        self._prepare_tool_dialog(d)
+        self._app._prepare_tool_dialog(d)
         d.setAttribute(Qt.WA_DeleteOnClose, True)
         d.accepted.connect(lambda *_, dlg=d: self._on_fragment_decomposition_dialog_accepted(dlg))
         d.show()
@@ -147,42 +141,36 @@ class FragmentToolsMixin:
     def _on_fragment_decomposition_dialog_accepted(self, d) -> None:
         p = d.params()
         only_selected = d.only_selected_rows()
-        if self._abort_if_only_selected_but_empty(
-            only_selected, self._selected_oids_set(), p.tool_title
+        if self._app._abort_if_only_selected_but_empty(
+            only_selected, self._app._selected_oids_set(), p.tool_title
         ):
             return
-        data = self.collect_scoped_table_mols(p.structure_source, only_selected=only_selected)
+        data = self._app.collect_scoped_table_mols(p.structure_source, only_selected=only_selected)
         if not data:
             QMessageBox.information(
-                self,
+                self._app,
                 p.tool_title,
                 "No valid structures were found for the selected source and scope.",
             )
-            self.status_label.setText("Ready.")
+            self._app.status_label.setText("Ready.")
             return
         prefix = p.column_prefix or ("BRICS" if p.method == "brics" else "RECAP")
         method = "brics" if p.method == "brics" else "recap"
-        self._fragment_decomp_render_2d_after = bool(getattr(p, "render_2d", False))
-        ps = self._tool_progress_state
-        self._begin_tool_progress(p.tool_title, len(data))
-        self.process_queue.enqueue(
+        self._app._fragment_decomp_render_2d_after = bool(getattr(p, "render_2d", False))
+        ps = self._app._tool_progress_state
+        self._app._begin_tool_progress(p.tool_title, len(data))
+        self._app.process_queue.enqueue(
             f"{p.tool_title} ({len(data)} rows)",
-            lambda ev, dt=data, m=method, pref=prefix, title=p.tool_title, sigs=self.signals, prog=ps: (
+            lambda ev, dt=data, m=method, pref=prefix, title=p.tool_title, sigs=self._app.signals, prog=ps: (
                 FragmentDecompositionWorker(
-                    dt,
-                    m,
-                    pref,
-                    title,
-                    sigs,
-                    cancel_event=ev,
-                    progress_state=prog,
+                    dt, m, pref, title, sigs, cancel_event=ev, progress_state=prog
                 )
             ),
         )
 
     def on_fragment_decomp_finished(self, res, col_headers: list, tool_title: str) -> None:
-        self._finish_tool_progress(tool_title)
-        self.on_calc_finished(
+        self._app._finish_tool_progress(tool_title)
+        self._app.on_calc_finished(
             res,
             col_headers,
             finish_progress=False,
@@ -190,21 +178,19 @@ class FragmentToolsMixin:
         )
 
     def _fragment_decomp_maybe_render(self, written: list[str], tool_title: str) -> None:
-        do_render = bool(getattr(self, "_fragment_decomp_render_2d_after", False))
-        self._fragment_decomp_render_2d_after = False
-        # Optionally render new fragment SMILES columns so the user can see the pieces immediately.
-        # Uses pixmap-only columns (hide SMILES text) and queues the renders so the GUI stays responsive.
+        do_render = bool(getattr(self._app, "_fragment_decomp_render_2d_after", False))
+        self._app._fragment_decomp_render_2d_after = False
         if do_render and tool_title in (TOOL_BRICS_DECOMP, TOOL_RECAP_DECOMP) and written:
             try:
-                base_w, base_h = structure_depict_width(), structure_depict_height()
+                base_w, base_h = (structure_depict_width(), structure_depict_height())
                 for h in written:
-                    if h not in self.headers:
+                    if h not in self._app.headers:
                         continue
-                    renders, row_by_oid = self._build_render2d_tasks_in_table_order(
+                    renders, row_by_oid = self._app._build_render2d_tasks_in_table_order(
                         h, base_w, base_h, None
                     )
                     if renders:
-                        self._start_render_2d_batch(
+                        self._app._start_render_2d_batch(
                             renders,
                             row_by_oid,
                             h,
@@ -215,94 +201,81 @@ class FragmentToolsMixin:
                 logger.exception("Fragment decomposition: auto 2D render failed")
 
     def on_fragment_decomp_failed(self, message: str, tool_title: str) -> None:
-        self._clear_tool_progress()
-        self._fragment_decomp_render_2d_after = False
-        self.status_label.setText("Ready.")
-        QMessageBox.warning(self, tool_title, message or "Fragment decomposition failed.")
+        self._app._clear_tool_progress()
+        self._app._fragment_decomp_render_2d_after = False
+        self._app.status_label.setText("Ready.")
+        QMessageBox.warning(self._app, tool_title, message or "Fragment decomposition failed.")
 
     def open_brics_recomposition(self) -> None:
         self._open_fragment_recomposition_dialog(
-            method="brics",
-            window_title=TOOL_BRICS_RECOMP,
-            default_prefix="BRICS",
+            method="brics", window_title=TOOL_BRICS_RECOMP, default_prefix="BRICS"
         )
 
     def open_recap_recomposition(self) -> None:
         self._open_fragment_recomposition_dialog(
-            method="recap",
-            window_title=TOOL_RECAP_RECOMP,
-            default_prefix="RECAP",
+            method="recap", window_title=TOOL_RECAP_RECOMP, default_prefix="RECAP"
         )
 
     def _open_fragment_recomposition_dialog(
-        self,
-        *,
-        method: str,
-        window_title: str,
-        default_prefix: str,
+        self, *, method: str, window_title: str, default_prefix: str
     ) -> None:
-        if not self.headers or self._table_model.rowCount() == 0:
-            QMessageBox.information(
-                self,
-                window_title,
-                "Load a table with fragment columns from decomposition first.",
-            )
+        if not ensure_table_ready_for_tool(
+            self._app,
+            window_title,
+            require_rows=True,
+            empty_message="Load a table with fragment columns from decomposition first.",
+        ):
             return
-        from ..dialogs import FragmentRecompositionDialog
+        from .dialogs import FragmentRecompositionDialog
 
         d = FragmentRecompositionDialog(
             window_title=window_title,
             default_prefix=default_prefix,
             method=method,
-            table_headers=list(self.headers),
-            selected_row_count=len(self._selected_logical_rows()),
-            parent=self,
+            table_headers=list(self._app.headers),
+            selected_row_count=len(self._app._selected_logical_rows()),
+            parent=self._app,
         )
-        self._prepare_tool_dialog(d)
+        self._app._prepare_tool_dialog(d)
         d.setAttribute(Qt.WA_DeleteOnClose, True)
         d.accepted.connect(lambda *_, dlg=d: self._on_fragment_recomposition_dialog_accepted(dlg))
         d.show()
 
-    def _collect_fragment_smiles_for_prefix(
-        self,
-        prefix: str,
-        *,
-        only_selected: bool,
-    ) -> list[str]:
-        from ...chem.fragment_decomposition import fragment_columns_for_prefix
+    def _collect_fragment_smiles_for_prefix(self, prefix: str, *, only_selected: bool) -> list[str]:
+        from ..chem.fragment_decomposition import fragment_columns_for_prefix
 
-        cols = fragment_columns_for_prefix(self.headers, prefix)
+        cols = fragment_columns_for_prefix(self._app.headers, prefix)
         if not cols:
             return []
-        allowed = self._selected_oids_set() if only_selected else None
-        col_idx = {h: self.headers.index(h) for h in cols}
+        allowed = self._app._selected_oids_set() if only_selected else None
+        col_idx = {h: self._app.headers.index(h) for h in cols}
         out: list[str] = []
-        for r in range(self._table_model.rowCount()):
-            t0 = self._table_model.cell_text(r, 0)
+        for r in range(self._app._table_model.rowCount()):
+            t0 = self._app._table_model.cell_text(r, 0)
             if not t0.isdigit():
                 continue
             oid = int(t0)
             if allowed is not None and oid not in allowed:
                 continue
             for h in cols:
-                raw = self._table_cell_text(r, col_idx[h])
+                raw = self._app._table_cell_text(r, col_idx[h])
                 if not raw:
-                    raw = self._table_model.backing_value_for_row_header(r, h) or ""
+                    raw = self._app._table_model.backing_value_for_row_header(r, h) or ""
                 if raw:
                     out.append(str(raw).strip())
         return out
 
     def _on_fragment_recomposition_dialog_accepted(self, d) -> None:
         p = d.params()
-        from ...platform_support.memory_guards import check_product_enumeration
+        from ..platform_support.memory_guards import check_product_enumeration
 
         guard = check_product_enumeration(p.max_products)
         if not guard.ok:
-            QMessageBox.warning(self, p.tool_title, guard.message)
+            QMessageBox.warning(self._app, p.tool_title, guard.message)
             return
         only_selected = d.only_selected_rows()
-        if self._abort_if_only_selected_but_empty(
-            only_selected, self._selected_oids_set(), p.tool_title
+        if self._app._abort_if_only_selected_but_empty(
+            only_selected, self._app._selected_oids_set(), p.tool_title
         ):
             return
         fragments = self._collect_fragment_smiles_for_prefix(
@@ -310,18 +283,18 @@ class FragmentToolsMixin:
         )
         if not fragments:
             QMessageBox.information(
-                self,
+                self._app,
                 p.tool_title,
                 f"No fragment SMILES found in columns matching “{p.column_prefix}_1”, “{p.column_prefix}_2”, …",
             )
-            self.status_label.setText("Ready.")
+            self._app.status_label.setText("Ready.")
             return
         method = "brics" if p.method == "brics" else "recap"
-        ps = self._tool_progress_state
-        self._begin_tool_progress(p.tool_title, p.max_products)
-        self.process_queue.enqueue(
+        ps = self._app._tool_progress_state
+        self._app._begin_tool_progress(p.tool_title, p.max_products)
+        self._app.process_queue.enqueue(
             f"{p.tool_title} ({len(fragments)} fragments)",
-            lambda ev, fr=fragments, pp=p, m=method, sigs=self.signals, prog=ps: (
+            lambda ev, fr=fragments, pp=p, m=method, sigs=self._app.signals, prog=ps: (
                 FragmentRecompositionWorker(
                     fr,
                     m,
@@ -339,25 +312,27 @@ class FragmentToolsMixin:
     def on_fragment_recomp_finished(
         self, products: list, tool_title: str, skipped: int = 0
     ) -> None:
-        self._finish_tool_progress(tool_title)
+        self._app._finish_tool_progress(tool_title)
         method_label = "BRICS" if "BRICS" in tool_title.upper() else "RECAP"
         records = [
             (str(smi), {"Recompose_Method": method_label})
             for smi in products
             if (smi or "").strip()
         ]
-        n = self.add_rows_from_external_records_batch(records, render_structures=True)
+        n = self._app.add_rows_from_external_records_batch(records, render_structures=True)
         suffix = ""
         if skipped > 0:
             suffix = f" ({skipped:,} assembly candidate(s) skipped by constraints)"
-        if self.has_partial_results_notice():
+        if self._app.has_partial_results_notice():
             return
-        self.status_label.setText(f"{tool_title}: added {n:,} product row(s){suffix}.")
+        self._app.status_label.setText(f"{tool_title}: added {n:,} product row(s){suffix}.")
 
     def on_fragment_recomp_failed(self, message: str, tool_title: str) -> None:
         if message == "Cancelled.":
-            self._finish_tool_progress(tool_title)
-            self.status_label.setText(self._consume_partial_results_notice() or "Cancelled.")
+            self._app._finish_tool_progress(tool_title)
+            self._app.status_label.setText(
+                self._app._consume_partial_results_notice() or "Cancelled."
+            )
             return
-        self.status_label.setText("Ready.")
-        QMessageBox.warning(self, tool_title, message or "Fragment recomposition failed.")
+        self._app.status_label.setText("Ready.")
+        QMessageBox.warning(self._app, tool_title, message or "Fragment recomposition failed.")

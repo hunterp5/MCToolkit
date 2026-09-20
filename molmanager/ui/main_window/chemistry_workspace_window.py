@@ -65,6 +65,11 @@ from ..compound_table_model import (
 )
 from ..filter_proxy_model import FilterProxyModel
 from ..filters.cards import FilterCardsHost
+from ..filters.filter_apply import FilterApply
+from ..filters.filter_bounds import FilterBounds
+from ..filters.filter_cards_ops import FilterCards
+from ..filters.filter_panel import FilterPanel
+from ..filters.filter_substructure import FilterSubstructure
 from ..gui_settings_mixin import GuiSettingsMixin
 from ..process_queue import ProcessQueueManager
 from ..progress_controller import ProgressController
@@ -74,6 +79,7 @@ from ..session_plots import SessionPlots
 from ..session_restore import SessionRestore
 from ..session_save import SessionSave
 from ..session_table_layout import SessionTableLayout
+from ..table_build_export import TableBuildExport
 from ..table_build_ingest import TableBuildIngest
 from ..table_build_layout import TableBuildLayout
 from ..table_build_pipeline import TableBuildPipeline
@@ -86,34 +92,33 @@ from ..table_write_service import TableWriteService
 from ..theme import bootstrap_application_gui
 from ..tool_dialog_scope import ToolDialogScope
 from ..workspace_cluster import ClusterTools
+from ..workspace_conformers import ConformersTools
+from ..workspace_descriptors import DescriptorsTools
 from ..workspace_dimred import DimensionReductionTools
+from ..workspace_dock import DockTools
+from ..workspace_external import ExternalRecordsTools
 from ..workspace_fast_prepare import FastPrepareTools
+from ..workspace_fragment import FragmentTools
 from ..workspace_medchem import MedChemSpaceTools
 from ..workspace_mmp import MmpTools
 from ..workspace_mmp_neighborhood import MmpNeighborhoodTools
 from ..workspace_activity_cliff import ActivityCliffTools
 from ..workspace_mpo import MpoTools
+from ..workspace_plot import PlotSync
+from ..workspace_predict import PredictTools
 from ..workspace_protonate import ProtonateTools
 from ..workspace_qsar import QsarTools
+from ..workspace_reaction import ReactionTools
 from ..workspace_sali import SaliTools
+from ..workspace_sql_load import SqlLoadTools
 from ..workspace_structure_edit import StructureEditTools
 from ..workspace_structure_writeback import StructureWritebackTools
+from ..workspace_table_calc import TableCalcTools
 from ..workspace_tools import WorkspaceTools
+from ..workspace_viewers import ViewerOpenersTools
 from .app_lifecycle_mixin import AppLifecycleMixin
 from .app_menu_mixin import AppMenuMixin
-from .conformers_tools_mixin import ConformersToolsMixin
-from .descriptors_tools_mixin import DescriptorsToolsMixin
-from .dock_tools_mixin import DockToolsMixin
-from .external_records_mixin import ExternalRecordsMixin
-from .fragment_tools_mixin import FragmentToolsMixin
-from .ingest_export_mixin import IngestExportMixin
-from .plot_tools_mixin import PlotToolsMixin
-from .predict_tools_mixin import PredictToolsMixin
-from .reaction_tools_mixin import ReactionToolsMixin
-from .sql_load_mixin import SqlLoadMixin
-from .table_calc_mixin import TableCalcMixin
 from .table_ui_mixin import TableUIMixin
-from .viewer_openers_mixin import ViewerOpenersMixin
 
 _FILTER_PANEL_BTN_H = 28
 _FILTER_PANEL_BTN_SPACING = 6
@@ -153,18 +158,6 @@ class ChemistryWorkspaceWindow(
     AppLifecycleMixin,
     AppMenuMixin,
     TableUIMixin,
-    IngestExportMixin,
-    PlotToolsMixin,
-    ConformersToolsMixin,
-    DescriptorsToolsMixin,
-    FragmentToolsMixin,
-    ReactionToolsMixin,
-    TableCalcMixin,
-    ViewerOpenersMixin,
-    ExternalRecordsMixin,
-    DockToolsMixin,
-    SqlLoadMixin,
-    PredictToolsMixin,
     GuiSettingsMixin,
 ):
     """Main window facade: table workspace, tools, and kernel-backed collaborators.
@@ -223,6 +216,8 @@ class ChemistryWorkspaceWindow(
         self.build_pipeline = TableBuildPipeline(self)
         self.session = SessionController(self)
         self.workspace_tools = WorkspaceTools(self)
+        self.filter_panel = FilterPanel(self)
+        self.plot_sync = PlotSync(self)
         _qc = Qt.QueuedConnection
         self.signals.mols_loaded.connect(self.on_file_loaded, _qc)
         self.signals.structure_source_probe.connect(self._on_structure_source_probe, _qc)
@@ -671,6 +666,19 @@ class ChemistryWorkspaceWindow(
         if index.isValid():
             self.on_cell_double_click(index.row(), index.column())
 
+    @property
+    def plot_dock(self):
+        """Workspace docking owner (:class:`~molmanager.ui.plot_dock_host.PlotDockHost`)."""
+        return self._plot_dock_host
+
+    @property
+    def _docked_plot_widget(self):
+        return self.plot_dock._docked_plot_widget
+
+    @_docked_plot_widget.setter
+    def _docked_plot_widget(self, value) -> None:
+        self.plot_dock._docked_plot_widget = value
+
 
 install_window_forwards(ChemistryWorkspaceWindow, "progress", (ProgressController,))
 install_window_forwards(ChemistryWorkspaceWindow, "tool_scope", (ToolDialogScope,))
@@ -689,6 +697,7 @@ install_window_forwards(
         TableBuildLayout,
         TableBuildRender,
         TableBuildRenderResults,
+        TableBuildExport,
     ),
 )
 install_window_forwards(
@@ -729,3 +738,23 @@ install_window_forwards(
         StructureWritebackTools,
     ),
 )
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.viewers", (ViewerOpenersTools,))
+install_window_forwards(
+    ChemistryWorkspaceWindow, "workspace_tools.external", (ExternalRecordsTools,)
+)
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.table_calc", (TableCalcTools,))
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.fragment", (FragmentTools,))
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.reaction", (ReactionTools,))
+install_window_forwards(
+    ChemistryWorkspaceWindow, "workspace_tools.descriptors", (DescriptorsTools,)
+)
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.conformers", (ConformersTools,))
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.sql_load", (SqlLoadTools,))
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.dock", (DockTools,))
+install_window_forwards(ChemistryWorkspaceWindow, "workspace_tools.predict", (PredictTools,))
+install_window_forwards(
+    ChemistryWorkspaceWindow,
+    "filter_panel",
+    (FilterCards, FilterApply, FilterSubstructure, FilterBounds),
+)
+install_window_forwards(ChemistryWorkspaceWindow, "plot_sync", (PlotSync,))

@@ -23,7 +23,9 @@ import sys
 from molmanager.workflows.tool_readiness import (
     ToolBlocker,
     plan_activity_analysis,
+    plan_calculator,
     plan_table_readiness,
+    plan_text_column_tool,
 )
 
 
@@ -83,3 +85,26 @@ def test_activity_analysis_returns_usable_columns():
     assert plan.is_ready
     assert plan.activity_columns == ("IC50", "MW")
     assert plan.blocked_by is None
+
+
+def test_text_column_tool_needs_rows_and_a_text_column():
+    assert (
+        plan_text_column_tool(
+            headers=["SMILES"], row_count=0, text_columns=["SMILES"]
+        ).blocked_by
+        is ToolBlocker.NO_ROWS
+    )
+    assert (
+        plan_text_column_tool(headers=["SMILES"], row_count=3, text_columns=[]).blocked_by
+        is ToolBlocker.NO_TEXT_COLUMN
+    )
+    assert plan_text_column_tool(
+        headers=["SMILES"], row_count=3, text_columns=["SMILES"]
+    ).is_ready
+
+
+def test_calculator_blocks_when_policy_disabled():
+    plan = plan_calculator(headers=["SMILES"], disabled=True)
+    assert plan.blocked_by is ToolBlocker.CALCULATOR_DISABLED
+    assert plan_calculator(headers=["SMILES"], disabled=False).is_ready
+    assert plan_calculator(headers=[], disabled=False).blocked_by is ToolBlocker.NO_TABLE

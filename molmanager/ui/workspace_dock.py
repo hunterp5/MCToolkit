@@ -19,21 +19,32 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Protocol
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
-
-from ...chem.molecule_conversion import copy_mol, mol_to_canonical_smiles
-from ...conformers.conformer_column_codec import pack_mols_as_confs_cell
-from ...docking.pose_file_io import (
+from ..chem.molecule_conversion import copy_mol, mol_to_canonical_smiles
+from ..conformers.conformer_column_codec import pack_mols_as_confs_cell
+from ..docking.pose_file_io import (
     dock_poses_pack_meta,
     group_dock_poses,
     is_poses_header,
     pose_table_props,
     stamp_pose_parent_oids,
 )
-from ...services.column_labels import COLUMN_PARENT_OID
-from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
+from ..services.column_labels import COLUMN_PARENT_OID
+from .singleton_modeless_dialog import reuse_or_show_modeless_singleton
+
+
+class DockResultsState(Protocol):
+    """Last dock run and packed-pose writeback kept on the window."""
+
+    _pose_browser_dialog: Any
+    _last_dock_results: Any
+    _dock_pose_zoomed: bool
+
+    def _next_packed_ensemble_column(self, prefix: str) -> str: ...
+    def _write_packed_ensemble_cells(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 def _copy_dock_pose_mols(mols: list) -> list:
@@ -48,7 +59,10 @@ def _copy_dock_pose_mols(mols: list) -> list:
     return out
 
 
-class DockToolsMixin:
+class DockTools:
+    def __init__(self, app) -> None:
+        self._app = app
+
     def open_dock_results_window(
         self,
         mols: list,
@@ -58,19 +72,16 @@ class DockToolsMixin:
         crystal_path: str | None = None,
     ):
         """Open the pose browser in the Protein Viewer Manager, or as a floating window."""
-        from ..pose_browser import PoseBrowserDialog, PoseBrowserWidget
+        from .pose_browser import PoseBrowserDialog, PoseBrowserWidget
 
-        usable = [m for m in (mols or []) if m is not None]
+        usable = [m for m in mols or [] if m is not None]
         if not usable:
             return None
         copies = _copy_dock_pose_mols(usable)
         rec_path = (receptor_path or "").strip() or None
         xtal_path = (crystal_path or "").strip() or None
         self._store_last_dock_results(
-            copies,
-            title=title,
-            receptor_path=rec_path,
-            crystal_path=xtal_path,
+            copies, title=title, receptor_path=rec_path, crystal_path=xtal_path
         )
         protein = self._live_protein_viewer()
         if protein is not None:
@@ -91,26 +102,25 @@ class DockToolsMixin:
             _load(existing)
             viewer = self._live_protein_viewer()
             already = getattr(viewer, "is_side_docked", None) if viewer is not None else None
-            if viewer is not None and not (callable(already) and already(existing)):
+            if viewer is not None and (not (callable(already) and already(existing))):
                 host = existing.window()
-                from ..pose_browser import PoseBrowserDialog
+                from .pose_browser import PoseBrowserDialog
 
                 if _dock_in_viewer(existing):
                     if isinstance(host, PoseBrowserDialog):
-                        from ..dockable_plot_chrome import discard_host_dialog_after_dock
+                        from .dockable_plot_chrome import discard_host_dialog_after_dock
 
-                        discard_host_dialog_after_dock(host, self, "_pose_browser_dialog")
+                        discard_host_dialog_after_dock(host, self._app, "_pose_browser_dialog")
                     return existing
             self._raise_pose_browser(existing)
             return self._pose_browser_open_result(existing)
-
-        widget = PoseBrowserWidget(self)
+        widget = PoseBrowserWidget(self._app)
         _load(widget)
         if _dock_in_viewer(widget):
             return widget
 
         def _factory():
-            dlg = PoseBrowserDialog(self, panel=widget)
+            dlg = PoseBrowserDialog(self._app, panel=widget)
             dlg.setWindowTitle("Pose Browser")
             return dlg
 
@@ -119,7 +129,7 @@ class DockToolsMixin:
             dlg.setWindowTitle("Pose Browser")
 
         return reuse_or_show_modeless_singleton(
-            self,
+            self._app,
             "_pose_browser_dialog",
             _factory,
             self._on_pose_browser_dialog_destroyed,
@@ -128,13 +138,13 @@ class DockToolsMixin:
 
     def _pose_browser_open_result(self, widget):
         """Return the Manager-docked panel, or its floating dialog host."""
-        from ..pose_browser import PoseBrowserDialog
+        from .pose_browser import PoseBrowserDialog
 
         protein = self._live_protein_viewer()
         check_side = getattr(protein, "is_side_docked", None) if protein is not None else None
         if callable(check_side) and widget is not None and bool(check_side(widget)):
             return widget
-        check = getattr(self, "is_plot_docked", None)
+        check = getattr(self._app, "is_plot_docked", None)
         if callable(check) and widget is not None and bool(check(widget)):
             return widget
         host = widget.window() if widget is not None else None
@@ -143,24 +153,24 @@ class DockToolsMixin:
         return widget
 
     def _on_pose_browser_dialog_destroyed(self, *_args) -> None:
-        from ..qt_widget_utils import qobject_is_deleted
+        from .qt_widget_utils import qobject_is_deleted
 
-        if qobject_is_deleted(self):
+        if qobject_is_deleted(self._app):
             return
         try:
-            sender = self.sender()
+            sender = self._app.sender()
         except RuntimeError:
             return
-        current = getattr(self, "_pose_browser_dialog", None)
-        if sender is not None and current is not None and current is not sender:
+        current = getattr(self._app, "_pose_browser_dialog", None)
+        if sender is not None and current is not None and (current is not sender):
             return
-        self._pose_browser_dialog = None
+        self._app._pose_browser_dialog = None
         self._clear_protein_viewer_dock_pose()
 
     def _on_pose_browser_widget_destroyed(self, *_args) -> None:
-        from ..qt_widget_utils import qobject_is_deleted
+        from .qt_widget_utils import qobject_is_deleted
 
-        if qobject_is_deleted(self):
+        if qobject_is_deleted(self._app):
             return
         self._clear_protein_viewer_dock_pose()
 
@@ -179,7 +189,7 @@ class DockToolsMixin:
 
     def _pose_browser_window_is_open(self, widget) -> bool:
         """True when the pose browser is docked in a visible viewer or in a visible window."""
-        from ..qt_widget_utils import qobject_is_deleted
+        from .qt_widget_utils import qobject_is_deleted
 
         if widget is None or qobject_is_deleted(widget):
             return False
@@ -192,7 +202,7 @@ class DockToolsMixin:
             check = getattr(protein, "is_side_docked", None)
             if viewer_open and callable(check) and bool(check(widget)):
                 return True
-        check = getattr(self, "is_plot_docked", None)
+        check = getattr(self._app, "is_plot_docked", None)
         if callable(check) and bool(check(widget)):
             return True
         try:
@@ -208,8 +218,8 @@ class DockToolsMixin:
 
     def _live_pose_browser(self):
         """Return the Manager-docked or visible floating pose-browser panel."""
-        from ..pose_browser import PoseBrowserDialog, PoseBrowserWidget
-        from ..qt_widget_utils import qobject_is_deleted
+        from .pose_browser import PoseBrowserDialog, PoseBrowserWidget
+        from .qt_widget_utils import qobject_is_deleted
 
         protein = self._live_protein_viewer()
         lister = getattr(protein, "side_docked_widgets", None) if protein is not None else None
@@ -217,12 +227,12 @@ class DockToolsMixin:
             for w in lister():
                 if isinstance(w, PoseBrowserWidget) and self._pose_browser_window_is_open(w):
                     return w
-        lister = getattr(self, "iter_docked_plot_widgets", None)
+        lister = getattr(self._app, "iter_docked_plot_widgets", None)
         if callable(lister):
             for w in lister():
                 if isinstance(w, PoseBrowserWidget) and self._pose_browser_window_is_open(w):
                     return w
-        dlg = getattr(self, "_pose_browser_dialog", None)
+        dlg = getattr(self._app, "_pose_browser_dialog", None)
         if dlg is None or qobject_is_deleted(dlg):
             return None
         panel = getattr(dlg, "_panel", None)
@@ -252,23 +262,23 @@ class DockToolsMixin:
             except RuntimeError:
                 pass
             return
-        check = getattr(self, "is_plot_docked", None)
+        check = getattr(self._app, "is_plot_docked", None)
         docked = callable(check) and widget is not None and bool(check(widget))
         if docked:
-            pane_for = getattr(self, "pane_for_plot_widget", None)
+            pane_for = getattr(self._app, "pane_for_plot_widget", None)
             pane = pane_for(widget) if callable(pane_for) else None
-            mgr = getattr(self, "_workspace_layout", None)
+            mgr = getattr(self._app, "_workspace_layout", None)
             if pane is not None:
                 if mgr is not None:
                     mgr.set_preferred_pane(pane)
                 show_page = getattr(pane, "add_plot_widget", None)
                 if callable(show_page):
                     show_page(widget)
-            show = getattr(self, "show_docked_plot_panel", None)
+            show = getattr(self._app, "show_docked_plot_panel", None)
             if callable(show):
                 show()
             widget.raise_()
-            status = getattr(self, "status_label", None)
+            status = getattr(self._app, "status_label", None)
             if status is not None:
                 status.setText("Pose Browser: focused in workspace pane.")
             return
@@ -296,7 +306,7 @@ class DockToolsMixin:
         if existing is not None:
             self._raise_pose_browser(existing)
             return self._pose_browser_open_result(existing)
-        snap = getattr(self, "_last_dock_results", None) or {}
+        snap = getattr(self._app, "_last_dock_results", None) or {}
         mols = list(snap.get("mols") or [])
         if not mols:
             mols = self._mols_from_table_pose_columns()
@@ -307,12 +317,10 @@ class DockToolsMixin:
                     receptor_path=snap.get("receptor_path"),
                     crystal_path=snap.get("crystal_path"),
                 )
-                snap = getattr(self, "_last_dock_results", None) or {}
+                snap = getattr(self._app, "_last_dock_results", None) or {}
         if not mols:
             QMessageBox.information(
-                self,
-                "Pose Browser",
-                "No docking results to show. Run Gnina first.",
+                self._app, "Pose Browser", "No docking results to show. Run Gnina first."
             )
             return None
         return self.open_dock_results_window(
@@ -334,7 +342,7 @@ class DockToolsMixin:
         copies = _copy_dock_pose_mols(mols)
         rec_path = (receptor_path or "").strip() or None
         xtal_path = (crystal_path or "").strip() or None
-        self._last_dock_results = (
+        self._app._last_dock_results = (
             {
                 "mols": copies,
                 "title": str(title or "Pose browser"),
@@ -347,7 +355,7 @@ class DockToolsMixin:
         self._set_pose_browser_action_enabled(bool(copies))
 
     def _set_pose_browser_action_enabled(self, enabled: bool) -> None:
-        act = getattr(self, "_act_dock_viewer", None)
+        act = getattr(self._app, "_act_dock_viewer", None)
         if act is None:
             return
         try:
@@ -357,13 +365,13 @@ class DockToolsMixin:
 
     def _mols_from_table_pose_columns(self) -> list:
         """Rebuild pose molecules from packed ``poses`` table columns (session fallback)."""
-        from ...conformers.conformer_output import iter_single_conformer_mols
-        from .conformer_writeback import mol_for_ensemble_column
+        from ..conformers.conformer_output import iter_single_conformer_mols
+        from .main_window.conformer_writeback import mol_for_ensemble_column
 
-        model = getattr(self, "_table_model", None)
+        model = getattr(self._app, "_table_model", None)
         if model is None:
             return []
-        headers = [h for h in list(getattr(self, "headers", []) or []) if is_poses_header(h)]
+        headers = [h for h in list(getattr(self._app, "headers", []) or []) if is_poses_header(h)]
         if not headers:
             return []
         try:
@@ -377,7 +385,7 @@ class DockToolsMixin:
             except Exception:
                 continue
             for header in headers:
-                packed = mol_for_ensemble_column(self, oid, header, min_conformers=1)
+                packed = mol_for_ensemble_column(self._app, oid, header, min_conformers=1)
                 if packed is None:
                     continue
                 for mol in iter_single_conformer_mols(packed):
@@ -399,18 +407,15 @@ class DockToolsMixin:
 
     def _live_protein_viewer(self):
         """Return the open Protein Viewer on this window."""
-        from ..qt_widget_utils import qobject_is_deleted
+        from .qt_widget_utils import qobject_is_deleted
 
-        dlg = getattr(self, "_protein_viewer_dialog", None)
+        dlg = getattr(self._app, "_protein_viewer_dialog", None)
         if dlg is None or qobject_is_deleted(dlg):
             return None
         return dlg
 
     def _prepare_protein_viewer_for_poses(
-        self,
-        dlg,
-        receptor_path: str | None,
-        crystal_path: str | None = None,
+        self, dlg, receptor_path: str | None, crystal_path: str | None = None
     ) -> None:
         """Load receptor (and crystal ligand) if the Protein Viewer is empty, then show it."""
         if dlg is None:
@@ -423,11 +428,13 @@ class DockToolsMixin:
                 if callable(adder):
                     adder(rec, refit=True)
         has_ligand = any(
-            getattr(getattr(row, "spec", None), "kind", "") == "ligand"
-            for row in getattr(dlg, "_rows", [])
+            (
+                getattr(getattr(row, "spec", None), "kind", "") == "ligand"
+                for row in getattr(dlg, "_rows", [])
+            )
         )
         crystal = (crystal_path or "").strip()
-        if crystal and not has_ligand:
+        if crystal and (not has_ligand):
             lig_add = getattr(dlg, "add_ligand_path", None)
             if callable(lig_add):
                 lig_add(crystal, name="Crystal ligand", color_scheme="default", refit=False)
@@ -444,17 +451,17 @@ class DockToolsMixin:
         setter = getattr(protein, "set_dock_pose", None)
         if not callable(setter):
             return
-        zoom = not bool(getattr(self, "_dock_pose_zoomed", False))
+        zoom = not bool(getattr(self._app, "_dock_pose_zoomed", False))
         text = caption or "Dock pose"
         if setter(mol, zoom=zoom, caption=text):
-            self._dock_pose_zoomed = True
+            self._app._dock_pose_zoomed = True
 
     def write_dock_poses_to_table(self, mols: list) -> str | None:
         """Pack docked poses into a ``poses`` column, grouped by parent table row."""
-        usable = [m for m in (mols or []) if m is not None]
+        usable = [m for m in mols or [] if m is not None]
         if not usable:
             return None
-        model = getattr(self, "_table_model", None)
+        model = getattr(self._app, "_table_model", None)
         if model is None:
             return None
         known: set[int] = set()
@@ -469,9 +476,9 @@ class DockToolsMixin:
                 continue
         stamp_pose_parent_oids(usable, known)
         by_oid, orphan_groups = group_dock_poses(usable, known)
-        if not by_oid and not orphan_groups:
+        if not by_oid and (not orphan_groups):
             return None
-        col = self._next_packed_ensemble_column("poses")
+        col = self._app._next_packed_ensemble_column("poses")
         pairs: list[tuple[int, str]] = []
         for oid, group in by_oid.items():
             pairs.append((int(oid), pack_mols_as_confs_cell(dock_poses_pack_meta(group), group)))
@@ -486,31 +493,31 @@ class DockToolsMixin:
                     continue
             pairs.append((int(oid), pack_mols_as_confs_cell(dock_poses_pack_meta(group), group)))
         if pairs:
-            self._write_packed_ensemble_cells(col, pairs)
+            self._app._write_packed_ensemble_cells(col, pairs)
         return col
 
     def _append_orphan_dock_pose_row(self, mols: list) -> int | None:
         """Add one table row for a file-docked ligand so packed poses have a place to live."""
-        first = next((m for m in (mols or []) if m is not None), None)
+        first = next((m for m in mols or [] if m is not None), None)
         if first is None:
             return None
-        ensure = getattr(self, "_ensure_columns", None)
+        ensure = getattr(self._app, "_ensure_columns", None)
         if callable(ensure):
             ensure(["SMILES"])
         try:
-            oid = int(self.next_oid)
-            self.next_oid = oid + 1
+            oid = int(self._app.next_oid)
+            self._app.next_oid = oid + 1
         except Exception:
             return None
         stored = copy_mol(first) or first
-        from ..mol_viewer_3d import prepare_mol_2d
+        from .mol_viewer_3d import prepare_mol_2d
 
         depict = prepare_mol_2d(stored)
-        self.mols[oid] = depict if depict is not None else stored
+        self._app.mols[oid] = depict if depict is not None else stored
         props = pose_table_props(first)
         smi = (props.get("SMILES") or "").strip() or mol_to_canonical_smiles(stored)
         cells: dict[str, str] = {}
-        for header in list(self.headers[2:]):
+        for header in list(self._app.headers[2:]):
             if header == "SMILES":
                 cells[header] = smi
             elif header == "Name":
@@ -519,28 +526,26 @@ class DockToolsMixin:
                 cells[header] = ""
             else:
                 cells[header] = ""
-        self._table_model.append_rows_batch([(oid, cells)])
-        render = getattr(self, "start_render_worker", None)
-        live = self.mols.get(oid)
+        self._app._table_model.append_rows_batch([(oid, cells)])
+        render = getattr(self._app, "start_render_worker", None)
+        live = self._app.mols.get(oid)
         if callable(render) and live is not None:
             render(oid, live, skip_mol_props=True)
         return oid
 
     def open_gnina_dock(self):
-        from ..dialogs.gnina_dock import GninaDockDialog
+        from .dialogs.gnina_dock import GninaDockDialog
 
         dlg = reuse_or_show_modeless_singleton(
-            self,
-            "_smina_dock_dialog",
-            lambda: GninaDockDialog(self),
+            self._app, "_smina_dock_dialog", lambda: GninaDockDialog(self._app)
         )
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
-        self._prepare_tool_dialog(dlg)
+        self._app._prepare_tool_dialog(dlg)
         protein = self._live_protein_viewer()
         if protein is not None:
             current = (
-                getattr(dlg, "edit_pharmacophore", None) and dlg.edit_pharmacophore.text()
-            ) or ""
+                getattr(dlg, "edit_pharmacophore", None) and dlg.edit_pharmacophore.text() or ""
+            )
             if not str(current).strip():
                 getter = getattr(protein, "pharmacophore_file_for_gnina", None)
                 path = getter() if callable(getter) else ""
@@ -552,23 +557,19 @@ class DockToolsMixin:
     open_smina_dock = open_gnina_dock
 
     def open_dock_prepare(self):
-        from ..dialogs.pdbqt_generator import PdbqtGeneratorDialog
+        from .dialogs.pdbqt_generator import PdbqtGeneratorDialog
 
         dlg = reuse_or_show_modeless_singleton(
-            self,
-            "_pdbqt_generator_dialog",
-            lambda: PdbqtGeneratorDialog(self),
+            self._app, "_pdbqt_generator_dialog", lambda: PdbqtGeneratorDialog(self._app)
         )
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
-        self._prepare_tool_dialog(dlg)
+        self._app._prepare_tool_dialog(dlg)
 
     def open_dock_prepare_pdb(self):
-        from ..dialogs.pdb_fixer import PdbFixerDialog
+        from .dialogs.pdb_fixer import PdbFixerDialog
 
         dlg = reuse_or_show_modeless_singleton(
-            self,
-            "_pdb_fixer_dialog",
-            lambda: PdbFixerDialog(self),
+            self._app, "_pdb_fixer_dialog", lambda: PdbFixerDialog(self._app)
         )
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
-        self._prepare_tool_dialog(dlg)
+        self._app._prepare_tool_dialog(dlg)

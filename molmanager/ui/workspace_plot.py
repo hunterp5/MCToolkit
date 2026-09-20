@@ -8,31 +8,72 @@
 #
 # MolManager is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
 
 """Plot↔table sync, floating plot dialogs, and thin dock API over PlotDockHost."""
 
 from __future__ import annotations
 
 import logging
+from typing import Any, Protocol
+
+from .plot_dock_host import PlotDockHost
 
 logger = logging.getLogger(__name__)
 
 
-class PlotToolsMixin:
+class PlotSyncState(Protocol):
+    """Floating plot dialog lists and selection-sync caches."""
+
+    _plot_dock_host: Any
+    _plot_dialogs: list
+    _floating_result_dialogs: list
+    _cached_plot_selected_oids: Any
+
+    def _attach_tool_scope_sync(self, *args: Any, **kwargs: Any) -> Any: ...
+    def _refresh_attached_tool_scope_labels(self) -> None: ...
+    def _visible_source_row_indices(self) -> Any: ...
+    def _prepare_tool_dialog(self, dialog: Any) -> None: ...
+
+
+class PlotBrowserState(Protocol):
+    """Undocked browser dialog handles PlotSync still binds."""
+
+    _selection_browser_dialog: Any
+    _pose_browser_dialog: Any
+    _som_browser_dialog: Any
+    _metabolite_browser_dialog: Any
+    _random_molecule_browser_dialog: Any
+
+    def _on_selection_browser_dialog_destroyed(self, *_args: Any) -> None: ...
+    def _on_pose_browser_dialog_destroyed(self, *_args: Any) -> None: ...
+    def _on_som_browser_dialog_destroyed(self, *_args: Any) -> None: ...
+
+
+class PlotSyncHost(PlotSyncState, PlotBrowserState, Protocol):
+    """What plot↔table sync reads from the window."""
+
+    def _background_job_ui_active(self) -> bool: ...
+    def _on_metabolite_browser_dialog_destroyed(self, *_args: Any) -> None: ...
+
+
+class PlotSync:
+    """Plot↔table selection sync and floating plot dialog tracking."""
+
+    def __init__(self, app: PlotSyncHost) -> None:
+        self._app = app
+
     @property
     def plot_dock(self):
         """Workspace docking owner (:class:`~molmanager.ui.plot_dock_host.PlotDockHost`)."""
-        host = getattr(self, "_plot_dock_host", None)
+        host = getattr(self._app, "_plot_dock_host", None)
         if host is None:
-            from ..plot_dock_host import PlotDockHost
-
-            host = PlotDockHost(self)
-            self._plot_dock_host = host
+            host = PlotDockHost(self._app)
+            self._app._plot_dock_host = host
         return host
 
     def _workspace(self):
@@ -40,8 +81,6 @@ class PlotToolsMixin:
 
     @staticmethod
     def _docked_widget_kind(plot_widget) -> str:
-        from ..plot_dock_host import PlotDockHost
-
         return PlotDockHost._docked_widget_kind(plot_widget)
 
     def iter_docked_plot_widgets(self):
@@ -117,11 +156,11 @@ class PlotToolsMixin:
 
     def _prepare_tool_plot(self, plot_widget) -> None:
         """Keep docked plot scope UI in sync with table selection changes."""
-        self._attach_tool_scope_sync(plot_widget, on_finished_signal=plot_widget.destroyed)
+        self._app._attach_tool_scope_sync(plot_widget, on_finished_signal=plot_widget.destroyed)
 
     def _iter_active_plot_selection_views(self) -> list:
         """Plot surfaces that mirror table row selection (dock, floating plotter, PCA/t-SNE)."""
-        from ..dockable_plot import iter_plot_selection_views
+        from .dockable_plot import iter_plot_selection_views
 
         views: list = []
         seen: set[int] = set()
@@ -153,7 +192,7 @@ class PlotToolsMixin:
             "_activity_cliff_map_dialog",
             "_mmp_neighborhood_map_dialog",
         ):
-            dlg = getattr(self, attr, None)
+            dlg = getattr(self._app, attr, None)
             if dlg is None:
                 continue
             panel = getattr(dlg, "_panel", None)
@@ -161,7 +200,7 @@ class PlotToolsMixin:
                 add_from(panel)
                 continue
             add_from(dlg)
-        for dlg in list(getattr(self, "_floating_result_dialogs", [])):
+        for dlg in list(getattr(self._app, "_floating_result_dialogs", [])):
             try:
                 import shiboken6
 
@@ -189,12 +228,11 @@ class PlotToolsMixin:
                     pass
 
     def _sync_active_plots_from_table_selection(self) -> None:
-        from ..plot_table_sync import selected_oids_for_plot
+        from .plot_table_sync import selected_oids_for_plot
 
-        self._refresh_attached_tool_scope_labels()
-        selected = selected_oids_for_plot(self)
-        # Share one OID set across every open plot for this fan-out tick.
-        self._cached_plot_selected_oids = frozenset(selected)
+        self._app._refresh_attached_tool_scope_labels()
+        selected = selected_oids_for_plot(self._app)
+        self._app._cached_plot_selected_oids = frozenset(selected)
         try:
             for view in self._iter_active_plot_selection_views():
                 try:
@@ -208,10 +246,10 @@ class PlotToolsMixin:
                 except RuntimeError:
                     pass
         finally:
-            self._cached_plot_selected_oids = None
+            self._app._cached_plot_selected_oids = None
 
     def _schedule_sync_active_plots_from_table_selection(self) -> None:
-        timer = getattr(self, "_plot_table_sync_timer", None)
+        timer = getattr(self._app, "_plot_table_sync_timer", None)
         if timer is None:
             return
         timer.start(40)
@@ -245,29 +283,28 @@ class PlotToolsMixin:
             "_activity_cliff_map_dialog",
             "_mmp_neighborhood_map_dialog",
         ):
-            dlg = getattr(self, attr, None)
+            dlg = getattr(self._app, attr, None)
             if dlg is None:
                 continue
             add(getattr(dlg, "_panel", None) or dlg)
-        for dlg in list(getattr(self, "_floating_result_dialogs", [])):
+        for dlg in list(getattr(self._app, "_floating_result_dialogs", [])):
             add(getattr(dlg, "_panel", None) or dlg)
         return hosts
 
     def _replot_active_plots(self) -> None:
         """Refresh plot data after filters or table edits change visible rows."""
-        # Warm sticky visible-row cache once for every open host (incl. debounced Plotter).
-        self._visible_source_row_indices()
+        self._app._visible_source_row_indices()
         hosts = list(self._iter_active_plot_hosts())
-        restore_idle = getattr(self, "_restore_idle_status", None)
-        work_active = getattr(self, "_status_work_is_active", None)
+        restore_idle = getattr(self._app, "_restore_idle_status", None)
+        work_active = getattr(self._app, "_status_work_is_active", None)
         show_update = (
             bool(hosts)
-            and getattr(self, "status_label", None) is not None
-            and not (callable(work_active) and work_active())
+            and getattr(self._app, "status_label", None) is not None
+            and (not (callable(work_active) and work_active()))
         )
         if show_update:
             try:
-                self.status_label.setText(f"Updating plots… ({len(hosts)})")
+                self._app.status_label.setText(f"Updating plots… ({len(hosts)})")
             except RuntimeError:
                 show_update = False
         for host in hosts:
@@ -284,123 +321,123 @@ class PlotToolsMixin:
     def _schedule_active_plots_replot(self, *, delay_ms: int = 80, force: bool = False) -> None:
         if (
             not force
-            and getattr(self, "_background_job_ui_active", None)
-            and self._background_job_ui_active()
+            and getattr(self._app, "_background_job_ui_active", None)
+            and self._app._background_job_ui_active()
         ):
             return
-        timer = getattr(self, "_plot_replot_timer", None)
+        timer = getattr(self._app, "_plot_replot_timer", None)
         if timer is None:
             return
         timer.start(max(0, int(delay_ms)))
 
     def _prune_plot_dialogs(self) -> None:
         alive: list = []
-        for dlg in getattr(self, "_plot_dialogs", []):
+        for dlg in getattr(self._app, "_plot_dialogs", []):
             try:
                 dlg.isVisible()
                 alive.append(dlg)
             except RuntimeError:
                 pass
-        self._plot_dialogs = alive
+        self._app._plot_dialogs = alive
 
     def _iter_plot_dialogs(self) -> list:
         self._prune_plot_dialogs()
-        return list(self._plot_dialogs)
+        return list(self._app._plot_dialogs)
 
     def _register_plot_dialog(self, dlg) -> None:
         """Track a floating plotter window (multiple instances allowed)."""
-        if not hasattr(self, "_plot_dialogs"):
-            self._plot_dialogs = []
+        if not hasattr(self._app, "_plot_dialogs"):
+            self._app._plot_dialogs = []
         self._prune_plot_dialogs()
-        self._plot_dialogs.append(dlg)
+        self._app._plot_dialogs.append(dlg)
         panel = getattr(dlg, "_plot_widget", None)
         custom = getattr(panel, "_pane_display_title", None) if panel is not None else None
         if isinstance(custom, str) and custom.strip():
             dlg.setWindowTitle(custom.strip())
         else:
-            n = len(self._plot_dialogs)
+            n = len(self._app._plot_dialogs)
             dlg.setWindowTitle("Plot Data" if n == 1 else f"Plot Data ({n})")
         dlg.destroyed.connect(lambda *_a, d=dlg: self._unregister_plot_dialog(d))
 
     def _unregister_plot_dialog(self, dlg) -> None:
         try:
-            self._plot_dialogs.remove(dlg)
+            self._app._plot_dialogs.remove(dlg)
         except (ValueError, AttributeError):
             pass
         self._prune_plot_dialogs()
 
     def _create_plot_dialog(self):
-        from ..plot import PlotDialog
+        from .plot import PlotDialog
 
-        d = PlotDialog(self)
-        self._prepare_tool_dialog(d)
+        d = PlotDialog(self._app)
+        self._app._prepare_tool_dialog(d)
         return d
 
     def _bind_undocked_browser_dialog(self, dlg) -> bool:
         """Track Data → Browser / Predict SOM windows after undock. Return True if handled."""
-        from ..metabolite_browser import MetaboliteBrowserDialog
-        from ..pose_browser import PoseBrowserDialog
-        from ..random_molecule_browser import RandomMoleculeBrowserDialog
-        from ..selection_browser import SelectionBrowserDialog
-        from ..som_browser import SomBrowserDialog
+        from .metabolite_browser import MetaboliteBrowserDialog
+        from .pose_browser import PoseBrowserDialog
+        from .random_molecule_browser import RandomMoleculeBrowserDialog
+        from .selection_browser import SelectionBrowserDialog
+        from .som_browser import SomBrowserDialog
 
         if isinstance(dlg, SelectionBrowserDialog):
-            self._selection_browser_dialog = dlg
+            self._app._selection_browser_dialog = dlg
             try:
-                dlg.destroyed.connect(self._on_selection_browser_dialog_destroyed)
+                dlg.destroyed.connect(self._app._on_selection_browser_dialog_destroyed)
             except Exception:
                 pass
             return True
         if isinstance(dlg, PoseBrowserDialog):
-            self._pose_browser_dialog = dlg
+            self._app._pose_browser_dialog = dlg
             try:
-                dlg.destroyed.connect(self._on_pose_browser_dialog_destroyed)
+                dlg.destroyed.connect(self._app._on_pose_browser_dialog_destroyed)
             except Exception:
                 pass
             return True
         if isinstance(dlg, SomBrowserDialog):
-            self._som_browser_dialog = dlg
+            self._app._som_browser_dialog = dlg
             try:
-                dlg.destroyed.connect(self._on_som_browser_dialog_destroyed)
+                dlg.destroyed.connect(self._app._on_som_browser_dialog_destroyed)
             except Exception:
                 pass
             return True
         if isinstance(dlg, MetaboliteBrowserDialog):
-            self._metabolite_browser_dialog = dlg
+            self._app._metabolite_browser_dialog = dlg
             try:
-                dlg.destroyed.connect(self._on_metabolite_browser_dialog_destroyed)
+                dlg.destroyed.connect(self._app._on_metabolite_browser_dialog_destroyed)
             except Exception:
                 pass
             return True
         if isinstance(dlg, RandomMoleculeBrowserDialog):
-            self._random_molecule_browser_dialog = dlg
+            self._app._random_molecule_browser_dialog = dlg
             try:
-                dlg.destroyed.connect(self._on_random_molecule_browser_dialog_destroyed)
+                dlg.destroyed.connect(self._app._on_random_molecule_browser_dialog_destroyed)
             except Exception:
                 pass
             return True
         return False
 
     def _on_random_molecule_browser_dialog_destroyed(self, *_args) -> None:
-        from ..qt_widget_utils import qobject_is_deleted
+        from .qt_widget_utils import qobject_is_deleted
 
-        if qobject_is_deleted(self):
+        if qobject_is_deleted(self._app):
             return
         try:
-            sender = self.sender()
+            sender = self._app.sender()
         except RuntimeError:
             return
-        current = getattr(self, "_random_molecule_browser_dialog", None)
-        if sender is not None and current is not None and current is not sender:
+        current = getattr(self._app, "_random_molecule_browser_dialog", None)
+        if sender is not None and current is not None and (current is not sender):
             return
-        self._random_molecule_browser_dialog = None
+        self._app._random_molecule_browser_dialog = None
 
     def _register_floating_result_dialog(self, dlg) -> None:
         """Track undocked SALI/cliff/MMP/etc. windows for table↔plot selection sync."""
-        if not hasattr(self, "_floating_result_dialogs"):
-            self._floating_result_dialogs = []
+        if not hasattr(self._app, "_floating_result_dialogs"):
+            self._app._floating_result_dialogs = []
         alive: list = []
-        for existing in self._floating_result_dialogs:
+        for existing in self._app._floating_result_dialogs:
             try:
                 import shiboken6
 
@@ -415,10 +452,10 @@ class PlotToolsMixin:
                 dlg.destroyed.connect(lambda *_a, d=dlg: self._unregister_floating_result_dialog(d))
             except Exception:
                 pass
-        self._floating_result_dialogs = alive
+        self._app._floating_result_dialogs = alive
 
     def _unregister_floating_result_dialog(self, dlg) -> None:
         try:
-            self._floating_result_dialogs.remove(dlg)
+            self._app._floating_result_dialogs.remove(dlg)
         except (ValueError, AttributeError):
             pass

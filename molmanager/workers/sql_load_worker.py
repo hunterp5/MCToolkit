@@ -25,12 +25,15 @@ from typing import Any
 
 import shiboken6
 from PySide6.QtCore import QObject, QRunnable, Signal
-from rdkit import Chem
 
+from ..chem.molecule_conversion import mol_from_binary_blob
 from ..platform_support.exception_policy import log_swallowed_exception
 from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
+from ..table.sql_load_job import cells_from_sql_mapping, mol_blob_from_smiles
 
 logger = logging.getLogger(__name__)
+
+__all__ = ["SqlLoadWorker", "cells_from_sql_mapping", "mol_blob_from_smiles"]
 
 
 def _safe_emit(obj: QObject | None, emitter_name: str, *args) -> None:
@@ -45,33 +48,6 @@ def _safe_emit(obj: QObject | None, emitter_name: str, *args) -> None:
         getattr(obj, emitter_name).emit(*args)
     except RuntimeError:
         pass
-
-
-def mol_blob_from_smiles(smiles: str) -> bytes | None:
-    """Parse *smiles* to an RDKit pickle, or ``None`` when the string is invalid."""
-    smi = (smiles or "").strip()
-    if not smi:
-        return None
-    try:
-        mol = Chem.MolFromSmiles(smi)
-    except Exception:
-        return None
-    if mol is None:
-        return None
-    try:
-        blob = mol.ToBinary()
-    except Exception:
-        return None
-    return bytes(blob) if blob else None
-
-
-def cells_from_sql_mapping(cols: list[str], mapping: Any) -> dict[str, str]:
-    """Stringify one SQLAlchemy row mapping into table cells."""
-    row_cells: dict[str, str] = {}
-    for c in cols:
-        v = mapping.get(c)
-        row_cells[c] = "" if v is None else str(v)
-    return row_cells
 
 
 @dataclass
@@ -92,9 +68,8 @@ class SqlLoadParseResult:
     def mols(self) -> dict[int, Any]:
         out: dict[int, Any] = {}
         for oid, blob in self.mol_blobs.items():
-            try:
-                mol = Chem.Mol(blob)
-            except Exception:
+            mol = mol_from_binary_blob(blob)
+            if mol is None:
                 continue
             if mol is not None:
                 out[int(oid)] = mol

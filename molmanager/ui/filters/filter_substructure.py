@@ -17,9 +17,7 @@
 """Substructure SMARTS matching and async job plumbing."""
 
 from __future__ import annotations
-
 import logging
-
 from ...chem.molecule_conversion import mol_to_canonical_smiles
 from ..background_jobs import unregister_background_job
 from .cards import SubstructureFilterCard
@@ -27,22 +25,22 @@ from .cards import SubstructureFilterCard
 logger = logging.getLogger(__name__)
 
 
-class FilterSubstructureMixin:
+class FilterSubstructure:
     """SMARTS card matching, including ``SubstructureFilterWorker`` jobs."""
 
     def _clear_filter_target_smiles_cache(self) -> None:
         """Drop cached MolToSmiles results (e.g. after wholesale ``mols`` replacement)."""
-        self._filter_target_smiles_cache = None
-        self._substructure_target_mol_cache = {}
+        self._app._filter_target_smiles_cache = None
+        self._app._substructure_target_mol_cache = {}
 
     def _smiles_for_substructure_target(self, oid: int, mol) -> str:
         """Stable SMILES string for filter worker targets; cache per (oid, mol object id)."""
         if mol is None:
             return ""
-        cache = getattr(self, "_filter_target_smiles_cache", None)
+        cache = getattr(self._app, "_filter_target_smiles_cache", None)
         if cache is None:
             cache = {}
-            self._filter_target_smiles_cache = cache
+            self._app._filter_target_smiles_cache = cache
         mid = id(mol)
         t = cache.get(oid)
         if t is not None and t[0] == mid:
@@ -61,10 +59,10 @@ class FilterSubstructureMixin:
         columns work without overwriting the Structure cache.
         """
         src = (structure_source or "Structure").strip() or "Structure"
-        resolve = getattr(self, "_mol_for_structure_tool_oid", None)
-        mols = getattr(self, "mols", None) or {}
-        oids = self._table_model.all_oids_in_order()
-        if src == "Structure" and not callable(resolve):
+        resolve = getattr(self._app, "_mol_for_structure_tool_oid", None)
+        mols = getattr(self._app, "mols", None) or {}
+        oids = self._app._table_model.all_oids_in_order()
+        if src == "Structure" and (not callable(resolve)):
             return [(int(oid), mols.get(int(oid))) for oid in oids]
         targets: list[tuple[int, object]] = []
         for oid in oids:
@@ -79,20 +77,17 @@ class FilterSubstructureMixin:
 
     def _mol_for_substructure_filter_row(self, row: int, structure_source: str):
         """Molecule used when evaluating a substructure filter card on *row*."""
-        oid = int(self._table_model.row_oid(row))
+        oid = int(self._app._table_model.row_oid(row))
         src = (structure_source or "Structure").strip() or "Structure"
-        resolve = getattr(self, "_mol_for_structure_tool_oid", None)
+        resolve = getattr(self._app, "_mol_for_structure_tool_oid", None)
         if callable(resolve):
             return resolve(oid, src)
         if src == "Structure":
-            return (getattr(self, "mols", None) or {}).get(oid)
+            return (getattr(self._app, "mols", None) or {}).get(oid)
         return None
 
     def _substructure_override_matches_card(
-        self,
-        card: SubstructureFilterCard,
-        override_smarts: str | None,
-        override_source: str | None,
+        self, card: SubstructureFilterCard, override_smarts: str | None, override_source: str | None
     ) -> bool:
         if override_smarts is None:
             return False
@@ -116,9 +111,9 @@ class FilterSubstructureMixin:
                 if isinstance(item, frozenset):
                     continue
                 if len(item) >= 3:
-                    smarts, source, oids = item[0], item[1], item[2]
+                    smarts, source, oids = (item[0], item[1], item[2])
                 else:
-                    smarts, oids = item[0], item[1]
+                    smarts, oids = (item[0], item[1])
                     source = "Structure"
                 if not isinstance(oids, frozenset):
                     oids = frozenset(oids or ())
@@ -130,9 +125,7 @@ class FilterSubstructureMixin:
         return [(smarts, source, oids)]
 
     def _override_for_substructure_card(
-        self,
-        card: SubstructureFilterCard,
-        overrides: list[tuple[str, str | None, frozenset]],
+        self, card: SubstructureFilterCard, overrides: list[tuple[str, str | None, frozenset]]
     ) -> frozenset | None:
         for smarts, source, oids in overrides:
             if self._substructure_override_matches_card(card, smarts, source):
@@ -140,58 +133,51 @@ class FilterSubstructureMixin:
         return None
 
     def _unregister_substructure_background_job(self, job_gen: int) -> None:
-        job_id = getattr(self, "_substructure_bg_job_id", None)
+        job_id = getattr(self._app, "_substructure_bg_job_id", None)
         if job_id == f"substructure-{job_gen}":
-            unregister_background_job(self, job_id)
-            self._substructure_bg_job_id = None
+            unregister_background_job(self._app, job_id)
+            self._app._substructure_bg_job_id = None
 
     def _cancel_substructure_filter_job(self) -> None:
         """Processes Cancel: discard the in-flight substructure filter job."""
-        job_id = getattr(self, "_substructure_bg_job_id", None)
-        gen = int(getattr(self, "_substructure_job_gen", 0))
+        job_id = getattr(self._app, "_substructure_bg_job_id", None)
+        gen = int(getattr(self._app, "_substructure_job_gen", 0))
         self._invalidate_substructure_async_jobs()
         if job_id is not None:
-            unregister_background_job(self, job_id)
-            self._substructure_bg_job_id = None
+            unregister_background_job(self._app, job_id)
+            self._app._substructure_bg_job_id = None
         elif gen:
             self._unregister_substructure_background_job(gen)
-        finish = getattr(self, "_finish_tool_progress", None)
+        finish = getattr(self._app, "_finish_tool_progress", None)
         if callable(finish):
             finish("Filtering substructure", status_message="Substructure filter cancelled.")
 
     def _on_substructure_filter_finished(self, job_gen: int, matched) -> None:
         self._unregister_substructure_background_job(job_gen)
-        if job_gen != getattr(self, "_substructure_job_gen", 0):
+        if job_gen != getattr(self._app, "_substructure_job_gen", 0):
             return
-        dispatched_queries = list(getattr(self, "_substructure_job_queries", None) or [])
+        dispatched_queries = list(getattr(self._app, "_substructure_job_queries", None) or [])
         ss_cards = [
-            f for f in self.filters if isinstance(f, SubstructureFilterCard) and f.filter_enabled()
+            f
+            for f in self._app.filters
+            if isinstance(f, SubstructureFilterCard) and f.filter_enabled()
         ]
-        finish = getattr(self, "_finish_tool_progress", None)
+        finish = getattr(self._app, "_finish_tool_progress", None)
         if callable(finish):
             finish("Filtering substructure", status_message=None)
-
         overrides = self._normalize_substructure_overrides(matched)
         if not overrides and isinstance(matched, frozenset):
-            # Backward-compatible single frozenset payload.
             if len(dispatched_queries) == 1:
                 smarts, src = dispatched_queries[0]
                 overrides = [(smarts, src, matched)]
             elif len(ss_cards) == 1:
                 card = ss_cards[0]
                 overrides = [
-                    (
-                        (card.smarts_edit.text() or "").strip(),
-                        card.structure_source(),
-                        matched,
-                    )
+                    ((card.smarts_edit.text() or "").strip(), card.structure_source(), matched)
                 ]
-
         if not overrides:
             self._route_filter_apply(None)
             return
-
-        # Re-run if the user changed SMARTS/source while the job was running.
         for smarts, src, _oids in overrides:
             still = False
             for card in ss_cards:
@@ -201,7 +187,6 @@ class FilterSubstructureMixin:
             if not still:
                 self.apply_filters()
                 return
-
         if len(overrides) == 1:
             smarts, src, oids = overrides[0]
             self._route_filter_apply((smarts, src, oids))
@@ -210,7 +195,7 @@ class FilterSubstructureMixin:
 
     def _on_substructure_filter_failed(self, job_gen: int, msg: str) -> None:
         self._unregister_substructure_background_job(job_gen)
-        if job_gen != getattr(self, "_substructure_job_gen", 0):
+        if job_gen != getattr(self._app, "_substructure_job_gen", 0):
             return
         logger.warning("Substructure filter job failed: %s", msg)
         self._invalidate_substructure_async_jobs()
@@ -224,7 +209,7 @@ class FilterSubstructureMixin:
         *,
         override_source: str | None = None,
     ) -> set[int]:
-        for f in self.filters:
+        for f in self._app.filters:
             if not isinstance(f, SubstructureFilterCard) or not f.filter_enabled():
                 continue
             if not self._substructure_override_matches_card(f, override_smarts, override_source):
@@ -236,12 +221,10 @@ class FilterSubstructureMixin:
         return set(base)
 
     def _apply_substructure_overrides_to_visible(
-        self,
-        base: frozenset[int] | set[int],
-        overrides: list[tuple[str, str | None, frozenset]],
+        self, base: frozenset[int] | set[int], overrides: list[tuple[str, str | None, frozenset]]
     ) -> set[int]:
         visible = set(base)
-        for f in self.filters:
+        for f in self._app.filters:
             if not isinstance(f, SubstructureFilterCard) or not f.filter_enabled():
                 continue
             oids = self._override_for_substructure_card(f, overrides)
@@ -258,7 +241,7 @@ class FilterSubstructureMixin:
     ) -> tuple[str | None, str | None, frozenset | None]:
         """Return ``(smarts, structure_source, matched_oids)`` from a job result tuple."""
         if not substructure_matches:
-            return None, None, None
+            return (None, None, None)
         if len(substructure_matches) >= 3:
-            return substructure_matches[0], substructure_matches[1], substructure_matches[2]
-        return substructure_matches[0], "Structure", substructure_matches[1]
+            return (substructure_matches[0], substructure_matches[1], substructure_matches[2])
+        return (substructure_matches[0], "Structure", substructure_matches[1])

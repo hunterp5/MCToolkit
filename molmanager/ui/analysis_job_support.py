@@ -29,7 +29,13 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QMessageBox
 
 from ..services.activity_records import build_oid_mol_activity_records, parse_activity_float
-from ..workflows.tool_readiness import ToolBlocker, plan_activity_analysis, plan_table_readiness
+from ..workflows.tool_readiness import (
+    ToolBlocker,
+    plan_activity_analysis,
+    plan_table_readiness,
+    plan_text_column_tool,
+    plan_calculator,
+)
 from .app_roles import JobScheduler, ProgressChrome, TableData, TableSelection
 from .tool_dialog_scope import abort_if_only_selected_but_empty, prepare_tool_dialog
 
@@ -64,6 +70,11 @@ class AnalysisJobHost(
 _BLOCKER_TEXT = {
     ToolBlocker.NO_TABLE: "Open a file or start a session first.",
     ToolBlocker.NO_ROWS: "Load a table with at least one row first.",
+    ToolBlocker.NO_TEXT_COLUMN: "No text columns are available.",
+    ToolBlocker.CALCULATOR_DISABLED: (
+        "The calculator is disabled by policy "
+        "(environment variable MOLMANAGER_DISABLE_CUSTOM_CALC)."
+    ),
 }
 
 
@@ -100,6 +111,40 @@ def ensure_table_ready_for_tool(
     if plan.is_ready:
         return True
     QMessageBox.information(app, tool_label, empty_message or _BLOCKER_TEXT[plan.blocked_by])
+    return False
+
+
+def ensure_text_column_tool_ready(
+    app: AnalysisJobHost,
+    tool_label: str,
+    text_columns: Sequence[str],
+    *,
+    empty_message: str | None = None,
+    no_text_message: str | None = None,
+) -> bool:
+    """Return True when split/join/extract can run; otherwise inform and return False."""
+    plan = plan_text_column_tool(
+        headers=app.headers,
+        row_count=app._table_model.rowCount(),
+        text_columns=text_columns,
+    )
+    if plan.is_ready:
+        return True
+    if plan.blocked_by is ToolBlocker.NO_TEXT_COLUMN:
+        QMessageBox.information(app, tool_label, no_text_message or _BLOCKER_TEXT[plan.blocked_by])
+        return False
+    QMessageBox.information(app, tool_label, empty_message or _BLOCKER_TEXT[plan.blocked_by])
+    return False
+
+
+def ensure_calculator_ready(app: AnalysisJobHost, *, disabled: bool) -> bool:
+    """Return True when the custom calculator may open."""
+    from .strings import TOOL_CALCULATOR
+
+    plan = plan_calculator(headers=app.headers, disabled=disabled)
+    if plan.is_ready:
+        return True
+    QMessageBox.information(app, TOOL_CALCULATOR, _BLOCKER_TEXT[plan.blocked_by])
     return False
 
 

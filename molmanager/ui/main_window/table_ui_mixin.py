@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Table chrome file-split for ``ChemistryWorkspaceWindow`` (edit/menu/search/filters)."""
+"""Table chrome file-split for ``ChemistryWorkspaceWindow`` (edit/menu/search)."""
 
 from __future__ import annotations
 
@@ -41,7 +41,6 @@ from ...chem.molecule_conversion import (
 )
 from ..singleton_modeless_dialog import reuse_or_show_modeless_singleton
 
-from ..filters import FilterPanelMixin
 from .table_edit_mixin import TableEditMixin
 from .table_menu_mixin import TableMenuMixin
 from .table_search_mixin import TableSearchMixin
@@ -53,7 +52,6 @@ class TableUIMixin(
     TableEditMixin,
     TableMenuMixin,
     TableSearchMixin,
-    FilterPanelMixin,
 ):
     def _on_written_columns(
         self,

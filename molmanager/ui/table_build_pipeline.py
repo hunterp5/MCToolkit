@@ -30,6 +30,7 @@ from .app_roles import (
     TableData,
     TableSelection,
 )
+from .table_build_export import TableBuildExport, TableBuildExportState
 from .table_build_ingest import TableBuildIngest
 from .table_build_layout import TableBuildLayout
 from .table_build_render import TableBuildRender
@@ -162,6 +163,7 @@ class TableBuildHost(
     TableBuildLayoutState,
     TableBuildWindowOps,
     TableBuildWindowChrome,
+    TableBuildExportState,
     Protocol,
 ):
     """What table ingest, SQLite rebuild, and Render 2D need from the window.
@@ -185,6 +187,7 @@ class TableBuildPipeline(
     TableBuildLayout,
     TableBuildRender,
     TableBuildRenderResults,
+    TableBuildExport,
 ):
     """GUI-thread table-build owner. Timers and generation counters stay on the kernel."""
 

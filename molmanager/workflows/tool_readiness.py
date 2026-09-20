@@ -33,6 +33,8 @@ class ToolBlocker(Enum):
     NO_TABLE = "no_table"
     NO_ROWS = "no_rows"
     NO_ACTIVITY_COLUMN = "no_activity_column"
+    NO_TEXT_COLUMN = "no_text_column"
+    CALCULATOR_DISABLED = "calculator_disabled"
 
 
 @dataclass(frozen=True)
@@ -89,3 +91,25 @@ def plan_activity_analysis(
     if not usable:
         return ActivityAnalysisPlan(blocked_by=ToolBlocker.NO_ACTIVITY_COLUMN)
     return ActivityAnalysisPlan(activity_columns=usable)
+
+
+def plan_text_column_tool(
+    *,
+    headers: Sequence[str],
+    row_count: int,
+    text_columns: Sequence[str],
+) -> TableReadiness:
+    """Split/join/reaction-extract need a populated table and at least one text column."""
+    table = plan_table_readiness(headers=headers, row_count=row_count, require_rows=True)
+    if not table.is_ready:
+        return table
+    if not any(str(name or "").strip() for name in text_columns):
+        return TableReadiness(blocked_by=ToolBlocker.NO_TEXT_COLUMN)
+    return TableReadiness()
+
+
+def plan_calculator(*, headers: Sequence[str], disabled: bool) -> TableReadiness:
+    """The calculator needs headers, and must not be policy-disabled."""
+    if disabled:
+        return TableReadiness(blocked_by=ToolBlocker.CALCULATOR_DISABLED)
+    return plan_table_readiness(headers=headers, row_count=0, require_rows=False)

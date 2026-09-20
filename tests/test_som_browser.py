@@ -461,7 +461,7 @@ def test_empty_som_map_cells_skip_pixmap_background(qapp) -> None:  # noqa: ARG0
 
 
 def test_som_map_export_filename() -> None:
-    from molmanager.ui.main_window.tools_sql_predict_mixin import som_map_export_filename
+    from molmanager.ui.workspace_predict import som_map_export_filename
 
     assert som_map_export_filename(12) == "SOM_Map_12.png"
     assert som_map_export_filename(3, "SOM Map 2") == "SOM_Map_2_3.png"
@@ -471,7 +471,7 @@ def test_save_som_map_pixmap(tmp_path, qapp) -> None:  # noqa: ARG001
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QPixmap
 
-    from molmanager.ui.main_window.tools_sql_predict_mixin import save_som_map_pixmap
+    from molmanager.ui.workspace_predict import save_som_map_pixmap
 
     pm = QPixmap(24, 16)
     pm.fill(Qt.red)

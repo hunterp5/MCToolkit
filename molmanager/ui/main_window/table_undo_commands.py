@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import Any, Protocol
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QPixmap, QUndoCommand
@@ -27,11 +27,49 @@ from PySide6.QtGui import QPixmap, QUndoCommand
 from ...chem.molecule_conversion import copy_mol, mol_from_smiles, mol_to_canonical_smiles
 from ...platform_support.config import load_config
 from ...table.structure_depiction_layout import structure_column_minimum_width
+from ..app_roles import ProgressChrome, SessionState, StoreAccess, TableData, TableSelection
 from ..compound_table_model import CompoundTableModel
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
 
-if TYPE_CHECKING:
-    from ..app_kernel import AppKernel
+
+class UndoRowOps(Protocol):
+    """Row snapshot / restore helpers undo commands still call on the window."""
+
+    _session_sort: Any
+
+    def _oids_for_row_indices(self, rows: list) -> Any: ...
+    def _confs_sidecar_discard_oids(self, oids: list) -> None: ...
+    def _confs_sidecar_copy_for_new_row(self, *args: Any, **kwargs: Any) -> Any: ...
+    def _clear_table_selection_after_delete(self) -> None: ...
+    def _refresh_table_after_bulk_delete(self) -> None: ...
+    def _row_cells_dict(self, row: int) -> dict: ...
+    def _paste_clipboard_into_table_cell(self, *args: Any, **kwargs: Any) -> Any: ...
+
+
+class UndoColumnOps(Protocol):
+    """Column / filter helpers undo commands still call on the window."""
+
+    def _filterable_data_column_names(self) -> list: ...
+    def _mark_sqlite_store_dirty(self) -> None: ...
+    def _ensure_blank_table_headers(self) -> None: ...
+    def apply_filters(self) -> None: ...
+    def calculate_global_bounds(self) -> None: ...
+    def remove_filter(self, *args: Any, **kwargs: Any) -> Any: ...
+    def start_render_worker(self, *args: Any, **kwargs: Any) -> Any: ...
+
+
+class UndoHost(
+    TableData,
+    TableSelection,
+    SessionState,
+    StoreAccess,
+    ProgressChrome,
+    UndoRowOps,
+    UndoColumnOps,
+    Protocol,
+):
+    """What table undo commands need from the window. Not the full kernel."""
+
 
 __all__ = [
     "UndoDeleteRowsCommand",
@@ -65,7 +103,7 @@ class DeleteRowSnapshot:
 
 
 def collect_delete_row_snapshots(
-    app: AppKernel,
+    app: UndoHost,
     oids: frozenset[int],
     *,
     light: bool,
@@ -92,7 +130,7 @@ class UndoDeleteRowsCommand(QUndoCommand):
 
     def __init__(
         self,
-        app: AppKernel,
+        app: UndoHost,
         rows: list[int] | None = None,
         *,
         oids: frozenset[int] | None = None,
@@ -152,7 +190,7 @@ class UndoDeleteRowsCommand(QUndoCommand):
 
     @staticmethod
     def _restore_row_assets(
-        app: AppKernel, snap: DeleteRowSnapshot, *, render_structure: bool = False
+        app: UndoHost, snap: DeleteRowSnapshot, *, render_structure: bool = False
     ) -> None:
         smi = str(snap.cells.get("SMILES") or "").strip()
         mol = None
@@ -228,7 +266,7 @@ class UndoDeleteRowsCommand(QUndoCommand):
 class UndoPasteCellCommand(QUndoCommand):
     """Undo/redo for pasting into one table cell (text or structure column)."""
 
-    def __init__(self, app: AppKernel, row: int, col: int, oid: int, clip_text: str) -> None:
+    def __init__(self, app: UndoHost, row: int, col: int, oid: int, clip_text: str) -> None:
         super().__init__("Paste")
         self._app = app
         self._row = row
@@ -299,7 +337,7 @@ class _PasteBlockCell:
 class UndoPasteBlockCommand(QUndoCommand):
     """Undo/redo for Excel-style paste into a block of cells."""
 
-    def __init__(self, app: AppKernel, writes: list[tuple[int, int, int, str]]) -> None:
+    def __init__(self, app: UndoHost, writes: list[tuple[int, int, int, str]]) -> None:
         n = len(writes)
         super().__init__(f"Paste {n} cells" if n != 1 else "Paste")
         self._app = app
@@ -362,7 +400,7 @@ class UndoPasteBlockCommand(QUndoCommand):
 class UndoCellTextChangeCommand(QUndoCommand):
     """Undo/redo for context-menu Edit Value or Clear Value on a text data cell."""
 
-    def __init__(self, app: AppKernel, oid: int, header: str, old_text: str, new_text: str) -> None:
+    def __init__(self, app: UndoHost, oid: int, header: str, old_text: str, new_text: str) -> None:
         label = "Clear cell" if new_text == "" else "Edit cell"
         super().__init__(label)
         self._app = app
@@ -388,7 +426,7 @@ class UndoCellTextChangeCommand(QUndoCommand):
 class UndoClearCellsCommand(QUndoCommand):
     """Undo/redo clearing many text cells in one Edit → Delete Selection action."""
 
-    def __init__(self, app: AppKernel, changes: list[tuple[int, str, str]]) -> None:
+    def __init__(self, app: UndoHost, changes: list[tuple[int, str, str]]) -> None:
         n = len(changes)
         super().__init__(f"Clear {n} cell(s)" if n != 1 else "Clear cell")
         self._app = app
@@ -412,7 +450,7 @@ class UndoClearCellsCommand(QUndoCommand):
         app.status_label.setText("Undo: cell values restored.")
 
 
-def _sync_filters_after_column_removed(app: AppKernel, hdr: str) -> None:
+def _sync_filters_after_column_removed(app: UndoHost, hdr: str) -> None:
     """Update filter UI after a column is removed (no full-table bounds/filter pass)."""
     app.global_bounds.pop(hdr, None)
     cols = app._filterable_data_column_names()
@@ -428,7 +466,7 @@ def _sync_filters_after_column_removed(app: AppKernel, hdr: str) -> None:
         app.remove_filter(f)
 
 
-def _sync_bounds_after_column_restored(app: AppKernel, hdr: str) -> None:
+def _sync_bounds_after_column_restored(app: UndoHost, hdr: str) -> None:
     """Rescan bounds for one restored column and refresh filter property lists."""
     meta = app._table_model.numeric_bounds_for_header(hdr)
     if meta is not None:
@@ -444,7 +482,7 @@ def _sync_bounds_after_column_restored(app: AppKernel, hdr: str) -> None:
 class UndoDeleteColumnCommand(QUndoCommand):
     """Undo/redo deleting a data column (not ID or Structure)."""
 
-    def __init__(self, app: AppKernel, col: int) -> None:
+    def __init__(self, app: UndoHost, col: int) -> None:
         hdr = app.headers[col]
         super().__init__(f"Delete column '{hdr}'")
         self._app = app
@@ -516,7 +554,7 @@ class UndoLogarithmicColumnCommand(QUndoCommand):
 
     def __init__(
         self,
-        app: AppKernel,
+        app: UndoHost,
         header: str,
         *,
         to_log: bool,
@@ -569,7 +607,7 @@ class UndoPrecisionColumnCommand(QUndoCommand):
 
     def __init__(
         self,
-        app: AppKernel,
+        app: UndoHost,
         header: str,
         *,
         decimals: int,
@@ -611,7 +649,7 @@ class UndoPrecisionColumnCommand(QUndoCommand):
 
 
 def _match_duplicated_column_width(
-    app: AppKernel, src_col: int, dest_col: int, src_name: str
+    app: UndoHost, src_col: int, dest_col: int, src_name: str
 ) -> None:
     """Give the inserted copy the same section width as its source.
 
@@ -644,7 +682,7 @@ def _unique_copy_header(headers: list[str], src_name: str) -> str:
     return f"{src_name} (Copy {n})"
 
 
-def _snapshot_structure_column(app: AppKernel) -> tuple[dict[int, str], dict[int, QPixmap]]:
+def _snapshot_structure_column(app: UndoHost) -> tuple[dict[int, str], dict[int, QPixmap]]:
     """Backing SMILES and 2D images for a Structure-column duplicate."""
     model = app._table_model
     smiles: dict[int, str] = {}
@@ -676,7 +714,7 @@ def _snapshot_structure_column(app: AppKernel) -> tuple[dict[int, str], dict[int
 class UndoDuplicateColumnCommand(QUndoCommand):
     """Undo/redo duplicating a column (insert copy next to source)."""
 
-    def __init__(self, app: AppKernel, src_col: int, src_name: str) -> None:
+    def __init__(self, app: UndoHost, src_col: int, src_name: str) -> None:
         super().__init__(f"Duplicate column '{src_name}'")
         self._app = app
         self._src_name = src_name
@@ -755,7 +793,7 @@ class UndoDuplicateColumnCommand(QUndoCommand):
 class UndoInsertRowCommand(QUndoCommand):
     """Undo/redo inserting a duplicated row (same data as source row at action time)."""
 
-    def __init__(self, app: AppKernel, src_row: int) -> None:
+    def __init__(self, app: UndoHost, src_row: int) -> None:
         super().__init__("Duplicate row")
         self._app = app
         self._src_oid = -1
@@ -815,7 +853,7 @@ class UndoInsertRowCommand(QUndoCommand):
 class UndoAddBlankRowCommand(QUndoCommand):
     """Undo/redo appending one or more empty table rows."""
 
-    def __init__(self, app: AppKernel, count: int = 1) -> None:
+    def __init__(self, app: UndoHost, count: int = 1) -> None:
         n = max(1, int(count))
         super().__init__("Add row" if n == 1 else f"Add {n} rows")
         self._app = app
@@ -883,7 +921,7 @@ class UndoAddBlankRowCommand(QUndoCommand):
 class UndoAddBlankColumnCommand(QUndoCommand):
     """Undo/redo inserting empty data columns at the right edge."""
 
-    def __init__(self, app: AppKernel, headers: str | list[str]) -> None:
+    def __init__(self, app: UndoHost, headers: str | list[str]) -> None:
         names = [headers] if isinstance(headers, str) else [h for h in headers if h]
         label = names[0] if len(names) == 1 else f"{len(names)} columns"
         super().__init__(f"Add column '{label}'" if len(names) == 1 else f"Add {label}")

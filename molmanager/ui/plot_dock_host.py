@@ -19,12 +19,30 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Protocol
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMessageBox
 
+from .app_roles import ProgressChrome
+
 logger = logging.getLogger(__name__)
+
+
+class PlotDockChrome(Protocol):
+    """Window methods PlotDockHost needs beyond status-bar chrome."""
+
+    def apply_workspace_layout(self, layout_id: str) -> None: ...
+    def _prepare_tool_plot(self, plot_widget: Any) -> None: ...
+    def _sync_active_plots_from_table_selection(self) -> None: ...
+    def _prepare_tool_dialog(self, dialog: Any) -> None: ...
+    def _bind_undocked_browser_dialog(self, dlg: Any) -> bool: ...
+    def _register_plot_dialog(self, dlg: Any) -> None: ...
+    def _register_floating_result_dialog(self, dlg: Any) -> None: ...
+
+
+class PlotDockHostApp(ProgressChrome, PlotDockChrome, Protocol):
+    """What the dock host reads from the window."""
 
 
 def _plot_dialog_and_widget_types():
@@ -39,11 +57,11 @@ def _plot_dialog_and_widget_types():
 class PlotDockHost:
     """Owns docked-plot lifecycle for :class:`~molmanager.ui.main_window.ChemistryWorkspaceWindow`.
 
-    Public entry points remain on the main window (via :class:`PlotToolsMixin`) so
-    existing callers keep working; this object holds the implementation.
+    Public entry points remain on the main window (via ``install_window_forwards``)
+    so existing callers keep working; this object holds the implementation.
     """
 
-    def __init__(self, app: Any) -> None:
+    def __init__(self, app: PlotDockHostApp) -> None:
         self._app = app
 
     def workspace(self):

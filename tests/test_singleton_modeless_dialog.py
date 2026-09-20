@@ -249,7 +249,7 @@ def test_dimension_reduction_singleton_attrs_match_session_bookkeeping() -> None
     ui = Path(__file__).resolve().parents[1] / "molmanager" / "ui"
     paths = (
         ui / "session_plots.py",
-        ui / "main_window" / "plot_tools_mixin.py",
+        ui / "workspace_plot.py",
     )
     for path in paths:
         text = path.read_text(encoding="utf-8")
@@ -272,7 +272,7 @@ def test_helper_call_sites_omit_boilerplate_clearers() -> None:
                 continue
             if len(node.args) >= 4:
                 extras.append((path.name, ast.unparse(node.args[3])))
-    assert extras == [("dock_tools_mixin.py", "self._on_pose_browser_dialog_destroyed")]
+    assert extras == [("workspace_dock.py", "self._on_pose_browser_dialog_destroyed")]
 
 
 def test_qobject_is_deleted_for_live_and_missing() -> None:
