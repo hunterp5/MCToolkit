@@ -755,3 +755,12 @@ def test_plot_pane_header_is_vertically_compact(qapp):
     assert pane._close_btn.height() == _GLYPH_BTN_SIZE
     assert PLOT_BODY_MARGINS[1] == 0
     pane.deleteLater()
+
+
+def test_plot_pane_fills_fusion_window(qapp):  # noqa: ARG001
+    pane = PlotPane("pane_fill")
+    try:
+        assert pane.autoFillBackground()
+        assert pane._stack.autoFillBackground()
+    finally:
+        pane.deleteLater()
