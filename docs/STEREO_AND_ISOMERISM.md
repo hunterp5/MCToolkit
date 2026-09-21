@@ -63,7 +63,7 @@ Important for this app:
 
 - A **SMILES string or mol block** almost always represents **one tautomeric form** (the one you drew or that the supplier encoded).
 - **RDKit** `MolFromSmiles` / sanitization do **not** mean “all tautomers”; they mean “this graph.” MCToolkit does **not** run tautomer enumeration on every table load.
-- **Tools → Prepare Structures → Tautomers** enumerates a likely set (RDKit `TautomerEnumerator`, scored and capped) and can add chosen forms as new rows with **Parent OID**.
+- **Tools → Tautomers…** enumerates a likely set (RDKit `TautomerEnumerator`, scored and capped) and can add chosen forms as new rows with **Parent OID**.
 - If you need a specific tautomer without enumerating, **draw or paste that form** explicitly. For charge-state (protomer) ensembles at a pH, use **Generate Protomers**.
 
 ---

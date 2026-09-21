@@ -83,7 +83,7 @@ You need a copy of the MCToolkit project on your computer.
 
 ### Option A — Download as a ZIP (simplest)
 
-1. Go to the MCToolkit repository on GitHub.
+1. Go to [https://github.com/hunterp5/MCToolkit](https://github.com/hunterp5/MCToolkit).
 2. Click the green **Code** button, then **Download ZIP**.
 3. Extract the ZIP to a folder you will remember, for example:
    - Windows: `C:\Users\YourName\Documents\MCToolkit`
@@ -519,7 +519,7 @@ Optional settings for power users and IT deployments:
 | Path | Role |
 |------|------|
 | `mctoolkit/app.py` | Application entry point |
-| `mctoolkit/ui/main_window/` | Main window and feature mixins |
+| `mctoolkit/ui/main_window/` | Main window shell and collaborators |
 | `mctoolkit/ui/compound_table_model.py` | Table data model |
 | `mctoolkit/ui/dialogs/` | Tool dialogs |
 | `mctoolkit/workers/` | Background jobs (render, export, cluster, pKa, …) |
@@ -564,14 +564,14 @@ python scripts/check_gpl_headers.py
 
 ```bash
 python scripts/benchmark_large_table.py --runs 3 --scales 10000,50000,100000
-python scripts/benchmark_pka.py samples/fda_approved_physprops_v2.sdf --limit 32
+python scripts/benchmark_pka.py samples/fda_approved_physprops.sdf --limit 32
 ```
 
 ---
 
 ## Stereochemistry and structures
 
-MCToolkit (RDKit + the 2D sketcher) handles **tetrahedral** stereo and **alkene E/Z** from 2D layout. It does not automatically enumerate tautomers or atropisomers. See `docs/STEREO_AND_ISOMERISM.md` and `docs/VALENCE_BONDS_AND_AROMATICITY.md` before changing structure-related code.
+MCToolkit (RDKit + the 2D sketcher) handles **tetrahedral** stereo and **alkene E/Z** from 2D layout. Loading a SMILES or mol block keeps **one** tautomeric form; use **Tools → Tautomers…** to enumerate likely tautomer graphs. Atropisomers are not enumerated. See [`docs/STEREO_AND_ISOMERISM.md`](docs/STEREO_AND_ISOMERISM.md) and [`docs/VALENCE_BONDS_AND_AROMATICITY.md`](docs/VALENCE_BONDS_AND_AROMATICITY.md) before changing structure-related code.
 
 ---
 

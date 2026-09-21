@@ -26,8 +26,8 @@ Also compares in-process chunk sizes (1 = old CUDA path, 16 = current) so we
 can tell whether batching is a win on this machine.
 
 Usage:
-    python scripts/benchmark_pka.py samples/fda_approved_physprops_v2.sdf
-    python scripts/benchmark_pka.py samples/fda_approved_physprops_v2.sdf --limit 32
+    python scripts/benchmark_pka.py samples/fda_approved_physprops.sdf
+    python scripts/benchmark_pka.py samples/fda_approved_physprops.sdf --limit 32
 """
 
 from __future__ import annotations
