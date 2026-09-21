@@ -1,24 +1,24 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for BRICS / RECAP fragment decomposition helpers."""
 
 from rdkit import Chem
 
-from molmanager.chem.fragment_decomposition import (
+from mctoolkit.chem.fragment_decomposition import (
     assemble_fragment_table_rows,
     decompose_brics,
     decompose_recap,
@@ -81,8 +81,8 @@ def test_recompose_brics_from_aspirin_fragments():
 
 
 def test_brics_decomposition_dialog_params(qapp):  # noqa: ARG001
-    from molmanager.ui.dialogs.fragment_decomposition import FragmentDecompositionDialog
-    from molmanager.ui.strings import TOOL_BRICS_DECOMP
+    from mctoolkit.ui.dialogs.fragment_decomposition import FragmentDecompositionDialog
+    from mctoolkit.ui.strings import TOOL_BRICS_DECOMP
 
     dlg = FragmentDecompositionDialog(
         window_title=TOOL_BRICS_DECOMP,

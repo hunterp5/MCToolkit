@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Dock menu, Gnina results viewer, and dock-results chrome."""
 
@@ -26,7 +26,7 @@ pytest.importorskip("PySide6.QtWidgets")
 
 
 def _live_pose_panel(parent, win):
-    from molmanager.ui.pose_browser import PoseBrowserDialog, PoseBrowserWidget
+    from mctoolkit.ui.pose_browser import PoseBrowserDialog, PoseBrowserWidget
 
     live = parent._live_pose_browser()
     if isinstance(live, PoseBrowserWidget):
@@ -39,7 +39,7 @@ def _live_pose_panel(parent, win):
 
 
 def test_dock_menu_includes_smina(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     assert hasattr(w, "open_gnina_dock")
@@ -118,9 +118,9 @@ def test_dock_menu_includes_smina(qapp):  # noqa: ARG001
 
 
 def test_predict_viewers_enable_when_table_has_results(qapp):  # noqa: ARG001
-    from molmanager.predictions.biotransformer_metabolites import METABOLITE_SMILES_COLUMN
-    from molmanager.predictions.som_prediction import SOM_MAP_COLUMN
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.predictions.biotransformer_metabolites import METABOLITE_SMILES_COLUMN
+    from mctoolkit.predictions.som_prediction import SOM_MAP_COLUMN
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w._sync_predict_viewer_actions()
@@ -143,10 +143,10 @@ def test_open_dock_results_window_lists_smina_fields(qapp, tmp_path, monkeypatch
     from rdkit import Chem
     from rdkit.Geometry import Point3D
 
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.dockable_plot_title import plot_widget_display_title
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.pose_browser import PoseBrowserWidget
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.dockable_plot_title import plot_widget_display_title
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.pose_browser import PoseBrowserWidget
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
 
@@ -215,8 +215,8 @@ def test_dock_viewer_reopens_closed_results_window(qapp, tmp_path, monkeypatch):
     from rdkit import Chem
     from rdkit.Geometry import Point3D
 
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
 
@@ -275,8 +275,8 @@ def _pose_mol(smiles: str, affinity: str, x: float, *, name: str | None = None):
 
 
 def test_pose_browser_table_lists_poses_for_one_ligand(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
     rec = tmp_path / "rec.pdbqt"
@@ -309,9 +309,9 @@ def test_pose_browser_table_lists_poses_for_one_ligand(qapp, tmp_path, monkeypat
 
 
 def test_pose_browser_nav_steps_ligand_groups(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.pose_browser import PoseBrowserDialog
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.pose_browser import PoseBrowserDialog
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
     rec = tmp_path / "rec.pdbqt"
@@ -352,8 +352,8 @@ def test_pose_browser_nav_steps_ligand_groups(qapp, tmp_path, monkeypatch):  # n
 def test_pose_browser_table_has_horizontal_scrollbar(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from PySide6.QtCore import Qt
 
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
     rec = tmp_path / "rec.pdbqt"
@@ -400,8 +400,8 @@ def test_pose_browser_table_has_horizontal_scrollbar(qapp, tmp_path, monkeypatch
 
 
 def test_pose_browser_table_sorts_highest_first_on_header_click(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
     rec = tmp_path / "rec.pdbqt"

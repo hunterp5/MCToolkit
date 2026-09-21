@@ -1,31 +1,31 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for MMP pair neighborhood graph helpers."""
 
 from rdkit import Chem
 
-from molmanager.analysis.mmp_analysis import find_matched_molecular_pairs
-from molmanager.analysis.mmp_neighborhood_analysis import (
+from mctoolkit.analysis.mmp_analysis import find_matched_molecular_pairs
+from mctoolkit.analysis.mmp_neighborhood_analysis import (
     build_mmp_network_graph,
     build_network_edges,
     neighborhood_oids,
     spring_layout_positions,
 )
-from molmanager.ui.mmp_neighborhood_plot import build_mmp_neighborhood_figure
+from mctoolkit.ui.mmp_neighborhood_plot import build_mmp_neighborhood_figure
 
 
 def _rec(oid: int, smiles: str, activity: float):
@@ -39,7 +39,7 @@ def test_spring_layout_and_neighborhood():
     assert set(pos) == {1, 2, 3}
     assert all(len(xy) == 2 for xy in pos.values())
 
-    from molmanager.analysis.mmp_neighborhood_analysis import MmpNetworkEdge
+    from mctoolkit.analysis.mmp_neighborhood_analysis import MmpNetworkEdge
 
     net_edges = [
         MmpNetworkEdge(1, 2, 1.0, 1.0, "a>>b", 0),
@@ -110,8 +110,8 @@ def test_build_mmp_network_from_pairs():
     fig = build_mmp_neighborhood_figure(graph, activity_column="pIC50")
     assert fig.data
     meta = fig.layout.meta or {}
-    assert "molmanager_selection_traces" in meta
-    assert meta.get("molmanager_selection_overlay") is False
+    assert "mctoolkit_selection_traces" in meta
+    assert meta.get("mctoolkit_selection_overlay") is False
     assert all(getattr(tr, "type", None) == "scattergl" for tr in fig.data)
     assert fig.layout.xaxis.scaleanchor is None
     assert fig.layout.xaxis.range is not None

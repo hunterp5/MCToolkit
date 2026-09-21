@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Tool-readiness decisions. No Qt, no qapp fixture, no main window."""
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import sys
 
-from molmanager.workflows.tool_readiness import (
+from mctoolkit.workflows.tool_readiness import (
     ToolBlocker,
     plan_activity_analysis,
     plan_calculator,
@@ -32,10 +32,10 @@ from molmanager.workflows.tool_readiness import (
 def test_workflow_layer_does_not_pull_in_qt():
     """The point of the layer: importing a decision must not load PySide6."""
     for name in list(sys.modules):
-        if name.startswith("molmanager.workflows"):
+        if name.startswith("mctoolkit.workflows"):
             del sys.modules[name]
     qt_already_loaded = "PySide6.QtWidgets" in sys.modules
-    import molmanager.workflows.tool_readiness  # noqa: F401
+    import mctoolkit.workflows.tool_readiness  # noqa: F401
 
     if not qt_already_loaded:
         assert "PySide6.QtWidgets" not in sys.modules
@@ -89,18 +89,14 @@ def test_activity_analysis_returns_usable_columns():
 
 def test_text_column_tool_needs_rows_and_a_text_column():
     assert (
-        plan_text_column_tool(
-            headers=["SMILES"], row_count=0, text_columns=["SMILES"]
-        ).blocked_by
+        plan_text_column_tool(headers=["SMILES"], row_count=0, text_columns=["SMILES"]).blocked_by
         is ToolBlocker.NO_ROWS
     )
     assert (
         plan_text_column_tool(headers=["SMILES"], row_count=3, text_columns=[]).blocked_by
         is ToolBlocker.NO_TEXT_COLUMN
     )
-    assert plan_text_column_tool(
-        headers=["SMILES"], row_count=3, text_columns=["SMILES"]
-    ).is_ready
+    assert plan_text_column_tool(headers=["SMILES"], row_count=3, text_columns=["SMILES"]).is_ready
 
 
 def test_calculator_blocks_when_policy_disabled():

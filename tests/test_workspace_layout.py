@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for multi-pane workspace layout presets and docking into panes."""
 
@@ -22,9 +22,10 @@ import pytest
 
 pytest.importorskip("PySide6.QtWidgets")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
-from molmanager.ui.main_window.workspace_layout import (
+from mctoolkit.ui.main_window.workspace_layout import (
     DEFAULT_LAYOUT_ID,
     LAYOUT_QUADRANTS,
     LAYOUT_TABLE_GRID,
@@ -487,9 +488,17 @@ class _ParentProbe(QWidget):
     def __init__(self):
         super().__init__()
         self.unparented_while_visible = False
+        self.hide_count = 0
+
+    def setVisible(self, visible):  # noqa: N802 — Qt API
+        if not visible:
+            self.hide_count += 1
+        super().setVisible(visible)
 
     def setParent(self, parent, *args, **kwargs):  # noqa: N802 — Qt API
         if parent is None and self.isVisible() and not self.isHidden():
+            self.unparented_while_visible = True
+        if parent is not self.parent() and self.isVisible() and not self.isHidden():
             self.unparented_while_visible = True
         super().setParent(parent, *args, **kwargs)
 
@@ -534,11 +543,46 @@ def test_remove_pane_keeps_table_parented(qapp):
     mgr.show()
     qapp.processEvents()
     pane = mgr.plot_panes()[1]
+    parent_before = table.parent()
     assert mgr.remove_pane(pane) is True
     qapp.processEvents()
-    assert table.parent() is not None
+    assert table.parent() is parent_before
     assert not table.isWindow()
+    assert table.isVisible()
     assert mgr.layout_id == LAYOUT_TABLE_SINGLE
+
+
+def test_remove_pane_does_not_hide_or_reparent_table(qapp):
+    table = _ParentProbe()
+    mgr = WorkspaceLayoutManager(table)
+    mgr.apply_layout(LAYOUT_TABLE_STACK, preserve_plots=False)
+    mgr.resize(640, 480)
+    mgr.show()
+    table.show()
+    qapp.processEvents()
+    table.hide_count = 0
+    table.unparented_while_visible = False
+    parent_before = table.parent()
+    closed = mgr.plot_panes()[1]
+    assert mgr.remove_pane(closed) is True
+    qapp.processEvents()
+    assert table.hide_count == 0
+    assert table.unparented_while_visible is False
+    assert table.parent() is parent_before
+    assert table.isVisible()
+    last = mgr.plot_panes()[0]
+    assert mgr.remove_pane(last) is True
+    qapp.processEvents()
+    assert table.hide_count == 0
+    assert table.unparented_while_visible is False
+    assert table.parent() is parent_before
+    assert table.isVisible()
+    assert mgr.layout_id == LAYOUT_TABLE_ONLY
+    assert mgr.plot_panes() == []
+    from PySide6.QtWidgets import QSplitterHandle
+
+    assert [h for h in mgr.findChildren(QSplitterHandle) if h.isVisible()] == []
+    mgr.close()
 
 
 def test_layout_freeze_restores_updates(qapp):
@@ -618,6 +662,33 @@ def test_layout_switch_only_shows_live_splitter_handles(qapp):
     assert live_panes[0] not in old_panes
     leftover = [p for p in old_panes if p is not live_panes[0] and _is_visible(p)]
     assert leftover == []
+    for splitter in mgr._splitters:
+        dummy = splitter.handle(0)
+        assert dummy is None or not dummy.isVisible()
+    mgr.close()
+
+
+def test_dummy_splitter_handles_stay_collapsed_after_resize(qapp):
+    mgr = _manager(qapp)
+    mgr.apply_layout(LAYOUT_TABLE_SINGLE, preserve_plots=False)
+    mgr.resize(800, 600)
+    mgr.show()
+    qapp.processEvents()
+    for splitter in mgr._splitters:
+        dummy = splitter.handle(0)
+        assert dummy is not None
+        assert not dummy.isVisible()
+        assert dummy.testAttribute(Qt.WA_DontCreateNativeAncestors)
+    mgr.resize(1, 1)
+    qapp.processEvents()
+    mgr.resize(800, 600)
+    mgr.refresh_splitter_handles()
+    qapp.processEvents()
+    for splitter in mgr._splitters:
+        dummy = splitter.handle(0)
+        assert dummy is None or not dummy.isVisible()
+        live = [splitter.handle(i) for i in range(1, splitter.count())]
+        assert any(h is not None and h.isVisible() for h in live)
     mgr.close()
 
 
@@ -643,7 +714,7 @@ def test_remove_pane_hides_closed_pane_chrome(qapp):
 def test_dock_fits_wide_widget_to_existing_splitter_sizes(qapp):
     from PySide6.QtWidgets import QLayout, QVBoxLayout
 
-    from molmanager.ui.dockable_plot import embed_in_plot_pane, unembed_from_plot_pane
+    from mctoolkit.ui.dockable_plot import embed_in_plot_pane, unembed_from_plot_pane
 
     host = QWidget()
     ly = QVBoxLayout(host)
@@ -672,7 +743,7 @@ def test_dock_fits_wide_widget_to_existing_splitter_sizes(qapp):
 
 
 def test_plot_pane_header_is_vertically_compact(qapp):
-    from molmanager.ui.dockable_plot import PLOT_BODY_MARGINS, _GLYPH_BTN_SIZE
+    from mctoolkit.ui.dockable_plot import PLOT_BODY_MARGINS, _GLYPH_BTN_SIZE
 
     pane = PlotPane("pane_compact")
     assert pane._header.minimumHeight() == _GLYPH_BTN_SIZE

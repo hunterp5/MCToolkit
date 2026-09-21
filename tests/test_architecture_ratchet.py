@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Freeze the coupling counters in ``architecture-ratchet.json`` against growth.
 
@@ -73,8 +73,8 @@ def test_coupling_counters_do_not_grow(metrics: am.Metrics, baseline: dict) -> N
     assert not grew, (
         "Architecture ratchet grew:\n  "
         + "\n  ".join(grew)
-        + "\nPut the decision in molmanager/workflows/ or the computation in "
-        "molmanager/services/ instead of the Qt layer. See docs/ARCHITECTURE.md."
+        + "\nPut the decision in mctoolkit/workflows/ or the computation in "
+        "mctoolkit/services/ instead of the Qt layer. See docs/ARCHITECTURE.md."
     )
 
 
@@ -90,7 +90,7 @@ def test_ui_share_of_codebase_does_not_drift(metrics: am.Metrics, baseline: dict
     was = baseline["tracked"]["ui_loc_share_pct"]
     share = metrics.tracked["ui_loc_share_pct"]
     assert share <= was + am.UI_SHARE_TOLERANCE_PP, (
-        f"molmanager/ui/ is {share}% of the package, over the {was}% baseline by more than "
+        f"mctoolkit/ui/ is {share}% of the package, over the {was}% baseline by more than "
         f"{am.UI_SHARE_TOLERANCE_PP}pp. Widgets belong in ui/; decisions do not."
     )
 
@@ -114,12 +114,12 @@ def test_decision_layers_import_no_qt_at_runtime() -> None:
     import importlib
 
     for name in list(sys.modules):
-        if name.startswith("molmanager.workflows"):
+        if name.startswith("mctoolkit.workflows"):
             del sys.modules[name]
     qt_already_loaded = "PySide6.QtWidgets" in sys.modules
-    package = ROOT / "molmanager" / "workflows"
+    package = ROOT / "mctoolkit" / "workflows"
     for path in sorted(package.glob("*.py")):
-        module = f"molmanager.workflows.{path.stem}" if path.stem != "__init__" else None
-        importlib.import_module(module or "molmanager.workflows")
+        module = f"mctoolkit.workflows.{path.stem}" if path.stem != "__init__" else None
+        importlib.import_module(module or "mctoolkit.workflows")
     if not qt_already_loaded:
         assert "PySide6.QtWidgets" not in sys.modules, "a workflow pulled in Qt"

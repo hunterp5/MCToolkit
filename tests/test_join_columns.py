@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for Data → Table → Join Columns."""
 
@@ -23,15 +23,15 @@ from types import SimpleNamespace
 import pytest
 from rdkit import Chem
 
-from molmanager.table.column_join import (
+from mctoolkit.table.column_join import (
     JoinColumnsParams,
     default_join_output_name,
     join_two_values,
     resolve_join_delimiter,
     unescape_join_delimiter,
 )
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.ui.strings import TOOL_JOIN_COLUMNS
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.strings import TOOL_JOIN_COLUMNS
 
 
 def test_join_two_values_skips_empty_by_default() -> None:
@@ -95,8 +95,8 @@ def test_join_columns_writes_new_header(qapp) -> None:  # noqa: ARG001
 
 
 def test_join_dialog_defaults_second_column_and_skip_empty(qapp) -> None:  # noqa: ARG001
-    from molmanager.table.column_join import JOIN_DELIMITER_MODES
-    from molmanager.ui.dialogs.join_columns import JoinColumnsDialog
+    from mctoolkit.table.column_join import JOIN_DELIMITER_MODES
+    from mctoolkit.ui.dialogs.join_columns import JoinColumnsDialog
 
     dlg = JoinColumnsDialog(["First", "Last"], 0)
     assert dlg.left_combo.currentText() == "First"

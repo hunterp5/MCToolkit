@@ -1,26 +1,26 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Batched 2D render: child-process task shape, worker sizing, and the batched GUI handler."""
 
 from __future__ import annotations
 
 import pytest
-from molmanager.platform_support.config import load_config
-from molmanager.workers.load_render import (
+from mctoolkit.platform_support.config import load_config
+from mctoolkit.workers.load_render import (
     Render2DBatchProcessWorker,
     _mp_render_structure_batch,
     render2d_process_worker_count,
@@ -60,9 +60,9 @@ def test_batch_render_honors_requested_size() -> None:
 
 
 def test_worker_count_respects_env_override(monkeypatch) -> None:
-    monkeypatch.setenv("MOLMANAGER_RENDER2D_PROCESS_WORKERS", "3")
+    monkeypatch.setenv("MCTOOLKIT_RENDER2D_PROCESS_WORKERS", "3")
     assert render2d_process_worker_count() == 3
-    monkeypatch.delenv("MOLMANAGER_RENDER2D_PROCESS_WORKERS")
+    monkeypatch.delenv("MCTOOLKIT_RENDER2D_PROCESS_WORKERS")
     assert render2d_process_worker_count() >= 2
 
 
@@ -76,7 +76,7 @@ def _worker(items):
 
 
 def test_build_tasks_batches_rows_and_covers_every_oid(monkeypatch) -> None:
-    monkeypatch.setenv("MOLMANAGER_RENDER2D_BATCH_SIZE", "4")
+    monkeypatch.setenv("MCTOOLKIT_RENDER2D_BATCH_SIZE", "4")
     mol = Chem.MolFromSmiles("CCO")
     items = [(oid, mol, 242, 202) for oid in range(10)]
     tasks = _worker(items).build_tasks()
@@ -86,7 +86,7 @@ def test_build_tasks_batches_rows_and_covers_every_oid(monkeypatch) -> None:
 
 
 def test_build_tasks_keeps_zoomed_rows_in_their_own_size_group(monkeypatch) -> None:
-    monkeypatch.setenv("MOLMANAGER_RENDER2D_BATCH_SIZE", "64")
+    monkeypatch.setenv("MCTOOLKIT_RENDER2D_BATCH_SIZE", "64")
     mol = Chem.MolFromSmiles("CCO")
     items = [(1, mol, 242, 202), (2, mol, 484, 404), (3, mol, 242, 202)]
     sizes = {(w, h): [oid for oid, _b in rows] for rows, w, h in _worker(items).build_tasks()}
@@ -99,7 +99,7 @@ def test_build_tasks_emits_empty_blob_for_missing_mol() -> None:
 
 
 def test_build_tasks_tags_reaction_smarts() -> None:
-    from molmanager.chem.structure_2d_depiction import ReactionDrawSpec
+    from mctoolkit.chem.structure_2d_depiction import ReactionDrawSpec
 
     spec = ReactionDrawSpec("[C:1]>>[C:1]")
     tasks = _worker([(7, spec, 630, 170)]).build_tasks()
@@ -140,7 +140,7 @@ class _App:
     """Minimal stand-in exposing only what the batched render handler touches."""
 
     def __init__(self, rows_in_table: set[int], goal: int):
-        from molmanager.ui.table_build_render_results import TableBuildRenderResults
+        from mctoolkit.ui.table_build_render_results import TableBuildRenderResults
 
         self._app = self
         self._rows = rows_in_table

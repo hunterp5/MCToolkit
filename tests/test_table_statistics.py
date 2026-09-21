@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Qt-free table statistics used by Data → Table → Statistics."""
 
@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from molmanager.analysis.table_statistics import (
+from mctoolkit.analysis.table_statistics import (
     CURVE_POLYNOMIAL,
     OUTLIER_IQR,
     TEST_ONE_SAMPLE_T,
@@ -40,7 +40,7 @@ from molmanager.analysis.table_statistics import (
     run_hypothesis_test,
 )
 
-_STATS_SRC = Path(__file__).resolve().parents[1] / "molmanager" / "analysis" / "table_statistics.py"
+_STATS_SRC = Path(__file__).resolve().parents[1] / "mctoolkit" / "analysis" / "table_statistics.py"
 
 
 def test_table_statistics_source_does_not_import_qt() -> None:

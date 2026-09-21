@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Ligand hydrogen preparation before Meeko PDBQT conversion."""
 
@@ -28,8 +28,8 @@ pytest.importorskip("PySide6.QtWidgets")
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.ui.dialogs.pdbqt_generator import PdbqtGeneratorDialog
-from molmanager.workers.pdbqt_generator import (
+from mctoolkit.ui.dialogs.pdbqt_generator import PdbqtGeneratorDialog
+from mctoolkit.workers.pdbqt_generator import (
     PdbqtGenRequest,
     _ligand_mols_from_request,
     _meeko_failed_residue_key,
@@ -71,7 +71,7 @@ def test_prepare_ligand_with_hydrogens_keeps_existing_3d_coords():
 
 
 def test_meeko_rdkit_compat_adds_mol_has_query():
-    from molmanager.workers.pdbqt_generator import _apply_meeko_rdkit_compat
+    from mctoolkit.workers.pdbqt_generator import _apply_meeko_rdkit_compat
 
     _apply_meeko_rdkit_compat()
     mol = Chem.MolFromSmiles("c1ccccc1")
@@ -82,7 +82,7 @@ def test_meeko_rdkit_compat_adds_mol_has_query():
 
 def test_write_ligand_pdbqt_file(tmp_path):
     pytest.importorskip("meeko")
-    from molmanager.workers.pdbqt_generator import (
+    from mctoolkit.workers.pdbqt_generator import (
         _write_ligand_pdbqt_file,
         prepare_ligand_with_hydrogens,
     )
@@ -284,7 +284,7 @@ def test_meeko_failed_residue_key_and_strip():
 
 def test_write_receptor_pdbqt_protonated_glu_slice(tmp_path):
     pytest.importorskip("meeko")
-    from molmanager.protein.structure_atoms import _pdb_from_atoms, parse_structure_atoms
+    from mctoolkit.protein.structure_atoms import _pdb_from_atoms, parse_structure_atoms
 
     src = Path(__file__).resolve().parents[1] / "samples" / "6bbu_fixed_protonated.cif"
     if not src.is_file():

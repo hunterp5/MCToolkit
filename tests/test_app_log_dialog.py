@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Session log pane, status-label mirroring, and Processes toolbar chrome."""
 
@@ -21,15 +21,15 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMainWindow
 
-from molmanager.platform_support.session_log import record_ui_log, session_log_buffer
-from molmanager.ui.app_log_dialog import SessionLogPanel, StatusLogLabel
-from molmanager.ui.main_window.app_menu_mixin import AppMenuMixin
-from molmanager.ui.processes_dialog import ProcessesDialog
+from mctoolkit.platform_support.session_log import record_ui_log, session_log_buffer
+from mctoolkit.ui.app_log_dialog import SessionLogPanel, StatusLogLabel
+from mctoolkit.ui.main_window.app_menu_mixin import AppMenuMixin
+from mctoolkit.ui.processes_dialog import ProcessesDialog
 
 
 def test_session_log_panel_shows_ui_and_status_lines(qapp):  # noqa: ARG001
     session_log_buffer().clear()
-    record_ui_log("Starting pdb2pqr", name="molmanager.ui.tools")
+    record_ui_log("Starting pdb2pqr", name="mctoolkit.ui.tools")
     label = StatusLogLabel("Ready")
     label.setText("Ready")
     label.setText("Descriptors: collecting… — 0/8 (0%)")
@@ -97,7 +97,7 @@ def test_processes_stays_enabled_during_ingest(qapp):  # noqa: ARG001
 
 def test_processes_dialog_embeds_session_log(qapp):  # noqa: ARG001
     session_log_buffer().clear()
-    record_ui_log("Starting pdb2pqr", name="molmanager.ui.tools")
+    record_ui_log("Starting pdb2pqr", name="mctoolkit.ui.tools")
     dlg = ProcessesDialog()
     assert dlg._log is not None
     assert "Starting pdb2pqr" in dlg._log._view.toPlainText()

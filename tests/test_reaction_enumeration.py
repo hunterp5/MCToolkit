@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for reaction-based enumeration."""
 
@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 from rdkit import Chem
 
-from molmanager.chem.reaction_enumeration import (
+from mctoolkit.chem.reaction_enumeration import (
     enumerate_reaction,
     load_reactant_molecules,
     load_reactant_molecules_from_smiles_text,
@@ -91,7 +91,7 @@ def test_load_reactant_molecules_from_smiles_text() -> None:
 
 
 def test_load_reactant_pool_smiles_mode() -> None:
-    from molmanager.chem.reaction_enumeration import load_reactant_pool
+    from mctoolkit.chem.reaction_enumeration import load_reactant_pool
 
     mols = load_reactant_pool(source="smiles", smiles_text="CCO\nCN")
     assert len(mols) == 2
@@ -113,7 +113,7 @@ def test_write_product_smiles_to_sdf(tmp_path: Path) -> None:
 
 
 def test_reaction_enumeration_dialog_accepts_initial_smarts(qapp):  # noqa: ARG001
-    from molmanager.ui.dialogs.reaction_enumeration import ReactionEnumerationDialog
+    from mctoolkit.ui.dialogs.reaction_enumeration import ReactionEnumerationDialog
 
     smarts = "[C:1](=[O:2])-[OH;D1].[N;H2,H1]>>[C:1](=[O:2])-[N]"
     dlg = ReactionEnumerationDialog(initial_smarts=smarts)
@@ -123,8 +123,8 @@ def test_reaction_enumeration_dialog_accepts_initial_smarts(qapp):  # noqa: ARG0
 
 
 def test_dialog_params_are_chem_request(qapp):  # noqa: ARG001
-    from molmanager.chem.reaction_enumeration import ReactionEnumerationRequest
-    from molmanager.ui.dialogs.reaction_enumeration import (
+    from mctoolkit.chem.reaction_enumeration import ReactionEnumerationRequest
+    from mctoolkit.ui.dialogs.reaction_enumeration import (
         ReactionEnumerationDialog,
         ReactionEnumerationDialogParams,
     )
@@ -143,7 +143,7 @@ def test_dialog_params_are_chem_request(qapp):  # noqa: ARG001
 
 
 def test_load_reactant_pools_from_request() -> None:
-    from molmanager.chem.reaction_enumeration import (
+    from mctoolkit.chem.reaction_enumeration import (
         ReactionEnumerationRequest,
         load_reactant_pools,
     )
@@ -169,7 +169,7 @@ def test_load_reactant_pools_from_request() -> None:
 
 
 def test_load_reaction_presets_invalid_json(tmp_path, monkeypatch) -> None:
-    from molmanager.chem import reaction_enumeration as reenum
+    from mctoolkit.chem import reaction_enumeration as reenum
 
     bad = tmp_path / "presets.json"
     bad.write_text("{not json", encoding="utf-8")

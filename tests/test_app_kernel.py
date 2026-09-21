@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Kernel / collaborator wiring for the main-window facade."""
 
@@ -23,22 +23,22 @@ from qt_helpers import qt_submenu
 import types
 from typing import Protocol
 
-from molmanager.ui import app_roles
-from molmanager.ui.app_kernel import (
+from mctoolkit.ui import app_roles
+from mctoolkit.ui.app_kernel import (
     AppKernel,
     bind_mixin_methods,
     install_window_forwards,
     wrap_mixin_callable,
 )
-from molmanager.ui.gui_settings_mixin import GuiSettingsMixin
-from molmanager.ui.main_window.app_lifecycle_mixin import AppLifecycleMixin
-from molmanager.ui.main_window.app_menu_mixin import AppMenuMixin
-from molmanager.ui.main_window.table_edit_mixin import TableEditMixin
-from molmanager.ui.main_window.table_menu_mixin import TableMenuMixin
-from molmanager.ui.main_window.table_search_mixin import TableSearchMixin
-from molmanager.ui.main_window.table_ui_mixin import TableUIMixin
-from molmanager.ui.table_write_service import TableWriteHost, TableWriteService
-from molmanager.ui.tool_dialog_scope import ToolScopeHost
+from mctoolkit.ui.gui_settings_mixin import GuiSettingsMixin
+from mctoolkit.ui.main_window.app_lifecycle_mixin import AppLifecycleMixin
+from mctoolkit.ui.main_window.app_menu_mixin import AppMenuMixin
+from mctoolkit.ui.main_window.table_edit_mixin import TableEditMixin
+from mctoolkit.ui.main_window.table_menu_mixin import TableMenuMixin
+from mctoolkit.ui.main_window.table_search_mixin import TableSearchMixin
+from mctoolkit.ui.main_window.table_ui_mixin import TableUIMixin
+from mctoolkit.ui.table_write_service import TableWriteHost, TableWriteService
+from mctoolkit.ui.tool_dialog_scope import ToolScopeHost
 
 # Frozen allowlist: adding a ChemistryWorkspaceWindow mixin base must fail this set.
 _ALLOWED_WINDOW_MIXIN_BASES = frozenset(
@@ -130,7 +130,7 @@ def test_install_window_forwards_delegates_to_collaborator() -> None:
 
 
 def test_lazy_collaborator_constructs_class_and_drops_triggered_bool() -> None:
-    from molmanager.ui.workspace_tools import _LazyCollaborator
+    from mctoolkit.ui.workspace_tools import _LazyCollaborator
 
     class Tools:
         def __init__(self, app) -> None:
@@ -148,31 +148,31 @@ def test_lazy_collaborator_constructs_class_and_drops_triggered_bool() -> None:
 
 
 def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.workspace_cluster import ClusterTools
-    from molmanager.ui.workspace_activity_cliff import ActivityCliffTools
-    from molmanager.ui.workspace_conformers import ConformersTools
-    from molmanager.ui.workspace_descriptors import DescriptorsTools
-    from molmanager.ui.workspace_dock import DockTools
-    from molmanager.ui.workspace_external import ExternalRecordsTools
-    from molmanager.ui.workspace_fast_prepare import FastPrepareTools
-    from molmanager.ui.workspace_fragment import FragmentTools
-    from molmanager.ui.workspace_mmp import MmpTools
-    from molmanager.ui.workspace_mmp_neighborhood import MmpNeighborhoodTools
-    from molmanager.ui.workspace_mpo import MpoTools
-    from molmanager.ui.workspace_predict import PredictTools
-    from molmanager.ui.workspace_protonate import ProtonateTools
-    from molmanager.ui.workspace_qsar import QsarTools
-    from molmanager.ui.workspace_reaction import ReactionTools
-    from molmanager.ui.workspace_sali import SaliTools
-    from molmanager.ui.workspace_sql_load import SqlLoadTools
-    from molmanager.ui.workspace_structure_edit import StructureEditTools
-    from molmanager.ui.workspace_structure_writeback import StructureWritebackTools
-    from molmanager.ui.workspace_table_calc import TableCalcTools
-    from molmanager.ui.workspace_viewers import ViewerOpenersTools
-    from molmanager.ui.filters.filter_panel import FilterPanel
-    from molmanager.ui.table_build_export import TableBuildExport
-    from molmanager.ui.workspace_plot import PlotSync
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.workspace_cluster import ClusterTools
+    from mctoolkit.ui.workspace_activity_cliff import ActivityCliffTools
+    from mctoolkit.ui.workspace_conformers import ConformersTools
+    from mctoolkit.ui.workspace_descriptors import DescriptorsTools
+    from mctoolkit.ui.workspace_dock import DockTools
+    from mctoolkit.ui.workspace_external import ExternalRecordsTools
+    from mctoolkit.ui.workspace_fast_prepare import FastPrepareTools
+    from mctoolkit.ui.workspace_fragment import FragmentTools
+    from mctoolkit.ui.workspace_mmp import MmpTools
+    from mctoolkit.ui.workspace_mmp_neighborhood import MmpNeighborhoodTools
+    from mctoolkit.ui.workspace_mpo import MpoTools
+    from mctoolkit.ui.workspace_predict import PredictTools
+    from mctoolkit.ui.workspace_protonate import ProtonateTools
+    from mctoolkit.ui.workspace_qsar import QsarTools
+    from mctoolkit.ui.workspace_reaction import ReactionTools
+    from mctoolkit.ui.workspace_sali import SaliTools
+    from mctoolkit.ui.workspace_sql_load import SqlLoadTools
+    from mctoolkit.ui.workspace_structure_edit import StructureEditTools
+    from mctoolkit.ui.workspace_structure_writeback import StructureWritebackTools
+    from mctoolkit.ui.workspace_table_calc import TableCalcTools
+    from mctoolkit.ui.workspace_viewers import ViewerOpenersTools
+    from mctoolkit.ui.filters.filter_panel import FilterPanel
+    from mctoolkit.ui.table_build_export import TableBuildExport
+    from mctoolkit.ui.workspace_plot import PlotSync
 
     w = ChemistryWorkspaceWindow()
     assert w.progress is not None
@@ -217,7 +217,7 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
     project_mixins = {
         cls
         for cls in mro
-        if cls.__module__.startswith("molmanager.") and cls is not ChemistryWorkspaceWindow
+        if cls.__module__.startswith("mctoolkit.") and cls is not ChemistryWorkspaceWindow
     }
     assert project_mixins == _ALLOWED_WINDOW_MIXIN_BASES
     assert hasattr(w, "_begin_tool_progress")
@@ -231,6 +231,9 @@ def test_chemistry_workspace_window_collaborators_and_mro(qapp) -> None:  # noqa
     assert hasattr(w, "dock_plot_widget")
     assert hasattr(w, "_open_dimension_reduction_dialog")
     assert hasattr(w, "run_protonate")
+    assert hasattr(w, "open_tautomer_generator")
+    assert hasattr(w, "open_tautomer_browser")
+    assert hasattr(w, "open_protomer_browser")
     assert hasattr(w, "run_fast_prepare")
     assert hasattr(w, "run_disconnect_fragments")
     assert hasattr(w, "run_neutralize")
@@ -264,7 +267,7 @@ def test_wrap_mixin_callable_drops_qt_triggered_bool() -> None:
 def test_qsar_menu_action_opens_with_triggered_bool(qapp) -> None:  # noqa: ARG001
     from rdkit import Chem
 
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]

@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Session log buffer, status throttle, and logging handler."""
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 
-from molmanager.platform_support.session_log import (
+from mctoolkit.platform_support.session_log import (
     SessionLogHandler,
     ensure_session_log_handler,
     format_session_log_line,
@@ -83,8 +83,8 @@ def test_record_status_log_dedupes():
 
 def test_record_ui_log_and_python_logging():
     ensure_session_log_handler()
-    record_ui_log("Starting PDBFixer", name="molmanager.ui.pdb_fixer")
-    logging.getLogger("molmanager.workers.demo").warning("worker hiccup")
+    record_ui_log("Starting PDBFixer", name="mctoolkit.ui.pdb_fixer")
+    logging.getLogger("mctoolkit.workers.demo").warning("worker hiccup")
     entries, _seq, _gen = session_log_buffer().snapshot()
     messages = [e.message for e in entries]
     assert "Starting PDBFixer" in messages
@@ -112,11 +112,11 @@ def test_ensure_session_log_handler_is_idempotent():
 
 
 def test_short_name_and_format_line():
-    assert short_logger_name("molmanager.ui.tools") == "ui.tools"
+    assert short_logger_name("mctoolkit.ui.tools") == "ui.tools"
     assert short_logger_name("rdkit") == "rdkit"
     session_log_buffer().add(
         levelno=logging.INFO,
-        logger_name="molmanager.ui.tools",
+        logger_name="mctoolkit.ui.tools",
         message="hello",
         source="ui",
         created=1_700_000_000.0,

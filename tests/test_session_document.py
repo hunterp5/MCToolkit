@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Session document build/apply round-trip (requires Qt + main window)."""
 
@@ -21,8 +21,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.ui.session_plots import SessionPlots
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.session_plots import SessionPlots
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from rdkit import Chem
@@ -48,7 +48,7 @@ def _skip_session_auto_render(monkeypatch) -> None:
 
 
 def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
-    from molmanager.table.session_codec import (
+    from mctoolkit.table.session_codec import (
         dumps_session_document,
         expand_session_document,
         loads_session_bytes,
@@ -86,7 +86,7 @@ def test_session_document_json_roundtrip_preserves_keys(qapp):  # noqa: ARG001
 
 
 def test_build_session_document_keeps_only_selected_oids(qapp):  # noqa: ARG001
-    from molmanager.table.session_codec import (
+    from mctoolkit.table.session_codec import (
         dumps_session_document,
         expand_session_document,
         loads_session_bytes,
@@ -136,7 +136,7 @@ def test_apply_session_document_restores_row(qapp):  # noqa: ARG001
 
 def test_session_roundtrip_restores_mol_from_binary_not_smiles(qapp):  # noqa: ARG001
     """Saved RDKit binaries win over unparseable SMILES on Open."""
-    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
+    from mctoolkit.chem.molecule_conversion import mol_to_canonical_smiles
 
     parent = Chem.MolFromSmiles("CCN")
     w = ChemistryWorkspaceWindow()
@@ -183,9 +183,9 @@ def test_session_roundtrip_restores_saved_filter_bounds(qapp, monkeypatch):  # n
 
 
 def test_session_rows_parse_prefers_mol_binary_over_smiles(qapp):  # noqa: ARG001
-    from molmanager.chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
-    from molmanager.table.session_codec import encode_mol_blob_b64
-    from molmanager.workers.session_rows_parse import (
+    from mctoolkit.chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
+    from mctoolkit.table.session_codec import encode_mol_blob_b64
+    from mctoolkit.workers.session_rows_parse import (
         SessionRowsParseResult,
         SessionRowsParseSignals,
         SessionRowsParseWorker,
@@ -211,8 +211,8 @@ def test_session_rows_parse_prefers_mol_binary_over_smiles(qapp):  # noqa: ARG00
 
 
 def test_decode_session_mols_prefers_blob_over_smiles():
-    from molmanager.chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
-    from molmanager.workers.session_rows_parse import decode_session_mols
+    from mctoolkit.chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
+    from mctoolkit.workers.session_rows_parse import decode_session_mols
 
     parent = Chem.MolFromSmiles("CCO")
     blob = mol_graph_binary(parent)
@@ -242,7 +242,7 @@ def test_session_plots_ready_without_waiting_for_webengine(qapp):  # noqa: ARG00
 
 def test_session_roundtrip_keeps_structure_independent_of_protonated(qapp):  # noqa: ARG001
     """Structure mols stay parent even when a Protonated column holds the ionized form."""
-    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
+    from mctoolkit.chem.molecule_conversion import mol_to_canonical_smiles
 
     parent = Chem.MolFromSmiles("CCN")
     ionized = "CC[NH3+]"
@@ -288,7 +288,7 @@ def test_mol_for_structure_row_ignores_protonated_without_cached_mol(qapp):  # n
 def test_legacy_session_without_structure_smiles_does_not_use_protonated(qapp):  # noqa: ARG001
     """Older compact sessions omitted Structure identity; do not rebuild it from Protonated."""
     compact = {
-        "format": "molmanager_session",
+        "format": "mctoolkit_session",
         "version": 2,
         "headers": ["ID_HIDDEN", "Structure", "Protonated"],
         "data_headers": ["Protonated"],
@@ -308,7 +308,7 @@ def test_legacy_session_without_structure_smiles_does_not_use_protonated(qapp): 
 
 
 def test_session_restore_render_tasks_keep_neutral_structure(qapp):  # noqa: ARG001
-    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
+    from mctoolkit.chem.molecule_conversion import mol_to_canonical_smiles
 
     parent = Chem.MolFromSmiles("CCN")
     w = ChemistryWorkspaceWindow()
@@ -332,7 +332,7 @@ def test_apply_legacy_v1_session_document(qapp):  # noqa: ARG001
     """Plain uncompressed version-1 documents still open."""
     w = ChemistryWorkspaceWindow()
     v1 = {
-        "format": "molmanager_session",
+        "format": "mctoolkit_session",
         "version": 1,
         "headers": ["ID_HIDDEN", "Structure", "SMILES", "Note"],
         "rows": [{"id": 3, "cells": {"SMILES": "CCO", "Note": "ethanol"}}],
@@ -390,13 +390,13 @@ def test_session_document_roundtrip_restores_logarithmic_columns(qapp):  # noqa:
 
 
 def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
-    from molmanager.predictions.som_prediction import (
+    from mctoolkit.predictions.som_prediction import (
         SOM_MAP_COLUMN,
         SOM_PROB_COLUMN,
         SOM_SITES_COLUMN,
         SomAtomHit,
     )
-    from molmanager.ui.som_browser import SomBrowseRecord, records_from_table
+    from mctoolkit.ui.som_browser import SomBrowseRecord, records_from_table
 
     w = ChemistryWorkspaceWindow()
     w.headers = [
@@ -431,7 +431,7 @@ def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
     assert w._table_model.backing_value_for_row_header(0, SOM_MAP_COLUMN) == "CCO"
 
     doc = w._build_session_document()
-    from molmanager.table.session_codec import expand_session_document
+    from mctoolkit.table.session_codec import expand_session_document
 
     expanded = expand_session_document(doc)
     assert expanded["rows"][0]["cells"][SOM_MAP_COLUMN] == "CCO"
@@ -452,7 +452,7 @@ def test_session_roundtrip_restores_som_maps(qapp) -> None:  # noqa: ARG001
 
 
 def test_session_roundtrip_restores_mmp_ledger(qapp):  # noqa: ARG001
-    from molmanager.analysis.mmp_analysis import MmpPair
+    from mctoolkit.analysis.mmp_analysis import MmpPair
 
     pair = MmpPair(
         oid_a=1,
@@ -505,13 +505,13 @@ def _session_ethanol_pose(affinity: str, x: float):
 
 
 def test_session_roundtrip_restores_dock_results(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.conformers.conformer_column_codec import (
+    from mctoolkit.conformers.conformer_column_codec import (
         mol_from_packed_confs_cell,
         rehydrate_v1_confs_cell,
     )
-    from molmanager.services.column_labels import COLUMN_PARENT_OID
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.pose_browser import PoseBrowserWidget
+    from mctoolkit.services.column_labels import COLUMN_PARENT_OID
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.pose_browser import PoseBrowserWidget
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
 
@@ -573,9 +573,9 @@ def test_session_roundtrip_restores_dock_results(qapp, monkeypatch) -> None:  # 
 
 
 def test_session_roundtrip_restores_pose_browser_from_table_poses(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.services.column_labels import COLUMN_PARENT_OID
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.pose_browser import PoseBrowserWidget
+    from mctoolkit.services.column_labels import COLUMN_PARENT_OID
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.pose_browser import PoseBrowserWidget
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
 
@@ -608,7 +608,7 @@ def test_session_roundtrip_restores_pose_browser_from_table_poses(qapp, monkeypa
 
 
 def test_build_session_document_keeps_selected_dock_results(qapp):  # noqa: ARG001
-    from molmanager.services.column_labels import COLUMN_PARENT_OID
+    from mctoolkit.services.column_labels import COLUMN_PARENT_OID
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
@@ -630,13 +630,13 @@ def test_build_session_document_keeps_selected_dock_results(qapp):  # noqa: ARG0
 
 
 def test_session_roundtrip_restores_ionization_cache(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.ionization import microstate_cache as mc
-    from molmanager.ionization.unipka_ensembles import (
+    from mctoolkit.ionization import microstate_cache as mc
+    from mctoolkit.ionization.unipka_ensembles import (
         PicklableIonizationEnsemble,
         PicklableIonizationMicrostate,
         microstates_for_mol,
     )
-    from molmanager.workers.structure_grouping import structure_key
+    from mctoolkit.workers.structure_grouping import structure_key
 
     mc.clear()
     try:
@@ -670,7 +670,7 @@ def test_session_roundtrip_restores_ionization_cache(qapp, monkeypatch) -> None:
             raise AssertionError("Uni-pKa should not run after session restore")
 
         monkeypatch.setattr(
-            "molmanager.ionization.unipka_ensembles.predict_ionization_ensemble", boom
+            "mctoolkit.ionization.unipka_ensembles.predict_ionization_ensemble", boom
         )
         out = microstates_for_mol(Chem.MolFromSmiles("CCO"))
         assert out.macro_pkas == (15.9,)
@@ -755,7 +755,7 @@ def test_session_roundtrip_restores_table_layout(qapp, monkeypatch) -> None:  # 
 
 
 def test_session_roundtrip_restores_docked_plotter(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
     from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
@@ -819,7 +819,7 @@ def test_session_roundtrip_restores_docked_plotter(qapp, monkeypatch) -> None:  
 
 
 def test_session_roundtrip_keeps_side_by_side_layout(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE, LAYOUT_TABLE_STACK
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE, LAYOUT_TABLE_STACK
     from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
@@ -885,7 +885,7 @@ def test_session_roundtrip_keeps_side_by_side_layout(qapp, monkeypatch) -> None:
 
 
 def test_session_roundtrip_keeps_split_view_not_stacked(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
     from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
@@ -931,7 +931,7 @@ def test_session_roundtrip_keeps_split_view_not_stacked(qapp, monkeypatch) -> No
 
 
 def test_session_save_after_closing_stacked_pane_is_split_view(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE, LAYOUT_TABLE_STACK
     from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
@@ -971,7 +971,7 @@ def test_session_save_after_closing_stacked_pane_is_split_view(qapp, monkeypatch
 
 
 def test_session_roundtrip_restores_workspace_splitter(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
     monkeypatch.setattr(
         ChemistryWorkspaceWindow,
@@ -1022,7 +1022,7 @@ def test_session_roundtrip_restores_workspace_splitter(qapp, monkeypatch) -> Non
 
 
 def test_session_open_clears_previous_docked_plots(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
     from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
@@ -1070,7 +1070,7 @@ def test_session_open_clears_previous_docked_plots(qapp, monkeypatch) -> None:  
 
 
 def test_session_roundtrip_preserves_pane_title_and_active_page(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
     from PySide6.QtWidgets import QWidget
 
     class FakePlot(QWidget):
@@ -1133,7 +1133,7 @@ def test_session_roundtrip_preserves_pane_title_and_active_page(qapp, monkeypatc
 
 
 def test_session_roundtrip_restores_floating_plots(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE, LAYOUT_TABLE_STACK
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE, LAYOUT_TABLE_STACK
     from PySide6.QtWidgets import QDialog, QWidget
 
     class FakePlot(QWidget):
@@ -1199,7 +1199,7 @@ def test_session_roundtrip_restores_floating_plots(qapp, monkeypatch) -> None:  
 
 
 def test_session_restore_dispatches_analysis_plot_kind(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
     from PySide6.QtWidgets import QWidget
 
     class FakeSali(QWidget):
@@ -1224,7 +1224,7 @@ def test_session_restore_dispatches_analysis_plot_kind(qapp, monkeypatch) -> Non
         w._restored_state = state
         return w
 
-    from molmanager.ui import sali_map
+    from mctoolkit.ui import sali_map
 
     monkeypatch.setattr(
         sali_map.SaliMapPanel, "from_session_state", classmethod(fake_sali_from_session)
@@ -1266,7 +1266,7 @@ def test_session_omits_idle_table_search(qapp):  # noqa: ARG001
 
 
 def test_session_document_roundtrip_table_search(qapp):  # noqa: ARG001
-    from molmanager.table.session_codec import expand_session_document
+    from mctoolkit.table.session_codec import expand_session_document
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "Note"]

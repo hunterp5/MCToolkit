@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Fast Prepare worker: fused disconnect + neutralize equivalence, payloads, and cancellation."""
 
@@ -23,10 +23,10 @@ import threading
 import pytest
 from rdkit import Chem
 
-from molmanager.chem.fragment_disconnect import largest_fragment_and_rest
-from molmanager.chem.structure_neutralize import neutralize_mol
-from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
-from molmanager.workers.fast_prepare import (
+from mctoolkit.chem.fragment_disconnect import largest_fragment_and_rest
+from mctoolkit.chem.structure_neutralize import neutralize_mol
+from mctoolkit.chem.molecule_conversion import mol_to_canonical_smiles
+from mctoolkit.workers.fast_prepare import (
     FastPrepareParams,
     FastPrepareWorker,
     _mp_fast_prepare_batch,

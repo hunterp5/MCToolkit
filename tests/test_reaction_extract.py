@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for Tools → Reaction → Extract."""
 
@@ -22,15 +22,15 @@ from types import SimpleNamespace
 
 from rdkit import Chem
 
-from molmanager.chem.reaction_extract import (
+from mctoolkit.chem.reaction_extract import (
     extract_reaction_column_values,
     extract_reaction_sides,
     preferred_reaction_source_column,
     split_side_components,
 )
-from molmanager.chem.reaction_file_io import RXN_SMARTS_HEADER
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.ui.strings import TOOL_REACTION_EXTRACT
+from mctoolkit.chem.reaction_file_io import RXN_SMARTS_HEADER
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.strings import TOOL_REACTION_EXTRACT
 
 _ETHANOL = "CCO.O>>CC=O"
 _AMIDE = "[C:1](=[O:2])-[OH;D1].[N;H2,H1]>>[C:1](=[O:2])-[N]"
@@ -123,7 +123,7 @@ def test_extract_writes_new_headers(qapp) -> None:  # noqa: ARG001
 
 
 def test_extract_dialog_defaults_to_reaction_smarts(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.dialogs.reaction_extract import ReactionExtractDialog
+    from mctoolkit.ui.dialogs.reaction_extract import ReactionExtractDialog
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", RXN_SMARTS_HEADER]

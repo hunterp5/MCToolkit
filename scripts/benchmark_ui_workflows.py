@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """End-to-end offscreen UI workflow benchmark for large tables."""
 
@@ -33,14 +33,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PySide6.QtWidgets import QApplication
 
-from molmanager.table.session_codec import (
+from mctoolkit.table.session_codec import (
     dumps_session_document,
     expand_session_document,
     loads_session_bytes,
 )
-from molmanager.ui.filters.cards import SubstructureFilterCard, TextFilterCard
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.workers.export_worker import ExportWorker
+from mctoolkit.ui.filters.cards import SubstructureFilterCard, TextFilterCard
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.workers.export_worker import ExportWorker
 
 
 class _NoopEmitter:
@@ -101,7 +101,7 @@ def _bench_one(scale: int) -> dict[str, float]:
     app = ChemistryWorkspaceWindow()
     # Measure load/filter/export; skip auto Render 2D so drain does not wait on paint.
     app._try_auto_render_all_structures_after_ingest = lambda: False
-    tmp_dir = Path(tempfile.mkdtemp(prefix="MOLMANAGER_ui_bench_"))
+    tmp_dir = Path(tempfile.mkdtemp(prefix="MCTOOLKIT_ui_bench_"))
     csv_path = tmp_dir / f"session_{scale}.csv"
     cms_path = tmp_dir / f"session_{scale}.cms"
     out_csv = tmp_dir / f"export_{scale}.csv"

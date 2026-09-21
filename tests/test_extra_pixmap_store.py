@@ -1,25 +1,25 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
 from PySide6.QtGui import QPixmap
 
-from molmanager.storage.extra_pixmap_store import ExtraPixmapStore
-from molmanager.ui.compound_table_model import CompoundTableModel
+from mctoolkit.storage.extra_pixmap_store import ExtraPixmapStore
+from mctoolkit.ui.compound_table_model import CompoundTableModel
 
 
 def test_extra_pixmap_store_lru_keeps_png_bytes(qapp):  # noqa: ARG001

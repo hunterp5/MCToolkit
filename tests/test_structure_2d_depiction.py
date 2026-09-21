@@ -1,29 +1,29 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for table structure rendering."""
 
 from __future__ import annotations
 
-from molmanager.table.structure_depiction_layout import (
+from mctoolkit.table.structure_depiction_layout import (
     STRUCTURE_DEPICT_BOND_LINE_WIDTH,
     STRUCTURE_DEPICT_HEIGHT,
     STRUCTURE_DEPICT_WIDTH,
 )
-from molmanager.chem.structure_2d_depiction import (
+from mctoolkit.chem.structure_2d_depiction import (
     ReactionDrawSpec,
     render_depict_payload_png,
     render_molecule_png,
@@ -87,8 +87,8 @@ def test_table_bond_line_width_constant() -> None:
 def test_configure_mol_drawer_uses_structure_padding() -> None:
     from rdkit.Chem.Draw import rdMolDraw2D
 
-    from molmanager.table.structure_depiction_layout import STRUCTURE_DEPICT_PADDING
-    from molmanager.chem.structure_2d_depiction import configure_mol_drawer
+    from mctoolkit.table.structure_depiction_layout import STRUCTURE_DEPICT_PADDING
+    from mctoolkit.chem.structure_2d_depiction import configure_mol_drawer
 
     assert STRUCTURE_DEPICT_PADDING == 0.05
     drawer = rdMolDraw2D.MolDraw2DCairo(STRUCTURE_DEPICT_WIDTH, STRUCTURE_DEPICT_HEIGHT)
@@ -97,7 +97,7 @@ def test_configure_mol_drawer_uses_structure_padding() -> None:
 
 
 def test_structure_column_minimum_width() -> None:
-    from molmanager.table.structure_depiction_layout import (
+    from mctoolkit.table.structure_depiction_layout import (
         DEFAULT_STRUCTURE_DEPICT_HEIGHT,
         DEFAULT_STRUCTURE_DEPICT_WIDTH,
         STRUCTURE_COLUMN_HORIZONTAL_PADDING,
@@ -121,7 +121,7 @@ def test_structure_column_minimum_width() -> None:
 
 
 def test_compound_table_view_clamps_structure_column_width(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.compound_table_model import CompoundTableModel, CompoundTableView
+    from mctoolkit.ui.compound_table_model import CompoundTableModel, CompoundTableView
 
     model = CompoundTableModel(["ID", "Structure", "SMILES"])
     view = CompoundTableView()
@@ -135,7 +135,7 @@ def test_compound_table_view_clamps_structure_column_width(qapp) -> None:  # noq
 def test_render_reaction_png_is_wider_than_molecule() -> None:
     from rdkit import Chem
 
-    from molmanager.table.structure_depiction_layout import (
+    from mctoolkit.table.structure_depiction_layout import (
         REACTION_DEPICT_WIDTH_MULTIPLIER,
         reaction_depict_size,
     )
@@ -168,9 +168,9 @@ def test_render_depict_payload_png_dispatches_reaction() -> None:
 
 
 def test_render_worker_emits_reaction_scheme_png(qapp) -> None:  # noqa: ARG001
-    from molmanager.table.structure_depiction_layout import reaction_depict_size
-    from molmanager.workers.load_render import RenderWorker
-    from molmanager.workers.signals import WorkerSignals
+    from mctoolkit.table.structure_depiction_layout import reaction_depict_size
+    from mctoolkit.workers.load_render import RenderWorker
+    from mctoolkit.workers.signals import WorkerSignals
 
     captured: list[tuple] = []
     signals = WorkerSignals()

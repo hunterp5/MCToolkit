@@ -1,24 +1,24 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Unique column names for descriptor calculation."""
 
 from __future__ import annotations
 
-from molmanager.ui.table_write_service import TableWriteService
+from mctoolkit.ui.table_write_service import TableWriteService
 
 
 class _Host:
@@ -41,7 +41,7 @@ def test_unique_table_column_names_dedupes_batch() -> None:
 
 
 def test_on_calc_finished_does_not_replace_existing_column(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "LogP"]
@@ -64,7 +64,7 @@ def test_on_calc_finished_does_not_replace_existing_column(qapp):  # noqa: ARG00
 
 
 def test_on_calc_finished_colors_qed_score(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure"]
@@ -85,7 +85,7 @@ def test_on_calc_finished_colors_qed_score(qapp):  # noqa: ARG001
 
 
 def test_on_calc_finished_updates_pka_and_pi_in_place(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "pKa", "pI"]
@@ -108,7 +108,7 @@ def test_on_calc_finished_updates_pka_and_pi_in_place(qapp):  # noqa: ARG001
 
 
 def test_on_calc_finished_chunks_large_write(qapp, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure"]
@@ -141,7 +141,7 @@ def test_on_calc_finished_chunks_large_write(qapp, monkeypatch):  # noqa: ARG001
 
 
 def test_on_calc_finished_immediate_skips_chunking(qapp, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure"]

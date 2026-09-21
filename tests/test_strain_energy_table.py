@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Strain energy results table in the conformer viewer."""
 
@@ -23,8 +23,8 @@ from PySide6.QtWidgets import QTableWidget
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.conformers.conformer_column_codec import conformer_mol_blocks_b64_json
-from molmanager.ui.mol_viewer_3d import (
+from mctoolkit.conformers.conformer_column_codec import conformer_mol_blocks_b64_json
+from mctoolkit.ui.mol_viewer_3d import (
     Molecule3DViewerWidget,
     conf_legend_entries,
     distinct_superpose_colors,
@@ -139,7 +139,7 @@ def test_conf_legend_entries_use_table_conf_ids():
 
 
 def test_distinct_superpose_colors_are_unique():
-    from molmanager.ui.mol_viewer_3d import _SUPERPOSE_PALETTE
+    from mctoolkit.ui.mol_viewer_3d import _SUPERPOSE_PALETTE
 
     assert len(_SUPERPOSE_PALETTE) == len({c.lower() for c in _SUPERPOSE_PALETTE})
     for n in (8, 24, 32, 40, 64):
@@ -178,7 +178,7 @@ def test_conf_legend_only_when_selected_conformers_checked(qapp) -> None:  # noq
 
 
 def test_conformer_results_dialog_opens_wide_enough(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.mol_viewer_3d import Molecule3DViewerDialog
+    from mctoolkit.ui.mol_viewer_3d import Molecule3DViewerDialog
 
     mol = Chem.MolFromSmiles("CCO")
     AllChem.EmbedMultipleConfs(mol, numConfs=3, randomSeed=0xC0FFEE)

@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """ProLIF protein–ligand overlay mapping and optional live fingerprint."""
 
@@ -22,7 +22,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from molmanager.protein.protein_interactions import (
+from mctoolkit.protein.protein_interactions import (
     FAMILY_HBOND,
     FAMILY_HYDROPHOBIC,
     FAMILY_IONIC,
@@ -35,7 +35,7 @@ from molmanager.protein.protein_interactions import (
     residue_pair_key,
     _prolif_role,
 )
-from molmanager.protein.structure_component_types import StructureAtom
+from mctoolkit.protein.structure_component_types import StructureAtom
 
 
 class _Point(SimpleNamespace):
@@ -258,7 +258,7 @@ def test_rdkit_ligand_structure_atoms_defaults() -> None:
     from rdkit import Chem
     from rdkit.Geometry import Point3D
 
-    from molmanager.protein.protein_interactions import rdkit_ligand_structure_atoms
+    from mctoolkit.protein.protein_interactions import rdkit_ligand_structure_atoms
 
     mol = Chem.MolFromSmiles("CCO")
     assert mol is not None
@@ -276,7 +276,7 @@ def test_compute_dock_pose_overlays_ignores_file_ligand() -> None:
     from rdkit import Chem
     from rdkit.Geometry import Point3D
 
-    from molmanager.protein.protein_interactions import compute_dock_pose_overlays
+    from mctoolkit.protein.protein_interactions import compute_dock_pose_overlays
 
     pdb = """\
 ATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00  0.00           N
@@ -305,7 +305,7 @@ def test_compute_dock_pose_overlays_on_tutorial_ligand() -> None:
 
     import prolif as plf
 
-    from molmanager.protein.protein_interactions import compute_dock_pose_overlays
+    from mctoolkit.protein.protein_interactions import compute_dock_pose_overlays
 
     rec = plf.datafiles.datapath / "vina" / "rec.pdb"
     lig = plf.datafiles.datapath / "vina" / "lig.pdb"

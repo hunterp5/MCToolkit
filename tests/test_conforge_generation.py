@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """CONFORGE backend (no Qt)."""
 
@@ -23,7 +23,7 @@ from pathlib import Path
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.conformers.conforge_generation import (
+from mctoolkit.conformers.conforge_generation import (
     ConforgeParams,
     confgen_cli_command,
     ensure_conforge_ready,
@@ -73,10 +73,10 @@ def test_confgen_cli_command_includes_cutoffs_and_include_input():
 
 def test_ensure_conforge_ready_reports_missing(monkeypatch):
     monkeypatch.setattr(
-        "molmanager.conformers.conforge_generation.python_conforge_available", lambda: False
+        "mctoolkit.conformers.conforge_generation.python_conforge_available", lambda: False
     )
     monkeypatch.setattr(
-        "molmanager.conformers.conforge_generation.resolve_confgen_executable", lambda _p="": None
+        "mctoolkit.conformers.conforge_generation.resolve_confgen_executable", lambda _p="": None
     )
     err = ensure_conforge_ready("")
     assert err is not None
@@ -89,10 +89,10 @@ def test_run_conforge_generation_merges_sdf(monkeypatch):
     block = Chem.MolToMolBlock(mol)
     sdf = block + "$$$$\n" + block + "$$$$\n"
     monkeypatch.setattr(
-        "molmanager.conformers.conforge_generation.ensure_conforge_ready", lambda _p="": None
+        "mctoolkit.conformers.conforge_generation.ensure_conforge_ready", lambda _p="": None
     )
     monkeypatch.setattr(
-        "molmanager.conformers.conforge_generation._run_conforge", lambda _sdf, _p: sdf
+        "mctoolkit.conformers.conforge_generation._run_conforge", lambda _sdf, _p: sdf
     )
     out, meta = run_conforge_generation(mol, ConforgeParams(num_confs=10))
     assert meta["ok"] is True

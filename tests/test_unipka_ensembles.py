@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """FE2pKa thermodynamics and Boltzmann populations (no Uni-pKa weights)."""
 
@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 from rdkit import Chem
 
-from molmanager.ionization.unipka_ensembles import (
+from mctoolkit.ionization.unipka_ensembles import (
     LN10,
     UNIPKA_DWAR_PKA_MEAN,
     PicklableIonizationEnsemble,
@@ -47,7 +47,7 @@ from molmanager.ionization.unipka_ensembles import (
     score_microstate_free_energies,
     unipka_use_gpu,
 )
-from molmanager.ionization.unipka_enumerator import (
+from mctoolkit.ionization.unipka_enumerator import (
     enumerate_charge_ensemble,
     flatten_charge_ensemble,
 )
@@ -220,42 +220,40 @@ def test_close_unipka_task_lmdb_closes_env() -> None:
 
 
 def test_pka_gpu_forced_off_env(monkeypatch) -> None:
-    from molmanager.ionization.unipka_ensembles import pka_gpu_forced_off
+    from mctoolkit.ionization.unipka_ensembles import pka_gpu_forced_off
 
-    monkeypatch.delenv("MOLMANAGER_PKA_GPU", raising=False)
+    monkeypatch.delenv("MCTOOLKIT_PKA_GPU", raising=False)
     assert pka_gpu_forced_off() is False
-    monkeypatch.setenv("MOLMANAGER_PKA_GPU", "0")
+    monkeypatch.setenv("MCTOOLKIT_PKA_GPU", "0")
     assert pka_gpu_forced_off() is True
 
 
 def test_unipka_use_gpu_honors_env(monkeypatch) -> None:
-    monkeypatch.setenv("MOLMANAGER_PKA_GPU", "0")
-    monkeypatch.setattr(
-        "molmanager.ionization.unipka_ensembles.unipka_cuda_available", lambda: True
-    )
+    monkeypatch.setenv("MCTOOLKIT_PKA_GPU", "0")
+    monkeypatch.setattr("mctoolkit.ionization.unipka_ensembles.unipka_cuda_available", lambda: True)
     assert unipka_use_gpu() is False
-    monkeypatch.setenv("MOLMANAGER_PKA_GPU", "auto")
+    monkeypatch.setenv("MCTOOLKIT_PKA_GPU", "auto")
     assert unipka_use_gpu() is True
-    monkeypatch.delenv("MOLMANAGER_PKA_GPU", raising=False)
+    monkeypatch.delenv("MCTOOLKIT_PKA_GPU", raising=False)
     monkeypatch.setattr(
-        "molmanager.ionization.unipka_ensembles.unipka_cuda_available", lambda: False
+        "mctoolkit.ionization.unipka_ensembles.unipka_cuda_available", lambda: False
     )
     assert unipka_use_gpu() is False
 
 
 def test_cuda_missing_hint_emits_once(monkeypatch, caplog) -> None:
-    monkeypatch.delenv("MOLMANAGER_UNIPKA_GPU_HINT_EMITTED", raising=False)
-    monkeypatch.setattr("molmanager.ionization.unipka_ensembles.torch_is_cuda_build", lambda: False)
-    monkeypatch.setattr("molmanager.ionization.unipka_ensembles.unipka_use_gpu", lambda: False)
+    monkeypatch.delenv("MCTOOLKIT_UNIPKA_GPU_HINT_EMITTED", raising=False)
+    monkeypatch.setattr("mctoolkit.ionization.unipka_ensembles.torch_is_cuda_build", lambda: False)
+    monkeypatch.setattr("mctoolkit.ionization.unipka_ensembles.unipka_use_gpu", lambda: False)
     monkeypatch.setattr(
-        "molmanager.ionization.unipka_ensembles.unipka_cuda_available", lambda: False
+        "mctoolkit.ionization.unipka_ensembles.unipka_cuda_available", lambda: False
     )
-    monkeypatch.setattr("molmanager.ionization.unipka_ensembles._nvidia_gpu_present", lambda: True)
+    monkeypatch.setattr("mctoolkit.ionization.unipka_ensembles._nvidia_gpu_present", lambda: True)
     import logging
 
-    from molmanager.ionization.unipka_ensembles import warn_if_cuda_torch_missing
+    from mctoolkit.ionization.unipka_ensembles import warn_if_cuda_torch_missing
 
-    with caplog.at_level(logging.WARNING, logger="molmanager.ionization.unipka_ensembles"):
+    with caplog.at_level(logging.WARNING, logger="mctoolkit.ionization.unipka_ensembles"):
         warn_if_cuda_torch_missing()
         warn_if_cuda_torch_missing()
     assert caplog.text.count("NVIDIA GPU detected") == 1
@@ -263,19 +261,19 @@ def test_cuda_missing_hint_emits_once(monkeypatch, caplog) -> None:
 
 
 def test_cpu_torch_with_nvidia_gpu(monkeypatch) -> None:
-    from molmanager.ionization.unipka_ensembles import cpu_torch_with_nvidia_gpu
+    from mctoolkit.ionization.unipka_ensembles import cpu_torch_with_nvidia_gpu
 
-    monkeypatch.setattr("molmanager.ionization.unipka_ensembles.torch_is_cuda_build", lambda: True)
-    monkeypatch.setattr("molmanager.ionization.unipka_ensembles._nvidia_gpu_present", lambda: True)
+    monkeypatch.setattr("mctoolkit.ionization.unipka_ensembles.torch_is_cuda_build", lambda: True)
+    monkeypatch.setattr("mctoolkit.ionization.unipka_ensembles._nvidia_gpu_present", lambda: True)
     assert cpu_torch_with_nvidia_gpu() is False
-    monkeypatch.setattr("molmanager.ionization.unipka_ensembles.torch_is_cuda_build", lambda: False)
+    monkeypatch.setattr("mctoolkit.ionization.unipka_ensembles.torch_is_cuda_build", lambda: False)
     assert cpu_torch_with_nvidia_gpu() is True
-    monkeypatch.setattr("molmanager.ionization.unipka_ensembles._nvidia_gpu_present", lambda: False)
+    monkeypatch.setattr("mctoolkit.ionization.unipka_ensembles._nvidia_gpu_present", lambda: False)
     assert cpu_torch_with_nvidia_gpu() is False
 
 
 def test_cuda_pka_install_hint_points_at_auto_script() -> None:
-    from molmanager.ionization.unipka_ensembles import cuda_pka_install_hint
+    from mctoolkit.ionization.unipka_ensembles import cuda_pka_install_hint
 
     text = cuda_pka_install_hint()
     assert "install_pytorch_pka.ps1" in text

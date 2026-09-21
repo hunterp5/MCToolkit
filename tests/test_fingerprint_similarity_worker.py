@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Fingerprint similarity worker progress and Gobbi process path."""
 
@@ -22,9 +22,9 @@ import threading
 
 from rdkit import Chem
 
-from molmanager.platform_support.tool_progress import ToolProgressState
-from molmanager.workers.fingerprint_similarity import FPSimilarityWorker
-from molmanager.workers.signals import FPSimilaritySignals
+from mctoolkit.platform_support.tool_progress import ToolProgressState
+from mctoolkit.workers.fingerprint_similarity import FPSimilarityWorker
+from mctoolkit.workers.signals import FPSimilaritySignals
 
 
 class _CaptureSignals(FPSimilaritySignals):

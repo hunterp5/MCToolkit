@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """RDKit version gate used at desktop startup."""
 
@@ -22,7 +22,7 @@ import importlib.metadata
 
 import pytest
 
-from molmanager.platform_support.rdkit_runtime_setup import (
+from mctoolkit.platform_support.rdkit_runtime_setup import (
     MIN_RDKIT_VERSION,
     parse_rdkit_version,
     rdkit_version_tuple,
@@ -47,7 +47,7 @@ def test_require_supported_rdkit_accepts_installed_build():
 
 def test_require_supported_rdkit_rejects_old_build(monkeypatch):
     monkeypatch.setattr(
-        "molmanager.platform_support.rdkit_runtime_setup.rdkit_version_tuple",
+        "mctoolkit.platform_support.rdkit_runtime_setup.rdkit_version_tuple",
         lambda: (2022, 9, 5),
     )
     with pytest.raises(RuntimeError, match=r"imported 2022\.9\.5"):
@@ -56,7 +56,7 @@ def test_require_supported_rdkit_rejects_old_build(monkeypatch):
 
 def test_unsupported_message_mentions_rdkit_pypi_when_installed(monkeypatch):
     monkeypatch.setattr(
-        "molmanager.platform_support.rdkit_runtime_setup._rdkit_pypi_is_installed",
+        "mctoolkit.platform_support.rdkit_runtime_setup._rdkit_pypi_is_installed",
         lambda: True,
     )
     msg = unsupported_rdkit_message("2022.09.5")
@@ -71,8 +71,8 @@ def test_rdkit_pypi_detection_uses_importlib(monkeypatch):
         raise importlib.metadata.PackageNotFoundError("rdkit-pypi")
 
     monkeypatch.setattr(
-        "molmanager.platform_support.rdkit_runtime_setup.importlib.metadata.distribution", _missing
+        "mctoolkit.platform_support.rdkit_runtime_setup.importlib.metadata.distribution", _missing
     )
-    from molmanager.platform_support.rdkit_runtime_setup import _rdkit_pypi_is_installed
+    from mctoolkit.platform_support.rdkit_runtime_setup import _rdkit_pypi_is_installed
 
     assert _rdkit_pypi_is_installed() is False

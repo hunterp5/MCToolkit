@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for BRICS / RECAP recomposition generation constraints."""
 
@@ -21,14 +21,14 @@ import threading
 import pytest
 from rdkit import Chem
 
-from molmanager.chem.fragment_decomposition import decompose_brics, recompose_fragments
-from molmanager.chem.fragment_recomposition_filters import (
+from mctoolkit.chem.fragment_decomposition import decompose_brics, recompose_fragments
+from mctoolkit.chem.fragment_recomposition_filters import (
     filter_product_smiles,
     parse_recomposition_filter_text,
     product_passes_filters,
 )
-from molmanager.workers.fragment_recomposition import FragmentRecompositionWorker
-from molmanager.workers.signals import WorkerSignals
+from mctoolkit.workers.fragment_recomposition import FragmentRecompositionWorker
+from mctoolkit.workers.signals import WorkerSignals
 
 
 def test_parse_recomposition_filter_text_range_and_comparisons():
@@ -172,7 +172,7 @@ def test_fragment_recomposition_worker_appends_partial_products_on_cancel(monkey
         return list(partial), 12, True
 
     monkeypatch.setattr(
-        "molmanager.workers.fragment_recomposition.recompose_fragments",
+        "mctoolkit.workers.fragment_recomposition.recompose_fragments",
         _fake_recompose,
     )
     sigs = WorkerSignals()

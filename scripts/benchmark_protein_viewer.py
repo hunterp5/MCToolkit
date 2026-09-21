@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Benchmark Protein Viewer restore from a .cms (default: FDA approved session).
 
@@ -33,7 +33,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from molmanager.platform_support.qt_webengine_flags import configure_qtwebengine_quiet_logs
+from mctoolkit.platform_support.qt_webengine_flags import configure_qtwebengine_quiet_logs
 
 configure_qtwebengine_quiet_logs()
 try:
@@ -43,22 +43,22 @@ except Exception:
 
 from PySide6.QtWidgets import QApplication
 
-from molmanager.protein.hydrogen_bonds import detect_hydrogen_bonds
-from molmanager.protein.protein_interactions import (
+from mctoolkit.protein.hydrogen_bonds import detect_hydrogen_bonds
+from mctoolkit.protein.protein_interactions import (
     compute_viewer_interaction_overlays,
     detect_prolif_interactions,
     prolif_available,
 )
-from molmanager.table.session_codec import expand_session_document, loads_session_bytes
-from molmanager.protein.structure_atoms import parse_structure_atoms, pocket_view_plan
-from molmanager.protein.structure_cif import _parse_cif_loops, cif_viewer_bond_tables
-from molmanager.protein.structure_inventory import (
+from mctoolkit.table.session_codec import expand_session_document, loads_session_bytes
+from mctoolkit.protein.structure_atoms import parse_structure_atoms, pocket_view_plan
+from mctoolkit.protein.structure_cif import _parse_cif_loops, cif_viewer_bond_tables
+from mctoolkit.protein.structure_inventory import (
     parse_polymer_sequences,
     parse_structure_components,
 )
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.ui.protein_embed import ProteinEmbedView
-from molmanager.ui.protein_viewer import ProteinViewerDialog
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.protein_embed import ProteinEmbedView
+from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
 
 def _ms(fn, *, n: int = 1, warmup: bool = True) -> tuple[list[float], object]:

@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """A/B microbenchmarks for the Sep 2026 performance follow-up.
 
@@ -43,10 +43,10 @@ from rdkit import Chem, DataStructs
 from rdkit.Chem import AllChem
 from rdkit.Geometry import Point3D
 
-from molmanager.platform_support.memory_usage import current_process_rss_bytes, format_memory_bytes
-from molmanager.storage.ensemble_store import EnsembleStore
-from molmanager.table.table_file_formats import _MOL2_MARKER, iter_mol2_mols, iter_sdf_mols
-from molmanager.workers.cluster_worker import (
+from mctoolkit.platform_support.memory_usage import current_process_rss_bytes, format_memory_bytes
+from mctoolkit.storage.ensemble_store import EnsembleStore
+from mctoolkit.table.table_file_formats import _MOL2_MARKER, iter_mol2_mols, iter_sdf_mols
+from mctoolkit.workers.cluster_worker import (
     _dense_fingerprint_matrix,
     cluster_butina,
 )
@@ -257,14 +257,14 @@ def bench_sql(tmp: Path) -> None:
     finally:
         con.close()
 
-    from molmanager.workers.sql_load_worker import SqlLoadParseResult, SqlLoadSignals, SqlLoadWorker
+    from mctoolkit.workers.sql_load_worker import SqlLoadParseResult, SqlLoadSignals, SqlLoadWorker
 
     url = "sqlite:///" + str(db).replace("\\", "/")
 
     def accumulate() -> int:
         from sqlalchemy import create_engine, text
 
-        from molmanager.workers.sql_load_worker import cells_from_sql_mapping, mol_blob_from_smiles
+        from mctoolkit.workers.sql_load_worker import cells_from_sql_mapping, mol_blob_from_smiles
 
         prepared = []
         blobs = {}
@@ -344,7 +344,7 @@ def bench_sql(tmp: Path) -> None:
 
 def main() -> None:
     print(f"RSS start {_rss()}")
-    with tempfile.TemporaryDirectory(prefix="molmanager_perf_") as raw:
+    with tempfile.TemporaryDirectory(prefix="mctoolkit_perf_") as raw:
         tmp = Path(raw)
         bench_sdf(tmp)
         bench_mol2(tmp)

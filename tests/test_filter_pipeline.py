@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Filter pipeline: numeric range, text, substructure (sync + async), and invalid SMARTS."""
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.ui.widgets import (
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.widgets import (
     CategoryFilterCard,
     FilterCard,
     SubstructureFilterCard,
@@ -187,7 +187,7 @@ def test_substructure_invalid_smarts_sets_status(qapp):  # noqa: ARG001
 
 
 def test_async_sqlite_filter_apply_hides_rows(qapp, monkeypatch, tmp_path):  # noqa: ARG001
-    monkeypatch.setenv("MOLMANAGER_FILTER_ASYNC_MIN_ROWS", "2")
+    monkeypatch.setenv("MCTOOLKIT_FILTER_ASYNC_MIN_ROWS", "2")
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
     w._table_model.set_headers(list(w.headers))
@@ -210,7 +210,7 @@ def test_async_sqlite_filter_apply_hides_rows(qapp, monkeypatch, tmp_path):  # n
 
 
 def test_substructure_async_handoff_hides_rows(qapp, monkeypatch):  # noqa: ARG001
-    monkeypatch.setenv("MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS", "64")
+    monkeypatch.setenv("MCTOOLKIT_SUBSTRUCTURE_ASYNC_ROWS", "64")
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
@@ -233,7 +233,7 @@ def test_substructure_async_handoff_hides_rows(qapp, monkeypatch):  # noqa: ARG0
 
 def test_substructure_async_without_smiles_column_uses_mols(qapp, monkeypatch):  # noqa: ARG001
     """Async path must match via in-memory mols when no SMILES column exists (e.g. SDF)."""
-    monkeypatch.setenv("MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS", "64")
+    monkeypatch.setenv("MCTOOLKIT_SUBSTRUCTURE_ASYNC_ROWS", "64")
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "Name"]
     w._table_model.set_headers(list(w.headers))
@@ -259,7 +259,7 @@ def test_substructure_async_without_smiles_column_uses_mols(qapp, monkeypatch): 
 
 def test_substructure_async_multi_card_handoff(qapp, monkeypatch):  # noqa: ARG001
     """Two SMARTS cards at async scale must finish off-thread without GUI match_mol."""
-    monkeypatch.setenv("MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS", "64")
+    monkeypatch.setenv("MCTOOLKIT_SUBSTRUCTURE_ASYNC_ROWS", "64")
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
     w._table_model.set_headers(list(w.headers))
@@ -291,7 +291,7 @@ def test_substructure_async_multi_card_handoff(qapp, monkeypatch):  # noqa: ARG0
 def test_reorder_filter_card_updates_list_and_layout(qapp):  # noqa: ARG001
     from PySide6.QtWidgets import QVBoxLayout
 
-    from molmanager.ui.filters.cards import FilterCardsHost, filter_card_drop_index
+    from mctoolkit.ui.filters.cards import FilterCardsHost, filter_card_drop_index
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]
@@ -324,7 +324,7 @@ def test_reorder_filter_card_updates_list_and_layout(qapp):  # noqa: ARG001
 
 
 def test_filter_card_default_titles_and_rename(qapp):  # noqa: ARG001
-    from molmanager.ui.filters.cards import next_default_filter_title
+    from mctoolkit.ui.filters.cards import next_default_filter_title
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES", "MW"]

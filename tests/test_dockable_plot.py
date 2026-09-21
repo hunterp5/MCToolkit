@@ -1,22 +1,22 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for docked-plot panel width helpers."""
 
-from molmanager.ui.dockable_plot import (
+from mctoolkit.ui.dockable_plot import (
     PLOT_PANEL_BASE_MINIMUM_WIDTH,
     PLOT_PANEL_DEFAULT_WIDTH,
     is_dockable_plot_widget,
@@ -55,7 +55,7 @@ def test_plot_widget_dock_width_is_figure_sized():
     """Options live in a dialog, so docked width no longer needs axes+stats side-by-side."""
     import inspect
 
-    from molmanager.ui.plot import PlotWidget
+    from mctoolkit.ui.plot import PlotWidget
 
     stub = type(
         "W",
@@ -81,15 +81,15 @@ def test_is_dockable_workspace_widget_accepts_viewer_marker():
 
 
 def test_molecule_3d_viewer_widget_is_workspace_dockable():
-    from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget
+    from mctoolkit.ui.mol_viewer_3d import Molecule3DViewerWidget
 
     assert getattr(Molecule3DViewerWidget, "dockable_in_workspace", False) is True
     assert is_dockable_workspace_widget(Molecule3DViewerWidget)
 
 
 def test_selection_browser_widget_is_workspace_dockable():
-    from molmanager.ui.selection_browser import SelectionBrowserWidget
-    from molmanager.ui.som_browser import SomBrowserWidget
+    from mctoolkit.ui.selection_browser import SelectionBrowserWidget
+    from mctoolkit.ui.som_browser import SomBrowserWidget
 
     assert getattr(SelectionBrowserWidget, "dockable_in_workspace", False) is True
     assert is_dockable_workspace_widget(SelectionBrowserWidget)
@@ -105,7 +105,7 @@ def test_selection_browser_widget_is_workspace_dockable():
 
 
 def test_clear_selection_button_is_glyph(qapp):  # noqa: ARG001
-    from molmanager.ui.dockable_plot import (
+    from mctoolkit.ui.dockable_plot import (
         _DOCK_LEADING_OPTS_ATTRS,
         _GLYPH_BTN_SIZE,
         _GLYPH_ICON_SIZE,
@@ -133,13 +133,13 @@ def test_clear_selection_button_is_glyph(qapp):  # noqa: ARG001
 def test_pane_title_chrome_is_readable(qapp):  # noqa: ARG001
     from PySide6.QtWidgets import QLineEdit, QPushButton
 
-    from molmanager.ui.dockable_plot import (
+    from mctoolkit.ui.dockable_plot import (
         _FOOTER_TEXT_FONT_PX,
         _GLYPH_BTN_SIZE,
         style_plot_footer_text_button,
         style_plot_pane_title_edit,
     )
-    from molmanager.ui.main_window.plot_pane import PlotPane
+    from mctoolkit.ui.main_window.plot_pane import PlotPane
 
     assert _FOOTER_TEXT_FONT_PX >= 12
     edit = QLineEdit("Histogram")
@@ -156,8 +156,8 @@ def test_pane_title_chrome_is_readable(qapp):  # noqa: ARG001
 def test_browser_nav_buttons_use_skip_glyphs(qapp):  # noqa: ARG001
     from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLayout, QPushButton, QSizePolicy, QWidget
 
-    from molmanager.ui.dockable_plot import add_centered_browser_nav, style_browser_nav_buttons
-    from molmanager.ui.dockable_plot_constants import (
+    from mctoolkit.ui.dockable_plot import add_centered_browser_nav, style_browser_nav_buttons
+    from mctoolkit.ui.dockable_plot_constants import (
         _BROWSER_NAV_BTN_HEIGHT,
         _BROWSER_NAV_BTN_WIDTH,
     )
@@ -210,7 +210,7 @@ def test_browser_nav_buttons_use_skip_glyphs(qapp):  # noqa: ARG001
 def test_pane_nav_arrow_glyph_is_vector(qapp):  # noqa: ARG001
     from PySide6.QtWidgets import QPushButton
 
-    from molmanager.ui.dockable_plot import (
+    from mctoolkit.ui.dockable_plot import (
         _GLYPH_BTN_SIZE,
         pane_nav_arrow_glyph_icon,
         style_plot_pane_nav_arrow,
@@ -229,7 +229,7 @@ def test_pane_nav_arrow_glyph_is_vector(qapp):  # noqa: ARG001
 def test_floating_title_edit_installed_when_undocked(qapp):  # noqa: ARG001
     from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
-    from molmanager.ui.dockable_plot import position_floating_title_edit, sync_docked_footer_bar
+    from mctoolkit.ui.dockable_plot import position_floating_title_edit, sync_docked_footer_bar
 
     host = QWidget()
     root = QVBoxLayout(host)
@@ -261,7 +261,7 @@ def test_floating_title_edit_installed_when_undocked(qapp):  # noqa: ARG001
 def test_browser_skips_floating_title_edit(qapp):  # noqa: ARG001
     from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
-    from molmanager.ui.dockable_plot import sync_docked_footer_bar
+    from mctoolkit.ui.dockable_plot import sync_docked_footer_bar
 
     host = QWidget()
     host.supports_floating_title = False

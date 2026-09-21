@@ -1,22 +1,22 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for Plotly scatter color encoding."""
 
-from molmanager.plotting.plot_marker_color import (
+from mctoolkit.plotting.plot_marker_color import (
     color_values_are_numeric,
     parse_color_range_bounds,
     scatter_marker_from_column_values,
@@ -71,7 +71,7 @@ def test_color_values_are_numeric():
 
 
 def test_all_none_uses_default_marker():
-    from molmanager.plotting.plot_marker_color import DEFAULT_MARKER_SIZE_PX
+    from mctoolkit.plotting.plot_marker_color import DEFAULT_MARKER_SIZE_PX
 
     m = scatter_marker_from_column_values([None, None, None], color_label="MW")
     assert m["color"] == "#2a74d6"
@@ -94,7 +94,7 @@ def test_mixed_none_and_float_uses_nan_for_missing():
 
 
 def test_size_by_numeric_maps_to_pixel_range():
-    from molmanager.plotting.plot_marker_color import marker_sizes_from_column_values
+    from mctoolkit.plotting.plot_marker_color import marker_sizes_from_column_values
 
     sizes = marker_sizes_from_column_values(
         [0.0, 5.0, 10.0],
@@ -122,7 +122,7 @@ def test_scatter_marker_applies_size_values():
 def test_attach_marker_size_legend_adds_right_scale():
     from plotly import graph_objects as go
 
-    from molmanager.plotting.plot_marker_color import attach_marker_size_legend
+    from mctoolkit.plotting.plot_marker_color import attach_marker_size_legend
 
     fig = go.Figure(data=[go.Scatter(x=[1, 2], y=[1, 2], mode="markers", showlegend=False)])
     attach_marker_size_legend(
@@ -134,14 +134,14 @@ def test_attach_marker_size_legend_adds_right_scale():
     )
     assert fig.layout.showlegend is True
     assert fig.layout.legend.title.text == "MW"
-    size_traces = [tr for tr in fig.data if getattr(tr, "legendgroup", None) == "molmanager_size"]
+    size_traces = [tr for tr in fig.data if getattr(tr, "legendgroup", None) == "mctoolkit_size"]
     assert len(size_traces) == 5
 
 
 def test_attach_marker_size_legend_with_colorbar():
     from plotly import graph_objects as go
 
-    from molmanager.plotting.plot_marker_color import (
+    from mctoolkit.plotting.plot_marker_color import (
         attach_marker_size_legend,
         scatter_marker_from_column_values,
     )
@@ -161,5 +161,5 @@ def test_attach_marker_size_legend_with_colorbar():
         size_max_px=16.0,
     )
     assert fig.layout.showlegend is True
-    assert any(getattr(tr, "legendgroup", None) == "molmanager_size" for tr in fig.data)
+    assert any(getattr(tr, "legendgroup", None) == "mctoolkit_size" for tr in fig.data)
     assert fig.data[0].marker.showscale is True

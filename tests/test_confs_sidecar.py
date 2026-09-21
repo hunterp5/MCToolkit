@@ -1,25 +1,25 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Sidecar storage for conformer table cells (lightweight cells + in-memory blocks)."""
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.conformers.conformer_column_codec import (
+from mctoolkit.conformers.conformer_column_codec import (
     demote_v1_cell_to_sidecar,
     deserialize_confs_sidecar,
     mol_from_packed_confs_cell,
@@ -29,7 +29,7 @@ from molmanager.conformers.conformer_column_codec import (
     serialize_confs_sidecar,
     unpack_confs_blocks_json_b64,
 )
-from molmanager.workers import ConformerGenParams, run_conformer_generation
+from mctoolkit.workers import ConformerGenParams, run_conformer_generation
 
 
 def _simple_mol():
@@ -77,7 +77,7 @@ def test_serialize_deserialize_sidecar_roundtrip():
 
 
 def test_serialize_ensemble_store_is_empty_json_map():
-    from molmanager.storage import EnsembleStore
+    from mctoolkit.storage import EnsembleStore
 
     store = EnsembleStore()
     try:
@@ -90,7 +90,7 @@ def test_serialize_ensemble_store_is_empty_json_map():
 def test_pack_confs_cell_unlimited_when_max_chars_zero():
     from rdkit.Geometry import Point3D
 
-    from molmanager.conformers.conformer_column_codec import (
+    from mctoolkit.conformers.conformer_column_codec import (
         CONFS_CELL_PACK_MAX_CHARS,
         format_confs_table_cell,
     )

@@ -1,24 +1,24 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
 import threading
 
-from molmanager.platform_support.tool_progress import ToolProgressState, format_tool_progress_text
+from mctoolkit.platform_support.tool_progress import ToolProgressState, format_tool_progress_text
 
 
 def test_format_tool_progress_text() -> None:
@@ -86,7 +86,7 @@ class _ProgressSignals:
 
 
 def test_report_tool_progress_force_signal_bypasses_throttle():
-    from molmanager.platform_support.tool_progress import report_tool_progress
+    from mctoolkit.platform_support.tool_progress import report_tool_progress
 
     signals = _ProgressSignals()
     state = ToolProgressState()
@@ -118,7 +118,7 @@ def test_report_tool_progress_force_signal_bypasses_throttle():
 
 
 def test_generation_progress_label_calls_out_last_molecule():
-    from molmanager.workers.conformer_generation import generation_progress_label
+    from mctoolkit.workers.conformer_generation import generation_progress_label
 
     assert generation_progress_label(0, 50) == "Generate conformations…"
     assert generation_progress_label(49, 50) == "Generate conformations… last molecule"
@@ -129,7 +129,7 @@ def test_generation_progress_label_calls_out_last_molecule():
 def test_drain_completed_futures_keeps_pending_and_collects_done():
     from concurrent.futures import Future
 
-    from molmanager.workers.conformer_generation import drain_completed_futures
+    from mctoolkit.workers.conformer_generation import drain_completed_futures
 
     pending = Future()
     done = Future()

@@ -1,6 +1,6 @@
 ---
-description: IUPAC graphical representation standards for ChemManager sketcher structure creation and rendering
-globs: molmanager/ui/sketcher/**/*.py,docs/IUPAC_DRAWING.md,tests/test_sketch_iupac*.py
+description: IUPAC graphical representation standards for MCToolkit sketcher structure creation and rendering
+globs: mctoolkit/ui/sketcher/**/*.py,docs/IUPAC_DRAWING.md,tests/test_sketch_iupac*.py
 alwaysApply: false
 ---
 

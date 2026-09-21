@@ -1,27 +1,27 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for memory-safety hardening (leaks, caps, PNG/store cleanup)."""
 
 from __future__ import annotations
 
-from molmanager.chem.fingerprint_cache import clear as clear_fp_cache
-from molmanager.chem.fingerprint_cache import store as store_fp
-from molmanager.chem.fingerprint_cache import get as get_fp
-from molmanager.platform_support.memory_guards import (
+from mctoolkit.chem.fingerprint_cache import clear as clear_fp_cache
+from mctoolkit.chem.fingerprint_cache import store as store_fp
+from mctoolkit.chem.fingerprint_cache import get as get_fp
+from mctoolkit.platform_support.memory_guards import (
     check_cluster_workload,
     check_conformer_workload,
     check_diverse_subset_workload,
@@ -29,8 +29,8 @@ from molmanager.platform_support.memory_guards import (
     check_product_enumeration,
     clamp_dimred_max_points,
 )
-from molmanager.storage.structure_render_store import StructureRenderStore
-from molmanager.storage.sqlite_table_store import SqliteTableStore
+from mctoolkit.storage.structure_render_store import StructureRenderStore
+from mctoolkit.storage.sqlite_table_store import SqliteTableStore
 
 
 def test_fingerprint_cache_clear_empties_store() -> None:
@@ -72,13 +72,13 @@ def test_sqlite_stream_rebuild_without_entries_list(tmp_path) -> None:
 
 
 def test_memory_guards_block_oversized_workloads(monkeypatch) -> None:
-    monkeypatch.setenv("MOLMANAGER_MEMORY_GUARD_CONF_MAX_ROWS", "10")
-    monkeypatch.setenv("MOLMANAGER_MEMORY_GUARD_CONF_MAX_ROW_CONFS", "100")
-    monkeypatch.setenv("MOLMANAGER_MEMORY_GUARD_CLUSTER_MAX_ROWS", "150")
-    monkeypatch.setenv("MOLMANAGER_MEMORY_GUARD_DIVERSE_MAX_ROWS", "200")
-    monkeypatch.setenv("MOLMANAGER_MEMORY_GUARD_DIVERSE_MAX_KN", "1000")
-    monkeypatch.setenv("MOLMANAGER_MEMORY_GUARD_FP_MATRIX_MAX_CELLS", "100000")
-    monkeypatch.setenv("MOLMANAGER_MEMORY_GUARD_ENUM_MAX_PRODUCTS", "50")
+    monkeypatch.setenv("MCTOOLKIT_MEMORY_GUARD_CONF_MAX_ROWS", "10")
+    monkeypatch.setenv("MCTOOLKIT_MEMORY_GUARD_CONF_MAX_ROW_CONFS", "100")
+    monkeypatch.setenv("MCTOOLKIT_MEMORY_GUARD_CLUSTER_MAX_ROWS", "150")
+    monkeypatch.setenv("MCTOOLKIT_MEMORY_GUARD_DIVERSE_MAX_ROWS", "200")
+    monkeypatch.setenv("MCTOOLKIT_MEMORY_GUARD_DIVERSE_MAX_KN", "1000")
+    monkeypatch.setenv("MCTOOLKIT_MEMORY_GUARD_FP_MATRIX_MAX_CELLS", "100000")
+    monkeypatch.setenv("MCTOOLKIT_MEMORY_GUARD_ENUM_MAX_PRODUCTS", "50")
 
     assert not check_conformer_workload(11, 1).ok
     assert not check_conformer_workload(5, 30).ok
@@ -100,7 +100,7 @@ def test_memory_guards_block_oversized_workloads(monkeypatch) -> None:
 
 
 def test_dimred_cap_allows_25k_fingerprint_rows():
-    from molmanager.platform_support.config import load_config
+    from mctoolkit.platform_support.config import load_config
 
     assert load_config().memory_guard_dimred_max_points == 25_000
     assert clamp_dimred_max_points(100_000) == 25_000

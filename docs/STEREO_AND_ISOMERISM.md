@@ -34,7 +34,7 @@ MCToolkit uses **RDKit** for chemistry semantics. The sketcher:
 
 **Cahn–Ingold–Prelog (CIP)** priorities at **each** alkene carbon determine which substituent is “higher priority” on each side. **E** (*entgegen*) = higher-priority groups on **opposite** sides of the double bond; **Z** (*zusammen*) = on the **same** side (in the usual projection).
 
-MCToolkit’s sketcher **infers** E/Z labels from **2D coordinates** plus ligand priorities (`molmanager/ui/sketcher/alkene_stereo.py`):
+MCToolkit’s sketcher **infers** E/Z labels from **2D coordinates** plus ligand priorities (`mctoolkit/ui/sketcher/alkene_stereo.py`):
 
 - Uses a hydrogen-supplemented copy with `CanonicalRankAtoms(breakTies=True)` to pick the highest-priority ligand at each end of each **non-aromatic** double bond, then compares which side of the C=C axis those ligands lie on (2D cross product sign).
 - This matches **textbook E/Z** for typical organic drawings; it is **not** a full CIP implementation for every edge case (ties, collinear atoms, exotic heteroatom alkenes may yield **no label**).
@@ -62,8 +62,9 @@ MCToolkit:
 Important for this app:
 
 - A **SMILES string or mol block** almost always represents **one tautomeric form** (the one you drew or that the supplier encoded).
-- **RDKit** `MolFromSmiles` / sanitization do **not** mean “all tautomers”; they mean “this graph.” MCToolkit does **not** ship a global “canonical tautomer” or tautomer enumeration pass on every table load.
-- If you need a specific tautomer, **draw or paste that form** explicitly. For batch canonicalization, use RDKit’s `MolStandardize` (or similar) outside the app or extend workers with care—different pipelines pick different “preferred” tautomers.
+- **RDKit** `MolFromSmiles` / sanitization do **not** mean “all tautomers”; they mean “this graph.” MCToolkit does **not** run tautomer enumeration on every table load.
+- **Tools → Prepare Structures → Tautomers** enumerates a likely set (RDKit `TautomerEnumerator`, scored and capped) and can add chosen forms as new rows with **Parent OID**.
+- If you need a specific tautomer without enumerating, **draw or paste that form** explicitly. For charge-state (protomer) ensembles at a pH, use **Generate Protomers**.
 
 ---
 
@@ -84,8 +85,8 @@ For atropisomer-sensitive chemistry, prefer **explicit structures from trusted m
 
 | Topic | Primary location |
 |--------|-------------------|
-| Wedge/hash semantics & bond tuple | `molmanager/ui/sketcher/bonds.py`, `widget_painting.py`, `widget.py` |
-| E/Z inference | `molmanager/ui/sketcher/alkene_stereo.py` |
+| Wedge/hash semantics & bond tuple | `mctoolkit/ui/sketcher/bonds.py`, `widget_painting.py`, `widget.py` |
+| E/Z inference | `mctoolkit/ui/sketcher/alkene_stereo.py` |
 | R/S and chiral perception from sketch | `SketchWidget._mol_from_node_ids`, `_apply_sketch_coords_and_stereo`, `_recompute_chiral_highlights` in `widget.py` |
 | Load mol → sketch (RDKit wedges) | `SketchWidget.load_from_rdkit_mol` |
 

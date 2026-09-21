@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Bulk delete snapshot helpers (no full main window)."""
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from molmanager.ui.compound_table_model import CompoundTableModel
-from molmanager.ui.main_window.table_undo_commands import collect_delete_row_snapshots
+from mctoolkit.ui.compound_table_model import CompoundTableModel
+from mctoolkit.ui.main_window.table_undo_commands import collect_delete_row_snapshots
 
 
 def test_collect_delete_row_snapshots_light(qapp):  # noqa: ARG001

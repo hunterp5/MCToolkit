@@ -1,4 +1,4 @@
-# MolManager — desktop core (no PyTorch / Chemprop / docking ML stack).
+# MCToolkit — desktop core (no PyTorch / Chemprop / docking ML stack).
 # Prefer this for day-to-day table work and CI smoke installs:
 #   pip install -U pip
 #   pip install -r requirements-core.txt

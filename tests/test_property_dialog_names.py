@@ -1,25 +1,25 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Calculate Descriptors Name tab includes PubChem lookups."""
 
 from __future__ import annotations
 
-from molmanager.descriptors.catalog import DESCRIPTOR_TAB_ORDER, iter_descriptor_tab_items
-from molmanager.ui.dialogs.properties import PropertyDialog
+from mctoolkit.descriptors.catalog import DESCRIPTOR_TAB_ORDER, iter_descriptor_tab_items
+from mctoolkit.ui.dialogs.properties import PropertyDialog
 
 
 def test_property_dialog_name_tab_includes_common_name_and_synonyms(qapp) -> None:  # noqa: ARG001

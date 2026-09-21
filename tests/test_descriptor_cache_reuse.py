@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for descriptor/fingerprint reuse helpers."""
 
@@ -20,13 +20,13 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.descriptors.descriptor_cache_reuse import (
+from mctoolkit.descriptors.descriptor_cache_reuse import (
     column_complete_for_oids,
     is_valid_descriptor_cell,
 )
-from molmanager.chem.fingerprint_cache import clear as clear_fp_cache
-from molmanager.chem.fingerprint_cache import store_from_mol
-from molmanager.chem.rdkit_fingerprints import (
+from mctoolkit.chem.fingerprint_cache import clear as clear_fp_cache
+from mctoolkit.chem.fingerprint_cache import store_from_mol
+from mctoolkit.chem.rdkit_fingerprints import (
     fingerprint_bitvect_for_row,
     spec_for_label,
 )

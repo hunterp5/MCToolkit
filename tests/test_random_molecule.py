@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for Tools → Utilities → Random → Molecule source sampling (no network)."""
 
@@ -22,8 +22,8 @@ import json
 
 import pytest
 
-from molmanager.sources.chembl_random_compounds import RandomChemblMolecule
-from molmanager.sources.random_molecule_sources import (
+from mctoolkit.sources.chembl_random_compounds import RandomChemblMolecule
+from mctoolkit.sources.random_molecule_sources import (
     SOURCE_CHEMBL,
     SOURCE_PUBCHEM,
     SOURCE_ZINC,
@@ -113,7 +113,7 @@ def test_fetch_zinc_page_polls_cartblanche_task(monkeypatch):
         except StopIteration:
             raise AssertionError(url)
 
-    monkeypatch.setattr("molmanager.sources.random_molecule_sources._http_get_json", fake_json)
+    monkeypatch.setattr("mctoolkit.sources.random_molecule_sources._http_get_json", fake_json)
     recs = _fetch_zinc_page(2, sleep=lambda _s: None)
     assert recs[0]["zincid"] == "ZINC1"
     assert recs[0]["SMILES"] == "CCO"
@@ -145,13 +145,13 @@ def test_fetch_random_pubchem_molecules_mocked(monkeypatch):
         return [props[c] for c in cids if c in props]
 
     monkeypatch.setattr(
-        "molmanager.sources.random_molecule_sources._fetch_pubchem_idlist", fake_idlist
+        "mctoolkit.sources.random_molecule_sources._fetch_pubchem_idlist", fake_idlist
     )
     monkeypatch.setattr(
-        "molmanager.sources.random_molecule_sources._fetch_pubchem_properties", fake_props
+        "mctoolkit.sources.random_molecule_sources._fetch_pubchem_properties", fake_props
     )
     monkeypatch.setattr(
-        "molmanager.sources.random_molecule_sources.pubchem_compound_total_count", lambda **_: 200
+        "mctoolkit.sources.random_molecule_sources.pubchem_compound_total_count", lambda **_: 200
     )
 
     hits = fetch_random_pubchem_molecules(3, seed=1, page_size=25)
@@ -176,7 +176,7 @@ def test_fetch_random_zinc_molecules_mocked(monkeypatch):
         except StopIteration:
             return []
 
-    monkeypatch.setattr("molmanager.sources.random_molecule_sources._fetch_zinc_page", fake_page)
+    monkeypatch.setattr("mctoolkit.sources.random_molecule_sources._fetch_zinc_page", fake_page)
     hits = fetch_random_zinc_molecules(3, seed=1, page_size=25)
     assert len(hits) == 3
     assert {h.molecule_id for h in hits} == {"ZINC1", "ZINC2", "ZINC3"}
@@ -193,7 +193,7 @@ def test_fetch_random_molecules_dispatches_chembl(monkeypatch):
         ]
 
     monkeypatch.setattr(
-        "molmanager.sources.random_molecule_sources.fetch_random_chembl_molecules", fake_chembl
+        "mctoolkit.sources.random_molecule_sources.fetch_random_chembl_molecules", fake_chembl
     )
     hits = fetch_random_molecules("ChEMBL", 1)
     assert len(hits) == 1
@@ -240,13 +240,13 @@ def test_fetch_random_pubchem_respects_nitrogen_filter(monkeypatch):
         return [props[c] for c in cids if c in props]
 
     monkeypatch.setattr(
-        "molmanager.sources.random_molecule_sources._fetch_pubchem_idlist", fake_idlist
+        "mctoolkit.sources.random_molecule_sources._fetch_pubchem_idlist", fake_idlist
     )
     monkeypatch.setattr(
-        "molmanager.sources.random_molecule_sources._fetch_pubchem_properties", fake_props
+        "mctoolkit.sources.random_molecule_sources._fetch_pubchem_properties", fake_props
     )
     monkeypatch.setattr(
-        "molmanager.sources.random_molecule_sources.pubchem_compound_total_count", lambda **_: 200
+        "mctoolkit.sources.random_molecule_sources.pubchem_compound_total_count", lambda **_: 200
     )
     hits = fetch_random_pubchem_molecules(
         1, seed=1, page_size=25, filters=RandomMoleculeFilters(nitrogen=IntBounds(minimum=1))
@@ -265,7 +265,7 @@ def test_fetch_rejects_bad_count():
 
 def test_random_molecule_dialog_source_field(qapp):  # noqa: ARG001
     pytest.importorskip("PySide6.QtWidgets")
-    from molmanager.ui.dialogs.random_molecule import RandomMoleculeDialog
+    from mctoolkit.ui.dialogs.random_molecule import RandomMoleculeDialog
 
     dlg = RandomMoleculeDialog(None)
     labels = [dlg.source_combo.itemText(i) for i in range(dlg.source_combo.count())]
@@ -291,7 +291,7 @@ def test_random_molecule_dialog_source_field(qapp):  # noqa: ARG001
 
 
 def test_random_molecule_help_lists_sources():
-    from molmanager.ui.user_guides import guide_html
+    from mctoolkit.ui.user_guides import guide_html
 
     h = guide_html("tools_random_molecule")
     assert "ChEMBL" in h

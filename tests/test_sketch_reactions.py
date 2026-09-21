@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Sketcher reaction-arrow geometry and export."""
 
@@ -21,8 +21,8 @@ from __future__ import annotations
 from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QLabel, QWidget
 
-from molmanager.table.structure_depiction_layout import reaction_depict_size
-from molmanager.chem.reaction_file_io import (
+from mctoolkit.table.structure_depiction_layout import reaction_depict_size
+from mctoolkit.chem.reaction_file_io import (
     RXN_NAME_HEADER,
     RXN_PRODUCTS_HEADER,
     RXN_REACTANTS_HEADER,
@@ -30,18 +30,18 @@ from molmanager.chem.reaction_file_io import (
     looks_like_reaction_smarts,
     parse_reaction_smarts,
 )
-from molmanager.chem.structure_2d_depiction import ReactionDrawSpec
-from molmanager.ui.compound_table_model import CompoundTableModel
-from molmanager.ui.compound_table_view import CompoundTableView
-from molmanager.ui.sketcher.bonds import _bond_make
-from molmanager.ui.sketcher.dialog import SketcherDialog
-from molmanager.ui.sketcher.sketch_reactions import (
+from mctoolkit.chem.structure_2d_depiction import ReactionDrawSpec
+from mctoolkit.ui.compound_table_model import CompoundTableModel
+from mctoolkit.ui.compound_table_view import CompoundTableView
+from mctoolkit.ui.sketcher.bonds import _bond_make
+from mctoolkit.ui.sketcher.dialog import SketcherDialog
+from mctoolkit.ui.sketcher.sketch_reactions import (
     fragment_side,
     join_reaction_string,
     plus_sign_positions,
     snap_arrow_end,
 )
-from molmanager.ui.sketcher.widget import SketchWidget
+from mctoolkit.ui.sketcher.widget import SketchWidget
 
 
 def test_fragment_side_tail_is_reactant() -> None:

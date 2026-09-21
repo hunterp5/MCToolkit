@@ -16,10 +16,10 @@ This document supports building an installer (PyInstaller, Inno Setup, MSI, etc.
 
 | Component | How it ships |
 |-----------|----------------|
-| MCToolkit app (`molmanager` package) | PyInstaller one-folder/one-file, or `pip install -e .` |
+| MCToolkit app (`mctoolkit` package) | PyInstaller one-folder/one-file, or `pip install -e .` |
 | Python dependencies | `requirements-core.txt` or `requirements.txt`, then `pip install -e .` |
-| 3Dmol.js | Already in `molmanager/ui/static/` |
-| AutoDock Vina | **Optional** binary in `molmanager/resources/bin/<platform>/` (not redistributed in git) |
+| 3Dmol.js | Already in `mctoolkit/ui/static/` |
+| AutoDock Vina | **Optional** binary in `mctoolkit/resources/bin/<platform>/` (not redistributed in git) |
 
 ## Recommended install commands (source / CI)
 
@@ -60,16 +60,16 @@ pip install -e ".[pka,permeability,docking,conforge,dev]"
 ## Bundling external tools
 
 1. Run `scripts\bootstrap_optional_tools.ps1` (Windows) or `scripts/bootstrap_optional_tools.sh` (Linux/macOS) to install Python deps, swap in CUDA PyTorch when an NVIDIA GPU is present, and print where to place a Gnina binary.
-2. On Linux, copy `gnina` into `molmanager/resources/bin/linux/` (or set `MOLMANAGER_BUNDLE_DIR`). On Windows, install Gnina in WSL so `gnina` is on that distro’s PATH (Settings → WSL).
+2. On Linux, copy `gnina` into `mctoolkit/resources/bin/linux/` (or set `MCTOOLKIT_BUNDLE_DIR`). On Windows, install Gnina in WSL so `gnina` is on that distro’s PATH (Settings → WSL).
 3. Protein → Dock Ligand defaults to bundled paths when present.
 
 ## PyInstaller (starter)
 
-A minimal spec lives in `packaging/molmanager.spec`. Build (from repo root, venv activated):
+A minimal spec lives in `packaging/mctoolkit.spec`. Build (from repo root, venv activated):
 
 ```bash
 pip install pyinstaller
-pyinstaller packaging/molmanager.spec
+pyinstaller packaging/mctoolkit.spec
 ```
 
 Output under `dist/MCToolkit/`. You still need to ship:
@@ -77,7 +77,7 @@ Output under `dist/MCToolkit/`. You still need to ship:
 - Qt platform plugins (PyInstaller usually collects these)
 - Optional `resources/bin/` for Gnina
 
-Tune `packaging/molmanager.spec` hidden imports as you enable more Tools menu features.
+Tune `packaging/mctoolkit.spec` hidden imports as you enable more Tools menu features.
 
 For **enterprise single-user desktop** builds, prefer a **core** PyInstaller image (no torch/chemprop) unless the product SKU explicitly includes pKa/permeability. Keep ML tools as an optional second installer or documented pip extras.
 
@@ -85,7 +85,7 @@ For **enterprise single-user desktop** builds, prefer a **core** PyInstaller ima
 
 Keep these three values in sync on every tagged release:
 
-1. `molmanager.__version__` in `molmanager/__init__.py`
+1. `mctoolkit.__version__` in `mctoolkit/__init__.py`
 2. `[project].version` in `pyproject.toml`
 3. Git tag: `vX.Y.Z` (annotated) matching that version
 
@@ -96,7 +96,7 @@ Process:
 3. Tag `vX.Y.Z` on `main` after merge from `dev`.
 4. Attach installer artifacts (if any) to the GitHub Release for that tag; note core vs full profile in the release notes.
 
-Application version is shown in About when wired to `molmanager.__version__`.
+Application version is shown in About when wired to `mctoolkit.__version__`.
 
 ## Performance release gate (100k rows)
 

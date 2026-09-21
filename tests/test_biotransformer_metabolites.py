@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for BioTransformer helpers (no Java JAR required)."""
 
@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 from rdkit import Chem
 
-from molmanager.predictions.biotransformer_metabolites import (
+from mctoolkit.predictions.biotransformer_metabolites import (
     BIOTRANSFORMER_CANCELLED,
     METABOLITE_COUNT_COLUMN,
     METABOLITE_REACTIONS_COLUMN,
@@ -40,7 +40,7 @@ from molmanager.predictions.biotransformer_metabolites import (
     resolve_java_heap,
     uses_cyp_mode,
 )
-from molmanager.platform_support.bundled_paths import (
+from mctoolkit.platform_support.bundled_paths import (
     biotransformer_layout_errors,
     resolve_biotransformer_jar,
 )
@@ -91,7 +91,7 @@ def test_uses_cyp_mode() -> None:
 
 def test_biotransformer_command_includes_cyp_mode(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
-        "molmanager.predictions.biotransformer_metabolites._java_reports_64bit", lambda _java: True
+        "mctoolkit.predictions.biotransformer_metabolites._java_reports_64bit", lambda _java: True
     )
     java = tmp_path / "java.exe"
     jar = tmp_path / "biotransformer-3.0.0.jar"
@@ -122,7 +122,7 @@ def test_biotransformer_command_includes_cyp_mode(tmp_path, monkeypatch) -> None
 
 def test_resolve_java_heap_32bit(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
-        "molmanager.predictions.biotransformer_metabolites._java_reports_64bit", lambda _java: False
+        "mctoolkit.predictions.biotransformer_metabolites._java_reports_64bit", lambda _java: False
     )
     java = tmp_path / "java.exe"
     java.write_bytes(b"")
@@ -130,18 +130,18 @@ def test_resolve_java_heap_32bit(tmp_path, monkeypatch) -> None:
 
 
 def test_resolve_biotransformer_jar_env_and_layout(tmp_path, monkeypatch) -> None:
-    monkeypatch.delenv("MOLMANAGER_BIOTRANSFORMER_JAR", raising=False)
+    monkeypatch.delenv("MCTOOLKIT_BIOTRANSFORMER_JAR", raising=False)
     monkeypatch.setattr(
-        "molmanager.platform_support.bundled_paths.configured_biotransformer_jar_text", lambda: ""
+        "mctoolkit.platform_support.bundled_paths.configured_biotransformer_jar_text", lambda: ""
     )
     monkeypatch.setattr(
-        "molmanager.platform_support.bundled_paths.biotransformer_models_dir",
+        "mctoolkit.platform_support.bundled_paths.biotransformer_models_dir",
         lambda: tmp_path / "missing",
     )
     assert resolve_biotransformer_jar() is None
     jar = tmp_path / "biotransformer-3.0.0.jar"
     jar.write_bytes(b"")
-    monkeypatch.setenv("MOLMANAGER_BIOTRANSFORMER_JAR", str(jar))
+    monkeypatch.setenv("MCTOOLKIT_BIOTRANSFORMER_JAR", str(jar))
     assert resolve_biotransformer_jar() == jar
     errs = biotransformer_layout_errors(jar)
     assert any("database/" in e for e in errs)
@@ -167,20 +167,20 @@ def test_predict_one_smiles_uses_parsed_fixture(tmp_path, monkeypatch) -> None:
         return 0, "", ""
 
     monkeypatch.setattr(
-        "molmanager.predictions.biotransformer_metabolites.run_java_command", fake_run
+        "mctoolkit.predictions.biotransformer_metabolites.run_java_command", fake_run
     )
     monkeypatch.setattr(
-        "molmanager.predictions.biotransformer_metabolites.java_executable", lambda: java
+        "mctoolkit.predictions.biotransformer_metabolites.java_executable", lambda: java
     )
     monkeypatch.setattr(
-        "molmanager.predictions.biotransformer_metabolites.resolve_biotransformer_jar", lambda: jar
+        "mctoolkit.predictions.biotransformer_metabolites.resolve_biotransformer_jar", lambda: jar
     )
     monkeypatch.setattr(
-        "molmanager.predictions.biotransformer_metabolites.biotransformer_layout_errors",
+        "mctoolkit.predictions.biotransformer_metabolites.biotransformer_layout_errors",
         lambda _jar=None: [],
     )
     monkeypatch.setattr(
-        "molmanager.predictions.biotransformer_metabolites.biotransformer_support_root",
+        "mctoolkit.predictions.biotransformer_metabolites.biotransformer_support_root",
         lambda _jar=None: tmp_path,
     )
     pred = predict_one_smiles("CCO", jar=jar, java=java)
@@ -196,7 +196,7 @@ def test_predict_metabolites_batch_cancel(monkeypatch) -> None:
         return MetabolitePrediction(smi, (MetaboliteHit("CC=O"),))
 
     monkeypatch.setattr(
-        "molmanager.predictions.biotransformer_metabolites.predict_one_smiles", fake_one
+        "mctoolkit.predictions.biotransformer_metabolites.predict_one_smiles", fake_one
     )
 
     def cancel() -> bool:
@@ -208,12 +208,12 @@ def test_predict_metabolites_batch_cancel(monkeypatch) -> None:
 
 
 def test_biotransformer_worker_emits_columns(monkeypatch, qapp) -> None:  # noqa: ARG001
-    from molmanager.workers.biotransformer_worker import (
+    from mctoolkit.workers.biotransformer_worker import (
         BiotransformerRequest,
         BiotransformerSignals,
         BiotransformerWorker,
     )
-    from molmanager.workers.signals import WorkerSignals
+    from mctoolkit.workers.signals import WorkerSignals
 
     finished: list = []
     failed: list = []
@@ -231,7 +231,7 @@ def test_biotransformer_worker_emits_columns(monkeypatch, qapp) -> None:  # noqa
         ]
 
     monkeypatch.setattr(
-        "molmanager.workers.biotransformer_worker.predict_metabolites_batch", fake_batch
+        "mctoolkit.workers.biotransformer_worker.predict_metabolites_batch", fake_batch
     )
     mol = Chem.MolFromSmiles("CCO")
     assert mol is not None
@@ -248,7 +248,7 @@ def test_biotransformer_worker_emits_columns(monkeypatch, qapp) -> None:  # noqa
 
 
 def test_records_from_worker_rows_skips_cancelled() -> None:
-    from molmanager.ui.metabolite_browser import records_from_worker_rows
+    from mctoolkit.ui.metabolite_browser import records_from_worker_rows
 
     rows = [
         (
@@ -279,11 +279,11 @@ def test_unknown_metabolism_raises() -> None:
 
 
 def test_biotransformer_dialog_disables_predict_when_missing(qapp, monkeypatch) -> None:  # noqa: ARG001
-    from molmanager.predictions.biotransformer_metabolites import CYP_MODE_LABELS, DEFAULT_CYP_MODE
-    from molmanager.ui.dialogs.biotransformer import BiotransformerDialog
+    from mctoolkit.predictions.biotransformer_metabolites import CYP_MODE_LABELS, DEFAULT_CYP_MODE
+    from mctoolkit.ui.dialogs.biotransformer import BiotransformerDialog
 
     monkeypatch.setattr(
-        "molmanager.ui.dialogs.biotransformer.install_ready_message",
+        "mctoolkit.ui.dialogs.biotransformer.install_ready_message",
         lambda: "Java is not on PATH.",
     )
     dlg = BiotransformerDialog(None)
@@ -303,7 +303,7 @@ def test_biotransformer_dialog_disables_predict_when_missing(qapp, monkeypatch) 
 
 
 def test_is_metabolite_column_header_and_parse_smiles() -> None:
-    from molmanager.predictions.biotransformer_metabolites import (
+    from mctoolkit.predictions.biotransformer_metabolites import (
         is_metabolite_column_header,
         parse_metabolite_smiles_cell,
     )
@@ -317,8 +317,8 @@ def test_is_metabolite_column_header_and_parse_smiles() -> None:
 
 
 def test_metabolite_records_from_table(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.metabolite_browser import records_from_table
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.metabolite_browser import records_from_table
 
     w = ChemistryWorkspaceWindow()
     w.headers = [

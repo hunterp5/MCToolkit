@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """IUPAC drawing helpers: condensed labels, stereo sanitize, validation, hash geometry."""
 
@@ -21,7 +21,7 @@ from __future__ import annotations
 from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QWidget
 
-from molmanager.ui.sketcher.bonds import (
+from mctoolkit.ui.sketcher.bonds import (
     BOND_STEREO_HASH,
     BOND_STEREO_PLAIN,
     BOND_STEREO_WEDGE,
@@ -29,13 +29,13 @@ from molmanager.ui.sketcher.bonds import (
     clear_stereo_bonds_between_centers,
     sanitize_sketch_stereo_bonds,
 )
-from molmanager.ui.sketcher.dialog import SketcherDialog
-from molmanager.ui.sketcher.iupac_style import (
+from mctoolkit.ui.sketcher.dialog import SketcherDialog
+from mctoolkit.ui.sketcher.iupac_style import (
     condensed_heteroatom_label,
     iupac_sketch_style,
     snap_extension_angle,
 )
-from molmanager.ui.sketcher.iupac_validate import validate_iupac_sketch
+from mctoolkit.ui.sketcher.iupac_validate import validate_iupac_sketch
 from rdkit import Chem
 import math
 
@@ -216,7 +216,7 @@ def test_iupac_double_bond_carbonyl_centered_vs_alkene_offset(qapp) -> None:  # 
 
 
 def test_contracted_cf3_edit_and_export(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.sketcher.contracted_labels import parse_edit_atom_input
+    from mctoolkit.ui.sketcher.contracted_labels import parse_edit_atom_input
 
     parsed = parse_edit_atom_input("CF3")
     assert parsed == ("C", None, "CF3")
@@ -348,7 +348,7 @@ def test_fusion_sign_keeps_aromatic_interior(qapp) -> None:  # noqa: ARG001
 
 
 def test_structure_issue_report_levels(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.sketcher.bonds import BOND_STEREO_WAVY
+    from mctoolkit.ui.sketcher.bonds import BOND_STEREO_WAVY
 
     dlg = SketcherDialog(QWidget())
     c = dlg.canvas
@@ -405,7 +405,7 @@ def test_structure_issue_report_levels(qapp) -> None:  # noqa: ARG001
     font_pt = style.label_font_pt
     # Reproduce clearance math: dist must exceed double_bond_offset.
     from PySide6.QtGui import QFontMetrics
-    from molmanager.ui.sketcher.iupac_style import iupac_structure_font
+    from mctoolkit.ui.sketcher.iupac_style import iupac_structure_font
 
     pt = max(7, int(round(float(font_pt) * 0.72)))
     fm = QFontMetrics(iupac_structure_font(pt, italic=True))
@@ -425,7 +425,7 @@ def test_structure_issue_report_levels(qapp) -> None:  # noqa: ARG001
 
 def test_iupac_structure_font_plain_roman() -> None:
     from PySide6.QtGui import QFont
-    from molmanager.ui.sketcher.iupac_style import iupac_structure_font
+    from mctoolkit.ui.sketcher.iupac_style import iupac_structure_font
 
     f = iupac_structure_font(12)
     assert f.weight() == QFont.Normal
@@ -452,7 +452,7 @@ def test_cleanup_and_validation_status(qapp) -> None:  # noqa: ARG001
 
 
 def test_cleanup_selected_does_not_move_unselected(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.sketcher.widget import SketchWidget
+    from mctoolkit.ui.sketcher.widget import SketchWidget
 
     w = SketchWidget()
     w.resize(700, 500)
@@ -490,7 +490,7 @@ def test_cleanup_selected_does_not_move_unselected(qapp) -> None:  # noqa: ARG00
 
 
 def test_cleanup_selected_requires_two_atoms(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.sketcher.widget import SketchWidget
+    from mctoolkit.ui.sketcher.widget import SketchWidget
 
     w = SketchWidget()
     w.nodes = [
@@ -512,7 +512,7 @@ def test_cleanup_selected_requires_two_atoms(qapp) -> None:  # noqa: ARG001
 
 
 def test_iupac_orientation_heteroatom_right() -> None:
-    from molmanager.ui.sketcher.iupac_orient import apply_iupac_orientation
+    from mctoolkit.ui.sketcher.iupac_orient import apply_iupac_orientation
 
     # Vertical C–C–O chain: after orient, O should be farther right than the leftmost C.
     xs = [0.0, 0.0, 0.0]
@@ -527,8 +527,8 @@ def test_iupac_orientation_heteroatom_right() -> None:
 def test_near_collinear_skipped_for_sulfur_and_phosphorus() -> None:
     from PySide6.QtCore import QPoint
 
-    from molmanager.ui.sketcher.bonds import _bond_make
-    from molmanager.ui.sketcher.iupac_validate import validate_iupac_sketch
+    from mctoolkit.ui.sketcher.bonds import _bond_make
+    from mctoolkit.ui.sketcher.iupac_validate import validate_iupac_sketch
 
     # Near-linear C–S–C (≈180°).
     nodes = [
@@ -552,7 +552,7 @@ def test_near_collinear_skipped_for_sulfur_and_phosphorus() -> None:
 
 
 def test_principal_ring_system_prefers_largest() -> None:
-    from molmanager.ui.sketcher.iupac_orient import (
+    from mctoolkit.ui.sketcher.iupac_orient import (
         apply_iupac_orientation,
         principal_ring_system,
     )
@@ -584,7 +584,7 @@ def test_principal_ring_system_prefers_largest() -> None:
 
 def test_iupac_orientation_ring_heteroatom_right() -> None:
     """GR-3.4.2: fused/ring heteroatoms prefer the right (and slightly bottom)."""
-    from molmanager.ui.sketcher.iupac_orient import apply_iupac_orientation
+    from mctoolkit.ui.sketcher.iupac_orient import apply_iupac_orientation
 
     # Rough horizontal naphthalene-like with N on the left.
     xs = [0.0, 1.0, 1.5, 0.5, -0.5, -1.0, 0.0, 1.0, 1.5, 0.5]
@@ -611,7 +611,7 @@ def test_iupac_orientation_ring_heteroatom_right() -> None:
 
 
 def test_layout_overlap_prefers_noncrossing() -> None:
-    from molmanager.ui.sketcher.iupac_orient import (
+    from mctoolkit.ui.sketcher.iupac_orient import (
         apply_iupac_orientation,
         count_bond_crossings,
         layout_overlap_penalty,
@@ -629,7 +629,7 @@ def test_layout_overlap_prefers_noncrossing() -> None:
 
 
 def test_iupac_label_reverse_gr216() -> None:
-    from molmanager.ui.sketcher.iupac_labels import (
+    from mctoolkit.ui.sketcher.iupac_labels import (
         label_should_reverse,
         oriented_display_label,
         reverse_atom_label,
@@ -651,7 +651,7 @@ def test_iupac_label_reverse_gr216() -> None:
 
 
 def test_iupac_ring_vertex_offset_hex() -> None:
-    from molmanager.ui.sketcher.iupac_style import iupac_ring_vertex_offset
+    from mctoolkit.ui.sketcher.iupac_style import iupac_ring_vertex_offset
     import math
 
     off = iupac_ring_vertex_offset(6)

@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Packed confs / superpose / poses columns are never overwritten in place."""
 
@@ -21,7 +21,7 @@ from __future__ import annotations
 import base64
 import json
 
-from molmanager.conformers.conformer_column_codec import is_packed_ensemble_header
+from mctoolkit.conformers.conformer_column_codec import is_packed_ensemble_header
 
 
 def test_is_packed_ensemble_header_matches_confs_superpose_poses():
@@ -45,7 +45,7 @@ def _packed_cell(tag: str) -> str:
 
 
 def _app_with_row(headers: list[str], cells: dict[str, str]):
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w.headers = list(headers)

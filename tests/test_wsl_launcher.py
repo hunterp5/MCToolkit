@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """WSL executable settings and launcher."""
 
@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from molmanager.platform_support.wsl_launcher import (
+from mctoolkit.platform_support.wsl_launcher import (
     default_wsl_executable,
     linux_path,
     windows_path_to_wsl,
@@ -38,13 +38,13 @@ def test_windows_path_to_wsl_drive_letter() -> None:
 
 
 def test_linux_path_passthrough_on_linux(monkeypatch) -> None:
-    monkeypatch.setattr("molmanager.platform_support.wsl_launcher.sys.platform", "linux")
+    monkeypatch.setattr("mctoolkit.platform_support.wsl_launcher.sys.platform", "linux")
     assert linux_path("/tmp/lig.mol2") == "/tmp/lig.mol2"
 
 
 def test_wsl_argv_requires_executable(monkeypatch) -> None:
     monkeypatch.setattr(
-        "molmanager.platform_support.wsl_launcher.resolve_wsl_executable", lambda _p="": None
+        "mctoolkit.platform_support.wsl_launcher.resolve_wsl_executable", lambda _p="": None
     )
     with pytest.raises(FileNotFoundError, match="Settings → WSL"):
         wsl_argv(["uname", "-s"])
@@ -54,7 +54,7 @@ def test_wsl_argv_inserts_distro(monkeypatch, tmp_path) -> None:
     exe = tmp_path / "wsl.exe"
     exe.write_text("", encoding="utf-8")
     monkeypatch.setattr(
-        "molmanager.platform_support.wsl_launcher.resolve_wsl_executable", lambda _p="": str(exe)
+        "mctoolkit.platform_support.wsl_launcher.resolve_wsl_executable", lambda _p="": str(exe)
     )
     argv = wsl_argv(["antechamber", "-i", "lig.mol2"], distro="Ubuntu")
     assert argv[:4] == [str(exe), "-d", "Ubuntu", "--"]
@@ -62,19 +62,19 @@ def test_wsl_argv_inserts_distro(monkeypatch, tmp_path) -> None:
 
 
 def test_default_wsl_executable_non_windows(monkeypatch) -> None:
-    monkeypatch.setattr("molmanager.platform_support.wsl_launcher.sys.platform", "linux")
+    monkeypatch.setattr("mctoolkit.platform_support.wsl_launcher.sys.platform", "linux")
     assert default_wsl_executable() == ""
 
 
 def test_wsl_settings_dialog_saves_path(qapp, monkeypatch, tmp_path):  # noqa: ARG001
     from PySide6.QtWidgets import QPushButton
 
-    from molmanager.ui.dialogs.wsl_settings import WslSettingsDialog
+    from mctoolkit.ui.dialogs.wsl_settings import WslSettingsDialog
 
     saved: dict[str, str] = {}
-    monkeypatch.setattr("molmanager.ui.dialogs.wsl_settings.load_wsl_executable", lambda: "")
+    monkeypatch.setattr("mctoolkit.ui.dialogs.wsl_settings.load_wsl_executable", lambda: "")
     monkeypatch.setattr(
-        "molmanager.ui.dialogs.wsl_settings.save_wsl_executable",
+        "mctoolkit.ui.dialogs.wsl_settings.save_wsl_executable",
         lambda path: saved.setdefault("path", path) or path,
     )
     dlg = WslSettingsDialog()
@@ -87,7 +87,7 @@ def test_wsl_settings_dialog_saves_path(qapp, monkeypatch, tmp_path):  # noqa: A
 
 
 def test_settings_menu_has_wsl(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     mb = w.menuBar()

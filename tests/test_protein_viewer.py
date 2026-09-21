@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Protein Viewer inventory parsing and Manager actions (no Qt WebEngine required)."""
 
@@ -22,7 +22,7 @@ from qt_helpers import qt_submenu
 
 from pathlib import Path
 
-from molmanager.protein.structure_components import (
+from mctoolkit.protein.structure_components import (
     add_cif_chem_bond,
     add_pdb_conect,
     cif_has_component_bonds,
@@ -47,7 +47,7 @@ from molmanager.protein.structure_components import (
     scope_structure_component,
     sniff_structure_format,
 )
-from molmanager.ui.protein_viewer import build_protein_viewer_html
+from mctoolkit.ui.protein_viewer import build_protein_viewer_html
 
 _MINI_PDB = """\
 ATOM      1  N   MET A   1      27.340  24.430   2.614  1.00  0.00           N
@@ -201,7 +201,7 @@ def test_parse_mmcif_inventory():
 
 
 def test_mmcif_het_keeps_numeric_label_seq_id():
-    from molmanager.protein.structure_components import (
+    from mctoolkit.protein.structure_components import (
         atoms_to_mmcif,
         parse_structure_atoms,
         pdb_to_mmcif,
@@ -226,7 +226,7 @@ def test_parse_cif_chem_comp_double_bonds():
 
 
 def test_parse_cif_loops_reuses_same_text():
-    from molmanager.protein.structure_cif import _parse_cif_loops
+    from mctoolkit.protein.structure_cif import _parse_cif_loops
 
     first = _parse_cif_loops(_MINI_CIF_BONDS)
     second = _parse_cif_loops(_MINI_CIF_BONDS)
@@ -236,7 +236,7 @@ def test_parse_cif_loops_reuses_same_text():
 def test_mol_from_cif_component_sets_double_bond():
     from rdkit import Chem
 
-    from molmanager.workers.protein_prepare_ligand import mol_from_cif_component
+    from mctoolkit.workers.protein_prepare_ligand import mol_from_cif_component
 
     mol = mol_from_cif_component(_MINI_CIF_BONDS, "LIG")
     assert mol is not None
@@ -289,7 +289,7 @@ def test_empty_non_pdb_gets_single_structure_row():
 
 
 def test_protein_viewer_help_topic():
-    from molmanager.ui.user_guides import guide_html
+    from mctoolkit.ui.user_guides import guide_html
 
     h = guide_html("protein_viewer")
     assert "Topic unavailable" not in h
@@ -476,42 +476,42 @@ def test_delete_cif_atoms_and_chem_bonds():
 
 
 def test_protein_viewer_init_script_lives_in_js_file():
-    from molmanager.ui import protein_viewer_html
+    from mctoolkit.ui import protein_viewer_html
 
     py_path = Path(protein_viewer_html.__file__)
     js_path = py_path.with_name("protein_viewer.js")
     py = py_path.read_text(encoding="utf-8")
     js = js_path.read_text(encoding="utf-8")
-    assert "function molmanagerInitView" in js
-    assert "molmanagerSetProteinPayload" in js
+    assert "function mctoolkitInitView" in js
+    assert "mctoolkitSetProteinPayload" in js
     assert "__RESET_JS__" in js
-    assert "molmanagerSetProteinPayload" not in py
+    assert "mctoolkitSetProteinPayload" not in py
     html = build_protein_viewer_html()
-    assert "molmanagerSetProteinPayload" in html
+    assert "mctoolkitSetProteinPayload" in html
     assert "__RESET_JS__" not in html
 
 
 def test_build_protein_viewer_html_has_setters():
     html = build_protein_viewer_html()
-    assert "molmanagerSetProteinPayload" in html
-    assert "molmanagerAddProteinModels" in html
+    assert "mctoolkitSetProteinPayload" in html
+    assert "mctoolkitAddProteinModels" in html
     assert "addModelsFromPayload" in html
-    assert "molmanagerModelCount" in html
+    assert "mctoolkitModelCount" in html
     assert "payload.models" in html
     assert "payload.camera" in html
-    assert "molmanagerGetView" in html
-    assert "molmanagerSetView" in html
-    assert "molmanagerApplyComponentStates" in html
-    assert "molmanagerDeleteComponents" in html
-    assert "molmanagerZoomToComponents" in html
-    assert "molmanagerSetResidueHighlight" in html
-    assert "molmanagerSetPocket" in html
-    assert "molmanagerSetPocketSurface" in html
+    assert "mctoolkitGetView" in html
+    assert "mctoolkitSetView" in html
+    assert "mctoolkitApplyComponentStates" in html
+    assert "mctoolkitDeleteComponents" in html
+    assert "mctoolkitZoomToComponents" in html
+    assert "mctoolkitSetResidueHighlight" in html
+    assert "mctoolkitSetPocket" in html
+    assert "mctoolkitSetPocketSurface" in html
     assert "applyPocketSurface" in html
     assert "p.wireframe" in html
     assert "p.surfaceType" in html
-    assert "molmanagerSetHydrogens" in html
-    assert "molmanagerSetHbonds" in html
+    assert "mctoolkitSetHydrogens" in html
+    assert "mctoolkitSetHbonds" in html
     assert "applyHydrogenVisibility" in html
     assert "indexVisibleHeavyResidues" in html
     assert "atomHasAtomRepresentation" in html
@@ -532,9 +532,9 @@ def test_build_protein_viewer_html_has_setters():
     assert "addStyle(resSel, {stick: {radius: 0.15}})" in html
     assert "addPocketResidueLabels" not in html
     assert "addResLabels" not in html
-    assert "molmanagerMutateResidues" in html
-    assert "molmanagerDeleteResidues" in html
-    assert "molmanagerEditBond" in html
+    assert "mctoolkitMutateResidues" in html
+    assert "mctoolkitDeleteResidues" in html
+    assert "mctoolkitEditBond" in html
     assert "ord >= 1" in html
     assert "Reset Structure" in html
     assert "__RESET_JS__" not in html
@@ -566,8 +566,8 @@ def test_build_protein_viewer_html_has_setters():
     assert 'sphere: {scale: 0.42, color: "orange"}' not in html
     assert 'v.setClickable({elem: ["H", "D", "T"], invert: true}' not in html
     assert "v.addStyle({model: atomModelId(at), serial: at.serial}, {hidden: true})" not in html
-    assert "molmanagerSetDockPose" in html
-    assert "molmanagerSetPharmacophore" in html
+    assert "mctoolkitSetDockPose" in html
+    assert "mctoolkitSetPharmacophore" in html
     assert "applyPharmacophore" in html
     assert "alpha: 0.58" in html
     assert "wireframe: true" in html
@@ -577,12 +577,12 @@ def test_build_protein_viewer_html_has_setters():
     assert "refreshShapeOverlays" in html
     assert "deferDecorate" in html
     assert "heavyIndex[residueHeavyKey(at)]" in html
-    assert "molmanagerPickingBound" in html
-    assert "molmanagerDecorateGen" in html
+    assert "mctoolkitPickingBound" in html
+    assert "mctoolkitDecorateGen" in html
 
 
 def test_protein_viewer_has_prepare_log(qapp):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     dlg = ProteinViewerDialog()
     assert dlg.log.isReadOnly()
@@ -596,7 +596,7 @@ def test_protein_viewer_has_prepare_log(qapp):  # noqa: ARG001
 
 
 def test_protein_viewer_manager_reaches_window_bottom(qapp):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     dlg = ProteinViewerDialog()
     dlg.resize(1100, 720)
@@ -616,7 +616,7 @@ def test_protein_viewer_manager_reaches_window_bottom(qapp):  # noqa: ARG001
 
 
 def test_protein_viewer_canvas_load_overlay_nests(qapp):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     dlg = ProteinViewerDialog()
     assert dlg.canvas_loading_visible() is False
@@ -633,7 +633,7 @@ def test_protein_viewer_canvas_load_overlay_nests(qapp):  # noqa: ARG001
 
 
 def test_protein_embed_set_payload_quiets_resize(qapp):  # noqa: ARG001
-    from molmanager.ui.protein_embed import ProteinEmbedView
+    from mctoolkit.ui.protein_embed import ProteinEmbedView
 
     view = ProteinEmbedView()
     view.set_payload({"models": []})
@@ -647,9 +647,9 @@ def test_protein_embed_set_payload_quiets_resize(qapp):  # noqa: ARG001
 
 
 def test_open_protein_viewer_shows_before_session_restore(qapp, tmp_path, monkeypatch):
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.protein_embed import ProteinEmbedView
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.protein_embed import ProteinEmbedView
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     monkeypatch.setattr(ProteinEmbedView, "_ensure_web", lambda self: None)
 
@@ -683,8 +683,8 @@ def test_open_protein_viewer_shows_before_session_restore(qapp, tmp_path, monkey
 
 
 def test_open_protein_viewer_empty_releases_start_overlay(qapp, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.protein_embed import ProteinEmbedView
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.protein_embed import ProteinEmbedView
 
     monkeypatch.setattr(ProteinEmbedView, "_ensure_web", lambda self: None)
     w = ChemistryWorkspaceWindow()
@@ -698,8 +698,51 @@ def test_open_protein_viewer_empty_releases_start_overlay(qapp, monkeypatch):  #
     w.close()
 
 
+def test_reopen_protein_viewer_after_close_rebuilds_canvas(qapp, tmp_path, monkeypatch):
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.protein_embed import ProteinEmbedView
+
+    monkeypatch.setattr(ProteinEmbedView, "_ensure_web", lambda self: None)
+    src = tmp_path / "mini.pdb"
+    src.write_text(_MINI_PDB, encoding="utf-8")
+    w = ChemistryWorkspaceWindow()
+    dlg = w.open_protein_viewer()
+    dlg.add_structure_path(src, refit=True)
+    dlg._suppress_close_prompt = True
+    dlg.close()
+    qapp.processEvents()
+    assert not dlg.isVisible()
+    assert dlg.viewer._bootstrapped is False
+    assert dlg._canvas_bootstrapped is False
+    again = w.open_protein_viewer()
+    qapp.processEvents()
+    assert again is dlg
+    assert again.isVisible()
+    assert again._canvas_bootstrapped is True
+    assert [slot.name for slot in again._slots] == ["mini.pdb"]
+    again._suppress_close_prompt = True
+    again.close()
+    w.close()
+
+
+def test_protein_embed_shutdown_web_allows_another_bootstrap(qapp):  # noqa: ARG001
+    from mctoolkit.ui.protein_embed import ProteinEmbedView
+
+    view = ProteinEmbedView()
+    view._bootstrapped = True
+    view._web_ready = True
+    view.shutdown_web()
+    assert view._bootstrapped is False
+    assert view._web_ready is False
+    assert view._web_shutdown is True
+    view.prepare_to_show()
+    view.show()
+    assert view._web_shutdown is False
+    view.deleteLater()
+
+
 def test_atom_pick_selects_individual_atom(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "mini.pdb"
     path.write_text(_MINI_PDB, encoding="utf-8")
@@ -758,7 +801,7 @@ def test_atom_pick_selects_individual_atom(qapp, tmp_path):  # noqa: ARG001
 def test_edit_structure_two_atom_pick_and_atom_delete(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QMenuBar, QMessageBox
 
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "mini.pdb"
     path.write_text(_MINI_PDB, encoding="utf-8")
@@ -808,7 +851,7 @@ def test_edit_structure_two_atom_pick_and_atom_delete(qapp, tmp_path, monkeypatc
 def test_delete_selected_residue_ligand_and_undo(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QMessageBox
 
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "mini.pdb"
     path.write_text(_MINI_PDB, encoding="utf-8")
@@ -847,7 +890,7 @@ def test_delete_selected_residue_ligand_and_undo(qapp, tmp_path, monkeypatch):  
 
 
 def test_sequence_delete_is_undoable(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "mini.pdb"
     path.write_text(_MINI_PDB, encoding="utf-8")
@@ -885,6 +928,36 @@ def test_pocket_view_plan_near_ligand_residues_and_polar_h():
         for line in plan.polar_h_pdb.splitlines()
         if line.startswith(("ATOM", "HETATM"))
     )
+    ser_h = [
+        (line[12:16].strip(), float(line[30:38]), float(line[38:46]), float(line[46:54]))
+        for line in plan.polar_h_pdb.splitlines()
+        if line.startswith(("ATOM", "HETATM"))
+        and line[76:78].strip() == "H"
+        and line[17:20].strip() == "SER"
+    ]
+    assert ser_h
+    assert all(name == "H" for name, _x, _y, _z in ser_h)
+    og = (3.350, 1.400, 0.000)
+    assert any(
+        (x - og[0]) ** 2 + (y - og[1]) ** 2 + (z - og[2]) ** 2 <= 1.2**2 for _name, x, y, z in ser_h
+    )
+
+
+def test_pocket_view_plan_adds_residue_polar_h_when_only_ligand_has_hydrogens():
+    pdb = _POCKET_PDB.replace(
+        "HETATM  101  O1  LIG A  99       5.400   1.400   0.200  1.00  0.00           O\nEND",
+        "HETATM  101  O1  LIG A  99       5.400   1.400   0.200  1.00  0.00           O\n"
+        "HETATM  102  HO1 LIG A  99       5.900   2.100   0.200  1.00  0.00           H\nEND",
+    )
+    plan = pocket_view_plan(pdb, "pdb")
+    assert plan is not None
+    h_rows = [
+        (line[17:20].strip(), line[12:16].strip())
+        for line in plan.polar_h_pdb.splitlines()
+        if line.startswith(("ATOM", "HETATM")) and line[76:78].strip() == "H"
+    ]
+    assert ("LIG", "HO1") in h_rows
+    assert any(resn == "SER" for resn, _name in h_rows)
 
 
 def test_pocket_view_plan_keeps_only_polar_hydrogens():
@@ -908,16 +981,19 @@ def test_protein_viewer_html_draws_heteroatom_polar_hydrogens():
     assert "polarHeavyAtom" in html
     assert "showPolarHydrogen" in html
     assert "foundPolar" in html
+    assert "pocketResAtoms" in html
+    assert "restylePocketHModel" in html
     assert "keepH: true" in html
     assert "normalizeHydrogenElements" in html
     assert "attachHydrogensToHeavies" in html
     assert "showHydrogenParent" in html
     assert "{stick: {radius: 0.12, hidden: false}, sphere: {scale: 0.16, hidden: false}}" in html
     assert "v.setStyle({model: mid}, {hidden: true})" not in html
+    assert "!atomLooksHidden(at) && visibleHeavies[residueResKey(at)]" not in html
 
 
 def test_protein_menu_opens_viewer(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     labels = [a.text().replace("&", "") for a in w.menuBar().actions()]
@@ -936,8 +1012,48 @@ def test_protein_menu_opens_viewer(qapp):  # noqa: ARG001
     w.close()
 
 
+def test_viewer_simulate_menu_has_dock_ligand(qapp, monkeypatch):  # noqa: ARG001
+    from PySide6.QtWidgets import QMenuBar
+
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
+
+    dlg = ProteinViewerDialog()
+    mb = dlg.findChild(QMenuBar)
+    tools_menu = qt_submenu(mb, "Tools")
+    sim_menu = qt_submenu(tools_menu, "Simulate")
+    sim_labels = [a.text().replace("&", "") for a in sim_menu.actions() if a.text().strip()]
+    assert sim_labels[0] == "Dock Ligand"
+    assert any(label.startswith("MM-GBSA") for label in sim_labels)
+    assert any("Dynamics" in label for label in sim_labels)
+    dock_menu = qt_submenu(sim_menu, "Dock Ligand")
+    dock_labels = [a.text().replace("&", "") for a in dock_menu.actions() if a.text().strip()]
+    assert dock_labels == ["Prepare", "Gnina…", "Pose Browser"]
+    prepare_menu = qt_submenu(dock_menu, "Prepare")
+    prep_labels = [a.text().replace("&", "") for a in prepare_menu.actions() if a.text().strip()]
+    assert prep_labels == ["PDBQT…", "Receptor PDB…"]
+    assert dlg._act_dock_viewer is not None
+    assert not dlg._act_dock_viewer.isEnabled()
+    dlg.close()
+
+    w = ChemistryWorkspaceWindow()
+    hosted = ProteinViewerDialog(w)
+    called: list[str] = []
+    monkeypatch.setattr(w, "open_gnina_dock", lambda: called.append("gnina"))
+    monkeypatch.setattr(w, "open_dock_prepare", lambda: called.append("pdbqt"))
+    monkeypatch.setattr(w, "open_dock_prepare_pdb", lambda: called.append("pdb"))
+    monkeypatch.setattr(w, "open_dock_results_viewer", lambda: called.append("poses"))
+    hosted.open_gnina_dock()
+    hosted.open_dock_prepare()
+    hosted.open_dock_prepare_pdb()
+    hosted.open_dock_results_viewer()
+    assert called == ["gnina", "pdbqt", "pdb", "poses"]
+    hosted.close()
+    w.close()
+
+
 def test_log_reaches_window_bottom_with_manager(qapp):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     dlg = ProteinViewerDialog()
     dlg.resize(1180, 760)
@@ -956,7 +1072,7 @@ def test_log_reaches_window_bottom_with_manager(qapp):  # noqa: ARG001
 def test_manager_hide_select_delete(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QMessageBox
 
-    from molmanager.ui.protein_viewer import _ID_ROLE, ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import _ID_ROLE, ProteinViewerDialog
 
     path = tmp_path / "mini.pdb"
     path.write_text(_MINI_PDB, encoding="utf-8")
@@ -1039,7 +1155,7 @@ def test_manager_hide_select_delete(qapp, tmp_path, monkeypatch):  # noqa: ARG00
 def test_manager_delete_undo_redo(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QMenuBar, QMessageBox
 
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "mini.pdb"
     path.write_text(_MINI_PDB, encoding="utf-8")
@@ -1085,7 +1201,7 @@ def test_manager_context_menu_duplicate(qapp, tmp_path, monkeypatch):  # noqa: A
     from PySide6.QtCore import QPoint, Qt
     from PySide6.QtWidgets import QMenu
 
-    from molmanager.ui.protein_viewer import _ID_ROLE, ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import _ID_ROLE, ProteinViewerDialog
 
     path = tmp_path / "mini.pdb"
     path.write_text(_MINI_PDB, encoding="utf-8")
@@ -1146,7 +1262,7 @@ def test_manager_context_menu_duplicate(qapp, tmp_path, monkeypatch):  # noqa: A
 
 
 def test_manager_named_groups(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import (
+    from mctoolkit.ui.protein_viewer import (
         USER_GROUP_KIND,
         _GROUP_ROLE,
         _ID_ROLE,
@@ -1256,7 +1372,7 @@ def test_manager_named_groups(qapp, tmp_path):  # noqa: ARG001
 
 
 def test_unscoped_component_id():
-    from molmanager.ui.protein_viewer_models import unscoped_component_id
+    from mctoolkit.ui.protein_viewer_models import unscoped_component_id
 
     assert unscoped_component_id("s0:ligand:A:AXI:2000") == "ligand:A:AXI:2000"
     assert unscoped_component_id("s12:polymer:A") == "polymer:A"
@@ -1268,7 +1384,7 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QMenuBar
 
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "mini.pdb"
     path.write_text(_MINI_PDB, encoding="utf-8")
@@ -1284,7 +1400,7 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
     assert "Sequence" not in labels
     tools_menu = qt_submenu(mb, "Tools")
     tools_labels = [a.text().replace("&", "") for a in tools_menu.actions() if a.text().strip()]
-    assert tools_labels[:2] == ["Prepare", "Pharmacophore"]
+    assert tools_labels[:3] == ["Prepare", "Simulate", "Pharmacophore"]
     corner = mb.cornerWidget(Qt.TopRightCorner)
     assert corner is not None
     assert dlg._btn_sequence is not None
@@ -1400,7 +1516,7 @@ def test_sequence_window_select_and_edit(qapp, tmp_path):  # noqa: ARG001
 
 
 def test_reset_camera_restores_loaded_styles(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "reset.pdb"
     path.write_text(_POCKET_PDB, encoding="utf-8")
@@ -1431,7 +1547,7 @@ def test_reset_camera_restores_loaded_styles(qapp, tmp_path):  # noqa: ARG001
 
 
 def test_reset_camera_keeps_styles_from_load_menus(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "reset_menu.pdb"
     path.write_text(_MINI_PDB, encoding="utf-8")
@@ -1452,7 +1568,7 @@ def test_reset_camera_keeps_styles_from_load_menus(qapp, tmp_path):  # noqa: ARG
 
 
 def test_pocket_view_menu_builds_overlay(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "pocket.pdb"
     path.write_text(_POCKET_PDB, encoding="utf-8")
@@ -1490,7 +1606,7 @@ def test_pocket_view_menu_builds_overlay(qapp, tmp_path):  # noqa: ARG001
 
 
 def test_normalize_pocket_surface_settings():
-    from molmanager.ui.dialogs.protein_pocket_surface import (
+    from mctoolkit.ui.dialogs.protein_pocket_surface import (
         DEFAULT_POCKET_SURFACE_SETTINGS,
         normalize_pocket_surface_settings,
     )
@@ -1517,8 +1633,8 @@ def test_normalize_pocket_surface_settings():
 def test_pocket_surface_menu_toggle(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QMessageBox
 
-    from molmanager.ui.dialogs.protein_pocket_surface import ProteinPocketSurfaceDialog
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.dialogs.protein_pocket_surface import ProteinPocketSurfaceDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     shown: list[str] = []
 
@@ -1591,7 +1707,7 @@ def test_pocket_surface_menu_toggle(qapp, tmp_path, monkeypatch):  # noqa: ARG00
 
 
 def test_hbond_menu_filters_kinds(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     pdb = """\
 ATOM      1  C   ALA A   1      -1.240   0.150   0.000  1.00  0.00           C
@@ -1645,7 +1761,7 @@ def test_dock_pose_hides_crystal_ligand_contacts(qapp, tmp_path):  # noqa: ARG00
     from rdkit import Chem
     from rdkit.Geometry import Point3D
 
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     pdb = """\
 ATOM      1  N   ALA A   1      -1.240   0.150   0.000  1.00  0.00           N
@@ -1700,8 +1816,8 @@ END
 
 
 def test_interaction_menu_toggles_prolif_families(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.protein.protein_interactions import FAMILY_HYDROPHOBIC
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.protein.protein_interactions import FAMILY_HYDROPHOBIC
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     pdb = """\
 ATOM      1  C   ALA A   1      -1.240   0.150   0.000  1.00  0.00           C
@@ -1733,7 +1849,7 @@ END
 
 
 def test_complex_load_enables_protein_ligand_interactions(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     apo = tmp_path / "apo.pdb"
     apo.write_text(
@@ -1790,7 +1906,7 @@ END
 
 
 def test_multi_file_session_and_prepare_overlay(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     a = tmp_path / "first.pdb"
     b = tmp_path / "second.pdb"
@@ -1822,7 +1938,7 @@ def test_multi_file_session_and_prepare_overlay(qapp, tmp_path):  # noqa: ARG001
 
 
 def test_second_structure_appends_without_replacing_canvas(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     a = tmp_path / "first.pdb"
     b = tmp_path / "second.pdb"
@@ -1851,7 +1967,7 @@ def test_second_structure_appends_without_replacing_canvas(qapp, tmp_path, monke
 def test_delete_extra_structures_stops_overlay_work(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QMessageBox
 
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     files = []
     for name in ("one.pdb", "two.pdb", "three.pdb"):
@@ -1885,7 +2001,7 @@ def test_4agc_cif_axitinib_has_carbonyl_double():
     import pytest
     from rdkit import Chem
 
-    from molmanager.workers.protein_prepare_ligand import mol_from_cif_component
+    from mctoolkit.workers.protein_prepare_ligand import mol_from_cif_component
 
     path = Path("samples/4AGC.cif")
     if not path.is_file():
@@ -1903,7 +2019,7 @@ def test_4agc_cif_axitinib_has_carbonyl_double():
 def test_save_structure_writes_active_slot(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QFileDialog, QMenuBar
 
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     src = tmp_path / "mini.pdb"
     src.write_text(_MINI_PDB, encoding="utf-8")
@@ -1923,7 +2039,7 @@ def test_save_structure_writes_active_slot(qapp, tmp_path, monkeypatch):  # noqa
 
 
 def test_collect_session_state_keeps_manager_rows(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     first = tmp_path / "first.pdb"
     second = tmp_path / "second.pdb"
@@ -1959,7 +2075,7 @@ def test_collect_session_state_keeps_manager_rows(qapp, tmp_path):  # noqa: ARG0
 
 
 def test_save_to_session_is_required_for_cms(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     src = tmp_path / "mini.pdb"
     src.write_text(_MINI_PDB, encoding="utf-8")
@@ -1980,7 +2096,7 @@ def test_close_without_save_to_session_discards_live_viewer(qapp, tmp_path, monk
     from PySide6.QtGui import QCloseEvent
     from PySide6.QtWidgets import QMessageBox
 
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     first = tmp_path / "first.pdb"
     second = tmp_path / "second.pdb"
@@ -2013,7 +2129,7 @@ def test_close_save_to_session_commits_live_viewer(qapp, tmp_path, monkeypatch):
     from PySide6.QtGui import QCloseEvent
     from PySide6.QtWidgets import QMessageBox
 
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     src = tmp_path / "live.pdb"
     src.write_text(_MINI_PDB, encoding="utf-8")
@@ -2034,7 +2150,7 @@ def test_close_cancel_keeps_protein_viewer_open(qapp, tmp_path, monkeypatch):
     from PySide6.QtGui import QCloseEvent
     from PySide6.QtWidgets import QMessageBox
 
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     src = tmp_path / "mini.pdb"
     src.write_text(_MINI_PDB, encoding="utf-8")

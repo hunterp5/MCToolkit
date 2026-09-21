@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Calculate Descriptors must emit partial results when cancelled mid-ionization."""
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from molmanager.workers.chemistry_tools import CalcDescriptorsRequest, CalcWorker
-from molmanager.workers.signals import WorkerSignals
+from mctoolkit.workers.chemistry_tools import CalcDescriptorsRequest, CalcWorker
+from mctoolkit.workers.signals import WorkerSignals
 
 
 class _AlwaysCancelled:
@@ -49,15 +49,15 @@ def test_calc_worker_emits_partial_results_when_cancelled_during_ionization():
 
     with (
         patch(
-            "molmanager.workers.chemistry_descriptors.int_fns_need_ionization",
+            "mctoolkit.workers.chemistry_descriptors.int_fns_need_ionization",
             return_value=True,
         ),
         patch(
-            "molmanager.workers.chemistry_descriptors.build_microstates_cache_for_rows",
+            "mctoolkit.workers.chemistry_descriptors.build_microstates_cache_for_rows",
             return_value=partial_cache,
         ),
         patch(
-            "molmanager.workers.chemistry_descriptors._calc_descriptor_row_task",
+            "mctoolkit.workers.chemistry_descriptors._calc_descriptor_row_task",
             side_effect=lambda task: (task[0], {"LogD 7.4": f"val{task[0]}"}),
         ),
     ):

@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """PubChem similarity filtering and retrieve-field helpers."""
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from molmanager.ui.external.pubchem import (
+from mctoolkit.ui.external.pubchem import (
     FIELD_COMMON_NAME,
     FIELD_SYNONYMS,
     _PUBCHEM_FIELD_DEFS,
@@ -54,7 +54,7 @@ def test_extract_common_name_and_synonyms(monkeypatch) -> None:
         synonyms=["ethanol", "ethyl alcohol", "alcohol"],
     )
     monkeypatch.setattr(
-        "molmanager.ui.external.pubchem._compound_title",
+        "mctoolkit.ui.external.pubchem._compound_title",
         lambda _c: "Ethanol",
     )
     out = _extract_medchem_fields(comp, selected=["IUPAC", FIELD_COMMON_NAME, FIELD_SYNONYMS])
@@ -65,13 +65,13 @@ def test_extract_common_name_and_synonyms(monkeypatch) -> None:
 
 def test_extract_common_name_falls_back_to_first_synonym(monkeypatch) -> None:
     comp = SimpleNamespace(cid=1, synonyms=["trivial name", "other"])
-    monkeypatch.setattr("molmanager.ui.external.pubchem._compound_title", lambda _c: "")
+    monkeypatch.setattr("mctoolkit.ui.external.pubchem._compound_title", lambda _c: "")
     out = _extract_medchem_fields(comp, selected=[FIELD_COMMON_NAME])
     assert out[FIELD_COMMON_NAME] == "trivial name"
 
 
 def test_pubchem_dialog_has_name_checkboxes(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.external.pubchem import PubChemDialog
+    from mctoolkit.ui.external.pubchem import PubChemDialog
 
     dlg = PubChemDialog()
     assert FIELD_COMMON_NAME in dlg.field_checks

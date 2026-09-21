@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Superpose conformers (RDKit rdMolAlign) and packed-cell decode."""
 
@@ -23,12 +23,12 @@ import json
 
 from rdkit import Chem
 
-from molmanager.conformers.conformer_column_codec import (
+from mctoolkit.conformers.conformer_column_codec import (
     mol_from_packed_confs_cell,
     pack_confs_cell,
     unpack_confs_blocks_json_b64,
 )
-from molmanager.workers import (
+from mctoolkit.workers import (
     ConformerGenParams,
     run_conformer_generation,
     run_superpose_conformers,
@@ -172,7 +172,7 @@ def test_superpose_packed_cell_meta():
 
 
 def test_largest_vs_central_ring_atoms():
-    from molmanager.workers.superpose import (
+    from mctoolkit.workers.superpose import (
         _central_ring_atoms,
         _largest_ring_system_atoms,
     )

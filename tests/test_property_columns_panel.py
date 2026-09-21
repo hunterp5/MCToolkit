@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """PropertyColumnsPanel used by Browser-style viewers."""
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.ui.property_columns_panel import PropertyColumnsPanel
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.property_columns_panel import PropertyColumnsPanel
 
 
 def test_property_columns_panel_defaults_and_oid_values(qapp):  # noqa: ARG001
@@ -69,7 +69,7 @@ def test_property_columns_panel_defaults_and_oid_values(qapp):  # noqa: ARG001
 
 
 def test_molecule_viewer_has_settings_not_hide_options_button(qapp):  # noqa: ARG001
-    from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget, prepare_mol_2d
+    from mctoolkit.ui.mol_viewer_3d import Molecule3DViewerWidget, prepare_mol_2d
 
     m2 = prepare_mol_2d(Chem.MolFromSmiles("CCO"))
     assert m2 is not None
@@ -88,8 +88,8 @@ def test_molecule_viewer_has_settings_not_hide_options_button(qapp):  # noqa: AR
 def test_view_conformers_omits_property_column_pickers(qapp) -> None:  # noqa: ARG001
     from rdkit.Chem import AllChem
 
-    from molmanager.conformers.conformer_column_codec import conformer_mol_blocks_b64_json
-    from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget
+    from mctoolkit.conformers.conformer_column_codec import conformer_mol_blocks_b64_json
+    from mctoolkit.ui.mol_viewer_3d import Molecule3DViewerWidget
 
     mol = Chem.MolFromSmiles("CCO")
     AllChem.EmbedMultipleConfs(mol, numConfs=2, randomSeed=0xC0FFEE)
@@ -122,8 +122,8 @@ def test_view_conformers_omits_property_column_pickers(qapp) -> None:  # noqa: A
 def test_3d_viewer_property_timer_survives_widget_delete(qapp) -> None:
     import shiboken6
 
-    from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget, prepare_mol_3d
-    from molmanager.ui.qt_widget_utils import qobject_is_deleted
+    from mctoolkit.ui.mol_viewer_3d import Molecule3DViewerWidget, prepare_mol_3d
+    from mctoolkit.ui.qt_widget_utils import qobject_is_deleted
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]

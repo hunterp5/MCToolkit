@@ -1,30 +1,30 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
 import pytest
 
-from molmanager.services.sql_load_policy import (
+from mctoolkit.services.sql_load_policy import (
     engine_kwargs_for_sql_load,
     make_sqlite_read_only_creator,
     sql_looks_destructive,
     sqlite_database_path_from_url,
 )
-from molmanager.services.table_scope import collect_scoped_pairs, resolve_structure_row_for_oid
+from mctoolkit.services.table_scope import collect_scoped_pairs, resolve_structure_row_for_oid
 
 
 @pytest.mark.parametrize(

@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Protein Viewer Prepare pipeline (PDBFixer, pdb2pqr, OpenMM)."""
 
@@ -26,8 +26,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from molmanager.protein.structure_components import pdb_to_mmcif
-from molmanager.workers.protein_prepare_runtime import (
+from mctoolkit.protein.structure_components import pdb_to_mmcif
+from mctoolkit.workers.protein_prepare_runtime import (
     ProteinPrepareRequest,
     _gb_kappa_per_nm,
     _protein_ff_xmls,
@@ -117,25 +117,25 @@ def test_pdb2pqr_argv_includes_propka_and_ph():
 
 
 def test_openmm_platform_candidates_prefer_gpu(monkeypatch):
-    from molmanager.workers.protein_prepare_minimize import (
+    from mctoolkit.workers.protein_prepare_minimize import (
         _iter_openmm_platform_candidates,
         _openmm_platform_properties,
     )
 
-    monkeypatch.delenv("MOLMANAGER_OPENMM_PLATFORM", raising=False)
+    monkeypatch.delenv("MCTOOLKIT_OPENMM_PLATFORM", raising=False)
     monkeypatch.setattr(
-        "molmanager.workers.protein_prepare_minimize._openmm_platform_names",
+        "mctoolkit.workers.protein_prepare_minimize._openmm_platform_names",
         lambda: ["Reference", "CPU", "OpenCL"],
     )
     assert _iter_openmm_platform_candidates("auto") == ["OpenCL", "CPU"]
     monkeypatch.setattr(
-        "molmanager.workers.protein_prepare_minimize._openmm_platform_names",
+        "mctoolkit.workers.protein_prepare_minimize._openmm_platform_names",
         lambda: ["CPU", "CUDA", "OpenCL"],
     )
     assert _iter_openmm_platform_candidates("auto") == ["CUDA", "OpenCL", "CPU"]
     assert _iter_openmm_platform_candidates("CPU") == ["CPU"]
     monkeypatch.setattr(
-        "molmanager.workers.protein_prepare_minimize._openmm_platform_names",
+        "mctoolkit.workers.protein_prepare_minimize._openmm_platform_names",
         lambda: ["CPU", "OpenCL"],
     )
     assert _iter_openmm_platform_candidates("CUDA") == ["OpenCL", "CPU"]
@@ -145,7 +145,7 @@ def test_openmm_platform_candidates_prefer_gpu(monkeypatch):
 
 
 def test_drop_uncappable_polymer_residues_n_only_gln():
-    from molmanager.workers.protein_prepare_pdb2pqr import drop_uncappable_polymer_residues
+    from mctoolkit.workers.protein_prepare_pdb2pqr import drop_uncappable_polymer_residues
 
     stub = _ALA_PDB.replace(
         "END\n",
@@ -162,7 +162,7 @@ def test_drop_uncappable_polymer_residues_n_only_gln():
 
 def test_run_pdb2pqr_reports_chained_value_error(tmp_path, monkeypatch):
     pytest.importorskip("pdb2pqr")
-    from molmanager.workers.protein_prepare_pdb2pqr import _run_pdb2pqr
+    from mctoolkit.workers.protein_prepare_pdb2pqr import _run_pdb2pqr
 
     inner = ValueError(
         "Too few atoms present to reconstruct or cap residue GLN A 1169 in structure!"
@@ -182,7 +182,7 @@ def test_run_pdb2pqr_reports_chained_value_error(tmp_path, monkeypatch):
 
 def test_run_pdb2pqr_drops_uncappable_terminal_stub(tmp_path):
     pytest.importorskip("pdb2pqr")
-    from molmanager.workers.protein_prepare_pdb2pqr import _run_pdb2pqr
+    from mctoolkit.workers.protein_prepare_pdb2pqr import _run_pdb2pqr
 
     inp = tmp_path / "in.pdb"
     inp.write_text(
@@ -231,8 +231,8 @@ def test_mp_prepare_forwards_log_lines(tmp_path):
 
 
 def test_drain_prepare_log_file(tmp_path):
-    from molmanager.workers.protein_prepare import drain_prepare_log_file
-    from molmanager.workers.protein_prepare_io import append_prepare_log_file
+    from mctoolkit.workers.protein_prepare import drain_prepare_log_file
+    from mctoolkit.workers.protein_prepare_io import append_prepare_log_file
 
     path = tmp_path / "prepare.log"
     append_prepare_log_file(path, "PDBFixer: loading")
@@ -249,11 +249,11 @@ def test_drain_prepare_log_file(tmp_path):
     assert got[-1] == "OpenMM: minimizing"
 
 
-@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
-@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._prune_fixer_residues")
-@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+@patch("mctoolkit.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("mctoolkit.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._prune_fixer_residues")
+@patch("mctoolkit.workers.protein_prepare_runtime._open_fixer")
 def test_prepare_on_log_reports_major_steps(
     mock_open_fixer,
     _mock_prune,
@@ -292,11 +292,11 @@ def test_prepare_on_log_reports_major_steps(
     assert "Prepare finished" in text
 
 
-@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
-@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._prune_fixer_residues")
-@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+@patch("mctoolkit.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("mctoolkit.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._prune_fixer_residues")
+@patch("mctoolkit.workers.protein_prepare_runtime._open_fixer")
 def test_prepare_skips_pdb2pqr_when_protonate_false(
     mock_open_fixer,
     _mock_prune,
@@ -331,10 +331,10 @@ def test_prepare_skips_pdb2pqr_when_protonate_false(
     )
 
 
-@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
-@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+@patch("mctoolkit.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("mctoolkit.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._open_fixer")
 def test_prepare_skips_pdbfixer_when_repair_false(
     mock_open_fixer,
     mock_write_fixer,
@@ -380,12 +380,12 @@ def test_prepare_skips_pdbfixer_when_repair_false(
     assert "PDBFIXER SKIPPED" in written or "1 PDBFIXER SKIPPED" in written
 
 
-@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
-@patch("molmanager.workers.protein_prepare_runtime._drop_internal_missing_residues")
-@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._prune_fixer_residues")
-@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+@patch("mctoolkit.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("mctoolkit.workers.protein_prepare_runtime._drop_internal_missing_residues")
+@patch("mctoolkit.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._prune_fixer_residues")
+@patch("mctoolkit.workers.protein_prepare_runtime._open_fixer")
 def test_prepare_rebuilds_internal_loops_by_default(
     mock_open_fixer,
     mock_prune,
@@ -437,12 +437,12 @@ def test_prepare_rebuilds_internal_loops_by_default(
     assert "ALA" in written
 
 
-@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
-@patch("molmanager.workers.protein_prepare_runtime._drop_internal_missing_residues")
-@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._prune_fixer_residues")
-@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+@patch("mctoolkit.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("mctoolkit.workers.protein_prepare_runtime._drop_internal_missing_residues")
+@patch("mctoolkit.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._prune_fixer_residues")
+@patch("mctoolkit.workers.protein_prepare_runtime._open_fixer")
 def test_prepare_can_skip_internal_loops_and_min(
     mock_open_fixer,
     _mock_prune,
@@ -470,7 +470,7 @@ def test_prepare_can_skip_internal_loops_and_min(
     mock_drop_internal.assert_called_once_with(fixer)
     mock_min.assert_not_called()
     text = (tmp_path / "out.cif").read_text(encoding="utf-8")
-    assert "MOLMANAGER PROTEIN PREPARE" in text
+    assert "MCTOOLKIT PROTEIN PREPARE" in text
     assert "OPENMM MINIMIZATION SKIPPED" in text
 
 
@@ -553,7 +553,7 @@ def test_residues_to_drop_strips_additives_and_can_keep_metals():
 def test_drop_long_missing_gaps_skips_n_terminal_tag():
     from types import SimpleNamespace
 
-    from molmanager.workers.protein_prepare_qc import drop_long_missing_gaps
+    from mctoolkit.workers.protein_prepare_qc import drop_long_missing_gaps
 
     fixer = SimpleNamespace(
         missingResidues={(0, 0): ["GLY"] * 28, (0, 5): ["ALA", "SER"]},
@@ -567,7 +567,7 @@ def test_drop_long_missing_gaps_skips_n_terminal_tag():
 def test_apply_sequence_missing_residues_n_terminal_tag_is_a_long_gap():
     from types import SimpleNamespace
 
-    from molmanager.workers.protein_prepare_qc import (
+    from mctoolkit.workers.protein_prepare_qc import (
         apply_sequence_missing_residues,
         drop_long_missing_gaps,
     )
@@ -637,7 +637,7 @@ def test_remap_residue_keys_auth_chain_to_mmcif_label_chain():
 def test_apply_sequence_missing_residues_inserts_internal_gap():
     from types import SimpleNamespace
 
-    from molmanager.workers.protein_prepare_qc import apply_sequence_missing_residues
+    from mctoolkit.workers.protein_prepare_qc import apply_sequence_missing_residues
 
     pdb = """\
 SEQRES   1 A    3  MET ALA LEU
@@ -729,7 +729,7 @@ def _mock_gap_fixer():
 
 
 def test_apply_sequence_missing_residues_from_cif_scheme():
-    from molmanager.workers.protein_prepare_qc import apply_sequence_missing_residues
+    from mctoolkit.workers.protein_prepare_qc import apply_sequence_missing_residues
 
     fixer = _mock_gap_fixer()
     n_added = apply_sequence_missing_residues(fixer, _GAP_CIF, "cif")
@@ -738,7 +738,7 @@ def test_apply_sequence_missing_residues_from_cif_scheme():
 
 
 def test_ligand_chem_tables_keep_input_cif_doubles():
-    from molmanager.workers.protein_prepare_runtime import _ligand_chem_tables
+    from mctoolkit.workers.protein_prepare_runtime import _ligand_chem_tables
 
     _atoms, bonds = _ligand_chem_tables(
         _CIF_CARBONYL,
@@ -752,7 +752,7 @@ def test_ligand_chem_tables_keep_input_cif_doubles():
 
 
 def test_ligand_chem_tables_prefer_input_cif_over_rewritten():
-    from molmanager.workers.protein_prepare_runtime import _ligand_chem_tables
+    from mctoolkit.workers.protein_prepare_runtime import _ligand_chem_tables
 
     rewritten = _CIF_CARBONYL.replace("doub", "sing")
     _atoms, bonds = _ligand_chem_tables(
@@ -772,12 +772,12 @@ def test_residue_names_by_key_reads_cif_auth_ids():
     assert names[("A", "2002", "")] == "HOH"
 
 
-@patch("molmanager.workers.protein_prepare_ligand.prepare_ligands_for_gaff")
-@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
-@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._prune_fixer_residues")
-@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+@patch("mctoolkit.workers.protein_prepare_ligand.prepare_ligands_for_gaff")
+@patch("mctoolkit.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("mctoolkit.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._prune_fixer_residues")
+@patch("mctoolkit.workers.protein_prepare_runtime._open_fixer")
 def test_prepare_remaps_mmcif_ligand_chain_after_fixer(
     mock_open_fixer,
     mock_prune,
@@ -788,7 +788,7 @@ def test_prepare_remaps_mmcif_ligand_chain_after_fixer(
     tmp_path,
 ):
     """OpenMM writes AXI on label chain B; Prepare must look it up there, not auth A."""
-    from molmanager.protein.structure_components import atoms_to_mmcif, parse_structure_atoms
+    from mctoolkit.protein.structure_components import atoms_to_mmcif, parse_structure_atoms
 
     in_path = tmp_path / "in.cif"
     in_path.write_text(_HOLO_CIF, encoding="utf-8")
@@ -888,7 +888,7 @@ def test_finalize_prepared_structure_cif_ligand_and_water():
 
 
 def test_delete_cif_residues_drops_ligand():
-    from molmanager.protein.structure_components import delete_cif_residues, parse_structure_atoms
+    from mctoolkit.protein.structure_components import delete_cif_residues, parse_structure_atoms
 
     text = delete_cif_residues(_HOLO_CIF, {("A", "2000", "")})
     resns = {atom.resn for atom in parse_structure_atoms(text, "cif")}
@@ -900,7 +900,7 @@ def test_delete_cif_residues_drops_ligand():
 def test_ligand_bond_orders_from_smiles():
     from rdkit import Chem
 
-    from molmanager.workers.protein_prepare_ligand import (
+    from mctoolkit.workers.protein_prepare_ligand import (
         mol_from_ligand_pdb,
         prepare_ligands_for_gaff,
     )
@@ -942,7 +942,7 @@ END
 
 
 def test_prepare_ligands_for_gaff_cif_keeps_chem_comp_bond():
-    from molmanager.workers.protein_prepare_ligand import prepare_ligands_for_gaff
+    from mctoolkit.workers.protein_prepare_ligand import prepare_ligands_for_gaff
 
     mols, rewritten = prepare_ligands_for_gaff(
         _CIF_CARBONYL,
@@ -956,14 +956,14 @@ def test_prepare_ligands_for_gaff_cif_keeps_chem_comp_bond():
     assert "_atom_site." in rewritten
     assert "_chem_comp_bond.value_order" in rewritten
     assert "LIG" in rewritten
-    from molmanager.protein.structure_components import parse_cif_chem_comp_bonds
+    from mctoolkit.protein.structure_components import parse_cif_chem_comp_bonds
 
     bonds = parse_cif_chem_comp_bonds(rewritten).get("LIG") or ()
     assert any({b.atom_id_1, b.atom_id_2} == {"C80", "O81"} and b.order == 2 for b in bonds)
 
 
 def test_hetatm_line_keeps_pdb_resname_columns():
-    from molmanager.workers.protein_prepare_ligand import _hetatm_line
+    from mctoolkit.workers.protein_prepare_ligand import _hetatm_line
 
     line = _hetatm_line(2444, "O81", "AXI", "A", "2000", "", -26.050, -1.540, -9.129, "O")
     padded = line.ljust(80)
@@ -975,7 +975,7 @@ def test_hetatm_line_keeps_pdb_resname_columns():
 
 
 def test_ligand_blocks_drop_alternate_locations():
-    from molmanager.workers.protein_prepare_ligand import ligand_residue_blocks
+    from mctoolkit.workers.protein_prepare_ligand import ligand_residue_blocks
 
     pdb = """\
 HETATM    1  C1  LIG A   1       0.000   0.000   0.000  1.00  0.00           C
@@ -995,7 +995,7 @@ END
 def test_ligand_smiles_atom_count_mismatch():
     from rdkit import Chem
 
-    from molmanager.workers.protein_prepare_ligand import mol_from_ligand_pdb
+    from mctoolkit.workers.protein_prepare_ligand import mol_from_ligand_pdb
 
     block = """\
 HETATM    1  C   LIG A   1       0.000   0.000   0.000  1.00  0.00           C
@@ -1009,12 +1009,12 @@ END
         assert "atom count" in str(exc).lower()
 
 
-@patch("molmanager.workers.protein_prepare_ligand.prepare_ligands_for_gaff")
-@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
-@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._prune_fixer_residues")
-@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+@patch("mctoolkit.workers.protein_prepare_ligand.prepare_ligands_for_gaff")
+@patch("mctoolkit.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("mctoolkit.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._prune_fixer_residues")
+@patch("mctoolkit.workers.protein_prepare_runtime._open_fixer")
 def test_prepare_strips_ligand_after_propka_unless_kept(
     mock_open_fixer,
     mock_prune,
@@ -1098,12 +1098,12 @@ def test_prepare_strips_ligand_after_propka_unless_kept(
     assert mock_min.call_count == 2
 
 
-@patch("molmanager.workers.protein_prepare_ligand.prepare_ligands_for_gaff")
-@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
-@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._prune_fixer_residues")
-@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+@patch("mctoolkit.workers.protein_prepare_ligand.prepare_ligands_for_gaff")
+@patch("mctoolkit.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("mctoolkit.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._prune_fixer_residues")
+@patch("mctoolkit.workers.protein_prepare_runtime._open_fixer")
 def test_prepare_gaff2_keeps_ligand_in_openmm(
     mock_open_fixer,
     _mock_prune,
@@ -1158,11 +1158,11 @@ def test_prepare_gaff2_keeps_ligand_in_openmm(
     assert "AXI" in out.read_text(encoding="utf-8")
 
 
-@patch("molmanager.workers.protein_prepare_runtime._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._run_pdb2pqr")
-@patch("molmanager.workers.protein_prepare_runtime._write_fixer_pdb")
-@patch("molmanager.workers.protein_prepare_runtime._prune_fixer_residues")
-@patch("molmanager.workers.protein_prepare_runtime._open_fixer")
+@patch("mctoolkit.workers.protein_prepare_runtime._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._run_pdb2pqr")
+@patch("mctoolkit.workers.protein_prepare_runtime._write_fixer_pdb")
+@patch("mctoolkit.workers.protein_prepare_runtime._prune_fixer_residues")
+@patch("mctoolkit.workers.protein_prepare_runtime._open_fixer")
 def test_prepare_cif_input_keeps_cif_work_files(
     mock_open_fixer,
     _mock_prune,
@@ -1203,7 +1203,7 @@ def test_prepare_cif_input_keeps_cif_work_files(
     assert text.lstrip().startswith("data_")
     assert "_atom_site." in text
     assert "REMARK   4" not in text
-    assert "MOLMANAGER PROTEIN PREPARE" in text
+    assert "MCTOOLKIT PROTEIN PREPARE" in text
     mock_pqr.assert_called_once()
     mock_min.assert_called_once()
 
@@ -1211,7 +1211,7 @@ def test_prepare_cif_input_keeps_cif_work_files(
 @patch("pdb2pqr.main.run_pdb2pqr")
 def test_run_pdb2pqr_cif_output_wraps_pdb_dump(mock_run, tmp_path):
     pytest.importorskip("pdb2pqr")
-    from molmanager.workers.protein_prepare_runtime import _run_pdb2pqr
+    from mctoolkit.workers.protein_prepare_runtime import _run_pdb2pqr
 
     inp = tmp_path / "repaired.cif"
     inp.write_text(_ALA_CIF, encoding="utf-8")
@@ -1238,7 +1238,7 @@ def test_run_pdb2pqr_cif_output_wraps_pdb_dump(mock_run, tmp_path):
 def test_open_fixer_does_not_lock_source_cif(tmp_path):
     pytest.importorskip("pdbfixer")
     pytest.importorskip("openmm")
-    from molmanager.workers.protein_prepare_runtime import _open_fixer
+    from mctoolkit.workers.protein_prepare_runtime import _open_fixer
 
     path = tmp_path / "in.cif"
     path.write_text(_ALA_CIF, encoding="utf-8")
@@ -1249,7 +1249,7 @@ def test_open_fixer_does_not_lock_source_cif(tmp_path):
 
 
 def test_prepare_water_keys_from_manager_selection(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "holo.pdb"
     path.write_text(_HOLO_PDB, encoding="utf-8")
@@ -1267,8 +1267,8 @@ def test_prepare_water_keys_from_manager_selection(qapp, tmp_path):  # noqa: ARG
 def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QGroupBox, QMenuBar, QMessageBox, QTextEdit
 
-    from molmanager.ui.protein_prepare_dialog import ProteinPrepareDialog
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_prepare_dialog import ProteinPrepareDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     dlg = ProteinViewerDialog()
     mb = dlg.findChild(QMenuBar)
@@ -1409,7 +1409,7 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
 
     dlg.open_pdbfixer_dialog()
     fixer = dlg._pdbfixer_dialog
-    from molmanager.ui.dialogs.protein_pdbfixer import ProteinPdbFixerDialog
+    from mctoolkit.ui.dialogs.protein_pdbfixer import ProteinPdbFixerDialog
 
     assert isinstance(fixer, ProteinPdbFixerDialog)
     assert fixer.windowTitle() == "PDBFixer"
@@ -1437,7 +1437,7 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
 
     dlg.open_pdb2pqr_dialog()
     pqr = dlg._pdb2pqr_dialog
-    from molmanager.ui.dialogs.protein_pdb2pqr import ProteinPdb2pqrDialog
+    from mctoolkit.ui.dialogs.protein_pdb2pqr import ProteinPdb2pqrDialog
 
     assert isinstance(pqr, ProteinPdb2pqrDialog)
     assert pqr.windowTitle() == "pdb2pqr"
@@ -1467,7 +1467,7 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
 
 
 def test_prepare_dialogs_use_manager_or_file_source(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     manager_path = tmp_path / "manager.pdb"
     manager_path.write_text(_ALA_PDB, encoding="utf-8")
@@ -1516,14 +1516,14 @@ def test_prepare_protein_structure_ala_optional_extras(tmp_path):
     text = Path(out.output_path).read_text(encoding="utf-8")
     assert "data_" in text
     assert "ALA" in text
-    from molmanager.protein.structure_components import parse_structure_atoms
+    from mctoolkit.protein.structure_components import parse_structure_atoms
 
     atoms = parse_structure_atoms(text, "cif")
     assert any(a.elem == "H" for a in atoms), "expected pdb2pqr to place hydrogens"
 
 
 def test_pdb_to_mmcif_keeps_ligand_chem_comp_bonds():
-    from molmanager.protein.structure_components import (
+    from mctoolkit.protein.structure_components import (
         CifChemAtom,
         CifChemBond,
         parse_cif_chem_comp_bonds,
@@ -1567,7 +1567,7 @@ END
 def _acetic_ensemble_near_ph_7_4():
     from rdkit import Chem
 
-    from molmanager.ionization.unipka_ensembles import LN10, build_ensemble_from_scored
+    from mctoolkit.ionization.unipka_ensembles import LN10, build_ensemble_from_scored
 
     ha = Chem.MolFromSmiles("CC(=O)O")
     a = Chem.MolFromSmiles("CC(=O)[O-]")
@@ -1585,7 +1585,7 @@ def test_choose_ligand_protomer_aqueous_acetic_acid():
     from rdkit import Chem
     from rdkit.Chem import rdmolops
 
-    from molmanager.workers.protein_prepare_ligand import choose_ligand_protomer
+    from mctoolkit.workers.protein_prepare_ligand import choose_ligand_protomer
 
     parent = Chem.MolFromSmiles("CC(=O)O")
     choice = choose_ligand_protomer(parent, ph=7.4, ensemble=_acetic_ensemble_near_ph_7_4())
@@ -1598,7 +1598,7 @@ def test_pocket_coulomb_prefers_neutral_near_anion():
     from rdkit import Chem
     from rdkit.Chem import rdmolops
 
-    from molmanager.workers.protein_prepare_ligand import choose_ligand_protomer
+    from mctoolkit.workers.protein_prepare_ligand import choose_ligand_protomer
 
     parent = Chem.MolFromSmiles("CC(=O)O")
     # Nearby negative charge at the carboxylate should penalize acetate.
@@ -1623,7 +1623,7 @@ def test_pocket_coulomb_prefers_anion_near_cation():
     from rdkit import Chem
     from rdkit.Chem import rdmolops
 
-    from molmanager.workers.protein_prepare_ligand import choose_ligand_protomer
+    from mctoolkit.workers.protein_prepare_ligand import choose_ligand_protomer
 
     parent = Chem.MolFromSmiles("CC(=O)O")
     pqr = "ATOM      1  NH1 ARG A   2       2.160  -1.080   3.000  1.0000 1.50\n"
@@ -1640,7 +1640,7 @@ def test_pocket_coulomb_prefers_anion_near_cation():
 
 
 def test_parse_pqr_atoms_and_mol2_roundtrip(tmp_path):
-    from molmanager.workers.protein_prepare_ligand import (
+    from mctoolkit.workers.protein_prepare_ligand import (
         parse_pqr_atoms,
         prepare_ligands_for_gaff,
         write_ligand_mol2,
@@ -1713,8 +1713,8 @@ LIG C80 O81 doub
 
 
 def test_prepare_dialog_cif_bonds_count_as_ligand_template(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_prepare_dialog import ProteinPrepareDialog
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_prepare_dialog import ProteinPrepareDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "lig.cif"
     path.write_text(_CIF_CARBONYL, encoding="utf-8")
@@ -1733,8 +1733,8 @@ def test_prepare_dialog_cif_bonds_count_as_ligand_template(qapp, tmp_path):  # n
 def test_prepare_dialog_requires_smiles_for_holo_protonation(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QMessageBox
 
-    from molmanager.ui.protein_prepare_dialog import ProteinPrepareDialog
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_prepare_dialog import ProteinPrepareDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     path = tmp_path / "holo.pdb"
     path.write_text(_HOLO_PDB, encoding="utf-8")
@@ -1771,7 +1771,7 @@ def test_gb_kappa_and_ff_xmls_prefer_gbn2():
 
 
 def test_solvent_label_and_minimize_remark_include_gbsa():
-    from molmanager.workers.protein_prepare_runtime import _solvent_label
+    from mctoolkit.workers.protein_prepare_runtime import _solvent_label
 
     assert (
         _solvent_label(("amber14-all.xml", "implicit/gbn2.xml"), used_gb=True, used_salt=True)
@@ -1798,7 +1798,7 @@ def test_protein_only_system_tries_gbn2_first(monkeypatch):
     monkeypatch.setattr("openmm.app.ForceField", _FakeFF)
     pdb = MagicMock()
     pdb.topology = MagicMock()
-    from molmanager.workers.protein_prepare_runtime import _protein_only_system
+    from mctoolkit.workers.protein_prepare_runtime import _protein_only_system
 
     with pytest.raises(RuntimeError, match="could not parameterize"):
         _protein_only_system(pdb, keep_water=False)
@@ -1809,7 +1809,7 @@ def test_protein_only_system_tries_gbn2_first(monkeypatch):
 def test_chem_comp_tables_from_mols_keeps_carbonyl_double():
     from rdkit import Chem
 
-    from molmanager.workers.protein_prepare_ligand import chem_comp_tables_from_mols
+    from mctoolkit.workers.protein_prepare_ligand import chem_comp_tables_from_mols
 
     mol = Chem.MolFromSmiles("CC(=O)O")
     assert mol is not None
@@ -1819,7 +1819,7 @@ def test_chem_comp_tables_from_mols_keeps_carbonyl_double():
 
 
 def test_highest_occupancy_altloc_keeps_major_copy():
-    from molmanager.workers.protein_prepare_qc import apply_highest_occupancy_altlocs
+    from mctoolkit.workers.protein_prepare_qc import apply_highest_occupancy_altlocs
 
     pdb = """\
 ATOM      1  CA  SER A  10       1.000   0.000   0.000  0.40 20.00           C
@@ -1834,8 +1834,8 @@ END
 
 
 def test_highest_occupancy_altloc_preserves_cif_poly_seq():
-    from molmanager.protein.structure_inventory import polymer_sequence_entries
-    from molmanager.workers.protein_prepare_qc import (
+    from mctoolkit.protein.structure_inventory import polymer_sequence_entries
+    from mctoolkit.workers.protein_prepare_qc import (
         apply_highest_occupancy_altlocs,
         apply_sequence_missing_residues,
     )
@@ -1857,7 +1857,7 @@ def test_highest_occupancy_altloc_preserves_cif_poly_seq():
 def test_4agc_cif_sequence_gaps_survive_altloc_pass():
     from pathlib import Path
 
-    from molmanager.workers.protein_prepare_qc import (
+    from mctoolkit.workers.protein_prepare_qc import (
         apply_highest_occupancy_altlocs,
         apply_sequence_missing_residues,
     )
@@ -1867,7 +1867,7 @@ def test_4agc_cif_sequence_gaps_survive_altloc_pass():
         pytest.skip("samples/4AGC.cif is not present")
     pytest.importorskip("pdbfixer")
     pytest.importorskip("openmm")
-    from molmanager.workers.protein_prepare_io import _open_fixer_from_text
+    from mctoolkit.workers.protein_prepare_io import _open_fixer_from_text
 
     raw = path.read_text(encoding="utf-8")
     rewritten, _notes = apply_highest_occupancy_altlocs(raw, "cif")
@@ -1880,7 +1880,7 @@ def test_4agc_cif_sequence_gaps_survive_altloc_pass():
 
 
 def test_bridging_water_keys_near_ligand():
-    from molmanager.workers.protein_prepare_qc import bridging_water_keys
+    from mctoolkit.workers.protein_prepare_qc import bridging_water_keys
 
     pdb = """\
 HETATM    1  C1  LIG A   1       0.000   0.000   0.000  1.00 10.00           C
@@ -1894,7 +1894,7 @@ END
 
 
 def test_pocket_titration_remarks_lists_nearby_his():
-    from molmanager.workers.protein_prepare_qc import pocket_titration_remarks
+    from mctoolkit.workers.protein_prepare_qc import pocket_titration_remarks
 
     pdb = """\
 ATOM      1  CA  HID A  10       1.000   0.000   0.000  1.00 20.00           C
@@ -1910,7 +1910,7 @@ END
 def test_restrain_atom_backbone_and_ligand():
     from types import SimpleNamespace
 
-    from molmanager.workers.protein_prepare_qc import restrain_atom
+    from mctoolkit.workers.protein_prepare_qc import restrain_atom
 
     chain = SimpleNamespace(id="A")
     ala = SimpleNamespace(name="ALA", id="10", insertionCode="", chain=chain)
@@ -1929,9 +1929,9 @@ def test_restrain_atom_backbone_and_ligand():
 
 
 def test_prepare_dialog_enables_open_smina_without_receptor(qapp):  # noqa: ARG001
-    from molmanager.docking.search_box import DockingBox
-    from molmanager.ui.dialogs.protein_prepare import ProteinPrepareDialog
-    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+    from mctoolkit.docking.search_box import DockingBox
+    from mctoolkit.ui.dialogs.protein_prepare import ProteinPrepareDialog
+    from mctoolkit.workers.protein_prepare_smina import ProteinPrepareResult
 
     dlg = ProteinPrepareDialog(None)
     dlg.show()
@@ -1950,7 +1950,7 @@ def test_prepare_dialog_enables_open_smina_without_receptor(qapp):  # noqa: ARG0
 
 
 def test_prepare_tool_dialogs_close_after_finished(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     monkeypatch.setattr(ProteinViewerDialog, "_overlay_prepared_path", lambda *a, **k: None)
     monkeypatch.setattr(ProteinViewerDialog, "_on_structure_minimized", lambda *a, **k: None)
@@ -1990,10 +1990,10 @@ def test_dock_file_dialog_defaults_and_auto_open_smina(qapp, tmp_path, monkeypat
 
     from PySide6.QtWidgets import QMessageBox
 
-    from molmanager.docking.search_box import DockingBox
-    from molmanager.ui.dialogs.protein_dock_file import ProteinDockFileDialog
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
-    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+    from mctoolkit.docking.search_box import DockingBox
+    from mctoolkit.ui.dialogs.protein_dock_file import ProteinDockFileDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.workers.protein_prepare_smina import ProteinPrepareResult
 
     dlg = ProteinViewerDialog()
     shown: list[str] = []

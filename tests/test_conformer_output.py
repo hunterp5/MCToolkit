@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Conformer export helpers."""
 
@@ -22,11 +22,11 @@ from pathlib import Path
 
 from rdkit import Chem
 
-from molmanager.conformers.conformer_output import (
+from mctoolkit.conformers.conformer_output import (
     iter_single_conformer_mols,
     write_conformer_results_to_sdf,
 )
-from molmanager.workers import ConformerGenParams, pack_confs_cell, run_conformer_generation
+from mctoolkit.workers import ConformerGenParams, pack_confs_cell, run_conformer_generation
 
 
 def test_iter_single_conformer_mols_splits_ensemble():

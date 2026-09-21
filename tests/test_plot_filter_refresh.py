@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Open plots follow the table filter's visible row set."""
 
@@ -22,13 +22,13 @@ from rdkit import Chem
 
 from PySide6.QtWidgets import QWidget
 
-from molmanager.analysis.dimensionality_reduction import (
+from mctoolkit.analysis.dimensionality_reduction import (
     DimensionReductionResult,
     subset_dimension_reduction_result,
 )
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.ui.plot_table_sync import visible_oids_for_plot
-from molmanager.ui.widgets import FilterCard
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.plot_table_sync import visible_oids_for_plot
+from mctoolkit.ui.widgets import FilterCard
 
 
 def _setup_two_row_mw_table(w: ChemistryWorkspaceWindow) -> None:
@@ -182,7 +182,7 @@ def test_subset_dimension_reduction_result_keeps_visible_oids() -> None:
 
 
 def test_embedding_collect_ignores_table_filter(qapp):  # noqa: ARG001
-    from molmanager.ui.data_analysis import table_to_dataframe
+    from mctoolkit.ui.data_analysis import table_to_dataframe
 
     w = ChemistryWorkspaceWindow()
     _setup_two_row_mw_table(w)

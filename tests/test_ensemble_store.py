@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Compact ensemble codec and disk-backed EnsembleStore."""
 
@@ -21,14 +21,14 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Geometry import Point3D
 
-from molmanager.conformers.conformer_column_codec import (
+from mctoolkit.conformers.conformer_column_codec import (
     demote_v1_cell_to_sidecar,
     mol_from_packed_confs_cell,
     pack_confs_cell,
     rehydrate_v1_confs_cell,
 )
-from molmanager.conformers.ensemble_binary_codec import pack_ensemble_mol, unpack_ensemble_mol
-from molmanager.storage import EnsembleStore, ensure_confs_sidecar
+from mctoolkit.conformers.ensemble_binary_codec import pack_ensemble_mol, unpack_ensemble_mol
+from mctoolkit.storage import EnsembleStore, ensure_confs_sidecar
 
 
 def _ethanol_ensemble(n: int = 3) -> Chem.Mol:
@@ -104,7 +104,7 @@ def test_ensure_confs_sidecar_upgrades_dict():
 
 
 def test_ensemble_mol_for_reads_sqlite_path():
-    from molmanager.storage import ensemble_mol_for
+    from mctoolkit.storage import ensemble_mol_for
 
     mol = _ethanol_ensemble(3)
     store = EnsembleStore()
@@ -120,9 +120,9 @@ def test_ensemble_mol_for_reads_sqlite_path():
 
 
 def test_write_ensemble_worker_results_stores_mol(qapp):  # noqa: ARG001
-    from molmanager.conformers.conformer_column_codec import unpack_confs_blocks_json_b64
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.main_window.conformer_writeback import write_ensemble_worker_results
+    from mctoolkit.conformers.conformer_column_codec import unpack_confs_blocks_json_b64
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window.conformer_writeback import write_ensemble_worker_results
 
     mol = _ethanol_ensemble(2)
     w = ChemistryWorkspaceWindow()
@@ -143,7 +143,7 @@ def test_write_ensemble_worker_results_stores_mol(qapp):  # noqa: ARG001
 
 
 def test_superpose_row_task_fetches_by_oid():
-    from molmanager.workers.superpose import SuperposeParams, _superpose_row_task
+    from mctoolkit.workers.superpose import SuperposeParams, _superpose_row_task
 
     mol = _ethanol_ensemble(3)
     store = EnsembleStore()
@@ -173,7 +173,7 @@ def test_ensemble_store_batches_commits_and_still_reads():
         assert got.GetNumConformers() == 2
         assert (0, "confs") in store
         path = store.db_path
-        from molmanager.storage import ensemble_mol_for
+        from mctoolkit.storage import ensemble_mol_for
 
         other = ensemble_mol_for(path, 40, "confs", min_conformers=2)
         assert other is not None

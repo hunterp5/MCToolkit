@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Descriptor worker process-pool thresholds and batched fingerprint calculation."""
 
@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.platform_support.config import load_config
-from molmanager.chem.rdkit_fingerprints import int_fns_include_fingerprints
-from molmanager.workers.chemistry_descriptors import (
+from mctoolkit.platform_support.config import load_config
+from mctoolkit.chem.rdkit_fingerprints import int_fns_include_fingerprints
+from mctoolkit.workers.chemistry_descriptors import (
     _descriptor_output_headers,
     _descriptor_process_pool_min_rows,
     _mp_calc_descriptor_batch,
@@ -48,7 +48,7 @@ def test_descriptor_pool_min_rows_pharm2d_is_two():
 
 
 def test_descriptor_pool_min_rows_plain_descriptors_use_default(monkeypatch):
-    monkeypatch.setenv("MOLMANAGER_DESCRIPTOR_PROCESS_POOL_MIN_ROWS", "999")
+    monkeypatch.setenv("MCTOOLKIT_DESCRIPTOR_PROCESS_POOL_MIN_ROWS", "999")
     cfg = load_config()
     assert _descriptor_process_pool_min_rows(cfg, ["MolWt"]) == 999
 
@@ -73,11 +73,11 @@ def test_descriptor_output_headers_appends_shared_pka_column() -> None:
 
 
 def test_calc_descriptor_row_values_adds_pka_from_ensemble() -> None:
-    from molmanager.ionization.unipka_ensembles import (
+    from mctoolkit.ionization.unipka_ensembles import (
         PicklableIonizationEnsemble,
         PicklableIonizationMicrostate,
     )
-    from molmanager.workers.chemistry_descriptors import _calc_descriptor_row_values
+    from mctoolkit.workers.chemistry_descriptors import _calc_descriptor_row_values
 
     mol = Chem.MolFromSmiles("CCO")
     ens = PicklableIonizationEnsemble(

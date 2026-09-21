@@ -1,0 +1,691 @@
+# This file is part of MCToolkit.
+# Copyright (C) 2026 Hunter Picard
+#
+# MCToolkit is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# MCToolkit is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+
+"""CMS session async restore, finalize steps, and workspace reveal."""
+
+from __future__ import annotations
+
+from contextlib import suppress
+import logging
+import sys
+import time
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QApplication, QMessageBox
+
+from ..analysis.mmp_session import deserialize_mmp_ledger_payload
+from ..conformers.conformer_column_codec import deserialize_confs_sidecar
+from ..docking.pose_file_io import deserialize_dock_results_payload
+from ..ionization.microstate_cache import restore_ionization_sidecar
+from ..platform_support.config import load_config
+from ..storage import ensure_confs_sidecar, load_mols_from_parse_result, reset_mol_store
+from ..table.session_codec import (
+    SESSION_ENSEMBLES_KEY,
+    expand_session_document,
+    parse_session_global_bounds,
+)
+from ..workers.session_rows_parse import (
+    SessionRowsParseResult,
+    SessionRowsParseSignals,
+    SessionRowsParseWorker,
+)
+from .strings import LOADING_DETAIL_SESSION, TOOL_RENDER_2D, loaded_session_status
+from .threadpool_access import start_runnable_on_app_pool
+from .widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
+
+logger = logging.getLogger(__name__)
+
+
+class SessionRestore:
+    def _append_filter_widget(self, card, *, title: str | None = None) -> None:
+        if title:
+            card.set_filter_title(str(title))
+        else:
+            from .filters.cards import next_default_filter_title
+
+            card.set_filter_title(next_default_filter_title(self._app.filters, type(card)))
+        card.changed.connect(self._app.apply_filters)
+        card.removed.connect(lambda c=card: self._app.remove_filter(c))
+        self._app.f_container.addWidget(card)
+        self._app.filters.append(card)
+        self._app._sync_filter_panel_scroll_content()
+
+    def _apply_session_document(self, doc: dict) -> None:
+        try:
+            doc = expand_session_document(doc)
+        except ValueError as exc:
+            raise ValueError(str(exc) or "Unsupported session format.") from exc
+        if not self._session_format_ok(doc.get("format")) or not self._session_version_ok(
+            doc.get("version")
+        ):
+            raise ValueError("Unsupported session format.")
+        self._app._session_mutation_paused = True
+        self._app._pending_session_clean_on_ready = True
+        self._app._session_restore_ctx = None
+        self._app._session_finalize_ctx = None
+        self._app._session_parse_busy = False
+        self._app._session_awaiting_ready = False
+        self._app._session_waiting_for_render = False
+        self._app._session_plot_wait_deadline = None
+        self._discard_floating_plot_dialogs()
+        self._app.clear_all()
+        self._app._session_hold_workspace_surfaces = True
+        # clear_all() bumps the load generation; capture after that so callbacks match.
+        self._app._session_load_generation = (
+            int(getattr(self._app, "_session_load_generation", 0)) + 1
+        )
+        gen = self._app._session_load_generation
+        self._app._set_ingest_loading(True)
+        self._app._set_workspace_stack_index(0)
+        self._app._loading_detail.setText(LOADING_DETAIL_SESSION)
+        self._app.status_label.setText("Loading session…")
+        headers = doc.get("headers") or ["ID_HIDDEN", "Structure", "SMILES"]
+        if len(headers) < 2 or headers[0] != "ID_HIDDEN" or headers[1] != "Structure":
+            raise ValueError("Invalid session headers.")
+        self._app.headers = list(headers)
+        self._app._structure_field_override = doc.get("structure_field_override")
+        self._app.zoomed_ids = set(int(x) for x in (doc.get("zoomed_ids") or []) if x is not None)
+        self._app.table.setSortingEnabled(False)
+        self._app._table_model.clear_rows()
+        self._app._table_model.set_headers(list(self._app.headers))
+        layout_early = doc.get("table_layout")
+        if isinstance(layout_early, dict):
+            pix_cols = layout_early.get("pixmap_columns")
+            if isinstance(pix_cols, list):
+                for name in pix_cols:
+                    if (
+                        isinstance(name, str)
+                        and name in self._app.headers
+                        and name not in ("ID_HIDDEN", "Structure")
+                    ):
+                        self._app._table_model.register_pixmap_column(name)
+        self._app.table.setColumnHidden(0, True)
+        reset_mol_store(self._app)
+        self._app._clear_filter_target_smiles_cache()
+        self._app.global_bounds = {}
+        rows = doc.get("rows") or []
+        try:
+            self._app.table.setUpdatesEnabled(False)
+        except Exception:
+            pass
+
+        if not rows:
+            self._begin_session_finalize(doc, -1, gen=gen)
+        else:
+            self._app._loading_detail.setText(f"Parsing structures…\n0 / {len(rows):,} rows")
+            self._app.status_label.setText(f"Loading session… (parsing {len(rows):,} rows)")
+            self._app._session_parse_busy = True
+            signals = SessionRowsParseSignals(self._app)
+
+            def _on_parsed(result, g=gen, d=doc) -> None:
+                self._on_session_rows_parsed(result, g, d)
+
+            def _on_failed(message, g=gen) -> None:
+                self._on_session_rows_parse_failed(message, g)
+
+            worker = SessionRowsParseWorker(
+                list(rows),
+                data_headers=list(self._app.headers[2:]),
+                signals=signals,
+                generation=gen,
+                structure_smiles=list(doc.get("structure_smiles") or []),
+                structure_mols=list(doc.get("structure_mols") or []),
+            )
+            # Pytest has no lasting event-loop turn for threadpool completions; parse inline.
+            if "pytest" in sys.modules:
+                signals.finished.connect(_on_parsed, type=Qt.DirectConnection)
+                signals.failed.connect(_on_failed, type=Qt.DirectConnection)
+                worker.run()
+            else:
+                signals.finished.connect(_on_parsed, type=Qt.QueuedConnection)
+                signals.failed.connect(_on_failed, type=Qt.QueuedConnection)
+                start_runnable_on_app_pool(self._app, worker)
+
+        # Tests call apply synchronously; drain until async restore finishes.
+        if "pytest" in sys.modules:
+            self._drain_pending_session_load()
+
+    def _drain_pending_session_load(self, *, timeout_s: float = 60.0) -> None:
+        """Process Qt events until session parse/apply/finalize complete."""
+        deadline = time.monotonic() + float(timeout_s)
+        while time.monotonic() < deadline:
+            busy = bool(getattr(self._app, "_session_parse_busy", False))
+            busy = busy or getattr(self._app, "_session_restore_ctx", None) is not None
+            busy = busy or getattr(self._app, "_csv_session_ctx", None) is not None
+            busy = busy or getattr(self._app, "_session_finalize_ctx", None) is not None
+            busy = busy or bool(getattr(self._app, "_session_awaiting_ready", False))
+            if not busy:
+                return
+            QApplication.processEvents()
+            time.sleep(0.001)
+        raise TimeoutError("Timed out waiting for session restore to finish.")
+
+    def _session_gui_chunk_size(self) -> int:
+        cfg = load_config()
+        return max(64, int(cfg.session_gui_chunk_size), int(cfg.ingest_gui_chunk_size))
+
+    def _on_session_rows_parse_failed(self, message: str, generation: int) -> None:
+        if generation != getattr(self._app, "_session_load_generation", 0):
+            return
+        self._app._session_parse_busy = False
+        self._app._session_awaiting_ready = False
+        self._app._session_waiting_for_render = False
+        self._app._session_hold_workspace_surfaces = False
+        self._show_session_workspace_when_ready()
+        try:
+            self._app.table.setUpdatesEnabled(True)
+        except Exception:
+            pass
+        self._app._set_ingest_loading(False)
+        self._app._session_mutation_paused = False
+        self._app._pending_session_clean_on_ready = False
+        self._app._set_workspace_stack_index(1)
+        QMessageBox.warning(self._app, "Open Session", message or "Session row parse failed.")
+
+    def _on_session_rows_parsed(self, result: object, generation: int, doc: dict) -> None:
+        if generation != getattr(self._app, "_session_load_generation", 0):
+            return
+        self._app._session_parse_busy = False
+        if not isinstance(result, SessionRowsParseResult):
+            self._on_session_rows_parse_failed("Invalid session parse result.", generation)
+            return
+        prepared = list(result.prepared_rows or [])
+        load_mols_from_parse_result(self._app, result)
+        if not prepared:
+            self._begin_session_finalize(doc, int(result.max_id), gen=generation)
+            return
+        chunk = self._session_gui_chunk_size()
+        self._app._session_restore_ctx = {
+            "gen": generation,
+            "doc": doc,
+            "prepared_rows": prepared,
+            "idx": 0,
+            "chunk": chunk,
+            "max_id": int(result.max_id),
+        }
+        n = len(prepared)
+        self._app.status_label.setText(f"Loading session… (0/{n} rows)")
+        self._app._loading_detail.setText(f"Loading session…\n0 / {n:,} rows")
+        QTimer.singleShot(0, self._session_restore_apply_step)
+
+    def _session_restore_apply_step(self) -> None:
+        ctx = getattr(self._app, "_session_restore_ctx", None)
+        if not ctx or ctx.get("gen") != getattr(self._app, "_session_load_generation", 0):
+            try:
+                self._app.table.setUpdatesEnabled(True)
+            except Exception:
+                pass
+            return
+        prepared = ctx["prepared_rows"]
+        doc = ctx["doc"]
+        i = int(ctx["idx"])
+        chunk = int(ctx["chunk"])
+        max_id = int(ctx["max_id"])
+        n = len(prepared)
+        end = min(i + chunk, n)
+        batch = prepared[i:end]
+        if batch:
+            self._app._table_model.append_rows_batch(batch)
+        ctx["idx"] = end
+        self._app.status_label.setText(f"Loading session… ({end}/{n} rows)")
+        self._app._loading_detail.setText(f"Loading session…\n{end:,} / {n:,} rows")
+        if end < n:
+            QTimer.singleShot(0, self._session_restore_apply_step)
+            return
+        self._app._session_restore_ctx = None
+        self._app._loading_detail.setText(
+            f"Session loaded ({n:,} row(s)).\nRestoring filters and workspace…"
+        )
+        self._begin_session_finalize(doc, max_id, gen=int(ctx["gen"]))
+
+    def _begin_session_finalize(self, doc: dict, max_id: int, *, gen: int) -> None:
+        self._app._session_finalize_ctx = {
+            "gen": int(gen),
+            "doc": doc,
+            "max_id": int(max_id),
+            "step": 0,
+        }
+        QTimer.singleShot(0, self._session_finalize_step)
+
+    def _session_finalize_step(self) -> None:
+        ctx = getattr(self._app, "_session_finalize_ctx", None)
+        if not ctx or ctx.get("gen") != getattr(self._app, "_session_load_generation", 0):
+            return
+        doc = ctx["doc"]
+        max_id = int(ctx["max_id"])
+        step = int(ctx["step"])
+        try:
+            if step == 0:
+                self._app._loading_detail.setText("Preparing filters…")
+                want_next = int(doc.get("next_oid", max_id + 1))
+                self._app.next_oid = want_next if want_next > max_id else max_id + 1
+                saved_bounds = parse_session_global_bounds(doc.get("global_bounds"))
+                if saved_bounds:
+                    list_fn = getattr(self._app._table_model, "list_bounds_data_headers", None)
+                    if callable(list_fn):
+                        allowed = set(list_fn())
+                        saved_bounds = {
+                            key: meta for key, meta in saved_bounds.items() if key in allowed
+                        }
+                if saved_bounds:
+                    install = getattr(self._app._table_model, "install_numeric_bounds_cache", None)
+                    if callable(install):
+                        install(saved_bounds)
+                    self._app.global_bounds = dict(saved_bounds)
+                    refresh = getattr(self._app, "_refresh_bounds_on_filter_cards", None)
+                    if callable(refresh):
+                        refresh()
+                    self._session_finalize_after_bounds()
+                    return
+                self._app.calculate_global_bounds(
+                    on_complete=lambda: self._session_finalize_after_bounds()
+                )
+                return
+            if step == 1:
+                self._app._loading_detail.setText("Restoring workspace and plots…")
+                self._finalize_session_workspace_and_plots(doc)
+                ctx["step"] = 2
+                QTimer.singleShot(0, self._session_finalize_step)
+                return
+            if step == 2:
+                self._app._loading_detail.setText("Applying sort, colors, and filters…")
+                self._finalize_session_table_chrome(doc)
+                ctx["step"] = 3
+                QTimer.singleShot(0, self._session_finalize_step)
+                return
+            # step 3 — sidecars + reveal
+            self._app._loading_detail.setText("Restoring tool data…")
+            self._finalize_session_sidecars_and_reveal(doc)
+            self._app._session_finalize_ctx = None
+        except Exception:
+            self._app._session_finalize_ctx = None
+            self._app._session_awaiting_ready = False
+            self._app._session_waiting_for_render = False
+            self._app._session_hold_workspace_surfaces = False
+            self._show_session_workspace_when_ready()
+            try:
+                self._app.table.setUpdatesEnabled(True)
+            except Exception:
+                pass
+            self._app._set_ingest_loading(False)
+            self._app._session_mutation_paused = False
+            self._app._pending_session_clean_on_ready = False
+            self._app._set_workspace_stack_index(1)
+            raise
+
+    def _session_finalize_after_bounds(self) -> None:
+        """Continue finalize after filter bounds are ready (keeps overlay until table is usable)."""
+        ctx = getattr(self._app, "_session_finalize_ctx", None)
+        if not ctx or ctx.get("gen") != getattr(self._app, "_session_load_generation", 0):
+            return
+        if int(ctx.get("step", -1)) != 0:
+            return
+        doc = ctx["doc"]
+        max_id = int(ctx["max_id"])
+        self._app._loading_detail.setText("Restoring filters…")
+        self._finalize_session_filters(doc, max_id)
+        ctx["step"] = 1
+        QTimer.singleShot(0, self._session_finalize_step)
+
+    def _finalize_session_filters(self, doc: dict, max_id: int) -> None:
+        # next_oid is set before bounds complete in ``_session_finalize_step``.
+        _ = max_id
+        for spec in doc.get("filters") or []:
+            kind = spec.get("kind")
+            if kind == "substructure":
+                sources = ["Structure"]
+                get_srcs = getattr(self._app, "chemistry_tool_structure_sources", None)
+                if callable(get_srcs):
+                    sources = get_srcs() or sources
+                c = SubstructureFilterCard(structure_sources=sources)
+                self._append_filter_widget(c, title=str(spec.get("title") or "") or None)
+                c.set_smarts(str(spec.get("smarts", "") or ""))
+                c.set_structure_source(
+                    str(spec.get("structure_source", "Structure") or "Structure")
+                )
+                c.restore_filter_flags(
+                    bool(spec.get("enabled", True)), bool(spec.get("inverted", False))
+                )
+            elif kind == "range":
+                props = list(self._app.global_bounds.keys()) or ["SMILES"]
+                c = FilterCard(props, self._app)
+                self._append_filter_widget(c, title=str(spec.get("title") or "") or None)
+                p = str(spec.get("property", "") or "")
+                if p:
+                    try:
+                        c.restore_state(p, float(spec.get("min", 0)), float(spec.get("max", 0)))
+                    except Exception:
+                        pass
+                c.restore_filter_flags(
+                    bool(spec.get("enabled", True)), bool(spec.get("inverted", False))
+                )
+            elif kind == "text":
+                cols = self._app._filterable_data_column_names()
+                if not cols:
+                    cols = list(self._app.global_bounds.keys()) or ["SMILES"]
+                c = TextFilterCard(cols, self._app)
+                self._append_filter_widget(c, title=str(spec.get("title") or "") or None)
+                c.restore_from_session(
+                    str(spec.get("property", "") or ""),
+                    str(spec.get("text", "") or ""),
+                    case_sensitive=bool(spec.get("case_sensitive", False)),
+                    partial_match=bool(spec.get("partial_match", True)),
+                )
+                c.restore_filter_flags(
+                    bool(spec.get("enabled", True)), bool(spec.get("inverted", False))
+                )
+            elif kind == "category":
+                cols = self._app._filterable_data_column_names()
+                if not cols:
+                    cols = list(self._app.global_bounds.keys()) or ["SMILES"]
+                c = CategoryFilterCard(cols, self._app)
+                self._append_filter_widget(c, title=str(spec.get("title") or "") or None)
+                vals = spec.get("values")
+                if not isinstance(vals, list):
+                    vals = []
+                c.restore_from_session(str(spec.get("property", "") or ""), vals)
+                c.restore_filter_flags(
+                    bool(spec.get("enabled", True)), bool(spec.get("inverted", False))
+                )
+        self._app.f_panel.setVisible(bool(doc.get("filter_panel_visible", False)))
+
+    def _finalize_session_workspace_and_plots(self, doc: dict) -> None:
+        self._discard_docked_plot_widgets()
+        ws = self._workspace_layout_payload_from_session_doc(doc)
+        self._app._pending_session_workspace_layout = ws if isinstance(ws, dict) else None
+        self._app._pending_session_column_order = (
+            doc.get("column_logical_order")
+            if isinstance(doc.get("column_logical_order"), list)
+            else None
+        )
+        mgr = getattr(self._app, "_workspace_layout", None)
+        docked_payload = doc.get("docked_plots")
+        panes_data = docked_payload.get("panes") if isinstance(docked_payload, dict) else None
+        if not isinstance(panes_data, list):
+            panes_data = []
+        saved_layout = self._resolve_session_workspace_layout_id(docked_payload, panes_data)
+        if mgr is not None and saved_layout:
+            if mgr.layout_id != saved_layout:
+                mgr.apply_layout(saved_layout, preserve_plots=False)
+            if isinstance(ws, dict):
+                mgr.restore_splitter_sizes(ws)
+        elif mgr is not None and isinstance(ws, dict):
+            layout_id = ws.get("layout_id")
+            if isinstance(layout_id, str) and layout_id:
+                mgr.apply_layout(layout_id, preserve_plots=False)
+            mgr.restore_splitter_sizes(ws)
+        elif getattr(self._app, "_workspace_layout", None) is not None:
+            saved_w = doc.get("plot_panel_width")
+            if isinstance(saved_w, (int, float)) and saved_w > 0:
+                ensure = getattr(self._app, "_ensure_plot_panel_width", None)
+                if callable(ensure):
+                    QTimer.singleShot(0, lambda: ensure(int(saved_w)))
+        self._restore_docked_plots(docked_payload)
+        # Re-assert the saved layout id after docking so leftover stacked/side panes cannot stick.
+        if mgr is not None and saved_layout and mgr.layout_id != saved_layout:
+            mgr.apply_layout(saved_layout, preserve_plots=True)
+            if isinstance(ws, dict):
+                mgr.restore_splitter_sizes(ws)
+        self._restore_floating_plots(doc.get("floating_plots"))
+        self._restore_protein_viewer(doc.get("protein_viewer"))
+        self._hide_session_workspace_until_ready()
+        self._restore_pending_workspace_layout()
+        co = self._app._pending_session_column_order
+        if isinstance(co, list):
+            self._restore_column_visual_order([int(x) for x in co])
+
+    def _finalize_session_table_chrome(self, doc: dict) -> None:
+        sc = doc.get("sort_column")
+        self._app.table.setSortingEnabled(False)
+        if (
+            sc is not None
+            and isinstance(sc, int)
+            and 0 <= sc < self._app._table_model.columnCount()
+        ):
+            asc = bool(doc.get("sort_ascending", True))
+            mode = doc.get("sort_mode") or "auto"
+            if mode not in ("auto", "numeric", "alphabetic"):
+                mode = "auto"
+            self._app._table_model.sort(
+                sc, Qt.AscendingOrder if asc else Qt.DescendingOrder, sort_kind=mode
+            )
+            self._app._session_sort = {"column": sc, "ascending": asc, "mode": mode}
+        else:
+            self._app._session_sort = None
+        col_colors = doc.get("column_colors")
+        if isinstance(col_colors, dict):
+            self._app._table_model.restore_column_color_rules(col_colors)
+        log_cols = doc.get("logarithmic_columns") or []
+        self._app._logarithmic_columns = {
+            str(h) for h in log_cols if isinstance(h, str) and h in self._app.headers
+        }
+        self._app.apply_filters()
+        rows_n = self._app._table_model.rowCount()
+        self._app.status_label.setText(loaded_session_status(rows_n))
+        if getattr(self._app, "_sqlite_store", None) is not None:
+            self._app._sqlite_store_dirty = True
+
+    def _restore_mmp_ledger(self, payload) -> int:
+        """Restore last MMP run so Transform Ledger can reopen after Open Session."""
+        pairs, activity_column = deserialize_mmp_ledger_payload(payload)
+        try:
+            self._app._mmp_last_pairs = list(pairs)
+            self._app._mmp_last_activity_column = str(activity_column or "")
+        except (AttributeError, TypeError, RuntimeError):
+            return 0
+        dlg = getattr(self._app, "_mmp_ledger_dialog", None)
+        if dlg is not None and pairs:
+            with suppress(RuntimeError, TypeError, AttributeError):
+                dlg.set_pairs(pairs, activity_column=activity_column)
+        elif dlg is not None and not pairs:
+            with suppress(RuntimeError):
+                dlg.close()
+        return len(pairs)
+
+    def _restore_dock_results(self, payload) -> int:
+        """Restore last docking run so Pose Browser can reopen after Open Session."""
+        snap = deserialize_dock_results_payload(payload)
+        mols = list((snap or {}).get("mols") or [])
+        title = str((snap or {}).get("title") or "Pose browser")
+        rec = (snap or {}).get("receptor_path") if snap else None
+        xtal = (snap or {}).get("crystal_path") if snap else None
+        if not mols:
+            loader = getattr(self._app, "_mols_from_table_pose_columns", None)
+            if callable(loader):
+                try:
+                    mols = list(loader() or [])
+                except Exception:
+                    logger.exception("Failed to rebuild dock poses from table columns")
+                    mols = []
+        store = getattr(self._app, "_store_last_dock_results", None)
+        if callable(store):
+            store(mols, title=title, receptor_path=rec, crystal_path=xtal)
+            return len(mols)
+        try:
+            self._app._last_dock_results = (
+                {
+                    "mols": mols,
+                    "title": title,
+                    "receptor_path": rec,
+                    "crystal_path": xtal,
+                }
+                if mols
+                else None
+            )
+        except Exception:
+            return 0
+        return len(mols)
+
+    def _finalize_session_sidecars_and_reveal(self, doc: dict) -> None:
+        cs = ensure_confs_sidecar(self._app)
+        blob = doc.get(SESSION_ENSEMBLES_KEY)
+        if isinstance(blob, (bytes, bytearray)) and blob:
+            cs.import_sqlite_bytes(bytes(blob), replace=True)
+        side = deserialize_confs_sidecar(doc.get("confs_sidecar"))
+        if side:
+            cs.update(side)
+        self._app._pending_session_som_browse = doc.get("som_browse")
+        restore_ionization_sidecar(doc.get("ionization_sidecar"))
+        self._restore_mmp_ledger(doc.get("mmp_ledger"))
+        self._restore_dock_results(doc.get("dock_results"))
+        self._app._pending_session_table_layout = doc.get("table_layout")
+        self._restore_table_layout(self._app._pending_session_table_layout)
+        restore_search = getattr(self._app, "restore_table_search_session", None)
+        if callable(restore_search):
+            restore_search(doc.get("table_search"))
+        self._app._session_awaiting_ready = True
+        self._app._session_waiting_for_render = False
+        self._app._session_plot_wait_deadline = None
+        self._hide_session_workspace_until_ready()
+        self._deferred_session_post_load_follow_up()
+
+    def _reveal_table_after_session_prep(self) -> None:
+        """Leave the loading overlay once session rows, filters, and plots are ready."""
+        self._app._set_ingest_loading(False)
+        self._app._set_workspace_stack_index(1)
+        finish_clean = getattr(self._app, "_finish_session_clean_if_pending", None)
+        if callable(finish_clean):
+            finish_clean()
+        try:
+            self._app.table.setUpdatesEnabled(True)
+        except Exception:
+            pass
+        self._restore_pending_session_som_maps()
+        self._start_deferred_session_auto_render2d()
+
+    def _restore_pending_session_som_maps(self) -> None:
+        """Redraw SOM Map pixmaps after the overlay lifts so Open is not blocked on depictions."""
+        payload = getattr(self._app, "_pending_session_som_browse", None)
+        self._app._pending_session_som_browse = None
+        from .som_browser import restore_som_maps_for_session
+
+        restore_som_maps_for_session(self._app, payload)
+
+    def _start_deferred_session_auto_render2d(self) -> None:
+        """Start auto Render 2D after the workspace is shown so plot restore keeps the overlay."""
+        render = getattr(self._app, "_try_auto_render_all_structures_after_ingest", None)
+        if callable(render):
+            render()
+
+    def _hide_session_workspace_until_ready(self) -> None:
+        """Keep independent floating plot windows hidden until the workspace overlay lifts."""
+        if not getattr(self._app, "_session_hold_workspace_surfaces", False):
+            return
+        for dlg in self._iter_floating_plot_hosts():
+            try:
+                dlg.hide()
+            except RuntimeError:
+                pass
+
+    def _show_session_workspace_when_ready(self) -> None:
+        """Show restored floating plot windows and Search with the rest of the workspace."""
+        self._app._session_hold_workspace_surfaces = False
+        for dlg in self._iter_floating_plot_hosts():
+            try:
+                dlg.show()
+            except RuntimeError:
+                pass
+        panel = getattr(self._app, "_search_panel", None)
+        if panel is not None and getattr(self._app, "_session_search_want_visible", False):
+            try:
+                panel.setVisible(True)
+                populate = getattr(self._app, "_populate_table_search_columns_combo", None)
+                if callable(populate):
+                    populate()
+            except RuntimeError:
+                pass
+        self._app._session_search_want_visible = False
+
+    def _session_plot_host_waiting_for_web(self, host) -> bool:
+        """True when a restored plot still has a Plotly payload waiting on the WebEngine."""
+        stack = [host]
+        seen: set[int] = set()
+        while stack:
+            widget = stack.pop()
+            if widget is None:
+                continue
+            key = id(widget)
+            if key in seen:
+                continue
+            seen.add(key)
+            if hasattr(widget, "_web_ready") and not bool(getattr(widget, "_web_ready", False)):
+                if getattr(widget, "_pending_payload_json", None):
+                    return True
+            for attr in ("_plot_widget", "_panel", "_viewer_widget", "_view"):
+                child = getattr(widget, attr, None)
+                if child is not None:
+                    stack.append(child)
+        return False
+
+    def _session_plots_ready_for_reveal(self) -> bool:
+        """Do not stall overlay on Plotly WebEngine; widgets are already constructed."""
+        return True
+
+    def _session_on_render2d_batch_finished(self) -> None:
+        """Continue session reveal after auto Render 2D (or cancel) completes."""
+        if getattr(self._app, "_session_waiting_for_render", False):
+            self._app._session_waiting_for_render = False
+        if not getattr(self._app, "_session_awaiting_ready", False):
+            return
+        detail = getattr(self._app, "_loading_detail", None)
+        if detail is not None:
+            try:
+                detail.setText("Preparing plots…")
+            except RuntimeError:
+                pass
+        QTimer.singleShot(0, self._session_try_reveal_when_ready)
+
+    def _session_try_reveal_when_ready(self) -> None:
+        """Show the workspace after session prep; Plotly may still be drawing."""
+        if not getattr(self._app, "_session_awaiting_ready", False):
+            return
+        if getattr(self._app, "_session_waiting_for_render", False):
+            return
+        if not self._session_plots_ready_for_reveal():
+            detail = getattr(self._app, "_loading_detail", None)
+            if detail is not None:
+                try:
+                    detail.setText("Preparing plots…")
+                except RuntimeError:
+                    pass
+            QTimer.singleShot(50, self._session_try_reveal_when_ready)
+            return
+        self._app._session_awaiting_ready = False
+        self._app._session_plot_wait_deadline = None
+        self._show_session_workspace_when_ready()
+        self._restore_pending_workspace_layout()
+        self._reveal_table_after_session_prep()
+        rerun = getattr(self._app, "_rerun_restored_table_search", None)
+        if callable(rerun):
+            rerun()
+        finish = getattr(self, "_finish_deferred_session_workspace_restore", None)
+        if callable(finish):
+            QTimer.singleShot(0, finish)
+        n = self._app._table_model.rowCount()
+        cur = self._app.status_label.text() or ""
+        if TOOL_RENDER_2D in cur or "auto 2D render skipped" in cur:
+            return
+        self._app.status_label.setText(loaded_session_status(n) if n else "Ready.")
+
+    def _deferred_session_post_load_follow_up(self) -> None:
+        """Migrate packed ensembles, restore chrome, then reveal; auto-render 2D after overlay lifts."""
+        migrate = getattr(self._app, "_migrate_legacy_confs_cells_to_sidecar", None)
+        if callable(migrate):
+            migrate()
+        pending = getattr(self._app, "_pending_session_table_layout", None)
+        self._restore_pending_workspace_layout()
+        self._restore_session_table_chrome(pending)
+        self._session_try_reveal_when_ready()

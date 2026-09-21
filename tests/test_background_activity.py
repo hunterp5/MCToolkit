@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Background activity hub (Processes dialog rows)."""
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from molmanager.platform_support.tool_progress import ToolProgressState
-from molmanager.ui.background_activity import BackgroundActivityHub
+from mctoolkit.platform_support.tool_progress import ToolProgressState
+from mctoolkit.ui.background_activity import BackgroundActivityHub
 
 
 class _FakeProcessQueue:
@@ -186,7 +186,7 @@ def test_try_cancel_pq_running_leaves_overlay_render2d_alone(qapp) -> None:  # n
 
 
 def test_try_cancel_background_job(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.background_jobs import register_background_job
+    from mctoolkit.ui.background_jobs import register_background_job
 
     cancelled = {"n": 0}
 
@@ -211,7 +211,7 @@ def test_try_cancel_background_job(qapp) -> None:  # noqa: ARG001
 
 
 def test_try_cancel_background_job_without_cancel_callable(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.background_jobs import register_background_job
+    from mctoolkit.ui.background_jobs import register_background_job
 
     app = SimpleNamespace(
         process_queue=_FakeProcessQueue({"running": None, "queued": [], "fast_running": []}),

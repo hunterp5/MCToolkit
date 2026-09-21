@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Superpose distinct table structures (MCS / pattern / O3A)."""
 
@@ -21,7 +21,7 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.workers import (
+from mctoolkit.workers import (
     SuperposeStructuresParams,
     align_structure_onto_reference,
     run_superpose_structures,
@@ -143,7 +143,7 @@ def test_run_superpose_structures_2d_batch():
 
 
 def test_pack_mols_as_confs_cell_same_and_mixed_atom_counts():
-    from molmanager.conformers.conformer_column_codec import (
+    from mctoolkit.conformers.conformer_column_codec import (
         mol_from_packed_confs_cell,
         pack_mols_as_confs_cell,
         unpack_confs_blocks_json_b64,

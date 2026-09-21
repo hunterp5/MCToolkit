@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Vacuum GAFF/GAFF2 helpers for stochastic conformer generation."""
 
@@ -21,12 +21,12 @@ from __future__ import annotations
 import pytest
 from rdkit import Chem
 
-from molmanager.workers.chemistry_worker_common import (
+from mctoolkit.workers.chemistry_worker_common import (
     is_gaff_force_field,
     normalize_force_field,
 )
-from molmanager.workers.conformer_gaff import map_coords_by_element
-from molmanager.workers.protein_prepare_amber import ligand_only_leap_input
+from mctoolkit.workers.conformer_gaff import map_coords_by_element
+from mctoolkit.workers.protein_prepare_amber import ligand_only_leap_input
 
 
 def test_normalize_force_field_gaff_aliases() -> None:
@@ -88,7 +88,7 @@ def test_map_coords_by_element_count_mismatch() -> None:
 
 
 def test_run_conformer_generation_gaff2_uses_gaff_minimizer(monkeypatch) -> None:
-    from molmanager.workers import ConformerGenParams, run_conformer_generation
+    from mctoolkit.workers import ConformerGenParams, run_conformer_generation
 
     def fake_opt(mol, force_field, max_iterations, cancel_event=None):
         assert normalize_force_field(force_field) == "GAFF2"
@@ -98,7 +98,7 @@ def test_run_conformer_generation_gaff2_uses_gaff_minimizer(monkeypatch) -> None
         return [float(i) * 0.1 for i in range(n)], "GAFF2"
 
     monkeypatch.setattr(
-        "molmanager.workers.conformer_gaff.optimize_conformer_energies_gaff", fake_opt
+        "mctoolkit.workers.conformer_gaff.optimize_conformer_energies_gaff", fake_opt
     )
     m = Chem.MolFromSmiles("CCO")
     p = ConformerGenParams(
@@ -116,10 +116,10 @@ def test_run_conformer_generation_gaff2_uses_gaff_minimizer(monkeypatch) -> None
 
 
 def test_run_conformer_generation_gaff_requires_ambertools(monkeypatch) -> None:
-    from molmanager.workers import ConformerGenParams, run_conformer_generation
+    from mctoolkit.workers import ConformerGenParams, run_conformer_generation
 
     monkeypatch.setattr(
-        "molmanager.workers.protein_prepare_amber.ambertools_available",
+        "mctoolkit.workers.protein_prepare_amber.ambertools_available",
         lambda **_k: False,
     )
     m = Chem.MolFromSmiles("CCO")

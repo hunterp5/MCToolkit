@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """pKa worker helpers (no Uni-pKa model required)."""
 
@@ -21,16 +21,16 @@ from __future__ import annotations
 import pytest
 from rdkit import Chem
 
-from molmanager.ionization.unipka_ensembles import (
+from mctoolkit.ionization.unipka_ensembles import (
     PicklableIonizationEnsemble,
     PicklableIonizationMicrostate,
 )
-from molmanager.workers.pka_predictor import (
+from mctoolkit.workers.pka_predictor import (
     PKaPredictorSignals,
     PKaPredictorWorker,
     prepare_mol_for_ionization,
 )
-from molmanager.workers.signals import WorkerSignals
+from mctoolkit.workers.signals import WorkerSignals
 
 
 def _ensemble(*pkas: float, smiles: str = "CCO") -> PicklableIonizationEnsemble:
@@ -43,15 +43,15 @@ def _ensemble(*pkas: float, smiles: str = "CCO") -> PicklableIonizationEnsemble:
 @pytest.fixture(autouse=True)
 def _force_sequential_pka_worker(monkeypatch) -> None:
     """Keep pKa worker tests on the in-process path (mocked scorer), not a process pool."""
-    from molmanager.ionization import microstate_cache as mc
+    from mctoolkit.ionization import microstate_cache as mc
 
     mc.clear()
-    monkeypatch.setenv("MOLMANAGER_PKA_PROCESS_WORKERS", "1")
+    monkeypatch.setenv("MCTOOLKIT_PKA_PROCESS_WORKERS", "1")
     monkeypatch.setattr(
-        "molmanager.workers.ionization_parallel.plan_ionization_process_workers",
+        "mctoolkit.workers.ionization_parallel.plan_ionization_process_workers",
         lambda _n, _c: (False, 1),
     )
-    monkeypatch.setattr("molmanager.workers.pka_predictor.unipka_import_error", lambda: None)
+    monkeypatch.setattr("mctoolkit.workers.pka_predictor.unipka_import_error", lambda: None)
     yield
     mc.clear()
 
@@ -84,7 +84,7 @@ def test_pka_worker_emits_partial_results_on_cancel(monkeypatch) -> None:
         cancel.trigger()
         return _ensemble(7.1, 4.2)
 
-    monkeypatch.setattr("molmanager.workers.pka_predictor.predict_ionization_ensemble", _predict)
+    monkeypatch.setattr("mctoolkit.workers.pka_predictor.predict_ionization_ensemble", _predict)
     ws = WorkerSignals()
     ps = PKaPredictorSignals()
     partial: list[tuple[str, int, int]] = []
@@ -113,7 +113,7 @@ def test_pka_worker_deduplicates_identical_structures(monkeypatch) -> None:
         call_count += 1
         return _ensemble(7.0)
 
-    monkeypatch.setattr("molmanager.workers.pka_predictor.predict_ionization_ensemble", _predict)
+    monkeypatch.setattr("mctoolkit.workers.pka_predictor.predict_ionization_ensemble", _predict)
     ws = WorkerSignals()
     ps = PKaPredictorSignals()
     finished: list[list[tuple[int | None, str, str]]] = []
@@ -133,8 +133,8 @@ def test_pka_worker_deduplicates_identical_structures(monkeypatch) -> None:
 
 
 def test_pka_worker_reuses_session_cache(monkeypatch) -> None:
-    from molmanager.ionization import microstate_cache as mc
-    from molmanager.workers.structure_grouping import structure_key
+    from mctoolkit.ionization import microstate_cache as mc
+    from mctoolkit.workers.structure_grouping import structure_key
 
     mol = Chem.MolFromSmiles("CCO")
     assert mol is not None
@@ -147,7 +147,7 @@ def test_pka_worker_reuses_session_cache(monkeypatch) -> None:
         call_count += 1
         return _ensemble(0.0)
 
-    monkeypatch.setattr("molmanager.workers.pka_predictor.predict_ionization_ensemble", _predict)
+    monkeypatch.setattr("mctoolkit.workers.pka_predictor.predict_ionization_ensemble", _predict)
     ws = WorkerSignals()
     ps = PKaPredictorSignals()
     finished: list[list[tuple[int | None, str, str]]] = []
@@ -170,7 +170,7 @@ def test_pka_worker_reuses_session_cache(monkeypatch) -> None:
 
 def test_pka_worker_emits_include_pi_flag(monkeypatch) -> None:
     monkeypatch.setattr(
-        "molmanager.workers.pka_predictor.predict_ionization_ensemble",
+        "mctoolkit.workers.pka_predictor.predict_ionization_ensemble",
         lambda _mol: _ensemble(7.0),
     )
     ws = WorkerSignals()

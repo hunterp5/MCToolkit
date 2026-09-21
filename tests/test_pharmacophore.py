@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Pharmacophore JSON, RDKit BaseFeatures, AutoDock maps, and Gnina wiring."""
 
@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from molmanager.protein.pharmacophore import (
+from mctoolkit.protein.pharmacophore import (
     FORMAT_ID,
     Pharmacophore,
     PharmacophoreFeature,
@@ -128,7 +128,7 @@ def test_gnina_argv_omits_user_grid(tmp_path: Path, qapp):  # noqa: ARG001
     pytest.importorskip("PySide6.QtWidgets")
     from rdkit.Geometry import Point3D
 
-    from molmanager.ui.gnina_dock import GninaDockDialog
+    from mctoolkit.ui.gnina_dock import GninaDockDialog
 
     pharma = Pharmacophore()
     pharma.add_feature(feature_type="Donor", x=1.0, y=2.0, z=3.0)
@@ -186,7 +186,7 @@ def test_protein_viewer_pharmacophore_menu(qapp):  # noqa: ARG001
     pytest.importorskip("PySide6.QtWidgets")
     from PySide6.QtWidgets import QMenuBar
 
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     dlg = ProteinViewerDialog(None)
     mb = dlg.findChild(QMenuBar)
@@ -233,7 +233,7 @@ def test_protein_viewer_pharmacophore_menu(qapp):  # noqa: ARG001
 def test_pharmacophore_editor_row_ids_and_on_column(qapp):  # noqa: ARG001
     from PySide6.QtCore import Qt
 
-    from molmanager.ui.dialogs.protein_pharmacophore import ProteinPharmacophoreDialog
+    from mctoolkit.ui.dialogs.protein_pharmacophore import ProteinPharmacophoreDialog
 
     editor = ProteinPharmacophoreDialog()
     editor.set_features(
@@ -263,7 +263,7 @@ def test_pharmacophore_editor_row_ids_and_on_column(qapp):  # noqa: ARG001
 
 
 def test_pharmacophore_help_topic():
-    from molmanager.ui.user_guides import guide_html
+    from mctoolkit.ui.user_guides import guide_html
 
     h = guide_html("protein_pharmacophore")
     assert "Pharmacophore" in h
@@ -272,7 +272,7 @@ def test_pharmacophore_help_topic():
 
 
 def test_screen_mol_matches_ethanol_self_pharmacophore():
-    from molmanager.protein.pharmacophore_screen import screen_mol
+    from mctoolkit.protein.pharmacophore_screen import screen_mol
 
     mol = _ethanol_3d()
     feats = features_from_mol(mol)
@@ -288,7 +288,7 @@ def test_screen_mol_matches_ethanol_self_pharmacophore():
 
 
 def test_screen_mol_rejects_impossible_pair_distance():
-    from molmanager.protein.pharmacophore_screen import screen_mol
+    from mctoolkit.protein.pharmacophore_screen import screen_mol
 
     mol = _ethanol_3d()
     query = Pharmacophore(
@@ -305,7 +305,7 @@ def test_screen_mol_rejects_impossible_pair_distance():
 
 
 def test_screen_mol_requires_feature_atom_when_set():
-    from molmanager.protein.pharmacophore_screen import screen_mol
+    from mctoolkit.protein.pharmacophore_screen import screen_mol
 
     mol = _ethanol_3d()
     donor = next(f for f in features_from_mol(mol) if f.type == "Donor")
@@ -340,7 +340,7 @@ def test_screen_mol_requires_feature_atom_when_set():
 
 
 def test_screen_mol_skips_exclusion_volumes():
-    from molmanager.protein.pharmacophore_screen import screening_features, screen_mol
+    from mctoolkit.protein.pharmacophore_screen import screening_features, screen_mol
 
     mol = _ethanol_3d()
     donor = next(f for f in features_from_mol(mol) if f.type == "Donor")
@@ -357,11 +357,11 @@ def test_screen_mol_skips_exclusion_volumes():
 
 
 def test_screen_packed_ensemble_cell():
-    from molmanager.conformers.conformer_column_codec import (
+    from mctoolkit.conformers.conformer_column_codec import (
         mol_from_packed_confs_cell,
         pack_confs_cell,
     )
-    from molmanager.protein.pharmacophore_screen import screen_mol
+    from mctoolkit.protein.pharmacophore_screen import screen_mol
 
     mol = _ethanol_3d()
     packed_text = pack_confs_cell({"n": 1}, mol)
@@ -373,7 +373,7 @@ def test_screen_packed_ensemble_cell():
 
 
 def test_output_column_names():
-    from molmanager.protein.pharmacophore_screen import output_column_names
+    from mctoolkit.protein.pharmacophore_screen import output_column_names
 
     assert output_column_names("pharma") == (
         "pharmaMatch",
@@ -385,7 +385,7 @@ def test_output_column_names():
 
 def test_pharmacophore_screen_dialog_constructible(qapp):  # noqa: ARG001
     pytest.importorskip("PySide6.QtWidgets")
-    from molmanager.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
+    from mctoolkit.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
 
     dlg = PharmacophoreScreenDialog(None)
     assert dlg.windowTitle() == "Screen Pharmacophore"
@@ -397,10 +397,10 @@ def test_pharmacophore_screen_dialog_constructible(qapp):  # noqa: ARG001
 
 def test_pharmacophore_screen_dialog_closes_when_run_starts(qapp, tmp_path, monkeypatch):
     pytest.importorskip("PySide6.QtWidgets")
-    from molmanager.conformers.conformer_column_codec import pack_confs_cell
-    from molmanager.protein.pharmacophore import save_pharmacophore
-    from molmanager.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.conformers.conformer_column_codec import pack_confs_cell
+    from mctoolkit.protein.pharmacophore import save_pharmacophore
+    from mctoolkit.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     mol = _ethanol_3d()
     w = ChemistryWorkspaceWindow()
@@ -423,8 +423,8 @@ def test_pharmacophore_screen_dialog_closes_when_run_starts(qapp, tmp_path, monk
 
 def test_pharmacophore_screen_selects_hits_in_table(qapp):  # noqa: ARG001
     pytest.importorskip("PySide6.QtWidgets")
-    from molmanager.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.dialogs.pharmacophore_screen import PharmacophoreScreenDialog
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
@@ -463,7 +463,7 @@ def test_pharmacophore_screen_selects_hits_in_table(qapp):  # noqa: ARG001
 
 
 def test_pharmacophore_screen_help_topic():
-    from molmanager.ui.user_guides import guide_html
+    from mctoolkit.ui.user_guides import guide_html
 
     h = guide_html("tools_pharmacophore_screen")
     assert "Screen Pharmacophore" in h
@@ -473,7 +473,7 @@ def test_pharmacophore_screen_help_topic():
 
 
 def test_screen_one_worker_helper():
-    from molmanager.workers.pharmacophore_screen import _screen_one
+    from mctoolkit.workers.pharmacophore_screen import _screen_one
 
     mol = _ethanol_3d()
     query = Pharmacophore(features=features_from_mol(mol)).to_dict()
@@ -488,7 +488,7 @@ def test_screen_one_worker_helper():
 def test_docked_pose_match_is_protein_frame():
     from rdkit.Geometry import Point3D
 
-    from molmanager.protein.pharmacophore_screen import match_docked_pose, screen_mol
+    from mctoolkit.protein.pharmacophore_screen import match_docked_pose, screen_mol
 
     mol = _ethanol_3d()
     feats = features_from_mol(mol)
@@ -508,7 +508,7 @@ def test_docked_pose_match_is_protein_frame():
 
 
 def test_docked_pose_exclusion_rejects_heavy_atom():
-    from molmanager.protein.pharmacophore_screen import match_docked_pose
+    from mctoolkit.protein.pharmacophore_screen import match_docked_pose
 
     mol = _ethanol_3d()
     conf = mol.GetConformer()
@@ -531,7 +531,7 @@ def test_docked_pose_exclusion_rejects_heavy_atom():
 
 
 def test_docked_pose_exclusion_respects_atom():
-    from molmanager.protein.pharmacophore_screen import match_docked_pose
+    from mctoolkit.protein.pharmacophore_screen import match_docked_pose
 
     mol = _ethanol_3d()
     conf = mol.GetConformer()
@@ -570,7 +570,7 @@ def test_docked_pose_exclusion_respects_atom():
 def test_filter_docked_poses_keeps_only_matches():
     from rdkit.Geometry import Point3D
 
-    from molmanager.protein.pharmacophore_screen import (
+    from mctoolkit.protein.pharmacophore_screen import (
         POSE_PHARMA_MATCH_PROP,
         filter_docked_poses,
         match_docked_pose,

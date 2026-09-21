@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Bond highlight underlay sizing for multi-order bonds."""
 
@@ -21,9 +21,9 @@ from __future__ import annotations
 from PySide6.QtCore import QPoint
 from PySide6.QtGui import QColor, QImage, QPainter
 
-from molmanager.ui.sketcher.acs_style import acs_sketch_style
-from molmanager.ui.sketcher.bonds import _bond_make
-from molmanager.ui.sketcher.widget import SketchWidget
+from mctoolkit.ui.sketcher.acs_style import acs_sketch_style
+from mctoolkit.ui.sketcher.bonds import _bond_make
+from mctoolkit.ui.sketcher.widget import SketchWidget
 
 
 def test_bond_highlight_width_covers_multiple_bonds(qapp) -> None:  # noqa: ARG001

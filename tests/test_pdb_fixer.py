@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """PDBFixer receptor preparation for docking."""
 
@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from molmanager.workers.pdb_fixer_runtime import (
+from mctoolkit.workers.pdb_fixer_runtime import (
     PdbFixerRequest,
     _drop_internal_missing_residues,
     mp_prepare_pdb_for_docking,
@@ -104,7 +104,7 @@ def test_mp_prepare_pdb_for_docking_returns_error_message(tmp_path):
     assert "Input PDB not found" in msg
 
 
-@patch("molmanager.workers.pdb_fixer_runtime.prepare_pdb_for_docking")
+@patch("mctoolkit.workers.pdb_fixer_runtime.prepare_pdb_for_docking")
 def test_mp_prepare_pdb_for_docking_success(mock_prepare, tmp_path):
     out_path = tmp_path / "receptor_prepared.pdb"
     req = PdbFixerRequest(
@@ -117,10 +117,10 @@ def test_mp_prepare_pdb_for_docking_success(mock_prepare, tmp_path):
     mock_prepare.assert_called_once_with(req)
 
 
-@patch("molmanager.workers.pdb_fixer_runtime.prepare_pdb_for_docking")
+@patch("mctoolkit.workers.pdb_fixer_runtime.prepare_pdb_for_docking")
 def test_mp_prepare_pdb_for_docking_uses_runtime_module(mock_prepare, tmp_path):
     """Subprocess entry must live in a PyQt-free module."""
-    from molmanager.workers import pdb_fixer_runtime
+    from mctoolkit.workers import pdb_fixer_runtime
 
     assert pdb_fixer_runtime.__name__.endswith("pdb_fixer_runtime")
     req = PdbFixerRequest(

@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Compound-table Open / Import / Save format helpers."""
 
@@ -23,8 +23,8 @@ from pathlib import Path
 
 from rdkit import Chem
 
-from molmanager.table.text_file_ingest import find_smiles_column
-from molmanager.table.table_file_formats import (
+from mctoolkit.table.text_file_ingest import find_smiles_column
+from mctoolkit.table.table_file_formats import (
     TABLE_OPEN_FILTER,
     TABLE_SAVE_FILTER,
     iter_mol2_mols,
@@ -158,8 +158,8 @@ def test_openbabel_mol2_write_and_read(tmp_path: Path) -> None:
 
 
 def test_universal_load_smiles_and_gzip_csv(tmp_path: Path, qapp) -> None:  # noqa: ARG001
-    from molmanager.workers.load_render import UniversalLoadWorker
-    from molmanager.workers.signals import WorkerSignals
+    from mctoolkit.workers.load_render import UniversalLoadWorker
+    from mctoolkit.workers.signals import WorkerSignals
 
     smi = tmp_path / "set.smiles"
     smi.write_text("CCO\nc1ccccc1\n", encoding="utf-8")

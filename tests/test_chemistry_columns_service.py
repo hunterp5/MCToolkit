@@ -1,24 +1,24 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for pure chemistry column policy helpers."""
 
 from __future__ import annotations
 
-from molmanager.services.chemistry_columns import (
+from mctoolkit.services.chemistry_columns import (
     canonical_smiles_header_for_updates,
     cell_texts_have_parseable_molecule,
     data_headers_confirmed_for_chemistry_tools,
@@ -27,7 +27,7 @@ from molmanager.services.chemistry_columns import (
     skip_chemistry_tool_column_dropdown,
     should_skip_chemical_scan_column,
 )
-from molmanager.chem.molecule_conversion import (
+from mctoolkit.chem.molecule_conversion import (
     canonical_structure_key_from_smiles,
     mol_from_binary_blob,
 )

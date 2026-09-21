@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
-"""Fail CI if tracked first-party Python files lack the MolManager GPL header."""
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+"""Fail CI if tracked first-party Python files lack the MCToolkit GPL header."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 MARKER = "Copyright (C) 2026 Hunter Picard"
-SKIP_PREFIXES = ("molmanager/ui/static/",)
+SKIP_PREFIXES = ("mctoolkit/ui/static/",)
 
 
 def tracked_python_files(root: Path) -> list[Path]:

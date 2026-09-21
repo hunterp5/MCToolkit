@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for Data → Table → Split Column."""
 
@@ -23,7 +23,7 @@ from types import SimpleNamespace
 import pytest
 from rdkit import Chem
 
-from molmanager.table.column_split import (
+from mctoolkit.table.column_split import (
     SplitColumnParams,
     apply_keep_mode,
     detect_delimiter,
@@ -34,8 +34,8 @@ from molmanager.table.column_split import (
     split_column_values,
     unescape_custom_delimiter,
 )
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.ui.strings import TOOL_SPLIT_COLUMN
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.strings import TOOL_SPLIT_COLUMN
 
 
 def test_split_cell_comma_and_quotes() -> None:
@@ -186,7 +186,7 @@ def test_split_column_writes_immediately_without_chunking(qapp, monkeypatch):  #
 
 
 def test_split_dialog_extreme_checkboxes_exclusive(qapp):  # noqa: ARG001
-    from molmanager.ui.dialogs.split_column import SplitColumnDialog
+    from mctoolkit.ui.dialogs.split_column import SplitColumnDialog
 
     dlg = SplitColumnDialog(["Tags"], 0)
     dlg.largest_cb.setChecked(True)
@@ -198,8 +198,8 @@ def test_split_dialog_extreme_checkboxes_exclusive(qapp):  # noqa: ARG001
 
 
 def test_split_dialog_custom_delimiter_enables_input(qapp) -> None:  # noqa: ARG001
-    from molmanager.table.column_split import DELIMITER_MODES
-    from molmanager.ui.dialogs.split_column import SplitColumnDialog
+    from mctoolkit.table.column_split import DELIMITER_MODES
+    from mctoolkit.ui.dialogs.split_column import SplitColumnDialog
 
     dlg = SplitColumnDialog(["Tags"], 0)
     assert dlg.custom_input.isEnabled() is False

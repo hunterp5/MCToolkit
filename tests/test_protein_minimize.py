@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Protein Viewer Minimize dialog and complex-minimization runtime."""
 
@@ -25,7 +25,7 @@ from unittest.mock import patch
 
 import pytest
 
-from molmanager.workers.protein_complex_minimize import (
+from mctoolkit.workers.protein_complex_minimize import (
     ProteinMinimizeRequest,
     minimize_protein_complex,
 )
@@ -66,9 +66,9 @@ def _min_req(tmp_path: Path, *, text: str = _HOLO_PDB, **kwargs) -> ProteinMinim
     return ProteinMinimizeRequest(**defaults)
 
 
-@patch("molmanager.workers.protein_prepare_ligand.prepare_ligands_for_gaff")
-@patch("molmanager.workers.protein_complex_minimize._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_complex_minimize._write_prepared_output")
+@patch("mctoolkit.workers.protein_prepare_ligand.prepare_ligands_for_gaff")
+@patch("mctoolkit.workers.protein_complex_minimize._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_complex_minimize._write_prepared_output")
 def test_minimize_gaff_keeps_ligand_in_openmm(mock_write, mock_min, mock_ligands, tmp_path):
     mock_ligands.side_effect = lambda text, _keys, **_k: ([object()], text)
     seen: dict = {}
@@ -91,8 +91,8 @@ def test_minimize_gaff_keeps_ligand_in_openmm(mock_write, mock_min, mock_ligands
     assert Path(out).is_file()
 
 
-@patch("molmanager.workers.protein_complex_minimize._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_complex_minimize._write_prepared_output")
+@patch("mctoolkit.workers.protein_complex_minimize._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_complex_minimize._write_prepared_output")
 def test_minimize_protein_only_holds_ligand_out(mock_write, mock_min, tmp_path):
     seen: dict = {}
 
@@ -112,8 +112,8 @@ def test_minimize_protein_only_holds_ligand_out(mock_write, mock_min, tmp_path):
     assert seen["kwargs"]["ligand_mols"] is None
 
 
-@patch("molmanager.workers.protein_complex_minimize._restrained_minimize_pdb")
-@patch("molmanager.workers.protein_complex_minimize._write_prepared_output")
+@patch("mctoolkit.workers.protein_complex_minimize._restrained_minimize_pdb")
+@patch("mctoolkit.workers.protein_complex_minimize._write_prepared_output")
 def test_minimize_drops_waters_when_unchecked(mock_write, mock_min, tmp_path):
     seen: dict = {}
 
@@ -131,7 +131,7 @@ def test_minimize_drops_waters_when_unchecked(mock_write, mock_min, tmp_path):
     assert seen["kwargs"]["keep_water"] is False
 
 
-@patch("molmanager.workers.protein_prepare_ligand.prepare_ligands_for_gaff")
+@patch("mctoolkit.workers.protein_prepare_ligand.prepare_ligands_for_gaff")
 def test_minimize_gaff_requires_ligand_chemistry(mock_ligands, tmp_path):
     mock_ligands.return_value = ([], _HOLO_PDB)
     req = _min_req(tmp_path, ligand_smiles="", ligand_ref_path="")
@@ -142,8 +142,8 @@ def test_minimize_gaff_requires_ligand_chemistry(mock_ligands, tmp_path):
 def test_minimize_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QMenuBar, QMessageBox, QTextEdit
 
-    from molmanager.ui.dialogs.protein_minimize import ProteinMinimizeDialog
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.dialogs.protein_minimize import ProteinMinimizeDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     dlg = ProteinViewerDialog()
     mb = dlg.findChild(QMenuBar)
@@ -192,8 +192,8 @@ def test_minimize_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa
 
 
 def _d7d_h_bond_lengths(text: str) -> list[float]:
-    from molmanager.protein.structure_atoms import parse_structure_atoms
-    from molmanager.protein.structure_cif import parse_cif_chem_comp_bonds
+    from mctoolkit.protein.structure_atoms import parse_structure_atoms
+    from mctoolkit.protein.structure_cif import parse_cif_chem_comp_bonds
 
     by_name = {}
     for atom in parse_structure_atoms(text, "cif"):
@@ -222,7 +222,7 @@ def _d7d_h_bond_lengths(text: str) -> list[float]:
 def test_rebuild_hydrogen_chem_bonds_fixes_6bbu_abrocitinib():
     from pathlib import Path
 
-    from molmanager.protein.structure_cif import (
+    from mctoolkit.protein.structure_cif import (
         cif_viewer_bond_tables,
         parse_cif_chem_comp_atoms,
         repair_cif_hydrogen_chem_bonds,

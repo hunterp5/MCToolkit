@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Sketcher toolbar glyph and top-toolbar wiring tests."""
 
@@ -20,11 +20,11 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QWidget
 
-from molmanager.ui.sketcher.bonds import BOND_STEREO_PLAIN, BOND_STEREO_WEDGE
-from molmanager.ui.sketcher.constants import SKETCH_RING_TEMPLATES, TOOLBAR_ELEMENT_GROUPS
-from molmanager.ui.sketcher.customize_elements import default_toolbar_element_symbols
-from molmanager.ui.sketcher.dialog import SketcherDialog
-from molmanager.ui.sketcher.toolbar_glyphs import (
+from mctoolkit.ui.sketcher.bonds import BOND_STEREO_PLAIN, BOND_STEREO_WEDGE
+from mctoolkit.ui.sketcher.constants import SKETCH_RING_TEMPLATES, TOOLBAR_ELEMENT_GROUPS
+from mctoolkit.ui.sketcher.customize_elements import default_toolbar_element_symbols
+from mctoolkit.ui.sketcher.dialog import SketcherDialog
+from mctoolkit.ui.sketcher.toolbar_glyphs import (
     TOOLBAR_RING_TEMPLATES,
     bond_dative_icon,
     bond_double_icon,

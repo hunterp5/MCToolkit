@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Main-window mixin smoke tests (clear_all, selection, chemistry sources)."""
 
@@ -22,7 +22,7 @@ from qt_helpers import qt_submenu
 
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
 
 def _seed_two_rows(w: ChemistryWorkspaceWindow) -> None:
@@ -134,7 +134,7 @@ def test_file_session_submenu_lists_session_actions(qapp):  # noqa: ARG001
 def test_save_selected_to_session_writes_subset_without_clearing_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
     from PySide6.QtWidgets import QFileDialog
 
-    from molmanager.table.session_codec import expand_session_document, loads_session_bytes
+    from mctoolkit.table.session_codec import expand_session_document, loads_session_bytes
 
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
@@ -182,7 +182,7 @@ def test_session_load_uses_loading_page_then_reveals(qapp, monkeypatch):  # noqa
     )
     w = ChemistryWorkspaceWindow()
     doc = {
-        "format": "molmanager_session",
+        "format": "mctoolkit_session",
         "version": w._SESSION_VERSION,
         "headers": ["ID_HIDDEN", "Structure", "SMILES", "MW"],
         "rows": [{"id": 0, "cells": {"SMILES": "CCO", "MW": "46"}}],
@@ -230,7 +230,7 @@ def test_session_load_reveals_before_auto_render_finishes(qapp, monkeypatch):  #
     )
     w = ChemistryWorkspaceWindow()
     doc = {
-        "format": "molmanager_session",
+        "format": "mctoolkit_session",
         "version": w._SESSION_VERSION,
         "headers": ["ID_HIDDEN", "Structure", "SMILES", "MW"],
         "rows": [{"id": 0, "cells": {"SMILES": "CCO", "MW": "46"}}],
@@ -260,8 +260,8 @@ def test_session_overlay_keeps_plot_restore_over_render2d_progress(qapp):  # noq
 
 
 def test_file_ingest_reveals_before_auto_render_finishes(qapp, monkeypatch):  # noqa: ARG001
-    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
-    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
 
     held = {"loading": False}
 
@@ -290,8 +290,8 @@ def test_file_ingest_reveals_before_auto_render_finishes(qapp, monkeypatch):  # 
 
 
 def test_file_ingest_reveals_immediately_when_auto_render_skipped(qapp, monkeypatch):  # noqa: ARG001
-    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
-    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
 
     def fake_render(self):
         self.status_label.setText("Loaded 2 rows — auto 2D render skipped (limit 1).")
@@ -317,8 +317,8 @@ def test_file_ingest_reveals_immediately_when_auto_render_skipped(qapp, monkeypa
 
 def test_file_ingest_reveals_during_large_auto_render(qapp, monkeypatch):  # noqa: ARG001
     """Auto Render 2D does not block reveal; images fill in after the table is shown."""
-    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
-    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
 
     def fake_render(self):
         return True
@@ -342,8 +342,8 @@ def test_file_ingest_reveals_during_large_auto_render(qapp, monkeypatch):  # noq
 
 
 def test_file_ingest_progress_updates_loading_overlay(qapp, monkeypatch):  # noqa: ARG001
-    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
-    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._set_ingest_loading(True)
@@ -545,7 +545,7 @@ def test_structure_header_menu_offers_duplicate_not_rename(qapp):  # noqa: ARG00
 
 
 def test_header_select_all_uses_visible_rows_only(qapp):  # noqa: ARG001
-    from molmanager.ui.widgets import FilterCard
+    from mctoolkit.ui.widgets import FilterCard
 
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
@@ -569,7 +569,7 @@ def test_header_select_all_unfiltered_chunked_oid_path(qapp, monkeypatch):  # no
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     monkeypatch.setattr(
-        "molmanager.ui.table_session_selection.load_config",
+        "mctoolkit.ui.table_session_selection.load_config",
         lambda: SimpleNamespace(
             table_selection_oid_override_min=1,
             table_selection_chunk_rows=2000,
@@ -649,7 +649,7 @@ def test_structure_header_select_first_occurrence_and_empty(qapp):  # noqa: ARG0
 
 
 def test_plot_clear_selection_drops_header_select_highlight(qapp):  # noqa: ARG001
-    from molmanager.ui.plot_table_sync import clear_table_selection_from_plot
+    from mctoolkit.ui.plot_table_sync import clear_table_selection_from_plot
 
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
@@ -672,9 +672,9 @@ def test_plot_clear_selection_drops_header_select_highlight(qapp):  # noqa: ARG0
 
 
 def test_duplicate_structure_column_is_chemistry_source(qapp):  # noqa: ARG001
-    from molmanager.table.structure_depiction_layout import structure_column_minimum_width
-    from molmanager.ui.compound_table_model import CompoundTableModel
-    from molmanager.ui.main_window.table_undo_commands import UndoDuplicateColumnCommand
+    from mctoolkit.table.structure_depiction_layout import structure_column_minimum_width
+    from mctoolkit.ui.compound_table_model import CompoundTableModel
+    from mctoolkit.ui.main_window.table_undo_commands import UndoDuplicateColumnCommand
 
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
@@ -695,7 +695,7 @@ def test_duplicate_structure_column_is_chemistry_source(qapp):  # noqa: ARG001
 
 
 def test_new_window_and_file_load_use_table_only_layout(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_ONLY, LAYOUT_TABLE_STACK
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_ONLY, LAYOUT_TABLE_STACK
 
     w = ChemistryWorkspaceWindow()
     assert w._workspace_layout.layout_id == LAYOUT_TABLE_ONLY
@@ -706,7 +706,7 @@ def test_new_window_and_file_load_use_table_only_layout(qapp):  # noqa: ARG001
 
 
 def test_docking_from_table_only_uses_split_view(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_ONLY, LAYOUT_TABLE_SINGLE
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_ONLY, LAYOUT_TABLE_SINGLE
 
     w = ChemistryWorkspaceWindow()
     assert w._workspace_layout.layout_id == LAYOUT_TABLE_ONLY
@@ -720,7 +720,7 @@ def test_docking_from_table_only_uses_split_view(qapp):  # noqa: ARG001
 def test_close_docked_plot_closes_without_prompt(qapp, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QLabel, QMessageBox
 
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
     w = ChemistryWorkspaceWindow()
     w.apply_workspace_layout(LAYOUT_TABLE_SINGLE)
@@ -743,7 +743,7 @@ def test_close_docked_plot_closes_without_prompt(qapp, monkeypatch):  # noqa: AR
 def test_close_plot_pane_prompts_when_occupied(qapp, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QLabel, QMessageBox
 
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
     w = ChemistryWorkspaceWindow()
     w.apply_workspace_layout(LAYOUT_TABLE_SINGLE)
@@ -761,7 +761,7 @@ def test_close_plot_pane_prompts_when_occupied(qapp, monkeypatch):  # noqa: ARG0
     assert list(pane.plot_widgets())
 
     w.close_plot_pane(pane)
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_ONLY
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_ONLY
 
     assert w._workspace_layout.layout_id == LAYOUT_TABLE_ONLY
     assert list(w.iter_docked_plot_widgets()) == []
@@ -770,7 +770,7 @@ def test_close_plot_pane_prompts_when_occupied(qapp, monkeypatch):  # noqa: ARG0
 def test_close_empty_plot_pane_skips_prompt(qapp, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QMessageBox
 
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SIDE
 
     w = ChemistryWorkspaceWindow()
     w.apply_workspace_layout(LAYOUT_TABLE_SIDE)
@@ -788,7 +788,7 @@ def test_close_empty_plot_pane_skips_prompt(qapp, monkeypatch):  # noqa: ARG001
     assert called["n"] == 0
     assert len(w._workspace_layout.plot_panes()) == 1
     assert pane not in w._workspace_layout.plot_panes()
-    from molmanager.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
+    from mctoolkit.ui.main_window.workspace_layout import LAYOUT_TABLE_SINGLE
 
     assert w._workspace_layout.layout_id == LAYOUT_TABLE_SINGLE
 
@@ -809,8 +809,8 @@ def test_clear_all_re_enables_menubar_after_ingest(qapp):  # noqa: ARG001
 
 def test_status_memory_tracker_starts_before_window_shown(qapp, monkeypatch):  # noqa: ARG001
     """Polling must start during __init__; isVisible() is False until show()."""
-    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
-    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
     w = ChemistryWorkspaceWindow()
     assert not w.isVisible()
     assert not w._status_host.isHidden()
@@ -819,10 +819,10 @@ def test_status_memory_tracker_starts_before_window_shown(qapp, monkeypatch):  #
 
 
 def test_status_and_memory_labels_use_smaller_font(qapp, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.theme import default_app_font_pt, status_bar_font_pt
+    from mctoolkit.ui.theme import default_app_font_pt, status_bar_font_pt
 
-    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
-    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
     w = ChemistryWorkspaceWindow()
     app_pt = int(w._app_font_pt or default_app_font_pt())
     expected = status_bar_font_pt(app_pt)
@@ -835,8 +835,8 @@ def test_status_and_memory_labels_use_smaller_font(qapp, monkeypatch):  # noqa: 
 
 
 def test_status_memory_tracker_stops_when_status_bar_hidden(qapp, monkeypatch):  # noqa: ARG001
-    monkeypatch.setattr("molmanager.ui.theme.load_status_bar_visible", lambda: True)
-    monkeypatch.setattr("molmanager.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.theme.load_status_bar_visible", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.gui_settings_mixin.load_status_bar_visible", lambda: True)
     w = ChemistryWorkspaceWindow()
     w._apply_status_bar_visible(False, persist=False)
     assert w._status_host.isHidden()
@@ -890,6 +890,8 @@ def test_prepare_structures_nests_explicit_hydrogens(qapp):  # noqa: ARG001
     assert "Protonate" in labels
     assert "Protonate Structures" not in labels
     assert labels.index("Protonate") == labels.index("Disconnect Largest Fragments…") + 1
+    assert "Tautomers…" in labels
+    assert labels.index("Tautomers…") == labels.index("Protonate") + 1
     protonate = qt_submenu(prepare, "Protonate")
     p_labels = [a.text().replace("&", "") for a in protonate.actions()]
     assert p_labels == ["Protonate…", "Generate Protomers…", "Neutralize…"]

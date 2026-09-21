@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Physical properties helpers for the sketcher View panel."""
 
@@ -22,16 +22,16 @@ from qt_helpers import qt_submenu
 from PySide6.QtWidgets import QMenuBar, QWidget
 from rdkit import Chem
 
-from molmanager.ui.sketcher.constants import (
+from mctoolkit.ui.sketcher.constants import (
     ELEMENT_FAMILY_GROUPS,
     SKETCH_ELEMENT_SYMBOLS,
 )
-from molmanager.ui.sketcher.customize_elements import (
+from mctoolkit.ui.sketcher.customize_elements import (
     element_groups_for_symbols,
     normalize_toolbar_element_symbols,
 )
-from molmanager.ui.sketcher.dialog import SketcherDialog
-from molmanager.ui.sketcher.physical_properties import (
+from mctoolkit.ui.sketcher.dialog import SketcherDialog
+from mctoolkit.ui.sketcher.physical_properties import (
     compute_rdkit_physical_properties,
     compute_sketch_physical_properties,
 )
@@ -58,7 +58,7 @@ def test_compute_rdkit_physical_properties_empty() -> None:
 
 def test_compute_ionization_failure_when_no_microstates(monkeypatch) -> None:
     monkeypatch.setattr(
-        "molmanager.ui.sketcher.physical_properties.predict_microstates_for_sketch",
+        "mctoolkit.ui.sketcher.physical_properties.predict_microstates_for_sketch",
         lambda _mol, cancel_event=None: None,
     )
     mol = Chem.MolFromSmiles("CCN")
@@ -72,10 +72,10 @@ def test_compute_ionization_failure_when_no_microstates(monkeypatch) -> None:
 
 
 def test_compute_ionization_properties_raises_without_microstates(monkeypatch) -> None:
-    from molmanager.ui.sketcher.physical_properties import compute_ionization_properties
+    from mctoolkit.ui.sketcher.physical_properties import compute_ionization_properties
 
     monkeypatch.setattr(
-        "molmanager.ui.sketcher.physical_properties.predict_microstates_for_sketch",
+        "mctoolkit.ui.sketcher.physical_properties.predict_microstates_for_sketch",
         lambda _mol, cancel_event=None: None,
     )
     mol = Chem.MolFromSmiles("CCO")

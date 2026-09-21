@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """RDKit Leader sphere-exclusion clustering."""
 
@@ -21,7 +21,7 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.workers.cluster_worker import cluster_sphere_exclusion
+from mctoolkit.workers.cluster_worker import cluster_sphere_exclusion
 
 
 def test_sphere_exclusion_assigns_nearest_centroid():
@@ -42,7 +42,7 @@ def test_sphere_exclusion_high_cutoff_yields_many_clusters():
 
 
 def test_butina_and_jarvis_patrick_do_not_need_dense_matrix():
-    from molmanager.workers.cluster_worker import (
+    from mctoolkit.workers.cluster_worker import (
         _method_needs_dense_matrix,
         cluster_butina,
         cluster_jarvis_patrick,
@@ -63,8 +63,8 @@ def test_butina_and_jarvis_patrick_do_not_need_dense_matrix():
 
 
 def test_cluster_method_combo_uses_worker_keys(qapp):
-    from molmanager.ui.dialogs.cluster import ClusterDialog
-    from molmanager.workers.cluster_worker import CLUSTER_METHOD_LABELS
+    from mctoolkit.ui.dialogs.cluster import ClusterDialog
+    from mctoolkit.workers.cluster_worker import CLUSTER_METHOD_LABELS
 
     dlg = ClusterDialog(None)
     try:

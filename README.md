@@ -1,6 +1,6 @@
 # MCToolkit
 
-MCToolkit is a desktop application for working with chemical structures in a spreadsheet-style table. You can open SDF, SMILES, and CSV files; draw structures; calculate descriptors; cluster compounds; dock ligands; and more. It is built with **Python**, **PySide6**, and **RDKit**. The importable Python package is still named ``molmanager``; after ``pip install -e .`` you can launch with ``mctoolkit`` or ``python -m molmanager``.
+MCToolkit is a desktop application for working with chemical structures in a spreadsheet-style table. You can open SDF, SMILES, and CSV files; draw structures; calculate descriptors; cluster compounds; dock ligands; and more. It is built with **Python**, **PySide6**, and **RDKit**. The importable Python package is ``mctoolkit``. After ``pip install -e .`` you can launch with ``mctoolkit`` or ``python -m mctoolkit``.
 
 This guide walks you through installation from scratch. It assumes you are new to Python and the command line. Follow the steps in order for your operating system.
 
@@ -92,11 +92,11 @@ You need a copy of the MCToolkit project on your computer.
 ### Option B — Clone with Git (if you use Git)
 
 ```bash
-git clone https://github.com/hunterp5/MolManager.git
-cd MolManager
+git clone https://github.com/hunterp5/MCToolkit.git
+cd MCToolkit
 ```
 
-All remaining steps assume your terminal is **inside the MCToolkit folder** (the folder that contains `README.md`, `requirements.txt`, and the `molmanager` subfolder).
+All remaining steps assume your terminal is **inside the MCToolkit folder** (the folder that contains `README.md`, `requirements.txt`, and the `mctoolkit` subfolder).
 
 **Windows — open a terminal in that folder**
 
@@ -235,7 +235,7 @@ See [docs/PACKAGING.md](docs/PACKAGING.md) for install profiles and release vers
 
 ### Step 6c — Register the MCToolkit application
 
-This step installs the MCToolkit program itself so you can launch it with `mctoolkit` or `python -m molmanager`:
+This step installs the MCToolkit program itself so you can launch it with `mctoolkit` or `python -m mctoolkit`:
 
 ```bash
 pip install -e .
@@ -271,7 +271,7 @@ Make sure the virtual environment is still active (`(.venv)` in your prompt), th
 
 ```bash
 mctoolkit
-# or: python -m molmanager
+# or: python -m mctoolkit
 ```
 
 The MCToolkit window should open. Use **File → Open File** to load an SDF, SMILES, or CSV file.
@@ -283,7 +283,7 @@ Every time you want to use MCToolkit:
 1. Open PowerShell or Terminal.
 2. Go to the MCToolkit folder (`cd` to the project directory).
 3. Activate the venv (Part 5).
-4. Run `python -m molmanager`.
+4. Run `python -m mctoolkit`.
 
 ---
 
@@ -304,14 +304,14 @@ Docking is **Protein → Dock Ligand → Gnina…** (file-based CLI with CNN sco
 The **Gnina** engine is not included in the Python install. Download the official Linux binary from [https://github.com/gnina/gnina](https://github.com/gnina/gnina). On Windows, install it in WSL (Settings → WSL) so `gnina` is on that distro’s PATH. On Linux, either:
 
 - Put `gnina` in:
-  - `molmanager/resources/bin/linux/`
-- Or set `MOLMANAGER_BUNDLE_DIR` to a folder that contains the executable.
+  - `mctoolkit/resources/bin/linux/`
+- Or set `MCTOOLKIT_BUNDLE_DIR` to a folder that contains the executable.
 
 macOS has no official Gnina binary. See **Protein → Dock Ligand** in the app after the binary is reachable.
 
 ### Systematic conformers (Open Babel)
 
-**Tools → Conformations → Generate → Systematic…** uses Open Babel Confab. Open Babel is a project dependency (`pip install openbabel`, also in `requirements-core.txt`). The dialog defaults to that wheel’s `obabel` (`site-packages/openbabel/bin/obabel`). You can still override the path, or place `obabel.exe` / `obabel` under `molmanager/resources/bin/<platform>/` to prefer a bundled copy.
+**Tools → Conformations → Generate → Systematic…** uses Open Babel Confab. Open Babel is a project dependency (`pip install openbabel`, also in `requirements-core.txt`). The dialog defaults to that wheel’s `obabel` (`site-packages/openbabel/bin/obabel`). You can still override the path, or place `obabel.exe` / `obabel` under `mctoolkit/resources/bin/<platform>/` to prefer a bundled copy.
 
 Distance-geometry ensembles remain **Tools → Conformations → Generate → Stochastic…** (RDKit ETKDG; no Open Babel).
 
@@ -355,7 +355,7 @@ The JAR is **not** in git. Install a JRE so `java` is on `PATH`, then download B
 python scripts/bootstrap_biotransformer.py
 ```
 
-That places the official Bitbucket package (`BioTransformer3.0_20230525.jar`, `btkb/`, `supportfiles/`) in `molmanager/resources/models/biotransformer/`. You can also **Browse JAR…** in Predict Metabolites, or set `MOLMANAGER_BIOTRANSFORMER_JAR` (the knowledge-base folder and `supportfiles/` must sit next to the JAR). Manual download: [Bitbucket](https://bitbucket.org/wishartlab/biotransformer3.0jar) / [GitHub](https://github.com/Wishartlab-openscience/Biotransformer). Official docs target UNIX; on Windows try a current JRE, or run the JAR under WSL.
+That places the official Bitbucket package (`BioTransformer3.0_20230525.jar`, `btkb/`, `supportfiles/`) in `mctoolkit/resources/models/biotransformer/`. You can also **Browse JAR…** in Predict Metabolites, or set `MCTOOLKIT_BIOTRANSFORMER_JAR` (the knowledge-base folder and `supportfiles/` must sit next to the JAR). Manual download: [Bitbucket](https://bitbucket.org/wishartlab/biotransformer3.0jar) / [GitHub](https://github.com/Wishartlab-openscience/Biotransformer). Official docs target UNIX; on Windows try a current JRE, or run the JAR under WSL.
 
 ---
 
@@ -420,7 +420,7 @@ pip install -e .
 
 The app can still run; **Browser** 3Dmol previews may open in your system browser instead of an embedded viewer. On Linux you may need system packages (for example `libegl1` on Debian/Ubuntu). Reinstall PySide6 if Qt WebEngine is missing.
 
-### “No module named molmanager”
+### “No module named mctoolkit”
 
 You skipped **Step 6c**. With the venv active, run:
 
@@ -454,7 +454,7 @@ pip install -e .
 # Unix:     bash scripts/install_pytorch_pka.sh
 
 # Run
-python -m molmanager
+python -m mctoolkit
 
 # Repair pKa / PyTorch conflicts (same venv; same scripts as above)
 
@@ -476,39 +476,38 @@ Optional settings for power users and IT deployments:
 
 | Variable | Purpose |
 |----------|---------|
-| `MOLMANAGER_LOG_LEVEL` | Console log level: `DEBUG`, `INFO`, `WARNING`, … (default `INFO`) |
-| `MOLMANAGER_MAX_THREADPOOL` | Main background thread pool size (`1`–`64`; default scales with CPU, cap `16`) |
-| `MOLMANAGER_RENDER_THREADPOOL` | 2D structure render pool (`1`–`32`) |
-| `MOLMANAGER_SUBSTRUCTURE_ASYNC_ROWS` | Row count for async substructure filtering (default `400`) |
-| `MOLMANAGER_FILTER_DEBOUNCE_SUBSTRUCTURE_ROWS` / `MOLMANAGER_FILTER_DEBOUNCE_SUBSTRUCTURE_MS` | Debounce when a substructure filter is active |
-| `MOLMANAGER_FILTER_DEBOUNCE_DEFAULT_ROWS` / `MOLMANAGER_FILTER_DEBOUNCE_DEFAULT_MS` | Debounce for other filters |
-| `MOLMANAGER_INGEST_GUI_CHUNK` | File-ingest table insert batch size (default `512`) |
-| `MOLMANAGER_SESSION_GUI_CHUNK` | Session restore table insert batch size (default `4096`) |
-| `MOLMANAGER_PERF_METRICS` | Enable performance metric logging |
-| `MOLMANAGER_PERF_LOG_EVERY` | Perf log interval (default `25` samples) |
-| `MOLMANAGER_PLOT_SCATTERGL_MIN_POINTS` | Upgrade marker scatters to WebGL above this count (default `2000`) |
-| `MOLMANAGER_PLOT_SELECTION_OVERLAY_MAX` | Max points for SVG/3D selection overlay; larger sets use selectedpoints / skip 3D overlay (default `400`) |
-| `MOLMANAGER_CONFORMER_THREADS` | Parallel workers for conformer generation (`1`–`16`) |
-| `MOLMANAGER_DESCRIPTOR_THREADS` | Parallel workers for descriptors (`1`–`32`) |
-| `MOLMANAGER_PROTOMER_PROCESSES` | Parallel processes for Protonate and Generate Protomers (`1`–`8`) |
-| `MOLMANAGER_PKA_GPU` | Set to `0` / `cpu` to force Uni-pKa onto CPU even with a CUDA PyTorch wheel |
-| `MOLMANAGER_SQL_MAX_ROWS_HARD` | Hard cap for SQL load row count (default `2000000`) |
-| `MOLMANAGER_MEMORY_GUARD_DIVERSE_MAX_ROWS` | Hard cap for Diverse Subset pool size (default `200000`) |
-| `MOLMANAGER_DIVERSE_SUBSET_EXACT_MAX_ROWS` | Auto mode uses Exact MaxMin at or below this size (default `50000`) |
-| `MOLMANAGER_DIVERSE_SUBSET_FAST_CANDIDATE_CAP` | Fast-mode candidate pool size before MaxMin (default `10000`) |
-| `MOLMANAGER_SQL_PRECOUNT_WARN` | Confirm before loading if `COUNT(*)` ≥ this (default `100000`) |
-| `MOLMANAGER_SQLITE_TIMEOUT_S` | SQLite connection timeout seconds (default `30`) |
-| `MOLMANAGER_PG_CONNECT_TIMEOUT` | PostgreSQL connect timeout seconds (default `30`) |
-| `MOLMANAGER_SQLITE_BACKEND_PAGE_SIZE` | SQLite cache page size for filters (default `5000`) |
-| `MOLMANAGER_DISABLE_CUSTOM_CALC` | Set to `1` / `true` to disable Tools → Utilities → Calculator |
-| `MOLMANAGER_LOG_DIR` | Directory for rotating `mctoolkit.log` (platform default under user app data / state) |
-| `MOLMANAGER_LOG_TO_FILE` | Set to `0` / `false` to disable file logging (console only) |
-| `MOLMANAGER_BUNDLE_DIR` | Folder containing optional `gnina` / `vina` binaries |
-| `MOLMANAGER_BIOTRANSFORMER_JAR` | Path to the BioTransformer JAR (`btkb/` or `database/`, and `supportfiles/`, must be siblings of the JAR) |
+| `MCTOOLKIT_LOG_LEVEL` | Console log level: `DEBUG`, `INFO`, `WARNING`, … (default `INFO`) |
+| `MCTOOLKIT_MAX_THREADPOOL` | Main background thread pool size (`1`–`64`; default scales with CPU, cap `16`) |
+| `MCTOOLKIT_RENDER_THREADPOOL` | 2D structure render pool (`1`–`32`) |
+| `MCTOOLKIT_SUBSTRUCTURE_ASYNC_ROWS` | Row count for async substructure filtering (default `400`) |
+| `MCTOOLKIT_FILTER_DEBOUNCE_SUBSTRUCTURE_ROWS` / `MCTOOLKIT_FILTER_DEBOUNCE_SUBSTRUCTURE_MS` | Debounce when a substructure filter is active |
+| `MCTOOLKIT_FILTER_DEBOUNCE_DEFAULT_ROWS` / `MCTOOLKIT_FILTER_DEBOUNCE_DEFAULT_MS` | Debounce for other filters |
+| `MCTOOLKIT_INGEST_GUI_CHUNK` | File-ingest table insert batch size (default `512`) |
+| `MCTOOLKIT_SESSION_GUI_CHUNK` | Session restore table insert batch size (default `4096`) |
+| `MCTOOLKIT_PERF_METRICS` | Enable performance metric logging |
+| `MCTOOLKIT_PERF_LOG_EVERY` | Perf log interval (default `25` samples) |
+| `MCTOOLKIT_PLOT_SCATTERGL_MIN_POINTS` | Upgrade marker scatters to WebGL above this count (default `2000`) |
+| `MCTOOLKIT_PLOT_SELECTION_OVERLAY_MAX` | Max points for SVG/3D selection overlay; larger sets use selectedpoints / skip 3D overlay (default `400`) |
+| `MCTOOLKIT_CONFORMER_THREADS` | Parallel workers for conformer generation (`1`–`16`) |
+| `MCTOOLKIT_DESCRIPTOR_THREADS` | Parallel workers for descriptors (`1`–`32`) |
+| `MCTOOLKIT_PROTOMER_PROCESSES` | Parallel processes for Protonate and Generate Protomers (`1`–`8`) |
+| `MCTOOLKIT_PKA_GPU` | Set to `0` / `cpu` to force Uni-pKa onto CPU even with a CUDA PyTorch wheel |
+| `MCTOOLKIT_SQL_MAX_ROWS_HARD` | Hard cap for SQL load row count (default `2000000`) |
+| `MCTOOLKIT_MEMORY_GUARD_DIVERSE_MAX_ROWS` | Hard cap for Diverse Subset pool size (default `200000`) |
+| `MCTOOLKIT_DIVERSE_SUBSET_EXACT_MAX_ROWS` | Auto mode uses Exact MaxMin at or below this size (default `50000`) |
+| `MCTOOLKIT_DIVERSE_SUBSET_FAST_CANDIDATE_CAP` | Fast-mode candidate pool size before MaxMin (default `10000`) |
+| `MCTOOLKIT_SQL_PRECOUNT_WARN` | Confirm before loading if `COUNT(*)` ≥ this (default `100000`) |
+| `MCTOOLKIT_SQLITE_TIMEOUT_S` | SQLite connection timeout seconds (default `30`) |
+| `MCTOOLKIT_PG_CONNECT_TIMEOUT` | PostgreSQL connect timeout seconds (default `30`) |
+| `MCTOOLKIT_SQLITE_BACKEND_PAGE_SIZE` | SQLite cache page size for filters (default `5000`) |
+| `MCTOOLKIT_DISABLE_CUSTOM_CALC` | Set to `1` / `true` to disable Tools → Utilities → Calculator |
+| `MCTOOLKIT_LOG_DIR` | Directory for rotating `mctoolkit.log` (platform default under user app data / state) |
+| `MCTOOLKIT_LOG_TO_FILE` | Set to `0` / `false` to disable file logging (console only) |
+| `MCTOOLKIT_BUNDLE_DIR` | Folder containing optional `gnina` / `vina` binaries |
+| `MCTOOLKIT_BIOTRANSFORMER_JAR` | Path to the BioTransformer JAR (`btkb/` or `database/`, and `supportfiles/`, must be siblings of the JAR) |
 
-**Custom calculator:** expressions always use a restricted AST interpreter (`calculator_expressions`). Treat them as trusted input only. `MOLMANAGER_CUSTOM_CALC_LEGACY_EVAL` is retired and ignored if set.
+**Custom calculator:** expressions always use a restricted AST interpreter (`calculator_expressions`). Treat them as trusted input only. `MCTOOLKIT_CUSTOM_CALC_LEGACY_EVAL` is retired and ignored if set.
 
-**Legacy env aliases:** `CHEMMANAGER_*` variables are still mapped to `MOLMANAGER_*` when the new name is unset, with a deprecation warning. Prefer `MOLMANAGER_*` only.
 
 **Logs:** MCToolkit writes a rotating log file (default on) and shows the path in the crash dialog on uncaught exceptions.
 **SQL URLs in logs:** at `DEBUG`, connection URLs are logged with credentials redacted.
@@ -519,12 +518,12 @@ Optional settings for power users and IT deployments:
 
 | Path | Role |
 |------|------|
-| `molmanager/app.py` | Application entry point |
-| `molmanager/ui/main_window/` | Main window and feature mixins |
-| `molmanager/ui/compound_table_model.py` | Table data model |
-| `molmanager/ui/dialogs/` | Tool dialogs |
-| `molmanager/workers/` | Background jobs (render, export, cluster, pKa, …) |
-| `molmanager/storage/` | SQLite mirror for fast filtering |
+| `mctoolkit/app.py` | Application entry point |
+| `mctoolkit/ui/main_window/` | Main window and feature mixins |
+| `mctoolkit/ui/compound_table_model.py` | Table data model |
+| `mctoolkit/ui/dialogs/` | Tool dialogs |
+| `mctoolkit/workers/` | Background jobs (render, export, cluster, pKa, …) |
+| `mctoolkit/storage/` | SQLite mirror for fast filtering |
 | `docs/ARCHITECTURE.md` | How components fit together |
 | `docs/STEREO_AND_ISOMERISM.md` | Stereochemistry behavior |
 | `docs/VALENCE_BONDS_AND_AROMATICITY.md` | Sketcher bond and valence rules |
@@ -556,8 +555,8 @@ CI runs lint (Ruff + GPL headers) on Ubuntu, and tests on Ubuntu, macOS, and Win
 **Lint / headers:**
 
 ```bash
-python -m ruff check molmanager tests scripts
-python -m ruff format --check molmanager tests scripts
+python -m ruff check mctoolkit tests scripts
+python -m ruff format --check mctoolkit tests scripts
 python scripts/check_gpl_headers.py
 ```
 

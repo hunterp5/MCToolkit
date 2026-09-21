@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for CompoundTableModel (no full window required)."""
 
@@ -22,8 +22,8 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPixmap
 
-from molmanager.ui.compound_table_model import CompoundTableModel
-from molmanager.ui.theme import set_table_text_alignment
+from mctoolkit.ui.compound_table_model import CompoundTableModel
+from mctoolkit.ui.theme import set_table_text_alignment
 
 
 @pytest.fixture()
@@ -120,7 +120,7 @@ def test_rename_header_at_accepts_pyside6_orientation_enum(model: CompoundTableM
 
 
 def test_search_header_changed_compares_orientation_enum(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window.table_search_mixin import TableSearchMixin
+    from mctoolkit.ui.main_window.table_search_mixin import TableSearchMixin
 
     class _Host(TableSearchMixin):
         def __init__(self) -> None:
@@ -388,7 +388,7 @@ def test_remove_rows_by_oids_bulk(model: CompoundTableModel):
 
 
 def test_remove_row_clears_structure_png_store(model: CompoundTableModel):
-    from molmanager.storage.structure_render_store import StructureRenderStore
+    from mctoolkit.storage.structure_render_store import StructureRenderStore
 
     model.append_row(5, {"SMILES": "CC", "MW": "30"})
     store = StructureRenderStore(max_decoded_pixmaps=8)
@@ -434,7 +434,7 @@ def test_data_cells_are_not_inline_editable(model: CompoundTableModel):
 def test_compound_table_view_disables_inline_edit_triggers(qapp):  # noqa: ARG001
     from PySide6.QtWidgets import QAbstractItemView
 
-    from molmanager.ui.compound_table_model import CompoundTableView
+    from mctoolkit.ui.compound_table_model import CompoundTableView
 
     view = CompoundTableView()
     assert view.editTriggers() == QAbstractItemView.NoEditTriggers
@@ -446,7 +446,7 @@ def test_compound_table_view_pixel_scrolls_and_keeps_edge_grip(qapp):
     from PySide6.QtGui import QMouseEvent
     from PySide6.QtWidgets import QAbstractItemView, QApplication
 
-    from molmanager.ui.compound_table_model import (
+    from mctoolkit.ui.compound_table_model import (
         CompoundTableHeaderView,
         CompoundTableModel,
         CompoundTableView,
@@ -511,7 +511,7 @@ def test_compound_table_view_pixel_scrolls_and_keeps_edge_grip(qapp):
 
 
 def test_header_drag_scroll_step_grows_toward_viewport_edge(qapp):  # noqa: ARG001
-    from molmanager.ui.compound_table_view import (
+    from mctoolkit.ui.compound_table_view import (
         _HEADER_DRAG_SCROLL_MAX_STEP_PX,
         _HEADER_DRAG_SCROLL_MIN_STEP_PX,
         CompoundTableView,
@@ -537,7 +537,7 @@ def test_header_drag_scroll_step_grows_toward_viewport_edge(qapp):  # noqa: ARG0
 def test_header_drag_autoscrolls_quickly_at_viewport_edge(qapp):
     from PySide6.QtWidgets import QApplication
 
-    from molmanager.ui.compound_table_model import CompoundTableModel, CompoundTableView
+    from mctoolkit.ui.compound_table_model import CompoundTableModel, CompoundTableView
 
     headers = ["ID_HIDDEN", "Structure"] + [f"C{i}" for i in range(16)]
     model = CompoundTableModel(headers)
@@ -567,7 +567,7 @@ def test_header_drag_autoscrolls_quickly_at_viewport_edge(qapp):
 
 
 def test_table_header_stylesheet_uses_palette_roles(qapp):  # noqa: ARG001
-    from molmanager.ui.compound_table_view import TABLE_HEADER_SECTION_QSS, CompoundTableView
+    from mctoolkit.ui.compound_table_view import TABLE_HEADER_SECTION_QSS, CompoundTableView
 
     qss = TABLE_HEADER_SECTION_QSS.lower()
     assert "palette(button)" in qss
@@ -581,7 +581,7 @@ def test_table_header_stylesheet_uses_palette_roles(qapp):  # noqa: ARG001
 def test_compound_table_headers_follow_application_palette(qapp):
     from PySide6.QtGui import QColor, QPalette
 
-    from molmanager.ui.compound_table_view import CompoundTableView
+    from mctoolkit.ui.compound_table_view import CompoundTableView
 
     prev = qapp.palette()
     view = CompoundTableView()
@@ -609,7 +609,7 @@ def test_compound_table_headers_follow_application_palette(qapp):
 def test_compound_table_headers_resize_with_table_font(qapp):  # noqa: ARG001
     from PySide6.QtGui import QFont
 
-    from molmanager.ui.compound_table_view import CompoundTableView
+    from mctoolkit.ui.compound_table_view import CompoundTableView
 
     view = CompoundTableView()
     small = QFont(view.font())

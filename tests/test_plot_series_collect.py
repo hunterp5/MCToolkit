@@ -1,29 +1,29 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Unit tests for plot_series_collect helpers."""
 
 from __future__ import annotations
 
-from molmanager.plotting.plot_series_collect import (
+from mctoolkit.plotting.plot_series_collect import (
     collect_histogram_values,
     collect_scatter_points,
     plotly_axis_range,
 )
-from molmanager.ui.compound_table_model import CompoundTableModel
+from mctoolkit.ui.compound_table_model import CompoundTableModel
 
 
 def _model_with_rows() -> CompoundTableModel:

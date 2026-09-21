@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Main menubar stays disabled while the table is loading."""
 
@@ -22,7 +22,7 @@ from qt_helpers import qt_submenu
 
 from PySide6.QtCore import Qt
 
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
 
 def test_main_toolbar_disabled_while_ingest_loading(qapp):  # noqa: ARG001
@@ -77,3 +77,10 @@ def test_main_window_table_sits_flush_under_menubar(qapp):  # noqa: ARG001
     assert (m.left(), m.top(), m.right(), m.bottom()) == (0, 0, 0, 0)
     assert ly.spacing() == 0
     w.close()
+
+
+def test_native_widget_siblings_are_disabled(qapp):
+    from mctoolkit.ui.theme import bootstrap_application_gui
+
+    bootstrap_application_gui(qapp)
+    assert qapp.testAttribute(Qt.AA_DontCreateNativeWidgetSiblings)

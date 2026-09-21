@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """3D viewer helper (RDKit only; no Qt WebEngine required)."""
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.ui.mol_viewer_3d import (
+from mctoolkit.ui.mol_viewer_3d import (
     _mol_block_b64,
     _offline_index_html,
     _offline_index_html_multiconf,
@@ -54,9 +54,9 @@ def test_build_3dmol_html_contains_script_and_model():
     assert "chem-atom-panel" not in html
     assert "chem-atom-detail" not in html
     assert "Reset Structure" in html
-    assert "molmanagerResetStructure" in html
+    assert "mctoolkitResetStructure" in html
     assert "chem-reset-menu" in html
-    assert "molmanagerHomeView" in html
+    assert "mctoolkitHomeView" in html
     assert "__RESET_JS__" not in html
 
 
@@ -68,13 +68,13 @@ def test_multiconf_html_has_no_on_canvas_chrome():
     assert "chem-strain-overlay" not in html
     assert "chem-conf-bar" not in html
     assert "chem-conf-prev" not in html
-    assert "molmanagerLoadConf" in html
-    assert "molmanagerShowSuperpose" in html
-    assert "molmanagerSetConfLegend" in html
+    assert "mctoolkitLoadConf" in html
+    assert "mctoolkitShowSuperpose" in html
+    assert "mctoolkitSetConfLegend" in html
     assert "chem-conf-legend" in html
-    assert "molmanagerRefit" in html
+    assert "mctoolkitRefit" in html
     assert "Reset Structure" in html
-    assert "molmanagerResetStructure" in html
+    assert "mctoolkitResetStructure" in html
     assert "chem-reset-menu" in html
     assert "__RESET_JS__" not in html
     assert "ensureViewer" in html

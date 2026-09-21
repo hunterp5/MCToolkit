@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Disconnect Largest Fragments — fragment collection."""
 
@@ -20,13 +20,13 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.chem.fragment_disconnect import (
+from mctoolkit.chem.fragment_disconnect import (
     collect_fragment_mols,
     largest_fragment_and_rest,
     split_dot_disconnected_smiles,
     split_multi_component_smiles,
 )
-from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
+from mctoolkit.chem.molecule_conversion import mol_to_canonical_smiles
 
 
 def test_split_dot_disconnected_smiles_respects_brackets() -> None:

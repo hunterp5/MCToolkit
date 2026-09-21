@@ -1,10 +1,10 @@
-## ChemManager / MolManager coding standards
+## MCToolkit coding standards
 
 These rules apply to all new or modified code in this repository.
 
 ### Copyright headers
 
-- Every **new** source file must include the standard MolManager GPL copyright header (same text as existing `.py` files).
+- Every **new** source file must include the standard MCToolkit GPL copyright header (same text as existing `.py` files).
 - Keep a shebang as line 1 when present; put the header immediately below it.
 - Do not add the header to vendored/third-party assets.
 - See `.cursor/rules/copyright-headers.mdc` for the full header text.
@@ -28,7 +28,7 @@ These rules apply to all new or modified code in this repository.
 - Keep UI responsive by offloading heavy work off the GUI thread.
 - Keep changes cohesive; avoid drive-by refactors unless required.
 - Prefer narrow `except` clauses. Do not use `except Exception: pass`.
-- Intentional swallows: `molmanager.platform_support.exception_policy.log_swallowed_exception`
+- Intentional swallows: `mctoolkit.platform_support.exception_policy.log_swallowed_exception`
   plus `# noqa: BLE001` when catching `Exception`.
 - New silent/blind `except` fails CI (`BLE001`, `S110`, `SIM105`). Existing files are in
   `ruff.exception-ratchet.toml`; remove a file from that list when it is clean. Never add files.

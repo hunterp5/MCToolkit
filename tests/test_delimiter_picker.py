@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for the shared Split/Join delimiter picker."""
 
@@ -22,7 +22,7 @@ from pathlib import Path
 
 
 def test_delimiter_picker_enables_custom_only_for_custom_mode(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.dialogs.delimiter_picker import DelimiterPicker
+    from mctoolkit.ui.dialogs.delimiter_picker import DelimiterPicker
 
     picker = DelimiterPicker(
         (("Comma (,)", "comma"), ("Custom", "custom")),
@@ -45,7 +45,7 @@ def test_delimiter_picker_enables_custom_only_for_custom_mode(qapp) -> None:  # 
 
 
 def test_split_and_join_dialogs_use_shared_picker() -> None:
-    root = Path(__file__).resolve().parents[1] / "molmanager" / "ui" / "dialogs"
+    root = Path(__file__).resolve().parents[1] / "mctoolkit" / "ui" / "dialogs"
     for name in ("split_column.py", "join_columns.py"):
         text = (root / name).read_text(encoding="utf-8")
         assert "from .delimiter_picker import DelimiterPicker" in text

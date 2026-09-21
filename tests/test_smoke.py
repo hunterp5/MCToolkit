@@ -1,34 +1,34 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Import and construction smoke tests for CI."""
 
 from __future__ import annotations
 
-import molmanager
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
+import mctoolkit
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
 
 def test_package_version():
-    assert hasattr(molmanager, "__version__")
-    assert isinstance(molmanager.__version__, str)
+    assert hasattr(mctoolkit, "__version__")
+    assert isinstance(mctoolkit.__version__, str)
 
 
 def test_user_guides_html_contains_topics():
-    from molmanager.ui.user_guides import guide_html
+    from mctoolkit.ui.user_guides import guide_html
 
     h = guide_html("ext_pubchem")
     assert "PubChem" in h
@@ -36,7 +36,7 @@ def test_user_guides_html_contains_topics():
 
 
 def test_user_guides_sections_cover_all_topics():
-    from molmanager.ui.user_guides import GUIDE_MENU, GUIDE_SECTIONS, iter_guide_entries
+    from mctoolkit.ui.user_guides import GUIDE_MENU, GUIDE_SECTIONS, iter_guide_entries
 
     flat = list(iter_guide_entries())
     assert len(flat) == len(GUIDE_MENU)
@@ -45,7 +45,7 @@ def test_user_guides_sections_cover_all_topics():
 
 
 def test_user_guides_data_viz_topic():
-    from molmanager.ui.user_guides import guide_html
+    from mctoolkit.ui.user_guides import guide_html
 
     h = guide_html("data_pca")
     assert "Principal" in h or "PCA" in h
@@ -53,8 +53,8 @@ def test_user_guides_data_viz_topic():
 
 
 def test_pubchem_similarity_results_sort_key():
-    from molmanager.ui.external.pubchem import PubChemResult, _pubchem_similarity_sort_key
-    from molmanager.ui.strings import COLUMN_TANIMOTO_SIMILARITY
+    from mctoolkit.ui.external.pubchem import PubChemResult, _pubchem_similarity_sort_key
+    from mctoolkit.ui.strings import COLUMN_TANIMOTO_SIMILARITY
 
     lo = PubChemResult(1, "C", {COLUMN_TANIMOTO_SIMILARITY: "0.41"})
     hi = PubChemResult(2, "CC", {COLUMN_TANIMOTO_SIMILARITY: "0.92"})
@@ -62,7 +62,7 @@ def test_pubchem_similarity_results_sort_key():
 
 
 def test_similarity_fp_type_labels_include_variants():
-    from molmanager.chem.rdkit_fingerprints import SIMILARITY_FP_TYPE_LABELS
+    from mctoolkit.chem.rdkit_fingerprints import SIMILARITY_FP_TYPE_LABELS
 
     joined = "\n".join(SIMILARITY_FP_TYPE_LABELS)
     assert "Atom pair" in joined and "Topological" in joined
@@ -73,7 +73,7 @@ def test_similarity_fp_type_labels_include_variants():
 def test_fingerprint_bitvect_atom_pair_and_morgan_nbits():
     from rdkit import Chem
 
-    from molmanager.workers.fingerprint_similarity import fingerprint_bitvect_for_ui_choice
+    from mctoolkit.workers.fingerprint_similarity import fingerprint_bitvect_for_ui_choice
 
     m = Chem.MolFromSmiles("c1ccccc1")
     ap = fingerprint_bitvect_for_ui_choice(m, "Atom pair (hashed, 2048 bits)")
@@ -87,7 +87,7 @@ def test_fingerprint_bitvect_atom_pair_and_morgan_nbits():
 def test_parse_molecule_from_cell_text_accepts_smiles_and_inchi():
     from rdkit import Chem
 
-    from molmanager.chem.molecule_conversion import parse_molecule_from_cell_text
+    from mctoolkit.chem.molecule_conversion import parse_molecule_from_cell_text
 
     m1 = parse_molecule_from_cell_text("CCO")
     assert m1 is not None and m1.GetNumAtoms() == 3
@@ -97,7 +97,7 @@ def test_parse_molecule_from_cell_text_accepts_smiles_and_inchi():
 
 
 def test_smina_dock_guide_html(qapp):  # noqa: ARG001
-    from molmanager.ui.user_guides import guide_html
+    from mctoolkit.ui.user_guides import guide_html
 
     h = guide_html("tools_gnina")
     assert "Gnina" in h and "PDBQT" in h
@@ -109,7 +109,7 @@ def test_smina_dock_guide_html(qapp):  # noqa: ARG001
 
 
 def test_systematic_conformations_guide_html(qapp):  # noqa: ARG001
-    from molmanager.ui.user_guides import guide_html
+    from mctoolkit.ui.user_guides import guide_html
 
     h = guide_html("tools_gen_conformations_systematic")
     assert "Confab" in h and "Systematic" in h
@@ -117,7 +117,7 @@ def test_systematic_conformations_guide_html(qapp):  # noqa: ARG001
 
 
 def test_conforge_conformations_guide_html(qapp):  # noqa: ARG001
-    from molmanager.ui.user_guides import guide_html
+    from mctoolkit.ui.user_guides import guide_html
 
     h = guide_html("tools_gen_conformations_conforge")
     assert "CONFORGE" in h and "CDPKit" in h
@@ -125,7 +125,7 @@ def test_conforge_conformations_guide_html(qapp):  # noqa: ARG001
 
 
 def test_smina_dock_dialog_constructible(qapp):  # noqa: ARG001
-    from molmanager.ui.gnina_dock import GninaDockDialog
+    from mctoolkit.ui.gnina_dock import GninaDockDialog
 
     d = GninaDockDialog(None)
     assert d.windowTitle() == "Dock — Gnina"
@@ -327,7 +327,7 @@ def test_pixmap_structure_column_context_chemistry(qapp):  # noqa: ARG001
 def test_canonical_structure_keys_for_dedup(qapp):  # noqa: ARG001
     from rdkit import Chem
 
-    from molmanager.chem.molecule_conversion import morgan_tanimoto_to_query
+    from mctoolkit.chem.molecule_conversion import morgan_tanimoto_to_query
 
     assert morgan_tanimoto_to_query("CC", "CC") == 1.0
     t = morgan_tanimoto_to_query("CCO", "CC")
@@ -348,7 +348,7 @@ def test_canonical_structure_keys_for_dedup(qapp):  # noqa: ARG001
 def test_data_analysis_outlier_masks() -> None:
     import numpy as np
 
-    from molmanager.ui.data_analysis import (
+    from mctoolkit.ui.data_analysis import (
         _outlier_mask_iqr,
         _outlier_mask_modified_z,
         _outlier_mask_zscore,

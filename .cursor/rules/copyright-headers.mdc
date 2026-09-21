@@ -1,5 +1,5 @@
 ---
-description: Require MolManager GPL copyright headers on all new and existing source files
+description: Require MCToolkit GPL copyright headers on all new and existing source files
 alwaysApply: true
 ---
 
@@ -10,28 +10,28 @@ Every **new** source file must begin with the same GPL copyright header used thr
 ## Applies to
 
 - Project-authored source: `.py`, `.pyi`, `.pyw`, `.pyx`, shell/PowerShell scripts (`.sh`, `.ps1`, `.bat`), and other first-party code
-- Do **not** add this header to vendored/third-party assets (e.g. minified libraries under `molmanager/ui/static/`)
+- Do **not** add this header to vendored/third-party assets (e.g. minified libraries under `mctoolkit/ui/static/`)
 
 ## Required header (Python and `#`-comment languages)
 
 Place at the top of the file. For scripts with a shebang (`#!/usr/bin/env …`), keep the shebang as line 1 and put the header immediately below it.
 
 ```
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 ```
 
 ## Checklist for new files

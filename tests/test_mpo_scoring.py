@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for multi-parameter optimization desirability scoring."""
 
@@ -22,7 +22,7 @@ import math
 
 import pytest
 
-from molmanager.analysis.mpo_scoring import (
+from mctoolkit.analysis.mpo_scoring import (
     DesirabilitySpec,
     combine_desirabilities,
     evaluate_desirability,
@@ -108,7 +108,7 @@ def test_score_mpo_row_end_to_end():
 def test_numeric_columns_and_bounds_from_dict_and_tuple() -> None:
     from types import SimpleNamespace
 
-    from molmanager.ui.dialogs.mpo_scoring import _numeric_columns_and_bounds
+    from mctoolkit.ui.dialogs.mpo_scoring import _numeric_columns_and_bounds
 
     parent = SimpleNamespace(
         global_bounds={"MW": {"min": 1, "max": 10}, "LogP": (0, 5), "empty": {"min": 3, "max": 3}}
@@ -121,7 +121,7 @@ def test_numeric_columns_and_bounds_from_dict_and_tuple() -> None:
 
 
 def test_mpo_dialog_constructs_without_parent(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.dialogs.mpo_scoring import MPOScoringDialog
+    from mctoolkit.ui.dialogs.mpo_scoring import MPOScoringDialog
 
     dlg = MPOScoringDialog(None)
     assert dlg.out_edit.text() == "MPO_Score"

@@ -24,10 +24,10 @@ jobs:
           pip install "ruff>=0.6"
 
       - name: Ruff (correctness and exception ratchet)
-        run: python -m ruff check molmanager tests scripts
+        run: python -m ruff check mctoolkit tests scripts
 
       - name: Ruff (format gate)
-        run: python -m ruff format --check molmanager tests scripts
+        run: python -m ruff format --check mctoolkit tests scripts
 
       - name: GPL copyright headers
         run: python scripts/check_gpl_headers.py

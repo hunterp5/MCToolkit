@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """IUPAC ring geometry: bond-length polygons, large rings, substituents."""
 
@@ -23,16 +23,16 @@ import math
 from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QWidget
 
-from molmanager.ui.sketcher.bonds import _bond_make
-from molmanager.ui.sketcher.dialog import SketcherDialog
-from molmanager.ui.sketcher.iupac_rings import (
+from mctoolkit.ui.sketcher.bonds import _bond_make
+from mctoolkit.ui.sketcher.dialog import SketcherDialog
+from mctoolkit.ui.sketcher.iupac_rings import (
     exterior_ring_substituent_direction,
     large_ring_offsets_y_up,
     ring_circumradius_for_bond_length,
     regular_ring_offsets_y_up,
 )
-from molmanager.ui.sketcher.iupac_style import iupac_sketch_style
-from molmanager.ui.sketcher.widget import SketchWidget
+from mctoolkit.ui.sketcher.iupac_style import iupac_sketch_style
+from mctoolkit.ui.sketcher.widget import SketchWidget
 
 
 def _ring_edge_lengths(pts: list[tuple[float, float]]) -> list[float]:
@@ -45,8 +45,8 @@ def _ring_edge_lengths(pts: list[tuple[float, float]]) -> list[float]:
 
 def test_sulfonamide_and_sulfoxide_valence_ok(qapp) -> None:  # noqa: ARG001
     """Hypervalent S (sulfone / sulfonamide / sulfoxide) must not flag valence errors."""
-    from molmanager.ui.sketcher.bonds import _bond_make
-    from molmanager.ui.sketcher.widget import SketchWidget
+    from mctoolkit.ui.sketcher.bonds import _bond_make
+    from mctoolkit.ui.sketcher.widget import SketchWidget
 
     w = SketchWidget()
     # Me–S(=O)(=O)–NH2 style: S with two doubles to O and singles to C and N.
@@ -91,8 +91,8 @@ def test_sulfonamide_and_sulfoxide_valence_ok(qapp) -> None:  # noqa: ARG001
 
 def test_divalent_sulfur_no_spurious_hydrogens(qapp) -> None:  # noqa: ARG001
     """Disulfides / thioethers are S(II): label as S, not SH4."""
-    from molmanager.ui.sketcher.bonds import _bond_make
-    from molmanager.ui.sketcher.widget import SketchWidget
+    from mctoolkit.ui.sketcher.bonds import _bond_make
+    from mctoolkit.ui.sketcher.widget import SketchWidget
 
     # Me–S–S–Me
     w = SketchWidget()
@@ -171,7 +171,7 @@ def test_large_rings_not_circular() -> None:
         radii = [math.hypot(x, y) for x, y in pts]
         assert max(radii) - min(radii) > 5.0
 
-    from molmanager.ui.sketcher.iupac_rings import (
+    from mctoolkit.ui.sketcher.iupac_rings import (
         PREFERRED_RING_BOND_ANGLES_DEG,
         _interior_bond_angles_deg,
     )
@@ -186,7 +186,7 @@ def test_large_rings_not_circular() -> None:
 def test_macrocycle_uses_local_painter_not_rdkit(qapp) -> None:  # noqa: ARG001
     from PySide6.QtCore import QPoint
 
-    from molmanager.ui.sketcher.widget import SketchWidget
+    from mctoolkit.ui.sketcher.widget import SketchWidget
 
     w = SketchWidget()
     w._median_bond_length_px = 60.0
@@ -209,7 +209,7 @@ def test_macrocycle_load_from_mol_keeps_rdkit_table_layout(qapp) -> None:  # noq
 
     from rdkit import Chem
 
-    from molmanager.ui.sketcher.widget import SketchWidget
+    from mctoolkit.ui.sketcher.widget import SketchWidget
 
     mol = Chem.MolFromSmiles("C1CCCCCCCCCCC1")
     w = SketchWidget()
@@ -231,8 +231,8 @@ def test_macrocycle_load_from_mol_keeps_rdkit_table_layout(qapp) -> None:  # noq
 def test_macrocycle_stereo_cip_assigned_on_load(qapp) -> None:  # noqa: ARG001
     from rdkit import Chem
 
-    from molmanager.ui.sketcher.bonds import BOND_STEREO_HASH, BOND_STEREO_WEDGE, _bond_unpack
-    from molmanager.ui.sketcher.widget import SketchWidget
+    from mctoolkit.ui.sketcher.bonds import BOND_STEREO_HASH, BOND_STEREO_WEDGE, _bond_unpack
+    from mctoolkit.ui.sketcher.widget import SketchWidget
 
     mol = Chem.MolFromSmiles("C[C@H]1CCCC[C@@H](C)CCCCC1")
     w = SketchWidget()
@@ -258,7 +258,7 @@ def test_macrocycle_skips_stereo_h_when_substituent_can_wedge() -> None:
     """ST-1.2/1.3: omit stereo-H when a substituent can take the wedge/hash."""
     from rdkit import Chem
 
-    from molmanager.ui.sketcher.sketch_rdkit import SketchWidgetRdkitMixin
+    from mctoolkit.ui.sketcher.sketch_rdkit import SketchWidgetRdkitMixin
 
     macro = Chem.MolFromSmiles("C[C@H]1CCCCCCCCCC1")
     Chem.AssignStereochemistry(macro, cleanIt=True, force=True)
@@ -278,8 +278,8 @@ def test_load_omits_stereo_h_when_substituent_can_wedge(qapp) -> None:  # noqa: 
     """Table→sketcher: wedge on a heavy substituent; no explicit stereo-H (ST-1.2)."""
     from rdkit import Chem
 
-    from molmanager.ui.sketcher.bonds import BOND_STEREO_HASH, BOND_STEREO_WEDGE, _bond_unpack
-    from molmanager.ui.sketcher.widget import SketchWidget
+    from mctoolkit.ui.sketcher.bonds import BOND_STEREO_HASH, BOND_STEREO_WEDGE, _bond_unpack
+    from mctoolkit.ui.sketcher.widget import SketchWidget
 
     mol = Chem.MolFromSmiles("C[C@H](O)N")
     w = SketchWidget()
@@ -301,8 +301,8 @@ def test_load_draws_stereo_h_when_ring_only_ligands(qapp) -> None:  # noqa: ARG0
     """When no exocyclic wedge target exists, draw stereo-H (ST-1.2 / ST-1.3)."""
     from rdkit import Chem
 
-    from molmanager.ui.sketcher.bonds import BOND_STEREO_HASH, BOND_STEREO_WEDGE, _bond_unpack
-    from molmanager.ui.sketcher.widget import SketchWidget
+    from mctoolkit.ui.sketcher.bonds import BOND_STEREO_HASH, BOND_STEREO_WEDGE, _bond_unpack
+    from mctoolkit.ui.sketcher.widget import SketchWidget
 
     mol = Chem.MolFromSmiles("C1CC[C@H]2CCCC[C@@H]12")
     w = SketchWidget()
@@ -323,8 +323,8 @@ def test_load_draws_stereo_h_when_ring_only_ligands(qapp) -> None:  # noqa: ARG0
 def test_stereo_with_wedge_not_unspecified_caution(qapp) -> None:  # noqa: ARG001
     from PySide6.QtCore import QPoint
 
-    from molmanager.ui.sketcher.bonds import BOND_STEREO_WEDGE
-    from molmanager.ui.sketcher.widget import SketchWidget
+    from mctoolkit.ui.sketcher.bonds import BOND_STEREO_WEDGE
+    from mctoolkit.ui.sketcher.widget import SketchWidget
 
     w = SketchWidget()
     # Simple chiral carbon with a wedge — CIP may or may not assign, but must not caution.
@@ -345,7 +345,7 @@ def test_stereo_with_wedge_not_unspecified_caution(qapp) -> None:  # noqa: ARG00
     w._after_sketch_edit(notify=False)
     assert 0 not in w._chiral_stereo_issue_ids
 
-    from molmanager.ui.sketcher.iupac_rings import rotate_offsets_to_inward_heteroatoms
+    from mctoolkit.ui.sketcher.iupac_rings import rotate_offsets_to_inward_heteroatoms
 
     pts = large_ring_offsets_y_up(12, bond_length=60)
     radii = [math.hypot(x, y) for x, y in pts]

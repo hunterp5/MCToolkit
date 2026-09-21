@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Fast Prepare end-to-end: one fused job writes the neutralized parent and the fragments column."""
 
@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
-from molmanager.workers.fast_prepare import FastPrepareParams, FastPrepareWorker
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.chem.molecule_conversion import mol_to_canonical_smiles
+from mctoolkit.workers.fast_prepare import FastPrepareParams, FastPrepareWorker
 
 SALTS = [
     "CC(=O)Oc1ccccc1C(=O)[O-].[Na+]",

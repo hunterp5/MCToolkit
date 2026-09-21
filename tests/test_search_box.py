@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Smina search-box geometry and Prepare sidecar writers."""
 
@@ -22,8 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from molmanager.docking.search_box import box_from_points, smina_artifact_paths
-from molmanager.workers.protein_prepare_smina import (
+from mctoolkit.docking.search_box import box_from_points, smina_artifact_paths
+from mctoolkit.workers.protein_prepare_smina import (
     ligand_keys_from_structure,
     write_dock_file_artifacts,
     write_smina_prepare_artifacts,
@@ -68,7 +68,7 @@ def test_smina_artifact_paths():
 
 
 def test_protein_prepare_result_receptor_pdbqt_path():
-    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+    from mctoolkit.workers.protein_prepare_smina import ProteinPrepareResult
 
     result = ProteinPrepareResult(
         output_path="holo_smina.pdbqt",
@@ -87,7 +87,7 @@ def test_protein_prepare_result_receptor_pdbqt_path():
 
 
 def test_protein_prepare_result_output_pdbqt_fallback_requires_file(tmp_path):
-    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+    from mctoolkit.workers.protein_prepare_smina import ProteinPrepareResult
 
     rec = tmp_path / "holo_smina.pdbqt"
     rec.write_text("ATOM\n", encoding="utf-8")
@@ -105,7 +105,7 @@ def test_write_smina_artifacts_holo_skips_water(tmp_path, monkeypatch):
         return None, []
 
     monkeypatch.setattr(
-        "molmanager.workers.pdbqt_generator._write_receptor_pdbqt_file",
+        "mctoolkit.workers.pdbqt_generator._write_receptor_pdbqt_file",
         _fake_meeko,
     )
     out = tmp_path / "rec_prepared.cif"
@@ -157,7 +157,7 @@ def _stub_meeko(monkeypatch):
         return None, []
 
     monkeypatch.setattr(
-        "molmanager.workers.pdbqt_generator._write_receptor_pdbqt_file",
+        "mctoolkit.workers.pdbqt_generator._write_receptor_pdbqt_file",
         _fake_meeko,
     )
 
@@ -232,7 +232,7 @@ def test_write_smina_artifacts_missing_gemmi_keeps_box(tmp_path, monkeypatch):
         raise ModuleNotFoundError("No module named 'gemmi'", name="gemmi")
 
     monkeypatch.setattr(
-        "molmanager.workers.pdbqt_generator._write_receptor_pdbqt_file",
+        "mctoolkit.workers.pdbqt_generator._write_receptor_pdbqt_file",
         _boom,
     )
     out = tmp_path / "rec_prepared.cif"
@@ -257,7 +257,7 @@ def test_write_dock_file_artifacts_from_holo(tmp_path, monkeypatch):
         return "", []
 
     monkeypatch.setattr(
-        "molmanager.workers.pdbqt_generator._write_receptor_pdbqt_file",
+        "mctoolkit.workers.pdbqt_generator._write_receptor_pdbqt_file",
         _fake_write,
     )
     keys = ligand_keys_from_structure(_HOLO_PDB, "pdb")

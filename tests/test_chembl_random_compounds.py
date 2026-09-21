@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for Tools → Utilities → Random → Molecule (ChEMBL sampling helpers)."""
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-from molmanager.sources.chembl_random_compounds import (
+from mctoolkit.sources.chembl_random_compounds import (
     RandomChemblMolecule,
     _record_to_hit,
     chembl_id_from_number,
@@ -80,9 +80,9 @@ def test_fetch_random_chembl_molecules_mocked(monkeypatch):
             off = 0
         return pages.get(off, [])
 
-    monkeypatch.setattr("molmanager.sources.chembl_random_compounds._fetch_page", fake_fetch_page)
+    monkeypatch.setattr("mctoolkit.sources.chembl_random_compounds._fetch_page", fake_fetch_page)
     monkeypatch.setattr(
-        "molmanager.sources.chembl_random_compounds.small_molecule_total_count", lambda **_: 200
+        "mctoolkit.sources.chembl_random_compounds.small_molecule_total_count", lambda **_: 200
     )
 
     hits = fetch_random_chembl_molecules(3, seed=1, page_size=25)

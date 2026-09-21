@@ -1,24 +1,24 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for matched molecular pair analysis helpers."""
 
 from rdkit import Chem
 
-from molmanager.analysis.mmp_analysis import (
+from mctoolkit.analysis.mmp_analysis import (
     MmpPair,
     aggregate_transforms,
     canonicalize_pair_direction,
@@ -29,8 +29,8 @@ from molmanager.analysis.mmp_analysis import (
     pairs_for_transform,
     parse_mmp_core_query,
 )
-from molmanager.analysis.mmp_depict import highlight_atoms_for_pair
-from molmanager.analysis.mmp_table import assemble_mmp_table_annotations
+from mctoolkit.analysis.mmp_depict import highlight_atoms_for_pair
+from mctoolkit.analysis.mmp_table import assemble_mmp_table_annotations
 
 
 def _rec(oid: int, smiles: str, activity: float):
@@ -274,7 +274,7 @@ def test_aggregate_transforms_splits_by_core():
 
 
 def test_aggregate_transforms_reference_oid():
-    from molmanager.analysis.mmp_analysis import (
+    from mctoolkit.analysis.mmp_analysis import (
         orient_pair_relative_to_reference,
         pairs_involving_oid,
         reference_oids_in_pairs,
@@ -325,7 +325,7 @@ def test_aggregate_transforms_from_real_pairs():
 
 
 def test_apply_transform_to_mol_phenol_anisole():
-    from molmanager.analysis.mmp_analysis import apply_transform_to_mol
+    from mctoolkit.analysis.mmp_analysis import apply_transform_to_mol
 
     phenol = Chem.MolFromSmiles("Oc1ccccc1")
     products = apply_transform_to_mol(phenol, "O[*:1]", "CO[*:1]")
@@ -346,7 +346,7 @@ def test_apply_transform_to_mol_phenol_anisole():
 
 
 def test_apply_transform_to_mol_two_cut():
-    from molmanager.analysis.mmp_analysis import apply_transform_to_mol
+    from mctoolkit.analysis.mmp_analysis import apply_transform_to_mol
 
     mol = Chem.MolFromSmiles("Nc1ccc(O)cc1")
     products = apply_transform_to_mol(mol, "N[*:1].O[*:2]", "CN[*:1].CO[*:2]", max_cuts=2)
@@ -357,7 +357,7 @@ def test_apply_transform_to_mol_two_cut():
 
 
 def test_mmp_ledger_session_payload_roundtrip():
-    from molmanager.analysis.mmp_session import (
+    from mctoolkit.analysis.mmp_session import (
         deserialize_mmp_ledger_payload,
         serialize_mmp_ledger_payload,
     )
@@ -386,7 +386,7 @@ def test_mmp_core_module_does_not_own_session_table_or_depict() -> None:
     from pathlib import Path
 
     text = (
-        Path(__file__).resolve().parents[1] / "molmanager" / "analysis" / "mmp_analysis.py"
+        Path(__file__).resolve().parents[1] / "mctoolkit" / "analysis" / "mmp_analysis.py"
     ).read_text(encoding="utf-8")
     assert "def serialize_mmp_ledger_payload" not in text
     assert "def assemble_mmp_table_annotations" not in text
@@ -394,7 +394,7 @@ def test_mmp_core_module_does_not_own_session_table_or_depict() -> None:
 
 
 def test_is_mmp_result_header() -> None:
-    from molmanager.analysis.mmp_table import is_mmp_result_header
+    from mctoolkit.analysis.mmp_table import is_mmp_result_header
 
     assert is_mmp_result_header("MMP_Partners")
     assert is_mmp_result_header("MMP_Delta_pIC50")

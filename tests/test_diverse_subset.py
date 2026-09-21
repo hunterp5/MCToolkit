@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Diverse subset (MaxMin) picking."""
 
@@ -23,10 +23,10 @@ import threading
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.chem.fingerprint_cache import clear as clear_fp_cache
-from molmanager.chem.fingerprint_cache import get as cache_get
-from molmanager.chem.fingerprint_cache import store_from_mol
-from molmanager.workers.diverse_subset_worker import (
+from mctoolkit.chem.fingerprint_cache import clear as clear_fp_cache
+from mctoolkit.chem.fingerprint_cache import get as cache_get
+from mctoolkit.chem.fingerprint_cache import store_from_mol
+from mctoolkit.workers.diverse_subset_worker import (
     DIVERSE_SUBSET_MODE_LABELS,
     DiverseSubsetPoolRow,
     DiverseSubsetRequest,
@@ -41,7 +41,7 @@ from molmanager.workers.diverse_subset_worker import (
     run_diverse_subset_pick,
     staged_maxmin_diverse_pick,
 )
-from molmanager.workers.signals import DiverseSubsetSignals
+from mctoolkit.workers.signals import DiverseSubsetSignals
 
 
 def _morgan_fps(smis: list[str]):
@@ -252,7 +252,7 @@ def test_prefilter_skips_leader_on_large_pools(monkeypatch):
         raise AssertionError("Leader should not run on large pools")
 
     monkeypatch.setattr(
-        "molmanager.workers.diverse_subset_worker._leader_candidate_indices",
+        "mctoolkit.workers.diverse_subset_worker._leader_candidate_indices",
         _boom,
     )
     fps = list(range(30_000))  # opaque stand-ins; Leader is never called
@@ -321,7 +321,7 @@ def test_diverse_subset_worker_resolves_structure_texts():
 
 
 def test_diverse_subset_dialog_mode_uses_item_data(qapp):  # noqa: ARG001
-    from molmanager.ui.dialogs.diverse_subset import DiverseSubsetDialog
+    from mctoolkit.ui.dialogs.diverse_subset import DiverseSubsetDialog
 
     dlg = DiverseSubsetDialog(None)
     try:

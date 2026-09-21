@@ -61,15 +61,14 @@ dev = [
 ]
 
 [project.scripts]
-mctoolkit = "molmanager.app:main"
-molmanager = "molmanager.app:main"
+mctoolkit = "mctoolkit.app:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["molmanager*"]
+include = ["mctoolkit*"]
 
 [tool.setuptools.package-data]
-molmanager = [
+mctoolkit = [
     "ui/static/*",
     "ui/plotly_shell.html",
     "ui/protein_viewer.js",
@@ -84,10 +83,10 @@ molmanager = [
 [tool.ruff]
 target-version = "py310"
 line-length = 100
-src = ["molmanager", "tests", "scripts"]
+src = ["mctoolkit", "tests", "scripts"]
 extend = "ruff.exception-ratchet.toml"
 extend-exclude = [
-    "molmanager/ui/static",
+    "mctoolkit/ui/static",
 ]
 
 [tool.ruff.lint]

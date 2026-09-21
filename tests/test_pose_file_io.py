@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Docking I/O helpers (PDBQT parse, setup file, pose merge)."""
 
@@ -25,7 +25,7 @@ import pytest
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.docking.pose_file_io import (
+from mctoolkit.docking.pose_file_io import (
     affinity_from_pdbqt,
     combine_placement_and_minimized,
     combine_pose_mols,
@@ -345,8 +345,8 @@ def test_gnina_executable_ok_accepts_wsl_name(monkeypatch, tmp_path):
     exe = tmp_path / "gnina"
     exe.write_bytes(b"")
     assert gnina_executable_ok(str(exe))
-    monkeypatch.setattr("molmanager.docking.gnina_launch.gnina_uses_wsl", lambda: True)
-    monkeypatch.setattr("molmanager.docking.gnina_launch.resolve_user_executable", lambda _p: None)
+    monkeypatch.setattr("mctoolkit.docking.gnina_launch.gnina_uses_wsl", lambda: True)
+    monkeypatch.setattr("mctoolkit.docking.gnina_launch.resolve_user_executable", lambda _p: None)
     assert gnina_executable_ok("gnina")
     assert not gnina_executable_ok("")
 
@@ -449,12 +449,12 @@ def test_mols_from_dock_output_merges_log(tmp_path):
 
 
 def test_group_dock_poses_by_parent_oid():
-    from molmanager.docking.pose_file_io import (
+    from mctoolkit.docking.pose_file_io import (
         dock_poses_pack_meta,
         group_dock_poses,
         stamp_pose_parent_oids,
     )
-    from molmanager.services.column_labels import COLUMN_PARENT_OID
+    from mctoolkit.services.column_labels import COLUMN_PARENT_OID
 
     parent = Chem.MolFromSmiles("CCO")
     orphan = Chem.MolFromSmiles("CCN")
@@ -478,8 +478,8 @@ def test_group_dock_poses_by_parent_oid():
 
 
 def test_ordered_dock_pose_groups_first_seen():
-    from molmanager.docking.pose_file_io import ordered_dock_pose_groups
-    from molmanager.services.column_labels import COLUMN_PARENT_OID
+    from mctoolkit.docking.pose_file_io import ordered_dock_pose_groups
+    from mctoolkit.services.column_labels import COLUMN_PARENT_OID
 
     a = Chem.MolFromSmiles("CCO")
     b = Chem.MolFromSmiles("CCO")
@@ -540,7 +540,7 @@ def test_dock_result_headers_include_ff_energies():
 
 
 def test_is_poses_header():
-    from molmanager.docking.pose_file_io import is_poses_header
+    from mctoolkit.docking.pose_file_io import is_poses_header
 
     assert is_poses_header("poses") is True
     assert is_poses_header("poses (1)") is True
@@ -552,11 +552,11 @@ def test_is_poses_header():
 def test_dock_results_session_payload_roundtrip():
     from rdkit.Geometry import Point3D
 
-    from molmanager.docking.pose_file_io import (
+    from mctoolkit.docking.pose_file_io import (
         deserialize_dock_results_payload,
         serialize_dock_results_payload,
     )
-    from molmanager.services.column_labels import COLUMN_PARENT_OID
+    from mctoolkit.services.column_labels import COLUMN_PARENT_OID
 
     mol = Chem.MolFromSmiles("CCO")
     assert mol is not None

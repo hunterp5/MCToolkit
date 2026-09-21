@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Measure the cost of each Fast Prepare stage (disconnect, neutralize, render 2D).
 
@@ -33,7 +33,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from molmanager.table.structure_depiction_layout import (  # noqa: E402
+from mctoolkit.table.structure_depiction_layout import (  # noqa: E402
     STRUCTURE_DEPICT_HEIGHT,
     STRUCTURE_DEPICT_WIDTH,
 )
@@ -43,10 +43,10 @@ def _fused_batch(args):
     """Disconnect + neutralize + render one batch inside a child process."""
     from rdkit import Chem
 
-    from molmanager.chem.fragment_disconnect import largest_fragment_and_rest
-    from molmanager.chem.structure_2d_depiction import render_molecule_png
-    from molmanager.chem.structure_neutralize import neutralize_mol
-    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
+    from mctoolkit.chem.fragment_disconnect import largest_fragment_and_rest
+    from mctoolkit.chem.structure_2d_depiction import render_molecule_png
+    from mctoolkit.chem.structure_neutralize import neutralize_mol
+    from mctoolkit.chem.molecule_conversion import mol_to_canonical_smiles
 
     blobs, w, h = args
     out = []
@@ -65,7 +65,7 @@ def _fused_batch(args):
 def _render_only_batch(args):
     from rdkit import Chem
 
-    from molmanager.chem.structure_2d_depiction import render_molecule_png
+    from mctoolkit.chem.structure_2d_depiction import render_molecule_png
 
     blobs, w, h = args
     return [(oid, render_molecule_png(Chem.Mol(blob), w, h)) for oid, blob in blobs]
@@ -75,9 +75,9 @@ def _chem_only_batch(args):
     """Disconnect + neutralize + canonical SMILES for one batch (no rendering)."""
     from rdkit import Chem
 
-    from molmanager.chem.fragment_disconnect import largest_fragment_and_rest
-    from molmanager.chem.structure_neutralize import neutralize_mol
-    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
+    from mctoolkit.chem.fragment_disconnect import largest_fragment_and_rest
+    from mctoolkit.chem.structure_neutralize import neutralize_mol
+    from mctoolkit.chem.molecule_conversion import mol_to_canonical_smiles
 
     blobs = args[0]
     out = []
@@ -101,9 +101,9 @@ def main() -> None:
 
     from rdkit import Chem
 
-    from molmanager.chem.fragment_disconnect import largest_fragment_and_rest
-    from molmanager.chem.structure_neutralize import neutralize_mol
-    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
+    from mctoolkit.chem.fragment_disconnect import largest_fragment_and_rest
+    from mctoolkit.chem.structure_neutralize import neutralize_mol
+    from mctoolkit.chem.molecule_conversion import mol_to_canonical_smiles
 
     suppl = Chem.SDMolSupplier(args.path)
     mols = [m for m in suppl if m is not None]

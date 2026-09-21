@@ -1,24 +1,24 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
 import os
 
-from molmanager.ui.theme import (
+from mctoolkit.ui.theme import (
     THEME_CUSTOM,
     THEME_DARK,
     THEME_GROOVY,
@@ -45,10 +45,10 @@ def _isolate_theme_settings(tmp_path, monkeypatch) -> None:
 
     ini = str(tmp_path / "mctoolkit_theme_test.ini")
     monkeypatch.setattr(
-        "molmanager.app_identity.QSettings",
+        "mctoolkit.app_identity.QSettings",
         lambda *_a, **_k: QSettings(ini, QSettings.IniFormat),
     )
-    from molmanager.app_identity import reset_settings_migration_for_tests
+    from mctoolkit.app_identity import reset_settings_migration_for_tests
 
     reset_settings_migration_for_tests()
 
@@ -92,7 +92,7 @@ def test_apply_application_theme_sets_current(qapp, tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
     from PySide6.QtWidgets import QApplication
 
-    from molmanager.ui.theme import apply_application_theme
+    from mctoolkit.ui.theme import apply_application_theme
 
     apply_application_theme(QApplication.instance(), THEME_DARK)
     assert current_theme_name() == THEME_DARK
@@ -107,7 +107,7 @@ def test_apply_application_theme_sets_current(qapp, tmp_path, monkeypatch):
 
 
 def test_status_bar_font_pt_is_one_point_below_app():
-    from molmanager.ui.theme import MIN_FONT_PT, status_bar_font_pt
+    from mctoolkit.ui.theme import MIN_FONT_PT, status_bar_font_pt
 
     assert status_bar_font_pt(10) == 9
     assert status_bar_font_pt(None) == 9
@@ -119,7 +119,7 @@ def test_table_text_alignment_save_load_and_flags(tmp_path, monkeypatch):
     from PySide6.QtCore import Qt
 
     _isolate_theme_settings(tmp_path, monkeypatch)
-    from molmanager.ui.theme import (
+    from mctoolkit.ui.theme import (
         load_saved_table_text_alignment,
         set_table_text_alignment,
         table_text_alignment,
@@ -140,7 +140,7 @@ def test_table_text_alignment_save_load_and_flags(tmp_path, monkeypatch):
 
 
 def test_font_dialog_alignment_grid(qapp):  # noqa: ARG001
-    from molmanager.ui.dialogs.font_settings import FontSettingsDialog
+    from mctoolkit.ui.dialogs.font_settings import FontSettingsDialog
 
     dlg = FontSettingsDialog(10, 10, current_align_h="right", current_align_v="top")
     assert dlg.selected_table_alignment() == ("right", "top")
@@ -154,7 +154,7 @@ def test_font_dialog_alignment_grid(qapp):  # noqa: ARG001
 
 def test_status_bar_visible_save_and_load(tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
-    from molmanager.ui.theme import load_status_bar_visible, save_status_bar_visible
+    from mctoolkit.ui.theme import load_status_bar_visible, save_status_bar_visible
 
     assert load_status_bar_visible() is True
     save_status_bar_visible(False)
@@ -168,7 +168,7 @@ def test_custom_palette_save_load_and_apply(qapp, tmp_path, monkeypatch):
     from PySide6.QtGui import QPalette
     from PySide6.QtWidgets import QApplication
 
-    from molmanager.ui.theme import (
+    from mctoolkit.ui.theme import (
         apply_application_theme,
         default_custom_palette_colors,
     )
@@ -213,7 +213,7 @@ def test_both_themes_use_fusion_without_global_stylesheet(qapp, tmp_path, monkey
     _isolate_theme_settings(tmp_path, monkeypatch)
     from PySide6.QtWidgets import QApplication
 
-    from molmanager.ui.theme import apply_application_theme
+    from mctoolkit.ui.theme import apply_application_theme
 
     app = QApplication.instance()
     save_custom_theme("FusionCustom", {"window": "#abcdef"})
@@ -243,7 +243,7 @@ def test_groovy_palette_is_randomized():
 def test_refresh_open_windows_theme_calls_hook(qapp):
     from PySide6.QtWidgets import QApplication, QDialog
 
-    from molmanager.ui.theme import apply_application_theme, refresh_open_windows_theme
+    from mctoolkit.ui.theme import apply_application_theme, refresh_open_windows_theme
 
     class _ThemeDlg(QDialog):
         def __init__(self):
@@ -270,7 +270,7 @@ def test_theme_menu_actions_apply_light_and_dark(qapp, tmp_path, monkeypatch):
     from PySide6.QtGui import QGuiApplication, QPalette
     from PySide6.QtWidgets import QApplication
 
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w._act_theme_dark.trigger()
@@ -294,8 +294,8 @@ def test_application_theme_updates_table_header_palette(qapp, tmp_path, monkeypa
     from PySide6.QtGui import QPalette
     from PySide6.QtWidgets import QApplication
 
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.theme import apply_application_theme
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.theme import apply_application_theme
 
     w = ChemistryWorkspaceWindow()
     apply_application_theme(QApplication.instance(), THEME_LIGHT)
@@ -314,7 +314,7 @@ def test_application_theme_updates_table_header_palette(qapp, tmp_path, monkeypa
 
 def test_table_font_resizes_main_window_headers(qapp, tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w._set_table_font_pt(8, persist=False)
@@ -329,8 +329,8 @@ def test_table_font_resizes_main_window_headers(qapp, tmp_path, monkeypatch):
 
 
 def test_windows_caption_platform_disables_dark_frames(monkeypatch):
-    monkeypatch.setattr("molmanager.platform_support.qt_windows_caption.sys.platform", "win32")
-    from molmanager.platform_support.qt_windows_caption import (
+    monkeypatch.setattr("mctoolkit.platform_support.qt_windows_caption.sys.platform", "win32")
+    from mctoolkit.platform_support.qt_windows_caption import (
         configure_windows_native_caption_platform,
     )
 
@@ -344,7 +344,7 @@ def test_windows_caption_platform_disables_dark_frames(monkeypatch):
 
 
 def test_ensure_fusion_style_is_idempotent(qapp):
-    from molmanager.ui.theme import ensure_fusion_style
+    from mctoolkit.ui.theme import ensure_fusion_style
 
     ensure_fusion_style(qapp)
     assert qapp.style().objectName().lower() == "fusion"
@@ -354,7 +354,7 @@ def test_ensure_fusion_style_is_idempotent(qapp):
 
 def test_apply_application_theme_preserves_app_font_pt(qapp, tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
-    from molmanager.ui.theme import apply_application_font_pt, apply_application_theme
+    from mctoolkit.ui.theme import apply_application_font_pt, apply_application_theme
 
     apply_application_font_pt(14)
     apply_application_theme(qapp, THEME_DARK)
@@ -366,8 +366,8 @@ def test_apply_application_theme_preserves_app_font_pt(qapp, tmp_path, monkeypat
 
 def test_gui_theme_switch_does_not_resize_fonts(qapp, tmp_path, monkeypatch):
     _isolate_theme_settings(tmp_path, monkeypatch)
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.theme import apply_application_font_pt
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.theme import apply_application_font_pt
 
     w = ChemistryWorkspaceWindow()
     w._set_app_font_pt(14, persist=False)

@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for Lipinski, InChI key, formula, and CNS MPO-style descriptors."""
 
@@ -24,7 +24,7 @@ from unittest.mock import patch
 
 from rdkit import Chem
 
-from molmanager.descriptors.medchem_descriptors import (
+from mctoolkit.descriptors.medchem_descriptors import (
     cns_mpo_score,
     esol_logS_intrinsic,
     lipinski_violations,
@@ -35,8 +35,8 @@ from molmanager.descriptors.medchem_descriptors import (
     mol_net_formal_charge,
     ro5_pass,
 )
-from molmanager.ionization.unipka_ensembles import int_fns_need_ionization
-from molmanager.workers.chemistry_tools import descriptor_callable_for_int_fn
+from mctoolkit.ionization.unipka_ensembles import int_fns_need_ionization
+from mctoolkit.workers.chemistry_tools import descriptor_callable_for_int_fn
 
 
 def test_lipinski_ethanol_zero_violations() -> None:
@@ -74,7 +74,7 @@ def test_inchi_key_and_formula_ethanol() -> None:
     assert mol_formula(mol) == "C2H6O"
 
 
-@patch("molmanager.descriptors.medchem_descriptors.microstates_for_mol", return_value=None)
+@patch("mctoolkit.descriptors.medchem_descriptors.microstates_for_mol", return_value=None)
 def test_cns_mpo_in_range(_mock_ms: object) -> None:
     mol = Chem.MolFromSmiles("c1ccccc1CCN")
     assert mol is not None
@@ -82,7 +82,7 @@ def test_cns_mpo_in_range(_mock_ms: object) -> None:
     assert 0.0 <= s <= 6.0
 
 
-@patch("molmanager.descriptors.medchem_descriptors.microstates_for_mol", return_value=None)
+@patch("mctoolkit.descriptors.medchem_descriptors.microstates_for_mol", return_value=None)
 def test_descriptor_dispatch_custom_ids(_mock_ms: object) -> None:
     cache: dict = {}
     mol = Chem.MolFromSmiles("CCO")

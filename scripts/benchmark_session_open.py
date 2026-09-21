@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Measure GUI-thread stalls while opening a ``.cms`` session.
 
@@ -54,18 +54,18 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.no_render:
-        os.environ["MOLMANAGER_AUTO_RENDER_2D_MAX_ROWS"] = "0"
+        os.environ["MCTOOLKIT_AUTO_RENDER_2D_MAX_ROWS"] = "0"
 
-    # QtWebEngine must register with Qt before QApplication, exactly as molmanager.app does,
+    # QtWebEngine must register with Qt before QApplication, exactly as mctoolkit.app does,
     # or docked-plot restore fails and the measurement misses its real cost.
-    from molmanager.platform_support.qt_webengine_flags import configure_qtwebengine_quiet_logs
+    from mctoolkit.platform_support.qt_webengine_flags import configure_qtwebengine_quiet_logs
 
     if not args.no_webengine:
         configure_qtwebengine_quiet_logs()
         with contextlib.suppress(ImportError):
             import PySide6.QtWebEngineWidgets  # noqa: F401
 
-    from molmanager.ui.main_window.chemistry_workspace_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window.chemistry_workspace_window import ChemistryWorkspaceWindow
 
     app = QApplication.instance() or QApplication(sys.argv)
     win = ChemistryWorkspaceWindow()
@@ -148,8 +148,8 @@ def main() -> None:
     import importlib
 
     for mod_path, fn_name in (
-        ("molmanager.ui.som_browser", "restore_som_maps_for_session"),
-        ("molmanager.ionization.microstate_cache", "restore_ionization_sidecar"),
+        ("mctoolkit.ui.som_browser", "restore_som_maps_for_session"),
+        ("mctoolkit.ionization.microstate_cache", "restore_ionization_sidecar"),
     ):
         try:
             mod = importlib.import_module(mod_path)
@@ -158,7 +158,7 @@ def main() -> None:
         if hasattr(mod, fn_name):
             wrap(mod, fn_name, f"{mod_path.rsplit('.', 1)[-1]}.{fn_name}")
 
-    from molmanager.table import session_codec
+    from mctoolkit.table import session_codec
 
     for name in ("loads_session_bytes", "expand_session_document"):
         orig = getattr(session_codec, name)
@@ -176,8 +176,8 @@ def main() -> None:
         setattr(session_codec, name, make_codec())
         # session_save/session_restore import these by name.
         for mod_name in (
-            "molmanager.ui.session_save",
-            "molmanager.ui.session_restore",
+            "mctoolkit.ui.session_save",
+            "mctoolkit.ui.session_restore",
         ):
             mod = sys.modules.get(mod_name)
             if mod is not None and hasattr(mod, name):

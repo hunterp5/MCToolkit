@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Undo/redo and extended bond types for the sketcher."""
 
@@ -23,14 +23,14 @@ from qt_helpers import qt_submenu
 from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QWidget
 
-from molmanager.ui.sketcher.bonds import (
+from mctoolkit.ui.sketcher.bonds import (
     BOND_STEREO_DATIVE,
     BOND_STEREO_WAVY,
     _bond_make,
     _bond_unpack,
 )
-from molmanager.ui.sketcher.dialog import SketcherDialog
-from molmanager.ui.sketcher.widget import SketchWidget
+from mctoolkit.ui.sketcher.dialog import SketcherDialog
+from mctoolkit.ui.sketcher.widget import SketchWidget
 
 
 def test_clear_is_undoable(qapp) -> None:  # noqa: ARG001

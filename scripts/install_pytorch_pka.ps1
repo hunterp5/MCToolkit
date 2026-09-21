@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 # Repair or install the PyTorch 2.5.1 + Uni-pKa (unipkainfer) stack in the *active* Python.
 # On a fresh install, `pip install -r requirements.txt` already includes the CPU wheel.
@@ -88,7 +88,7 @@ if ($useCuda) {
 }
 
 Write-Host "`nVerifying imports..."
-$env:MOLMANAGER_REQUIRE_CUDA = $(if ($useCuda) { "1" } else { "0" })
+$env:MCTOOLKIT_REQUIRE_CUDA = $(if ($useCuda) { "1" } else { "0" })
 python -c @"
 import os
 import sys
@@ -97,7 +97,7 @@ import unipkainfer
 print('OK: torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'unipkainfer', getattr(unipkainfer, '__version__', 'ok'))
 if torch.cuda.is_available():
     print('GPU:', torch.cuda.get_device_name(0))
-elif os.environ.get('MOLMANAGER_REQUIRE_CUDA') == '1':
+elif os.environ.get('MCTOOLKIT_REQUIRE_CUDA') == '1':
     sys.exit('CUDA was requested but torch.cuda.is_available() is False. Close MCToolkit if it is running and retry.')
 "@
 if ($LASTEXITCODE -ne 0) {

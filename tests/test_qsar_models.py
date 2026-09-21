@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for QSAR model fitting (no Qt)."""
 
@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from molmanager.analysis.qsar_models import (
+from mctoolkit.analysis.qsar_models import (
     CLASSIFICATION_MODELS,
     MODEL_PARAM_SPECS,
     MODEL_SPECS,
@@ -171,7 +171,7 @@ def test_fit_and_predict_new_regressors(model_key: str):
 
 
 def test_custom_model_params_applied():
-    from molmanager.analysis.qsar_models import default_model_params, param_specs_for_model
+    from mctoolkit.analysis.qsar_models import default_model_params, param_specs_for_model
 
     assert "alpha" in default_model_params("ridge")
     assert any(s["key"] == "n_neighbors" for s in param_specs_for_model("knn"))

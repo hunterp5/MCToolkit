@@ -1,30 +1,30 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for activity-cliff metrics and figure helpers."""
 
 from rdkit import Chem
 
-from molmanager.analysis.activity_cliff_analysis import (
+from mctoolkit.analysis.activity_cliff_analysis import (
     build_activity_cliff_points,
     change_heavy_atom_count,
     fragment_tanimoto_distance,
 )
-from molmanager.analysis.mmp_analysis import find_matched_molecular_pairs
-from molmanager.ui.activity_cliff_plot import build_activity_cliff_figure
+from mctoolkit.analysis.mmp_analysis import find_matched_molecular_pairs
+from mctoolkit.ui.activity_cliff_plot import build_activity_cliff_figure
 
 
 def _rec(oid: int, smiles: str, activity: float):

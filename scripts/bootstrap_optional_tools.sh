@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -42,9 +42,9 @@ fi
 
 PLAT=linux
 [[ "$(uname -s)" == "Darwin" ]] && PLAT=mac
-BINDIR="$ROOT/molmanager/resources/bin/$PLAT"
+BINDIR="$ROOT/mctoolkit/resources/bin/$PLAT"
 echo ""
 echo "Optional executables (copy into): $BINDIR"
 echo "  gnina  - https://github.com/gnina/gnina (Linux binary; WSL on Windows)"
 echo ""
-echo "Or set MOLMANAGER_BUNDLE_DIR. Run: mctoolkit   (or: python -m molmanager)"
+echo "Or set MCTOOLKIT_BUNDLE_DIR. Run: mctoolkit   (or: python -m mctoolkit)"

@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for embedded Plotly HTML export."""
 
@@ -21,8 +21,8 @@ from pathlib import Path
 
 from plotly import graph_objects as go
 
-from molmanager.plotting.plot_marker_color import scatter_marker_from_column_values
-from molmanager.ui.plotly_html import (
+from mctoolkit.plotting.plot_marker_color import scatter_marker_from_column_values
+from mctoolkit.ui.plotly_html import (
     figure_payload_json,
     legend_name_is_utility,
     prefer_scattergl_for_large_traces,
@@ -102,7 +102,7 @@ def test_prefer_scattergl_skips_small_traces() -> None:
 
 
 def test_figure_payload_json_upgrades_large_scatter(monkeypatch) -> None:
-    monkeypatch.setenv("MOLMANAGER_PLOT_SCATTERGL_MIN_POINTS", "50")
+    monkeypatch.setenv("MCTOOLKIT_PLOT_SCATTERGL_MIN_POINTS", "50")
     n = 80
     fig = go.Figure(data=[go.Scatter(x=list(range(n)), y=list(range(n)), mode="markers")])
     payload = json.loads(figure_payload_json(fig))

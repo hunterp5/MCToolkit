@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Modeless singleton helper (Tools dialogs depend on correct reuse)."""
 
@@ -20,11 +20,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from molmanager.ui.singleton_modeless_dialog import reuse_or_show_modeless_singleton
+from mctoolkit.ui.singleton_modeless_dialog import reuse_or_show_modeless_singleton
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget
 
-_UI = Path(__file__).resolve().parents[1] / "molmanager" / "ui"
+_UI = Path(__file__).resolve().parents[1] / "mctoolkit" / "ui"
 
 
 def test_reuse_or_show_modeless_singleton_can_create_without_showing(qapp):  # noqa: ARG001
@@ -227,8 +227,8 @@ def test_dimension_reduction_menu_kinds_are_all_registered() -> None:
     An unregistered method would fall through to the "unknown embedding method" warning
     instead of opening, so the menu and the registry have to agree.
     """
-    from molmanager.ui.dialogs.dimensionality_reduction import DIMRED_FLOATING_DIALOGS
-    from molmanager.ui.main_window.menu_spec import MAIN_WINDOW_MENUS, find_submenu
+    from mctoolkit.ui.dialogs.dimensionality_reduction import DIMRED_FLOATING_DIALOGS
+    from mctoolkit.ui.main_window.menu_spec import MAIN_WINDOW_MENUS, find_submenu
 
     dimred = find_submenu(find_submenu(MAIN_WINDOW_MENUS, "Data").items, "DimRed Plots")
     kinds = [
@@ -242,11 +242,11 @@ def test_dimension_reduction_menu_kinds_are_all_registered() -> None:
 
 def test_dimension_reduction_singleton_attrs_match_session_bookkeeping() -> None:
     """The mixin derives ``_<kind>_dialog``; session and plot bookkeeping list those literally."""
-    from molmanager.ui.dialogs.dimensionality_reduction import DIMRED_FLOATING_DIALOGS
+    from mctoolkit.ui.dialogs.dimensionality_reduction import DIMRED_FLOATING_DIALOGS
 
     derived = {f"_{kind}_dialog" for kind in DIMRED_FLOATING_DIALOGS}
     assert derived == {"_pca_dialog", "_tsne_dialog", "_umap_dialog", "_som_dialog"}
-    ui = Path(__file__).resolve().parents[1] / "molmanager" / "ui"
+    ui = Path(__file__).resolve().parents[1] / "mctoolkit" / "ui"
     paths = (
         ui / "session_plots.py",
         ui / "workspace_plot.py",
@@ -262,7 +262,7 @@ def test_helper_call_sites_omit_boilerplate_clearers() -> None:
     import ast
 
     extras: list[tuple[str, str]] = []
-    root = Path(__file__).resolve().parents[1] / "molmanager"
+    root = Path(__file__).resolve().parents[1] / "mctoolkit"
     for path in root.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
@@ -276,7 +276,7 @@ def test_helper_call_sites_omit_boilerplate_clearers() -> None:
 
 
 def test_qobject_is_deleted_for_live_and_missing() -> None:
-    from molmanager.ui.qt_widget_utils import qobject_is_deleted
+    from mctoolkit.ui.qt_widget_utils import qobject_is_deleted
 
     assert qobject_is_deleted(None) is True
     w = QWidget()

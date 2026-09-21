@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Qt WebEngine Chromium flag helpers."""
 
@@ -20,11 +20,11 @@ from __future__ import annotations
 
 import pytest
 
-from molmanager.platform_support.qt_webengine_flags import (
+from mctoolkit.platform_support.qt_webengine_flags import (
     configure_qtwebengine_quiet_logs,
     webengine_views_supported,
 )
-from molmanager.ui.mol_viewer_3d import _js_console_is_benign
+from mctoolkit.ui.mol_viewer_3d import _js_console_is_benign
 
 
 def test_configure_qtwebengine_quiet_logs_sets_log_level(monkeypatch):
@@ -42,7 +42,7 @@ def test_configure_qtwebengine_quiet_logs_keeps_user_log_level(monkeypatch):
 
 
 def test_schedule_qtwebengine_prewarm_skips_pytest():
-    from molmanager.platform_support import qt_webengine_flags
+    from mctoolkit.platform_support import qt_webengine_flags
 
     qt_webengine_flags.schedule_qtwebengine_prewarm()
     qt_webengine_flags.prewarm_qtwebengine()
@@ -71,7 +71,7 @@ def test_viewer_skips_webengine_under_offscreen(qapp, monkeypatch):  # noqa: ARG
     """The 3D viewer must fall back instead of building a page the platform cannot host."""
     from rdkit import Chem
 
-    from molmanager.ui.mol_viewer_3d import Molecule3DViewerWidget, prepare_mol_2d
+    from mctoolkit.ui.mol_viewer_3d import Molecule3DViewerWidget, prepare_mol_2d
 
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
     mol = prepare_mol_2d(Chem.MolFromSmiles("CCO"))
@@ -84,7 +84,7 @@ def test_viewer_skips_webengine_under_offscreen(qapp, monkeypatch):  # noqa: ARG
 
 def test_interactive_plot_skips_webengine_under_offscreen(qapp, monkeypatch):  # noqa: ARG001
     """The embedded plot must fall back instead of building a page the platform cannot host."""
-    from molmanager.ui.plotly_interactive_view import PlotlyInteractiveView
+    from mctoolkit.ui.plotly_interactive_view import PlotlyInteractiveView
 
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
     view = PlotlyInteractiveView()
@@ -106,9 +106,9 @@ def test_no_module_scope_webengine_imports():
     import ast
     from pathlib import Path
 
-    import molmanager
+    import mctoolkit
 
-    package_root = Path(molmanager.__file__).parent
+    package_root = Path(mctoolkit.__file__).parent
     offenders: list[str] = []
     for path in sorted(package_root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))

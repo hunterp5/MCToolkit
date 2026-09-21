@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Statistics stays in sync with main-table edits."""
 
@@ -24,7 +24,7 @@ pytest.importorskip("PySide6.QtWidgets")
 
 import pandas as pd
 
-from molmanager.ui.data_analysis import (
+from mctoolkit.ui.data_analysis import (
     DataAnalysisDialog,
     selected_table_column_headers,
     table_to_dataframe,
@@ -202,17 +202,17 @@ def test_table_dataframe_source_does_not_import_statistics_ui() -> None:
     """QSAR / MMP / dimred / medchem-space must not construct the Statistics dialog to get a DataFrame."""
     from pathlib import Path
 
-    path = Path(__file__).resolve().parents[1] / "molmanager" / "ui" / "table_dataframe.py"
+    path = Path(__file__).resolve().parents[1] / "mctoolkit" / "ui" / "table_dataframe.py"
     text = path.read_text(encoding="utf-8")
     assert "PyQt5" not in text
     assert "PySide6" not in text
     assert "QDialog" not in text
     assert "DataAnalysisDialog" not in text
     for rel in (
-        "molmanager/ui/dialogs/qsar.py",
-        "molmanager/ui/dialogs/mmp.py",
-        "molmanager/ui/dialogs/dimred_panel.py",
-        "molmanager/ui/dialogs/medchem_space.py",
+        "mctoolkit/ui/dialogs/qsar.py",
+        "mctoolkit/ui/dialogs/mmp.py",
+        "mctoolkit/ui/dialogs/dimred_panel.py",
+        "mctoolkit/ui/dialogs/medchem_space.py",
     ):
         src = (Path(__file__).resolve().parents[1] / rel).read_text(encoding="utf-8")
         assert "from .data_analysis import" not in src

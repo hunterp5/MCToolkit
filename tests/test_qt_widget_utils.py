@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Shared Qt widget helpers."""
 
@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from molmanager.ui.qt_widget_utils import (
+from mctoolkit.ui.qt_widget_utils import (
     append_viewer_log,
     install_unfocused_wheel_passthrough,
 )
@@ -107,7 +107,7 @@ def test_append_viewer_log_forwards_when_present():
 
 
 def test_append_viewer_log_records_session_log_without_viewer():
-    from molmanager.platform_support.session_log import session_log_buffer
+    from mctoolkit.platform_support.session_log import session_log_buffer
 
     session_log_buffer().clear()
     append_viewer_log(None, "no viewer")
@@ -198,7 +198,7 @@ def test_clicked_spin_line_edit_accepts_wheel(qapp):
 def test_unipka_cuda_hint_shows_once(qapp, monkeypatch):  # noqa: ARG001
     from PySide6.QtWidgets import QMessageBox, QWidget
 
-    from molmanager.ui.pka_gpu_hint import maybe_remind_unipka_cuda_wheel
+    from mctoolkit.ui.pka_gpu_hint import maybe_remind_unipka_cuda_wheel
 
     shown: list[int] = []
 
@@ -206,7 +206,7 @@ def test_unipka_cuda_hint_shows_once(qapp, monkeypatch):  # noqa: ARG001
         shown.append(1)
         return QMessageBox.Ok
 
-    monkeypatch.setattr("molmanager.ui.pka_gpu_hint.cpu_torch_with_nvidia_gpu", lambda: True)
+    monkeypatch.setattr("mctoolkit.ui.pka_gpu_hint.cpu_torch_with_nvidia_gpu", lambda: True)
     monkeypatch.setattr(QMessageBox, "information", _info)
     host = QWidget()
     maybe_remind_unipka_cuda_wheel(host)

@@ -1,24 +1,24 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Result browsers share one floating shell and preview theme."""
 
 from __future__ import annotations
 
-from molmanager.ui.browsers.chrome import (
+from mctoolkit.ui.browsers.chrome import (
     BROWSER_DATA_TABLE_QSS,
     BROWSER_GROUP_QSS,
     BROWSER_PREVIEW_CANVAS_QSS,
@@ -26,18 +26,20 @@ from molmanager.ui.browsers.chrome import (
     BROWSER_PREVIEW_STRUCT_QSS,
     BrowserHostDialog,
 )
-from molmanager.ui.browsers.pair_browser import PairBrowserDialog
-from molmanager.ui.dockable_plot import PLOT_BODY_MARGINS, PLOT_BODY_SPACING
-from molmanager.ui.metabolite_browser import MetaboliteBrowserDialog, MetaboliteBrowserWidget
-from molmanager.ui.mmp_browser import MmpBrowserDialog
-from molmanager.ui.pose_browser import PoseBrowserDialog, PoseBrowserWidget
-from molmanager.ui.random_molecule_browser import (
+from mctoolkit.ui.browsers.pair_browser import PairBrowserDialog
+from mctoolkit.ui.dockable_plot import PLOT_BODY_MARGINS, PLOT_BODY_SPACING
+from mctoolkit.ui.metabolite_browser import MetaboliteBrowserDialog, MetaboliteBrowserWidget
+from mctoolkit.ui.mmp_browser import MmpBrowserDialog
+from mctoolkit.ui.pose_browser import PoseBrowserDialog, PoseBrowserWidget
+from mctoolkit.ui.random_molecule_browser import (
     RandomMoleculeBrowserDialog,
     RandomMoleculeBrowserWidget,
 )
-from molmanager.ui.sali_browser import SaliBrowserDialog
-from molmanager.ui.selection_browser import SelectionBrowserDialog, SelectionBrowserWidget
-from molmanager.ui.som_browser import SomBrowserDialog, SomBrowserWidget
+from mctoolkit.ui.sali_browser import SaliBrowserDialog
+from mctoolkit.ui.selection_browser import SelectionBrowserDialog, SelectionBrowserWidget
+from mctoolkit.ui.som_browser import SomBrowserDialog, SomBrowserWidget
+from mctoolkit.ui.tautomer_browser import TautomerBrowserDialog, TautomerBrowserWidget
+from mctoolkit.ui.protomer_browser import ProtomerBrowserDialog, ProtomerBrowserWidget
 
 
 def test_dockable_browser_dialogs_share_host_shell():
@@ -46,6 +48,8 @@ def test_dockable_browser_dialogs_share_host_shell():
         PoseBrowserDialog,
         SomBrowserDialog,
         MetaboliteBrowserDialog,
+        TautomerBrowserDialog,
+        ProtomerBrowserDialog,
         RandomMoleculeBrowserDialog,
     ):
         assert issubclass(cls, BrowserHostDialog)
@@ -57,12 +61,14 @@ def test_pair_browsers_share_pair_shell():
 
 
 def test_canvas_browsers_use_shared_preview_theme(qapp):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     widgets = (
         SelectionBrowserWidget(ChemistryWorkspaceWindow()),
         SomBrowserWidget(None),
         MetaboliteBrowserWidget(None),
+        TautomerBrowserWidget(None),
+        ProtomerBrowserWidget(None),
         RandomMoleculeBrowserWidget(None),
     )
     for panel in widgets:

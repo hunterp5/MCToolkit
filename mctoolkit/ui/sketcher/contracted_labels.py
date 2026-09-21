@@ -1,0 +1,33 @@
+# This file is part of MCToolkit.
+# Copyright (C) 2026 Hunter Picard
+#
+# MCToolkit is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# MCToolkit is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+
+"""IUPAC GR-2.2 / GR-2.3 contracted atom labels."""
+
+from ...chem.contracted_labels import (
+    ContractedLabel,
+    contracted_max_bonds,
+    expand_contracted_label_on_atom,
+    lookup_contracted_label,
+    parse_edit_atom_input,
+)
+
+__all__ = [
+    "ContractedLabel",
+    "contracted_max_bonds",
+    "expand_contracted_label_on_atom",
+    "lookup_contracted_label",
+    "parse_edit_atom_input",
+]

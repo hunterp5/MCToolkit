@@ -1,24 +1,24 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """plot_table_sync helpers."""
 
 from __future__ import annotations
 
-from molmanager.ui.plot_table_sync import (
+from mctoolkit.ui.plot_table_sync import (
     apply_table_selection_for_source_rows,
     clear_table_selection_from_plot,
     point_indices_for_oids,
@@ -44,7 +44,7 @@ def test_selection_visual_push_key_stable_for_same_set() -> None:
 
 
 def test_point_indices_for_oids_uses_index_and_partners() -> None:
-    from molmanager.ui.plot_table_sync import build_oid_point_index
+    from mctoolkit.ui.plot_table_sync import build_oid_point_index
 
     plotted = [10, 20, 30]
     partners = [11, 21, 31]

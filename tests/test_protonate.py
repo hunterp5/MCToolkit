@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Dominant protomer selection from ionization ensembles / HA–A− pairs."""
 
@@ -22,8 +22,8 @@ from types import SimpleNamespace
 
 from rdkit import Chem
 
-from molmanager.ionization.unipka_ensembles import LN10, build_ensemble_from_scored
-from molmanager.workers.protonate_worker import (
+from mctoolkit.ionization.unipka_ensembles import LN10, build_ensemble_from_scored
+from mctoolkit.workers.protonate_worker import (
     _dominant_smiles_from_microstates,
     dominant_results_from_microstate_cache,
     protomer_percent_column_name,
@@ -72,7 +72,7 @@ def test_dominant_results_still_map_cache_when_cancel_is_set():
 
     states = _acetic_microstates()
     ha = states[0].protonated_mol
-    from molmanager.workers.structure_grouping import structure_key
+    from mctoolkit.workers.structure_grouping import structure_key
 
     key = structure_key(ha)
     ev = threading.Event()
@@ -92,7 +92,7 @@ def test_dominant_results_still_map_cache_when_cancel_is_set():
 def test_dominant_results_replicate_across_duplicate_oids():
     states = _acetic_microstates()
     ha = states[0].protonated_mol
-    from molmanager.workers.structure_grouping import structure_key
+    from mctoolkit.workers.structure_grouping import structure_key
 
     key = structure_key(ha)
     rows, cancelled = dominant_results_from_microstate_cache(

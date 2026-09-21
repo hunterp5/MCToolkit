@@ -1,24 +1,24 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for Tools → Utilities → Random → Number generation helpers."""
 
 import pytest
 
-from molmanager.table.random_number_columns import (
+from mctoolkit.table.random_number_columns import (
     RANDOM_NUMBER_DISTRIBUTION_LABELS,
     RandomNumberParams,
     generate_random_values,
@@ -75,7 +75,7 @@ def test_empty_count():
 
 
 def test_random_number_dialog_distribution_uses_item_data(qapp):  # noqa: ARG001
-    from molmanager.ui.dialogs.random_number import RandomNumberDialog
+    from mctoolkit.ui.dialogs.random_number import RandomNumberDialog
 
     dlg = RandomNumberDialog(0)
     try:

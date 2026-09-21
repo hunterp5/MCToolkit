@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 """Measure the coupling counters that ``architecture-ratchet.json`` freezes.
 
 The ratchet exists because the layering described in ``docs/ARCHITECTURE.md`` is
@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "molmanager"
+PACKAGE = ROOT / "mctoolkit"
 TESTS = ROOT / "tests"
 BASELINE_PATH = ROOT / "architecture-ratchet.json"
 
@@ -49,9 +49,9 @@ SKIP_DIR_NAMES = frozenset({"__pycache__", "static"})
 # PyQt5 import cannot slip back in without tripping the ratchet.
 QT_IMPORT_ROOTS = frozenset({"PySide6", "PyQt5", "PyQt6", "PySide2", "shiboken6"})
 
-# The composition root wires the Qt window to everything else, so it imports molmanager.ui
-# by definition. Every other module outside molmanager/ui/ must not.
-ENTRY_POINTS = frozenset({"molmanager/app.py"})
+# The composition root wires the Qt window to everything else, so it imports mctoolkit.ui
+# by definition. Every other module outside mctoolkit/ui/ must not.
+ENTRY_POINTS = frozenset({"mctoolkit/app.py"})
 
 # Decision layers: plain data in, result objects out (docs/ARCHITECTURE.md "Workflow layer").
 DECISION_PACKAGES = ("services", "workflows")
@@ -111,17 +111,17 @@ def _root_module(node: ast.Import | ast.ImportFrom) -> set[str]:
 
 
 def _imports_ui(node: ast.Import | ast.ImportFrom) -> bool:
-    """Whether *node* imports ``molmanager.ui``, relatively or absolutely."""
+    """Whether *node* imports ``mctoolkit.ui``, relatively or absolutely."""
     if isinstance(node, ast.ImportFrom) and node.level:
         return "ui" in _root_module(node)
     for name in _root_module(node):
-        if name == "molmanager":
+        if name == "mctoolkit":
             break
     else:
         return False
     if isinstance(node, ast.Import):
-        return any(alias.name.startswith("molmanager.ui") for alias in node.names)
-    return bool(node.module and node.module.startswith("molmanager.ui"))
+        return any(alias.name.startswith("mctoolkit.ui") for alias in node.names)
+    return bool(node.module and node.module.startswith("mctoolkit.ui"))
 
 
 def _type_checking_import_lines(tree: ast.AST) -> set[int]:
@@ -161,7 +161,7 @@ def _deferred_intra_package_imports(tree: ast.AST) -> int:
             continue
         if isinstance(node, ast.ImportFrom) and node.level:
             total += 1
-        elif "molmanager" in _root_module(node):
+        elif "mctoolkit" in _root_module(node):
             total += 1
     return total
 
@@ -271,8 +271,8 @@ def collect() -> Metrics:
         text = path.read_text(encoding="utf-8")
         loc = len(text.splitlines())
         total_loc += loc
-        in_ui = rel.startswith("molmanager/ui/")
-        in_decision = any(rel.startswith(f"molmanager/{pkg}/") for pkg in DECISION_PACKAGES)
+        in_ui = rel.startswith("mctoolkit/ui/")
+        in_decision = any(rel.startswith(f"mctoolkit/{pkg}/") for pkg in DECISION_PACKAGES)
         if in_ui:
             ui_loc += loc
         if path.name.endswith("_mixin.py"):
@@ -344,7 +344,7 @@ def collect() -> Metrics:
 def _test_shape() -> tuple[int, int]:
     """Count test modules, and how many of them need Qt to run.
 
-    A module needs Qt when it imports Qt or ``molmanager.ui``, or takes the ``qapp``
+    A module needs Qt when it imports Qt or ``mctoolkit.ui``, or takes the ``qapp``
     fixture. Mentioning ``PySide6`` in a string does not count.
     """
     total = 0

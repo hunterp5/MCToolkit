@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Sketcher SMILES/SMARTS export (wildcards, isotopes, charges) and H toggle helpers."""
 
@@ -21,15 +21,15 @@ import math
 from PySide6.QtCore import QPoint
 from rdkit import Chem
 
-from molmanager.chem.smarts_macropatterns import mol_from_smarts
-from molmanager.ui.sketcher.bonds import _bond_make
-from molmanager.ui.sketcher.chem import (
+from mctoolkit.chem.smarts_macropatterns import mol_from_smarts
+from mctoolkit.ui.sketcher.bonds import _bond_make
+from mctoolkit.ui.sketcher.chem import (
     _rdkit_atom_from_sketch_node,
     _sketch_element_from_rdkit_atom,
 )
-from molmanager.ui.sketcher.constants import DEFAULT_WILDCARD_ELEMENTS, WILDCARD_ELEMENT
-from molmanager.ui.sketcher.widget import SketchWidget
-from molmanager.ui.sketcher.wildcards import _wildcard_query_smarts
+from mctoolkit.ui.sketcher.constants import DEFAULT_WILDCARD_ELEMENTS, WILDCARD_ELEMENT
+from mctoolkit.ui.sketcher.widget import SketchWidget
+from mctoolkit.ui.sketcher.wildcards import _wildcard_query_smarts
 
 
 def test_wildcard_smarts_uses_atomic_numbers_and_charge():
@@ -182,7 +182,7 @@ def _sketch_cip_labels(w: SketchWidget) -> dict[int, str]:
 
 def test_add_remove_hydrogens_preserves_tetrahedral_stereo(qapp) -> None:  # noqa: ARG001
     """Add→remove explicit H must not drop CIP / wedges (rewedge after remove)."""
-    from molmanager.ui.sketcher.bonds import BOND_STEREO_HASH, BOND_STEREO_WEDGE, _bond_unpack
+    from mctoolkit.ui.sketcher.bonds import BOND_STEREO_HASH, BOND_STEREO_WEDGE, _bond_unpack
 
     mol = Chem.MolFromSmiles("C[C@H](O)N")
     w = SketchWidget()
@@ -291,7 +291,7 @@ def test_add_explicit_hydrogens_skips_condensed_oh_nh(qapp) -> None:  # noqa: AR
 
 def test_load_preserves_aromatic_kekule_doubles_with_stereo_h(qapp) -> None:  # noqa: ARG001
     """Sanitize after stereo-H must not leave aromatic rings as all singles."""
-    from molmanager.ui.sketcher.bonds import _bond_unpack
+    from mctoolkit.ui.sketcher.bonds import _bond_unpack
 
     mol = Chem.MolFromSmiles("C[C@H](O)c1ccccc1")
     w = SketchWidget()

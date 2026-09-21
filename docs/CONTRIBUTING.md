@@ -7,9 +7,9 @@ Cursor-specific copies live under [`.cursor/rules/`](../.cursor/rules/) (tracked
 
 ### Copyright headers
 
-- Every **new** first-party source file must include the standard GPL copyright header (the block still names MolManager; see `.cursor/rules/copyright-headers.mdc`).
+- Every **new** first-party source file must include the standard GPL copyright header (see `.cursor/rules/copyright-headers.mdc`).
 - Keep a shebang as line 1 when present; put the header immediately below it.
-- Do **not** add the header to vendored/third-party assets (e.g. `molmanager/ui/static/`).
+- Do **not** add the header to vendored/third-party assets (e.g. `mctoolkit/ui/static/`).
 - Full header text: [`.cursor/rules/copyright-headers.mdc`](../.cursor/rules/copyright-headers.mdc).
 - Check: `python scripts/check_gpl_headers.py`
 - Bulk insert: `python scripts/add_gpl_headers.py`
@@ -22,8 +22,8 @@ Cursor-specific copies live under [`.cursor/rules/`](../.cursor/rules/) (tracked
 - Avoid redundant comments; only comment on non-obvious intent or trade-offs.
 
 ```bash
-python -m ruff check molmanager tests scripts
-python -m ruff format molmanager tests scripts
+python -m ruff check mctoolkit tests scripts
+python -m ruff format mctoolkit tests scripts
 ```
 
 CI gates on `ruff check` (correctness / undefined-name rules plus unused imports and locals:
@@ -42,8 +42,8 @@ CI gates on `ruff check` (correctness / undefined-name rules plus unused imports
 - Keep the UI responsive by offloading heavy work off the GUI thread (`ProcessQueueManager`, `QThreadPool`, workers).
 - Keep changes cohesive; avoid drive-by refactors unless required.
 - New tools: dialog → worker (if heavy) → `WorkspaceTools` or collaborator + window forward → tests. Do **not** add mixin bases to `ChemistryWorkspaceWindow`. See [ARCHITECTURE.md](ARCHITECTURE.md) (Mixins vs composition).
-- New menubar items go in `molmanager/ui/main_window/menu_spec.py` (plain data). `init_menubar` only installs that tree. See [ARCHITECTURE.md](ARCHITECTURE.md) (Main window).
-- Put "can this run / what should happen next" decisions in `molmanager/workflows/`: plain-data arguments in, result object out, no Qt. The UI adapter renders the result. See [ARCHITECTURE.md](ARCHITECTURE.md) (Workflow layer).
+- New menubar items go in `mctoolkit/ui/main_window/menu_spec.py` (plain data). `init_menubar` only installs that tree. See [ARCHITECTURE.md](ARCHITECTURE.md) (Main window).
+- Put "can this run / what should happen next" decisions in `mctoolkit/workflows/`: plain-data arguments in, result object out, no Qt. The UI adapter renders the result. See [ARCHITECTURE.md](ARCHITECTURE.md) (Workflow layer).
 - Most `*_mixin.py` files are file-splits of one host class. True mixins (shared by multiple classes) are filter-card chrome and `ProteinStructureSourceMixin` only.
 - New collaborator methods use `self._app`. `bind_mixin_methods` is a legacy bridge.
 
@@ -52,15 +52,15 @@ CI gates on `ruff check` (correctness / undefined-name rules plus unused imports
 - Prefer narrow `except` clauses and re-raise unexpected failures.
 - Do not use `except Exception: pass`. For a specific, expected failure use
   `contextlib.suppress(SomeError)` or handle the error. For a non-fatal path that must catch
-  `Exception`, call `molmanager.platform_support.exception_policy.log_swallowed_exception` and add
+  `Exception`, call `mctoolkit.platform_support.exception_policy.log_swallowed_exception` and add
   `# noqa: BLE001` with a short reason (worker/process boundary, Qt object already deleted, and
   similar).
 - New `except Exception` / `try-except-pass` in files that are not on the allowlist fail CI
   (`BLE001`, `S110`, `SIM105`). Existing sites are listed in [`ruff.exception-ratchet.toml`](../ruff.exception-ratchet.toml).
   When you clean a file, delete its line there, decrement `ratchet-max-files`, and lower
   `EXCEPTION_RATCHET_MAX_FILES` in `tests/test_exception_ratchet.py`. Never add files.
-- File logging is on by default (`molmanager/platform_support/app_logging.py`); override with `MOLMANAGER_LOG_DIR`,
-  disable with `MOLMANAGER_LOG_TO_FILE=0`. Uncaught exceptions show a crash dialog with the log path.
+- File logging is on by default (`mctoolkit/platform_support/app_logging.py`); override with `MCTOOLKIT_LOG_DIR`,
+  disable with `MCTOOLKIT_LOG_TO_FILE=0`. Uncaught exceptions show a crash dialog with the log path.
 
 ### Architecture ratchet
 
@@ -69,11 +69,11 @@ CI gates on `ruff check` (correctness / undefined-name rules plus unused imports
 - Report: `python scripts/architecture_metrics.py`. Blame a metric:
   `python scripts/architecture_metrics.py --offenders rdkit_in_ui_modules`.
 - After a cleanup lands, re-freeze: `python scripts/architecture_metrics.py --write-baseline`.
-- If a counter grows, the fix is to put the decision in `molmanager/workflows/` or the
-  computation in `molmanager/services/` rather than the Qt layer. See
+- If a counter grows, the fix is to put the decision in `mctoolkit/workflows/` or the
+  computation in `mctoolkit/services/` rather than the Qt layer. See
   [ARCHITECTURE.md](ARCHITECTURE.md#target-architecture-and-the-ratchet).
 - Reaching into window state (`self._app._x`) counts against `private_cross_module_access` unless
-  `_x` is declared in a role in [`molmanager/ui/app_roles.py`](../molmanager/ui/app_roles.py) or in
+  `_x` is declared in a role in [`mctoolkit/ui/app_roles.py`](../mctoolkit/ui/app_roles.py) or in
   a host protocol beside the collaborator. Declare what a collaborator needs instead of taking the
   whole window — but no protocol may declare more than 8 members
   (`protocols_over_member_cap` must stay 0), so a contract that will not fit means the
@@ -99,8 +99,8 @@ Before changing structure drawing or stereo behavior, read:
 export QT_QPA_PLATFORM=offscreen   # Windows: $env:QT_QPA_PLATFORM="offscreen"
 python -m pytest tests/ -v
 python scripts/check_gpl_headers.py
-python -m ruff check molmanager tests scripts
-python -m ruff format --check molmanager tests scripts
+python -m ruff check mctoolkit tests scripts
+python -m ruff format --check mctoolkit tests scripts
 ```
 
 CI (`.github/workflows/ci.yml`) runs on **Ubuntu, macOS, and Windows**: lint/header checks, pytest, Linux perf gate, and a dependency audit that **fails on CRITICAL/HIGH/malware** findings (see [dependency-audit-exceptions.md](dependency-audit-exceptions.md)).

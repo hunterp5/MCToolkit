@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Lightweight timing for Diverse Subset MaxMin (exact vs fast, warm vs cold cache).
 
@@ -35,8 +35,8 @@ if str(_ROOT) not in sys.path:
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.chem.fingerprint_cache import clear as clear_fp_cache
-from molmanager.workers.diverse_subset_worker import (
+from mctoolkit.chem.fingerprint_cache import clear as clear_fp_cache
+from mctoolkit.workers.diverse_subset_worker import (
     DiverseSubsetPoolRow,
     run_diverse_subset_pick,
 )
@@ -114,7 +114,7 @@ def main() -> None:
         row.fp = None
     _time_pick(pool, k, "exact", cap)
     # Reattach cache hits
-    from molmanager.chem.fingerprint_cache import get as cache_get
+    from mctoolkit.chem.fingerprint_cache import get as cache_get
 
     for row in pool:
         row.fp = cache_get(row.oid, "FP_Morgan_2_2048")

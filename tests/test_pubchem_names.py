@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """PubChem common-name / synonym helpers for Calculate Descriptors."""
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from rdkit import Chem
 
-from molmanager.descriptors.medchem_descriptors import mol_inchi_key
-from molmanager.sources.pubchem_names import (
+from mctoolkit.descriptors.medchem_descriptors import mol_inchi_key
+from mctoolkit.sources.pubchem_names import (
     CompoundNames,
     fetch_pubchem_names_for_inchikeys,
     format_synonym_list,
@@ -153,8 +153,8 @@ def test_lookup_names_skips_network_when_cancelled() -> None:
 
 
 def test_calc_worker_fills_pubchem_name_columns(monkeypatch) -> None:
-    from molmanager.workers.chemistry_tools import CalcDescriptorsRequest, CalcWorker
-    from molmanager.workers.signals import WorkerSignals
+    from mctoolkit.workers.chemistry_tools import CalcDescriptorsRequest, CalcWorker
+    from mctoolkit.workers.signals import WorkerSignals
 
     sigs = WorkerSignals()
     out: dict[str, object] = {}
@@ -166,7 +166,7 @@ def test_calc_worker_fills_pubchem_name_columns(monkeypatch) -> None:
         return [rec for _ in mols]
 
     monkeypatch.setattr(
-        "molmanager.workers.chemistry_descriptors.lookup_names_for_mols",
+        "mctoolkit.workers.chemistry_descriptors.lookup_names_for_mols",
         fake_lookup,
     )
     worker = CalcWorker(
@@ -187,15 +187,15 @@ def test_calc_worker_fills_pubchem_name_columns(monkeypatch) -> None:
 
 
 def test_calc_worker_name_lookup_with_local_descriptor(monkeypatch) -> None:
-    from molmanager.workers.chemistry_tools import CalcDescriptorsRequest, CalcWorker
-    from molmanager.workers.signals import WorkerSignals
+    from mctoolkit.workers.chemistry_tools import CalcDescriptorsRequest, CalcWorker
+    from mctoolkit.workers.signals import WorkerSignals
 
     sigs = WorkerSignals()
     out: dict[str, object] = {}
     sigs.calculated.connect(lambda rows, headers: out.update({"rows": rows, "headers": headers}))
 
     monkeypatch.setattr(
-        "molmanager.workers.chemistry_descriptors.lookup_names_for_mols",
+        "mctoolkit.workers.chemistry_descriptors.lookup_names_for_mols",
         lambda mols, **_k: [CompoundNames(common_name="ethanol") for _ in mols],
     )
     worker = CalcWorker(

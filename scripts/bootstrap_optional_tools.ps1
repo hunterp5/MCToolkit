@@ -1,20 +1,20 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
-# Install molmanager Python dependencies and show where to place optional CLI binaries.
+# Install MCToolkit Python dependencies and show where to place optional CLI binaries.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
@@ -44,11 +44,11 @@ if ($bt -match '^[yY]') {
     python scripts/bootstrap_biotransformer.py
 }
 
-$binDir = Join-Path $Root "molmanager\resources\bin\win"
+$binDir = Join-Path $Root "mctoolkit\resources\bin\win"
 Write-Host ""
 Write-Host "Optional executables (copy into):"
 Write-Host "  $binDir"
 Write-Host "    gnina  - Linux binary from https://github.com/gnina/gnina (run via WSL on Windows)"
 Write-Host ""
-Write-Host "Or set MOLMANAGER_BUNDLE_DIR to a folder containing those binaries."
-Write-Host "Run: mctoolkit   (or: python -m molmanager)"
+Write-Host "Or set MCTOOLKIT_BUNDLE_DIR to a folder containing those binaries."
+Write-Host "Run: mctoolkit   (or: python -m mctoolkit)"

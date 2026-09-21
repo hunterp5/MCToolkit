@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Render 2D can start while another serial tool (e.g. CONFORGE) is running."""
 
@@ -21,7 +21,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from molmanager.ui.table_build_render import TableBuildRender
+from mctoolkit.ui.table_build_render import TableBuildRender
 
 
 class _QueueHost(TableBuildRender):
@@ -98,7 +98,7 @@ def test_run_render_2d_structures_allows_dialog_while_conforge_runs(qapp, monkey
     host._selected_logical_rows = lambda: []
     host._prepare_tool_dialog = lambda *_a, **_k: None
     host.chemistry_tool_structure_sources = lambda: ["Structure"]
-    import molmanager.ui.dialogs as dialogs_pkg
+    import mctoolkit.ui.dialogs as dialogs_pkg
 
     monkeypatch.setattr(dialogs_pkg, "Render2DStructureDialog", _Dlg, raising=False)
     host.run_render_2d_structures()

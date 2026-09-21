@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Pose browser overlay into an open Protein Viewer."""
 
@@ -39,10 +39,10 @@ def _ethanol_pose(affinity: str, x: float):
 
 
 def test_protein_viewer_html_has_dock_pose_setter():
-    from molmanager.ui.protein_viewer import build_protein_viewer_html
+    from mctoolkit.ui.protein_viewer import build_protein_viewer_html
 
     html = build_protein_viewer_html()
-    assert "molmanagerSetDockPose" in html
+    assert "mctoolkitSetDockPose" in html
     assert "applyDockPose" in html
     assert "zoomToDockPose" in html
     assert "magentaCarbon" in html
@@ -50,7 +50,7 @@ def test_protein_viewer_html_has_dock_pose_setter():
 
 
 def test_set_dock_pose_overlay(qapp):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     mol = _ethanol_pose("-7.250", 1.0)
     dlg = ProteinViewerDialog()
@@ -71,8 +71,8 @@ def test_set_dock_pose_overlay(qapp):  # noqa: ARG001
 
 
 def test_ligand_mol_to_pdb_inventories_as_ligand():
-    from molmanager.protein.structure_components import parse_structure_components
-    from molmanager.ui.dock_complex_viewer import ligand_mol_to_pdb_text, pose_manager_slot_name
+    from mctoolkit.protein.structure_components import parse_structure_components
+    from mctoolkit.ui.dock_complex_viewer import ligand_mol_to_pdb_text, pose_manager_slot_name
 
     mol = _ethanol_pose("-7.1", 0.0)
     pdb = ligand_mol_to_pdb_text(mol)
@@ -85,7 +85,7 @@ def test_ligand_mol_to_pdb_inventories_as_ligand():
 
 
 def test_add_dock_poses_keeps_crystal_in_manager(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     rec = tmp_path / "holo.pdb"
     rec.write_text(
@@ -113,8 +113,8 @@ def test_add_dock_poses_keeps_crystal_in_manager(qapp, tmp_path):  # noqa: ARG00
 
 
 def test_prepare_viewer_adds_crystal_when_receptor_is_apo(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     apo = tmp_path / "apo.pdb"
     apo.write_text(
@@ -139,10 +139,10 @@ def test_prepare_viewer_adds_crystal_when_receptor_is_apo(qapp, tmp_path):  # no
 
 
 def test_pose_browser_overlays_open_protein_viewer(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.protein_embed import ProteinEmbedView
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.protein_embed import ProteinEmbedView
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
     monkeypatch.setattr(ProteinEmbedView, "_ensure_web", lambda self: None)
@@ -213,9 +213,9 @@ def test_pose_browser_overlays_open_protein_viewer(qapp, tmp_path, monkeypatch):
 
 
 def test_closed_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.protein_embed import ProteinEmbedView
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.protein_embed import ProteinEmbedView
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
     monkeypatch.setattr(ProteinEmbedView, "_ensure_web", lambda self: None)
@@ -263,9 +263,9 @@ def test_closed_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp
 
 
 def test_hidden_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp_path, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
-    from molmanager.ui.protein_embed import ProteinEmbedView
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.protein_embed import ProteinEmbedView
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
     monkeypatch.setattr(ProteinEmbedView, "_ensure_web", lambda self: None)
@@ -315,12 +315,12 @@ def test_hidden_pose_browser_does_not_restore_overlay_on_viewer_reopen(qapp, tmp
 
 
 def test_write_dock_poses_to_table_packs_parent_row(qapp):  # noqa: ARG001
-    from molmanager.conformers.conformer_column_codec import (
+    from mctoolkit.conformers.conformer_column_codec import (
         mol_from_packed_confs_cell,
         rehydrate_v1_confs_cell,
     )
-    from molmanager.services.column_labels import COLUMN_PARENT_OID
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.services.column_labels import COLUMN_PARENT_OID
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
@@ -345,11 +345,11 @@ def test_write_dock_poses_to_table_packs_parent_row(qapp):  # noqa: ARG001
 
 
 def test_write_dock_poses_to_table_adds_row_for_file_ligand(qapp):  # noqa: ARG001
-    from molmanager.conformers.conformer_column_codec import (
+    from mctoolkit.conformers.conformer_column_codec import (
         mol_from_packed_confs_cell,
         rehydrate_v1_confs_cell,
     )
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
@@ -372,7 +372,7 @@ def test_write_dock_poses_to_table_adds_row_for_file_ligand(qapp):  # noqa: ARG0
 
 
 def test_pose_browser_not_workspace_dockable():
-    from molmanager.ui.pose_browser import PoseBrowserWidget
+    from mctoolkit.ui.pose_browser import PoseBrowserWidget
 
     assert getattr(PoseBrowserWidget, "dockable_in_workspace", True) is False
 
@@ -380,7 +380,7 @@ def test_pose_browser_not_workspace_dockable():
 def test_protein_chain_manager_docks_widget(qapp):  # noqa: ARG001
     from PySide6.QtWidgets import QLabel
 
-    from molmanager.ui.protein_chain_manager import ProteinChainManager
+    from mctoolkit.ui.protein_chain_manager import ProteinChainManager
 
     mgr = ProteinChainManager()
     panel = QLabel("poses")
@@ -406,7 +406,7 @@ def test_protein_chain_manager_docks_widget(qapp):  # noqa: ARG001
 
 
 def test_pose_browser_headers_use_pose_id_not_smiles():
-    from molmanager.ui.browsers.pose_browser import (
+    from mctoolkit.ui.browsers.pose_browser import (
         POSE_ID_HEADER,
         pose_browser_headers,
         pose_browser_id,
@@ -424,8 +424,8 @@ def test_pose_browser_headers_use_pose_id_not_smiles():
 
 
 def test_pose_browser_table_shows_unique_pose_ids(qapp, monkeypatch):  # noqa: ARG001
-    from molmanager.ui.dock_complex_viewer import DockComplexEmbedView
-    from molmanager.ui.pose_browser import POSE_ID_HEADER, PoseBrowserWidget
+    from mctoolkit.ui.dock_complex_viewer import DockComplexEmbedView
+    from mctoolkit.ui.pose_browser import POSE_ID_HEADER, PoseBrowserWidget
 
     monkeypatch.setattr(DockComplexEmbedView, "_ensure_web", lambda self: None)
     panel = PoseBrowserWidget(None)

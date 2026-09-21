@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Data → Browser shows the current table row in a compact table."""
 
@@ -21,8 +21,8 @@ from __future__ import annotations
 from PySide6.QtWidgets import QSizePolicy
 from rdkit import Chem
 
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.ui.selection_browser import SelectionBrowserWidget
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.selection_browser import SelectionBrowserWidget
 
 
 def _seed_row(app: ChemistryWorkspaceWindow) -> None:
@@ -122,7 +122,7 @@ def test_selection_browser_caption_in_header_bar(qapp):  # noqa: ARG001
 
 
 def test_selection_browser_preview_mode_uses_item_data(qapp):  # noqa: ARG001
-    from molmanager.ui.browsers.selection_browser import (
+    from mctoolkit.ui.browsers.selection_browser import (
         BROWSER_PREVIEW_MODE_3DMOL_2D,
         BROWSER_PREVIEW_MODE_3DMOL_3D,
         BROWSER_PREVIEW_MODE_LABELS,

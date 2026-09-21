@@ -1,0 +1,140 @@
+# This file is part of MCToolkit.
+# Copyright (C) 2026 Hunter Picard
+#
+# MCToolkit is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# MCToolkit is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+
+"""Descriptor calculation dialogs (writeback is ``TableWriteService``)."""
+
+from __future__ import annotations
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QMessageBox
+from .analysis_job_support import ensure_table_ready_for_tool
+from ..workers.chemistry_descriptors import CalcDescriptorsRequest, CalcWorker
+
+
+class DescriptorsTools:
+    def __init__(self, app) -> None:
+        self._app = app
+
+    def open_calc(self):
+        if not ensure_table_ready_for_tool(self._app, "Calculate Descriptors"):
+            return
+        from .dialogs import PropertyDialog
+
+        desc_src_cols = self._app.chemistry_tool_structure_sources()
+        d = PropertyDialog(desc_src_cols, len(self._app._selected_logical_rows()), self._app)
+        self._app._prepare_tool_dialog(d)
+        d.setAttribute(Qt.WA_DeleteOnClose, True)
+        d.accepted.connect(lambda *_, dlg=d: self._on_calc_descriptors_dialog_accepted(dlg))
+        d.show()
+
+    def _on_calc_descriptors_dialog_accepted(self, d) -> None:
+        from ..descriptors.descriptors_3d import int_fns_need_3d
+
+        disp, fns = d.get_selected()
+        calc_headers = self._app._unique_table_column_names(disp)
+        src = d.src_combo.currentText()
+        is_s = src != "Structure"
+        s_idx = self._app.headers.index(src)
+        only_selected = d.only_selected_rows()
+        allowed = self._app._selected_oids_set() if only_selected else None
+        if self._app._abort_if_only_selected_but_empty(
+            only_selected, allowed, "Calculate Descriptors"
+        ):
+            return
+        oids_list = self._app._all_oids_in_table_order()
+        if allowed is not None:
+            oids_list = [o for o in oids_list if o in allowed]
+        packed_confs, confs_cols, ensemble_db = (
+            self._ensemble_inputs_for_descriptor_job(oids_list, src)
+            if int_fns_need_3d(fns)
+            else ({}, {}, None)
+        )
+        if not is_s:
+            data = []
+            for o in oids_list:
+                r = self._app.logical_row_for_oid(o)
+                m = self._app.mols.get(o) if r >= 0 else None
+                if m is None and r >= 0:
+                    m = self._app._mol_for_structure_row(r)
+                if m is not None:
+                    data.append((o, m))
+        else:
+            data = [
+                (o, self._app._table_cell_text(self._app.logical_row_for_oid(o), s_idx))
+                for o in oids_list
+            ]
+        if not data:
+            QMessageBox.information(
+                self._app, "Calculate Descriptors", "No rows to process for this scope and source."
+            )
+            self._app.status_label.setText("Ready.")
+            return
+        ps = self._app._tool_progress_state
+        self._app._begin_tool_progress("Calculate descriptors", len(data))
+        req = CalcDescriptorsRequest(
+            data=data,
+            disp_headers=calc_headers,
+            int_fns=fns,
+            is_smiles=is_s,
+            confs_by_idx=packed_confs,
+            confs_col_by_idx=confs_cols,
+            ensemble_db=ensemble_db,
+        )
+
+        def _make_calc_worker(ev, request=req):
+            return CalcWorker(request, self._app.signals, cancel_event=ev, progress_state=ps)
+
+        self._app.process_queue.enqueue(
+            f"Calculate descriptors ({len(data)} rows)", _make_calc_worker
+        )
+
+    def _ensemble_inputs_for_descriptor_job(
+        self, oids, src: str
+    ) -> tuple[dict[int, str], dict[int, str], str | None]:
+        """Packed-cell fallback map, column map, and ensemble DB path for 3D descriptors."""
+        from ..conformers.conformer_column_codec import (
+            rehydrate_v1_confs_cell,
+            unpack_confs_blocks_json_b64,
+        )
+        from ..storage import EnsembleStore, ensemble_db_path
+
+        preferred: list[str] = []
+        src_h = (src or "").strip()
+        if src_h in ("confs", "superpose") and src_h in self._app.headers:
+            preferred.append(src_h)
+        for col in ("confs", "superpose"):
+            if col not in preferred and col in self._app.headers:
+                preferred.append(col)
+        if not preferred:
+            return ({}, {}, None)
+        sc = getattr(self._app, "_confs_blocks_sidecar", None)
+        db = str(ensemble_db_path(self._app) or "") or None
+        packed: dict[int, str] = {}
+        cols: dict[int, str] = {}
+        mapping = sc if sc is not None else {}
+        for oid in oids:
+            r = self._app.logical_row_for_oid(int(oid))
+            if r < 0:
+                continue
+            for col in preferred:
+                if isinstance(sc, EnsembleStore) and (int(oid), col) in sc:
+                    cols[int(oid)] = col
+                    break
+                raw = self._app._table_model.backing_value_for_row_header(r, col)
+                full = rehydrate_v1_confs_cell(raw, col, int(oid), mapping)
+                if unpack_confs_blocks_json_b64(full):
+                    packed[int(oid)] = full
+                    break
+        return (packed, cols, db)

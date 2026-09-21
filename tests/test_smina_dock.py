@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Gnina CLI dialog: autobox vs manual search box."""
 
@@ -24,7 +24,7 @@ import pytest
 
 pytest.importorskip("PySide6.QtWidgets")
 
-from molmanager.ui.gnina_dock import GninaDockDialog
+from mctoolkit.ui.gnina_dock import GninaDockDialog
 
 _CARBONYL_PDBQT = (
     "REMARK SMILES C=O\n"
@@ -167,7 +167,7 @@ def test_gnina_flex_named_residues_rejects_bad_token(qapp):  # noqa: ARG001
 
 
 def test_normalize_flexres_and_flex_out_path():
-    from molmanager.ui.gnina_dock import flex_out_path, normalize_flexres
+    from mctoolkit.ui.gnina_dock import flex_out_path, normalize_flexres
 
     assert normalize_flexres(" A:123 ; B:4A ") == "A:123,B:4A"
     assert flex_out_path("C:/tmp/rec_docked.sdf") == str(Path("C:/tmp/rec_docked_flex.pdb"))
@@ -176,7 +176,7 @@ def test_normalize_flexres_and_flex_out_path():
 
 
 def test_smina_dialog_defaults_to_resolved_executable(qapp):  # noqa: ARG001
-    from molmanager.platform_support.bundled_paths import default_external_executable
+    from mctoolkit.platform_support.bundled_paths import default_external_executable
 
     dlg = GninaDockDialog(None)
     assert dlg.edit_exe.text() == default_external_executable("gnina")
@@ -275,7 +275,7 @@ def test_smina_launch_argv_uses_config_for_multi_ligand(qapp, tmp_path):  # noqa
 
 
 def test_smina_ligand_cli_args_repeats_flag():
-    from molmanager.ui.smina_dock import _ligand_cli_args
+    from mctoolkit.ui.smina_dock import _ligand_cli_args
 
     args, first = _ligand_cli_args(["a.pdbqt", "b.pdbqt"])
     assert args == ["--ligand", "a.pdbqt", "--ligand", "b.pdbqt"]
@@ -286,7 +286,7 @@ def test_smina_ligand_cli_args_repeats_flag():
 
 
 def test_write_smina_config_repeats_ligand(tmp_path):
-    from molmanager.ui.smina_dock import _write_smina_config
+    from mctoolkit.ui.smina_dock import _write_smina_config
 
     dest = tmp_path / "smina.conf"
     _write_smina_config(
@@ -382,8 +382,8 @@ def test_smina_present_dock_results_opens_table(qapp, tmp_path):  # noqa: ARG001
 
 
 def test_apply_prepare_result_fills_numeric_box(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.docking.search_box import DockingBox
-    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+    from mctoolkit.docking.search_box import DockingBox
+    from mctoolkit.workers.protein_prepare_smina import ProteinPrepareResult
 
     rec = tmp_path / "rec_receptor.pdbqt"
     lig = tmp_path / "rec_ligand.sdf"
@@ -422,7 +422,7 @@ def test_apply_prepare_result_fills_numeric_box(qapp, tmp_path):  # noqa: ARG001
 
 
 def test_apply_prepare_result_loads_output_pdbqt_as_receptor(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+    from mctoolkit.workers.protein_prepare_smina import ProteinPrepareResult
 
     rec = tmp_path / "holo_smina.pdbqt"
     rec.write_text("ATOM\n", encoding="utf-8")
@@ -439,7 +439,7 @@ def test_apply_prepare_result_loads_output_pdbqt_as_receptor(qapp, tmp_path):  #
 
 
 def test_apply_prepare_result_skips_missing_output_pdbqt(qapp, tmp_path):  # noqa: ARG001
-    from molmanager.workers.protein_prepare_smina import ProteinPrepareResult
+    from mctoolkit.workers.protein_prepare_smina import ProteinPrepareResult
 
     missing = tmp_path / "holo_smina.pdbqt"
     result = ProteinPrepareResult(output_path=str(missing))
@@ -451,7 +451,7 @@ def test_apply_prepare_result_skips_missing_output_pdbqt(qapp, tmp_path):  # noq
 
 
 def test_ensemble_column_headers_lists_confs_and_sidecar(qapp):  # noqa: ARG001
-    from molmanager.ui.gnina_dock import ensemble_column_headers
+    from mctoolkit.ui.gnina_dock import ensemble_column_headers
 
     class _App:
         headers = [
@@ -475,7 +475,7 @@ def test_ligand_mol_from_ensemble_keeps_one_start(qapp):  # noqa: ARG001
     from rdkit import Chem
     from rdkit.Chem import AllChem
 
-    from molmanager.ui.gnina_dock import ligand_mol_from_ensemble
+    from mctoolkit.ui.gnina_dock import ligand_mol_from_ensemble
 
     mol = Chem.AddHs(Chem.MolFromSmiles("CCO"))
     AllChem.EmbedMultipleConfs(mol, 2, randomSeed=1)
@@ -490,8 +490,8 @@ def test_gnina_selected_rows_writes_confs_sdf(qapp, tmp_path):  # noqa: ARG001
     from rdkit import Chem
     from rdkit.Chem import AllChem
 
-    from molmanager.conformers.conformer_column_codec import pack_confs_cell
-    from molmanager.ui.gnina_dock import GninaDockDialog
+    from mctoolkit.conformers.conformer_column_codec import pack_confs_cell
+    from mctoolkit.ui.gnina_dock import GninaDockDialog
 
     mol = Chem.AddHs(Chem.MolFromSmiles("CCO"))
     AllChem.EmbedMultipleConfs(mol, 2, randomSeed=1)
@@ -644,7 +644,7 @@ def test_present_dock_results_stamps_crystal_ref(qapp, tmp_path):  # noqa: ARG00
     from rdkit import Chem
     from rdkit.Chem import SDWriter
 
-    from molmanager.docking.redock_validation import CRYSTAL_REF_PROP
+    from mctoolkit.docking.redock_validation import CRYSTAL_REF_PROP
 
     sdf = tmp_path / "docked.sdf"
     mol = Chem.MolFromSmiles("CCO")
@@ -680,7 +680,7 @@ def test_present_dock_results_skips_crystal_ref_on_user_ligands(qapp, tmp_path):
     from rdkit import Chem
     from rdkit.Chem import SDWriter
 
-    from molmanager.docking.redock_validation import CRYSTAL_REF_PROP
+    from mctoolkit.docking.redock_validation import CRYSTAL_REF_PROP
 
     sdf = tmp_path / "docked.sdf"
     mol = Chem.MolFromSmiles("CCN")
@@ -716,7 +716,7 @@ def test_present_dock_results_keeps_crystal_ref_on_validation_entry_only(qapp, t
     from rdkit import Chem
     from rdkit.Chem import SDWriter
 
-    from molmanager.docking.redock_validation import CRYSTAL_REF_PROP, stamp_crystal_ref
+    from mctoolkit.docking.redock_validation import CRYSTAL_REF_PROP, stamp_crystal_ref
 
     user_sdf = tmp_path / "docked.sdf"
     user = Chem.MolFromSmiles("CCN")
@@ -756,7 +756,7 @@ def test_gnina_log_goes_to_protein_viewer(qapp):  # noqa: ARG001
 
     from PySide6.QtWidgets import QGroupBox
 
-    from molmanager.ui.protein_viewer import ProteinViewerDialog
+    from mctoolkit.ui.protein_viewer import ProteinViewerDialog
 
     viewer = ProteinViewerDialog()
     host = SimpleNamespace(_live_protein_viewer=lambda: viewer)
@@ -776,8 +776,8 @@ def test_gnina_start_hides_dialog(qapp, monkeypatch):  # noqa: ARG001
     dlg.show()
     assert dlg.isVisible()
     dlg._resolved_exe = "gnina"
-    monkeypatch.setattr("molmanager.workers.gnina_dock_worker.gnina_uses_wsl", lambda: False)
-    monkeypatch.setattr("molmanager.workers.gnina_dock_worker.gnina_launch_env", lambda _exe: {})
+    monkeypatch.setattr("mctoolkit.workers.gnina_dock_worker.gnina_uses_wsl", lambda: False)
+    monkeypatch.setattr("mctoolkit.workers.gnina_dock_worker.gnina_launch_env", lambda _exe: {})
     monkeypatch.setattr(dlg._proc, "start", lambda *_args, **_kwargs: None)
     dlg._worker.start_process(["--receptor", "rec.pdbqt"])
     assert dlg.isHidden()

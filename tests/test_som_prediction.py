@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for FAME3R site-of-metabolism helpers (no NERDD network required)."""
 
@@ -21,7 +21,7 @@ from __future__ import annotations
 import pytest
 from rdkit import Chem
 
-from molmanager.predictions.som_prediction import (
+from mctoolkit.predictions.som_prediction import (
     SOM_CANCELLED_ERROR,
     SOM_ENTROPY_COLUMN,
     SOM_FAME_COLUMN,
@@ -158,7 +158,7 @@ def test_predict_soms_batch_rejects_unknown_subset() -> None:
 
 
 def test_metabolism_options_have_no_compare() -> None:
-    from molmanager.predictions.som_prediction import (
+    from mctoolkit.predictions.som_prediction import (
         METABOLISM_SUBSET_OPTIONS,
         NERDD_METABOLISM_SUBSETS,
         uses_split_phase_jobs,
@@ -248,7 +248,7 @@ def _dark_ink_span(png: bytes) -> tuple[int, int]:
 
 
 def test_som_map_matches_structure_molecule_scale(qapp) -> None:  # noqa: ARG001
-    from molmanager.chem.structure_2d_depiction import render_molecule_png
+    from mctoolkit.chem.structure_2d_depiction import render_molecule_png
 
     mol = Chem.MolFromSmiles("c1ccccc1O")
     assert mol is not None
@@ -299,7 +299,7 @@ def test_render_som_map_png_matches_reference_orientation() -> None:
 def test_emphasize_keeps_atom_color() -> None:
     mol = Chem.MolFromSmiles("CCO")
     assert mol is not None
-    from molmanager.predictions.som_prediction import _apply_emphasized_atom, som_probability_rgb
+    from mctoolkit.predictions.som_prediction import _apply_emphasized_atom, som_probability_rgb
 
     keep = som_probability_rgb(0.9)
     colors = {1: keep}
@@ -319,9 +319,9 @@ def test_emphasize_keeps_atom_color() -> None:
 
 
 def test_som_worker_emits_map(monkeypatch, qapp) -> None:  # noqa: ARG001
-    from molmanager.predictions.som_prediction import SOM_SITES_COLUMN
-    from molmanager.workers.signals import WorkerSignals
-    from molmanager.workers.som_worker import (
+    from mctoolkit.predictions.som_prediction import SOM_SITES_COLUMN
+    from mctoolkit.workers.signals import WorkerSignals
+    from mctoolkit.workers.som_worker import (
         SomPredictorRequest,
         SomPredictorSignals,
         SomPredictorWorker,
@@ -346,7 +346,7 @@ def test_som_worker_emits_map(monkeypatch, qapp) -> None:  # noqa: ARG001
             )
         ]
 
-    monkeypatch.setattr("molmanager.workers.som_worker.predict_soms_batch", fake_predict)
+    monkeypatch.setattr("mctoolkit.workers.som_worker.predict_soms_batch", fake_predict)
     mol = Chem.MolFromSmiles("CCO")
     assert mol is not None
     SomPredictorWorker(SomPredictorRequest(rows=[(1, mol)]), WorkerSignals(), sig).run()
@@ -361,9 +361,9 @@ def test_som_worker_emits_map(monkeypatch, qapp) -> None:  # noqa: ARG001
 
 
 def test_som_worker_phase1_and_2_calls_predict_twice(monkeypatch, qapp) -> None:  # noqa: ARG001
-    from molmanager.predictions.som_prediction import SOM_P1_SITES_COLUMN, SOM_P2_SITES_COLUMN
-    from molmanager.workers.signals import WorkerSignals
-    from molmanager.workers.som_worker import (
+    from mctoolkit.predictions.som_prediction import SOM_P1_SITES_COLUMN, SOM_P2_SITES_COLUMN
+    from mctoolkit.workers.signals import WorkerSignals
+    from mctoolkit.workers.som_worker import (
         SomPredictorRequest,
         SomPredictorSignals,
         SomPredictorWorker,
@@ -391,7 +391,7 @@ def test_som_worker_phase1_and_2_calls_predict_twice(monkeypatch, qapp) -> None:
             )
         ]
 
-    monkeypatch.setattr("molmanager.workers.som_worker.predict_soms_batch", fake_predict)
+    monkeypatch.setattr("mctoolkit.workers.som_worker.predict_soms_batch", fake_predict)
     mol = Chem.MolFromSmiles("CCO")
     assert mol is not None
     SomPredictorWorker(
@@ -415,7 +415,7 @@ def test_som_worker_phase1_and_2_calls_predict_twice(monkeypatch, qapp) -> None:
 
 
 def test_predict_soms_batch_skips_delete_when_cancelled(monkeypatch) -> None:
-    from molmanager.predictions.som_prediction import SOM_CANCELLED_ERROR, predict_soms_batch
+    from mctoolkit.predictions.som_prediction import SOM_CANCELLED_ERROR, predict_soms_batch
 
     calls: list[str] = []
 
@@ -427,10 +427,8 @@ def test_predict_soms_batch_skips_delete_when_cancelled(monkeypatch) -> None:
             raise AssertionError("NERDD job delete must be skipped after cancel")
         return {"status": "running"}
 
-    monkeypatch.setattr("molmanager.predictions.som_prediction._json_request", fake_json)
-    monkeypatch.setattr(
-        "molmanager.predictions.som_prediction._app_is_shutting_down", lambda: False
-    )
+    monkeypatch.setattr("mctoolkit.predictions.som_prediction._json_request", fake_json)
+    monkeypatch.setattr("mctoolkit.predictions.som_prediction._app_is_shutting_down", lambda: False)
 
     def cancel() -> bool:
         return any(c.startswith("POST ") for c in calls)
@@ -442,7 +440,7 @@ def test_predict_soms_batch_skips_delete_when_cancelled(monkeypatch) -> None:
 
 
 def test_predict_soms_batch_keeps_completed_chunk_on_cancel(monkeypatch) -> None:
-    from molmanager.predictions.som_prediction import SOM_CANCELLED_ERROR, predict_soms_batch
+    from mctoolkit.predictions.som_prediction import SOM_CANCELLED_ERROR, predict_soms_batch
 
     finished_jobs = {"n": 0}
 
@@ -467,10 +465,8 @@ def test_predict_soms_batch_keeps_completed_chunk_on_cancel(monkeypatch) -> None
             }
         return {"status": "completed", "num_pages_total": 1}
 
-    monkeypatch.setattr("molmanager.predictions.som_prediction._json_request", fake_json)
-    monkeypatch.setattr(
-        "molmanager.predictions.som_prediction._app_is_shutting_down", lambda: False
-    )
+    monkeypatch.setattr("mctoolkit.predictions.som_prediction._json_request", fake_json)
+    monkeypatch.setattr("mctoolkit.predictions.som_prediction._app_is_shutting_down", lambda: False)
 
     def cancel() -> bool:
         return finished_jobs["n"] >= 1
@@ -483,9 +479,9 @@ def test_predict_soms_batch_keeps_completed_chunk_on_cancel(monkeypatch) -> None
 def test_som_worker_emits_partial_results_on_cancel(monkeypatch, qapp) -> None:  # noqa: ARG001
     import threading
 
-    from molmanager.predictions.som_prediction import SOM_CANCELLED_ERROR, SOM_SITES_COLUMN
-    from molmanager.workers.signals import WorkerSignals
-    from molmanager.workers.som_worker import (
+    from mctoolkit.predictions.som_prediction import SOM_CANCELLED_ERROR, SOM_SITES_COLUMN
+    from mctoolkit.workers.signals import WorkerSignals
+    from mctoolkit.workers.som_worker import (
         SomPredictorRequest,
         SomPredictorSignals,
         SomPredictorWorker,
@@ -517,7 +513,7 @@ def test_som_worker_emits_partial_results_on_cancel(monkeypatch, qapp) -> None: 
             cancel_ev.set()
         return out
 
-    monkeypatch.setattr("molmanager.workers.som_worker.predict_soms_batch", fake_predict)
+    monkeypatch.setattr("mctoolkit.workers.som_worker.predict_soms_batch", fake_predict)
     mol_a = Chem.MolFromSmiles("CCO")
     mol_b = Chem.MolFromSmiles("c1ccccc1")
     assert mol_a is not None and mol_b is not None
@@ -539,7 +535,7 @@ def test_som_worker_emits_partial_results_on_cancel(monkeypatch, qapp) -> None: 
 
 
 def test_job_entry_progress_uses_fallback_when_total_missing() -> None:
-    from molmanager.predictions.som_prediction import _job_entry_progress
+    from mctoolkit.predictions.som_prediction import _job_entry_progress
 
     processed, total = _job_entry_progress(
         {"status": "created", "num_entries_total": None, "num_entries_processed": 0},
@@ -550,7 +546,7 @@ def test_job_entry_progress_uses_fallback_when_total_missing() -> None:
 
 
 def test_job_entry_progress_counts_compressed_ranges() -> None:
-    from molmanager.predictions.som_prediction import _job_entry_progress
+    from mctoolkit.predictions.som_prediction import _job_entry_progress
 
     processed, total = _job_entry_progress(
         {
@@ -565,7 +561,7 @@ def test_job_entry_progress_counts_compressed_ranges() -> None:
 
 
 def test_job_entry_progress_completed_snaps_to_total() -> None:
-    from molmanager.predictions.som_prediction import _job_entry_progress
+    from mctoolkit.predictions.som_prediction import _job_entry_progress
 
     processed, total = _job_entry_progress(
         {"status": "completed", "num_entries_total": 8, "num_entries_processed": 8},
@@ -576,9 +572,9 @@ def test_job_entry_progress_completed_snaps_to_total() -> None:
 
 
 def test_som_worker_reports_waiting_progress_before_nerdd(monkeypatch, qapp) -> None:  # noqa: ARG001
-    from molmanager.platform_support.tool_progress import ToolProgressState
-    from molmanager.workers.signals import WorkerSignals
-    from molmanager.workers.som_worker import (
+    from mctoolkit.platform_support.tool_progress import ToolProgressState
+    from mctoolkit.workers.signals import WorkerSignals
+    from mctoolkit.workers.som_worker import (
         SomPredictorRequest,
         SomPredictorSignals,
         SomPredictorWorker,
@@ -597,7 +593,7 @@ def test_som_worker_reports_waiting_progress_before_nerdd(monkeypatch, qapp) -> 
             SomMoleculePrediction(smi, smi, atoms=(SomAtomHit(0, 0.9, True),)) for smi in smiles
         ]
 
-    monkeypatch.setattr("molmanager.workers.som_worker.predict_soms_batch", fake_predict)
+    monkeypatch.setattr("mctoolkit.workers.som_worker.predict_soms_batch", fake_predict)
     mol = Chem.MolFromSmiles("CCO")
     assert mol is not None
     sig = SomPredictorSignals()

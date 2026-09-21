@@ -1,25 +1,25 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for plot axis column list helpers."""
 
 import pytest
 from PySide6.QtWidgets import QApplication, QComboBox
 
-from molmanager.ui.plot import AXIS_NONE, PlotWidget, normalize_axis_name
+from mctoolkit.ui.plot import AXIS_NONE, PlotWidget, normalize_axis_name
 
 
 @pytest.fixture(scope="module")
@@ -42,7 +42,7 @@ def test_set_axis_combo_items_preserves_selection(qapp):
 def test_on_table_data_changed_ignores_structure_paint(qapp):  # noqa: ARG001
     from PySide6.QtCore import Qt
 
-    from molmanager.ui.compound_table_model import CompoundTableModel
+    from mctoolkit.ui.compound_table_model import CompoundTableModel
 
     class _Host:
         def __init__(self) -> None:

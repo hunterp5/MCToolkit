@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Measure GUI-thread stalls while loading a file into the table.
 
@@ -48,9 +48,9 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.no_render:
-        os.environ["MOLMANAGER_AUTO_RENDER_2D_MAX_ROWS"] = "0"
+        os.environ["MCTOOLKIT_AUTO_RENDER_2D_MAX_ROWS"] = "0"
 
-    from molmanager.ui.main_window.chemistry_workspace_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.main_window.chemistry_workspace_window import ChemistryWorkspaceWindow
 
     app = QApplication.instance() or QApplication(sys.argv)
     win = ChemistryWorkspaceWindow()
@@ -59,9 +59,9 @@ def main() -> None:
     # shared temp DB left by a previous load.
     import tempfile
 
-    from molmanager.storage import SqliteTableStore
+    from mctoolkit.storage import SqliteTableStore
 
-    fd, priv_db = tempfile.mkstemp(prefix="bench_molmanager_", suffix=".sqlite3")
+    fd, priv_db = tempfile.mkstemp(prefix="bench_mctoolkit_", suffix=".sqlite3")
     os.close(fd)
     os.unlink(priv_db)
     try:

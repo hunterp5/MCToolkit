@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for the Random Molecule results browser."""
 
@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import pytest
 
-from molmanager.sources.random_molecule_sources import SOURCE_CHEMBL, RandomSourceMolecule
-from molmanager.ui.dockable_plot import is_dockable_workspace_widget
-from molmanager.ui.random_molecule_browser import (
+from mctoolkit.sources.random_molecule_sources import SOURCE_CHEMBL, RandomSourceMolecule
+from mctoolkit.ui.dockable_plot import is_dockable_workspace_widget
+from mctoolkit.ui.random_molecule_browser import (
     RandomMoleculeBrowserDialog,
     RandomMoleculeBrowserWidget,
     add_random_source_hits_to_table,

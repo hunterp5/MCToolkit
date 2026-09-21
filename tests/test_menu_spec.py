@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Qt-free tests for the declarative main-window menu tree."""
 
@@ -20,14 +20,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from molmanager.ui.main_window.menu_spec import (
+from mctoolkit.ui.main_window.menu_spec import (
     MAIN_WINDOW_MENUS,
     find_submenu,
     menu_outline,
 )
 
 _MENU_SPEC = (
-    Path(__file__).resolve().parents[1] / "molmanager" / "ui" / "main_window" / "menu_spec.py"
+    Path(__file__).resolve().parents[1] / "mctoolkit" / "ui" / "main_window" / "menu_spec.py"
 )
 
 
@@ -93,6 +93,8 @@ def test_prepare_structures_nests_protonate_and_hydrogens():
     assert "Explicit Hydrogens" in labels
     assert "Protonate" in labels
     assert labels.index("Protonate") == labels.index("Disconnect Largest Fragments…") + 1
+    assert "Tautomers…" in labels
+    assert labels.index("Tautomers…") == labels.index("Protonate") + 1
     protonate = find_submenu(prepare.items, "Protonate")
     assert menu_outline(protonate.items) == ["Protonate…", "Generate Protomers…", "Neutralize…"]
     hydrogens = find_submenu(prepare.items, "Explicit Hydrogens")

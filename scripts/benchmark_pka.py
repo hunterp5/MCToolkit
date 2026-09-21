@@ -1,23 +1,23 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Measure Uni-pKa pKa/protonate cost and how much is our wrapper vs the model.
 
 Breaks a unique-structure batch into:
-  enumerate   MolGpKa SMARTS ensembles (MolManager)
+  enumerate   MolGpKa SMARTS ensembles (MCToolkit)
   mmff_lmdb   Uni-pKa 11-conformer MMFF + LMDB write (unipkainfer)
   infer       Uni-Mol free-energy forward pass (unipkainfer)
   other       pickle, calibration, LMDB teardown, Python
@@ -46,7 +46,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def _load_mols(path: Path, limit: int) -> list:
     from rdkit import Chem
 
-    from molmanager.workers.structure_grouping import structure_key
+    from mctoolkit.workers.structure_grouping import structure_key
 
     suffix = path.suffix.lower()
     mols: list = []
@@ -140,7 +140,7 @@ def main() -> None:
     args = ap.parse_args()
     chunk_sizes = [max(1, int(x)) for x in str(args.chunks).split(",") if x.strip()]
 
-    from molmanager.ionization.unipka_ensembles import (
+    from mctoolkit.ionization.unipka_ensembles import (
         pin_unipka_torch_threads,
         predict_ionization_ensembles,
         prepare_mol_for_ionization,
@@ -149,12 +149,12 @@ def main() -> None:
         unipka_use_gpu,
         warn_if_cuda_torch_missing,
     )
-    from molmanager.ionization.unipka_enumerator import (
+    from mctoolkit.ionization.unipka_enumerator import (
         enumerate_charge_ensemble,
         flatten_charge_ensemble,
     )
-    from molmanager.chem.molecule_conversion import mol_to_canonical_smiles
-    from molmanager.workers.ionization_parallel import (
+    from mctoolkit.chem.molecule_conversion import mol_to_canonical_smiles
+    from mctoolkit.workers.ionization_parallel import (
         UNIPKA_STRUCTURE_CHUNK,
         UNIPKA_STRUCTURE_CHUNK_SERIAL,
     )

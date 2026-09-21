@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Excel-style rectangular table copy/paste."""
 
@@ -25,8 +25,8 @@ pytest.importorskip("PySide6.QtWidgets")
 from PySide6.QtCore import QItemSelectionModel
 from PySide6.QtWidgets import QApplication
 
-from molmanager.ui.main_window import ChemistryWorkspaceWindow
-from molmanager.ui.table_clipboard import format_tsv_grid, parse_tsv_grid, tsv_grid_is_block
+from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
+from mctoolkit.ui.table_clipboard import format_tsv_grid, parse_tsv_grid, tsv_grid_is_block
 
 
 def test_parse_and_format_tsv_grid_roundtrip() -> None:
@@ -143,7 +143,7 @@ def test_structure_copy_submenu_formats(qapp) -> None:  # noqa: ARG001
     from PySide6.QtWidgets import QMenu
     from rdkit import Chem
 
-    from molmanager.ui.main_window.table_menu_mixin import TableMenuMixin
+    from mctoolkit.ui.main_window.table_menu_mixin import TableMenuMixin
 
     class _Host(TableMenuMixin):
         pass

@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Scalar 3D descriptors (shape, SASA, volume) and packed-confs coordinate lookup."""
 
@@ -21,14 +21,14 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from molmanager.conformers.conformer_column_codec import pack_confs_cell
-from molmanager.descriptors.descriptors_3d import (
+from mctoolkit.conformers.conformer_column_codec import pack_confs_cell
+from mctoolkit.descriptors.descriptors_3d import (
     DESCRIPTOR_3D_ITEMS,
     DESCRIPTOR_3D_KEYS,
     int_fns_need_3d,
     mol_for_3d_descriptors,
 )
-from molmanager.workers.chemistry_descriptors import (
+from mctoolkit.workers.chemistry_descriptors import (
     _calc_descriptor_row_values,
     descriptor_callable_for_int_fn,
 )
@@ -183,15 +183,15 @@ def test_descriptor_callable_3d_requires_ctx_mol():
 
 
 def test_all_3d_keys_have_dialog_items_and_fns():
-    from molmanager.descriptors.descriptors_3d import DESCRIPTOR_3D_FNS
+    from mctoolkit.descriptors.descriptors_3d import DESCRIPTOR_3D_FNS
 
     assert {k for _d, k in DESCRIPTOR_3D_ITEMS} == DESCRIPTOR_3D_KEYS
     assert set(DESCRIPTOR_3D_FNS) == DESCRIPTOR_3D_KEYS
 
 
 def test_packed_confs_from_ingest_structure_column(qapp):  # noqa: ARG001
-    from molmanager.storage import ensemble_mol_for
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.storage import ensemble_mol_for
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     w.headers = ["ID_HIDDEN", "Structure", "SMILES"]
@@ -226,7 +226,7 @@ def test_packed_confs_from_ingest_structure_column(qapp):  # noqa: ARG001
 def test_property_dialog_3d_tab(qapp) -> None:  # noqa: ARG001
     from PySide6.QtWidgets import QLabel
 
-    from molmanager.ui.dialogs.properties import PropertyDialog
+    from mctoolkit.ui.dialogs.properties import PropertyDialog
 
     dlg = PropertyDialog(["Structure", "SMILES"], selected_row_count=0)
     assert "PMI 1" in dlg.cbs

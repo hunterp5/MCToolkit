@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """FASTA helpers, MAFFT argv, and Protein → Sequence menu (no MAFFT binary)."""
 
@@ -22,9 +22,9 @@ from qt_helpers import qt_submenu
 
 from pathlib import Path
 
-from molmanager.platform_support import bundled_paths
-from molmanager.protein import protein_msa
-from molmanager.protein.protein_msa import (
+from mctoolkit.platform_support import bundled_paths
+from mctoolkit.protein import protein_msa
+from mctoolkit.protein.protein_msa import (
     FastaRecord,
     aa_sequence_from_viewer,
     alignment_html,
@@ -111,7 +111,7 @@ def test_run_mafft_alignment_fake_cli(tmp_path):
 
 
 def test_find_mafft_in_all_in_one_tree(tmp_path, monkeypatch):
-    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path / "empty"))
+    monkeypatch.setenv("MCTOOLKIT_BUNDLE_DIR", str(tmp_path / "empty"))
     (tmp_path / "empty").mkdir()
     tree = tmp_path / "mafft-win"
     tree.mkdir()
@@ -130,14 +130,14 @@ def test_resolve_bundled_mafft_nested_folder(tmp_path, monkeypatch):
     nested.mkdir()
     bat = nested / "mafft.bat"
     bat.write_text("", encoding="utf-8")
-    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
+    monkeypatch.setenv("MCTOOLKIT_BUNDLE_DIR", str(tmp_path))
     assert bundled_paths.resolve_bundled_executable("mafft") == bat
     assert bundled_paths.resolve_mafft_executable() == str(bat)
 
 
 def test_protein_menu_has_viewer_and_sequence(qapp):  # noqa: ARG001
-    from molmanager.ui.dialogs.protein_sequence_msa import ProteinSequenceMsaDialog
-    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+    from mctoolkit.ui.dialogs.protein_sequence_msa import ProteinSequenceMsaDialog
+    from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 
     w = ChemistryWorkspaceWindow()
     protein_menu = qt_submenu(w.menuBar(), "Protein")
@@ -158,7 +158,7 @@ def test_protein_menu_has_viewer_and_sequence(qapp):  # noqa: ARG001
 
 
 def test_protein_sequence_help_topic():
-    from molmanager.ui.user_guides import guide_html
+    from mctoolkit.ui.user_guides import guide_html
 
     h = guide_html("protein_sequence")
     assert "Topic unavailable" not in h

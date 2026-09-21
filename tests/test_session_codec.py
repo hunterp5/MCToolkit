@@ -1,24 +1,24 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Unit tests for compact session codec."""
 
 from __future__ import annotations
 
-from molmanager.table.session_codec import (
+from mctoolkit.table.session_codec import (
     compact_session_document,
     dumps_session_document,
     expand_session_document,
@@ -28,7 +28,7 @@ from molmanager.table.session_codec import (
 
 def test_compact_expand_roundtrip_preserves_cells():
     doc = {
-        "format": "molmanager_session",
+        "format": "mctoolkit_session",
         "version": 1,
         "headers": ["ID_HIDDEN", "Structure", "SMILES", "MW"],
         "rows": [
@@ -56,7 +56,7 @@ def test_compact_expand_roundtrip_preserves_cells():
 
 def test_compact_expand_preserves_structure_smiles_not_protonated():
     doc = {
-        "format": "molmanager_session",
+        "format": "mctoolkit_session",
         "version": 1,
         "headers": ["ID_HIDDEN", "Structure", "Protonated"],
         "rows": [{"id": 1, "cells": {"Protonated": "CC[NH3+]"}}],
@@ -72,7 +72,7 @@ def test_compact_expand_preserves_structure_smiles_not_protonated():
 
 def test_compact_does_not_treat_protonated_as_structure():
     doc = {
-        "format": "molmanager_session",
+        "format": "mctoolkit_session",
         "version": 1,
         "headers": ["ID_HIDDEN", "Structure", "Protonated"],
         "rows": [{"id": 1, "cells": {"Protonated": "CC[NH3+]"}}],
@@ -87,7 +87,7 @@ def test_compact_does_not_treat_protonated_as_structure():
 
 def test_expand_v1_does_not_invent_structure_from_protonated():
     v1 = {
-        "format": "molmanager_session",
+        "format": "mctoolkit_session",
         "version": 1,
         "headers": ["ID_HIDDEN", "Structure", "Protonated"],
         "rows": [{"id": 1, "cells": {"Protonated": "CC[NH3+]"}}],
@@ -100,7 +100,7 @@ def test_expand_v1_does_not_invent_structure_from_protonated():
 def test_gzip_dumps_loads_roundtrip():
     compact = compact_session_document(
         {
-            "format": "molmanager_session",
+            "format": "mctoolkit_session",
             "version": 1,
             "headers": ["ID_HIDDEN", "Structure", "SMILES"],
             "rows": [{"id": 0, "cells": {"SMILES": "O"}}],
@@ -114,14 +114,14 @@ def test_gzip_dumps_loads_roundtrip():
 
 
 def test_compact_expand_preserves_structure_mols_and_bounds():
-    from molmanager.table.session_codec import encode_mol_blob_b64
-    from molmanager.chem.molecule_conversion import mol_graph_binary
+    from mctoolkit.table.session_codec import encode_mol_blob_b64
+    from mctoolkit.chem.molecule_conversion import mol_graph_binary
     from rdkit import Chem
 
     blob_b64 = encode_mol_blob_b64(mol_graph_binary(Chem.MolFromSmiles("CCO")))
     compact = compact_session_document(
         {
-            "format": "molmanager_session",
+            "format": "mctoolkit_session",
             "version": 1,
             "headers": ["ID_HIDDEN", "Structure", "SMILES", "MW"],
             "rows": [{"id": 4, "cells": {"SMILES": "CCO", "MW": "46.1"}}],
@@ -145,7 +145,7 @@ def test_compact_expand_preserves_structure_mols_and_bounds():
 def test_compact_omits_empty_structure_mols_and_bounds():
     compact = compact_session_document(
         {
-            "format": "molmanager_session",
+            "format": "mctoolkit_session",
             "version": 1,
             "headers": ["ID_HIDDEN", "Structure", "SMILES"],
             "rows": [{"id": 0, "cells": {"SMILES": "O"}}],
@@ -159,11 +159,11 @@ def test_compact_omits_empty_structure_mols_and_bounds():
 
 
 def test_session_zip_roundtrip_keeps_ensembles():
-    from molmanager.table.session_codec import SESSION_ENSEMBLES_KEY
+    from mctoolkit.table.session_codec import SESSION_ENSEMBLES_KEY
 
     compact = compact_session_document(
         {
-            "format": "molmanager_session",
+            "format": "mctoolkit_session",
             "version": 1,
             "headers": ["ID_HIDDEN", "Structure", "SMILES"],
             "rows": [{"id": 0, "cells": {"SMILES": "O"}}],

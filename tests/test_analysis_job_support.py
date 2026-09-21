@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Unit tests for analysis_job_support helpers (no full GUI)."""
 
@@ -21,7 +21,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from molmanager.ui.analysis_job_support import (
+from mctoolkit.ui.analysis_job_support import (
     enqueue_process_queue_job,
     ensure_table_ready_for_tool,
     finish_analysis_pairs,
@@ -34,7 +34,7 @@ from molmanager.ui.analysis_job_support import (
 def test_finish_analysis_pairs_empty_returns_none(monkeypatch):
     infos: list[tuple] = []
     monkeypatch.setattr(
-        "molmanager.ui.analysis_job_support.QMessageBox.information",
+        "mctoolkit.ui.analysis_job_support.QMessageBox.information",
         lambda *a, **k: infos.append(a),
     )
     app = SimpleNamespace(
@@ -48,7 +48,7 @@ def test_finish_analysis_pairs_empty_returns_none(monkeypatch):
 
 def test_finish_analysis_pairs_returns_list(monkeypatch):
     monkeypatch.setattr(
-        "molmanager.ui.analysis_job_support.QMessageBox.information",
+        "mctoolkit.ui.analysis_job_support.QMessageBox.information",
         lambda *a, **k: None,
     )
     app = SimpleNamespace(
@@ -62,7 +62,7 @@ def test_finish_analysis_pairs_returns_list(monkeypatch):
 def test_report_analysis_failure(monkeypatch):
     warns: list[tuple] = []
     monkeypatch.setattr(
-        "molmanager.ui.analysis_job_support.QMessageBox.warning",
+        "mctoolkit.ui.analysis_job_support.QMessageBox.warning",
         lambda *a, **k: warns.append(a),
     )
     app = SimpleNamespace(
@@ -77,7 +77,7 @@ def test_report_analysis_failure(monkeypatch):
 def test_ensure_table_ready_for_tool_no_headers(monkeypatch):
     infos: list[tuple] = []
     monkeypatch.setattr(
-        "molmanager.ui.analysis_job_support.QMessageBox.information",
+        "mctoolkit.ui.analysis_job_support.QMessageBox.information",
         lambda *a, **k: infos.append(a),
     )
     app = SimpleNamespace(headers=[], _table_model=SimpleNamespace(rowCount=lambda: 0))
@@ -93,7 +93,7 @@ def test_ensure_table_ready_for_tool_ok():
 def test_prepare_scoped_structure_mols_empty_selection(monkeypatch):
     infos: list[tuple] = []
     monkeypatch.setattr(
-        "molmanager.ui.analysis_job_support.QMessageBox.information",
+        "mctoolkit.ui.analysis_job_support.QMessageBox.information",
         lambda *a, **k: infos.append(a),
     )
     app = SimpleNamespace(
@@ -116,7 +116,7 @@ def test_prepare_scoped_structure_mols_empty_selection(monkeypatch):
 def test_prepare_scoped_structure_mols_too_few(monkeypatch):
     infos: list[tuple] = []
     monkeypatch.setattr(
-        "molmanager.ui.analysis_job_support.QMessageBox.information",
+        "mctoolkit.ui.analysis_job_support.QMessageBox.information",
         lambda *a, **k: infos.append(a),
     )
     app = SimpleNamespace(
@@ -155,7 +155,7 @@ def test_enqueue_process_queue_job_returns_id():
 def test_report_cancellable_job_failure_cancelled(monkeypatch):
     warns: list[tuple] = []
     monkeypatch.setattr(
-        "molmanager.ui.analysis_job_support.QMessageBox.warning",
+        "mctoolkit.ui.analysis_job_support.QMessageBox.warning",
         lambda *a, **k: warns.append(a),
     )
     after = MagicMock()
@@ -180,7 +180,7 @@ def test_report_cancellable_job_failure_cancelled(monkeypatch):
 def test_report_cancellable_job_failure_error(monkeypatch):
     warns: list[tuple] = []
     monkeypatch.setattr(
-        "molmanager.ui.analysis_job_support.QMessageBox.warning",
+        "mctoolkit.ui.analysis_job_support.QMessageBox.warning",
         lambda *a, **k: warns.append(a),
     )
     app = SimpleNamespace(

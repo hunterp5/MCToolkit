@@ -1,24 +1,24 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for the Predict SOM results browser."""
 
 from __future__ import annotations
 
-from molmanager.predictions.som_prediction import (
+from mctoolkit.predictions.som_prediction import (
     SOM_CANCELLED_ERROR,
     SOM_MAP_COLUMN,
     SOM_P1_SITES_COLUMN,
@@ -29,8 +29,8 @@ from molmanager.predictions.som_prediction import (
     SomAtomHit,
     is_som_map_header,
 )
-from molmanager.ui.dockable_plot import is_dockable_workspace_widget
-from molmanager.ui.som_browser import (
+from mctoolkit.ui.dockable_plot import is_dockable_workspace_widget
+from mctoolkit.ui.som_browser import (
     SomBrowseRecord,
     SomBrowserDialog,
     SomBrowserWidget,
@@ -287,7 +287,7 @@ def test_is_som_map_header() -> None:
 
 
 def test_atoms_from_som_columns_parses_phase_sites() -> None:
-    from molmanager.ui.som_browser import _atoms_from_som_columns
+    from mctoolkit.ui.som_browser import _atoms_from_som_columns
 
     hits = _atoms_from_som_columns(
         {
@@ -304,7 +304,7 @@ def test_atoms_from_som_columns_parses_phase_sites() -> None:
 
 
 def test_som_browse_session_payload_roundtrip() -> None:
-    from molmanager.ui.som_browser import (
+    from mctoolkit.ui.som_browser import (
         deserialize_som_browse_records,
         serialize_som_browse_records,
     )
@@ -370,7 +370,7 @@ def test_som_browser_only_selected_filters(qapp) -> None:  # noqa: ARG001
 
 
 def test_som_browser_dialog_set_records_without_panel(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.som_browser import SomBrowserDialog
+    from mctoolkit.ui.som_browser import SomBrowserDialog
 
     dlg = SomBrowserDialog(None)
     dlg._panel = None
@@ -392,7 +392,7 @@ def test_som_browser_nav_shortcuts_are_widget_scoped(qapp) -> None:  # noqa: ARG
 def test_discard_host_dialog_after_dock_clears_attr(qapp) -> None:  # noqa: ARG001
     from PySide6.QtWidgets import QDialog
 
-    from molmanager.ui.dockable_plot import discard_host_dialog_after_dock
+    from mctoolkit.ui.dockable_plot import discard_host_dialog_after_dock
 
     class Host:
         _dlg = None
@@ -412,8 +412,8 @@ def test_pixmap_column_size_hint_matches_image(qapp) -> None:  # noqa: ARG001
     from PySide6.QtGui import QPixmap
     from PySide6.QtWidgets import QStyleOptionViewItem
 
-    from molmanager.ui.compound_table_model import CompoundTableModel
-    from molmanager.ui.table_selection_delegate import RowHighlightDelegate
+    from mctoolkit.ui.compound_table_model import CompoundTableModel
+    from mctoolkit.ui.table_selection_delegate import RowHighlightDelegate
 
     model = CompoundTableModel(["ID_HIDDEN", "Structure", "SOM Map"])
     model.append_row(1, {})
@@ -435,9 +435,9 @@ def test_empty_som_map_cells_skip_pixmap_background(qapp) -> None:  # noqa: ARG0
     from PySide6.QtGui import QPixmap
     from PySide6.QtWidgets import QStyleOptionViewItem
 
-    from molmanager.table.structure_depiction_layout import structure_depict_height
-    from molmanager.ui.compound_table_model import CompoundTableModel
-    from molmanager.ui.table_selection_delegate import RowHighlightDelegate
+    from mctoolkit.table.structure_depiction_layout import structure_depict_height
+    from mctoolkit.ui.compound_table_model import CompoundTableModel
+    from mctoolkit.ui.table_selection_delegate import RowHighlightDelegate
 
     model = CompoundTableModel(["ID_HIDDEN", "Structure", "SOM Map"])
     model.append_row(1, {})
@@ -461,7 +461,7 @@ def test_empty_som_map_cells_skip_pixmap_background(qapp) -> None:  # noqa: ARG0
 
 
 def test_som_map_export_filename() -> None:
-    from molmanager.ui.workspace_predict import som_map_export_filename
+    from mctoolkit.ui.workspace_predict import som_map_export_filename
 
     assert som_map_export_filename(12) == "SOM_Map_12.png"
     assert som_map_export_filename(3, "SOM Map 2") == "SOM_Map_2_3.png"
@@ -471,7 +471,7 @@ def test_save_som_map_pixmap(tmp_path, qapp) -> None:  # noqa: ARG001
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QPixmap
 
-    from molmanager.ui.workspace_predict import save_som_map_pixmap
+    from mctoolkit.ui.workspace_predict import save_som_map_pixmap
 
     pm = QPixmap(24, 16)
     pm.fill(Qt.red)

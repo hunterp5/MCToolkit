@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Ionization process-pool planning and structure cache."""
 
@@ -24,16 +24,16 @@ from types import SimpleNamespace
 import pytest
 from rdkit import Chem
 
-import molmanager.workers.ionization_parallel as ionization_parallel
-from molmanager.ionization.unipka_ensembles import PicklableMicrostate, microstates_to_picklable
-from molmanager.ionization.microstate_cache import clear as cache_clear
-from molmanager.workers.ionization_parallel import plan_ionization_process_workers
+import mctoolkit.workers.ionization_parallel as ionization_parallel
+from mctoolkit.ionization.unipka_ensembles import PicklableMicrostate, microstates_to_picklable
+from mctoolkit.ionization.microstate_cache import clear as cache_clear
+from mctoolkit.workers.ionization_parallel import plan_ionization_process_workers
 
 
 @pytest.fixture(autouse=True)
 def _force_sequential_ionization_cache(monkeypatch) -> None:
     """Tests that mock ``microstates_for_mol`` must not spawn a real process pool."""
-    monkeypatch.setenv("MOLMANAGER_PKA_PROCESS_WORKERS", "1")
+    monkeypatch.setenv("MCTOOLKIT_PKA_PROCESS_WORKERS", "1")
     monkeypatch.setattr(
         ionization_parallel,
         "plan_ionization_process_workers",
@@ -61,7 +61,7 @@ def test_plan_ionization_cuda_uses_one_worker_pool(monkeypatch) -> None:
 
 
 def test_chunk_structure_keys_spreads_across_workers() -> None:
-    from molmanager.workers.ionization_parallel import chunk_structure_keys
+    from mctoolkit.workers.ionization_parallel import chunk_structure_keys
 
     keys = [f"k{i}" for i in range(10)]
     chunks = chunk_structure_keys(keys, 2)
@@ -72,7 +72,7 @@ def test_chunk_structure_keys_spreads_across_workers() -> None:
 
 
 def test_chunk_structure_keys_single_worker_batches_and_splits() -> None:
-    from molmanager.workers.ionization_parallel import (
+    from mctoolkit.workers.ionization_parallel import (
         UNIPKA_STRUCTURE_CHUNK_SERIAL,
         chunk_structure_keys,
     )
@@ -87,7 +87,7 @@ def test_chunk_structure_keys_single_worker_batches_and_splits() -> None:
 
 
 def test_map_ionization_progress_protonate_moves_before_last_tick() -> None:
-    from molmanager.workers.ionization_parallel import map_ionization_progress
+    from mctoolkit.workers.ionization_parallel import map_ionization_progress
 
     done, total = map_ionization_progress(1, 3, progress_total=3, reserve_final_tick=False)
     assert (done, total) == (1, 3)
@@ -114,7 +114,7 @@ def test_build_microstates_cache_reports_progress_during_sequential(monkeypatch)
         lambda _n, _c: (False, 1),
     )
     monkeypatch.setattr(
-        "molmanager.ionization.unipka_ensembles.microstates_for_mol",
+        "mctoolkit.ionization.unipka_ensembles.microstates_for_mol",
         lambda _mol: [{"pka": 7.0}],
     )
     seen: list[tuple[int, int]] = []
@@ -122,7 +122,7 @@ def test_build_microstates_cache_reports_progress_during_sequential(monkeypatch)
     def _capture(**kwargs):
         seen.append((int(kwargs["done"]), int(kwargs["total"])))
 
-    monkeypatch.setattr("molmanager.platform_support.tool_progress.report_tool_progress", _capture)
+    monkeypatch.setattr("mctoolkit.platform_support.tool_progress.report_tool_progress", _capture)
     mols = [Chem.MolFromSmiles(s) for s in ("CCO", "CCN", "CCC")]
     assert all(m is not None for m in mols)
     ionization_parallel.build_microstates_cache_by_key(
@@ -141,13 +141,13 @@ def test_build_microstates_cache_dedupes(monkeypatch) -> None:
     calls: list[str] = []
 
     def _fake_microstates(mol):
-        from molmanager.workers.structure_grouping import structure_key
+        from mctoolkit.workers.structure_grouping import structure_key
 
         calls.append(structure_key(mol))
         return [{"pka": 7.0}]
 
     monkeypatch.setattr(
-        "molmanager.ionization.unipka_ensembles.microstates_for_mol",
+        "mctoolkit.ionization.unipka_ensembles.microstates_for_mol",
         _fake_microstates,
     )
 

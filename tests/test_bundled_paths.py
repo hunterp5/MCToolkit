@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Bundled resource and external tool path resolution."""
 
@@ -20,16 +20,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from molmanager.platform_support import bundled_paths
+from mctoolkit.platform_support import bundled_paths
 
 
 def test_default_external_executable_falls_back_to_name(monkeypatch, tmp_path):
-    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
+    monkeypatch.setenv("MCTOOLKIT_BUNDLE_DIR", str(tmp_path))
     assert bundled_paths.default_external_executable("smina") in ("smina", "smina.exe")
 
 
 def test_default_external_executable_gnina_wsl_name(monkeypatch, tmp_path):
-    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
+    monkeypatch.setenv("MCTOOLKIT_BUNDLE_DIR", str(tmp_path))
     monkeypatch.setattr(bundled_paths.sys, "platform", "win32")
     assert bundled_paths.default_external_executable("gnina") == "gnina"
 
@@ -39,7 +39,7 @@ def test_resolve_bundled_gnina_uses_linux_dir_on_windows(tmp_path, monkeypatch):
     linux_dir.mkdir(parents=True)
     exe = linux_dir / "gnina"
     exe.write_bytes(b"")
-    monkeypatch.delenv("MOLMANAGER_BUNDLE_DIR", raising=False)
+    monkeypatch.delenv("MCTOOLKIT_BUNDLE_DIR", raising=False)
     monkeypatch.setattr(bundled_paths.sys, "platform", "win32")
     monkeypatch.setattr(bundled_paths, "resources_dir", lambda: tmp_path)
     monkeypatch.setattr(bundled_paths, "bundled_bin_dir", lambda: tmp_path / "bin" / "win")
@@ -48,7 +48,7 @@ def test_resolve_bundled_gnina_uses_linux_dir_on_windows(tmp_path, monkeypatch):
 
 
 def test_default_obabel_uses_pip_wheel(monkeypatch, tmp_path):
-    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
+    monkeypatch.setenv("MCTOOLKIT_BUNDLE_DIR", str(tmp_path))
     pip_exe = bundled_paths.pip_openbabel_executable()
     got = bundled_paths.default_external_executable("obabel")
     if pip_exe is None:
@@ -70,7 +70,7 @@ def test_resolve_user_executable(tmp_path):
 def test_resolve_user_executable_bare_name_uses_bundle(tmp_path, monkeypatch):
     exe = tmp_path / "smina.exe"
     exe.write_bytes(b"")
-    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
+    monkeypatch.setenv("MCTOOLKIT_BUNDLE_DIR", str(tmp_path))
     assert bundled_paths.resolve_user_executable("smina.exe") == str(exe)
     assert bundled_paths.resolve_user_executable("smina") == str(exe)
 
@@ -78,7 +78,7 @@ def test_resolve_user_executable_bare_name_uses_bundle(tmp_path, monkeypatch):
 def test_resolve_bundled_executable_when_present(tmp_path, monkeypatch):
     exe = tmp_path / "smina.exe"
     exe.write_bytes(b"")
-    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path))
+    monkeypatch.setenv("MCTOOLKIT_BUNDLE_DIR", str(tmp_path))
     assert bundled_paths.resolve_bundled_executable("smina") == exe
     assert bundled_paths.default_external_executable("smina") == str(exe)
 
@@ -129,13 +129,13 @@ def test_static_asset_path_points_at_3dmol():
 
 
 def test_resolve_biotransformer_jar_env_override_and_missing_database(tmp_path, monkeypatch):
-    monkeypatch.delenv("MOLMANAGER_BIOTRANSFORMER_JAR", raising=False)
+    monkeypatch.delenv("MCTOOLKIT_BIOTRANSFORMER_JAR", raising=False)
     monkeypatch.setattr(bundled_paths, "configured_biotransformer_jar_text", lambda: "")
     monkeypatch.setattr(bundled_paths, "biotransformer_models_dir", lambda: tmp_path / "absent")
     assert bundled_paths.resolve_biotransformer_jar() is None
     jar = tmp_path / "biotransformer-3.0.0.jar"
     jar.write_bytes(b"")
-    monkeypatch.setenv("MOLMANAGER_BIOTRANSFORMER_JAR", str(jar))
+    monkeypatch.setenv("MCTOOLKIT_BIOTRANSFORMER_JAR", str(jar))
     assert bundled_paths.resolve_biotransformer_jar() == jar
     errs = bundled_paths.biotransformer_layout_errors(jar)
     assert any("database/" in e for e in errs)
@@ -146,7 +146,7 @@ def test_resolve_biotransformer_jar_env_override_and_missing_database(tmp_path, 
 
 
 def test_resolve_biotransformer_jar_official_name_and_btkb(tmp_path, monkeypatch):
-    monkeypatch.delenv("MOLMANAGER_BIOTRANSFORMER_JAR", raising=False)
+    monkeypatch.delenv("MCTOOLKIT_BIOTRANSFORMER_JAR", raising=False)
     monkeypatch.setattr(bundled_paths, "configured_biotransformer_jar_text", lambda: "")
     monkeypatch.setattr(bundled_paths, "biotransformer_models_dir", lambda: tmp_path)
     jar = tmp_path / "BioTransformer3.0_20230525.jar"
@@ -161,7 +161,7 @@ def test_resolve_biotransformer_jar_official_name_and_btkb(tmp_path, monkeypatch
 
 
 def test_resolve_biotransformer_jar_uses_saved_path(tmp_path, monkeypatch):
-    monkeypatch.delenv("MOLMANAGER_BIOTRANSFORMER_JAR", raising=False)
+    monkeypatch.delenv("MCTOOLKIT_BIOTRANSFORMER_JAR", raising=False)
     monkeypatch.setattr(bundled_paths, "biotransformer_models_dir", lambda: tmp_path / "absent")
     jar = tmp_path / "BioTransformer3.0.jar"
     jar.write_bytes(b"")
@@ -173,7 +173,7 @@ def test_default_confgen_uses_cdpkit_program_files(monkeypatch, tmp_path):
     exe = tmp_path / "CDPKit" / "Bin" / "confgen.exe"
     exe.parent.mkdir(parents=True)
     exe.write_bytes(b"")
-    monkeypatch.setenv("MOLMANAGER_BUNDLE_DIR", str(tmp_path / "empty_bundle"))
+    monkeypatch.setenv("MCTOOLKIT_BUNDLE_DIR", str(tmp_path / "empty_bundle"))
     monkeypatch.setenv("ProgramFiles", str(tmp_path))
     monkeypatch.setenv("ProgramFiles(x86)", str(tmp_path / "none"))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "none2"))

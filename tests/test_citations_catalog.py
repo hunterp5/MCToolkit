@@ -1,31 +1,31 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for Help → Citations catalog and dialog."""
 
 from __future__ import annotations
 
-from molmanager.reference.citations_catalog import (
+from mctoolkit.reference.citations_catalog import (
     CITATION_SECTIONS,
     iter_tool_citations,
     tool_citation,
     tool_citation_html_fragment,
 )
-from molmanager.ui.citations_dialog import citation_html, open_citations_dialog
-from molmanager.ui.hotkeys import default_shortcuts
+from mctoolkit.ui.citations_dialog import citation_html, open_citations_dialog
+from mctoolkit.ui.hotkeys import default_shortcuts
 
 
 def test_catalog_ids_unique_and_licensed() -> None:
@@ -70,8 +70,8 @@ def test_catalog_includes_key_dois() -> None:
     assert bt is not None
     assert "LGPL" in bt.license_name
     assert "gnu.org/licenses/lgpl-3.0" in bt.license_url
-    assert "gnu.org/licenses/gpl-3.0" in tool_citation("molmanager").license_url  # type: ignore[union-attr]
-    assert tool_citation("molmanager").name == "MCToolkit"  # type: ignore[union-attr]
+    assert "gnu.org/licenses/gpl-3.0" in tool_citation("mctoolkit").license_url  # type: ignore[union-attr]
+    assert tool_citation("mctoolkit").name == "MCToolkit"  # type: ignore[union-attr]
 
 
 def test_citation_html_renders_license_link() -> None:

@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for session ionization-ensemble cache (Predict pKa → LogD/LogS reuse)."""
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from molmanager.ionization import microstate_cache as mc
-from molmanager.ionization.unipka_ensembles import (
+from mctoolkit.ionization import microstate_cache as mc
+from mctoolkit.ionization.unipka_ensembles import (
     PicklableIonizationEnsemble,
     PicklableIonizationMicrostate,
     PicklableMicrostate,
@@ -29,8 +29,8 @@ from molmanager.ionization.unipka_ensembles import (
     microstates_for_mol,
     microstates_to_picklable,
 )
-from molmanager.workers.ionization_parallel import build_microstates_cache_by_key
-from molmanager.workers.structure_grouping import structure_key
+from mctoolkit.workers.ionization_parallel import build_microstates_cache_by_key
+from mctoolkit.workers.structure_grouping import structure_key
 from rdkit import Chem
 
 
@@ -80,7 +80,7 @@ def test_microstates_for_mol_uses_session_cache(monkeypatch) -> None:
     def boom(_m):
         raise AssertionError("Uni-pKa should not run on cache hit")
 
-    monkeypatch.setattr("molmanager.ionization.unipka_ensembles.predict_ionization_ensemble", boom)
+    monkeypatch.setattr("mctoolkit.ionization.unipka_ensembles.predict_ionization_ensemble", boom)
     out = microstates_for_mol(mol)
     assert out is fake
 
@@ -96,7 +96,7 @@ def test_build_microstates_cache_skips_cached_keys(monkeypatch) -> None:
         raise AssertionError("process pool should not start when all cached")
 
     monkeypatch.setattr(
-        "molmanager.workers.ionization_parallel.plan_ionization_process_workers",
+        "mctoolkit.workers.ionization_parallel.plan_ionization_process_workers",
         fail_pool,
     )
     out = build_microstates_cache_by_key([mol], workers_cfg=0)

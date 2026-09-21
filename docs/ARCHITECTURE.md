@@ -7,7 +7,7 @@ Desktop chemistry table manager: **PySide6** UI, **RDKit** structures, optional 
 ```mermaid
 flowchart TB
   subgraph entry [Entry]
-    app[molmanager.app:main]
+    app[mctoolkit.app:main]
   end
   subgraph window [Main window]
     CTA[ChemistryWorkspaceWindow facade]
@@ -28,7 +28,7 @@ flowchart TB
     sqlite[SqliteTableStore]
   end
   subgraph workers [Workers]
-    W[molmanager.workers.*]
+    W[mctoolkit.workers.*]
   end
   app --> CTA
   CTA --> PROG
@@ -50,7 +50,7 @@ flowchart TB
 
 ## Package layout
 
-`molmanager/` holds no loose modules other than the `app.py` entry point; every module lives in a
+`mctoolkit/` holds no loose modules other than the `app.py` entry point; every module lives in a
 subpackage named for its subject. File names describe what the module does, so the flat listing of a
 subpackage reads as its table of contents.
 
@@ -58,7 +58,7 @@ subpackage reads as its table of contents.
 |---------|----------|
 | `platform_support/` | Process, config, and runtime concerns: `config.py`, `app_logging.py`, `bundled_paths.py`, `wsl_launcher.py`, `qt_webengine_flags.py`, `rdkit_runtime_setup.py`, `memory_guards.py`, `memory_usage.py`, `performance_tracking.py`, `exception_policy.py`, `tool_progress.py` |
 | `reference/` | In-app reference content: `help_markdown.py`, `citations_catalog.py`, `method_citations.py`, `descriptor_tooltips.py` |
-| `chem/` | Core molecule handling: `molecule_conversion.py`, `smarts_macropatterns.py`, `rdkit_fingerprints.py`, `fingerprint_cache.py`, `fragment_*.py`, `reaction_*.py`, `structure_2d_depiction.py`, `structure_hydrogens.py`, `structure_neutralize.py`, `structure_source_headers.py`, sketcher chemistry (`sketch_atoms.py`, `sketch_mol.py`, `alkene_stereo.py`, `contracted_labels.py`, `element_colors.py`) |
+| `chem/` | Core molecule handling: `molecule_conversion.py`, `smarts_macropatterns.py`, `rdkit_fingerprints.py`, `fingerprint_cache.py`, `fragment_*.py`, `reaction_*.py`, `tautomer_enumeration.py`, `structure_2d_depiction.py`, `structure_hydrogens.py`, `structure_neutralize.py`, `structure_source_headers.py`, sketcher chemistry (`sketch_atoms.py`, `sketch_mol.py`, `alkene_stereo.py`, `contracted_labels.py`, `element_colors.py`) |
 | `descriptors/` | `catalog.py`, `descriptors_3d.py`, `medchem_descriptors.py`, `descriptor_cache_reuse.py`, `ml_feature_matrix.py` |
 | `conformers/` | Generation and encoding: `conforge_generation.py`, `openbabel_confab.py`, `conformer_column_codec.py`, `ensemble_binary_codec.py`, `conformer_output.py` |
 | `ionization/` | `unipka_ensembles.py`, `unipka_enumerator.py`, `microstate_cache.py` |
@@ -70,7 +70,7 @@ subpackage reads as its table of contents.
 | `plotting/` | Chart computation, no Qt widgets: `plot_axes.py`, `plot_series_collect.py`, `plot_marker_color.py`, `plot_heatmap.py`, `plot_labels.py`, `plot_radar.py`, `plot_statistics_fits.py`, `plotly_legend.py` |
 | `table/` | Table data operations and documents: `column_*.py`, `calculator_expressions.py`, `filter_compute.py`, `random_number_columns.py`, `text_file_ingest.py`, `table_file_formats.py`, `session_codec.py`, `structure_depiction_layout.py`, `cell_reader.py` (`TableCellReader`) |
 | `storage/` | `MolStore`, `SqliteTableStore`, `extra_pixmap_store.py`, `structure_render_store.py` |
-| `services/` | Pure helpers shared by UI and workers (no Qt, no `molmanager.ui` imports) |
+| `services/` | Pure helpers shared by UI and workers (no Qt, no `mctoolkit.ui` imports) |
 | `workflows/` | What the app should do next, decided without the UI (see *Workflow layer*) |
 | `workers/` | Background jobs (see *Chemistry workers layout*) |
 | `ui/` | Qt widgets, dialogs, and the main window |
@@ -79,7 +79,7 @@ Bundled `resources/` are resolved from the package root via
 `platform_support.bundled_paths.package_root()`, never from a module's own `__file__`, so modules can
 move between subpackages without breaking resource lookup.
 
-## Workflow layer (`molmanager/workflows/`)
+## Workflow layer (`mctoolkit/workflows/`)
 
 Tool flows historically fused two things in one function: deciding whether a tool can run, and
 telling the user why not. That made every decision untestable without a `QApplication` and usually a
@@ -135,7 +135,7 @@ bound is the useful signal when converting a collaborator — if what it needs w
 responsibility has not been split yet, and declaring 19 window members would only document the
 coupling rather than reduce it.
 
-Invariants that must stay 0: `domain_modules_importing_ui` (`molmanager/app.py` is the
+Invariants that must stay 0: `domain_modules_importing_ui` (`mctoolkit/app.py` is the
 composition root and exempt), `qt_in_decision_layers`, `ui_in_decision_layers`,
 `protocols_over_member_cap`. The `ui/` share of the package (63.0%) may not drift up by more than
 0.5 points.
@@ -156,13 +156,13 @@ Two rules make that real, and both are what the counters track. **Per-capability
 instead of one kernel:** anything accepting all 31 kernel members can reach the whole window, so
 collaborators should take the roles in `ui/app_roles.py` instead (see "Kernel roles" below).
 **One table-reader interface:** domain code must not loop `app._table_cell_text`. The window
-implements `molmanager.table.cell_reader.TableCellReader` (`cell_text`); dialogs and services
+implements `mctoolkit.table.cell_reader.TableCellReader` (`cell_text`); dialogs and services
 read cells through that.
 
-## Main window (`molmanager/ui/main_window/`)
+## Main window (`mctoolkit/ui/main_window/`)
 
 `ChemistryWorkspaceWindow` is a **QMainWindow facade** over an explicit GUI-thread kernel
-(`molmanager/ui/app_kernel.py`: `AppKernel`) and collaborators. Public methods stay on the
+(`mctoolkit/ui/app_kernel.py`: `AppKernel`) and collaborators. Public methods stay on the
 window as one-line forwards so dialogs and tests keep calling `app.on_calc_finished`,
 `app._begin_tool_progress`, `app._selected_oids_set`, etc. Most `*_mixin.py` files are
 **file-splits of one host class**, not reusable mixins; they are **not** all on the window MRO.
@@ -183,7 +183,7 @@ window as one-line forwards so dialogs and tests keep calling `app.on_calc_finis
 | `BackgroundActivityHub` | `ui/background_activity.py` | Processes dialog |
 | `SessionLogBuffer` | `platform_support/session_log.py` | In-memory session log (Processes dialog) |
 
-### Kernel roles (`molmanager/ui/app_roles.py`)
+### Kernel roles (`mctoolkit/ui/app_roles.py`)
 
 `AppKernel` is not a list of members any more; it is the union of seven role protocols, and it
 declares nothing of its own. `tests/test_app_kernel.py` enforces both, so new kernel surface has
@@ -320,7 +320,7 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 - **Result maps:** `ui/result_plot_panel.py` (`DockableResultPlotPanel`) is the shared dock chrome for SALI / MMP / cliffs / dimred / MedChem
 - **Docked-plot chrome:** `ui/dockable_plot.py` re-exports glyphs, floating titles, footer buttons, and pane embed (`dockable_plot_glyphs.py`, `_title.py`, `_chrome.py`, `_embed.py`)
 - **Workspace panes:** `ui/main_window/plot_pane.py` (`PlotPane`); `ui/main_window/workspace_layout.py` (`WorkspaceLayoutManager`)
-- **Result browsers:** `ui/browsers/` (SOM, selection, MMP, SALI, metabolites) with shims at `ui/*_browser.py`
+- **Result browsers:** `ui/browsers/` (SOM, selection, MMP, SALI, metabolites, tautomer/protomer forms, poses) with shims at `ui/*_browser.py`
 - **Filters:** `FilterPanel` (`ui/filters/filter_panel.py`) owns cards/apply/substructure/bounds. True mixins are card chrome only (`card_chrome.py`); `cards.py` is the barrel.
 - **Conformer writeback:** `ui/main_window/conformer_writeback.py` (table append / packed ensemble / superpose mol lookup); `ConformersTools` is the UI adapter
 - **Table → plot:** debounced `_schedule_sync_active_plots_from_table_selection`
@@ -332,10 +332,10 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 
 ## Adding a new Tool
 
-1. Dialog under `molmanager/ui/dialogs/` (use `scope.selection_scope_checked`, `parent_app` on docked panels).
+1. Dialog under `mctoolkit/ui/dialogs/` (use `scope.selection_scope_checked`, `parent_app` on docked panels).
    Protein Prepare, Gnina dock, and Data Analysis live there; shims remain at the old `ui/`
    paths. Package `__init__` loads exports lazily so submodule imports do not pull Qt WebEngine.
-2. Worker under `molmanager/workers/` if work is heavy.
+2. Worker under `mctoolkit/workers/` if work is heavy.
 3. Wire the menu action on `ChemistryWorkspaceWindow` as a **thin forward** to `WorkspaceTools` or an existing collaborator (`install_window_forwards`). Do **not** add a new mixin base to the window class. New collaborator methods use `self._app`, not `bind_mixin_methods`.
 4. Long jobs: `process_queue.enqueue` + `_begin_tool_progress` / `report_tool_progress`.
 5. Short threadpool jobs: `register_background_job` / `unregister_background_job`.
@@ -358,18 +358,20 @@ Heavy chemistry jobs are split by concern (compat re-exports remain in `workers/
 | `workers/chemistry_calc.py` | Custom calculator (AST `calculator_expressions`) |
 | `workers/reaction_enumeration.py` | Two-reactant `RunReactants` job; request lives in `chem/reaction_enumeration.py` |
 | `workers/chemistry_worker_common.py` | Shared progress throttling and force-field names |
+| `workers/protomer_generator.py` | Uni-pKa protomer ensemble listing |
+| `workers/tautomer_generator.py` | Likely tautomer enumeration (RDKit MolStandardize) |
 
-Pure helpers live under `molmanager/services/` (e.g. `chemistry_columns.py`, `sql_load_policy.py`,
+Pure helpers live under `mctoolkit/services/` (e.g. `chemistry_columns.py`, `sql_load_policy.py`,
 `table_scope.py`, `activity_records.py`, `table_selection.py`, `sqlite_text_match.py`,
 `filter_config.py`, `column_labels.py`, `structure_grouping.py`). Domain modules must not import
-`molmanager.ui`; Plotly legend cleanup lives in `molmanager/plotting/plotly_legend.py` (re-exported from
+`mctoolkit.ui`; Plotly legend cleanup lives in `mctoolkit/plotting/plotly_legend.py` (re-exported from
 `ui/plotly_html.py`). Shared lineage header is `COLUMN_PARENT_OID` (`"Parent OID"`).
 MMP / Activity Cliff / Pair Network / SALI share `ui/analysis_job_support.py` for scoped
 activity-record prep, process-queue enqueue (`start_scoped_activity_job`), dialog open/finish
 helpers (`ensure_activity_analysis_ready`, `finish_analysis_pairs`, `report_analysis_failure`).
 Those helpers take `AnalysisJobHost`, not `AppKernel`. Browser MMP/SALI/selection previews and
 the Transform Ledger draw through `chem.structure_2d_depiction.render_molecule_png` (Qt wrap is
-`ui/browsers/chrome.pixmap_from_mol`). Cluster / pKa / SOM / protomer / permeability reuse the same
+`ui/browsers/chrome.pixmap_from_mol`). Cluster / pKa / SOM / protomer / tautomer / permeability reuse the same
 module for table readiness (`ensure_table_ready_for_tool`), structure-scoped mol collect
 (`prepare_scoped_structure_mols`), enqueue (`enqueue_process_queue_job` /
 `start_scoped_structure_job`), and cancellable failure reporting
@@ -385,13 +387,13 @@ the sticky cache without a `mapToSource` loop. Column insert/remove is forwarded
 without that, deletes leave blank columns and new descriptor columns never appear.
 When visibility does not change, finalize skips reset/replot.
 
-Plotter axis/mode/histogram helpers live in `molmanager/plotting/plot_axes.py` (re-exported from
-`ui/plot.py`). Series collection for scatter/histogram lives in `molmanager/plotting/plot_series_collect.py`.
+Plotter axis/mode/histogram helpers live in `mctoolkit/plotting/plot_axes.py` (re-exported from
+`ui/plot.py`). Series collection for scatter/histogram lives in `mctoolkit/plotting/plot_series_collect.py`.
 Floating plot chrome is split into `ui/plot_bridge.py`, `ui/plot_statistics_panel.py`, and
 `ui/plot_dialog.py`. Figure / shell / style / axis / radar / collect / session modules under
 `ui/plot_*_mixin.py` are a **file-split of `PlotWidget`** (`ui/plot.py` owns UI construction).
 Fingerprint session cache is an LRU capped by `fingerprint_cache_max_entries`
-(`MOLMANAGER_FINGERPRINT_CACHE_MAX_ENTRIES`).
+(`MCTOOLKIT_FINGERPRINT_CACHE_MAX_ENTRIES`).
 
 Ligand 3D viewer: `ui/mol_viewer_3d.py` re-exports. HTML/JS assembly is
 `ui/mol_3d_html.py` (shared `assemble_3dmol_shell_page`), RDKit 2D/3D prep is
@@ -409,7 +411,7 @@ Structure-prep tools (protonate, Fast Prepare, disconnect/neutralize/explicit H)
 Protein Prepare runtime: `workers/protein_prepare_runtime.py` orchestrates;
 IO/residue maps are `protein_prepare_io.py`, pdb2pqr is `protein_prepare_pdb2pqr.py`,
 AmberTools GAFF/GAFF2 (WSL on Windows) is `protein_prepare_amber.py`,
-OpenMM min is `protein_prepare_minimize.py`. Complex-only Minimize (viewer **Minimize…**) is `protein_complex_minimize.py` with dialog `ui/dialogs/protein_minimize.py`. Tests patch names on the runtime module.
+OpenMM min is `protein_prepare_minimize.py`. Complex-only Minimize (viewer **Minimize…**) is `protein_complex_minimize.py` with dialog `ui/dialogs/protein_minimize.py`. Shared holo setup is `protein_openmm_holo.py`. 1-trajectory MM-GBSA is `md/mmgbsa.py` + `workers/protein_mmgbsa.py` (viewer **Simulate → MM-GBSA…**). Langevin MD is `md/implicit_md.py` + `workers/protein_md.py` (viewer **Simulate → Molecular Dynamics…**): implicit GBn2/OBC2 or tleap TIP3P `solvateBox` with OpenMM PME/NPT, optional checkpoint resume, and MM-GBSA on solute snapshots. Tests patch names on the runtime module.
 
 Gnina dock: `ui/dialogs/gnina_dock.py` is the widget. Argv, ligand files, and pose
 I/O live in `gnina_job.py` (no Qt). `workers/gnina_dock_worker.py` owns the

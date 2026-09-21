@@ -1,18 +1,18 @@
-# This file is part of MolManager.
+# This file is part of MCToolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MolManager is free software: you can redistribute it and/or modify
+# MCToolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MolManager is distributed in the hope that it will be useful,
+# MCToolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
+# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ from rdkit import Chem
 from rdkit.Chem.rdchem import Conformer
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from molmanager.ui.sketcher.acs_style import acs_sketch_style
-from molmanager.ui.sketcher.sketch_rdkit_paint import (
+from mctoolkit.ui.sketcher.acs_style import acs_sketch_style
+from mctoolkit.ui.sketcher.sketch_rdkit_paint import (
     effective_model_per_drawer_scale,
     fit_rdkit_draw_to_sketch_map,
     render_sketch_mol_to_pixmap,
@@ -150,7 +150,7 @@ def test_thiotepa_sketcher_paints_heteroatom_labels(qapp) -> None:  # noqa: ARG0
     """RDKit bond pixmap alone drops P/N/S glyphs; ACS overlays must restore them."""
     from PySide6.QtGui import QColor, QImage, QPainter
 
-    from molmanager.ui.sketcher.widget import SketchWidget
+    from mctoolkit.ui.sketcher.widget import SketchWidget
 
     mol = Chem.MolFromSmiles("S=P(N1CC1)(N1CC1)N1CC1")
     assert mol is not None
@@ -179,7 +179,7 @@ def test_thiotepa_sketcher_paints_heteroatom_labels(qapp) -> None:  # noqa: ARG0
 
 
 def test_sketch_rdkit_paint_disables_cairo_atom_labels(qapp) -> None:  # noqa: ARG001
-    from molmanager.ui.sketcher.sketch_rdkit_paint import _configure_sketch_drawer_style
+    from mctoolkit.ui.sketcher.sketch_rdkit_paint import _configure_sketch_drawer_style
 
     drawer = rdMolDraw2D.MolDraw2DCairo(200, 200)
     _configure_sketch_drawer_style(drawer, bond_scale_px=60.0, model_per_drawer_scale=0.4)
