@@ -38,6 +38,10 @@ def test_interactive_plot_shell_includes_bridge_handlers():
     assert "mctoolkit_selection_traces" in html
     assert "Plotly.Plots.resize" in html
     assert "addEventListener('resize'" in html
+    assert "ResizeObserver" in html
+    assert "mctoolkitOnHostResize" in html
+    assert "stretchPlotToHost" in html
+    assert "setTimeout(resizePlot, 50)" not in html
     assert "SELECTION_OVERLAY_MAX" in html
     assert "idxs.length > SELECTION_OVERLAY_MAX" in html
     assert 'typeof payloadJson === "string"' in html
