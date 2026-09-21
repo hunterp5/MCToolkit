@@ -343,6 +343,30 @@ def test_windows_caption_platform_disables_dark_frames(monkeypatch):
     assert os.environ.get("QT_QPA_PLATFORM") == "offscreen"
 
 
+def test_classic_caption_does_not_call_winid(qapp, monkeypatch):  # noqa: ARG001
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QWidget
+
+    from mctoolkit.platform_support.qt_windows_caption import _set_widget_caption_classic
+
+    monkeypatch.setattr("mctoolkit.platform_support.qt_windows_caption.sys.platform", "win32")
+    w = QWidget()
+    w.setWindowFlag(Qt.Window)
+    calls: list[int] = []
+    original = QWidget.winId
+
+    def _win_id(self):
+        calls.append(1)
+        return original(self)
+
+    monkeypatch.setattr(QWidget, "winId", _win_id)
+    try:
+        _set_widget_caption_classic(w)
+        assert calls == []
+    finally:
+        w.deleteLater()
+
+
 def test_ensure_fusion_style_is_idempotent(qapp):
     from mctoolkit.ui.theme import ensure_fusion_style
 
@@ -427,4 +451,3 @@ def test_molstar_theme_dark_palette_uses_fusion_surfaces(qapp):  # noqa: ARG001
     assert payload["background"] == "#353535"
     assert "#353535" in payload["css"]
     assert "msp-plugin" in payload["css"]
-
