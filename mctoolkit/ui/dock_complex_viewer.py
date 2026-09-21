@@ -28,7 +28,10 @@ from PySide6.QtCore import QTemporaryDir, QTimer, QUrl, Qt
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from ..chem.molecule_conversion import mol_to_molblock, mol_to_pdbblock
-from ..platform_support.qt_webengine_flags import webengine_views_supported
+from ..platform_support.qt_webengine_flags import (
+    prepare_embedded_webengine_view,
+    webengine_views_supported,
+)
 from .mol_viewer_3d import (
     _BUNDLED_3DMOL,
     _RESET_STRUCTURE_JS,
@@ -533,6 +536,7 @@ class DockComplexEmbedView(QWidget):
             from PySide6.QtWebEngineWidgets import QWebEngineView
 
             web = QWebEngineView(self)
+            prepare_embedded_webengine_view(web)
             web.setContextMenuPolicy(Qt.NoContextMenu)
             _wire_webengine_console_logger(web)
             try:
