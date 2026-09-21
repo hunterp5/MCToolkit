@@ -25,6 +25,7 @@ from PySide6.QtGui import QMouseEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
+    QDialog,
     QDoubleSpinBox,
     QScrollArea,
     QVBoxLayout,
@@ -33,6 +34,8 @@ from PySide6.QtWidgets import (
 
 from mctoolkit.ui.qt_widget_utils import (
     append_viewer_log,
+    configure_floating_webengine_window,
+    fill_fusion_window,
     install_unfocused_wheel_passthrough,
 )
 
@@ -222,3 +225,28 @@ def test_unipka_cuda_hint_shows_once(qapp, monkeypatch):  # noqa: ARG001
     qapp.processEvents()
     assert shown == [1]
     host.close()
+
+
+def test_fill_fusion_window_paints_own_background(qapp):  # noqa: ARG001
+    w = QWidget()
+    try:
+        assert not w.autoFillBackground()
+        fill_fusion_window(w)
+        assert w.autoFillBackground()
+    finally:
+        w.deleteLater()
+
+
+def test_configure_floating_webengine_window_is_owned_top_level(qapp):  # noqa: ARG001
+    host = QWidget()
+    dlg = QDialog(host)
+    try:
+        configure_floating_webengine_window(dlg)
+        assert dlg.parentWidget() is host
+        assert dlg.windowFlags() & Qt.Window
+        assert dlg.testAttribute(Qt.WA_DeleteOnClose)
+        assert dlg.windowFlags() & Qt.WindowMinimizeButtonHint
+        assert dlg.windowFlags() & Qt.WindowMaximizeButtonHint
+    finally:
+        dlg.deleteLater()
+        host.deleteLater()
