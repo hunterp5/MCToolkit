@@ -45,6 +45,8 @@ from ..dockable_plot import (
     style_plot_pane_title_edit,
     unembed_from_plot_pane,
 )
+from ...platform_support.qt_webengine_flags import set_descendant_webengine_visible
+from ..qt_widget_utils import fill_fusion_window
 
 
 class _PaneActivateFilter(QObject):
@@ -72,6 +74,7 @@ class PlotPane(QFrame):
         self._pages: list[QWidget] = []
         self._activate_filter = _PaneActivateFilter(self)
         self.setObjectName("PlotPane")
+        fill_fusion_window(self)
         # Border width is owned by the stylesheet; avoid QFrame chrome fighting it.
         self.setFrameShape(QFrame.NoFrame)
         self.setMinimumWidth(PLOT_PANEL_BASE_MINIMUM_WIDTH // 2)
@@ -203,6 +206,7 @@ class PlotPane(QFrame):
         self._root.addWidget(self._header)
 
         self._stack = QStackedWidget()
+        fill_fusion_window(self._stack)
         self._stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         stack_ly = self._stack.layout()
         if stack_ly is not None and hasattr(stack_ly, "setSizeAdjustPolicy"):
@@ -370,6 +374,7 @@ class PlotPane(QFrame):
                 self._header_button_owner = None
             for old in list(self._pages):
                 self._uninstall_activate_filter(old)
+                set_descendant_webengine_visible(old, False)
                 self._stack.removeWidget(old)
                 old.hide()
                 old.setParent(None)
@@ -396,6 +401,7 @@ class PlotPane(QFrame):
             self._stack.blockSignals(False)
         self._refresh_pager()
         self._sync_visible_footer()
+        self._sync_webengine_pages()
         for widget in self._pages:
             embed_in_plot_pane(widget)
 
@@ -406,6 +412,7 @@ class PlotPane(QFrame):
             self._stack.setCurrentWidget(widget)
             self._refresh_pager()
             self._sync_visible_footer()
+            self._sync_webengine_pages()
             embed_in_plot_pane(widget)
             return
         self._pages.append(widget)
@@ -414,6 +421,7 @@ class PlotPane(QFrame):
         self._stack.setCurrentWidget(widget)
         self._refresh_pager()
         self._sync_visible_footer()
+        self._sync_webengine_pages()
         embed_in_plot_pane(widget)
 
     def remove_plot_widget(self, widget: QWidget) -> bool:
@@ -426,6 +434,7 @@ class PlotPane(QFrame):
         idx = self._pages.index(widget)
         self._uninstall_activate_filter(widget)
         self._pages.remove(widget)
+        set_descendant_webengine_visible(widget, False)
         self._stack.removeWidget(widget)
         try:
             widget.hide()
@@ -437,6 +446,7 @@ class PlotPane(QFrame):
             self._stack.setCurrentIndex(min(idx, len(self._pages) - 1))
         self._refresh_pager()
         self._sync_visible_footer()
+        self._sync_webengine_pages()
         return True
 
     def show_previous_page(self) -> None:
@@ -479,6 +489,7 @@ class PlotPane(QFrame):
             self._stack.blockSignals(False)
         self._refresh_pager()
         self._sync_visible_footer()
+        self._sync_webengine_pages()
         self.activated.emit(self)
 
     def set_page(self, index: int) -> None:
@@ -489,6 +500,13 @@ class PlotPane(QFrame):
     def _on_stack_current_changed(self, _index: int) -> None:
         self._refresh_pager()
         self._sync_visible_footer()
+        self._sync_webengine_pages()
+
+    def _sync_webengine_pages(self) -> None:
+        """Unmap Chromium on hidden stacked pages so they cannot paint as black boxes."""
+        current = self.plot_widget()
+        for page in self._pages:
+            set_descendant_webengine_visible(page, page is current)
 
     def _sync_visible_footer(self) -> None:
         current = self.plot_widget()
