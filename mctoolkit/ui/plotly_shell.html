@@ -13,6 +13,7 @@
       height: 100%;
       margin: 0;
       overflow: hidden;
+      background: #ffffff;
     }
     #mol-hover-layer {
       position: absolute;
@@ -1312,6 +1313,7 @@
             });
             applyInFlight = false;
             flushPendingSelection();
+            syncShellBackground();
             try { Plotly.Plots.resize(gd); } catch (_rz) {}
             schedulePinnedHoverReposition();
           }).finally(function() {
@@ -1323,17 +1325,88 @@
           console.error('mctoolkit Plotly embed failed:', e);
         }
       };
+      function shellPaperBackground() {
+        try {
+          if (gd && gd._fullLayout && gd._fullLayout.paper_bgcolor) {
+            return String(gd._fullLayout.paper_bgcolor);
+          }
+          if (gd && gd.layout && gd.layout.paper_bgcolor) {
+            return String(gd.layout.paper_bgcolor);
+          }
+        } catch (_bg) {}
+        return '#ffffff';
+      }
+      function syncShellBackground() {
+        var bg = shellPaperBackground();
+        try {
+          document.documentElement.style.background = bg;
+          document.body.style.background = bg;
+          if (gd) gd.style.background = bg;
+        } catch (_sb) {}
+      }
+      function plotHostSize() {
+        var w = 0, h = 0;
+        try {
+          w = (gd && gd.clientWidth) | 0;
+          h = (gd && gd.clientHeight) | 0;
+        } catch (_sz) {}
+        return {w: w, h: h};
+      }
+      function stretchPlotToHost() {
+        var sz = plotHostSize();
+        if (sz.w < 8 || sz.h < 8 || !gd) return;
+        try {
+          var container = gd.querySelector('.svg-container');
+          if (container) {
+            container.style.width = sz.w + 'px';
+            container.style.height = sz.h + 'px';
+          }
+          var nodes = gd.querySelectorAll('canvas, svg.main-svg');
+          for (var i = 0; i < nodes.length; i++) {
+            nodes[i].style.width = sz.w + 'px';
+            nodes[i].style.height = sz.h + 'px';
+          }
+        } catch (_st) {}
+      }
       function resizePlot() {
+        var sz = plotHostSize();
+        if (sz.w < 8 || sz.h < 8) return;
         try {
           if (gd && gd.data) Plotly.Plots.resize(gd);
         } catch (_r) {}
+        syncShellBackground();
         schedulePinnedHoverReposition();
       }
-      var resizeTimer = null;
-      window.addEventListener('resize', function() {
-        if (resizeTimer) clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(resizePlot, 50);
-      });
+      var hostResizeRaf = null;
+      var hostResizeSettle = null;
+      var lastHostW = -1;
+      var lastHostH = -1;
+      function onHostResize() {
+        var sz = plotHostSize();
+        if (sz.w === lastHostW && sz.h === lastHostH) return;
+        lastHostW = sz.w;
+        lastHostH = sz.h;
+        if (sz.w < 8 || sz.h < 8) return;
+        if (hostResizeRaf === null) {
+          hostResizeRaf = requestAnimationFrame(function() {
+            hostResizeRaf = null;
+            stretchPlotToHost();
+          });
+        }
+        if (hostResizeSettle) clearTimeout(hostResizeSettle);
+        hostResizeSettle = setTimeout(function() {
+          hostResizeSettle = null;
+          resizePlot();
+        }, 64);
+      }
+      window.mctoolkitOnHostResize = onHostResize;
+      if (typeof ResizeObserver === 'function') {
+        try {
+          new ResizeObserver(onHostResize).observe(document.documentElement);
+          if (gd) new ResizeObserver(onHostResize).observe(gd);
+        } catch (_ro) {}
+      }
+      window.addEventListener('resize', onHostResize);
     })();
   </script>
 </body>
