@@ -60,13 +60,27 @@ def configure_windows_native_caption_platform() -> str | None:
     return value
 
 
+def existing_native_hwnd(widget: Any) -> int:
+    """Return a realized HWND without calling ``winId()``.
+
+    ``QWidget.winId()`` creates native windows and breaks ``QWebEngineView`` in the
+    same top-level window (QTBUG-48130).
+    """
+    if widget is None:
+        return 0
+    internal = getattr(widget, "internalWinId", None)
+    if not callable(internal):
+        return 0
+    try:
+        return int(internal() or 0)
+    except (RuntimeError, TypeError, ValueError, AttributeError):
+        return 0
+
+
 def _set_widget_caption_classic(widget: Any) -> None:
     if sys.platform != "win32" or widget is None:
         return
-    try:
-        hwnd = int(widget.winId())
-    except (RuntimeError, TypeError, ValueError, AttributeError):
-        return
+    hwnd = existing_native_hwnd(widget)
     if hwnd == 0:
         return
     try:
