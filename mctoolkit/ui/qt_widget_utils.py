@@ -84,6 +84,31 @@ def make_window_minimizable(widget: QWidget) -> None:
     widget.setWindowFlags(flags)
 
 
+def fill_fusion_window(widget: QWidget) -> None:
+    """Paint palette Window so a late Chromium frame is not an unpainted black hole."""
+    widget.setAutoFillBackground(True)
+
+
+def configure_floating_webengine_window(widget: QWidget, *, delete_on_close: bool = True) -> None:
+    """Make a parented dialog a real top-level window *before* Chromium is created.
+
+    ``setWindowFlags`` after a ``QWebEngineView`` exists recreates the native
+    window and leaves a black pane. Call this immediately after ``super().__init__``.
+    """
+    set_modal = getattr(widget, "setModal", None)
+    if callable(set_modal):
+        set_modal(False)
+    widget.setWindowModality(Qt.NonModal)
+    if delete_on_close:
+        widget.setAttribute(Qt.WA_DeleteOnClose, True)
+    widget.setWindowFlags(
+        Qt.Window
+        | Qt.WindowCloseButtonHint
+        | Qt.WindowMinimizeButtonHint
+        | Qt.WindowMaximizeButtonHint
+    )
+
+
 _WHEEL_STEALERS = (QAbstractSpinBox, QComboBox, QSlider, QDial)
 _WHEEL_FILTER_NAME = "mctoolkit_unfocused_wheel_passthrough"
 _WHEEL_CLICK_ARMED = "mctoolkit_wheel_click_armed"
