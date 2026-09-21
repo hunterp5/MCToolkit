@@ -44,6 +44,52 @@ def webengine_views_supported() -> bool:
     return plugin.split(":")[0] not in _PLATFORMS_WITHOUT_WEBENGINE
 
 
+def prepare_embedded_webengine_view(view) -> None:
+    """Keep Chromium native without promoting Fusion ancestors to HWNDs.
+
+    Qt 6 ``QWebEngineView`` is a child window. If ancestors become native too, the
+    table, status strip, and splitter handles paint as unpainted black siblings.
+    """
+    from PySide6.QtCore import Qt
+
+    view.setAttribute(Qt.WA_DontCreateNativeAncestors, True)
+    view.setAutoFillBackground(True)
+
+
+def _webengine_views_in(root) -> list:
+    if root is None or not webengine_views_supported():
+        return []
+    try:
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+    except Exception:
+        return []
+    views: list = []
+    try:
+        if isinstance(root, QWebEngineView):
+            views.append(root)
+        views.extend(root.findChildren(QWebEngineView))
+    except RuntimeError:
+        return []
+    seen: set[int] = set()
+    unique: list = []
+    for view in views:
+        key = id(view)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(view)
+    return unique
+
+
+def set_descendant_webengine_visible(root, visible: bool) -> None:
+    """Map or unmap Chromium HWNDs. Hiding a Fusion parent leaves them painted."""
+    for view in _webengine_views_in(root):
+        try:
+            view.setVisible(bool(visible))
+        except RuntimeError:
+            continue
+
+
 def configure_qtwebengine_quiet_logs() -> str:
     """
     Hide Chromium GPU ERROR spam on stderr (SharedImage / GLES while rotating WebGL).
@@ -83,6 +129,7 @@ def prewarm_qtwebengine() -> None:
         if app is None:
             return
         view = QWebEngineView()
+        prepare_embedded_webengine_view(view)
         view.setAttribute(Qt.WA_DontShowOnScreen, True)
         view.resize(2, 2)
         view.setHtml("<!DOCTYPE html><html><body></body></html>")
