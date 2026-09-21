@@ -49,20 +49,20 @@ htmlcov/
 !.cursor/rules/**
 
 # Optional CLI binaries placed under resources/bin (keep README + .gitkeep)
-molmanager/resources/bin/**/*
-!molmanager/resources/bin/**/
-!molmanager/resources/bin/**/.gitkeep
+mctoolkit/resources/bin/**/*
+!mctoolkit/resources/bin/**/
+!mctoolkit/resources/bin/**/.gitkeep
 
 # GNN-MTL weights (download via scripts/bootstrap_gnn_mtl_model.py)
-molmanager/resources/models/**/*.pt
-!molmanager/resources/models/**/
-!molmanager/resources/models/**/README.md
-!molmanager/resources/models/**/.gitkeep
+mctoolkit/resources/models/**/*.pt
+!mctoolkit/resources/models/**/
+!mctoolkit/resources/models/**/README.md
+!mctoolkit/resources/models/**/.gitkeep
 
 # BioTransformer JAR + knowledge base (download via scripts/bootstrap_biotransformer.py)
-molmanager/resources/models/biotransformer/**
-!molmanager/resources/models/biotransformer/README.md
-!molmanager/resources/models/biotransformer/.gitkeep
+mctoolkit/resources/models/biotransformer/**
+!mctoolkit/resources/models/biotransformer/README.md
+!mctoolkit/resources/models/biotransformer/.gitkeep
 
 # Local large or throwaway inputs at repo root (remove lines if you want these tracked)
 fda_approved_full.SDF
