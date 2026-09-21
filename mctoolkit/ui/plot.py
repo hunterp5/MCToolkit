@@ -110,6 +110,7 @@ from .plot_size_controls import PlotSizeRangeControls
 from .plot_statistics_panel import PlotStatisticsPanel
 from .plot_style_mixin import PlotStyleMixin
 from .plot_web_surface import build_plot_web_view, no_web_surface
+from .qt_widget_utils import fill_fusion_window
 
 
 class PlotWidget(
@@ -132,8 +133,8 @@ class PlotWidget(
     _STATS_PANEL_MIN_WIDTH = 240
     owns_docked_plot_actions = True
 
-    def __init__(self, parent_app=None):
-        super().__init__(None)
+    def __init__(self, parent_app=None, *, qt_parent: QWidget | None = None):
+        super().__init__(qt_parent)
         self.parent_app = parent_app
         self._init_plot_state()
         self._build_plot_ui()
@@ -163,6 +164,7 @@ class PlotWidget(
         self._radar_oids: list[int] = []
 
     def _build_plot_ui(self) -> None:
+        fill_fusion_window(self)
         root = QVBoxLayout(self)
         root.setContentsMargins(*PLOT_BODY_MARGINS)
         root.setSpacing(PLOT_BODY_SPACING)
