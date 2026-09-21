@@ -1,23 +1,25 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """User-facing application identity (display name, Qt settings, log paths).
 
+The display name is ``mctoolkit`` (short for medicinal chemistry toolkit).
 The importable Python package is ``mctoolkit``. Environment variables are
-``MCTOOLKIT_*``. Session files use ``mctoolkit_session``.
+``MCTOOLKIT_*``. Session files use ``mctoolkit_session`` and the ``.mct``
+extension.
 """
 
 from __future__ import annotations
@@ -26,24 +28,42 @@ from typing import Any
 
 from PySide6.QtCore import QSettings
 
-APP_DISPLAY_NAME = "MCToolkit"
-APP_ORGANIZATION = "MCToolkit"
-SETTINGS_ORG = "MCToolkit"
-SETTINGS_APP = "MCToolkit"
-PREVIOUS_SETTINGS_ORG = "MCtoolkit"
-PREVIOUS_SETTINGS_APP = "MCtoolkit"
+APP_DISPLAY_NAME = "mctoolkit"
+APP_ORGANIZATION = "mctoolkit"
+SETTINGS_ORG = "mctoolkit"
+SETTINGS_APP = "mctoolkit"
+PREVIOUS_SETTINGS = (
+    ("MCToolkit", "MCToolkit"),
+    ("MCtoolkit", "MCtoolkit"),
+)
+PREVIOUS_SETTINGS_ORG = PREVIOUS_SETTINGS[0][0]
+PREVIOUS_SETTINGS_APP = PREVIOUS_SETTINGS[0][1]
 PYTHON_PACKAGE = "mctoolkit"
-LOG_DIR_NAME = "MCToolkit"
+LOG_DIR_NAME = "mctoolkit"
 LOG_DIR_SLUG = "mctoolkit"
 LOG_FILE_NAME = "mctoolkit.log"
-SESSION_TEMP_DIR_NAME = "MCToolkitSessions"
-SESSION_SAVE_FILTER = f"{APP_DISPLAY_NAME} Session (*.cms);;JSON (*.json)"
-SESSION_OPEN_FILTER = (
-    f"{APP_DISPLAY_NAME} Session (*.cms *.json);;Legacy session CSV (*.csv);;All files (*.*)"
+SESSION_TEMP_DIR_NAME = "mctoolkit-sessions"
+SESSION_FILE_EXTENSION = ".mct"
+SESSION_JSON_EXTENSION = ".json"
+SESSION_DOCUMENT_EXTENSIONS = (SESSION_FILE_EXTENSION, SESSION_JSON_EXTENSION)
+SESSION_SAVE_FILTER = (
+    f"{APP_DISPLAY_NAME} Session (*{SESSION_FILE_EXTENSION});;JSON (*{SESSION_JSON_EXTENSION})"
 )
-SESSION_INVALID_MESSAGE = f"Not an {APP_DISPLAY_NAME} session file (expected .cms / version 1–2)."
+SESSION_OPEN_FILTER = (
+    f"{APP_DISPLAY_NAME} Session (*{SESSION_FILE_EXTENSION} "
+    f"*{SESSION_JSON_EXTENSION});;Legacy session CSV (*.csv);;All files (*.*)"
+)
+SESSION_INVALID_MESSAGE = (
+    f"Not an {APP_DISPLAY_NAME} session file (expected {SESSION_FILE_EXTENSION} / version 1–2)."
+)
 
 _settings_migrated = False
+
+
+def is_session_document_path(path: str) -> bool:
+    """True when *path* looks like an mctoolkit session document (not CSV)."""
+    low = (path or "").lower()
+    return any(low.endswith(ext) for ext in SESSION_DOCUMENT_EXTENSIONS)
 
 
 def window_title(suffix: str | None = None) -> str:
@@ -87,22 +107,37 @@ def apply_qt_application_identity(app: Any) -> None:
     qt_settings()
 
 
+def _named_settings(org: str, app: str) -> QSettings:
+    """Org/app store without falling back into other Qt settings locations."""
+    store = QSettings(org, app)
+    store.setFallbacksEnabled(False)
+    return store
+
+
 def _migrate_legacy_qt_settings(settings: QSettings) -> None:
-    """Copy older QSettings stores into MCToolkit when the new store is empty."""
+    """Copy older QSettings stores into mctoolkit, then drop those leftover stores."""
     global _settings_migrated
     if _settings_migrated:
         return
     _settings_migrated = True
-    if settings.allKeys():
+    if not settings.allKeys():
+        for org, app in PREVIOUS_SETTINGS:
+            if org == SETTINGS_ORG and app == SETTINGS_APP:
+                continue
+            legacy = _named_settings(org, app)
+            keys = legacy.allKeys()
+            if not keys:
+                continue
+            for key in keys:
+                settings.setValue(key, legacy.value(key))
+            settings.sync()
+            break
+    if not settings.allKeys():
         return
-    for org, app in ((PREVIOUS_SETTINGS_ORG, PREVIOUS_SETTINGS_APP),):
+    for org, app in PREVIOUS_SETTINGS:
         if org == SETTINGS_ORG and app == SETTINGS_APP:
             continue
-        legacy = QSettings(org, app)
-        keys = legacy.allKeys()
-        if not keys:
-            continue
-        for key in keys:
-            settings.setValue(key, legacy.value(key))
-        settings.sync()
-        return
+        leftover = _named_settings(org, app)
+        if leftover.allKeys():
+            leftover.clear()
+            leftover.sync()

@@ -1,27 +1,28 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Standalone Protein Viewer window (3D canvas + chain Manager)."""
+"""Standalone Protein Viewer window (Mol* canvas + SBDD tools)."""
 
 from __future__ import annotations
 
 import base64
 import logging
 import sys
+from dataclasses import replace
 from datetime import datetime
 
 from PySide6.QtCore import QEventLoop, Qt, QTimer
@@ -34,36 +35,26 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
-    QHBoxLayout,
     QLabel,
     QMenuBar,
+    QMessageBox,
     QSizePolicy,
     QSplitter,
     QStackedWidget,
     QTextEdit,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from ..app_identity import APP_DISPLAY_NAME
 from ..platform_support.session_log import record_ui_log
-from ..protein.structure_components import PolymerChain, cif_viewer_bond_tables
+from ..protein.structure_components import PolymerChain, parse_polymer_sequences
 from .protein_chain_manager import ProteinChainManager
 from .protein_embed import ProteinEmbedView
-from .protein_sequence import ProteinSequenceDialog
 from .protein_viewer_edit_mixin import ProteinViewerEditMixin
 from .protein_viewer_io_mixin import ProteinViewerIoMixin
-from .protein_viewer_models import (
-    LIGAND_STYLE_CHOICES,
-    LIGAND_STYLE_IDS,
-    NamedManagerGroup,
-    _LoadedSlot,
-    _RENDER_COLOR_SPEC,
-)
-from .protein_viewer_overlays import ProteinViewerOverlayJobMixin
+from .protein_viewer_models import NamedManagerGroup, _LoadedSlot, copy_loaded_slots
 from .protein_viewer_pharmacophore_mixin import ProteinViewerPharmacophoreMixin
-from .protein_viewer_sequence_mixin import ProteinViewerSequenceMixin
 from .protein_viewer_style_mixin import ProteinViewerStyleMixin
 from .qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
 
@@ -73,15 +64,13 @@ logger = logging.getLogger(__name__)
 class ProteinViewerDialog(
     ProteinViewerEditMixin,
     ProteinViewerIoMixin,
-    ProteinViewerOverlayJobMixin,
     ProteinViewerStyleMixin,
-    ProteinViewerSequenceMixin,
     ProteinViewerPharmacophoreMixin,
     QDialog,
 ):
-    """Standalone Protein → Viewer window (3D canvas + chain Manager).
+    """Standalone Protein → Viewer window (Mol* canvas + SBDD tools).
 
-    Mixin bases are a file-split of this dialog (IO/style/sequence/pharmacophore).
+    Mixin bases are a file-split of this dialog (IO/style/pharmacophore).
     """
 
     def __init__(self, parent=None) -> None:
@@ -107,13 +96,14 @@ class ProteinViewerDialog(
         self._act_add_bond: QAction | None = None
         self._act_delete_bond: QAction | None = None
         self._sequence_chains: list[PolymerChain] = []
-        self._sequence_dialog: ProteinSequenceDialog | None = None
+        self._sequence_dialog = None
         self._prepare_dialog = None
         self._pdbfixer_dialog = None
         self._pdb2pqr_dialog = None
         self._minimize_dialog = None
         self._mmgbsa_dialog = None
         self._md_dialog = None
+        self._md_analysis_dialog = None
         self._dock_file_dialog = None
         self._act_dock_viewer: QAction | None = None
         self._residue_highlight: list[dict] = []
@@ -182,9 +172,7 @@ class ProteinViewerDialog(
         file_menu.addAction(act_open)
         act_save = QAction("&Save Structure…", self, triggered=self.save_structure_dialog)
         act_save.setShortcut(QKeySequence.Save)
-        act_save.setToolTip(
-            "Write the Manager-selected structure (or the last loaded file) to disk."
-        )
+        act_save.setToolTip("Write the last loaded structure to disk as PDB or mmCIF.")
         file_menu.addAction(act_save)
         act_save_session = QAction("Save to Session", self, triggered=self.save_viewer_to_session)
         act_save_session.setToolTip(
@@ -192,6 +180,13 @@ class ProteinViewerDialog(
             "Closing without this leaves the session unchanged."
         )
         file_menu.addAction(act_save_session)
+        act_export = QAction("Export &Image…", self, triggered=self.export_canvas_image)
+        file_menu.addAction(act_export)
+        file_menu.addSeparator()
+        act_traj = QAction("Open &Trajectory…", self, triggered=self.open_trajectory_dialog)
+        file_menu.addAction(act_traj)
+        act_map = QAction("Open &Map…", self, triggered=self.open_map_dialog)
+        file_menu.addAction(act_map)
         file_menu.addSeparator()
         act_close = QAction("&Close Structure", self, triggered=self.close_structure)
         file_menu.addAction(act_close)
@@ -306,6 +301,11 @@ class ProteinViewerDialog(
         act_md = QAction("Molecular &Dynamics…", self, triggered=self.open_md_dialog)
         act_md.setToolTip("OpenMM MD (implicit GBSA or TIP3P PME), with optional snapshot MM-GBSA.")
         simulate_menu.addAction(act_md)
+        act_md_an = QAction("&Analyze Trajectory…", self, triggered=self.open_md_analysis_dialog)
+        act_md_an.setToolTip(
+            "RMSD, RMSF, and energy vs time from an MD DCD. Not a trajectory player."
+        )
+        simulate_menu.addAction(act_md_an)
         pharma_menu = tools_menu.addMenu("&Pharmacophore")
         pharma_menu.setToolTipsVisible(True)
         act_pharma_edit = QAction("&Editor", self, triggered=self.open_pharmacophore_dialog)
@@ -323,174 +323,19 @@ class ProteinViewerDialog(
         act_pharma_open = QAction("&Open…", self, triggered=self.open_pharmacophore_file)
         act_pharma_open.setToolTip("Load a saved pharmacophore JSON onto the canvas.")
         pharma_menu.addAction(act_pharma_open)
-        render_menu = menubar.addMenu("&Render")
-        select_menu = menubar.addMenu("&Select")
-        protein_menu = render_menu.addMenu("&Protein")
-        self._protein_style_actions = self._add_render_style_menu(
-            protein_menu,
-            kind="polymer",
-            default="cartoon",
-        )
-        protein_menu.addSeparator()
-        self._protein_color_actions = self._add_render_color_menu(
-            protein_menu.addMenu("&Color"),
-            kind="polymer",
-        )
-        ligand_menu = render_menu.addMenu("&Ligand")
-        self._ligand_style_actions = self._add_render_style_menu(
-            ligand_menu,
-            kind="ligand",
-            default="ballstick",
-            choices=LIGAND_STYLE_CHOICES,
-        )
-        ligand_menu.addSeparator()
-        self._ligand_color_actions = self._add_render_color_menu(
-            ligand_menu.addMenu("&Color"),
-            kind="ligand",
-        )
-        hydrogens_menu = render_menu.addMenu("&Hydrogens")
-        self._add_hydrogen_mode_menu(hydrogens_menu)
-        self._act_hydrogens_all = (self._hydrogen_mode_actions.get("all") or [None])[0]
-        self._act_hydrogens_polar = (self._hydrogen_mode_actions.get("polar") or [None])[0]
-        self._act_hydrogens_none = (self._hydrogen_mode_actions.get("none") or [None])[0]
-        self._sync_hydrogen_mode_actions("polar")
-        interactions_menu = render_menu.addMenu("&Interactions")
-        hbonds_menu = interactions_menu.addMenu("Hydrogen &Bonds")
-        self._act_hbond_protein = QAction("&Protein", self)
-        self._act_hbond_protein.setCheckable(True)
-        self._act_hbond_protein.setToolTip(
-            "Show intramolecular hydrogen bonds within protein chains (gold)."
-        )
-        self._act_hbond_ligand = QAction("&Ligand", self)
-        self._act_hbond_ligand.setCheckable(True)
-        self._act_hbond_ligand.setToolTip(
-            "Show intramolecular hydrogen bonds within ligands (cyan)."
-        )
-        self._act_hbond_complex = QAction("Protein–&Ligand", self)
-        self._act_hbond_complex.setCheckable(True)
-        self._act_hbond_complex.setToolTip(
-            "Show intermolecular hydrogen bonds between protein and ligand (green). "
-            "Uses ProLIF when installed, otherwise geometric donor–acceptor distances."
-        )
-        hbonds_menu.addAction(self._act_hbond_protein)
-        hbonds_menu.addAction(self._act_hbond_ligand)
-        hbonds_menu.addAction(self._act_hbond_complex)
-        self._act_interact_hydrophobic = QAction("H&ydrophobic", self)
-        self._act_interact_hydrophobic.setCheckable(True)
-        self._act_interact_hydrophobic.setToolTip(
-            "Show protein–ligand hydrophobic contacts from ProLIF (orange)."
-        )
-        self._act_interact_ionic = QAction("&Ionic", self)
-        self._act_interact_ionic.setCheckable(True)
-        self._act_interact_ionic.setToolTip("Show protein–ligand salt bridges from ProLIF (red).")
-        self._act_interact_pi_stacking = QAction("π-&Stacking", self)
-        self._act_interact_pi_stacking.setCheckable(True)
-        self._act_interact_pi_stacking.setToolTip(
-            "Show protein–ligand π-stacking from ProLIF (purple)."
-        )
-        self._act_interact_pi_cation = QAction("π–&Cation", self)
-        self._act_interact_pi_cation.setCheckable(True)
-        self._act_interact_pi_cation.setToolTip(
-            "Show protein–ligand π-cation contacts from ProLIF (magenta)."
-        )
-        self._act_interact_halogen = QAction("Halo&gen Bond", self)
-        self._act_interact_halogen.setCheckable(True)
-        self._act_interact_halogen.setToolTip(
-            "Show protein–ligand halogen bonds from ProLIF (amber)."
-        )
-        interactions_menu.addAction(self._act_interact_hydrophobic)
-        interactions_menu.addAction(self._act_interact_ionic)
-        interactions_menu.addAction(self._act_interact_pi_stacking)
-        interactions_menu.addAction(self._act_interact_pi_cation)
-        interactions_menu.addAction(self._act_interact_halogen)
-        self._act_hbond_protein.toggled.connect(self._on_hbond_toggles)
-        self._act_hbond_ligand.toggled.connect(self._on_hbond_toggles)
-        self._act_hbond_complex.toggled.connect(self._on_hbond_toggles)
-        self._act_interact_hydrophobic.toggled.connect(self._on_hbond_toggles)
-        self._act_interact_ionic.toggled.connect(self._on_hbond_toggles)
-        self._act_interact_pi_stacking.toggled.connect(self._on_hbond_toggles)
-        self._act_interact_pi_cation.toggled.connect(self._on_hbond_toggles)
-        self._act_interact_halogen.toggled.connect(self._on_hbond_toggles)
-        self._act_pocket_surface = QAction("Pocket &Surface…", self)
-        self._act_pocket_surface.setToolTip(
-            "Open options for a molecular surface on protein residues within 4.5 Å of the ligand."
-        )
-        self._act_pocket_surface.triggered.connect(self.open_pocket_surface_dialog)
-        render_menu.addAction(self._act_pocket_surface)
+        view_menu = menubar.addMenu("&View")
         self._act_docking_box = QAction("&Docking Box", self)
         self._act_docking_box.setCheckable(True)
         self._act_docking_box.setToolTip(
             "Show the Gnina search box written by Prepare (ligand bounding box + padding)."
         )
         self._act_docking_box.toggled.connect(self._on_docking_box_toggled)
-        render_menu.addAction(self._act_docking_box)
-        render_menu.addSeparator()
-        self._act_all_atoms = QAction("All &Atoms", self)
-        self._act_all_atoms.setCheckable(True)
-        self._act_all_atoms.setToolTip(
-            "Draw protein residues as ball-and-stick (all atoms) instead of a ribbon cartoon."
-        )
-        self._act_all_atoms.toggled.connect(self._on_all_atoms_toggled)
-        render_menu.addAction(self._act_all_atoms)
-        render_menu.addSeparator()
-        self._act_pocket = QAction("Focus &Pocket", self)
-        self._act_pocket.setToolTip(
-            "Zoom to the ligand, show nearby protein residues as ball-and-stick, "
-            "and display polar hydrogens on heteroatoms in the pocket."
-        )
-        self._act_pocket.triggered.connect(self._on_pocket)
-        render_menu.addAction(self._act_pocket)
+        view_menu.addAction(self._act_docking_box)
         self._act_reset_camera = QAction("Reset Camera", self, triggered=self._reset_camera)
-        self._act_reset_camera.setToolTip(
-            "Restore the fitted view and the protein/ligand styles from when they were loaded."
-        )
-        render_menu.addAction(self._act_reset_camera)
-        act_hide = QAction("&Hide", self, triggered=lambda: self._set_selected_visible(False))
-        act_hide.setToolTip("Hide the chains selected in the Manager.")
-        select_menu.addAction(act_hide)
-        act_show = QAction("&Show", self, triggered=lambda: self._set_selected_visible(True))
-        act_show.setToolTip("Show the chains selected in the Manager.")
-        select_menu.addAction(act_show)
-        act_focus = QAction("&Focus", self, triggered=self.focus_selected)
-        act_focus.setToolTip("Zoom the 3D view to the Manager selection.")
-        select_menu.addAction(act_focus)
-        select_menu.addSeparator()
-        act_invert = QAction("&Invert Selection", self, triggered=self.invert_selection)
-        act_invert.setToolTip(
-            "Select unselected Manager chains and deselect the current selection."
-        )
-        select_menu.addAction(act_invert)
-        act_delete = QAction("&Delete", self, triggered=self.delete_selected)
-        act_delete.setToolTip("Delete highlighted atoms or residues, or selected Manager chains.")
-        select_menu.addAction(act_delete)
-        act_duplicate = QAction("D&uplicate", self, triggered=self.duplicate_selected)
-        act_duplicate.setToolTip("Copy the Manager selection as a new overlay structure.")
-        select_menu.addAction(act_duplicate)
-        act_clear = QAction("C&lear Selection", self, triggered=self.clear_selection)
-        act_clear.setToolTip("Deselect Manager rows and clear the 3D atom/residue highlight.")
-        select_menu.addAction(act_clear)
-        select_menu.addSeparator()
-        select_render = select_menu.addMenu("&Render")
-        self._add_select_style_menu(select_render)
-        self._add_select_color_menu(select_menu.addMenu("&Color"))
-        self._sync_hydrogen_mode_actions(self._hydrogen_mode())
-        # Native Windows menu bars can swallow clicks meant for the corner widget.
+        self._act_reset_camera.setToolTip("Restore the fitted Mol* camera.")
+        view_menu.addAction(self._act_reset_camera)
         if sys.platform == "win32":
             menubar.setNativeMenuBar(False)
-        corner = QWidget(menubar)
-        corner_ly = QHBoxLayout(corner)
-        corner_ly.setContentsMargins(0, 0, 4, 0)
-        btn_sequence = QToolButton(corner)
-        btn_sequence.setText("Sequence")
-        btn_sequence.setToolTip("Show the editable amino-acid sequence and select residues in 3D.")
-        btn_sequence.setToolButtonStyle(Qt.ToolButtonTextOnly)
-        btn_sequence.setAutoRaise(True)
-        btn_sequence.setFocusPolicy(Qt.NoFocus)
-        btn_sequence.setFont(menubar.font())
-        btn_sequence.clicked.connect(self.open_sequence_window)
-        self._btn_sequence = btn_sequence
-        corner_ly.addWidget(btn_sequence)
-        menubar.setCornerWidget(corner, Qt.TopRightCorner)
         root.setMenuBar(menubar)
 
         splitter = QSplitter(Qt.Horizontal)
@@ -502,9 +347,8 @@ class ProteinViewerDialog(
         self.viewer.redo_requested.connect(self.redo_manager_delete)
         self.viewer.web_ready.connect(self._on_canvas_web_ready)
         self.manager = ProteinChainManager(self)
-        self.manager.visibility_changed.connect(self._on_visibility_changed)
+        self.manager.setVisible(False)
         self.manager.selection_changed.connect(self._on_manager_selection)
-        self.manager.focus_requested.connect(self.focus_selected)
         self.manager.delete_requested.connect(self.delete_selected_chains)
         self.manager.duplicate_requested.connect(self.duplicate_selected)
         self.manager.add_to_group_requested.connect(self._on_add_to_group)
@@ -547,9 +391,9 @@ class ProteinViewerDialog(
 
         splitter.addWidget(vsplit)
         splitter.addWidget(self.manager)
-        splitter.setStretchFactor(0, 4)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([860, 300])
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
+        splitter.setSizes([1180, 0])
         splitter.setChildrenCollapsible(False)
 
         self._loading_page = QWidget()
@@ -709,111 +553,47 @@ class ProteinViewerDialog(
         record_ui_log(t, name="mctoolkit.ui.protein_viewer")
 
     def _reset_camera(self) -> None:
-        styles_changed = self._restore_loaded_render_styles()
-        self._clear_pocket_overlay()
-        if styles_changed:
-            self.manager.apply_row_states(self._rows)
-            self._sync_render_menus_from_rows()
-            self._push_states()
-        elif self._slots:
-            self._sync_render_menus_from_rows()
-        web = getattr(self.viewer, "_web", None)
-        if web is None:
-            return
-        try:
-            web.page().runJavaScript(
-                "if (window.mctoolkitResetStructure) window.mctoolkitResetStructure();"
-            )
-        except Exception:
-            logger.debug("Protein viewer reset camera failed", exc_info=True)
-
-    def _component_payloads(self) -> list[dict]:
-        out: list[dict] = []
-        for row in self._rows:
-            payload = row.spec.to_payload()
-            payload["visible"] = row.visible
-            payload["selected"] = row.selected
-            payload["style"] = (
-                row.style
-                if row.spec.kind != "ligand" or row.style in LIGAND_STYLE_IDS
-                else "ballstick"
-            )
-            scheme = row.color_scheme or "default"
-            spec = _RENDER_COLOR_SPEC.get(scheme)
-            if spec is not None:
-                payload["cartoonColor"] = spec[0]
-                payload["carbonScheme"] = spec[1]
-            elif str(scheme).startswith("#"):
-                payload["cartoonColor"] = scheme
-                payload["carbonScheme"] = scheme
-            out.append(payload)
-        return out
+        self.viewer.reset_camera()
 
     def _slot_model_payload(self, slot: _LoadedSlot) -> dict:
-        model = {
+        return {
             "data": base64.b64encode(slot.text.encode("utf-8")).decode("ascii"),
             "fmt": slot.fmt,
             "name": slot.name,
+            "id": slot.structure_id,
         }
-        if slot.fmt == "cif":
-            cache = getattr(self, "_cif_bond_cache", None)
-            if cache is None:
-                cache = {}
-                self._cif_bond_cache = cache
-            prev = cache.get(slot.structure_id)
-            if prev is None or prev[0] is not slot.text:
-                tables = cif_viewer_bond_tables(slot.text)
-                cache[slot.structure_id] = (slot.text, tables)
-            else:
-                tables = prev[1]
-            if tables:
-                model["cifBonds"] = tables
-        return model
-
-    def _structure_canvas_payload(
-        self,
-        models: list[dict],
-        *,
-        refit: bool,
-        camera=None,
-    ) -> dict:
-        payload = {
-            "models": models,
-            "fmt": models[0]["fmt"] if models else "pdb",
-            "data": models[0]["data"] if models else "",
-            "components": self._component_payloads(),
-            "residueHighlight": self._residue_highlight,
-            "pocket": self._pocket_payload_data,
-            "pocketSurface": self._pocket_surface_overlay_payload(),
-            "dockingBox": self._docking_box_overlay_payload(),
-            "dockPose": self._dock_pose_overlay_payload(),
-            "pharmacophore": self._pharmacophore_overlay_payload(),
-            "hbonds": self._hbond_payload_for_structure_push(),
-            "hydrogens": self._hydrogen_mode(),
-            "refit": bool(refit) and camera is None,
-        }
-        if camera is not None:
-            payload["camera"] = camera
-        return payload
 
     def _push_structure(self, *, refit: bool, camera=None, append_from: int | None = None) -> None:
+        if not self._slots:
+            self.viewer.clear_structures()
+            return
         web_ready = bool(getattr(self.viewer, "_web_ready", False))
         can_append = (
             append_from is not None
             and append_from > 0
             and append_from < len(self._slots)
-            and camera is None
             and web_ready
         )
+        models = [
+            self._slot_model_payload(slot)
+            for slot in (self._slots[append_from:] if can_append else self._slots)
+        ]
+        payload = {"models": models, "refit": bool(refit)}
         if can_append:
-            models = [self._slot_model_payload(slot) for slot in self._slots[append_from:]]
-            self.viewer.add_models(self._structure_canvas_payload(models, refit=refit))
-            return
-        models = [self._slot_model_payload(slot) for slot in self._slots]
-        self.viewer.set_payload(self._structure_canvas_payload(models, refit=refit, camera=camera))
+            self.viewer.add_structures(payload)
+        else:
+            self.viewer.load_structures(payload)
+        box = self._docking_box_overlay_payload()
+        if box:
+            self.viewer.set_docking_box(box)
+        pose = self._dock_pose_overlay_payload()
+        if pose:
+            self.viewer.set_dock_pose(pose)
+        pharma = self._pharmacophore_overlay_payload()
+        if pharma and pharma.get("active"):
+            self.viewer.set_pharmacophore(pharma)
 
     def _schedule_canvas_structure_push(self, *, refit: bool = False) -> None:
-        """Coalesce rapid Manager deletes into one canvas rebuild."""
         self._pending_canvas_refit = bool(getattr(self, "_pending_canvas_refit", False) or refit)
         if "pytest" in sys.modules:
             self._flush_canvas_structure_push()
@@ -833,14 +613,214 @@ class ProteinViewerDialog(
         if not self._slots:
             return
         self._push_structure(refit=refit)
-        self._refresh_pocket_overlays(zoom=False)
-        if self._interaction_overlay_active():
-            self._push_hbonds()
 
     def _push_states(self) -> None:
-        self.viewer.apply_component_states(self._component_payloads())
-        if self._interaction_overlay_active():
-            self._push_hbonds()
+        self._mark_viewer_unsaved()
+
+    def _refresh_sequence_chains(self, force: bool = False) -> None:
+        """Parse polymer sequences for Protein → Sequence MSA (Mol* owns the Sequence panel)."""
+        del force
+        filtered: list[PolymerChain] = []
+        for model, slot in enumerate(self._slots):
+            fmt = "cif" if slot.fmt == "cif" else "pdb"
+            for poly in parse_polymer_sequences(slot.text, fmt):
+                residues = [
+                    replace(res, structure_id=slot.structure_id, model=model)
+                    for res in poly.residues
+                ]
+                if residues:
+                    filtered.append(
+                        PolymerChain(
+                            chain=poly.chain,
+                            residues=list(residues),
+                            structure_id=slot.structure_id,
+                            structure_name=slot.name,
+                        )
+                    )
+        self._sequence_chains = filtered
+
+    def _on_sequence_deleted(self, residues: list) -> None:
+        if not residues:
+            return
+        sels = []
+        for res in residues:
+            sel = res.selection()
+            sel["structure_id"] = res.structure_id
+            sel["kind"] = res.kind
+            sel["resn"] = res.resn
+            sels.append(sel)
+        self.delete_residue_selections(sels, confirm=False)
+
+    def _sync_sequence_dialog(self) -> None:
+        return
+
+    def _selected_component_ids(self) -> list[str]:
+        return self.manager.selected_component_ids() or [
+            r.spec.component_id for r in self._rows if r.selected
+        ]
+
+    def _clear_manager_delete_history(self) -> None:
+        self._manager_delete_undo = []
+        self._manager_delete_redo = []
+        self._sync_manager_edit_actions()
+
+    def _sync_manager_edit_actions(self) -> None:
+        undo = getattr(self, "_act_undo", None)
+        redo = getattr(self, "_act_redo", None)
+        if undo is not None:
+            undo.setEnabled(bool(self._manager_delete_undo))
+        if redo is not None:
+            redo.setEnabled(bool(self._manager_delete_redo))
+
+    def _push_manager_delete_undo(
+        self,
+        before: list[_LoadedSlot],
+        after: list[_LoadedSlot],
+    ) -> None:
+        self._manager_delete_undo.append((before, after))
+        if len(self._manager_delete_undo) > 50:
+            self._manager_delete_undo = self._manager_delete_undo[-50:]
+        self._manager_delete_redo = []
+        self._sync_manager_edit_actions()
+
+    def _restore_manager_slots(self, slots: list[_LoadedSlot]) -> None:
+        self._slots = copy_loaded_slots(slots)
+        self._reindex_models()
+        self._residue_highlight = []
+        self._set_atom_status("")
+        if not self._slots:
+            self.close_structure(keep_edit_history=True)
+            return
+        self._refresh_manager()
+        self._refresh_sequence_chains()
+        self._push_structure(refit=False)
+        self._mark_viewer_unsaved()
+        sync_edit = getattr(self, "_sync_structure_edit_actions", None)
+        if callable(sync_edit):
+            sync_edit()
+
+    def undo_manager_delete(self) -> None:
+        if not self._manager_delete_undo:
+            return
+        before, after = self._manager_delete_undo.pop()
+        self._manager_delete_redo.append((before, after))
+        self._restore_manager_slots(before)
+        self._sync_manager_edit_actions()
+
+    def redo_manager_delete(self) -> None:
+        if not self._manager_delete_redo:
+            return
+        before, after = self._manager_delete_redo.pop()
+        self._manager_delete_undo.append((before, after))
+        self._restore_manager_slots(after)
+        self._sync_manager_edit_actions()
+
+    def _hydrogen_mode(self) -> str:
+        return "polar"
+
+    def _hbond_kinds_enabled(self) -> set:
+        return set()
+
+    def _interaction_overlay_active(self) -> bool:
+        return False
+
+    def _hbond_payload_for_structure_push(self) -> dict:
+        return {"active": False, "bonds": []}
+
+    def _pocket_surface_overlay_payload(self):
+        return {"active": False}
+
+    def _refresh_pocket_overlays(self, *, zoom: bool = False) -> None:
+        return
+
+    def _invalidate_hbonds(self, structure_id: str | None = None) -> None:
+        return
+
+    def _push_hbonds(self) -> None:
+        return
+
+    def _drop_overlay_structures(self, sids) -> None:
+        return
+
+    def _enable_protein_ligand_interactions_for_complex(self) -> None:
+        return
+
+    def _checked_style(self, actions, default: str) -> str:
+        return default
+
+    def _check_style_action(self, actions, key: str) -> None:
+        return
+
+    def _on_visibility_changed(self, *_a) -> None:
+        return
+
+    def _on_manager_selection(self, ids: list) -> None:
+        want = set(ids)
+        for slot in self._slots:
+            slot.rows = [replace(row, selected=row.spec.component_id in want) for row in slot.rows]
+        if not self._syncing_from_atom and self._residue_highlight:
+            self._residue_highlight = []
+            self._set_atom_status("")
+
+    def focus_selected(self) -> None:
+        return
+
+    def invert_selection(self) -> None:
+        return
+
+    def clear_selection(self) -> None:
+        """Clear the 3D pick highlight and any Manager row selection."""
+        for slot in self._slots:
+            slot.rows = [replace(row, selected=False) for row in slot.rows]
+        self._residue_highlight = []
+        self._set_atom_status("")
+
+    def delete_selected_chains(self) -> None:
+        if self.manager.selected_items_are_groups_only():
+            for gid in self.manager.selected_user_group_ids():
+                self._on_delete_group(gid)
+            return
+        ids = self._selected_component_ids()
+        if not ids:
+            return
+        labels = [r.spec.label for r in self._rows if r.spec.component_id in set(ids)]
+        preview = ", ".join(labels[:6])
+        if len(labels) > 6:
+            preview += "…"
+        n = len(ids)
+        msg = f"Delete {n} selected chain{'s' if n != 1 else ''} from the viewer?"
+        if preview:
+            msg += f"\n\n{preview}"
+        if (
+            QMessageBox.question(
+                self, "Delete chains", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            != QMessageBox.Yes
+        ):
+            return
+        before = copy_loaded_slots(self._slots)
+        drop = set(ids)
+        kept: list[_LoadedSlot] = []
+        for slot in self._slots:
+            rows = [r for r in slot.rows if r.spec.component_id not in drop]
+            if rows:
+                slot.rows = rows
+                kept.append(slot)
+        self._slots = kept
+        reindex = getattr(self, "_reindex_models", None)
+        if callable(reindex):
+            reindex()
+        self._push_manager_delete_undo(before, copy_loaded_slots(self._slots))
+        if not self._slots:
+            self.close_structure(keep_edit_history=True)
+            return
+        self._refresh_manager()
+        self._refresh_sequence_chains()
+        schedule = getattr(self, "_schedule_canvas_structure_push", None)
+        if callable(schedule):
+            schedule(refit=False)
+        else:
+            self._push_structure(refit=False)
         self._mark_viewer_unsaved()
 
     def dock_side_widget(self, widget) -> bool:
@@ -848,6 +828,7 @@ class ProteinViewerDialog(
         dock = getattr(self.manager, "dock_widget", None)
         if not callable(dock) or not dock(widget):
             return False
+        self.manager.setVisible(True)
         self._widen_manager_for_side_dock()
         sync = getattr(widget, "_sync_footer_chrome", None)
         if callable(sync):
@@ -869,6 +850,13 @@ class ProteinViewerDialog(
             sync = getattr(widget, "_sync_footer_chrome", None)
             if callable(sync):
                 sync()
+            if not self.side_docked_widgets():
+                self.manager.setVisible(False)
+                splitter = getattr(self, "_main_splitter", None)
+                if splitter is not None:
+                    sizes = splitter.sizes()
+                    if len(sizes) >= 2:
+                        splitter.setSizes([sizes[0] + sizes[1], 0])
         return ok
 
     def close_side_dock_widget(self, widget) -> bool:

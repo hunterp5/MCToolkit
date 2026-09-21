@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Catalog of external tools, papers, and licenses shown in Help → Citations."""
 
@@ -35,7 +35,7 @@ LIC_PYTORCH = ("BSD-style (PyTorch)", "https://github.com/pytorch/pytorch/blob/m
 
 @dataclass(frozen=True)
 class ToolCitation:
-    """One external library, service, or method used by MCToolkit."""
+    """One external library, service, or method used by mctoolkit."""
 
     tool_id: str
     name: str
@@ -86,7 +86,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 "Desktop chemical table workspace (this program).",
                 (),
                 LIC_GPL3,
-                homepage="https://github.com/hunterp5/MCToolkit",
+                homepage="https://github.com/hunterp5/mctoolkit",
                 notes=f"Copyright © 2026 Hunter Picard. Full text in the LICENSE file shipped with {APP_DISPLAY_NAME}.",
             ),
         ),
@@ -188,7 +188,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "3dmol",
                 "3Dmol.js",
-                "In-app 2D/3D structure viewer (bundled `3Dmol-min.js`).",
+                "In-app small-molecule 2D/3D structure viewer (bundled `3Dmol-min.js`).",
                 (
                     (
                         "Rego, N.; Koes, D. 3Dmol.js: molecular visualization with WebGL. "
@@ -198,6 +198,23 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 ),
                 LIC_BSD3,
                 homepage="https://3dmol.org",
+            ),
+            _t(
+                "molstar",
+                "Mol*",
+                "Protein Viewer 3D canvas (bundled `molstar.js` Viewer UI: "
+                "components, sequence, measurements, interactions, maps, trajectories).",
+                (
+                    (
+                        "Sehnal, D.; Bittrich, S.; Deshpande, M.; Svobodová, R.; Berka, K.; "
+                        "Bazgier, V.; Velankar, S.; Burley, S. K.; Koča, J.; Rose, A. S. "
+                        "Mol* Viewer: modern web app for 3D visualization and analysis of "
+                        "large biomolecular structures. Nucleic Acids Res. 2021, 49, W431–W437.",
+                        "https://doi.org/10.1093/nar/gkab314",
+                    ),
+                ),
+                LIC_MIT,
+                homepage="https://molstar.org",
             ),
             _t(
                 "mafft",
@@ -260,7 +277,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 ),
                 LIC_MIT,
                 homepage="https://github.com/Xundrug/MolGpKa",
-                notes="See mctoolkit/resources/unipka/NOTICE.md. These files are third-party data, not MCToolkit GPL source.",
+                notes="See mctoolkit/resources/unipka/NOTICE.md. These files are third-party data, not mctoolkit GPL source.",
             ),
             _t(
                 "fame3r",
@@ -299,7 +316,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     "GNU LGPL v3. Place the JAR plus database/ and supportfiles/ next to it "
                     "(or set MCTOOLKIT_BIOTRANSFORMER_JAR). Commercial redistribution of "
                     "BioTransformer resources requires permission from the authors. Java must "
-                    "be on PATH. Environmental microbial predictions are not offered in MCToolkit."
+                    "be on PATH. Environmental microbial predictions are not offered in mctoolkit."
                 ),
             ),
             _t(
@@ -343,7 +360,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 ),
                 LIC_GPL3,
                 homepage="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3368654/",
-                notes="Score implemented in MCToolkit (this GPL program) using RDKit descriptors plus Uni-pKa ionization.",
+                notes="Score implemented in mctoolkit (this GPL program) using RDKit descriptors plus Uni-pKa ionization.",
             ),
             _t(
                 "esol",
@@ -357,7 +374,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Published ESOL model, implemented in MCToolkit (this GPL program).",
+                notes="Published ESOL model, implemented in mctoolkit (this GPL program).",
             ),
             _t(
                 "qed",
@@ -400,7 +417,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Implemented in MCToolkit; ionization from Uni-pKa. Values ≤ 14 are often associated with higher oral/PK success in bRo5 space.",
+                notes="Implemented in mctoolkit; ionization from Uni-pKa. Values ≤ 14 are often associated with higher oral/PK success in bRo5 space.",
             ),
             _t(
                 "pharm2d_gobbi",
@@ -465,7 +482,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 LIC_APACHE2,
                 homepage="https://github.com/gnina/gnina",
                 notes=(
-                    "After docking, MCToolkit keeps poses whose RDKit feature sites occupy "
+                    "After docking, mctoolkit keeps poses whose RDKit feature sites occupy "
                     "the Protein Viewer pharmacophore spheres (protein coordinates). Gnina "
                     "--user_grid occupancy maps are not used."
                 ),
@@ -550,6 +567,8 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     "Simulate → MM-GBSA / Molecular Dynamics use GBn2 (or OBC2) "
                     "implicit solvent or a TIP3P PME box; MM-GBSA is 1-trajectory, "
                     "omits entropy, and strips solvent from explicit-MD snapshots. "
+                    "Simulate → Analyze Trajectory fits Cα to frame 0 (Kabsch) and "
+                    "reports RMSD/RMSF plus joined energy/ΔG; it is not a DCD player. "
                     "OpenMM also includes LGPL components; see the OpenMM license files in that package."
                 ),
             ),
@@ -619,8 +638,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "prolif",
                 "ProLIF",
-                "Protein Viewer Render → Interactions: protein–ligand hydrogen bonds, "
-                "hydrophobic contacts, salt bridges, π-stacking, π-cation, and halogen bonds.",
+                "Optional protein–ligand interaction fingerprints (docking extra).",
                 (
                     (
                         "Bouysset, C.; Fiorucci, S. ProLIF: a library to encode molecular "
@@ -631,11 +649,8 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 LIC_APACHE2,
                 homepage="https://github.com/chemosim-lab/ProLIF",
                 notes=(
-                    "Optional docking extra (`pip install prolif`). Intramolecular protein and "
-                    "ligand hydrogen bonds still use MCToolkit's geometric detector. "
-                    "Protein–ligand H-bonds fall back to that detector when ProLIF is missing "
-                    "or hydrogens are absent. Pose Browser overlays recompute ProLIF against "
-                    "the receptor only (cached protein molecule; crystal ligand ignored)."
+                    "Optional docking extra (`pip install prolif`). Protein Viewer contacts "
+                    "are drawn by Mol* Non-covalent Interactions, not ProLIF."
                 ),
             ),
         ),
@@ -684,7 +699,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "som",
                 "Self-organizing map (Kohonen)",
-                "Data → DimRed Plots → Self-Organizing Map (NumPy implementation in MCToolkit).",
+                "Data → DimRed Plots → Self-Organizing Map (NumPy implementation in mctoolkit).",
                 (
                     (
                         "Kohonen, T. Self-Organized Formation of Topologically Correct Feature Maps. "
@@ -693,7 +708,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Algorithm citation; the MCToolkit SOM code is part of this GPL program.",
+                notes="Algorithm citation; the mctoolkit SOM code is part of this GPL program.",
             ),
             _t(
                 "plotly",
@@ -720,7 +735,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Region boundaries from the publication SI; descriptors via RDKit. Plot implemented in MCToolkit.",
+                notes="Region boundaries from the publication SI; descriptors via RDKit. Plot implemented in mctoolkit.",
             ),
             _t(
                 "golden_triangle",
@@ -734,7 +749,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="Plot implemented in MCToolkit (LogP −2 to 5, MW 200–450 Da, apex near 1.5 / 450).",
+                notes="Plot implemented in mctoolkit (LogP −2 to 5, MW 200–450 Da, apex near 1.5 / 450).",
             ),
             _t(
                 "sali",
@@ -748,7 +763,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                     ),
                 ),
                 LIC_GPL3,
-                notes="SALI = |Δactivity| / (1 − similarity). Implemented in MCToolkit using RDKit fingerprints.",
+                notes="SALI = |Δactivity| / (1 − similarity). Implemented in mctoolkit using RDKit fingerprints.",
             ),
         ),
     ),
@@ -841,7 +856,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "qtwebengine",
                 "Qt WebEngine (Chromium)",
-                "3Dmol viewer, Plotly, and other embedded HTML views.",
+                "Mol* Viewer, Plotly, and other embedded HTML views.",
                 (
                     (
                         "The Qt Company. Qt WebEngine.",

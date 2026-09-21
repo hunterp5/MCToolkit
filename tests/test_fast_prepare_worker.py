@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Fast Prepare worker: fused disconnect + neutralize equivalence, payloads, and cancellation."""
 
@@ -63,9 +63,10 @@ def test_prepare_one_matches_old_two_stage_pipeline(smiles: str) -> None:
     if expected is None:
         return
     exp_smiles, exp_fragments = expected
-    blob, fragments, canonical = got
+    blob, fragments, canonical, png = got
     assert fragments == exp_fragments
     assert canonical == exp_smiles
+    assert png == b""
     assert mol_to_canonical_smiles(Chem.Mol(blob)) == exp_smiles
 
 
@@ -105,6 +106,28 @@ def test_need_smiles_false_skips_canonical_smiles() -> None:
     res = _prepare_one("C[NH+](C)C.[Cl-]", None, is_text=True, need_smiles=False)
     assert res is not None
     assert res[2] == ""
+    assert res[3] == b""
+
+
+def test_prepare_one_emits_png_when_requested() -> None:
+    res = _prepare_one(
+        "c1ccccc1",
+        None,
+        is_text=True,
+        need_smiles=False,
+        need_png=True,
+        png_width=32,
+        png_height=32,
+    )
+    assert res is not None
+    assert res[3].startswith(b"\x89PNG")
+
+
+def test_prepare_one_skips_uncharger_when_already_neutral() -> None:
+    res = _prepare_one("c1ccccc1", None, is_text=True, need_smiles=True, neutralize=True)
+    assert res is not None
+    assert Chem.GetFormalCharge(Chem.Mol(res[0])) == 0
+    assert res[2] == mol_to_canonical_smiles(Chem.MolFromSmiles("c1ccccc1"))
 
 
 def test_batch_helper_preserves_oids_and_drops_failures() -> None:
@@ -148,17 +171,32 @@ def _worker_rows(items, **kwargs):
     return sig, worker
 
 
+def test_worker_accepts_store_blobs() -> None:
+    mols = [Chem.MolFromSmiles(s) for s in SAMPLE_SMILES]
+    items = [(i, m.ToBinary(), s) for i, (m, s) in enumerate(zip(mols, SAMPLE_SMILES))]
+    sig, _ = _worker_rows(items, need_smiles=True, neutralize=True)
+    assert sig.results
+    assert [r[0] for r in sig.results] == list(range(len(SAMPLE_SMILES)))
+    for row in sig.results:
+        _oid, blob, _fragments, canonical = row[:4]
+        assert isinstance(blob, bytes)
+        assert canonical == mol_to_canonical_smiles(Chem.Mol(blob))
+        assert row[4] == b""
+
+
 def test_worker_emits_blobs_not_live_mols() -> None:
     mols = [Chem.MolFromSmiles(s) for s in SAMPLE_SMILES]
     items = [(i, m, s) for i, (m, s) in enumerate(zip(mols, SAMPLE_SMILES))]
     sig, _ = _worker_rows(items, need_smiles=True)
     assert sig.results
-    for oid, blob, fragments, canonical in sig.results:
+    for row in sig.results:
+        oid, blob, fragments, canonical = row[:4]
         assert isinstance(oid, int)
         assert isinstance(blob, bytes)
         assert isinstance(fragments, str)
         assert Chem.Mol(blob) is not None
         assert canonical == mol_to_canonical_smiles(Chem.Mol(blob))
+        assert row[4] == b""
 
 
 def test_worker_text_mode_reads_cell_text() -> None:
@@ -166,6 +204,15 @@ def test_worker_text_mode_reads_cell_text() -> None:
     sig, _ = _worker_rows(items, is_smiles=True, need_smiles=True, neutralize=True)
     assert [r[0] for r in sig.results] == [1, 2]
     assert Chem.GetFormalCharge(Chem.Mol(sig.results[0][1])) == 0
+
+
+def test_worker_emits_png_when_requested() -> None:
+    mols = [Chem.MolFromSmiles(s) for s in SAMPLE_SMILES]
+    items = [(i, m, s) for i, (m, s) in enumerate(zip(mols, SAMPLE_SMILES))]
+    sig, _ = _worker_rows(items, need_png=True, png_width=32, png_height=32, neutralize=True)
+    assert sig.results
+    for row in sig.results:
+        assert row[4].startswith(b"\x89PNG")
 
 
 def test_worker_reports_progress_and_empty_input() -> None:

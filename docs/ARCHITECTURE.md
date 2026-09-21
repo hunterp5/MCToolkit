@@ -1,4 +1,4 @@
-# MCToolkit architecture
+# mctoolkit architecture
 
 Desktop chemistry table manager: **PySide6** UI, **RDKit** structures, optional **PyTorch** tools (pKa, permeability).
 
@@ -174,7 +174,7 @@ window as one-line forwards so dialogs and tests keep calling `app.on_calc_finis
 | `TableWriteService` | `ui/table_write_service.py` | Column writeback: unique names, inserts, chunked `on_calc_finished` |
 | `TableSession` | `ui/table_session.py` | Selection, chemistry-column lookup, sticky visible-row cache (`TableSessionSelection` / `TableSessionChemistry`) |
 | `TableBuildPipeline` | `ui/table_build_pipeline.py` | Ingest chunks, SQLite rebuild, Render 2D, Open/Import/Export (`QObject` child) |
-| `SessionController` | `ui/session_controller.py` | `.cms` save/restore, table layout, session plots, legacy CSV |
+| `SessionController` | `ui/session_controller.py` | `.mct` save/restore, table layout, session plots, legacy CSV |
 | `WorkspaceTools` | `ui/workspace_tools.py` | Lazy cluster / dimred / QSAR / MPO / medchem / MMP / SALI / structure-prep / leaf-tool collaborators |
 | `FilterPanel` | `ui/filters/filter_panel.py` | Filter cards, apply, substructure, bounds |
 | `PlotDockHost` | `ui/plot_dock_host.py` | Dock/undock plot panes |
@@ -215,7 +215,7 @@ turns that tree into Qt widgets. Add tools to the spec; do not grow `AppMenuMixi
 
 ## Mixins vs composition
 
-A mixin is shared behavior used by **more than one** class. Almost all MCToolkit
+A mixin is shared behavior used by **more than one** class. Almost all mctoolkit
 `*_mixin.py` modules fail that test: they are method bags for a single host
 (`ChemistryWorkspaceWindow`, `PlotWidget`, `CompoundTableModel`, `ProteinViewerDialog`,
 `Molecule3DViewerWidget`). State is created on the host `__init__`.
@@ -327,7 +327,7 @@ Progress: `WorkerSignals.tool_progress` + `ToolProgressState` polling → bottom
 - **Plot → table:** `apply_table_selection_for_source_rows`
 - **Filters / edits:** `_schedule_active_plots_replot` after filter apply; `dataChanged` on model for open plots
 - **Substructure (large tables):** one or more SMARTS cards run via `SubstructureFilterWorker` off the GUI; sync/chunked apply consume override OID sets
-- **UI workflow benchmark:** `scripts/benchmark_ui_workflows.py` times CSV load, `.cms` restore, filters, plot collect/replot, search, export
+- **UI workflow benchmark:** `scripts/benchmark_ui_workflows.py` times CSV load, `.mct` restore, filters, plot collect/replot, search, export
 - **pKa / Uni-pKa benchmark:** `scripts/benchmark_pka.py` splits enumerate vs Uni-pKa MMFF/LMDB vs Uni-Mol infer and compares chunk sizes
 
 ## Adding a new Tool
@@ -401,8 +401,11 @@ Ligand 3D viewer: `ui/mol_viewer_3d.py` re-exports. HTML/JS assembly is
 conformer XY writes are `chem/rdkit_conformer_xy.py`, Qt widgets are `ui/mol_3d_widget.py` (conformer nav + dock chrome mixins), and the floating
 dialog/openers are `ui/mol_3d_dialog.py`. The sketcher embed is `ui/mol_3d_embed.py`;
 strain-energy table fill is `ui/mol_3d_strain.py`. Protein viewer: `ui/protein_viewer.py`
-re-exports; HTML is `ui/protein_viewer_html.py` (init script: `ui/protein_viewer.js`), canvas is `ui/protein_embed.py`,
-chain list is `ui/protein_chain_manager.py`. The window (`ui/protein_viewer_dialog.py`) is a file-split (IO/session, render-style/H-bond, sequence).
+re-exports; HTML is `ui/protein_viewer_html.py` (Mol* Viewer UI + `ui/protein_molstar.js`
+bridge), canvas is `ui/protein_embed.py`. Pose Browser still docks in
+`ui/protein_chain_manager.py`. The window (`ui/protein_viewer_dialog.py`) is a file-split
+(IO/session, docking-box/pose overlays, pharmacophore). Inspection (styles, sequence,
+measurements, contacts, maps, trajectories) is Mol*.
 Crystallographic inventory: `structure_components.py` re-exports types, CIF IO,
 chain inventory, and atoms/pocket helpers.
 `TableWriteService` owns descriptor/tool column writeback and unique header naming.
@@ -411,7 +414,7 @@ Structure-prep tools (protonate, Fast Prepare, disconnect/neutralize/explicit H)
 Protein Prepare runtime: `workers/protein_prepare_runtime.py` orchestrates;
 IO/residue maps are `protein_prepare_io.py`, pdb2pqr is `protein_prepare_pdb2pqr.py`,
 AmberTools GAFF/GAFF2 (WSL on Windows) is `protein_prepare_amber.py`,
-OpenMM min is `protein_prepare_minimize.py`. Complex-only Minimize (viewer **Minimize…**) is `protein_complex_minimize.py` with dialog `ui/dialogs/protein_minimize.py`. Shared holo setup is `protein_openmm_holo.py`. 1-trajectory MM-GBSA is `md/mmgbsa.py` + `workers/protein_mmgbsa.py` (viewer **Simulate → MM-GBSA…**). Langevin MD is `md/implicit_md.py` + `workers/protein_md.py` (viewer **Simulate → Molecular Dynamics…**): implicit GBn2/OBC2 or tleap TIP3P `solvateBox` with OpenMM PME/NPT, optional checkpoint resume, and MM-GBSA on solute snapshots. Tests patch names on the runtime module.
+OpenMM min is `protein_prepare_minimize.py`. Complex-only Minimize (viewer **Minimize…**) is `protein_complex_minimize.py` with dialog `ui/dialogs/protein_minimize.py`. Shared holo setup is `protein_openmm_holo.py`. 1-trajectory MM-GBSA is `md/mmgbsa.py` + `workers/protein_mmgbsa.py` (viewer **Simulate → MM-GBSA…**). Langevin MD is `md/implicit_md.py` + `workers/protein_md.py` (viewer **Simulate → Molecular Dynamics…**): implicit GBn2/OBC2 or tleap TIP3P `solvateBox` with OpenMM PME/NPT, optional checkpoint resume, and MM-GBSA on solute snapshots. Each DCD run writes a matching topology PDB, energy CSV, and sidecar JSON. Post-run analysis is `md/analysis.py` + `workers/protein_md_analysis.py` (viewer **Simulate → Analyze Trajectory…**): Cα Kabsch RMSD/RMSF and energy/ΔG join. Tests patch names on the runtime module.
 
 Gnina dock: `ui/dialogs/gnina_dock.py` is the widget. Argv, ligand files, and pose
 I/O live in `gnina_job.py` (no Qt). `workers/gnina_dock_worker.py` owns the

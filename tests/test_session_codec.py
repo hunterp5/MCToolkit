@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Unit tests for compact session codec."""
 
@@ -173,9 +173,44 @@ def test_session_zip_roundtrip_keeps_ensembles():
     compact[SESSION_ENSEMBLES_KEY] = b"SQLite-format-3\x00placeholder"
     raw = dumps_session_document(compact)
     assert raw.startswith(b"PK")
+    import zipfile
+    import io
+
+    with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+        assert "session.mct" in zf.namelist()
     assert compact[SESSION_ENSEMBLES_KEY] == b"SQLite-format-3\x00placeholder"
     back = loads_session_bytes(raw)
     assert back[SESSION_ENSEMBLES_KEY] == compact[SESSION_ENSEMBLES_KEY]
     expanded = expand_session_document(back)
     assert expanded["rows"][0]["cells"]["SMILES"] == "O"
     assert expanded[SESSION_ENSEMBLES_KEY] == compact[SESSION_ENSEMBLES_KEY]
+
+
+def test_session_zip_rejects_legacy_cms_member():
+    import io
+    import zipfile
+
+    import pytest
+
+    from mctoolkit.table.session_codec import SESSION_ENSEMBLES_KEY, SESSION_ENSEMBLES_MEMBER
+
+    compact = compact_session_document(
+        {
+            "format": "mctoolkit_session",
+            "version": 1,
+            "headers": ["ID_HIDDEN", "Structure", "SMILES"],
+            "rows": [{"id": 0, "cells": {"SMILES": "O"}}],
+            "next_oid": 1,
+        }
+    )
+    compact[SESSION_ENSEMBLES_KEY] = b"SQLite-format-3\x00placeholder"
+    raw = dumps_session_document(compact)
+    with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+        payload = zf.read("session.mct")
+        extra = zf.read(SESSION_ENSEMBLES_MEMBER)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as zf:
+        zf.writestr("session.cms", payload)
+        zf.writestr(SESSION_ENSEMBLES_MEMBER, extra)
+    with pytest.raises(ValueError, match="session.mct"):
+        loads_session_bytes(buf.getvalue())

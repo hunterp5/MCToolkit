@@ -1,24 +1,24 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
-"""Benchmark Protein Viewer restore from a .cms (default: FDA approved session).
+"""Benchmark Protein Viewer restore from a .mct (default: FDA approved session).
 
 Usage:
     python scripts/benchmark_protein_viewer.py
-    python scripts/benchmark_protein_viewer.py samples/fda_approved_physprops.cms --runs 3
+    python scripts/benchmark_protein_viewer.py samples/fda_approved_physprops.mct --runs 3
 """
 
 from __future__ import annotations
@@ -173,7 +173,7 @@ def _bench_open_from_app(cms_path: Path) -> None:
                 if dlg is not None and getattr(dlg, "_slots", None):
                     break
         n_slots = len(getattr(dlg, "_slots", []) or []) if dlg is not None else 0
-        print(f"  {'session decode (full cms)':32s} {decode_ms:8.1f} ms", flush=True)
+        print(f"  {'session decode (full file)':32s} {decode_ms:8.1f} ms", flush=True)
         print(f"  {'stash protein_viewer payload':32s} {stash_ms:8.1f} ms", flush=True)
         print(f"  {'open_protein_viewer':32s} {open_ms:8.1f} ms  slots={n_slots}", flush=True)
         if dlg is not None:
@@ -189,15 +189,15 @@ def _bench_open_from_app(cms_path: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark Protein Viewer session load.")
     parser.add_argument(
-        "cms",
+        "session",
         nargs="?",
-        default="samples/fda_approved_physprops.cms",
-        help="Session file (default: samples/fda_approved_physprops.cms)",
+        default="samples/fda_approved_physprops.mct",
+        help="Session file (default: samples/fda_approved_physprops.mct)",
     )
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--parse-repeats", type=int, default=3)
     args = parser.parse_args()
-    cms_path = Path(args.cms).expanduser()
+    cms_path = Path(args.session).expanduser()
     if not cms_path.is_file():
         raise SystemExit(f"Session file not found: {cms_path}")
 
@@ -207,7 +207,7 @@ def main() -> None:
     doc = expand_session_document(loads_session_bytes(cms_path.read_bytes()))
     decode_ms = (time.perf_counter() - t0) * 1000.0
     pv = doc.get("protein_viewer")
-    print(f"CMS: {cms_path}  ({cms_path.stat().st_size / (1024 * 1024):.1f} MB)", flush=True)
+    print(f"Session: {cms_path}  ({cms_path.stat().st_size / (1024 * 1024):.1f} MB)", flush=True)
     print(f"  decode document                 {decode_ms:8.1f} ms", flush=True)
     if not isinstance(pv, dict) or not pv.get("structures"):
         raise SystemExit("No protein_viewer structures in that session.")

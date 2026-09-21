@@ -1,25 +1,25 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """SQLite/chunked/sync filter apply for the compound table."""
 
 from __future__ import annotations
 import logging
 from contextlib import nullcontext
-from ...platform_support.config import MCToolkitConfig, load_config
+from ...platform_support.config import mctoolkitConfig, load_config
 from ...table.filter_compute import build_sqlite_where, fetch_matching_oids
 from ...services.filter_config import cfg_column
 from ...chem.molecule_conversion import safe_float
@@ -612,7 +612,7 @@ class FilterApply:
                 table.setUpdatesEnabled(True)
         self._finalize_filter_apply(visible_oids, n_rows)
 
-    def _apply_filters_impl(self, cfg: MCToolkitConfig | None = None) -> None:
+    def _apply_filters_impl(self, cfg: mctoolkitConfig | None = None) -> None:
         if cfg is None:
             cfg = load_config()
         n_rows = self._app._table_model.rowCount()

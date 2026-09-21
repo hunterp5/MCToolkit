@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Uni-pKa ionization ensembles: enumerate, score G, FE2pKa, pH populations.
 
@@ -29,13 +29,17 @@ official ``pKa = (G_base − G_acid) / ln(10) + mean`` denormalization.
 from __future__ import annotations
 
 import gc
+import importlib.util
 import logging
 import math
 import os
+import re
+import sys
 import tempfile
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 
 from rdkit import Chem
@@ -141,17 +145,24 @@ def prepare_mol_for_ionization(mol: Chem.Mol | None) -> Chem.Mol | None:
 
 
 def unipka_import_error() -> str | None:
-    """Return an install hint if ``unipkainfer`` cannot be imported, else ``None``."""
+    """Return an install hint if ``unipkainfer`` is not installed, else ``None``.
+
+    Uses ``find_spec`` so the GUI process never loads Uni-pKa / PyTorch native
+    libraries. Importing them holds the GIL and freezes the Qt event loop.
+    """
     try:
-        import unipkainfer  # noqa: F401
-        from unipkainfer import predict_standard_free_energies  # noqa: F401
+        spec = importlib.util.find_spec("unipkainfer")
     except Exception as exc:
         return f"{UNIPKA_MISSING_MESSAGE} Details: {exc}"
+    if spec is None:
+        return UNIPKA_MISSING_MESSAGE
     return None
 
 
 _WORKER_THREADS_PINNED = False
 _UNIPKA_DEVICE_LOGGED = False
+_TORCH_CUDA_BUILD: bool | None = None
+_NVIDIA_GPU_PRESENT: bool | None = None
 
 
 def pka_gpu_forced_off() -> bool:
@@ -160,14 +171,82 @@ def pka_gpu_forced_off() -> bool:
     return raw in {"0", "false", "no", "off", "cpu"}
 
 
-def torch_is_cuda_build() -> bool:
-    """True when this PyTorch wheel was built with CUDA (does not initialize the runtime)."""
-    try:
-        import torch
+def _cuda_build_from_version_py_text(text: str) -> bool | None:
+    """Parse ``torch/version.py`` text: ``cuda = None`` vs ``cuda = '12.4'``."""
+    match = re.search(r"^cuda\s*=\s*(.+)$", text, flags=re.MULTILINE)
+    if match is None:
+        return None
+    raw = match.group(1).split("#", 1)[0].strip()
+    if raw in {"None", "''", '""'}:
+        return False
+    if (raw.startswith("'") and raw.endswith("'")) or (raw.startswith('"') and raw.endswith('"')):
+        return bool(raw[1:-1].strip())
+    return raw not in {"0", "False"}
 
-        return bool(getattr(torch, "version", None) and torch.version.cuda)
+
+def _torch_package_dir() -> Path | None:
+    try:
+        spec = importlib.util.find_spec("torch")
+    except Exception:
+        return None
+    if spec is None:
+        return None
+    origin = spec.origin
+    if origin and origin != "namespace":
+        return Path(origin).parent
+    locs = getattr(spec, "submodule_search_locations", None)
+    if locs:
+        return Path(list(locs)[0])
+    return None
+
+
+def _imported_torch() -> object | None:
+    """Return the already-imported ``torch`` module, or ``None`` (does not import)."""
+    return sys.modules.get("torch")
+
+
+def _detect_torch_cuda_build() -> bool:
+    """Detect a CUDA PyTorch wheel without importing the native library."""
+    torch_mod = _imported_torch()
+    if torch_mod is not None:
+        try:
+            return bool(getattr(torch_mod, "version", None) and torch_mod.version.cuda)
+        except Exception:
+            pass
+    pkg = _torch_package_dir()
+    if pkg is not None:
+        version_py = pkg / "version.py"
+        try:
+            parsed = _cuda_build_from_version_py_text(
+                version_py.read_text(encoding="utf-8", errors="replace")
+            )
+        except Exception:
+            parsed = None
+        if parsed is not None:
+            return parsed
+    try:
+        from importlib.metadata import version as dist_version
+
+        ver = dist_version("torch").lower()
     except Exception:
         return False
+    if "+cu" in ver or "+cuda" in ver:
+        return True
+    if "+cpu" in ver:
+        return False
+    return False
+
+
+def torch_is_cuda_build() -> bool:
+    """True when this PyTorch wheel was built with CUDA.
+
+    Does not import torch or initialize the CUDA runtime. Importing torch on the
+    GUI thread (or a QThread that still holds the GIL) freezes Qt for seconds.
+    """
+    global _TORCH_CUDA_BUILD
+    if _TORCH_CUDA_BUILD is None:
+        _TORCH_CUDA_BUILD = _detect_torch_cuda_build()
+    return _TORCH_CUDA_BUILD
 
 
 def unipka_cuda_available() -> bool:
@@ -200,23 +279,31 @@ def unipka_use_gpu() -> bool:
 
 def _nvidia_gpu_present() -> bool:
     """Best-effort check for an NVIDIA GPU even when PyTorch is CPU-only."""
+    global _NVIDIA_GPU_PRESENT
+    if _NVIDIA_GPU_PRESENT is not None:
+        return _NVIDIA_GPU_PRESENT
+    present = False
     try:
         import shutil
         import subprocess
 
         exe = shutil.which("nvidia-smi")
-        if not exe:
-            return False
-        proc = subprocess.run(
-            [exe, "-L"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        return proc.returncode == 0 and "GPU" in (proc.stdout or "")
+        if exe:
+            kwargs: dict = {
+                "capture_output": True,
+                "text": True,
+                "timeout": 2,
+                "check": False,
+            }
+            no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            if os.name == "nt" and no_window:
+                kwargs["creationflags"] = no_window
+            proc = subprocess.run([exe, "-L"], **kwargs)
+            present = proc.returncode == 0 and "GPU" in (proc.stdout or "")
     except Exception:
-        return False
+        present = False
+    _NVIDIA_GPU_PRESENT = present
+    return present
 
 
 def cpu_torch_with_nvidia_gpu() -> bool:
@@ -231,11 +318,11 @@ def cuda_pka_install_hint() -> str:
     return (
         "An NVIDIA GPU was found, but this Python has a CPU-only PyTorch, "
         "so Uni-pKa (Predict pKa, Protonate, LogD) runs on the CPU.\n\n"
-        "Close MCToolkit and, in the same virtual environment, run:\n"
+        "Close mctoolkit and, in the same virtual environment, run:\n"
         "  Windows:      .\\scripts\\install_pytorch_pka.ps1\n"
         "  macOS/Linux:  bash scripts/install_pytorch_pka.sh\n\n"
         "Those scripts install the CUDA 12.4 wheel when nvidia-smi sees a GPU "
-        "(pass -Cpu / --cpu to keep the CPU wheel). Restart MCToolkit afterward."
+        "(pass -Cpu / --cpu to keep the CPU wheel). Restart mctoolkit afterward."
     )
 
 
@@ -248,7 +335,7 @@ def warn_if_cuda_torch_missing() -> None:
     env_set("MCTOOLKIT_UNIPKA_GPU_HINT_EMITTED", "1")
     logger.warning(
         "NVIDIA GPU detected, but this PyTorch build is CPU-only. "
-        "Close MCToolkit and run scripts\\install_pytorch_pka.ps1 "
+        "Close mctoolkit and run scripts\\install_pytorch_pka.ps1 "
         "(or bash scripts/install_pytorch_pka.sh); CUDA is selected automatically."
     )
 

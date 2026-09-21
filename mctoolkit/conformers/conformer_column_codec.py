@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Pack / unpack conformer ensembles for the ``confs`` table column and 3D viewer."""
 
@@ -282,7 +282,7 @@ def pack_confs_cell(
 def unpack_confs_blocks_json_b64(cell_text: str) -> str | None:
     """
     If *cell_text* is a packed ``confs`` cell (v1 with ``b``), return the inner ``blocks_json_b64`` string
-    expected by :class:`~MCToolkit.ui.mol_viewer_3d.Molecule3DViewerDialog` ``multi_conf_blocks_json_b64``.
+    expected by :class:`~mctoolkit.ui.mol_viewer_3d.Molecule3DViewerDialog` ``multi_conf_blocks_json_b64``.
     """
     s = (cell_text or "").strip()
     if not s or len(s) < 10:

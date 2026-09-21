@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Open/save/session state for the Protein Viewer window."""
 
@@ -806,38 +806,16 @@ class ProteinViewerIoMixin:
         else:
             self._dock_pose_overlay = None
         self._invalidate_hbonds()
-        self._sync_pocket_surface_dialog()
         act_box = getattr(self, "_act_docking_box", None)
         if act_box is not None:
             act_box.blockSignals(True)
             act_box.setChecked(False)
             act_box.blockSignals(False)
-        self._act_all_atoms.blockSignals(True)
-        self._act_all_atoms.setChecked(False)
-        self._act_all_atoms.blockSignals(False)
-        self._check_style_action(self._protein_style_actions, "cartoon")
-        self._check_style_action(self._ligand_style_actions, "ballstick")
-        self._check_style_action(self._protein_color_actions, "default")
-        self._check_style_action(self._ligand_color_actions, "default")
         self.setWindowTitle("Protein Viewer")
-        self.manager.set_structure([])
-        self._sync_sequence_dialog()
-        self.viewer.set_payload(
-            {
-                "data": "",
-                "fmt": "pdb",
-                "models": [],
-                "components": [],
-                "residueHighlight": [],
-                "pocket": None,
-                "pocketSurface": {"active": False},
-                "dockingBox": None,
-                "dockPose": {"active": False},
-                "hbonds": {"active": False, "bonds": []},
-                "hydrogens": self._hydrogen_mode(),
-                "refit": True,
-            }
-        )
+        mgr = getattr(self, "manager", None)
+        if mgr is not None:
+            mgr.set_structure([])
+        self.viewer.clear_structures()
         if mark_dirty:
             self._mark_viewer_unsaved()
 
@@ -920,53 +898,9 @@ class ProteinViewerIoMixin:
             )
         state: dict = {
             "structures": structures,
-            "hydrogens": self._hydrogen_mode(),
-            "hbonds": {
-                "protein": bool(
-                    self._act_hbond_protein is not None and self._act_hbond_protein.isChecked()
-                ),
-                "ligand": bool(
-                    self._act_hbond_ligand is not None and self._act_hbond_ligand.isChecked()
-                ),
-                "complex": bool(
-                    self._act_hbond_complex is not None and self._act_hbond_complex.isChecked()
-                ),
-            },
-            "interactions": {
-                "hydrophobic": bool(
-                    self._act_interact_hydrophobic is not None
-                    and self._act_interact_hydrophobic.isChecked()
-                ),
-                "ionic": bool(
-                    self._act_interact_ionic is not None and self._act_interact_ionic.isChecked()
-                ),
-                "pi_stacking": bool(
-                    self._act_interact_pi_stacking is not None
-                    and self._act_interact_pi_stacking.isChecked()
-                ),
-                "pi_cation": bool(
-                    self._act_interact_pi_cation is not None
-                    and self._act_interact_pi_cation.isChecked()
-                ),
-                "halogen": bool(
-                    self._act_interact_halogen is not None
-                    and self._act_interact_halogen.isChecked()
-                ),
-            },
-            "allAtoms": bool(self._act_all_atoms.isChecked()),
-            "pocket": bool(self._pocket_payload_data),
-            "pocketSurface": {
-                "active": bool(
-                    self._pocket_surface_payload is not None
-                    and self._pocket_surface_payload.get("active")
-                ),
-                **self._pocket_surface_style(),
-            },
             "dockingBox": self._docking_box_payload,
             "pharmacophore": self._ensure_pharmacophore().to_dict(),
             "pharmacophorePath": str(getattr(self, "_pharmacophore_path", None) or ""),
-            "namedGroups": self._named_groups_session_payload(),
-            "residueHighlight": list(self._residue_highlight or []),
         }
         splitters: dict[str, list[int]] = {}
         main = getattr(self, "_main_splitter", None)
@@ -983,15 +917,15 @@ class ProteinViewerIoMixin:
                 pass
         if splitters:
             state["splitters"] = splitters
-        fetch = getattr(self.viewer, "fetch_camera", None)
+        fetch = getattr(self.viewer, "fetch_molj", None)
         if callable(fetch):
-            camera = fetch()
+            molj = fetch()
             try:
-                json.dumps(camera)
+                json.dumps(molj)
             except (TypeError, ValueError):
-                camera = None
-            if isinstance(camera, (list, dict)):
-                state["camera"] = camera
+                molj = None
+            if isinstance(molj, dict):
+                state["molj"] = molj
         try:
             geo = self.saveGeometry()
             if geo is not None and not geo.isEmpty():
@@ -1001,7 +935,7 @@ class ProteinViewerIoMixin:
         return state
 
     def apply_session_state(self, state: dict | None) -> None:
-        """Rebuild Manager rows and the 3D canvas from a session payload."""
+        """Rebuild loaded structures and restore Mol* molj when present."""
         if not isinstance(state, dict):
             return
         self.close_structure(mark_dirty=False)
@@ -1032,36 +966,6 @@ class ProteinViewerIoMixin:
                 row_states=list(spec.get("rows") or []),
                 push=False,
             )
-        hydrogens = str(state.get("hydrogens") or "polar")
-        if hydrogens not in ("all", "polar", "none"):
-            hydrogens = "polar"
-        self._set_hydrogen_mode(hydrogens)
-        hbonds = state.get("hbonds") if isinstance(state.get("hbonds"), dict) else {}
-        for act, key in (
-            (self._act_hbond_protein, "protein"),
-            (self._act_hbond_ligand, "ligand"),
-            (self._act_hbond_complex, "complex"),
-        ):
-            if act is None:
-                continue
-            act.blockSignals(True)
-            act.setChecked(bool(hbonds.get(key)))
-            act.blockSignals(False)
-        interactions = (
-            state.get("interactions") if isinstance(state.get("interactions"), dict) else {}
-        )
-        for act, key in (
-            (self._act_interact_hydrophobic, "hydrophobic"),
-            (self._act_interact_ionic, "ionic"),
-            (self._act_interact_pi_stacking, "pi_stacking"),
-            (self._act_interact_pi_cation, "pi_cation"),
-            (self._act_interact_halogen, "halogen"),
-        ):
-            if act is None:
-                continue
-            act.blockSignals(True)
-            act.setChecked(bool(interactions.get(key)))
-            act.blockSignals(False)
         geo = state.get("geometry")
         if isinstance(geo, str) and geo.strip():
             try:
@@ -1069,40 +973,14 @@ class ProteinViewerIoMixin:
             except Exception:
                 logger.debug("Protein viewer restore geometry failed", exc_info=True)
         self._restore_session_splitters(state.get("splitters"))
-        highlight = state.get("residueHighlight")
-        if isinstance(highlight, list):
-            self._residue_highlight = [item for item in highlight if isinstance(item, dict)]
-        if state.get("allAtoms"):
-            for slot in self._slots:
-                slot.rows = [
-                    replace(row, style="ballstick") if row.spec.kind == "polymer" else row
-                    for row in slot.rows
-                ]
-        self._restore_named_groups(state.get("namedGroups"))
         self._refresh_manager()
-        self._refresh_sequence_chains()
-        self._sync_render_menus_from_rows()
-        if "allAtoms" in state:
-            self._sync_all_atoms_check(bool(state.get("allAtoms")))
-        camera = state.get("camera")
-        has_camera = isinstance(camera, (list, dict))
+        molj = state.get("molj")
         if self._slots:
-            self._push_structure(
-                refit=not has_camera,
-                camera=camera if has_camera else None,
-            )
-            if state.get("pocket"):
-                self._activate_pocket(zoom=False)
-            raw_surface = state.get("pocketSurface")
-            if isinstance(raw_surface, dict):
-                from .dialogs.protein_pocket_surface import normalize_pocket_surface_settings
-
-                self._pocket_surface_settings = normalize_pocket_surface_settings(raw_surface)
-                if raw_surface.get("active"):
-                    self._activate_pocket_surface(notify=False)
-            elif raw_surface:
-                self._activate_pocket_surface(notify=False)
-            self._sync_pocket_surface_dialog()
+            self._push_structure(refit=not isinstance(molj, dict))
+            if isinstance(molj, dict):
+                loader = getattr(self.viewer, "load_molj", None)
+                if callable(loader):
+                    loader(molj)
             box = state.get("dockingBox")
             if isinstance(box, dict) and box.get("active"):
                 from ..docking.search_box import docking_box_from_dict
@@ -1272,8 +1150,38 @@ class ProteinViewerIoMixin:
 
     def _on_md_finished(self, result) -> None:
         path = getattr(result, "structure_path", "") or ""
-        if not path:
-            return
+        rec = Path(path) if path else None
+        if rec is not None and rec.is_file():
+            self.add_structure_path(rec, refit=False)
+        dcd = getattr(result, "dcd_path", "") or ""
+        if dcd:
+            loader = getattr(self, "load_trajectory_path", None)
+            if callable(loader):
+                loader(dcd)
+
+    def open_md_analysis_dialog(self, prefill=None) -> None:
+        """Open Analyze Trajectory, optionally filled from a finished MD job."""
+        dlg = self._md_analysis_dialog
+        if dlg is not None and qobject_is_deleted(dlg):
+            self._md_analysis_dialog = None
+            dlg = None
+        if dlg is None:
+            from .dialogs.protein_md_analysis import ProteinMDAnalysisDialog
+
+            dlg = ProteinMDAnalysisDialog(self)
+            dlg.overlay_frame.connect(self._on_md_analysis_overlay)
+            dlg.destroyed.connect(self._on_md_analysis_dialog_destroyed)
+            self._md_analysis_dialog = dlg
+        if prefill is not None:
+            dlg.prefill_from_md_result(prefill)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    def _on_md_analysis_dialog_destroyed(self) -> None:
+        self._md_analysis_dialog = None
+
+    def _on_md_analysis_overlay(self, path: str) -> None:
         rec = Path(path)
         if rec.is_file():
             self.add_structure_path(rec, refit=False)

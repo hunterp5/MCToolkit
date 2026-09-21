@@ -1,27 +1,27 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Measure GUI-thread stalls while opening a ``.cms`` session.
+"""Measure GUI-thread stalls while opening a ``.mct`` session.
 
 A high-frequency QTimer records the gap between successive fires. When the GUI
 thread is blocked, the timer cannot fire, so a large gap is a direct measure of
 a freeze exactly as the user perceives it.
 
 Usage:
-    python scripts/benchmark_session_open.py samples/bindingdb_10k.cms [--no-render]
+    python scripts/benchmark_session_open.py samples/bindingdb_10k.mct [--no-render]
 """
 
 from __future__ import annotations

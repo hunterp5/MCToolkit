@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """FE2pKa thermodynamics and Boltzmann populations (no Uni-pKa weights)."""
 
@@ -217,6 +217,64 @@ def test_close_unipka_task_lmdb_closes_env() -> None:
     _close_unipka_task_lmdb(task)
     assert env.closed is True
     assert task.datasets == {}
+
+
+def test_cuda_build_from_version_py_text() -> None:
+    from mctoolkit.ionization.unipka_ensembles import _cuda_build_from_version_py_text
+
+    assert _cuda_build_from_version_py_text("cuda = None\n") is False
+    assert _cuda_build_from_version_py_text("cuda = '12.4'\n") is True
+    assert _cuda_build_from_version_py_text('cuda = "12.1"  # comment\n') is True
+    assert _cuda_build_from_version_py_text("__version__ = '2.5.1'\n") is None
+
+
+def test_detect_torch_cuda_build_reads_version_py(tmp_path, monkeypatch) -> None:
+    from mctoolkit.ionization import unipka_ensembles as m
+
+    (tmp_path / "version.py").write_text("cuda = None\n", encoding="utf-8")
+    monkeypatch.setattr(m, "_TORCH_CUDA_BUILD", None)
+    monkeypatch.setattr(m, "_imported_torch", lambda: None)
+    monkeypatch.setattr(m, "_torch_package_dir", lambda: tmp_path)
+    assert m._detect_torch_cuda_build() is False
+    (tmp_path / "version.py").write_text("cuda = '12.4'\n", encoding="utf-8")
+    monkeypatch.setattr(m, "_TORCH_CUDA_BUILD", None)
+    assert m._detect_torch_cuda_build() is True
+
+
+def test_torch_is_cuda_build_does_not_import_torch(tmp_path, monkeypatch) -> None:
+    import sys
+
+    from mctoolkit.ionization import unipka_ensembles as m
+
+    (tmp_path / "version.py").write_text("cuda = None\n", encoding="utf-8")
+    monkeypatch.setattr(m, "_TORCH_CUDA_BUILD", None)
+    monkeypatch.setattr(m, "_imported_torch", lambda: None)
+    monkeypatch.setattr(m, "_torch_package_dir", lambda: tmp_path)
+    before = set(sys.modules)
+    assert m.torch_is_cuda_build() is False
+    added = set(sys.modules) - before
+    assert not any(name == "torch" or name.startswith("torch.") for name in added)
+
+
+def test_unipka_import_error_does_not_load_package() -> None:
+    import sys
+
+    from mctoolkit.ionization.unipka_ensembles import unipka_import_error
+
+    before = {k for k in sys.modules if k == "unipkainfer" or k.startswith("unipkainfer.")}
+    unipka_import_error()
+    after = {k for k in sys.modules if k == "unipkainfer" or k.startswith("unipkainfer.")}
+    assert after == before
+
+
+def test_unipka_import_error_missing(monkeypatch) -> None:
+    from mctoolkit.ionization.unipka_ensembles import UNIPKA_MISSING_MESSAGE, unipka_import_error
+
+    monkeypatch.setattr(
+        "mctoolkit.ionization.unipka_ensembles.importlib.util.find_spec",
+        lambda _name: None,
+    )
+    assert unipka_import_error() == UNIPKA_MISSING_MESSAGE
 
 
 def test_pka_gpu_forced_off_env(monkeypatch) -> None:

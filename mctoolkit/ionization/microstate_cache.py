@@ -1,25 +1,25 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Session cache of Uni-pKa ionization ensembles (structure key → picklable ensemble).
 
 Keyed by :func:`mctoolkit.services.structure_grouping.structure_key` (canonical SMILES)
 and by each microstate SMILES in the ensemble so Protonated / protomer rows reuse the
 same prediction. Shared by Predict pKa, Protonate, Generate Protomers, and ionization
-descriptors (LogD/LogS 7.4, CNS MPO, AB-MPS). Saved into ``.cms`` session files and
+descriptors (LogD/LogS 7.4, CNS MPO, AB-MPS). Saved into ``.mct`` session files and
 restored on Open / Duplicate. Cleared on Clear / shutdown. Does not persist to SDF/CSV.
 """
 
@@ -236,7 +236,7 @@ def _entry_from_json(raw: Any) -> Any | None:
 
 
 def serialize_ionization_sidecar(store: dict[str, Any] | None = None) -> dict[str, Any]:
-    """JSON-safe Uni-pKa ensembles for ``.cms`` sessions (successful predictions only)."""
+    """JSON-safe Uni-pKa ensembles for ``.mct`` sessions (successful predictions only)."""
     src = snapshot() if store is None else store
     entries: dict[str, Any] = {}
     seen_ids: set[int] = set()

@@ -20,7 +20,7 @@ supportfiles/
 config.json
 ```
 
-Older docs used `biotransformer-3.0.0.jar` and `database/` (`bkdb/` in some snapshots). MCToolkit accepts any of those knowledge-base folder names next to the JAR.
+Older docs used `biotransformer-3.0.0.jar` and `database/` (`bkdb/` in some snapshots). mctoolkit accepts any of those knowledge-base folder names next to the JAR.
 
 You can also **Browse JAR…** in Predict Metabolites, or set `MCTOOLKIT_BIOTRANSFORMER_JAR` (the knowledge-base folder and `supportfiles/` must sit next to that JAR).
 
@@ -28,4 +28,4 @@ Manual download: https://bitbucket.org/wishartlab/biotransformer3.0jar (source: 
 
 **Java** must be on `PATH` (`java -version`). Official docs target UNIX; on native Windows, try a current JRE first. If the JAR fails, run BioTransformer under WSL and point `MCTOOLKIT_BIOTRANSFORMER_JAR` at that install.
 
-Do not enable PubChem annotate (`-a`) from MCToolkit. The environmental microbial module is not offered in v1 (EnviPath non-commercial terms).
+Do not enable PubChem annotate (`-a`) from mctoolkit. The environmental microbial module is not offered in v1 (EnviPath non-commercial terms).

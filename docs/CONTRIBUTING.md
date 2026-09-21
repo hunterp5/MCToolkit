@@ -1,4 +1,4 @@
-# Contributing to MCToolkit
+# Contributing to mctoolkit
 
 This document is the versioned source of project coding standards for humans and CI.
 Cursor-specific copies live under [`.cursor/rules/`](../.cursor/rules/) (tracked in git).
@@ -133,7 +133,7 @@ What is known, measured on one unchanged tree over eight runs:
 
 - Aborts cluster in `tests/test_protein_viewer.py` (three of six), but one landed in
   `tests/test_fast_prepare_pipeline.py`, so the victim test is not the cause.
-- There is no Python traceback, and the faulthandler dump holds no MCToolkit frames. This is
+- There is no Python traceback, and the faulthandler dump holds no mctoolkit frames. This is
   native state, not an error in the test that happened to be running.
 - Capture mode is not a reliable workaround. Three `--capture=sys` runs passed and a fourth
   aborted; `--capture=sys` is still the configured default because an fd-captured abort throws the

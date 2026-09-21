@@ -149,7 +149,6 @@
 "mctoolkit/ui/protein_embed.py" = ["BLE001", "S110"]
 "mctoolkit/ui/protein_viewer_dialog.py" = ["BLE001", "SIM105"]
 "mctoolkit/ui/protein_viewer_io_mixin.py" = ["BLE001", "SIM105"]
-"mctoolkit/ui/protein_viewer_overlays.py" = ["BLE001"]
 "mctoolkit/ui/protein_viewer_pharmacophore_mixin.py" = ["BLE001"]
 "mctoolkit/ui/protein_viewer_style_mixin.py" = ["BLE001"]
 "mctoolkit/ui/qt_widget_utils.py" = ["BLE001"]

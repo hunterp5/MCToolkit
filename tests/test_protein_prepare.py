@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Protein Viewer Prepare pipeline (PDBFixer, pdb2pqr, OpenMM)."""
 
@@ -1282,9 +1282,9 @@ def test_prepare_dialog_defaults_and_menu(qapp, tmp_path, monkeypatch):  # noqa:
     assert any("pdb2pqr" in label for label in prepare_labels)
     assert any(label.startswith("Minimize") for label in prepare_labels)
     assert any(label.startswith("Dock File") for label in prepare_labels)
-    render_menu = qt_submenu(mb, "Render")
-    render_labels = [a.text().replace("&", "") for a in render_menu.actions()]
-    assert "Docking Box" in render_labels
+    view_menu = qt_submenu(mb, "View")
+    view_labels = [a.text().replace("&", "") for a in view_menu.actions()]
+    assert "Docking Box" in view_labels
 
     shown: list[str] = []
 

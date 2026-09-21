@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Pose browser overlay into an open Protein Viewer."""
 
@@ -43,10 +43,7 @@ def test_protein_viewer_html_has_dock_pose_setter():
 
     html = build_protein_viewer_html()
     assert "mctoolkitSetDockPose" in html
-    assert "applyDockPose" in html
-    assert "zoomToDockPose" in html
-    assert "magentaCarbon" in html
-    assert "selOf(comps[i]), {hidden: true}" not in html
+    assert "mctoolkitLoadStructures" in html
 
 
 def test_set_dock_pose_overlay(qapp):  # noqa: ARG001
@@ -61,9 +58,9 @@ def test_set_dock_pose_overlay(qapp):  # noqa: ARG001
     assert payload["fmt"] == "sdf"
     assert payload["data"]
     assert payload["zoom"] is False
-    pending = dlg.viewer._pending_dock_pose or (dlg.viewer._pending_payload or {}).get("dockPose")
-    assert pending is not None
-    assert pending["zoom"] is True
+    pending = [item for item in dlg.viewer._pending if item[0] == "mctoolkitSetDockPose"]
+    assert pending
+    assert pending[0][1]["zoom"] is True
     assert "Dock pose 1 of 1" in dlg._atom_status.text()
     dlg.clear_dock_pose()
     assert dlg._dock_pose_payload is None

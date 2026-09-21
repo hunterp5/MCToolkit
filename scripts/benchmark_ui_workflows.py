@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """End-to-end offscreen UI workflow benchmark for large tables."""
 
@@ -103,7 +103,7 @@ def _bench_one(scale: int) -> dict[str, float]:
     app._try_auto_render_all_structures_after_ingest = lambda: False
     tmp_dir = Path(tempfile.mkdtemp(prefix="MCTOOLKIT_ui_bench_"))
     csv_path = tmp_dir / f"session_{scale}.csv"
-    cms_path = tmp_dir / f"session_{scale}.cms"
+    cms_path = tmp_dir / f"session_{scale}.mct"
     out_csv = tmp_dir / f"export_{scale}.csv"
     _write_session_csv(csv_path, scale)
 
@@ -115,7 +115,7 @@ def _bench_one(scale: int) -> dict[str, float]:
     _cur_b, peak_b = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
-    # .cms restore into the same window (avoids dual QMainWindow teardown crashes on Windows).
+    # .mct restore into the same window (avoids dual QMainWindow teardown crashes on Windows).
     cms_bytes = dumps_session_document(app._build_session_document())
     cms_path.write_bytes(cms_bytes)
     doc = expand_session_document(loads_session_bytes(cms_bytes))
@@ -125,7 +125,7 @@ def _bench_one(scale: int) -> dict[str, float]:
     cms_load_ms = (time.perf_counter() - t0) * 1000.0
     if app._table_model.rowCount() != scale:
         raise RuntimeError(
-            f".cms restore row count mismatch: got {app._table_model.rowCount()}, expected {scale}"
+            f".mct restore row count mismatch: got {app._table_model.rowCount()}, expected {scale}"
         )
 
     app.delete_all_filters_from_panel()
@@ -234,7 +234,7 @@ def _print_stats(label: str, samples: list[dict[str, float]], keys: tuple[str, .
 
 
 def _bench_cms_file(cms_path: Path) -> dict[str, float]:
-    """Time Open Session on an existing .cms (decode vs apply+drain)."""
+    """Time Open Session on an existing .mct (decode vs apply+drain)."""
     app = ChemistryWorkspaceWindow()
     app._try_auto_render_all_structures_after_ingest = lambda: False
 
@@ -316,10 +316,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="End-to-end UI workflow benchmark.")
     parser.add_argument("--runs", type=int, default=1, help="Runs per scale (default: 1)")
     parser.add_argument(
-        "--cms",
+        "--session",
         type=str,
         default="",
-        help="Existing .cms to time (Open Session decode + restore). Skips synthetic scales.",
+        help="Existing .mct to time (Open Session decode + restore). Skips synthetic scales.",
     )
     parser.add_argument(
         "--scales",
@@ -328,8 +328,8 @@ def main() -> None:
         help="Comma-separated row counts (default: 10000,50000,100000)",
     )
     args = parser.parse_args()
-    if (args.cms or "").strip():
-        cms_path = Path(args.cms).expanduser()
+    if (args.session or "").strip():
+        cms_path = Path(args.session).expanduser()
         if not cms_path.is_file():
             raise SystemExit(f"Session file not found: {cms_path}")
         run_cms_benchmark(cms_path, max(1, int(args.runs)))

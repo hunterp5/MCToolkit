@@ -16,7 +16,7 @@ Use for flexible ligands when you want a systematic (not stochastic) search, or 
 
 Scoped rows with valid structures; **Selected Rows Only** when checked. Output may go to table and/or SDF file. Open Babel is installed with the project (`pip install openbabel`). The dialog defaults to that `obabel`. You can override the path or drop a copy under `resources/bin`.
 
-Confab requires a 3D starting geometry. If a row is 2D, MCToolkit embeds once with ETKDG before calling Confab.
+Confab requires a 3D starting geometry. If a row is 2D, mctoolkit embeds once with ETKDG before calling Confab.
 
 ## Options
 
@@ -43,4 +43,4 @@ Confab requires a 3D starting geometry. If a row is 2D, MCToolkit embeds once wi
 
 ## Tips and limits
 
-Confab cost grows quickly with rotatable bonds. The `--conf` value is a test budget, not a guarantee of that many unique poses. Energies shown after the run are vacuum MMFF/UFF totals computed in MCToolkit, not protein-bound or quantum-chemical values. Confab itself is not protein-aware. If a **confs** column already exists, new ensembles go to **confs (1)** (then **confs (2)**, …) so the previous column is kept.
+Confab cost grows quickly with rotatable bonds. The `--conf` value is a test budget, not a guarantee of that many unique poses. Energies shown after the run are vacuum MMFF/UFF totals computed in mctoolkit, not protein-bound or quantum-chemical values. Confab itself is not protein-aware. If a **confs** column already exists, new ensembles go to **confs (1)** (then **confs (2)**, …) so the previous column is kept.

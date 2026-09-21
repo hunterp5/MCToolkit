@@ -1,5 +1,5 @@
 ---
-description: IUPAC graphical representation standards for MCToolkit sketcher structure creation and rendering
+description: IUPAC graphical representation standards for mctoolkit sketcher structure creation and rendering
 globs: mctoolkit/ui/sketcher/**/*.py,docs/IUPAC_DRAWING.md,tests/test_sketch_iupac*.py
 alwaysApply: false
 ---

@@ -4,7 +4,7 @@ Gnina runs the Gnina docking engine (a Smina/Vina fork with CNN scoring) with a 
 
 ## Goal
 
-Dock prepared ligands into a receptor box and collect poses/scores from MCToolkit, including CNN pose scores when enabled.
+Dock prepared ligands into a receptor box and collect poses/scores from mctoolkit, including CNN pose scores when enabled.
 
 ## When to use
 
@@ -20,13 +20,13 @@ On **Windows**, Gnina is the official Linux binary and runs through **Settings �
 
 `conda create -n gnina-cuda -c nvidia -c conda-forge libcudnn cuda-cudart libcublas libcufft libcusparse libcusolver`
 
-MCToolkit prepends matching conda `lib` dirs to `LD_LIBRARY_PATH`. If `nvidia-smi` fails entirely, MCToolkit adds `--no_gpu`. macOS has no official Gnina binary.
+mctoolkit prepends matching conda `lib` dirs to `LD_LIBRARY_PATH`. If `nvidia-smi` fails entirely, mctoolkit adds `--no_gpu`. macOS has no official Gnina binary.
 
 ## Options
 
 - **Gnina** - command or path to the binary (WSL PATH name `gnina` on Windows).
 - **Receptor**, **Ligand**, **Output** (+ **Browse...**). Receptor may be **PDB or PDBQT**. If the receptor file still contains a ligand, Gnina docks into an **apo** copy. **Ligand** is **File** (SDF; Browse also lists MOL/MOL2; PDBQT is converted to SDF) or **Selected rows**. Selected rows docks each selected table row once; **Conformations** chooses the packed ensemble column (`confs`, `superpose`, …) or **Structure** for the starting 3D geometry (first packed conformer). Gnina then samples poses itself — the rest of the ensemble is not docked as extra ligands. **Save as SDF** (on by default) sets Gnina `--out` to SDF. Uncheck it only if you need PDBQT poses (that format cannot store double/aromatic bonds). Concatenated Meeko PDBQT is converted to one multi-mol SDF and docked in a **single** Gnina process. If Ligand is empty and **Internal validation** is on with a crystal ligand available, Run redocks the crystal ligand only.
-- **Pharmacophore** - optional MCToolkit pharmacophore JSON from **Protein Viewer → Tools → Pharmacophore → Editor** (**Save…**, or **Send to Gnina**). Gnina itself is unchanged (no occupancy `--user_grid`; that flag *scales Vina down* when λ is set and is type-blind). After poses are written, MCToolkit keeps those whose RDKit feature sites of the matching type (and element, when **Atom** is set) lie inside each query sphere in **protein coordinates**. **Slack** (default 0.50 Å) is extra tolerance on top of each feature radius. **Exclusion** spheres drop a pose if a ligand heavy atom is inside (that element when **Atom** is set). If nothing matches, all poses are kept and the log says so. Pose properties `pharmaMatch`, `pharmaRMSD`, and `pharmaN` are written for the browser.
+- **Pharmacophore** - optional mctoolkit pharmacophore JSON from **Protein Viewer → Tools → Pharmacophore → Editor** (**Save…**, or **Send to Gnina**). Gnina itself is unchanged (no occupancy `--user_grid`; that flag *scales Vina down* when λ is set and is type-blind). After poses are written, mctoolkit keeps those whose RDKit feature sites of the matching type (and element, when **Atom** is set) lie inside each query sphere in **protein coordinates**. **Slack** (default 0.50 Å) is extra tolerance on top of each feature radius. **Exclusion** spheres drop a pose if a ligand heavy atom is inside (that element when **Atom** is set). If nothing matches, all poses are kept and the log says so. Pose properties `pharmaMatch`, `pharmaRMSD`, and `pharmaN` are written for the browser.
 - **Autobox** - Gnina `--autobox_ligand` plus **Padding** (`--autobox_add`, default 4 Å). Optional **Browse…** next to the checkbox sets a reference ligand (**PDB or PDBQT**); empty uses the docking ligand. Disables center/size.
 - **Flexible side chains** - **Off** (default, rigid receptor), **Distance from ligand**, or **Named residues**. Backbone stays rigid. Distance mode uses `--flexdist` / `--flexdist_ligand` (default 3.5 Å; empty ligand field uses the Autobox / Prepare crystal ligand, then the docking ligand). **Max** (`--flex_max`) keeps only the closest N residues (0 / all keeps every residue in range). Named residues are `CHAIN:RESNUM` (`A:123,A:145`). Gnina writes moved side chains to `{output stem}_flex.pdb` (`--out_flex`). **Write full receptor** adds `--full_flex_output`. The pose browser still overlays the ligand in the original pocket; open the flex PDB to inspect side chains.
 - **Center X/Y/Z** and **Size X/Y/Z** - search box when autobox is off.

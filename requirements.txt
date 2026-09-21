@@ -1,4 +1,4 @@
-# MCToolkit — full Python dependency list (core + ML + docking + dev).
+# mctoolkit — full Python dependency list (core + ML + docking + dev).
 # For a smaller desktop-only install, prefer requirements-core.txt instead.
 # From the repo root with your virtual environment active:
 #   pip install -U pip
@@ -28,7 +28,7 @@ chembl_webresource_client>=0.10.9
 # Official PyPI name is `rdkit`. Do not install `rdkit-pypi` (last release 2022.9.5);
 # both packages share the `rdkit` import path and the old one will shadow the new wheels.
 rdkit>=2025.9.1
-# Fast JSON for compact .cms session files.
+# Fast JSON for compact .mct session files.
 orjson>=3.9
 # Official Open Babel wheels (obabel + Confab) for Systematic conformers.
 openbabel>=3.2.0

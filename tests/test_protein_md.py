@@ -1,23 +1,24 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Langevin MD helpers and Protein Viewer dialog wiring."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -101,6 +102,7 @@ def test_run_protein_md_writes_last_frame(
         charge_tag="AM1-BCC",
     )
     topology = MagicMock()
+    topology.getNumAtoms.return_value = 3
     mock_amber.return_value = (object(), topology, [0], "GBN2")
     mock_md.return_value = ImplicitMDResult(
         positions=[1],
@@ -135,6 +137,12 @@ def test_run_protein_md_writes_last_frame(
     assert cfg.solute_atoms == 0
     assert result.n_snapshots == 0
     mock_restrain.assert_called_once()
+    assert Path(result.topology_path).is_file()
+    sidecar = json.loads(Path(result.sidecar_path).read_text(encoding="utf-8"))
+    assert sidecar["topology"] == result.topology_path
+    assert sidecar["dcd"] == result.dcd_path
+    assert sidecar["solute_atoms"] == 3
+    assert sidecar["wrap_dcd"] is False
 
 
 @patch("mctoolkit.workers.protein_md.run_implicit_md")
@@ -219,6 +227,10 @@ def test_run_protein_md_explicit_uses_solvated_system(
     mock_align.assert_called_once()
     assert result.n_snapshots == 0
     mock_restrain.assert_called_once()
+    sidecar = json.loads(Path(result.sidecar_path).read_text(encoding="utf-8"))
+    assert sidecar["solute_atoms"] == 12
+    assert sidecar["wrap_dcd"] is True
+    assert Path(result.topology_path).is_file()
 
 
 def test_md_dialog_defaults_and_help(qapp, tmp_path):  # noqa: ARG001
@@ -238,6 +250,7 @@ def test_md_dialog_defaults_and_help(qapp, tmp_path):  # noqa: ARG001
     sim_menu = qt_submenu(tools_menu, "Simulate")
     labels = [a.text().replace("&", "") for a in sim_menu.actions()]
     assert any("Dynamics" in label for label in labels)
+    assert any("Analyze Trajectory" in label for label in labels)
 
     path = tmp_path / "holo.pdb"
     path.write_text(_HOLO_PDB, encoding="utf-8")

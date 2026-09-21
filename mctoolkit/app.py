@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 import logging
 import os
@@ -29,7 +29,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-from .app_identity import apply_qt_application_identity  # noqa: E402
+from .app_identity import apply_qt_application_identity, is_session_document_path  # noqa: E402
 from .platform_support.app_logging import configure_app_logging, install_crash_excepthook  # noqa: E402
 from .platform_support.rdkit_runtime_setup import configure_rdkit_for_desktop_app  # noqa: E402
 from .ui.main_window import ChemistryWorkspaceWindow  # noqa: E402
@@ -57,7 +57,7 @@ def _preload_qt_webengine() -> None:
 
 
 def _argv_for_qt(argv: list[str]) -> tuple[list[str], str | None, str | None]:
-    """Remove MCToolkit-only flags so ``QApplication`` does not see unknown options."""
+    """Remove mctoolkit-only flags so ``QApplication`` does not see unknown options."""
     out: list[str] = [argv[0]] if argv else []
     load_session: str | None = None
     open_file: str | None = None
@@ -118,9 +118,13 @@ def main(argv: list[str] | None = None) -> int:
     schedule_qtwebengine_prewarm()
     if load_session:
         try:
-            p = load_session.lower()
-            if p.endswith(".cms") or p.endswith(".json"):
+            if is_session_document_path(load_session):
                 w.apply_saved_session_from_file(load_session)
+            elif load_session.lower().endswith(".cms"):
+                logger.warning(
+                    "Startup session load skipped (%s): .cms sessions are not supported",
+                    load_session,
+                )
             else:
                 w.load_session_csv(load_session)
         except Exception as e:

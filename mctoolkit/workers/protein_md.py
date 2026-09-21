@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Implicit-solvent OpenMM MD of a Protein Viewer complex, optional MM-GBSA."""
 
@@ -28,6 +28,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Signal
 
+from ..md.analysis import write_run_sidecar
 from ..md.implicit_md import (
     ImplicitMDConfig,
     align_solute_com,
@@ -124,6 +125,9 @@ class ProteinMDJobResult:
     report_path: str = ""
     dcd_path: str = ""
     csv_path: str = ""
+    topology_path: str = ""
+    energy_csv_path: str = ""
+    sidecar_path: str = ""
     summary: str = ""
     n_snapshots: int = 0
     delta_mean: float | None = None
@@ -232,6 +236,12 @@ def _run_protein_md(req: ProteinMDRequest) -> ProteinMDJobResult:
             note=note,
         )
     dcd_path = (req.dcd_path or "").strip()
+    energy_csv = ""
+    if dcd_path:
+        energy_csv = str(Path(dcd_path).with_name(Path(dcd_path).stem + "_energy.csv"))
+    elif req.output_path:
+        rec = Path(req.output_path)
+        energy_csv = str(rec.with_name(rec.stem + "_energy.csv"))
     md_result = run_implicit_md(
         topology=md_top,
         system=md_sys,
@@ -250,6 +260,7 @@ def _run_protein_md(req: ProteinMDRequest) -> ProteinMDJobResult:
             restraint_k_eq=float(req.restraint_k_eq),
             restraint_k_prod=float(req.restraint_k_prod),
             dcd_path=dcd_path,
+            energy_csv_path=energy_csv,
             solute_atoms=n_solute,
             checkpoint_path=(req.checkpoint_path or "").strip(),
             checkpoint_ps=float(req.checkpoint_ps),
@@ -319,11 +330,45 @@ def _run_protein_md(req: ProteinMDRequest) -> ProteinMDJobResult:
             newline="\n",
         )
     log_prepare(f"Writing last frame → {Path(str(out_file)).name}")
+    topology_out = ""
+    sidecar_out = ""
+    energy_out = md_result.energy_csv_path
+    dcd_out = md_result.dcd_path
+    if dcd_out:
+        top_path = Path(dcd_out).with_name(Path(dcd_out).stem + "_top.pdb")
+        log_prepare(f"Writing DCD-matching topology → {top_path.name}")
+        _write_openmm_structure(md_top, md_pos, top_path, remarks=["4 OPENMM MD TOPOLOGY"])
+        topology_out = str(top_path)
+        mmgbsa_csv = csv_path if md_result.mmgbsa else ""
+        if explicit:
+            solute_n = int(n_solute)
+        else:
+            try:
+                solute_n = int(md_top.getNumAtoms())
+            except (TypeError, ValueError):
+                solute_n = 0
+        sidecar = write_run_sidecar(
+            dcd_out,
+            topology=topology_out,
+            last_frame=str(out_file),
+            energy_csv=energy_out,
+            mmgbsa_csv=mmgbsa_csv,
+            timestep_fs=float(req.timestep_fs),
+            dcd_interval_steps=int(md_result.dcd_interval_steps),
+            solute_atoms=solute_n,
+            ligand_keys=sorted(work.ligand_keys),
+            wrap_dcd=explicit,
+        )
+        sidecar_out = str(sidecar)
+        log_prepare(f"Analysis sidecar → {sidecar.name}")
     return ProteinMDJobResult(
         structure_path=str(out_file),
         report_path=report_path,
-        dcd_path=md_result.dcd_path,
+        dcd_path=dcd_out,
         csv_path=csv_path if md_result.mmgbsa else "",
+        topology_path=topology_out,
+        energy_csv_path=energy_out,
+        sidecar_path=sidecar_out,
         summary=summary,
         n_snapshots=len(md_result.mmgbsa),
         delta_mean=delta_mean,

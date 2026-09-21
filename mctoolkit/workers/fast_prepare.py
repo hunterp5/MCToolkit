@@ -1,30 +1,26 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Fast Prepare worker: disconnect largest fragment, optional neutralize, in one parallel pass.
+"""Fast Prepare worker: disconnect, optional neutralize, and depict in one parallel pass.
 
-Fast Prepare used to run the disconnect and neutralize tools as two sequential jobs, each
-processing every row on a single thread and each writing its results back to the table (the first
-writeback being immediately overwritten by the second). Both steps are pure per-molecule CPU work,
-so they run here as one batched pass in child processes — the same pattern the descriptor worker
-uses — which keeps RDKit off the GUI thread and off the GIL. Neutralize is optional (off by default).
-
-Results carry molecules as binary blobs rather than live ``Chem.Mol`` objects: child processes have
-to serialize anyway, and handing thousands of live SWIG-wrapped mols across a Qt queued connection
-stalls the GUI for seconds.
+Fast Prepare used to run disconnect, neutralize, and Render 2D as separate queued jobs.
+Chemistry is fused here, and when the Structure column is the target the same child process
+draws the PNG so the GUI does not spawn a second RDKit pool. Neutralize is optional (off by
+default). Results carry molecules as binary blobs and optional PNG bytes rather than live
+``Chem.Mol`` objects.
 """
 
 from __future__ import annotations
@@ -63,6 +59,9 @@ class FastPrepareParams:
     is_smiles: bool = False
     need_smiles: bool = False
     neutralize: bool = False
+    need_png: bool = False
+    png_width: int = 0
+    png_height: int = 0
     batch_size: int = 64
     process_pool_min_rows: int = 250
 
@@ -74,11 +73,15 @@ def _prepare_one(
     is_text: bool,
     need_smiles: bool,
     neutralize: bool = False,
-) -> tuple[bytes, str, str] | None:
-    """Disconnect the largest fragment, then optionally neutralize it.
+    need_png: bool = False,
+    png_width: int = 0,
+    png_height: int = 0,
+) -> tuple[bytes, str, str, bytes] | None:
+    """Disconnect the largest fragment, then optionally neutralize and depict it.
 
-    Returns ``(mol_blob, smaller_fragments_text, canonical_smiles)``, or ``None`` when the row has
-    no usable structure. If neutralization is requested and fails, the disconnected parent is kept.
+    Returns ``(mol_blob, smaller_fragments_text, canonical_smiles, png_bytes)``, or ``None`` when
+    the row has no usable structure. If neutralization is requested and fails, the disconnected
+    parent is kept. ``png_bytes`` is empty unless *need_png* is set.
     """
     if is_text:
         raw = str(blob_or_text or "").strip()
@@ -94,15 +97,45 @@ def _prepare_one(
     if parent is None:
         return None
     out = parent
-    if neutralize:
+    if neutralize and Chem.GetFormalCharge(parent) != 0:
         out = neutralize_mol(parent) or parent
     smiles = mol_to_canonical_smiles(out) if need_smiles else ""
-    return out.ToBinary(), fragments, smiles
+    png = b""
+    if need_png:
+        from ..chem.structure_2d_depiction import render_molecule_png
+
+        width = int(png_width) or 0
+        height = int(png_height) or 0
+        if width > 0 and height > 0:
+            try:
+                png = render_molecule_png(out, width, height) or b""
+            except Exception:  # noqa: BLE001
+                png = b""
+    return out.ToBinary(), fragments, smiles, png
+
+
+def _structure_payload_as_blob(payload) -> bytes:
+    """Pickle a live mol, or pass through a blob the GUI already read from the store."""
+    if isinstance(payload, (bytes, bytearray)):
+        return bytes(payload)
+    if payload is None:
+        return b""
+    try:
+        raw = payload.ToBinary()
+    except Exception:
+        return b""
+    return bytes(raw) if raw else b""
 
 
 def _mp_fast_prepare_batch(args: tuple) -> list[tuple]:
     """Run :func:`_prepare_one` over one batch inside a child process (picklable args)."""
-    items, is_text, need_smiles, neutralize = args
+    items = args[0]
+    is_text = args[1]
+    need_smiles = args[2]
+    neutralize = args[3]
+    need_png = args[4] if len(args) > 4 else False
+    png_width = args[5] if len(args) > 5 else 0
+    png_height = args[6] if len(args) > 6 else 0
     out: list[tuple] = []
     for oid, payload, source_text in items:
         try:
@@ -112,13 +145,16 @@ def _mp_fast_prepare_batch(args: tuple) -> list[tuple]:
                 is_text=bool(is_text),
                 need_smiles=bool(need_smiles),
                 neutralize=bool(neutralize),
+                need_png=bool(need_png),
+                png_width=int(png_width or 0),
+                png_height=int(png_height or 0),
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             res = None
         if res is None:
             continue
-        blob, fragments, smiles = res
-        out.append((int(oid), blob, fragments, smiles))
+        blob, fragments, smiles, png = res
+        out.append((int(oid), blob, fragments, smiles, png))
     return out
 
 
@@ -127,7 +163,7 @@ class FastPrepareWorker(QRunnable):
 
     ``items`` are ``(oid, mol, source_text)`` tuples, or ``(oid, cell_text)`` when
     ``params.is_smiles``. Emits ``signals.fast_prepared`` with
-    ``(oid, mol_blob, fragments_text, canonical_smiles)`` rows.
+    ``(oid, mol_blob, fragments_text, canonical_smiles, png_bytes)`` rows.
     """
 
     def __init__(
@@ -165,13 +201,9 @@ class FastPrepareWorker(QRunnable):
             if self.params.is_smiles:
                 tasks.append((oid, str(row[1] or ""), None))
                 continue
-            mol = row[1]
+            payload = row[1]
             source_text = (str(row[2]).strip() or None) if len(row) >= 3 and row[2] else None
-            try:
-                blob = mol.ToBinary() if mol is not None else b""
-            except Exception:
-                blob = b""
-            tasks.append((oid, blob, source_text))
+            tasks.append((oid, _structure_payload_as_blob(payload), source_text))
         return tasks
 
     def run(self) -> None:
@@ -184,10 +216,23 @@ class FastPrepareWorker(QRunnable):
         p = self.params
         batch_size = max(1, int(p.batch_size))
         batches = [
-            (tasks[s : s + batch_size], p.is_smiles, p.need_smiles, p.neutralize)
+            (
+                tasks[s : s + batch_size],
+                p.is_smiles,
+                p.need_smiles,
+                p.neutralize,
+                p.need_png,
+                p.png_width,
+                p.png_height,
+            )
             for s in range(0, len(tasks), batch_size)
         ]
-        workers = min(8, max(2, (os.cpu_count() or 4) - 1), 6)
+        if p.need_png:
+            from .load_render import render2d_process_worker_count
+
+            workers = render2d_process_worker_count()
+        else:
+            workers = min(8, max(2, (os.cpu_count() or 4) - 1), 6)
         use_pool = len(tasks) >= max(2, int(p.process_pool_min_rows)) and workers > 1
 
         results: list[tuple] = []

@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Primary literature and software references for methods beyond plain RDKit numeric descriptors.
 
@@ -349,6 +349,17 @@ def md_dialog_footer_html() -> str:
         "Short runs are for pose relaxation and ranking, not converged binding free energies. "
         '<a href="https://doi.org/10.1371/journal.pcbi.1005659">Eastman et al., 2017</a>; '
         '<a href="https://doi.org/10.1021/ct3010485">Nguyen, Roe &amp; Simmerling, 2013</a>.</small>'
+    )
+
+
+def md_analysis_dialog_footer_html() -> str:
+    """Rich text for Protein Viewer → Simulate → Analyze Trajectory."""
+    return (
+        "<small><b>Method</b>: Cα Kabsch fit to frame 0, then protein Cα RMSD, ligand "
+        "heavy-atom RMSD, ligand COM drift, and per-residue Cα RMSF "
+        "(sqrt of mean-square fluctuation about the fitted mean). "
+        "Energy and optional MM-GBSA ΔG are joined on nearest <code>time_ps</code>. "
+        "This is not a DCD player — overlay writes one solute frame.</small>"
     )
 
 

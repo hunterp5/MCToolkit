@@ -13,9 +13,9 @@ Override path with environment variable `MCTOOLKIT_GNN_MTL_MODEL`.
 
 **Model outputs (log10, in order):** Caco-2 ER, Caco-2 Papp, MDCK-MDR1 ER, NIH MDCK ER.
 
-MCToolkit writes **linear** values to the table (10^prediction):
+mctoolkit writes **linear** values to the table (10^prediction):
 
-| Column in MCToolkit | Endpoint |
+| Column in mctoolkit | Endpoint |
 |----------------------|----------|
 | Caco-2 ER | Caco-2 efflux ratio (unitless) |
 | Caco-2 Papp | Caco-2 intrinsic apparent permeability (×10⁻⁶ cm/s) |

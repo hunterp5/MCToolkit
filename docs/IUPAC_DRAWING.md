@@ -1,4 +1,4 @@
-# IUPAC Drawing Standards in the MCToolkit Sketcher
+# IUPAC Drawing Standards in the mctoolkit Sketcher
 
 Mapped from the [IUPAC Recommendations 2008](https://iupac.qmul.ac.uk/drawing/drawing.html) (GR-\*) and the [2006 stereochemical configuration](https://publications.iupac.org/pac/2006/pdf/7810x1897.pdf) recommendations (ST-\*). Project rule: `.cursor/rules/iupac-drawing-sketcher.mdc`.
 

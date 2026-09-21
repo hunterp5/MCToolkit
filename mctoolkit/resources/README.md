@@ -6,7 +6,7 @@
 
 ## Optional CLI binaries (not in git — place locally or use installer)
 
-MCToolkit can run these when installed on the system **or** when copied into:
+mctoolkit can run these when installed on the system **or** when copied into:
 
 ```
 mctoolkit/resources/bin/win/     # Windows: optional obabel.exe / mafft.bat (Gnina runs via WSL)

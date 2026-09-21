@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for Help → Citations catalog and dialog."""
 
@@ -71,7 +71,7 @@ def test_catalog_includes_key_dois() -> None:
     assert "LGPL" in bt.license_name
     assert "gnu.org/licenses/lgpl-3.0" in bt.license_url
     assert "gnu.org/licenses/gpl-3.0" in tool_citation("mctoolkit").license_url  # type: ignore[union-attr]
-    assert tool_citation("mctoolkit").name == "MCToolkit"  # type: ignore[union-attr]
+    assert tool_citation("mctoolkit").name == "mctoolkit"  # type: ignore[union-attr]
 
 
 def test_citation_html_renders_license_link() -> None:

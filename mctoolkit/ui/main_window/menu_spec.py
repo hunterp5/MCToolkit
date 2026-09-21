@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Declarative main-window menu tree.
 
@@ -710,7 +710,7 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             hotkey="help.user_guides",
             attr="_act_user_guide",
             add_to_window=True,
-            tooltip="Open MCToolkit help (F1).",
+            tooltip="Open mctoolkit help (F1).",
         ),
         action(
             "&Citations",
@@ -718,7 +718,7 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             hotkey="help.citations",
             attr="_act_citations",
             add_to_window=True,
-            tooltip="Open papers and licenses for tools used in MCToolkit.",
+            tooltip="Open papers and licenses for tools used in mctoolkit.",
         ),
         attr="_help_menu",
     ),

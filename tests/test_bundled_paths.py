@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Bundled resource and external tool path resolution."""
 
@@ -126,6 +126,15 @@ def test_static_asset_path_points_at_3dmol():
     assert p.name == "3Dmol-min.js"
     assert p.parent.name == "static"
     assert Path(bundled_paths.package_root(), "ui", "static", "3Dmol-min.js") == p
+
+
+def test_static_asset_path_points_at_molstar():
+    p = bundled_paths.static_asset_path("molstar.js")
+    assert p.name == "molstar.js"
+    assert p.is_file()
+    css = bundled_paths.static_asset_path("molstar.css")
+    assert css.name == "molstar.css"
+    assert css.is_file()
 
 
 def test_resolve_biotransformer_jar_env_override_and_missing_database(tmp_path, monkeypatch):

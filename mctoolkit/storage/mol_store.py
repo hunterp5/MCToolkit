@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """SQLite-backed molecule store with a small in-memory LRU."""
 
@@ -213,6 +213,10 @@ class MolStore(MutableMapping[int, Chem.Mol]):
             rows,
         )
         self._conn.commit()
+        # Replacing a row must not leave a stale hydrated mol in the LRU; Fast Prepare
+        # (and any other in-place rewrite) would otherwise keep serving the old structure.
+        for oid, _blob, _smiles in rows:
+            self._lru.pop(oid, None)
 
     def ingest_structures(
         self, rows: Iterable[tuple[int, Chem.Mol | None, bytes | None, str]]
@@ -255,6 +259,8 @@ class MolStore(MutableMapping[int, Chem.Mol]):
             rows.append((oid_i, blob, smi))
             if cache:
                 self._remember(oid_i, mol)
+            else:
+                self._lru.pop(oid_i, None)
         if not rows:
             return
         self._flush()

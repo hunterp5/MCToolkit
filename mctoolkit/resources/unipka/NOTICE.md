@@ -9,4 +9,4 @@ Uni-pKa is licensed under Apache License 2.0. The SMARTS patterns were derived
 from MolGpKa (MIT License; Pan et al., *J. Chem. Inf. Model.* 2021,
 doi:10.1021/acs.jcim.1c00075).
 
-These TSV files are third-party data, not MCToolkit GPL source.
+These TSV files are third-party data, not mctoolkit GPL source.

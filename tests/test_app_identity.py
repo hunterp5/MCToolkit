@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Display-name identity, QSettings migration, and session format."""
 
@@ -25,10 +25,12 @@ from mctoolkit.app_identity import (
     PREVIOUS_SETTINGS_APP,
     PREVIOUS_SETTINGS_ORG,
     PYTHON_PACKAGE,
+    SESSION_FILE_EXTENSION,
     SESSION_INVALID_MESSAGE,
     SESSION_OPEN_FILTER,
     SESSION_SAVE_FILTER,
     SESSION_TEMP_DIR_NAME,
+    is_session_document_path,
     SETTINGS_APP,
     SETTINGS_ORG,
     http_user_agent,
@@ -40,17 +42,17 @@ from mctoolkit.table.session_codec import session_format_ok
 
 
 def test_display_name_and_window_title() -> None:
-    assert APP_DISPLAY_NAME == "MCToolkit"
-    assert window_title() == "MCToolkit"
-    assert window_title("Help") == "MCToolkit — Help"
-    assert PREVIOUS_SETTINGS_ORG == "MCtoolkit"
-    assert PREVIOUS_SETTINGS_APP == "MCtoolkit"
+    assert APP_DISPLAY_NAME == "mctoolkit"
+    assert window_title() == "mctoolkit"
+    assert window_title("Help") == "mctoolkit — Help"
+    assert PREVIOUS_SETTINGS_ORG == "MCToolkit"
+    assert PREVIOUS_SETTINGS_APP == "MCToolkit"
     assert PYTHON_PACKAGE == "mctoolkit"
 
 
 def test_http_user_agent_includes_display_name() -> None:
     agent = http_user_agent("FAME3R SOM")
-    assert agent.startswith("MCToolkit/")
+    assert agent.startswith("mctoolkit/")
     assert "FAME3R SOM" in agent
 
 
@@ -75,10 +77,20 @@ def test_compact_session_writes_current_format() -> None:
 
 
 def test_session_dialog_filters_use_display_name() -> None:
-    assert SESSION_SAVE_FILTER.startswith("MCToolkit Session")
-    assert "MCToolkit Session" in SESSION_OPEN_FILTER
-    assert "MCToolkit" in SESSION_INVALID_MESSAGE
-    assert SESSION_TEMP_DIR_NAME == "MCToolkitSessions"
+    assert SESSION_SAVE_FILTER.startswith("mctoolkit Session")
+    assert SESSION_FILE_EXTENSION in SESSION_SAVE_FILTER
+    assert SESSION_FILE_EXTENSION in SESSION_OPEN_FILTER
+    assert "mctoolkit Session" in SESSION_OPEN_FILTER
+    assert "mctoolkit" in SESSION_INVALID_MESSAGE
+    assert SESSION_FILE_EXTENSION in SESSION_INVALID_MESSAGE
+    assert SESSION_TEMP_DIR_NAME == "mctoolkit-sessions"
+    assert is_session_document_path("library.mct")
+    assert is_session_document_path("library.json")
+    assert not is_session_document_path("library.cms")
+    assert not is_session_document_path("library.csv")
+    assert not is_session_document_path("library.sdf")
+    assert "*.cms" not in SESSION_OPEN_FILTER
+    assert "*.cms" not in SESSION_SAVE_FILTER
 
 
 def test_qt_settings_migrates_legacy_keys(tmp_path, monkeypatch, qapp):  # noqa: ARG001
@@ -101,6 +113,9 @@ def test_qt_settings_migrates_legacy_keys(tmp_path, monkeypatch, qapp):  # noqa:
 
     settings = qt_settings()
     assert str(settings.value("gui/theme")) == "dark"
+    leftover = ident.QSettings(PREVIOUS_SETTINGS_ORG, PREVIOUS_SETTINGS_APP)
+    leftover.setFallbacksEnabled(False)
+    assert leftover.allKeys() == []
 
 
 def test_qt_settings_does_not_overwrite_existing_keys(tmp_path, monkeypatch, qapp):  # noqa: ARG001
@@ -126,3 +141,6 @@ def test_qt_settings_does_not_overwrite_existing_keys(tmp_path, monkeypatch, qap
 
     settings = qt_settings()
     assert str(settings.value("gui/theme")) == "light"
+    leftover = ident.QSettings(PREVIOUS_SETTINGS_ORG, PREVIOUS_SETTINGS_APP)
+    leftover.setFallbacksEnabled(False)
+    assert leftover.allKeys() == []

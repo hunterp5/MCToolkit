@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Protein Viewer MD dialog (OpenMM Langevin: GBSA or TIP3P PME + optional MM-GBSA)."""
 
@@ -234,11 +234,17 @@ class ProteinMDDialog(ProteinStructureSourceMixin, QDialog):
         self.btn_run = QPushButton("Run MD")
         self.btn_run.clicked.connect(self._on_run)
         btn_row.addWidget(self.btn_run)
+        self.btn_analyze = QPushButton("Analyze…")
+        self.btn_analyze.setEnabled(False)
+        self.btn_analyze.setToolTip("Open Analyze Trajectory with this run's DCD and sidecar.")
+        self.btn_analyze.clicked.connect(self._on_analyze)
+        btn_row.addWidget(self.btn_analyze)
         btn_row.addStretch()
         self.btn_close = QPushButton("Close")
         self.btn_close.clicked.connect(self.close)
         btn_row.addWidget(self.btn_close)
         root.addLayout(btn_row)
+        self._last_result = None
 
         self._signals = ProteinMDSignals(self)
         self._signals.finished.connect(self._on_finished)
@@ -500,8 +506,16 @@ class ProteinMDDialog(ProteinStructureSourceMixin, QDialog):
 
         QThreadPool.globalInstance().start(ProteinMDWorker(req, signals=self._signals))
 
+    def _on_analyze(self) -> None:
+        opener = getattr(self._viewer, "open_md_analysis_dialog", None)
+        if opener is None:
+            return
+        opener(prefill=self._last_result)
+
     def _on_finished(self, result) -> None:
         self.btn_run.setEnabled(True)
+        self._last_result = result
+        self.btn_analyze.setEnabled(bool(getattr(result, "dcd_path", "") or ""))
         summary = getattr(result, "summary", "") or ""
         if summary:
             self.results.setPlainText(summary)

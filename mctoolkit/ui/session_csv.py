@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Legacy CSV session load path."""
 
@@ -46,7 +46,7 @@ class SessionCsv:
         """Load a session CSV exported by `_write_session_csv`.
 
         File I/O and SMILES parsing run off the GUI thread; table appends stay
-        chunked on the GUI thread (same pattern as ``.cms`` restore).
+        chunked on the GUI thread (same pattern as ``.mct`` restore).
         """
         self._app._session_mutation_paused = True
         self._app._pending_session_clean_on_ready = True

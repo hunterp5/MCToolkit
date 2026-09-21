@@ -1,24 +1,24 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Keep native window captions on the PyQt5 / Windows 10 look.
 
 Qt 6's Windows plugin turns on DWM immersive dark mode (black title bars with
 minimize / maximize / close) from the OS color scheme. PyQt5 never set that
-            attribute, so MCToolkit captions stayed the classic light Windows frame even
+            attribute, so mctoolkit captions stayed the classic light Windows frame even
 when Fusion was dark. Call ``configure_windows_native_caption_platform`` before
 ``QApplication`` and ``install_classic_native_captions`` after it exists.
 """

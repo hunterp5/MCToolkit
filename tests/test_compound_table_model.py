@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for CompoundTableModel (no full window required)."""
 
@@ -397,6 +397,22 @@ def test_remove_row_clears_structure_png_store(model: CompoundTableModel):
     assert store.has_png(5)
     model.remove_row_at(0)
     assert not store.has_png(5)
+
+
+def test_drop_structure_pixmap_cache_leaves_png_store(model: CompoundTableModel):
+    from mctoolkit.storage.structure_render_store import StructureRenderStore
+
+    model.append_row(1, {"SMILES": "C", "MW": "16"})
+    model.append_row(2, {"SMILES": "CC", "MW": "30"})
+    store = StructureRenderStore(max_decoded_pixmaps=8)
+    store.ingest_batch([(1, b"a"), (2, b"b")])
+    model.set_structure_png_store(store)
+    model._pixmaps[1] = QPixmap()
+    model._pixmaps[2] = QPixmap()
+    model.drop_structure_pixmap_cache([1])
+    assert 1 not in model._pixmaps
+    assert 2 in model._pixmaps
+    assert store.has_png(1) and store.has_png(2)
 
 
 def test_insert_rows_batch_restores_order(model: CompoundTableModel):

@@ -1,20 +1,20 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
-"""In-app User Manual for MCToolkit (TOC + Markdown topic loader)."""
+"""In-app User Manual for mctoolkit (TOC + Markdown topic loader)."""
 
 from __future__ import annotations
 
@@ -320,6 +320,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "Molecular Dynamics",
                 "Molecular Dynamics",
                 "Short OpenMM MD (implicit GBSA or TIP3P PME) with optional snapshot MM-GBSA.",
+            ),
+            _e(
+                "tools_md_analysis",
+                "Analyze Trajectory",
+                "Analyze Trajectory",
+                "RMSD, RMSF, and energy vs time from an MD DCD (not a trajectory player).",
             ),
             _e(
                 "protein_pharmacophore",

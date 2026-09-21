@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Central environment-driven settings (see README env table)."""
 
@@ -87,7 +87,7 @@ def clamp_substructure_async_rows(raw: str | None) -> int:
 
 
 @dataclass(frozen=True)
-class MCToolkitConfig:
+class mctoolkitConfig:
     log_level: str
     max_threadpool: int | None
     render_threadpool: int | None
@@ -168,12 +168,12 @@ def _warn_retired_custom_calc_legacy_eval() -> None:
         )
 
 
-def load_config() -> MCToolkitConfig:
+def load_config() -> mctoolkitConfig:
     """Read current settings from ``os.environ`` (no process-wide cache — tests can monkeypatch)."""
     _warn_retired_custom_calc_legacy_eval()
     hard = _env_int("MCTOOLKIT_SQL_MAX_ROWS_HARD", 2_000_000, lo=1000, hi=50_000_000)
     precowarn = _env_int("MCTOOLKIT_SQL_PRECOUNT_WARN", 100_000, lo=1000, hi=hard)
-    return MCToolkitConfig(
+    return mctoolkitConfig(
         log_level=_env_str("MCTOOLKIT_LOG_LEVEL", "INFO").upper(),
         max_threadpool=_env_optional_positive_int("MCTOOLKIT_MAX_THREADPOOL", lo=1, hi=64),
         render_threadpool=_env_optional_positive_int("MCTOOLKIT_RENDER_THREADPOOL", lo=1, hi=32),

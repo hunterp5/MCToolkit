@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Main-window mixin smoke tests (clear_all, selection, chemistry sources)."""
 
@@ -102,11 +102,11 @@ def test_save_session_clears_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._mark_session_dirty()
-    out = tmp_path / "t.cms"
+    out = tmp_path / "t.mct"
     monkeypatch.setattr(
         QFileDialog,
         "getSaveFileName",
-        lambda *args, **kwargs: (str(out), "MCToolkit Session (*.cms)"),
+        lambda *args, **kwargs: (str(out), "mctoolkit Session (*.mct)"),
     )
     assert w.save_session_as() is True
     assert not w._session_has_unsaved_changes()
@@ -140,11 +140,11 @@ def test_save_selected_to_session_writes_subset_without_clearing_dirty(qapp, mon
     _seed_two_rows(w)
     w._selected_oids_override = frozenset({1})
     w._mark_session_dirty()
-    out = tmp_path / "selected.cms"
+    out = tmp_path / "selected.mct"
     monkeypatch.setattr(
         QFileDialog,
         "getSaveFileName",
-        lambda *args, **kwargs: (str(out), "MCToolkit Session (*.cms)"),
+        lambda *args, **kwargs: (str(out), "mctoolkit Session (*.mct)"),
     )
     assert w.save_selected_to_session() is True
     assert w._session_has_unsaved_changes()

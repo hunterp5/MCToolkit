@@ -1,6 +1,6 @@
-# Packaging MCToolkit for distribution
+# Packaging mctoolkit for distribution
 
-This document supports building an installer (PyInstaller, Inno Setup, MSI, etc.) so users can run MCToolkit without managing Python manually.
+This document supports building an installer (PyInstaller, Inno Setup, MSI, etc.) so users can run mctoolkit without managing Python manually.
 
 ## Install profiles
 
@@ -16,9 +16,10 @@ This document supports building an installer (PyInstaller, Inno Setup, MSI, etc.
 
 | Component | How it ships |
 |-----------|----------------|
-| MCToolkit app (`mctoolkit` package) | PyInstaller one-folder/one-file, or `pip install -e .` |
+| mctoolkit app (`mctoolkit` package) | PyInstaller one-folder/one-file, or `pip install -e .` |
 | Python dependencies | `requirements-core.txt` or `requirements.txt`, then `pip install -e .` |
-| 3Dmol.js | Already in `mctoolkit/ui/static/` |
+| 3Dmol.js | Already in `mctoolkit/ui/static/` (small-molecule 3D viewer) |
+| Mol* Viewer | Already in `mctoolkit/ui/static/` (`molstar.js` + `molstar.css`, Protein Viewer) |
 | AutoDock Vina | **Optional** binary in `mctoolkit/resources/bin/<platform>/` (not redistributed in git) |
 
 ## Recommended install commands (source / CI)
@@ -72,7 +73,7 @@ pip install pyinstaller
 pyinstaller packaging/mctoolkit.spec
 ```
 
-Output under `dist/MCToolkit/`. You still need to ship:
+Output under `dist/mctoolkit/`. You still need to ship:
 
 - Qt platform plugins (PyInstaller usually collects these)
 - Optional `resources/bin/` for Gnina

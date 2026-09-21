@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Structure / pixmap storage helpers — file-split of ``CompoundTableModel``, not a reusable mixin."""
 
@@ -60,6 +60,18 @@ class CompoundTableStructureMixin:
         self.dataChanged.emit(
             self.index(lo, self.STRUCTURE_COL), self.index(hi, self.STRUCTURE_COL), roles
         )
+
+    def drop_structure_pixmap_cache(self, oids: list[int] | None = None) -> None:
+        """Drop decoded Structure QPixmaps so paint reloads from the lazy PNG store.
+
+        Does not touch SQLite. Use this when the PNG store is being replaced or upserted
+        in bulk; :meth:`clear_structure_pixmaps_for_oids` commits a DELETE per oid.
+        """
+        if oids is None:
+            self._pixmaps.clear()
+            return
+        for oid in oids:
+            self._pixmaps.pop(int(oid), None)
 
     def clear_structure_pixmaps_for_oids(self, oids: list[int], *, emit: bool = True) -> None:
         for oid in oids:

@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 import re
 
@@ -228,7 +228,7 @@ def mol_structure_copy_texts(mol) -> dict[str, str]:
 def mol_graph_binary(mol) -> bytes | None:
     """RDKit binary for the connection table only (no conformers).
 
-    Used in ``.cms`` sessions so Open can skip ``MolFromSmiles``. Conformers stay in
+    Used in ``.mct`` sessions so Open can skip ``MolFromSmiles``. Conformers stay in
     ``confs_sidecar``; dropping them keeps the structure blob small.
     """
     if mol is None:

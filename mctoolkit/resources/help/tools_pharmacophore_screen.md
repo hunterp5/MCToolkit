@@ -17,7 +17,7 @@ This is not Gobbi 2D pharmacophore fingerprints (those ignore ensembles and the 
 
 ## Inputs / scope
 
-- **Pharmacophore** — MCToolkit JSON (`.json` / `.mph4`). **Protein Viewer → Tools → Pharmacophore → Screen Table…** fills this from the live pharmacophore.
+- **Pharmacophore** — mctoolkit JSON (`.json` / `.mph4`). **Protein Viewer → Tools → Pharmacophore → Screen Table…** fills this from the live pharmacophore.
 - **Ensembles** — packed `confs`, `superpose`, or `poses` column. Each conformer is scored; the best match is kept per row.
 - **Distance slack** — allowed difference (Å) between query pairwise feature distances and ligand pairwise distances (default 1.2 Å).
 - **Require all features** — every enabled non-Exclusion site must map onto a unique same-type RDKit BaseFeatures site (same element when **Atom** is set). Uncheck and set **Min** for a looser screen.

@@ -23,7 +23,7 @@ A Manager structure or PDB/mmCIF in Protein Viewer, with ligand chemistry for GA
 - **Eq. restraint k** — backbone+ligand heavy atoms by default; **Prod. restraint k** 0 turns restraints off in production.
 - **Checkpoint** — OpenMM `.chk` written during production. **Resume from checkpoint** skips minimize/eq and continues remaining production. Resume starts a new DCD.
 - **Score MM-GBSA on production snapshots** — writes a report and CSV of ΔG vs time. For TIP3P, water and ions are stripped first; scoring is still GBn2 on the dry complex.
-- **Trajectory DCD** — OpenMM DCD of production frames (includes water for TIP3P). Protein Viewer overlays the **last solute frame**, not the DCD.
+- **Trajectory DCD** — OpenMM DCD of production frames (includes water for TIP3P), plus a matching `*_md_top.pdb`, energy CSV, and `*.dcd.json` sidecar for **Analyze Trajectory**. Protein Viewer overlays the **last solute frame**; analysis is a sibling tool, not a DCD player.
 
 ## Workflow
 
@@ -32,6 +32,7 @@ A Manager structure or PDB/mmCIF in Protein Viewer, with ligand chemistry for GA
 3. Choose GBSA or TIP3P, set production length, and whether to score MM-GBSA.
 4. **Run MD**. Cancel from **Processes** if needed; a checkpoint lets you resume.
 5. Inspect the last-frame overlay and the MM-GBSA mean ± SD when scoring was on.
+6. **Analyze…** (or **Tools → Simulate → Analyze Trajectory…**) plots RMSD/RMSF/energy from the DCD, topology, and sidecar this run wrote.
 
 ## Use cases
 

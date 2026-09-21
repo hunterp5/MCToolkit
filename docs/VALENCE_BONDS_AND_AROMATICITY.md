@@ -1,4 +1,4 @@
-# Valence, bonds, aromaticity, and atom types in MCToolkit
+# Valence, bonds, aromaticity, and atom types in mctoolkit
 
 Authoritative summary of how the **2D sketcher** and **RDKit-backed** table chemistry treat valence, bond order, bond “types”, aromaticity, and what counts as an atom type. For stereoisomerism (E/Z, wedges, etc.) see [`STEREO_AND_ISOMERISM.md`](STEREO_AND_ISOMERISM.md).
 
@@ -34,7 +34,7 @@ Bond order is what **valence sums use** (double = 2 toward both endpoints).
 
 Chemically, “bond type” can mean **order** (single/double/triple), **polarity** (ionic/covalent), **aromatic** (delocalized π), **coordination**, etc.
 
-**MCToolkit sketcher:**
+**mctoolkit sketcher:**
 
 - Represents **covalent orders 1–3** explicitly.
 - Does **not** store a separate “aromatic bond” order in the tuple; see **Aromaticity** below.

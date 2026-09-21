@@ -14,9 +14,9 @@ Use **Protein Viewer → Tools → Pharmacophore** after a structure is on the c
 
 Features are spheres in Cartesian coordinates (Å). Each site has a feature family and an optional **atom** (C, N, O, …). Click an atom to fill X/Y/Z and the element, then **Add**, or type coordinates and pick **Atom** yourself. **Any** matches every element. Empty canvas space is not pickable in 3Dmol. You can also generate sites from a ligand with RDKit.
 
-The file format is JSON (`mctoolkit.pharmacophore` version 1), typically `.json` or `.mph4`. It is independent of the MCToolkit session file; **Save…** writes it for other sessions.
+The file format is JSON (`mctoolkit.pharmacophore` version 1), typically `.json` or `.mph4`. It is independent of the mctoolkit session file; **Save…** writes it for other sessions.
 
-Gnina does not have a native pharmacophore constraint. MCToolkit docks with CNN/Vina as usual, then **filters poses in the protein frame**: each enabled attractive site must have an RDKit ligand feature of the same type inside its sphere (plus **Slack**). If **Atom** is set, that ligand site must be the same element. **Exclusion** sites reject a pose if a ligand heavy atom (of that element, or any heavy atom when Atom is **Any**) is inside. Occupancy `--user_grid` maps are not used (Gnina’s `--user_grid_lambda` would scale Vina, not “weight the pharmacophore”).
+Gnina does not have a native pharmacophore constraint. mctoolkit docks with CNN/Vina as usual, then **filters poses in the protein frame**: each enabled attractive site must have an RDKit ligand feature of the same type inside its sphere (plus **Slack**). If **Atom** is set, that ligand site must be the same element. **Exclusion** sites reject a pose if a ligand heavy atom (of that element, or any heavy atom when Atom is **Any**) is inside. Occupancy `--user_grid` maps are not used (Gnina’s `--user_grid_lambda` would scale Vina, not “weight the pharmacophore”).
 
 ## Options
 

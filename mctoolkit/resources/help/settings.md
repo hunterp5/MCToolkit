@@ -4,7 +4,7 @@ Settings control appearance, keyboard shortcuts, and the WSL executable used for
 
 ## Goal
 
-Make MCToolkit readable and efficient for your display and preferred shortcuts without changing chemistry results.
+Make mctoolkit readable and efficient for your display and preferred shortcuts without changing chemistry results.
 
 ## When to use
 

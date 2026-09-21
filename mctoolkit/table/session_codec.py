@@ -1,20 +1,20 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
-"""Encode/decode MCToolkit ``.cms`` session documents (compact v2 + gzip)."""
+"""Encode/decode mctoolkit ``.mct`` session documents (compact v2 + gzip)."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ SESSION_VERSIONS_SUPPORTED = frozenset({1, 2})
 
 _GZIP_MAGIC = b"\x1f\x8b"
 _ZIP_MAGIC = b"PK"
-SESSION_CMS_MEMBER = "session.cms"
+SESSION_ZIP_MEMBER = "session.mct"
 SESSION_ENSEMBLES_MEMBER = "ensembles.sqlite"
 # In-memory only: compact JSON must not serialize this bytes payload.
 SESSION_ENSEMBLES_KEY = "__ensembles_sqlite__"
@@ -114,7 +114,7 @@ def dumps_session_document(doc: dict[str, Any], *, gzip_compress: bool = True) -
         return payload
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as zf:
-        zf.writestr(SESSION_CMS_MEMBER, payload)
+        zf.writestr(SESSION_ZIP_MEMBER, payload)
         zf.writestr(SESSION_ENSEMBLES_MEMBER, bytes(extra))
     return buf.getvalue()
 
@@ -122,19 +122,19 @@ def dumps_session_document(doc: dict[str, Any], *, gzip_compress: bool = True) -
 def _session_zip_payload(data: bytes) -> tuple[bytes, bytes | None]:
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         names = zf.namelist()
-        cms_name = None
-        if SESSION_CMS_MEMBER in names:
-            cms_name = SESSION_CMS_MEMBER
+        member = None
+        if SESSION_ZIP_MEMBER in names:
+            member = SESSION_ZIP_MEMBER
         else:
-            cms_name = next(
-                (n for n in names if n.endswith(".cms") or n.endswith(".json")),
+            member = next(
+                (n for n in names if n.endswith((".mct", ".json"))),
                 None,
             )
-        if cms_name is None:
-            raise ValueError("Session zip is missing session.cms.")
-        cms = zf.read(cms_name)
+        if member is None:
+            raise ValueError("Session zip is missing session.mct.")
+        payload = zf.read(member)
         ensembles = zf.read(SESSION_ENSEMBLES_MEMBER) if SESSION_ENSEMBLES_MEMBER in names else None
-    return cms, ensembles
+    return payload, ensembles
 
 
 def loads_session_bytes(raw: bytes | str) -> dict[str, Any]:

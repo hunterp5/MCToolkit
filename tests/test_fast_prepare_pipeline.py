@@ -1,24 +1,27 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit.  If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
 """Fast Prepare end-to-end: one fused job writes the neutralized parent and the fragments column."""
 
 from __future__ import annotations
 
 from rdkit import Chem
+from PySide6.QtGui import QPixmap
+
+from mctoolkit.storage.structure_render_store import StructureRenderStore
 
 from mctoolkit.ui.main_window import ChemistryWorkspaceWindow
 from mctoolkit.chem.molecule_conversion import mol_to_canonical_smiles
@@ -87,6 +90,9 @@ def _run_fast_prepare_inline(
             is_smiles=is_smiles,
             need_smiles=need_smiles,
             neutralize=neutralize,
+            need_png=prepare_col == "Structure",
+            png_width=32 if prepare_col == "Structure" else 0,
+            png_height=32 if prepare_col == "Structure" else 0,
             process_pool_min_rows=10**9,
         ),
         _Recorder(),
@@ -107,6 +113,7 @@ def test_fast_prepare_structure_target_neutralizes_and_lists_fragments(qapp):  #
 
         assert "Fragments" in win.headers
         assert len(win.mols) == len(SALTS)
+        assert len(win.mols._lru) == 0
         for mol in win.mols.values():
             assert Chem.GetFormalCharge(mol) == 0
             assert len(Chem.GetMolFrags(mol)) == 1
@@ -117,6 +124,8 @@ def test_fast_prepare_structure_target_neutralizes_and_lists_fragments(qapp):  #
         }
         assert mol_to_canonical_smiles(Chem.MolFromSmiles("[Cl-]")) in frag_values
         assert "" in frag_values  # benzene has no smaller fragments
+        assert getattr(win, "_render2d_batch_active", False) is False
+        assert win._table_model.structure_png_store_active()
     finally:
         win.close()
 
@@ -157,5 +166,42 @@ def test_fast_prepare_structure_target_is_not_text(qapp):  # noqa: ARG001
     try:
         assert win._fast_prepare_target_is_text("Structure") is False
         assert win._fast_prepare_target_is_text("SMILES") is True
+    finally:
+        win.close()
+
+
+def test_fast_prepare_structure_items_are_blobs_without_hydrate(qapp):  # noqa: ARG001
+    win = _seeded_window()
+    try:
+        win.mols._lru.clear()
+        items = win._fast_prepare_structure_items(win._all_oids_in_table_order(), "Structure")
+        assert items
+        assert all(isinstance(payload, (bytes, bytearray)) and payload for _, payload, _ in items)
+        assert len(win.mols._lru) == 0
+    finally:
+        win.close()
+
+
+def test_fast_prepare_png_ingest_reuses_store_without_per_oid_delete(qapp):  # noqa: ARG001
+    win = _seeded_window()
+    try:
+        store = StructureRenderStore(max_decoded_pixmaps=8)
+        keep_oid = 999
+        store.ingest_batch([(keep_oid, b"keep-me")])
+        win._table_model.set_structure_png_store(store)
+        first = next(iter(win.mols))
+        win._table_model._pixmaps[first] = QPixmap()
+        removed: list[int] = []
+
+        def _capture_remove(oid: int) -> None:
+            removed.append(int(oid))
+
+        store.remove_oid = _capture_remove
+        assert win._apply_fast_prepare_pngs([(first, b"new-png")], "Structure") is True
+        assert removed == []
+        assert store.has_png(keep_oid)
+        assert store.png_bytes(first) == b"new-png"
+        assert first not in win._table_model._pixmaps
+        assert win._table_model._structure_png_store is store
     finally:
         win.close()

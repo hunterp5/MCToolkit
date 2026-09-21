@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Langevin MD (implicit GBSA or explicit PME) with optional snapshot MM-GBSA."""
 
@@ -44,6 +44,7 @@ class ImplicitMDConfig:
     restraint_k_eq: float = 10.0
     restraint_k_prod: float = 0.0
     dcd_path: str = ""
+    energy_csv_path: str = ""
     log_every_ps: float = 1.0
     solute_atoms: int = 0
     checkpoint_path: str = ""
@@ -60,6 +61,8 @@ class ImplicitMDResult:
     n_eq_steps: int
     n_prod_steps: int
     dcd_path: str = ""
+    energy_csv_path: str = ""
+    dcd_interval_steps: int = 0
     mmgbsa: list[MMGBSAResult] = field(default_factory=list)
     resumed: bool = False
     checkpoint_path: str = ""
@@ -170,6 +173,19 @@ def write_checkpoint_meta(
 
 def production_steps_done(current_step: int, n_eq_steps: int) -> int:
     return max(0, int(current_step) - int(n_eq_steps))
+
+
+def write_energy_csv(path: Path, rows: list[tuple[float, float]]) -> None:
+    """Production potential energy (kcal/mol) vs time (ps)."""
+    import csv
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(("time_ps", "E_pot_kcal"))
+        for time_ps, energy in rows:
+            writer.writerow((f"{float(time_ps):.4f}", f"{float(energy):.6f}"))
 
 
 def run_implicit_md(
@@ -284,10 +300,12 @@ def run_implicit_md(
         _save_chk()
     _set_k(float(config.restraint_k_prod))
     dcd_path = (config.dcd_path or "").strip()
+    energy_csv = (config.energy_csv_path or "").strip()
     already = production_steps_done(int(simulation.currentStep), n_eq_recorded)
     remaining_prod = max(0, n_prod - already)
+    interval = n_snap if n_snap > 0 else max(1, n_log)
+    energy_rows: list[tuple[float, float]] = []
     if dcd_path and remaining_prod:
-        interval = n_snap if n_snap > 0 else max(1, n_log)
         Path(dcd_path).parent.mkdir(parents=True, exist_ok=True)
         simulation.reporters.append(
             DCDReporter(dcd_path, interval, enforcePeriodicBox=bool(config.wrap_dcd))
@@ -332,7 +350,9 @@ def run_implicit_md(
             time_ps = done * float(config.timestep_fs) / 1000.0
             if remaining == 0 or done % n_log == 0:
                 state = simulation.context.getState(getEnergy=True)
-                _log(f"OpenMM MD: prod {time_ps:.1f} ps  E={_kcal_pe(state):.1f} kcal/mol")
+                energy = _kcal_pe(state)
+                energy_rows.append((time_ps, energy))
+                _log(f"OpenMM MD: prod {time_ps:.1f} ps  E={energy:.1f} kcal/mol")
             if next_snap > 0 and done >= next_snap:
                 frame += 1
                 snapshots.append(_score_now(time_ps, frame))
@@ -346,12 +366,20 @@ def run_implicit_md(
         _log("OpenMM MD: production already complete in the checkpoint")
     last = simulation.context.getState(getPositions=True).getPositions()
     last = slice_solute_positions(last, int(config.solute_atoms))
+    energy_out = ""
+    if energy_csv and energy_rows:
+        rec = Path(energy_csv)
+        write_energy_csv(rec, energy_rows)
+        energy_out = str(rec)
+        _log(f"OpenMM MD: energy CSV → {rec.name}")
     _log("OpenMM MD: finished")
     return ImplicitMDResult(
         positions=last,
         n_eq_steps=n_eq_recorded,
         n_prod_steps=n_prod,
         dcd_path=dcd_path if dcd_path and n_prod else "",
+        energy_csv_path=energy_out,
+        dcd_interval_steps=interval if dcd_path and n_prod else 0,
         mmgbsa=snapshots,
         resumed=resumed,
         checkpoint_path=chk_path,

@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Session save/restore for :class:`PlotWidget`."""
 
@@ -29,10 +29,10 @@ _T = TypeVar("_T", bound="PlotSessionMixin")
 
 
 class PlotSessionMixin:
-    """Persist and restore Plotter control state in ``.cms`` sessions."""
+    """Persist and restore Plotter control state in ``.mct`` sessions."""
 
     def collect_session_state(self) -> dict:
-        """JSON-safe Plotter settings for ``.cms`` session files."""
+        """JSON-safe Plotter settings for ``.mct`` session files."""
         spokes = [c.currentText() for c in getattr(self, "spoke_combos", None) or []]
         entries = [e.text() for e in getattr(self, "entry_edits", None) or []]
         fit_key = self.fit_combo.currentData()

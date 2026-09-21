@@ -1,6 +1,6 @@
 # ChEMBL
 
-ChEMBL access retrieves molecules and associated bioactivity-oriented public data into MCToolkit for exploration.
+ChEMBL access retrieves molecules and associated bioactivity-oriented public data into mctoolkit for exploration.
 
 ## Goal
 

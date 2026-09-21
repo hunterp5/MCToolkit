@@ -1,10 +1,10 @@
-## MCToolkit coding standards
+## mctoolkit coding standards
 
 These rules apply to all new or modified code in this repository.
 
 ### Copyright headers
 
-- Every **new** source file must include the standard MCToolkit GPL copyright header (same text as existing `.py` files).
+- Every **new** source file must include the standard mctoolkit GPL copyright header (same text as existing `.py` files).
 - Keep a shebang as line 1 when present; put the header immediately below it.
 - Do not add the header to vendored/third-party assets.
 - See `.cursor/rules/copyright-headers.mdc` for the full header text.

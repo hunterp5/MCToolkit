@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mctoolkit"
 version = "0.1.0"
-description = "MCToolkit desktop chemistry table workspace (PySide6 + RDKit)"
+description = "mctoolkit desktop chemistry table workspace (PySide6 + RDKit)"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 license = { file = "LICENSE" }
@@ -71,7 +71,7 @@ include = ["mctoolkit*"]
 mctoolkit = [
     "ui/static/*",
     "ui/plotly_shell.html",
-    "ui/protein_viewer.js",
+    "ui/protein_molstar.js",
     "resources/README.md",
     "resources/help/**/*.md",
     "resources/unipka/**",

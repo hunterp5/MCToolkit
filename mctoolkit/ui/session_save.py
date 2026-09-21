@@ -1,18 +1,18 @@
-# This file is part of MCToolkit.
+# This file is part of mctoolkit.
 # Copyright (C) 2026 Hunter Picard
 #
-# MCToolkit is free software: you can redistribute it and/or modify
+# mctoolkit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# MCToolkit is distributed in the hope that it will be useful,
+# mctoolkit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with MCToolkit. If not, see <https://www.gnu.org/licenses/>.
+# along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
 """Session save / document build / File open-save entry points."""
 
@@ -29,10 +29,12 @@ import time
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from ..app_identity import (
+    SESSION_FILE_EXTENSION,
     SESSION_INVALID_MESSAGE,
     SESSION_OPEN_FILTER,
     SESSION_SAVE_FILTER,
     SESSION_TEMP_DIR_NAME,
+    is_session_document_path,
 )
 from ..analysis.mmp_session import serialize_mmp_ledger_payload
 from ..chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
@@ -66,7 +68,7 @@ class SessionSave:
 
     def new_session(self) -> None:
         """Launch a new instance of the app with nothing loaded."""
-        # Keep ``python -m mctoolkit``; only the window chrome is MCToolkit.
+        # Keep ``python -m mctoolkit``; only the window chrome is mctoolkit.
         try:
             subprocess.Popen([sys.executable, "-m", "mctoolkit"], close_fds=True)
         except Exception as e:
@@ -132,10 +134,10 @@ class SessionSave:
         return out_path
 
     def _write_session_bundle_file(self) -> str:
-        """Write a full session bundle (.cms JSON) under the temp session directory."""
+        """Write a full session bundle (``.mct``) under the temp session directory."""
         session_dir = os.path.join(tempfile.gettempdir(), SESSION_TEMP_DIR_NAME)
         os.makedirs(session_dir, exist_ok=True)
-        fname = f"session_{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}.cms"
+        fname = f"session_{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}{SESSION_FILE_EXTENSION}"
         out_path = os.path.join(session_dir, fname)
         with open(out_path, "wb") as f:
             f.write(dumps_session_document(self._build_session_document()))
@@ -383,7 +385,7 @@ class SessionSave:
         )
 
     def save_selected_to_session(self) -> bool:
-        """Write a new ``.cms`` that contains only the currently selected table rows."""
+        """Write a new ``.mct`` that contains only the currently selected table rows."""
         oids = {int(o) for o in self._app._selected_oids_set()}
         if not oids:
             QMessageBox.information(
@@ -410,9 +412,8 @@ class SessionSave:
         path, _ = QFileDialog.getSaveFileName(self._app, dialog_title, "", SESSION_SAVE_FILTER)
         if not path:
             return False
-        low = path.lower()
-        if not low.endswith(".cms") and not low.endswith(".json"):
-            path += ".cms"
+        if not is_session_document_path(path):
+            path += SESSION_FILE_EXTENSION
         try:
             with open(path, "wb") as f:
                 f.write(dumps_session_document(document))
@@ -442,6 +443,13 @@ class SessionSave:
             self.apply_saved_session_from_file(path)
 
     def apply_saved_session_from_file(self, path: str) -> bool:
+        if path.lower().endswith(".cms"):
+            QMessageBox.warning(
+                self._app,
+                "Open Session",
+                SESSION_INVALID_MESSAGE,
+            )
+            return False
         try:
             with open(path, "rb") as f:
                 raw = f.read()

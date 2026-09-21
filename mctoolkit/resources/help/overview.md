@@ -1,6 +1,6 @@
 # Overview
 
-MCToolkit is a desktop chemical table workspace for loading, preparing, analyzing, and exporting small-molecule data with RDKit-backed structure tools.
+mctoolkit (short for medicinal chemistry toolkit) is a desktop chemical table workspace for loading, preparing, analyzing, and exporting small-molecule data with RDKit-backed structure tools.
 
 ## Goal
 
