@@ -44,6 +44,7 @@ from .plot_table_sync import (
 )
 from .plot_web_surface import build_plot_web_view, no_web_surface
 from .plotly_html import figure_payload_json
+from .qt_widget_utils import fill_fusion_window
 
 if TYPE_CHECKING:
     from .main_window import ChemistryWorkspaceWindow
@@ -85,6 +86,7 @@ class PlotlyInteractiveView(QWidget):
     ) -> None:
         super().__init__(parent)
         self.parent_app = parent_app
+        fill_fusion_window(self)
         self._plot_shell_path = (
             Path(tempfile.gettempdir()) / f"MCTOOLKIT_plot_shell_{id(self)}.html"
         )
