@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QDoubleSpinBox,
@@ -30,7 +29,8 @@ from PySide6.QtWidgets import (
 )
 
 from ..dockable_plot import handle_floating_plot_close_event
-from ..qt_widget_utils import make_window_minimizable
+from ...platform_support.qt_webengine_flags import set_descendant_webengine_visible
+from ..qt_widget_utils import configure_floating_webengine_window
 from .dimred_panel import DimensionReductionPanel
 
 if TYPE_CHECKING:
@@ -48,6 +48,9 @@ class DimensionReductionDialog(QDialog):
     ):
         super().__init__(parent)
         self.parent_app = parent
+        configure_floating_webengine_window(self)
+        self._force_close = False
+        set_descendant_webengine_visible(panel, False)
         self._panel = panel
         self._panel.setParent(self)
         self._panel.parent_app = parent
@@ -59,13 +62,8 @@ class DimensionReductionDialog(QDialog):
 
         root = QVBoxLayout(self)
         root.addWidget(self._panel, 1)
+        set_descendant_webengine_visible(self._panel, True)
         self._panel._sync_footer_chrome()
-
-        self.setModal(False)
-        self.setWindowModality(Qt.NonModal)
-        self.setAttribute(Qt.WA_DeleteOnClose, True)
-        self._force_close = False
-        make_window_minimizable(self)
 
     def closeEvent(self, event) -> None:  # noqa: N802 — Qt API name
         handle_floating_plot_close_event(self, event)
