@@ -31,8 +31,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ..platform_support.qt_webengine_flags import set_descendant_webengine_visible
 from .dockable_plot import handle_floating_plot_close_event
-from .qt_widget_utils import make_window_minimizable
+from .qt_widget_utils import configure_floating_webengine_window
 
 if TYPE_CHECKING:
     from .plot import PlotWidget
@@ -47,22 +48,26 @@ class PlotDialog(QDialog):
         super().__init__(parent_app)
         self.parent_app = parent_app
         self.setWindowTitle("Plot Data")
+        configure_floating_webengine_window(self)
         self.resize(960, 900)
 
-        self._plot_widget = plot_widget if plot_widget is not None else PlotWidgetCls(parent_app)
+        if plot_widget is not None:
+            set_descendant_webengine_visible(plot_widget, False)
+            self._plot_widget = plot_widget
+            self._plot_widget.setParent(self)
+        else:
+            self._plot_widget = PlotWidgetCls(parent_app, qt_parent=self)
         self.only_selected_cb = self._plot_widget.only_selected_cb
         self._only_selected_scope_prefix = self._plot_widget._only_selected_scope_prefix
 
         root = QVBoxLayout(self)
         root.addWidget(self._plot_widget, 1)
+        set_descendant_webengine_visible(self._plot_widget, True)
         self._plot_widget._sync_footer_chrome()
 
         self._configure_floating_plot_dialog()
 
     def _configure_floating_plot_dialog(self) -> None:
-        self.setModal(False)
-        self.setWindowModality(Qt.NonModal)
-        self.setAttribute(Qt.WA_DeleteOnClose, True)
         self._force_close = False
         for btn in self.findChildren(QPushButton):
             btn.setAutoDefault(False)
@@ -71,7 +76,6 @@ class PlotDialog(QDialog):
         esc = QShortcut(QKeySequence(Qt.Key_Escape), self)
         esc.setContext(Qt.WidgetWithChildrenShortcut)
         esc.activated.connect(self.close)
-        make_window_minimizable(self)
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 — Qt API name
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
