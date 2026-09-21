@@ -59,7 +59,8 @@ from ..chunked_table_write import ChunkedTableWriter
 from ..medchem_space_plot import build_boiled_egg_figure, build_golden_triangle_figure
 from ..plotly_interactive_view import PlotlyInteractiveView
 from ..plot_table_sync import visible_oids_for_plot
-from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
+from ...platform_support.qt_webengine_flags import set_descendant_webengine_visible
+from ..qt_widget_utils import apply_monospace_to_text_edit, configure_floating_webengine_window
 from ..result_plot_panel import DockableResultPlotPanel
 from .scope import selection_scope_checked
 
@@ -931,7 +932,10 @@ class MedChemSpaceDialog(QDialog):
         super().__init__(parent)
         self.parent_app = parent
         self._plot_kind = plot_kind
+        configure_floating_webengine_window(self)
+        self._force_close = False
         if panel is not None:
+            set_descendant_webengine_visible(panel, False)
             self._panel = panel
             self._panel.setParent(self)
             self._panel.parent_app = parent
@@ -945,13 +949,8 @@ class MedChemSpaceDialog(QDialog):
 
         root = QVBoxLayout(self)
         root.addWidget(self._panel, 1)
+        set_descendant_webengine_visible(self._panel, True)
         self._panel._sync_footer_chrome()
-
-        self.setModal(False)
-        self.setWindowModality(Qt.NonModal)
-        self.setAttribute(Qt.WA_DeleteOnClose, True)
-        self._force_close = False
-        make_window_minimizable(self)
 
     def closeEvent(self, event) -> None:  # noqa: N802 — Qt API name
         handle_floating_plot_close_event(self, event)
