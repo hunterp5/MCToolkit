@@ -24,6 +24,7 @@ extension.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from PySide6.QtCore import QSettings
@@ -114,8 +115,20 @@ def _named_settings(org: str, app: str) -> QSettings:
     return store
 
 
+def _same_settings_file(left: QSettings, right: QSettings) -> bool:
+    """True when two QSettings objects share a path (INI file or Windows registry key)."""
+    a = os.path.normcase(os.path.normpath(str(left.fileName() or "")))
+    b = os.path.normcase(os.path.normpath(str(right.fileName() or "")))
+    return bool(a) and a == b
+
+
 def _migrate_legacy_qt_settings(settings: QSettings) -> None:
-    """Copy older QSettings stores into mctoolkit, then drop those leftover stores."""
+    """Copy older QSettings stores into mctoolkit, then drop those leftover stores.
+
+    Windows registry keys are case-insensitive, so ``MCToolkit`` and ``mctoolkit`` are the
+    same hive. Clearing that "legacy" store would wipe the theme and other GUI settings
+    on every launch. Compare ``fileName()`` rather than the org/app strings.
+    """
     global _settings_migrated
     if _settings_migrated:
         return
@@ -125,6 +138,8 @@ def _migrate_legacy_qt_settings(settings: QSettings) -> None:
             if org == SETTINGS_ORG and app == SETTINGS_APP:
                 continue
             legacy = _named_settings(org, app)
+            if _same_settings_file(settings, legacy):
+                continue
             keys = legacy.allKeys()
             if not keys:
                 continue
@@ -138,6 +153,8 @@ def _migrate_legacy_qt_settings(settings: QSettings) -> None:
         if org == SETTINGS_ORG and app == SETTINGS_APP:
             continue
         leftover = _named_settings(org, app)
+        if _same_settings_file(settings, leftover):
+            continue
         if leftover.allKeys():
             leftover.clear()
             leftover.sync()

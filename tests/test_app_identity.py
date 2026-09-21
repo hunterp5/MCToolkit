@@ -144,3 +144,29 @@ def test_qt_settings_does_not_overwrite_existing_keys(tmp_path, monkeypatch, qap
     leftover = ident.QSettings(PREVIOUS_SETTINGS_ORG, PREVIOUS_SETTINGS_APP)
     leftover.setFallbacksEnabled(False)
     assert leftover.allKeys() == []
+
+
+def test_qt_settings_does_not_clear_case_equivalent_store(tmp_path, monkeypatch, qapp):  # noqa: ARG001
+    """Windows registry treats MCToolkit and mctoolkit as the same key.
+
+    Startup used to copy-then-clear the "legacy" hive, which deleted the live theme.
+    """
+    import mctoolkit.app_identity as ident
+
+    shared = str(tmp_path / "shared.ini")
+
+    def _settings(org, app, *args, **kwargs):
+        del org, app, args, kwargs
+        return QSettings(shared, QSettings.IniFormat)
+
+    monkeypatch.setattr(ident, "QSettings", _settings)
+    reset_settings_migration_for_tests()
+
+    current = ident.QSettings(SETTINGS_ORG, SETTINGS_APP)
+    current.setValue("gui/theme", "dark")
+    current.setValue("gui/app_font_pt", 12)
+    current.sync()
+
+    settings = qt_settings()
+    assert str(settings.value("gui/theme")) == "dark"
+    assert str(settings.value("gui/app_font_pt")) == "12"

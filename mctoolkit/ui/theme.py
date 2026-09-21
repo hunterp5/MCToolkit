@@ -368,7 +368,9 @@ def load_saved_theme_name() -> str:
 
 def save_theme_name(theme: str) -> None:
     name = _normalize_theme_name(theme)
-    qt_settings().setValue(_SETTINGS_KEY_THEME, name)
+    settings = qt_settings()
+    settings.setValue(_SETTINGS_KEY_THEME, name)
+    settings.sync()
 
 
 def default_custom_palette_colors() -> dict[str, str]:
