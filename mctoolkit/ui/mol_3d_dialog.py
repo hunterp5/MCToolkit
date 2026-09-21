@@ -21,14 +21,14 @@ from __future__ import annotations
 import base64
 import json
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QMessageBox, QVBoxLayout, QWidget
 
 from ..chem.molecule_conversion import copy_mol, is_rdkit_mol, mol_from_smiles
 from ..conformers.conformer_column_codec import conformer_mol_blocks_b64_json
 from .mol_3d_prepare import prepare_mol_2d, prepare_mol_3d
+from ..platform_support.qt_webengine_flags import set_descendant_webengine_visible
 from .mol_3d_widget import Molecule3DViewerWidget
-from .qt_widget_utils import make_window_minimizable
+from .qt_widget_utils import configure_floating_webengine_window
 
 
 class Molecule3DViewerDialog(QDialog):
@@ -53,13 +53,12 @@ class Molecule3DViewerDialog(QDialog):
     ):
         super().__init__(parent)
         self.parent_app = parent
-        self.setModal(False)
-        self.setWindowModality(Qt.NonModal)
         self.setWindowTitle(window_title)
-        self.setAttribute(Qt.WA_DeleteOnClose, True)
+        configure_floating_webengine_window(self)
         self._force_close = False
 
         if viewer_widget is not None:
+            set_descendant_webengine_visible(viewer_widget, False)
             self._viewer_widget = viewer_widget
             self._viewer_widget.setParent(self)
             self._viewer_widget._window_title = window_title
@@ -70,6 +69,7 @@ class Molecule3DViewerDialog(QDialog):
             self._viewer_widget = Molecule3DViewerWidget(
                 mol,
                 parent,
+                qt_parent=self,
                 window_title=window_title,
                 flat=flat,
                 multi_conf_blocks_json_b64=multi_conf_blocks_json_b64,
@@ -85,8 +85,8 @@ class Molecule3DViewerDialog(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(self._viewer_widget, 1)
+        set_descendant_webengine_visible(self._viewer_widget, True)
         self._viewer_widget._sync_footer_chrome()
-        make_window_minimizable(self)
         min_w = int(self._viewer_widget.embedded_minimum_width())
         self._viewer_widget.setMinimumWidth(min_w)
         self.setMinimumWidth(min_w)
