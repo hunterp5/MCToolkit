@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..dockable_plot import PLOT_PANEL_DEFAULT_WIDTH
+from ...platform_support.qt_webengine_flags import set_descendant_webengine_visible
 from .plot_pane import PlotPane
 
 LAYOUT_TABLE_ONLY = "table_only"
@@ -54,6 +55,7 @@ LAYOUT_PRESETS: tuple[tuple[str, str], ...] = (
 
 def _reparent_hidden(widget: QWidget, host: QWidget | None) -> None:
     """Move ``widget`` under ``host`` (or unparent) without flashing a window."""
+    set_descendant_webengine_visible(widget, False)
     try:
         widget.hide()
         widget.setParent(host)
@@ -442,6 +444,7 @@ class WorkspaceLayoutManager(QWidget):
                 for widget in widgets:
                     with suppress(RuntimeError):
                         widget.show()
+                        set_descendant_webengine_visible(widget, True)
             else:
                 extras.extend(widgets)
                 if on_extra_plot is not None:
