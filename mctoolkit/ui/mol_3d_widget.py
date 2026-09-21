@@ -39,7 +39,10 @@ from PySide6.QtWidgets import (
 )
 
 from ..app_identity import APP_DISPLAY_NAME
-from ..platform_support.qt_webengine_flags import webengine_views_supported
+from ..platform_support.qt_webengine_flags import (
+    prepare_embedded_webengine_view,
+    webengine_views_supported,
+)
 from .dockable_plot import (
     PLOT_BODY_MARGINS,
     PLOT_BODY_SPACING,
@@ -104,6 +107,7 @@ class Molecule3DViewerWidget(Mol3DConfMixin, Mol3DChromeMixin, QWidget):
         mol: object,
         parent_app: QWidget | None = None,
         *,
+        qt_parent: QWidget | None = None,
         window_title: str = "View in 3D",
         flat: bool = False,
         multi_conf_blocks_json_b64: str | None = None,
@@ -115,7 +119,7 @@ class Molecule3DViewerWidget(Mol3DConfMixin, Mol3DChromeMixin, QWidget):
         strain_overlay: dict | None = None,
         source_oid: int | None = None,
     ):
-        super().__init__(None)
+        super().__init__(qt_parent)
         self.parent_app = parent_app
         self._window_title = window_title
         self._flat = bool(flat)
@@ -165,6 +169,7 @@ class Molecule3DViewerWidget(Mol3DConfMixin, Mol3DChromeMixin, QWidget):
             from PySide6.QtWebEngineWidgets import QWebEngineView
 
             web = QWebEngineView(self)
+            prepare_embedded_webengine_view(web)
             web.setContextMenuPolicy(Qt.NoContextMenu)
             _wire_webengine_console_logger(web)
             try:
