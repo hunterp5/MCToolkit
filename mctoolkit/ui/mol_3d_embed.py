@@ -27,7 +27,10 @@ from PySide6.QtCore import Qt, QTemporaryDir, QTimer, QUrl
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from ..chem.molecule_conversion import copy_mol
-from ..platform_support.qt_webengine_flags import webengine_views_supported
+from ..platform_support.qt_webengine_flags import (
+    prepare_embedded_webengine_view,
+    webengine_views_supported,
+)
 from .mol_3d_html import (
     _BUNDLED_3DMOL,
     _cdn_embed_fallback_html,
@@ -106,6 +109,7 @@ class Molecule3DEmbedView(QWidget):
             from PySide6.QtWebEngineWidgets import QWebEngineView
 
             web = QWebEngineView(self)
+            prepare_embedded_webengine_view(web)
             web.setContextMenuPolicy(Qt.NoContextMenu)
             _wire_webengine_console_logger(web)
             try:
