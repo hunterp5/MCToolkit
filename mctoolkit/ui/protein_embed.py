@@ -40,7 +40,10 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
-from ..platform_support.qt_webengine_flags import webengine_views_supported
+from ..platform_support.qt_webengine_flags import (
+    prepare_embedded_webengine_view,
+    webengine_views_supported,
+)
 from ..workers.process_pool_utils import application_is_shutting_down
 from .mol_3d_html import _wire_webengine_console_logger
 from .protein_viewer_html import (
@@ -220,6 +223,7 @@ class ProteinEmbedView(QWidget):
             web = QWebEngineView(self)
             if self._discard_web_if_shutdown(web):
                 return
+            prepare_embedded_webengine_view(web)
             web.setFocusPolicy(Qt.StrongFocus)
             web.setContextMenuPolicy(Qt.NoContextMenu)
             web.installEventFilter(self)
