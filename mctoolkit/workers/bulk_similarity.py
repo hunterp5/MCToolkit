@@ -28,6 +28,7 @@ from PySide6.QtCore import QRunnable
 from rdkit import Chem, DataStructs
 
 from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
+from ..chem.molecule_conversion import mol_from_job_payload
 from ..chem.rdkit_fingerprints import fingerprint_bitvect_for_row, fingerprint_bitvect_for_ui_choice
 from .fingerprint_similarity import SIMILARITY_METRIC_LABELS, pairwise_fingerprint_similarity
 from .signals import BulkSimilaritySignals
@@ -91,10 +92,13 @@ class BulkSimilarityWorker(QRunnable):
             self._report(0, n_in, force=True)
             oids: list[int] = []
             fps: list = []
-            for i, (oid, mol) in enumerate(self.rows, start=1):
+            for i, (oid, payload) in enumerate(self.rows, start=1):
                 if cancel_ev is not None and cancel_ev.is_set():
                     self.signals.failed.emit("Cancelled.")
                     return
+                mol = mol_from_job_payload(payload)
+                if mol is None:
+                    continue
                 try:
                     fp = fingerprint_bitvect_for_row(int(oid), mol, self.fp_choice)
                     if fp is None:

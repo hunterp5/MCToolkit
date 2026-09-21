@@ -42,12 +42,25 @@ from .tool_dialog_scope import abort_if_only_selected_but_empty, prepare_tool_di
 WorkerFactory = Callable[..., Any]
 
 
+def _collect_structure_job_rows(
+    app: AnalysisJobHost, structure_source: str, *, only_selected: bool
+) -> list[tuple[int, object]]:
+    """Prefer store blobs/SMILES so the GUI does not hydrate RDKit mols."""
+    collect = getattr(app, "collect_scoped_structure_payloads", None)
+    if callable(collect):
+        return list(collect(structure_source, only_selected=only_selected) or [])
+    return list(app.collect_scoped_table_mols(structure_source, only_selected=only_selected) or [])
+
+
 class AnalysisJobOps(Protocol):
     """Window forwards scoped analysis jobs need beyond the kernel roles."""
 
     def logical_row_for_oid(self, oid: int) -> int: ...
     def cell_text(self, row: int, col: int) -> str: ...
     def collect_scoped_table_mols(
+        self, src: str, *, only_selected: bool = False, only_visible: bool = False
+    ) -> list[tuple[int, object]]: ...
+    def collect_scoped_structure_payloads(
         self, src: str, *, only_selected: bool = False, only_visible: bool = False
     ) -> list[tuple[int, object]]: ...
     def _clear_tool_progress(self, *, status_message: str | None = None) -> None: ...
@@ -201,7 +214,7 @@ def prepare_scoped_structure_mols(
     """
     if abort_if_only_selected_but_empty(app, only_selected, app._selected_oids_set(), tool_label):
         return None
-    mol_data = app.collect_scoped_table_mols(structure_source, only_selected=only_selected)
+    mol_data = _collect_structure_job_rows(app, structure_source, only_selected=only_selected)
     if not mol_data:
         QMessageBox.information(
             app,
@@ -246,7 +259,7 @@ def prepare_scoped_activity_mol_records(
         )
         return None
 
-    mol_data = app.collect_scoped_table_mols(structure_source, only_selected=only_selected)
+    mol_data = _collect_structure_job_rows(app, structure_source, only_selected=only_selected)
     if not mol_data:
         QMessageBox.information(
             app,

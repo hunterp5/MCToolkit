@@ -31,6 +31,14 @@ def _reset_worker_global_state() -> None:
     ppu._SHUTDOWN.clear()
     yield
     ppu._SHUTDOWN.clear()
+    import sys
+
+    perm = sys.modules.get("mctoolkit.workers.permeability_worker")
+    if perm is not None:
+        perm.discard_permeability_process_pool()
+    pool = sys.modules.get("mctoolkit.workers.chemprop_cuda_pool")
+    if pool is not None:
+        pool.discard_chemprop_process_pool()
 
 
 @pytest.fixture(autouse=True)

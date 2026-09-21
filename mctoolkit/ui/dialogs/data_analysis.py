@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import io
+import logging
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -49,6 +50,7 @@ from ...analysis.table_statistics import (
 from ..qt_widget_utils import make_window_minimizable
 from ..table_dataframe import (
     numeric_subset,
+    scoped_table_analysis_row_indices,
     selected_table_column_headers,
     table_to_dataframe,
 )
@@ -63,6 +65,11 @@ from .data_analysis_tabs import (
 
 if TYPE_CHECKING:
     from ..main_window import ChemistryWorkspaceWindow
+
+logger = logging.getLogger(__name__)
+
+# Auto-reload (debounced table edits) builds pandas off the GUI above this many cells.
+_DF_ASYNC_CELL_THRESHOLD = 4000
 
 
 class DataAnalysisDialog(QDialog):
@@ -88,6 +95,8 @@ class DataAnalysisDialog(QDialog):
         self._last_outlier_table_rows: list[int] = []
         self._suppress_analysis_reload = False
         self._table_updates_wired = False
+        self._df_job_gen = 0
+        self._df_signals = None
         self._reload_debounce = QTimer(self)
         self._reload_debounce.setSingleShot(True)
         self._reload_debounce.setInterval(80)
@@ -250,17 +259,56 @@ class DataAnalysisDialog(QDialog):
     def refresh_table_data(self) -> None:
         """Reload the scoped DataFrame from the main table (immediate, not debounced)."""
         self._reload_debounce.stop()
-        self._reload()
+        self._reload(sync=True)
 
-    def _reload(self) -> None:
+    def _reload(self, *, sync: bool = False) -> None:
         if self.parent_app is None:
             return
         vis = self.chk_visible.isChecked()
         only_sel = self.only_selected_cb.isChecked() and self.only_selected_cb.isEnabled()
-        self._df_raw, self._scoped_source_rows = table_to_dataframe(
-            self.parent_app, visible_only=vis, only_selected=only_sel
+        app = self.parent_app
+        source_rows = scoped_table_analysis_row_indices(
+            app, visible_only=vis, only_selected=only_sel
         )
-        self._df_num = numeric_subset(self._df_raw, exclude_id=True)
+        bulk = getattr(app._table_model, "analysis_column_texts", None)
+        self._df_job_gen += 1
+        gen = self._df_job_gen
+        if not callable(bulk):
+            df, source_rows = table_to_dataframe(app, visible_only=vis, only_selected=only_sel)
+            self._apply_analysis_frames(df, source_rows, numeric_subset(df, exclude_id=True))
+            return
+        columns = bulk(list(app.headers), source_rows)
+        n_cells = sum(len(v) for v in columns.values()) if columns else 0
+        if sync or n_cells < _DF_ASYNC_CELL_THRESHOLD or not source_rows:
+            df = pd.DataFrame(columns, copy=False)
+            self._apply_analysis_frames(df, source_rows, numeric_subset(df, exclude_id=True))
+            return
+        from ...workers.table_dataframe import TableDataFrameSignals, TableDataFrameWorker
+        from ..threadpool_access import start_runnable_on_app_pool
+
+        signals = TableDataFrameSignals(self)
+
+        def _on_ok(frame, rows, numeric, job_gen=gen) -> None:
+            if job_gen != self._df_job_gen:
+                return
+            self._apply_analysis_frames(frame, rows, numeric)
+
+        def _on_fail(message: str, job_gen=gen) -> None:
+            if job_gen != self._df_job_gen:
+                return
+            logger.warning("Statistics DataFrame build failed: %s", message)
+
+        signals.finished.connect(_on_ok)
+        signals.failed.connect(_on_fail)
+        self._df_signals = signals
+        start_runnable_on_app_pool(
+            app, TableDataFrameWorker(columns, source_rows, signals, job_gen=gen)
+        )
+
+    def _apply_analysis_frames(self, df, source_rows, numeric) -> None:
+        self._df_raw = df
+        self._scoped_source_rows = list(source_rows)
+        self._df_num = numeric
         self._populate_fit_combos()
         self._run_summary()
         self._sync_selected_columns_only_scope()

@@ -83,6 +83,7 @@ def test_dock_menu_includes_smina(qapp):  # noqa: ARG001
     pred_labels = [a.text() for a in predict.actions() if a.text()]
     assert any("pKa" in t for t in pred_labels)
     assert any("Permeability" in t for t in pred_labels)
+    assert any("ADME" in t for t in pred_labels)
     som = None
     mets = None
     for act in predict.actions():

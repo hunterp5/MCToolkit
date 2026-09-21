@@ -224,20 +224,20 @@ def build_fingerprint_matrix(
     """Full bit-vector matrix from in-memory structures (same fingerprints as Cluster)."""
     from rdkit import DataStructs
 
+    from ..chem.molecule_conversion import hydrate_structure_rows
     from ..platform_support.memory_guards import check_fp_matrix_workload
     from ..workers.fingerprint_similarity import fingerprint_bitvect_for_ui_choice
     from ..chem.rdkit_fingerprints import fingerprint_bitvect_for_row
 
-    n_candidates = sum(1 for _oid, mol in mol_rows if mol is not None)
+    rows = hydrate_structure_rows(mol_rows)
+    n_candidates = len(rows)
     guard = check_fp_matrix_workload(n_candidates, n_bits=2048)
     if not guard.ok:
         raise ValueError(guard.message)
 
     oids: list[int] = []
-    rows: list[np.ndarray] = []
-    for oid, mol in mol_rows:
-        if mol is None:
-            continue
+    rows_out: list[np.ndarray] = []
+    for oid, mol in rows:
         try:
             fp = fingerprint_bitvect_for_row(int(oid), mol, fp_choice)
             if fp is None:
@@ -249,13 +249,13 @@ def build_fingerprint_matrix(
         arr = np.zeros((int(fp.GetNumBits()),), dtype=np.float64)
         DataStructs.ConvertToNumpyArray(fp, arr)
         oids.append(int(oid))
-        rows.append(arr)
-    if len(rows) < 2:
+        rows_out.append(arr)
+    if len(rows_out) < 2:
         raise ValueError(
             "Need at least two rows with valid fingerprints in this scope. "
             "Check the structure source and that rows have parseable structures."
         )
-    return np.vstack(rows), oids
+    return np.vstack(rows_out), oids
 
 
 def run_pca(

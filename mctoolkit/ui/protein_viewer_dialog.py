@@ -423,6 +423,13 @@ class ProteinViewerDialog(
         QShortcut(QKeySequence.Delete, self, activated=self.delete_selected)
         QShortcut(QKeySequence("Backspace"), self, activated=self.delete_selected)
 
+    def refresh_theme(self) -> None:
+        """Recolor Mol* chrome after a GUI theme or application font change."""
+        viewer = getattr(self, "viewer", None)
+        apply = getattr(viewer, "apply_theme", None)
+        if callable(apply):
+            apply()
+
     def canvas_loading_visible(self) -> bool:
         """True while the loading page covers the 3D canvas and Manager."""
         stack = getattr(self, "_content_stack", None)

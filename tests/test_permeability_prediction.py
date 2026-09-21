@@ -89,3 +89,103 @@ def test_predict_permeability_batch_smiles_linear():
     # Ethanol: model log Papp ≈ 3.223 → linear ×10⁻⁶ cm/s
     assert out[0]["Caco-2 Papp"] == pytest.approx(10**3.223, rel=0.01)
     assert out[0]["Caco-2 Papp"] > 100
+
+
+def test_permeability_gpu_forced_off_env(monkeypatch) -> None:
+    from mctoolkit.predictions.permeability_prediction import permeability_gpu_forced_off
+
+    monkeypatch.delenv("MCTOOLKIT_PERMEABILITY_GPU", raising=False)
+    assert permeability_gpu_forced_off() is False
+    monkeypatch.setenv("MCTOOLKIT_PERMEABILITY_GPU", "0")
+    assert permeability_gpu_forced_off() is True
+    monkeypatch.setenv("MCTOOLKIT_PERMEABILITY_GPU", "cpu")
+    assert permeability_gpu_forced_off() is True
+
+
+def test_permeability_use_gpu_honors_env(monkeypatch) -> None:
+    import sys
+    from types import ModuleType
+
+    from mctoolkit.predictions import permeability_prediction as perm
+
+    monkeypatch.setenv("MCTOOLKIT_PERMEABILITY_GPU", "0")
+    assert perm.permeability_use_gpu() is False
+    assert perm.permeability_lightning_accelerator() == "cpu"
+
+    monkeypatch.delenv("MCTOOLKIT_PERMEABILITY_GPU", raising=False)
+
+    class _Cuda:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+    fake = ModuleType("torch")
+    fake.cuda = _Cuda  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "torch", fake)
+    assert perm.permeability_use_gpu() is True
+    assert perm.permeability_lightning_accelerator() == "gpu"
+
+
+def test_permeability_lightning_accelerator_cpu_when_no_cuda(monkeypatch) -> None:
+    from mctoolkit.predictions import permeability_prediction as perm
+
+    monkeypatch.setattr(perm, "permeability_use_gpu", lambda: False)
+    assert perm.permeability_lightning_accelerator() == "cpu"
+
+
+def test_permeability_needs_cuda_isolation_uses_wheel_flag(monkeypatch) -> None:
+    from mctoolkit.predictions import permeability_prediction as perm
+
+    monkeypatch.setattr("mctoolkit.ionization.unipka_ensembles.torch_is_cuda_build", lambda: True)
+    assert perm.permeability_needs_cuda_isolation() is True
+    monkeypatch.setattr("mctoolkit.ionization.unipka_ensembles.torch_is_cuda_build", lambda: False)
+    assert perm.permeability_needs_cuda_isolation() is False
+
+
+def test_dispatch_permeability_predict_isolates_cuda_wheel(monkeypatch) -> None:
+    from mctoolkit.workers import permeability_worker as pw
+
+    seen: dict[str, object] = {}
+
+    def _child(smiles, batch_size, cancel_event, progress_callback):
+        seen["n"] = len(smiles)
+        seen["batch"] = batch_size
+        return [{"Caco-2 ER": 1.0}] * len(smiles)
+
+    monkeypatch.setattr(pw, "permeability_needs_cuda_isolation", lambda: True)
+    monkeypatch.setattr(pw, "_predict_in_cuda_child", _child)
+    monkeypatch.setattr(
+        pw,
+        "predict_permeability_batch",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("in-process CUDA")),
+    )
+    out = pw.dispatch_permeability_predict(["CCO", "c1ccccc1"], batch_size=8)
+    assert seen == {"n": 2, "batch": 8}
+    assert len(out) == 2
+
+
+def test_dispatch_permeability_predict_cpu_in_process(monkeypatch) -> None:
+    from mctoolkit.workers import permeability_worker as pw
+
+    monkeypatch.setattr(pw, "permeability_needs_cuda_isolation", lambda: False)
+
+    def _in_process(smiles, batch_size=64, progress_callback=None):
+        assert batch_size == 16
+        return [None] * len(smiles)
+
+    monkeypatch.setattr(pw, "predict_permeability_batch", _in_process)
+    monkeypatch.setattr(
+        pw,
+        "_predict_in_cuda_child",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("child CPU")),
+    )
+    out = pw.dispatch_permeability_predict(["CCO"], batch_size=16)
+    assert out == [None]
+
+
+def test_chunk_smiles_splits_batches() -> None:
+    from mctoolkit.workers.permeability_worker import _chunk_smiles
+
+    assert _chunk_smiles([], 64) == []
+    chunks = _chunk_smiles(["a", "b", "c", "d", "e"], 2)
+    assert chunks == [["a", "b"], ["c", "d"], ["e"]]

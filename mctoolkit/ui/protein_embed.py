@@ -418,6 +418,15 @@ class ProteinEmbedView(QWidget):
     def reset_camera(self) -> None:
         self._run_js("mctoolkitResetCamera", None)
 
+    def apply_theme(self, payload: dict | None = None) -> None:
+        """Recolor Mol* chrome and the 3D canvas to the live Fusion palette."""
+        from .protein_molstar_theme import molstar_theme_payload
+
+        self._run_js(
+            "mctoolkitApplyTheme",
+            payload if payload is not None else molstar_theme_payload(),
+        )
+
     def set_camera(self, view) -> None:
         return
 

@@ -351,6 +351,49 @@ def is_rdkit_mol(obj) -> bool:
     return isinstance(obj, Chem.Mol)
 
 
+def mol_from_job_payload(payload) -> object | None:
+    """Rebuild an RDKit mol from a job snapshot: live mol, pickle bytes, or cell text.
+
+    Chemistry tools snapshot store blobs or SMILES on the GUI thread and hydrate here
+    so ``MolStore.get`` never walks the table on the Qt event loop.
+    """
+    if payload is None:
+        return None
+    if is_rdkit_mol(payload):
+        return payload
+    if isinstance(payload, (bytes, bytearray, memoryview)):
+        return mol_from_binary_blob(payload)
+    if isinstance(payload, str):
+        return parse_molecule_from_cell_text(payload)
+    if isinstance(payload, tuple):
+        blob = payload[0] if payload else None
+        mol = mol_from_job_payload(blob)
+        if mol is not None:
+            return mol
+        if len(payload) > 1 and payload[1]:
+            return parse_molecule_from_cell_text(str(payload[1]))
+    return None
+
+
+def hydrate_structure_rows(rows) -> list[tuple]:
+    """Turn ``(oid, payload, *rest)`` job rows into ``(oid, mol, *rest)`` off the GUI."""
+    out: list[tuple] = []
+    for row in rows or ():
+        if not row:
+            continue
+        oid = row[0]
+        payload = row[1] if len(row) > 1 else None
+        mol = mol_from_job_payload(payload)
+        if mol is None:
+            continue
+        oid_out = None if oid is None else int(oid)
+        if len(row) > 2:
+            out.append((oid_out, mol, *row[2:]))
+        else:
+            out.append((oid_out, mol))
+    return out
+
+
 def copy_mol(mol) -> object | None:
     """Independent RDKit copy of *mol*, or ``None`` when copying fails."""
     if mol is None:

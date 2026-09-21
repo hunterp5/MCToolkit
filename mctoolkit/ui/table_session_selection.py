@@ -879,7 +879,10 @@ class TableSessionSelection:
         self._app.apply_filters()
 
     def _all_oids_in_table_order(self) -> list[int]:
-        """Every row OID top-to-bottom (only rows with a numeric hidden id)."""
+        """Every row OID top-to-bottom."""
+        getter = getattr(self._app._table_model, "all_oids_in_order", None)
+        if callable(getter):
+            return list(getter())
         out: list[int] = []
         for r in range(self._app._table_model.rowCount()):
             t0 = self._app._table_model.cell_text(r, 0)

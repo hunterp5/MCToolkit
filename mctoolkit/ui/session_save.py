@@ -26,6 +26,7 @@ import sys
 import tempfile
 import time
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from ..app_identity import (
@@ -37,23 +38,22 @@ from ..app_identity import (
     is_session_document_path,
 )
 from ..analysis.mmp_session import serialize_mmp_ledger_payload
-from ..chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
+from ..chem.molecule_conversion import mol_to_canonical_smiles
 from ..conformers.conformer_column_codec import serialize_confs_sidecar
 from ..docking.pose_file_io import serialize_dock_results_payload
 from ..ionization.microstate_cache import serialize_ionization_sidecar
 from ..services.filter_config import cfg_column
+from ..services.structure_payloads import structure_payloads_by_oid
 from ..storage import EnsembleStore
 from ..table.session_codec import (
     SESSION_ENSEMBLES_KEY,
     compact_global_bounds,
-    compact_session_document,
-    dumps_session_document,
-    encode_mol_blob_b64,
     expand_session_document,
     loads_session_bytes,
     session_format_ok,
     session_version_ok,
 )
+from ..table.session_document_build import assemble_session_document, dumps_session_snapshot
 from .widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
 
 logger = logging.getLogger(__name__)
@@ -140,10 +140,13 @@ class SessionSave:
         fname = f"session_{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}{SESSION_FILE_EXTENSION}"
         out_path = os.path.join(session_dir, fname)
         with open(out_path, "wb") as f:
-            f.write(dumps_session_document(self._build_session_document()))
+            f.write(dumps_session_snapshot(self._snapshot_session_table()))
         return out_path
 
     def _build_session_document(self, *, oids: set[int] | None = None) -> dict:
+        return assemble_session_document(self._snapshot_session_table(oids=oids))
+
+    def _snapshot_session_table(self, *, oids: set[int] | None = None) -> dict:
         hh = self._app.table.horizontalHeader()
         n = self._app._table_model.columnCount()
         logical_order = sorted(range(n), key=lambda lg: hh.visualIndex(lg)) if n else []
@@ -159,44 +162,34 @@ class SessionSave:
                 sort_mode = str(ss.get("mode") or "auto")
         rows_out: list[dict] = []
         structure_smiles: list[str] = []
-        structure_mols: list[str] = []
+        structure_blobs: list[bytes | None] = []
         n_rows = self._app._table_model.rowCount()
-        smiles_col = "SMILES" in self._app.headers
+        model = self._app._table_model
+        texts = model.analysis_column_texts(list(self._app.headers))
+        payloads = structure_payloads_by_oid(self._app.mols)
         want = oids
         for r in range(n_rows):
-            oid = int(self._app._table_model.row_oid(r))
+            oid = int(model.row_oid(r))
             if want is not None and oid not in want:
                 continue
             cells: dict[str, str] = {}
-            for ci, h in enumerate(self._app.headers):
+            for h in self._app.headers:
                 if h in ("ID_HIDDEN", "Structure"):
                     continue
-                if self._app._table_model.is_pixmap_data_column(h):
-                    cells[h] = self._app._table_model.backing_value_for_row_header(r, h)
+                col_vals = texts.get(h)
+                if col_vals is not None and r < len(col_vals):
+                    cells[h] = col_vals[r]
+                elif model.is_pixmap_data_column(h):
+                    cells[h] = model.backing_value_for_row_header(r, h)
                 else:
+                    ci = self._app.headers.index(h)
                     cells[h] = self._app.cell_text(r, ci)
-            mol = None
-            blob = None
-            getter = getattr(self._app.mols, "blob_for", None)
-            if callable(getter):
-                blob = getter(oid)
-            if not blob:
-                mol = self._app.mols.get(oid)
-                if mol is None:
-                    mol = self._app._mol_for_structure_row(r)
-                blob = mol_graph_binary(mol)
-            structure_mols.append(encode_mol_blob_b64(blob))
-            smi = str(cells.get("SMILES") or "").strip() if smiles_col else ""
-            if smi:
-                structure_smiles.append(smi)
-            else:
-                if mol is None and blob:
-                    mol = self._app.mols.get(oid)
-                    if mol is None:
-                        mol = self._app._mol_for_structure_row(r)
-                structure_smiles.append(mol_to_canonical_smiles(mol) if mol is not None else "")
-                if smiles_col and mol is not None and not (cells.get("SMILES") or "").strip():
-                    cells["SMILES"] = structure_smiles[-1]
+            blob, store_smi = payloads.get(oid, (None, ""))
+            smi = str(cells.get("SMILES") or "").strip() or str(store_smi or "").strip()
+            if smi and "SMILES" in cells and not str(cells.get("SMILES") or "").strip():
+                cells["SMILES"] = smi
+            structure_blobs.append(blob)
+            structure_smiles.append(smi)
             rows_out.append({"id": oid, "cells": cells})
         filters_out: list[dict] = []
         for f in self._app.filters:
@@ -257,7 +250,7 @@ class SessionSave:
             "headers": list(self._app.headers),
             "rows": rows_out,
             "structure_smiles": structure_smiles,
-            "structure_mols": structure_mols,
+            "structure_blobs": structure_blobs,
             "global_bounds": compact_global_bounds(getattr(self._app, "global_bounds", None)),
             "next_oid": int(self._app.next_oid),
             "zoomed_ids": sorted(
@@ -298,11 +291,10 @@ class SessionSave:
             search_payload = collect_search()
             if search_payload:
                 doc["table_search"] = search_payload
-        out = compact_session_document(doc)
         ensembles = self._ensembles_sqlite_for_session(want)
         if ensembles:
-            out[SESSION_ENSEMBLES_KEY] = ensembles
-        return out
+            doc[SESSION_ENSEMBLES_KEY] = ensembles
+        return doc
 
     def _confs_sidecar_for_session(self, oids: set[int] | None) -> dict[tuple[int, str], str]:
         store = getattr(self._app, "_confs_blocks_sidecar", None)
@@ -379,7 +371,7 @@ class SessionSave:
         """Prompt for a path and save the session. Returns True if a file was written."""
         return self._prompt_save_session_document(
             dialog_title="Save Session",
-            document=self._build_session_document(),
+            oids=None,
             clear_dirty=True,
             status_prefix="Session saved to",
         )
@@ -396,7 +388,7 @@ class SessionSave:
             return False
         return self._prompt_save_session_document(
             dialog_title="Save Selected to Session",
-            document=self._build_session_document(oids=oids),
+            oids=oids,
             clear_dirty=False,
             status_prefix="Selected rows saved to session",
         )
@@ -405,7 +397,7 @@ class SessionSave:
         self,
         *,
         dialog_title: str,
-        document: dict,
+        oids: set[int] | None,
         clear_dirty: bool,
         status_prefix: str,
     ) -> bool:
@@ -415,18 +407,58 @@ class SessionSave:
         if not is_session_document_path(path):
             path += SESSION_FILE_EXTENSION
         try:
-            with open(path, "wb") as f:
-                f.write(dumps_session_document(document))
-            self._app.status_label.setText(f"{status_prefix} {path}")
-            if clear_dirty:
-                clear = getattr(self._app, "_clear_session_dirty", None)
-                if callable(clear):
-                    clear()
+            snapshot = self._snapshot_session_table(oids=oids)
+            self._enqueue_session_snapshot_write(
+                snapshot,
+                path,
+                clear_dirty=clear_dirty,
+                status_prefix=status_prefix,
+                dialog_title=dialog_title,
+            )
             return True
         except Exception as e:
             logger.exception("Save session failed: %s", path)
             QMessageBox.warning(self._app, dialog_title, str(e))
             return False
+
+    def _enqueue_session_snapshot_write(
+        self,
+        snapshot: dict,
+        path: str,
+        *,
+        clear_dirty: bool,
+        status_prefix: str,
+        dialog_title: str,
+    ) -> None:
+        """Encode/gzip/write on a worker; tests run the worker inline."""
+        from ..workers.session_save import SessionSaveSignals, SessionSaveWorker
+        from .threadpool_access import start_runnable_on_app_pool
+
+        signals = SessionSaveSignals(self._app)
+
+        def _on_ok(saved_path: str) -> None:
+            self._app.status_label.setText(f"{status_prefix} {saved_path}")
+            if clear_dirty:
+                clear = getattr(self._app, "_clear_session_dirty", None)
+                if callable(clear):
+                    clear()
+
+        def _on_fail(message: str) -> None:
+            QMessageBox.warning(self._app, dialog_title, message)
+
+        if "pytest" in sys.modules:
+            signals.finished.connect(_on_ok, type=Qt.DirectConnection)
+            signals.failed.connect(_on_fail, type=Qt.DirectConnection)
+            SessionSaveWorker(snapshot, path, signals).run()
+            return
+        signals.finished.connect(_on_ok)
+        signals.failed.connect(_on_fail)
+        pending = getattr(self._app, "_session_save_pending", None)
+        if pending is None:
+            pending = []
+            self._app._session_save_pending = pending
+        pending.append(signals)
+        start_runnable_on_app_pool(self._app, SessionSaveWorker(snapshot, path, signals))
 
     def open_session_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

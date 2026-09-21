@@ -46,7 +46,6 @@ class DescriptorsTools:
         calc_headers = self._app._unique_table_column_names(disp)
         src = d.src_combo.currentText()
         is_s = src != "Structure"
-        s_idx = self._app.headers.index(src)
         only_selected = d.only_selected_rows()
         allowed = self._app._selected_oids_set() if only_selected else None
         if self._app._abort_if_only_selected_but_empty(
@@ -62,19 +61,11 @@ class DescriptorsTools:
             else ({}, {}, None)
         )
         if not is_s:
-            data = []
-            for o in oids_list:
-                r = self._app.logical_row_for_oid(o)
-                m = self._app.mols.get(o) if r >= 0 else None
-                if m is None and r >= 0:
-                    m = self._app._mol_for_structure_row(r)
-                if m is not None:
-                    data.append((o, m))
+            data = self._app.collect_scoped_structure_payloads(
+                "Structure", only_selected=only_selected
+            )
         else:
-            data = [
-                (o, self._app._table_cell_text(self._app.logical_row_for_oid(o), s_idx))
-                for o in oids_list
-            ]
+            data = self._app.collect_scoped_structure_payloads(src, only_selected=only_selected)
         if not data:
             QMessageBox.information(
                 self._app, "Calculate Descriptors", "No rows to process for this scope and source."

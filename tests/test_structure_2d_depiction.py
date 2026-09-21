@@ -185,3 +185,66 @@ def test_render_worker_emits_reaction_scheme_png(qapp) -> None:  # noqa: ARG001
     assert props == {}
     assert png.startswith(b"\x89PNG")
     assert (rw, rh) == (width, height)
+
+
+def _prepared(smiles: str):
+    from rdkit import Chem
+    from rdkit.Chem.Draw import rdMolDraw2D
+
+    mol = Chem.MolFromSmiles(smiles)
+    assert mol is not None
+    return rdMolDraw2D.PrepareMolForDrawing(mol)
+
+
+def test_acyclic_alkene_double_bonds_marked_for_parallel_redraw() -> None:
+    from mctoolkit.chem.structure_2d_depiction import acyclic_offset_double_bond_indices
+
+    linalyl = _prepared("C=CC(C)(CCC=C(C)C)OC(C)=O")
+    idxs = acyclic_offset_double_bond_indices(linalyl)
+    assert len(idxs) == 2
+    for bid in idxs:
+        bond = linalyl.GetBondWithIdx(bid)
+        assert bond.GetBondType().name == "DOUBLE"
+        assert bond.GetBeginAtom().GetAtomicNum() == 6
+        assert bond.GetEndAtom().GetAtomicNum() == 6
+
+    ketotifen = _prepared("CN1CCC(=C2c3ccccc3CC(=O)c3sccc32)CC1")
+    keto_idxs = acyclic_offset_double_bond_indices(ketotifen)
+    assert len(keto_idxs) == 1
+    bond = ketotifen.GetBondWithIdx(keto_idxs[0])
+    assert {bond.GetBeginAtom().GetAtomicNum(), bond.GetEndAtom().GetAtomicNum()} == {6}
+
+
+def test_carbonyl_and_ring_doubles_not_marked_for_parallel_redraw() -> None:
+    from mctoolkit.chem.structure_2d_depiction import acyclic_offset_double_bond_indices
+
+    assert acyclic_offset_double_bond_indices(_prepared("CC(=O)C")) == []
+    assert acyclic_offset_double_bond_indices(_prepared("c1ccccc1")) == []
+    assert acyclic_offset_double_bond_indices(_prepared("CCOC(C)=O")) == []
+
+
+def test_offset_double_inner_stroke_is_parallel() -> None:
+    from mctoolkit.chem.structure_2d_depiction import offset_double_inner_strokes
+
+    mol = _prepared("C=CC(C)(CCC=C(C)C)OC(C)=O")
+    strokes = offset_double_inner_strokes(mol, multiple_bond_offset=0.15)
+    assert len(strokes) == 2
+    for (x1, y1), (x2, y2), (sx, sy), (ex, ey) in strokes:
+        mx, my = x2 - x1, y2 - y1
+        ix, iy = ex - sx, ey - sy
+        mag_m = (mx * mx + my * my) ** 0.5
+        mag_i = (ix * ix + iy * iy) ** 0.5
+        assert mag_m > 0.5 and mag_i > 0.5
+        # Parallel: cross product of unit directions is ~0.
+        cross = abs(mx * iy - my * ix) / (mag_m * mag_i)
+        assert cross < 1e-9
+
+
+def test_render_linalyl_acetate_and_ketotifen_png() -> None:
+    from rdkit import Chem
+
+    for smi in ("C=CC(C)(CCC=C(C)C)OC(C)=O", "CN1CCC(=C2c3ccccc3CC(=O)c3sccc32)CC1"):
+        mol = Chem.MolFromSmiles(smi)
+        png = render_molecule_png(mol, STRUCTURE_DEPICT_WIDTH, STRUCTURE_DEPICT_HEIGHT)
+        assert png.startswith(b"\x89PNG")
+        assert len(png) > 100

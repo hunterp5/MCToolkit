@@ -43,13 +43,19 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-The pKa install script selects CUDA automatically when `nvidia-smi` sees a GPU (`-Cpu` / `--cpu` keeps the CPU wheel):
+The pKa install script selects CUDA automatically when `nvidia-smi` sees a GPU (`-Cpu` / `--cpu` keeps the CPU wheel) and prefetches Uni-pKa fold weights (~550 MB):
 
 ```bash
 # Windows
 scripts\install_pytorch_pka.ps1
 # macOS / Linux
 bash scripts/install_pytorch_pka.sh
+```
+
+CPU-only full installs can prefetch weights without swapping the torch wheel:
+
+```bash
+python scripts/bootstrap_unipka_model.py
 ```
 
 Editable install with extras (optional):

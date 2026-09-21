@@ -167,10 +167,8 @@ class FPSimilarityDialog(QDialog):
             qid = self._resolve_query_oid()
             if qid is None:
                 return None, None
-            for oid, mol in self.parent_app.collect_scoped_table_mols(src, only_selected=False):
-                if oid == qid:
-                    return mol, qid
-            return None, qid
+            mol = self.parent_app._mol_for_structure_tool_oid(qid, src)
+            return mol, qid
         smi = self.smi_input.text().strip()
         if not smi:
             return None, None
@@ -201,7 +199,7 @@ class FPSimilarityDialog(QDialog):
             return
 
         compare_oids = self._compare_oids_in_scope(only_sel)
-        targets = self.parent_app.collect_scoped_table_mols(src, only_selected=only_sel)
+        targets = self.parent_app.collect_scoped_structure_payloads(src, only_selected=only_sel)
 
         if not compare_oids:
             self.parent_app.status_label.setText(

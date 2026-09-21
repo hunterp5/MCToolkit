@@ -26,6 +26,7 @@ from PySide6.QtCore import QRunnable
 from rdkit import Chem
 from rdkit.Chem import rdRGroupDecomposition
 
+from ..chem.molecule_conversion import hydrate_structure_rows
 from .signals import WorkerSignals
 
 logger = logging.getLogger(__name__)
@@ -130,8 +131,9 @@ class RGroupDecompositionWorker(QRunnable):
 
         from ..platform_support.tool_progress import report_tool_progress
 
-        oids = [int(o) for o, _ in self.data]
-        mols = [m for _, m in self.data]
+        hydrated = hydrate_structure_rows(self.data)
+        oids = [int(o) for o, _ in hydrated]
+        mols = [m for _, m in hydrated]
         tot = max(len(mols), 1)
         report_tool_progress(
             message="Core-based decomposition",

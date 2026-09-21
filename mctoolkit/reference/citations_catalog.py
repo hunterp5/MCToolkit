@@ -348,6 +348,35 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
                 homepage="https://github.com/chemprop/chemprop",
             ),
             _t(
+                "adme",
+                "Predict ADME (Chemprop / TDC)",
+                "Predict ADME writes checked TDC ADMET endpoints from ADMET-AI v2 Chemprop weights.",
+                (
+                    (
+                        "Swanson, K.; et al. ADMET-AI: a machine learning ADMET platform for evaluation "
+                        "of large-scale chemical libraries. Bioinformatics 2024, 40, btae416.",
+                        "https://doi.org/10.1093/bioinformatics/btae416",
+                    ),
+                    (
+                        "Huang, K.; et al. Therapeutics Data Commons: Machine Learning Datasets and "
+                        "Tasks for Drug Discovery and Development. NeurIPS 2021.",
+                        "https://doi.org/10.48550/arXiv.2102.09548",
+                    ),
+                    (
+                        "ADMET-AI v2 Chemprop weights (Zenodo 10.5281/zenodo.18728250).",
+                        "https://doi.org/10.5281/zenodo.18728250",
+                    ),
+                ),
+                LIC_MIT,
+                homepage="https://github.com/swansonk14/admet_ai",
+                notes=(
+                    "mctoolkit loads the published checkpoints with the Chemprop stack already used "
+                    "for Predict Permeability. Do not pip-install the admet-ai package into this "
+                    "environment (it requires torch>=2.8 and conflicts with Uni-pKa). Local v2 "
+                    "predictions will not match the public ADMET-AI website (v1)."
+                ),
+            ),
+            _t(
                 "cns_mpo",
                 "CNS MPO (Wager)",
                 "CNS multiparameter optimization score (descriptor / MPO tools).",
@@ -773,7 +802,7 @@ CITATION_SECTIONS: tuple[CitationSection, ...] = (
             _t(
                 "pubchem",
                 "PubChem / PubChemPy",
-                "Tools → Query Database → PubChem; Tools → Utilities → Random → Molecule; Calculate Descriptors → Name (Common Name, Synonyms).",
+                "Tools → Query Database → PubChem; Tools → Utilities → Random → Molecule.",
                 (
                     (
                         "Kim, S.; et al. PubChem 2023 update. Nucleic Acids Res. 2023, 51, D1373–D1380.",

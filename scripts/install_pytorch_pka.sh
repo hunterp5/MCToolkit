@@ -102,4 +102,8 @@ if ${CUDA} == 1 and not torch.cuda.is_available():
 "
 
 echo
-echo "Done. First pKa run downloads Uni-pKa weights (unipka-download-model). Use this same Python for python -m mctoolkit."
+echo "Prefetching Uni-pKa fold weights (~550 MB; skipped if already present)..."
+python scripts/bootstrap_unipka_model.py
+
+echo
+echo "Done. Uni-pKa weights are on disk. Use this same Python for python -m mctoolkit."

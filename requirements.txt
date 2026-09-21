@@ -41,6 +41,9 @@ torchvision==0.20.1
 
 # --- pKa predictor (Tools → Predict → pKa; Uni-pKa / unipkainfer) ---
 unipkainfer>=0.2.0
+# Fold weights (~550 MB) are not a pip artifact. After this file:
+#   python scripts/bootstrap_unipka_model.py
+# or run scripts/install_pytorch_pka.ps1 / .sh (also selects CUDA when nvidia-smi sees a GPU).
 
 # --- Permeability prediction (Tools → Predict Permeability / GNN-MTL) ---
 chemprop>=2.1.0,<2.3

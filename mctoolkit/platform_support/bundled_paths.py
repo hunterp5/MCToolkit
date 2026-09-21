@@ -374,6 +374,14 @@ def gnn_mtl_model_path() -> Path:
     return models_dir() / "gnn_mtl" / "model.pt"
 
 
+def adme_models_dir() -> Path:
+    """Directory of ADMET-AI v2 Chemprop ensembles used by Predict ADME."""
+    override = (env_get("MCTOOLKIT_ADME_MODELS") or "").strip()
+    if override:
+        return Path(override)
+    return models_dir() / "adme"
+
+
 def biotransformer_models_dir() -> Path:
     return models_dir() / "biotransformer"
 

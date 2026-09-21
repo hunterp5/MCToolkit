@@ -67,7 +67,6 @@ class StructureEditTools:
         no_render_2d: bool,
         queue_title_prefix: str = "",
     ) -> None:
-        allowed = self._app._selected_oids_set() if only_selected else None
         self._app._disconnect_source = src
         self._app._disconnect_update_target = update_target
         self._app._disconnect_largest_col = src if update_target else largest_col
@@ -75,15 +74,11 @@ class StructureEditTools:
         self._app._disconnect_no_render_2d = no_render_2d
         if src == "Structure":
             data = []
-            oids_walk = self._app._all_oids_in_table_order()
-            if allowed is not None:
-                oids_walk = [o for o in oids_walk if o in allowed]
-            for oid in oids_walk:
-                mol = self._app.mols.get(oid)
-                if mol is None:
-                    continue
+            for oid, payload in self._app.collect_scoped_structure_payloads(
+                src, only_selected=only_selected
+            ):
                 raw = self._disconnect_source_text_for_oid(oid, src)
-                data.append((oid, mol, raw))
+                data.append((oid, payload, raw))
             if not data:
                 QMessageBox.information(
                     self._app,
@@ -103,16 +98,7 @@ class StructureEditTools:
                 ),
             )
         else:
-            col = self._app.headers.index(src)
-            data = []
-            oids_walk = self._app._all_oids_in_table_order()
-            if allowed is not None:
-                oids_walk = [o for o in oids_walk if o in allowed]
-            for oid in oids_walk:
-                r = self._app.logical_row_for_oid(oid)
-                if r == -1:
-                    continue
-                data.append((oid, self._app._table_cell_text(r, col)))
+            data = self._app.collect_scoped_structure_payloads(src, only_selected=only_selected)
             if not data:
                 QMessageBox.information(
                     self._app,
@@ -170,15 +156,7 @@ class StructureEditTools:
 
         self._app._add_explicit_hydrogens_source = src
         self._app._add_explicit_hydrogens_no_render_2d = no_render_2d
-        allowed = self._app._selected_oids_set() if only_selected else None
-        data: list[tuple[int, object]] = []
-        oids_walk = self._app._all_oids_in_table_order()
-        if allowed is not None:
-            oids_walk = [o for o in oids_walk if o in allowed]
-        for oid in oids_walk:
-            mol = self._mol_for_structure_tool_oid(oid, src)
-            if mol is not None:
-                data.append((oid, mol))
+        data = self._app.collect_scoped_structure_payloads(src, only_selected=only_selected)
         if not data:
             QMessageBox.information(
                 self._app,
@@ -237,15 +215,7 @@ class StructureEditTools:
 
         self._app._remove_explicit_hydrogens_source = src
         self._app._remove_explicit_hydrogens_no_render_2d = no_render_2d
-        allowed = self._app._selected_oids_set() if only_selected else None
-        data: list[tuple[int, object]] = []
-        oids_walk = self._app._all_oids_in_table_order()
-        if allowed is not None:
-            oids_walk = [o for o in oids_walk if o in allowed]
-        for oid in oids_walk:
-            mol = self._mol_for_structure_tool_oid(oid, src)
-            if mol is not None:
-                data.append((oid, mol))
+        data = self._app.collect_scoped_structure_payloads(src, only_selected=only_selected)
         if not data:
             QMessageBox.information(
                 self._app,
@@ -303,15 +273,7 @@ class StructureEditTools:
         self._app._neutralize_source = src
         self._app._neutralize_no_render_2d = no_render_2d
         if rows is None:
-            allowed = self._app._selected_oids_set() if only_selected else None
-            data: list[tuple[int, object]] = []
-            oids_walk = self._app._all_oids_in_table_order()
-            if allowed is not None:
-                oids_walk = [o for o in oids_walk if o in allowed]
-            for oid in oids_walk:
-                mol = self._mol_for_structure_tool_oid(oid, src)
-                if mol is not None:
-                    data.append((oid, mol))
+            data = self._app.collect_scoped_structure_payloads(src, only_selected=only_selected)
         else:
             data = list(rows)
         if not data:

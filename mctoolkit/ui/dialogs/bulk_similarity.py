@@ -121,7 +121,7 @@ class BulkSimilarityDialog(QDialog):
             QMessageBox.information(self, "Bulk Similarity", "Select rows in the table first.")
             return []
         src = self.src_combo.currentText()
-        rows = app.collect_scoped_table_mols(src, only_selected=True)
+        rows = app.collect_scoped_structure_payloads(src, only_selected=True)
         out = [(oid, mol) for oid, mol in rows if mol is not None]
         if len(out) < 2:
             QMessageBox.information(

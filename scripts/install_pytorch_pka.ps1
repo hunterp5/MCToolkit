@@ -104,4 +104,10 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-Write-Host "`nDone. First pKa run downloads Uni-pKa weights (unipka-download-model). Run mctoolkit with this same Python."
+Write-Host "`nPrefetching Uni-pKa fold weights (~550 MB; skipped if already present)..."
+python scripts/bootstrap_unipka_model.py
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+Write-Host "`nDone. Uni-pKa weights are on disk. Run mctoolkit with this same Python."

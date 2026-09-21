@@ -29,6 +29,7 @@ from ..conformers.openbabel_confab import (
     ensure_openbabel_confab_ready,
     run_systematic_conformer_generation,
 )
+from ..chem.molecule_conversion import mol_from_job_payload
 from .chemistry_worker_common import emit_tool_progress_throttled
 from .process_pool_utils import should_terminate_process_pool
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
@@ -78,10 +79,11 @@ class SystematicConformerWorker(QRunnable):
             )
         except Exception:
             pass
-        for i, (oid, mol) in enumerate(self.data):
+        for i, (oid, payload) in enumerate(self.data):
             if should_terminate_process_pool(self.cancel_event):
                 cancelled = True
                 break
+            mol = mol_from_job_payload(payload)
             results.append(_row_result(int(oid), mol, self.params, self.cancel_event))
             if should_terminate_process_pool(self.cancel_event):
                 cancelled = True

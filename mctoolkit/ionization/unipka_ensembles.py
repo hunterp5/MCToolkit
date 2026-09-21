@@ -314,10 +314,11 @@ def cpu_torch_with_nvidia_gpu() -> bool:
 
 
 def cuda_pka_install_hint() -> str:
-    """User-facing steps to swap the CPU PyTorch wheel for CUDA Uni-pKa."""
+    """User-facing steps to swap the CPU PyTorch wheel for CUDA Uni-pKa / Chemprop."""
     return (
         "An NVIDIA GPU was found, but this Python has a CPU-only PyTorch, "
-        "so Uni-pKa (Predict pKa, Protonate, LogD) runs on the CPU.\n\n"
+        "so Uni-pKa (Predict pKa, Protonate, LogD) and Predict Permeability "
+        "run on the CPU.\n\n"
         "Close mctoolkit and, in the same virtual environment, run:\n"
         "  Windows:      .\\scripts\\install_pytorch_pka.ps1\n"
         "  macOS/Linux:  bash scripts/install_pytorch_pka.sh\n\n"

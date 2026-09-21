@@ -498,8 +498,11 @@ def test_build_protein_viewer_html_has_setters():
     assert "mctoolkitLoadVolume" in html
     assert "mctoolkitExportMolj" in html
     assert "mctoolkitLoadMolj" in html
+    assert "mctoolkitApplyTheme" in html
     assert "qwebchannel.js" in html
     assert 'id="app"' in html
+    assert 'id="mctoolkit-theme"' in html
+    assert "msp-plugin" in html
 
 
 def test_build_protein_viewer_html_legacy_3dmol_setters_removed():
@@ -509,6 +512,15 @@ def test_build_protein_viewer_html_legacy_3dmol_setters_removed():
     assert "mctoolkitSetHbonds" not in html
     assert "mctoolkitSetPocket" not in html
     assert "applyPharmacophore" not in html
+
+
+def test_protein_embed_apply_theme_queues_before_ready(qapp):  # noqa: ARG001
+    from mctoolkit.ui.protein_embed import ProteinEmbedView
+
+    view = ProteinEmbedView()
+    view.apply_theme({"css": ".x{}", "background": "#123456"})
+    assert any(name == "mctoolkitApplyTheme" for name, _payload in view._pending)
+    view.deleteLater()
 
 
 def test_protein_viewer_has_prepare_log(qapp):  # noqa: ARG001

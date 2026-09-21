@@ -362,6 +362,14 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
                     "(optional Chemprop install)."
                 ),
             ),
+            action(
+                "ADME…",
+                "open_adme_predictor",
+                tooltip=(
+                    "Predict selected ADME endpoints from local Chemprop weights "
+                    "(optional Chemprop install)."
+                ),
+            ),
             submenu(
                 "SOM",
                 action(

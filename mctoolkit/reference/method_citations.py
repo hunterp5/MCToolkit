@@ -157,14 +157,6 @@ def descriptor_checkbox_citation_html(internal_key: str) -> str | None:
         "FP_Pharm2D_Gobbi": (
             "RDKit Pharm2D; Gobbi &amp; Poppinger, <i>Perspect. Drug Discov. Des.</i> 1998"
         ),
-        "COMMON_NAME": (
-            '<a href="https://doi.org/10.1093/nar/gkac956">Kim et al., Nucleic Acids Res. 2023</a> '
-            "(PubChem preferred name / Title)"
-        ),
-        "SYNONYMS": (
-            '<a href="https://doi.org/10.1093/nar/gkac956">Kim et al., Nucleic Acids Res. 2023</a> '
-            "(PubChem compound synonyms)"
-        ),
         "PMI1": shape_html,
         "PMI2": shape_html,
         "PMI3": shape_html,
@@ -209,9 +201,6 @@ def descriptor_dialog_footer_html() -> str:
         '<a href="https://doi.org/10.1038/nchem.1243">Bickerton et al., Nat. Chem. 2012</a> (RDKit QED).<br>'
         "<b>Ro5:</b> Lipinski et al., Adv. Drug Deliv. Rev. 1997 (RDKit Lipinski counts).<br>"
         "<b>2D pharmacophore (Gobbi) on-bits:</b> RDKit Pharm2D / Gobbi–Poppinger definitions.<br>"
-        "<b>Common Name / Synonyms:</b> "
-        '<a href="https://doi.org/10.1093/nar/gkac956">PubChem</a> preferred name (Title) and '
-        "compound synonyms via PubChemPy (network lookup; N/A if not in PubChem).<br>"
         "<b>3D shape (PMI, NPR, asphericity, …):</b> "
         '<a href="https://doi.org/10.1021/ci025599w">Sauer &amp; Schwarz, J. Chem. Inf. Comput. Sci. 2003</a> '
         "(RDKit Descriptors3D; lowest-energy packed conformer in <code>confs</code>).<br>"
@@ -229,8 +218,10 @@ def pka_dialog_footer_html() -> str:
         '(<a href="https://github.com/dptech-corp/Uni-pKa">Uni-pKa</a> / '
         '<a href="https://pypi.org/project/unipkainfer/">unipkainfer</a>); ionization ensembles via '
         '<a href="https://doi.org/10.1021/acs.jcim.1c00075">MolGpKa SMARTS</a> (Pan et al., 2021). '
-        "Macro pKa = (G_base − G_acid) / ln(10) for β-scaled G. First run downloads fold weights "
-        "from Hugging Face (<code>unipka-download-model</code> / optional <code>model_dir</code>). "
+        "Macro pKa = (G_base − G_acid) / ln(10) for β-scaled G. Fold weights are "
+        "prefetched by <code>scripts/install_pytorch_pka.*</code> / "
+        "<code>python scripts/bootstrap_unipka_model.py</code> "
+        "(Hugging Face <code>unipka-download-model</code> if missing). "
         "Re-running after the pkasolver era is a new method, not a refresh.</small>"
     )
 
@@ -275,6 +266,19 @@ def permeability_dialog_footer_html() -> str:
         'weights <a href="https://doi.org/10.5281/zenodo.16948542">Zenodo 10.5281/zenodo.16948542</a>. '
         "<b>Outputs</b>: linear Caco-2 ER and intrinsic Papp (Papp in ×10⁻⁶ cm/s); MDCK-MDR1 and NIH MDCK "
         "<b>efflux ratios</b> (not passive MDCK Papp). Assay conditions match AstraZeneca training data.</small>"
+    )
+
+
+def adme_dialog_footer_html() -> str:
+    """Rich text for the Predict ADME dialog."""
+    return (
+        "<small><b>Method</b>: Chemprop multitask models trained on Therapeutics Data Commons ADMET "
+        "sets (ADMET-AI v2 weights) — "
+        '<a href="https://doi.org/10.1093/bioinformatics/btae416">Swanson et al., Bioinformatics 2024</a>; '
+        'checkpoints <a href="https://doi.org/10.5281/zenodo.18728250">Zenodo 10.5281/zenodo.18728250</a>. '
+        "Local v2 numbers will not match the public ADMET-AI website (v1). "
+        "These are QSAR scores, not measured assays. Use <b>Predict Permeability</b> for GNN-MTL "
+        "Caco-2/MDCK efflux; Uni-pKa remains the pKa / LogD engine.</small>"
     )
 
 

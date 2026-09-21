@@ -34,11 +34,40 @@ if TYPE_CHECKING:
 __all__ = [
     "iter_scoped_table_analysis_rows",
     "numeric_subset",
+    "scoped_oid_column_snapshot",
     "scoped_table_analysis_row_indices",
     "scoped_table_column_names",
     "selected_table_column_headers",
     "table_to_dataframe",
 ]
+
+
+def scoped_oid_column_snapshot(
+    app: ChemistryWorkspaceWindow,
+    headers: list[str],
+    *,
+    allowed_oids: set[int] | frozenset[int] | None = None,
+) -> tuple[list[int], dict[str, list[str]]]:
+    """Table-order OIDs and bulk cell text for *headers* (no per-cell Qt lookups)."""
+    m = app._table_model
+    oids: list[int] = []
+    rows: list[int] = []
+    names = list(headers)
+    for r in range(m.rowCount()):
+        oid = int(m.row_oid(r))
+        if allowed_oids is not None and oid not in allowed_oids:
+            continue
+        oids.append(oid)
+        rows.append(r)
+    bulk = getattr(m, "analysis_column_texts", None)
+    if callable(bulk):
+        return oids, bulk(names, rows)
+    texts: dict[str, list[str]] = {h: [] for h in names}
+    backing = getattr(m, "backing_value_for_row_header", None)
+    for r in rows:
+        for h in names:
+            texts[h].append(backing(r, h) or "" if callable(backing) else "")
+    return oids, texts
 
 
 def scoped_table_analysis_row_indices(

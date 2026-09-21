@@ -45,6 +45,15 @@ def test_evaluate_custom_calc_rows_computes_column_math():
     assert results == [(1, "24.000"), (2, "6.000")]
 
 
+def test_evaluate_custom_calc_rows_accepts_column_snapshot():
+    results, cancelled = evaluate_custom_calc_rows(
+        ([1, 2], {"MW": ["12.0", "3"]}),
+        "[MW] * 2",
+    )
+    assert cancelled is False
+    assert results == [(1, "24.000"), (2, "6.000")]
+
+
 def test_evaluate_custom_calc_rows_honors_cancel_event():
     cancel = threading.Event()
     cancel.set()

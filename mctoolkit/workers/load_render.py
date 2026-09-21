@@ -63,6 +63,7 @@ from ..chem.structure_neutralize import neutralize_mol
 from ..chem.structure_hydrogens import add_explicit_hydrogens, remove_explicit_hydrogens
 from ..chem.reaction_file_io import RXN_TABLE_HEADERS, load_rxn_file
 from ..chem.molecule_conversion import (
+    mol_from_job_payload,
     parse_molecule_from_cell_text,
     row_cells_from_mol,
     safe_mol_prop_string,
@@ -591,10 +592,10 @@ class DisconnectFragmentsWorker(QRunnable):
                 source_text = str(row[1] or "").strip()
                 mol = parse_molecule_from_cell_text(source_text) if source_text else None
             elif len(row) >= 3:
-                mol = row[1]
+                mol = mol_from_job_payload(row[1])
                 source_text = (str(row[2]).strip() if row[2] else None) or None
             else:
-                mol = row[1]
+                mol = mol_from_job_payload(row[1] if len(row) > 1 else None)
             if mol is None and source_text:
                 mol = parse_molecule_from_cell_text(source_text)
             if mol is None:
@@ -663,11 +664,7 @@ class NeutralizeWorker(QRunnable):
                 break
             done_count = done
             oid = row[0]
-            if self.is_smiles:
-                raw = str(row[1] or "").strip()
-                mol = parse_molecule_from_cell_text(raw) if raw else None
-            else:
-                mol = row[1]
+            mol = mol_from_job_payload(row[1] if len(row) > 1 else None)
             if mol is None:
                 _emit_structure_tool_progress(
                     message="Neutralize…",
@@ -723,11 +720,7 @@ class AddExplicitHydrogensWorker(QRunnable):
                 break
             done_count = done
             oid = row[0]
-            if self.is_smiles:
-                raw = str(row[1] or "").strip()
-                mol = parse_molecule_from_cell_text(raw) if raw else None
-            else:
-                mol = row[1]
+            mol = mol_from_job_payload(row[1] if len(row) > 1 else None)
             if mol is None:
                 _emit_structure_tool_progress(
                     message="Add explicit hydrogens…",
@@ -785,11 +778,7 @@ class RemoveExplicitHydrogensWorker(QRunnable):
                 break
             done_count = done
             oid = row[0]
-            if self.is_smiles:
-                raw = str(row[1] or "").strip()
-                mol = parse_molecule_from_cell_text(raw) if raw else None
-            else:
-                mol = row[1]
+            mol = mol_from_job_payload(row[1] if len(row) > 1 else None)
             if mol is None:
                 _emit_structure_tool_progress(
                     message="Remove explicit hydrogens…",

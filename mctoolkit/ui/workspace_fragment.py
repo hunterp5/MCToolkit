@@ -72,7 +72,7 @@ class FragmentTools:
         if self._app._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_CORE_DECOMP):
             return
         src = p.structure_source
-        data = self._app.collect_scoped_table_mols(src, only_selected=only_selected)
+        data = self._app.collect_scoped_structure_payloads(src, only_selected=only_selected)
         if not data:
             QMessageBox.information(
                 self._app,
@@ -145,7 +145,9 @@ class FragmentTools:
             only_selected, self._app._selected_oids_set(), p.tool_title
         ):
             return
-        data = self._app.collect_scoped_table_mols(p.structure_source, only_selected=only_selected)
+        data = self._app.collect_scoped_structure_payloads(
+            p.structure_source, only_selected=only_selected
+        )
         if not data:
             QMessageBox.information(
                 self._app,

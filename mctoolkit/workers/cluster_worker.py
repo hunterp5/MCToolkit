@@ -30,6 +30,7 @@ from rdkit.ML.Cluster import Butina
 from rdkit.SimDivFilters.rdSimDivPickers import LeaderPicker
 
 from .fingerprint_similarity import fingerprint_bitvect_for_ui_choice
+from ..chem.molecule_conversion import mol_from_job_payload
 from ..chem.rdkit_fingerprints import fingerprint_bitvect_for_row
 from .signals import emit_partial_results_if_cancelled
 
@@ -517,7 +518,7 @@ class ClusterWorker(QRunnable):
         cancelled = False
         throttle = [0, 0.0]
 
-        for i, (oid, mol) in enumerate(self.rows, start=1):
+        for i, (oid, payload) in enumerate(self.rows, start=1):
             if cancel_ev is not None and cancel_ev.is_set():
                 cancelled = True
                 break
@@ -529,6 +530,9 @@ class ClusterWorker(QRunnable):
                 signals=self.signals,
                 throttle=throttle,
             )
+            mol = mol_from_job_payload(payload)
+            if mol is None:
+                continue
             try:
                 fp = fingerprint_bitvect_for_row(int(oid), mol, self.fp_choice)
                 if fp is None:
@@ -631,7 +635,7 @@ class ClusterExploreWorker(QRunnable):
         tot = max(len(self.rows), 1)
         fp_throttle = [0, 0.0]
 
-        for i, (oid, mol) in enumerate(self.rows, start=1):
+        for i, (oid, payload) in enumerate(self.rows, start=1):
             if cancel_ev is not None and cancel_ev.is_set():
                 self.signals.cluster_failed.emit("Cancelled.")
                 return
@@ -643,6 +647,9 @@ class ClusterExploreWorker(QRunnable):
                 signals=self.signals,
                 throttle=fp_throttle,
             )
+            mol = mol_from_job_payload(payload)
+            if mol is None:
+                continue
             try:
                 fp = fingerprint_bitvect_for_row(int(oid), mol, self.fp_choice)
                 if fp is None:

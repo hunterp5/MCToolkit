@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .protein_molstar_theme import molstar_theme_css, molstar_theme_tokens
+
 MOLSTAR_VERSION = "5.11.0"
 MOLSTAR_CDN_JS = f"https://cdn.jsdelivr.net/npm/molstar@{MOLSTAR_VERSION}/build/viewer/molstar.js"
 MOLSTAR_CDN_CSS = (
@@ -51,17 +53,18 @@ def _bridge_script() -> str:
     return "  <script>\n" + js.rstrip("\n") + "\n  </script>\n"
 
 
-def assemble_molstar_page(*, script_src: str, css_href: str) -> str:
+def assemble_molstar_page(*, script_src: str, css_href: str, theme_css: str | None = None) -> str:
     """Return the Mol* Viewer HTML shell (local files or CDN)."""
     extra = '  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>\n'
+    css = theme_css if theme_css is not None else molstar_theme_css()
+    bg = molstar_theme_tokens().get("window", "#f0f0f0")
     return (
         "<!DOCTYPE html>\n<html><head>"
         '<meta charset="utf-8"/>'
         '<meta name="viewport" content="width=device-width, initial-scale=1"/>'
         f'<link rel="stylesheet" type="text/css" href="{css_href}"/>'
-        "<style>"
-        "html,body,#app{width:100%;height:100%;margin:0;overflow:hidden;background:#fff;}"
-        "msp-plugin{width:100%;height:100%;display:block;}"
+        f'<style id="mctoolkit-theme" data-background="{bg}">'
+        f"{css}"
         "</style>"
         f"{extra}"
         f'<script src="{script_src}"></script>'

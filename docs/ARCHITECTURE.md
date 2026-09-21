@@ -276,6 +276,12 @@ folders — group files only when that feature is already extracted. Sketcher RD
 
 **SQLite mirror rebuild:** GUI only chunk-exports cell text into memory; `SqliteRebuildWorker` streams inserts + oid index off the GUI (`Indexing table…` progress). Sync `_rebuild_sqlite_store_from_model` remains for tiny/test paths.
 
+**Session save:** the GUI snapshots cell text (`analysis_column_texts`) and MolStore blobs (`iter_structure_payloads`) without hydrating RDKit mols. `SessionSaveWorker` fills missing SMILES/pickles, compacts, and gzip-writes `.mct`. `_build_session_document` stays synchronous for tests.
+
+**Chemistry job payloads:** tools collect store blobs or SMILES on the GUI; workers hydrate with `mol_from_job_payload` / `hydrate_structure_rows`.
+
+**Statistics / MPO / Calculator:** large Statistics auto-reloads build pandas off the GUI (`TableDataFrameWorker`). MPO scores from a bulk column snapshot (`MpoScoreWorker`). Calculator snapshots column text with `analysis_column_texts` and evaluates in `CustomCalcWorker`.
+
 **Tool writeback:** `on_calc_finished` inserts columns immediately, then for large result sets chunks `apply_columns_values_bulk` / `set_column_text_by_oids` with `Writing results…` status; coloring and bounds run after the last chunk (`on_complete` for Protonate/fragment/SOM follow-ups). Fingerprint similarity uses the same chunked fill for large tables.
 
 Leaf tools (fragments, dock, predict, descriptors, conformers, SQL load, viewers, table calc, reactions, external records) live on `WorkspaceTools`. MMP / SALI / activity cliffs / pair network and structure-prep already did. Ingest/render/sqlite/export live on `TableBuildPipeline`; column writeback on `TableWriteService`; filters on `FilterPanel`.
@@ -299,7 +305,7 @@ Leaf tools (fragments, dock, predict, descriptors, conformers, SQL load, viewers
 | Mechanism | Used for |
 |-----------|----------|
 | `ProcessQueueManager` | Serial heavy tools (descriptors, cluster, export, …) |
-| `threadpool` | Substructure filter, dimred, MedChem space, SQLite export chunks |
+| `threadpool` | Substructure filter, dimred, MedChem space, SQLite export chunks, session save, Statistics DataFrame, MPO |
 | `_render_threadpool` | 2D structure rendering |
 | `_background_jobs` + `BackgroundActivityHub` | **Processes** dialog rows for non-queue work |
 
@@ -356,6 +362,9 @@ Heavy chemistry jobs are split by concern (compat re-exports remain in `workers/
 | `workers/superpose_rmsd.py` | Per-conformer RMSD |
 | `workers/strain_energy.py` | Strain energy + overlay helpers |
 | `workers/chemistry_calc.py` | Custom calculator (AST `calculator_expressions`) |
+| `workers/session_save.py` | Encode/gzip/write `.mct` from a GUI blob/SMILES snapshot |
+| `workers/table_dataframe.py` | pandas + numeric subset from bulk column text |
+| `workers/mpo_scoring.py` | MPO desirability scoring from bulk column text |
 | `workers/reaction_enumeration.py` | Two-reactant `RunReactants` job; request lives in `chem/reaction_enumeration.py` |
 | `workers/chemistry_worker_common.py` | Shared progress throttling and force-field names |
 | `workers/protomer_generator.py` | Uni-pKa protomer ensemble listing |

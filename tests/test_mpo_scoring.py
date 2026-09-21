@@ -30,6 +30,7 @@ from mctoolkit.analysis.mpo_scoring import (
     gaussian_desirability,
     linear_desirability,
     score_mpo_row,
+    score_mpo_table,
     step_desirability,
 )
 
@@ -127,3 +128,15 @@ def test_mpo_dialog_constructs_without_parent(qapp) -> None:  # noqa: ARG001
     assert dlg.out_edit.text() == "MPO_Score"
     assert dlg.add_btn.isEnabled() is False
     dlg.close()
+
+
+def test_score_mpo_table_from_column_texts():
+    specs = [DesirabilitySpec(column="MW", kind="linear", direction="maximize", low=0.0, high=10.0)]
+    rows = score_mpo_table(
+        [1, 2],
+        {"MW": ["0", "10"]},
+        specs,
+        output_column="MPO_Score",
+    )
+    assert rows[0] == (1, {"MPO_Score": format_score(0.0)})
+    assert rows[1] == (2, {"MPO_Score": format_score(1.0)})

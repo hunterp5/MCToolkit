@@ -413,7 +413,7 @@ class QSARDialog(QDialog):
     def _collect_mols(self) -> list:
         app = self.parent_app
         assert app is not None
-        return app.collect_scoped_table_mols(
+        return app.collect_scoped_structure_payloads(
             self.struct_src_combo.currentText(),
             only_selected=selection_scope_checked(self),
             only_visible=self.chk_visible.isChecked(),

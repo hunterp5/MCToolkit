@@ -36,7 +36,7 @@ from ..chem.rdkit_fingerprints import (
     fingerprint_is_gil_heavy,
 )
 from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
-from ..chem.molecule_conversion import mol_to_canonical_smiles
+from ..chem.molecule_conversion import mol_from_job_payload, mol_to_canonical_smiles
 from .process_pool_utils import (
     register_process_pool,
     should_terminate_process_pool,
@@ -140,6 +140,14 @@ class FPSimilarityWorker(QRunnable):
                 return
             self._report(1, total_steps, force=True)
 
+            hydrated: list[tuple[int, Chem.Mol]] = []
+            for oid, payload in self.targets:
+                mol = mol_from_job_payload(payload)
+                if mol is not None:
+                    hydrated.append((int(oid), mol))
+            n = len(hydrated)
+            total_steps = max(1, n + 1)
+
             if n <= 0:
                 self.signals.finished.emit([])
                 return
@@ -152,7 +160,7 @@ class FPSimilarityWorker(QRunnable):
                 qfp_bytes = pickle.dumps(qfp)
                 mp_tasks = [
                     (oid, mol.ToBinary(), self.fp_choice, metric, qfp_bytes)
-                    for oid, mol in self.targets
+                    for oid, mol in hydrated
                 ]
                 proc_workers = min(max(2, (os.cpu_count() or 4) - 1), 8)
                 done_count = 1
@@ -194,7 +202,7 @@ class FPSimilarityWorker(QRunnable):
                     )
             elif n < 64:
                 done_count = 1
-                for oid, mol in self.targets:
+                for oid, mol in hydrated:
                     if cancel_ev is not None and cancel_ev.is_set():
                         break
                     raw.append(_fp_similarity_one(oid, mol, qfp, self.fp_choice, metric))
@@ -202,7 +210,7 @@ class FPSimilarityWorker(QRunnable):
                     self._report(min(done_count, total_steps), total_steps)
             else:
                 max_workers = min(8, max(1, (os.cpu_count() or 4)))
-                tasks = [(oid, mol, qfp, self.fp_choice, metric) for oid, mol in self.targets]
+                tasks = [(oid, mol, qfp, self.fp_choice, metric) for oid, mol in hydrated]
                 done_count = 1
                 with ThreadPoolExecutor(max_workers=max_workers) as ex:
                     pending = {ex.submit(_fp_similarity_one, *t) for t in tasks}

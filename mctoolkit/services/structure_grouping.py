@@ -22,7 +22,7 @@ from collections import defaultdict
 
 from rdkit import Chem
 
-from ..chem.molecule_conversion import mol_to_canonical_smiles
+from ..chem.molecule_conversion import mol_from_job_payload, mol_to_canonical_smiles
 
 
 def structure_key(mol: Chem.Mol) -> str:
@@ -50,7 +50,8 @@ def group_rows_by_structure(
     order: list[str] = []
     rep: dict[str, Chem.Mol] = {}
     oids: dict[str, list[int | None]] = defaultdict(list)
-    for oid, mol in rows:
+    for oid, payload in rows:
+        mol = mol_from_job_payload(payload)
         if mol is None:
             continue
         k = structure_key(mol)

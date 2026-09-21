@@ -255,3 +255,34 @@ def format_score(value: float | None, *, decimals: int = 4) -> str:
         return ""
     dec = max(0, min(12, int(decimals)))
     return f"{float(value):.{dec}f}"
+
+
+def score_mpo_table(
+    oids: list[int],
+    column_texts: dict[str, list[str]],
+    specs: list[DesirabilitySpec],
+    *,
+    method: CombineMethod = "arithmetic",
+    output_column: str,
+    write_individual: bool = False,
+    decimals: int = 4,
+) -> list[tuple[int, dict[str, str]]]:
+    """Score each row from bulk column text (no Qt)."""
+    from ..chem.molecule_conversion import safe_float
+
+    rows: list[tuple[int, dict[str, str]]] = []
+    for i, oid in enumerate(oids):
+        values: dict[str, float | None] = {}
+        for spec in specs:
+            series = column_texts.get(spec.column) or []
+            raw = series[i] if i < len(series) else ""
+            values[spec.column] = safe_float(raw)
+        overall, per = score_mpo_row(values, specs, method=method)
+        cell: dict[str, str] = {
+            output_column: format_score(overall, decimals=decimals),
+        }
+        if write_individual:
+            for spec in specs:
+                cell[f"MPO_d_{spec.column}"] = format_score(per.get(spec.column), decimals=decimals)
+        rows.append((int(oid), cell))
+    return rows

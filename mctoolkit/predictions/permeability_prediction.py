@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 import threading
 import warnings
 from pathlib import Path
@@ -32,6 +33,7 @@ from collections.abc import Callable
 from typing import Sequence
 
 from ..platform_support.bundled_paths import gnn_mtl_model_path
+from ..platform_support.env import env_get
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,8 @@ def _format_papp(val: float) -> str:
 
 _model_lock = threading.Lock()
 _model_singleton = None
+_PERMEABILITY_DEVICE_LOGGED = False
+_WORKER_THREADS_PINNED = False
 
 ZENODO_MODEL_URL = "https://zenodo.org/api/records/16948542/files/model.pt/content"
 ZENODO_DOI = "10.5281/zenodo.16948542"
@@ -124,6 +128,101 @@ def _quiet_lightning_predict():
                 lg.setLevel(prev)
 
 
+def permeability_gpu_forced_off() -> bool:
+    """True when ``MCTOOLKIT_PERMEABILITY_GPU`` forces CPU (does not initialize CUDA)."""
+    raw = (env_get("MCTOOLKIT_PERMEABILITY_GPU") or "").strip().lower()
+    return raw in {"0", "false", "no", "off", "cpu"}
+
+
+def permeability_needs_cuda_isolation() -> bool:
+    """True when Chemprop must run in a child process (CUDA PyTorch wheel).
+
+    Importing a CUDA torch in the GUI process hangs Windows spawn and breaks
+    WebEngine GL. Detection does not import torch or initialize CUDA.
+    """
+    from ..ionization.unipka_ensembles import torch_is_cuda_build
+
+    return torch_is_cuda_build()
+
+
+def permeability_use_gpu() -> bool:
+    """Whether GNN-MTL inference should run on CUDA.
+
+    Initializes the CUDA runtime. Call only from a worker process, never from
+    the GUI process when a CUDA wheel is installed.
+    """
+    if permeability_gpu_forced_off():
+        return False
+    raw = (env_get("MCTOOLKIT_PERMEABILITY_GPU") or "").strip().lower()
+    try:
+        import torch
+
+        cuda = bool(torch.cuda.is_available())
+    except (ImportError, OSError, RuntimeError):
+        cuda = False
+    if raw in {"1", "true", "yes", "on", "cuda", "gpu"} and not cuda:
+        logger.warning(
+            "MCTOOLKIT_PERMEABILITY_GPU requested CUDA but this PyTorch build has no GPU; using CPU"
+        )
+        return False
+    return cuda
+
+
+def permeability_lightning_accelerator() -> str:
+    """Lightning ``accelerator`` for the current process (``gpu`` or ``cpu``)."""
+    return "gpu" if permeability_use_gpu() else "cpu"
+
+
+def _log_permeability_compute_device(use_gpu: bool) -> None:
+    """Log CUDA device once per process."""
+    global _PERMEABILITY_DEVICE_LOGGED
+    if _PERMEABILITY_DEVICE_LOGGED:
+        return
+    _PERMEABILITY_DEVICE_LOGGED = True
+    if use_gpu:
+        try:
+            import torch
+
+            name = torch.cuda.get_device_name(0)
+        except (ImportError, OSError, RuntimeError):
+            name = "CUDA"
+        logger.info("GNN-MTL permeability on GPU (%s)", name)
+        return
+    logger.debug("GNN-MTL permeability on CPU")
+    from ..ionization.unipka_ensembles import warn_if_cuda_torch_missing
+
+    warn_if_cuda_torch_missing()
+
+
+def pin_permeability_torch_threads() -> None:
+    """Pin intra-op threads inside the Chemprop child (avoid oversubscribe)."""
+    global _WORKER_THREADS_PINNED
+    if _WORKER_THREADS_PINNED:
+        return
+    _WORKER_THREADS_PINNED = True
+    for var in (
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    ):
+        os.environ.setdefault(var, "1")
+    try:
+        import torch
+
+        torch.set_num_threads(1)
+    except (ImportError, OSError, RuntimeError):
+        logger.debug("could not pin torch thread count for GNN-MTL", exc_info=True)
+
+
+def mp_predict_permeability_chunk(
+    smiles: list[str], batch_size: int
+) -> list[dict[str, float] | None]:
+    """Process-pool entry: Qt-free so the CUDA child does not import PySide6."""
+    pin_permeability_torch_threads()
+    return predict_permeability_batch(smiles, batch_size=batch_size)
+
+
 def permeability_model_file() -> Path:
     """Path to ``model.pt`` (may be missing until bootstrap download)."""
     return gnn_mtl_model_path()
@@ -143,7 +242,11 @@ _WINDOWS_TORCH_DLL_HELP = (
 
 
 def permeability_stack_import_error() -> str | None:
-    """Return an error message when Chemprop / PyTorch cannot be imported."""
+    """Return an error message when Chemprop / PyTorch cannot be imported.
+
+    Imports torch. Do not call this from the GUI process when a CUDA wheel is
+    installed (see :func:`permeability_needs_cuda_isolation`).
+    """
     try:
         # Import torch first; on Windows, loading only from a QThread can fail (WinError 1114).
         import torch  # noqa: F401
@@ -233,6 +336,11 @@ def predict_permeability_batch(
         return []
 
     mpnn = _load_gnn_mtl_model()
+    accelerator = permeability_lightning_accelerator()
+    use_gpu = accelerator == "gpu"
+    _log_permeability_compute_device(use_gpu)
+    if use_gpu:
+        mpnn = mpnn.to("cuda")
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
     out: list[dict[str, float] | None] = [None] * len(smiles_list)
     valid_idx: list[int] = []
@@ -261,7 +369,7 @@ def predict_permeability_batch(
             enable_progress_bar=False,
             enable_model_summary=False,
             barebones=True,
-            accelerator="cpu",
+            accelerator=accelerator,
             devices=1,
         )
         n_dp = len(datapoints)

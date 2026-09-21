@@ -336,6 +336,7 @@ def test_cuda_pka_install_hint_points_at_auto_script() -> None:
     text = cuda_pka_install_hint()
     assert "install_pytorch_pka.ps1" in text
     assert "install_pytorch_pka.sh" in text
+    assert "Predict Permeability" in text
     assert "-Cuda" not in text
 
 

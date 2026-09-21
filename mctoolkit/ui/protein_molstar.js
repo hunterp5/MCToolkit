@@ -378,6 +378,53 @@
     } catch (err) {}
   }
 
+  function hexToColor(hex) {
+    var h = String(hex || "").replace("#", "");
+    if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+    var n = parseInt(h, 16);
+    return isNaN(n) ? 0xffffff : n;
+  }
+
+  function themeStyleEl() {
+    var el = document.getElementById("mctoolkit-theme");
+    if (el) return el;
+    el = document.createElement("style");
+    el.id = "mctoolkit-theme";
+    document.head.appendChild(el);
+    return el;
+  }
+
+  function applyTheme(spec) {
+    spec = spec || {};
+    var el = themeStyleEl();
+    if (spec.css) el.textContent = spec.css;
+    if (spec.background) el.setAttribute("data-background", spec.background);
+    var bg = el.getAttribute("data-background");
+    whenReady(function () {
+      return setCanvasBackground(bg);
+    });
+  }
+
+  async function setCanvasBackground(hex) {
+    if (!plugin || !hex) return;
+    var color = hexToColor(hex);
+    try {
+      if (plugin.canvas3d && typeof plugin.canvas3d.setProps === "function") {
+        plugin.canvas3d.setProps({ renderer: { backgroundColor: color } });
+        return;
+      }
+    } catch (err) {}
+    try {
+      var cmds = window.molstar && window.molstar.PluginCommands;
+      if (cmds && cmds.Canvas3D && cmds.Canvas3D.SetSettings && plugin.canvas3d) {
+        var renderer = plugin.canvas3d.props.renderer;
+        await cmds.Canvas3D.SetSettings(plugin, {
+          settings: { renderer: Object.assign({}, renderer, { backgroundColor: color }) },
+        });
+      }
+    } catch (err) {}
+  }
+
   function bindChannel() {
     if (typeof qt === "undefined" || !qt.webChannelTransport) return;
     new QWebChannel(qt.webChannelTransport, function (channel) {
@@ -416,6 +463,9 @@
   window.mctoolkitResetCamera = function () {
     whenReady(function () { resetCamera(); });
   };
+  window.mctoolkitApplyTheme = function (spec) {
+    applyTheme(spec);
+  };
   window.mctoolkitResizeKeepView = function () {
     resizeViewer();
   };
@@ -449,6 +499,10 @@
     window.mctoolkitMolstarViewer = viewer;
     bindPicks();
     bindChannel();
+    var themeEl = document.getElementById("mctoolkit-theme");
+    if (themeEl && themeEl.getAttribute("data-background")) {
+      await setCanvasBackground(themeEl.getAttribute("data-background"));
+    }
     ready = true;
     window.mctoolkitMolstarReady = true;
     for (var i = 0; i < queue.length; i++) {

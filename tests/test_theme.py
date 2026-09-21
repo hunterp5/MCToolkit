@@ -391,3 +391,40 @@ def test_gui_theme_switch_does_not_resize_fonts(qapp, tmp_path, monkeypatch):
     assert int(w.table.horizontalHeader().height()) == header_h
     apply_application_font_pt(default_app_font_pt())
     w.deleteLater()
+
+
+def test_molstar_theme_payload_follows_palette(qapp):  # noqa: ARG001
+    from PySide6.QtGui import QColor, QPalette
+
+    from mctoolkit.ui.protein_molstar_theme import (
+        molstar_theme_css,
+        molstar_theme_payload,
+        molstar_theme_tokens,
+    )
+
+    pal = QPalette()
+    pal.setColor(QPalette.Window, QColor("#1a2b3c"))
+    pal.setColor(QPalette.WindowText, QColor("#f2f2f2"))
+    pal.setColor(QPalette.Highlight, QColor("#aa3300"))
+    tokens = molstar_theme_tokens(pal)
+    assert tokens["window"] == "#1a2b3c"
+    assert tokens["window_text"] == "#f2f2f2"
+    css = molstar_theme_css(pal)
+    assert "#1a2b3c" in css
+    assert "#aa3300" in css
+    assert "font-family" in css
+    payload = molstar_theme_payload(pal)
+    assert payload["background"] == "#1a2b3c"
+    assert payload["css"] == css
+
+
+def test_molstar_theme_dark_palette_uses_fusion_surfaces(qapp):  # noqa: ARG001
+    from mctoolkit.ui.protein_molstar_theme import molstar_theme_payload
+    from mctoolkit.ui.theme import THEME_DARK, palette_for_theme
+
+    pal = palette_for_theme(THEME_DARK)
+    payload = molstar_theme_payload(pal)
+    assert payload["background"] == "#353535"
+    assert "#353535" in payload["css"]
+    assert "msp-plugin" in payload["css"]
+

@@ -30,6 +30,7 @@ from mctoolkit.app_identity import (
     SESSION_OPEN_FILTER,
     SESSION_SAVE_FILTER,
     SESSION_TEMP_DIR_NAME,
+    apply_qt_application_identity,
     is_session_document_path,
     SETTINGS_APP,
     SETTINGS_ORG,
@@ -44,10 +45,16 @@ from mctoolkit.table.session_codec import session_format_ok
 def test_display_name_and_window_title() -> None:
     assert APP_DISPLAY_NAME == "mctoolkit"
     assert window_title() == "mctoolkit"
-    assert window_title("Help") == "mctoolkit — Help"
+    assert window_title("Help") == "Help"
     assert PREVIOUS_SETTINGS_ORG == "MCToolkit"
     assert PREVIOUS_SETTINGS_APP == "MCToolkit"
     assert PYTHON_PACKAGE == "mctoolkit"
+
+
+def test_qt_identity_does_not_append_display_name_to_captions(qapp) -> None:
+    apply_qt_application_identity(qapp)
+    assert qapp.applicationName() == APP_DISPLAY_NAME
+    assert qapp.applicationDisplayName() == ""
 
 
 def test_http_user_agent_includes_display_name() -> None:

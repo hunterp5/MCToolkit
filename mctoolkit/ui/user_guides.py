@@ -392,6 +392,12 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "pKa",
                 "Uni-pKa macro pKa values from a structure column or SMILES.",
             ),
+            _e(
+                "tools_adme",
+                "Predict ADME",
+                "ADME",
+                "Selected TDC ADME endpoints from local Chemprop weights.",
+            ),
             _e("data_qsar", "QSAR", "QSAR", "Train and apply QSAR models on table features."),
             _e("data_mpo", "MPO Scoring", "MPO Scoring", "Multi-parameter desirability scores."),
         ),

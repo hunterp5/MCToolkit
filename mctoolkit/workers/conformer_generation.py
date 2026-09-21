@@ -29,6 +29,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 
 from ..platform_support.config import load_config
+from ..chem.molecule_conversion import hydrate_structure_rows
 from .chemistry_worker_common import (
     emit_tool_progress_throttled,
     is_gaff_force_field,
@@ -537,9 +538,10 @@ class ConformerGenerationWorker(QRunnable):
         self.progress_state = progress_state
 
     def run(self):
-        nrows = len(self.data)
+        data = hydrate_structure_rows(self.data)
+        nrows = len(data)
         tot = max(nrows, 1)
-        tasks = [(oid, mol, self.params) for oid, mol in self.data]
+        tasks = [(oid, mol, self.params) for oid, mol in data]
         cfg = load_config()
         if cfg.conformer_threads is not None:
             max_workers = cfg.conformer_threads

@@ -39,7 +39,8 @@ from ..services.chemistry_columns import (
     should_skip_chemical_scan_column,
     skip_chemistry_tool_column_dropdown,
 )
-from ..services.table_scope import collect_scoped_pairs, resolve_structure_row_for_oid
+from ..services.structure_payloads import payloads_for_oids
+from ..services.table_scope import collect_scoped_pairs, iter_scoped_row_oids, resolve_structure_row_for_oid
 from .compound_table_model import CompoundTableModel
 
 
@@ -332,6 +333,40 @@ class TableSessionChemistry:
             visible_rows=visible_rows,
             on_row=_on_row,
         )
+
+    def collect_scoped_structure_payloads(
+        self,
+        src: str,
+        *,
+        only_selected: bool = False,
+        only_visible: bool = False,
+    ) -> list[tuple[int, object]]:
+        """Return ``(oid, blob_or_smiles)`` for a chemistry job without hydrating RDKit mols.
+
+        ``src == "Structure"`` reads ``MolStore`` pickles in one scan. Other sources collect
+        cell text the same way as :meth:`collect_scoped_table_smiles`.
+        """
+        if src != "Structure":
+            return self.collect_scoped_table_smiles(
+                src,
+                only_selected=only_selected,
+                only_visible=only_visible,
+                process_ui_every=0,
+            )
+        allowed = self._selected_oids_set() if only_selected else None
+        visible_rows: set[int] | None = None
+        if only_visible:
+            vis = self._visible_source_row_indices()
+            visible_rows = None if vis is None else set(vis)
+        model = self._app._table_model
+        row_indices = iter_scoped_row_oids(
+            model.rowCount(),
+            row_oid=model.row_oid,
+            allowed_oids=allowed,
+            visible_rows=visible_rows,
+        )
+        oids = [int(model.row_oid(r)) for r in row_indices]
+        return payloads_for_oids(self._app.mols, oids)
 
     def _apply_structure_field_override(self, mol: object | None) -> object | None:
         field = getattr(self._app, "_structure_field_override", None)

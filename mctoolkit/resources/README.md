@@ -25,6 +25,16 @@ Override the search directory with environment variable `MCTOOLKIT_BUNDLE_DIR`.
 
 Python dependencies (RDKit, PySide6, PyTorch, unipkainfer, Chemprop, Meeko, pytest) are installed via `pip install -r requirements.txt` and `pip install -e .` — see root **README** and **docs/PACKAGING.md**.
 
+## Uni-pKa fold weights (optional, not in git)
+
+~550 MB Hugging Face checkpoint in unipkainfer’s per-user `model_dir` (not under `resources/`). Prefetch after the pKa stack is installed:
+
+```bash
+python scripts/bootstrap_unipka_model.py
+```
+
+`scripts/install_pytorch_pka.ps1` / `.sh` run the same prefetch. If the file is missing, the first Predict pKa still downloads it.
+
 ## GNN-MTL permeability model (optional, not in git)
 
 `mctoolkit/resources/models/gnn_mtl/model.pt` — see `models/gnn_mtl/README.md`. Download:

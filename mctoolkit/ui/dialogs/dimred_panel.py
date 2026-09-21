@@ -594,7 +594,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         """Fingerprint mols for Run: all table rows; table filters only hide points at draw time."""
         app = self.parent_app
         assert app is not None
-        return app.collect_scoped_table_mols(
+        return app.collect_scoped_structure_payloads(
             src,
             only_selected=only_selected,
             only_visible=False,

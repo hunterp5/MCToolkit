@@ -319,6 +319,7 @@ class GuiSettingsMixin:
         self._apply_table_font()
         self._apply_status_font()
         self._refresh_workspace_pane_theme()
+        self._refresh_molstar_theme()
         self._sync_menubar_chrome_font()
         table = getattr(self, "table", None)
         if table is not None:
@@ -336,6 +337,11 @@ class GuiSettingsMixin:
         if callable(refresh):
             refresh()
 
+    def _refresh_molstar_theme(self) -> None:
+        from .protein_molstar_theme import refresh_molstar_views
+
+        refresh_molstar_views(self)
+
     def _set_gui_theme(self, theme: str) -> None:
         theme = apply_application_theme(QApplication.instance(), theme)
         self._gui_theme = theme
@@ -350,6 +356,7 @@ class GuiSettingsMixin:
         apply_application_font_pt(self._app_font_pt)
         self._apply_table_font()
         self._apply_status_font()
+        self._refresh_molstar_theme()
         self._sync_menubar_chrome_font()
 
     def _set_app_font_pt(self, pt: int, *, persist: bool = True) -> None:
@@ -359,6 +366,7 @@ class GuiSettingsMixin:
         self._apply_table_font()
         self._apply_status_font()
         self._refresh_workspace_pane_theme()
+        self._refresh_molstar_theme()
         self._sync_menubar_chrome_font()
 
     def _apply_table_font(self) -> None:

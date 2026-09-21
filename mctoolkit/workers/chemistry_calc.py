@@ -39,13 +39,23 @@ class CalcSignals(QObject):
 
 
 class CustomCalcWorker(QRunnable):
-    def __init__(self, row_data, expression, signals, progress_signals=None):
+    def __init__(
+        self,
+        row_data,
+        expression,
+        signals,
+        progress_signals=None,
+        *,
+        cancel_event=None,
+        progress_state=None,
+    ):
         super().__init__()
         self.row_data = row_data
         self.expression = expression
         self.signals = signals
         self.progress_signals = progress_signals
-        self.cancel_event = threading.Event()
+        self.progress_state = progress_state
+        self.cancel_event = cancel_event if cancel_event is not None else threading.Event()
         self._stop_requested = False
         self._cancel_emitted = False
 
@@ -55,11 +65,16 @@ class CustomCalcWorker(QRunnable):
 
     def run(self):
         def on_progress(message: str, done: int, total: int) -> None:
+            from ..platform_support.tool_progress import report_tool_progress
+
             try:
-                if self.progress_signals is not None:
-                    self.progress_signals.progress.emit(message, done, total)
-                else:
-                    self.signals.progress.emit(message, done, total)
+                report_tool_progress(
+                    message=message,
+                    done=done,
+                    total=max(1, int(total)),
+                    progress_state=self.progress_state,
+                    signals=self.progress_signals or self.signals,
+                )
             except RuntimeError:
                 log_swallowed_exception(logger, "CustomCalcWorker progress emit failed")
 

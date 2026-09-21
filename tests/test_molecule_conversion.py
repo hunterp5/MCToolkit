@@ -22,13 +22,17 @@ from rdkit import Chem
 
 from mctoolkit.chem.molecule_conversion import (
     copy_mol,
+    hydrate_structure_rows,
     is_rdkit_mol,
     looks_like_structure_cell_text,
+    mol_from_job_payload,
     mol_from_ligand_path,
     mol_from_molblock,
     mol_from_smarts,
     mol_from_smiles,
+    mol_graph_binary,
     mol_structure_copy_texts,
+    mol_to_canonical_smiles,
     mol_to_molblock,
     mol_to_pdbblock,
     parse_molecule_from_cell_text,
@@ -177,3 +181,20 @@ def test_mol_from_ligand_path_sdf(tmp_path):
     assert loaded is not None
     assert Chem.MolToSmiles(loaded, canonical=True) == "CCO"
     assert mol_from_ligand_path(tmp_path / "missing.sdf") is None
+
+
+def test_mol_from_job_payload_smiles_blob_and_live_mol():
+    mol = mol_from_job_payload("CCO")
+    assert mol is not None
+    assert mol_to_canonical_smiles(mol) == "CCO"
+    blob = mol_graph_binary(mol)
+    rebuilt = mol_from_job_payload(blob)
+    assert rebuilt is not None
+    assert mol_to_canonical_smiles(rebuilt) == "CCO"
+    assert mol_from_job_payload(mol) is mol
+    assert mol_from_job_payload(None) is None
+
+
+def test_hydrate_structure_rows_skips_empty_payloads():
+    rows = hydrate_structure_rows([(1, "CCO"), (2, None), (3, "CC")])
+    assert [oid for oid, _mol in rows] == [1, 3]

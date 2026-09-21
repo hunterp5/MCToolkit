@@ -243,6 +243,14 @@ pip install -e .
 
 The `-e` means “editable”: if you update the source code later, you do not need to reinstall.
 
+**Full stack:** prefetch Uni-pKa fold weights (~550 MB) so the first **Predict pKa** is not a Hugging Face download. Skip this after a core-only install (`requirements-core.txt`).
+
+```bash
+python scripts/bootstrap_unipka_model.py
+```
+
+`install_pytorch_pka` in Step 6d runs the same prefetch automatically.
+
 **When everything succeeds**, you should see no red `ERROR` lines at the end. Warnings in yellow are usually fine.
 
 ### Step 6d — NVIDIA GPU for Uni-pKa (recommended)
@@ -295,7 +303,7 @@ Most Python packages are already installed by **Step 6b**. The items below are b
 
 `pip install -r requirements.txt` installs CPU PyTorch. If you have an NVIDIA GPU, run the script in **Step 6d** (same venv) so Uni-pKa uses CUDA. With no flags it selects CUDA when `nvidia-smi` sees a GPU.
 
-If **Tools → Predict → pKa** fails with a PyTorch version error (often after installing another package that upgrades torch), run the same script again to repair the stack. Do **not** create a second environment. Pass `-Cpu` / `--cpu` to force the CPU wheel, or `-Cuda` / `--cuda` to force CUDA. The first **Predict pKa** run downloads Uni-pKa fold weights from Hugging Face (`unipka-download-model`). For offline machines, prefetch with that CLI or copy the fold into unipkainfer’s `model_dir`.
+If **Tools → Predict → pKa** fails with a PyTorch version error (often after installing another package that upgrades torch), run the same script again to repair the stack. Do **not** create a second environment. Pass `-Cpu` / `--cpu` to force the CPU wheel, or `-Cuda` / `--cuda` to force CUDA. The script also prefetches Uni-pKa fold weights (~550 MB) into unipkainfer’s per-user `model_dir`. You can run that step alone with `python scripts/bootstrap_unipka_model.py`. Offline machines can copy `fold_1/checkpoint_best.pt` into that directory instead.
 
 ### Docking (Gnina)
 
@@ -337,7 +345,7 @@ On **Linux/macOS**, `pip install cdpkit` uses a wheel when one exists for your P
 bash scripts/bootstrap_optional_tools.sh
 ```
 
-This runs `pip install -r requirements.txt`, `pip install -e .`, then `install_pytorch_pka` (CUDA PyTorch when an NVIDIA GPU is present), and can download permeability model weights.
+This runs `pip install -r requirements.txt`, `pip install -e .`, then `install_pytorch_pka` (CUDA PyTorch when an NVIDIA GPU is present, and Uni-pKa weight prefetch), and can download permeability model weights.
 
 ### Permeability model weights
 

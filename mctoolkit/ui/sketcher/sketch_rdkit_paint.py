@@ -25,6 +25,7 @@ from PySide6.QtGui import QImage, QPixmap, QTransform
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
+from ...chem.structure_2d_depiction import prepare_and_draw_molecule
 from ...platform_support.exception_policy import log_swallowed_exception
 
 logger = logging.getLogger(__name__)
@@ -164,7 +165,7 @@ def _draw_sketch_mol(
     mol: Chem.Mol,
 ) -> bool:
     try:
-        rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
+        prepare_and_draw_molecule(drawer, mol)
         drawer.FinishDrawing()
     except Exception:
         return False

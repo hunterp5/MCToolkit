@@ -57,8 +57,28 @@ def describe_custom_calc_error(exc: BaseException) -> str:
     return f"Could not evaluate: {exc.__class__.__name__}: {exc}"
 
 
+def expand_calc_row_data(row_data) -> list[tuple[object, dict]]:
+    """Turn a columnar ``(oids, {col: texts})`` snapshot into ``(oid, row_map)`` rows."""
+    if (
+        isinstance(row_data, tuple)
+        and len(row_data) == 2
+        and isinstance(row_data[0], (list, tuple))
+        and isinstance(row_data[1], dict)
+    ):
+        oids, columns = row_data
+        rows: list[tuple[object, dict]] = []
+        for i, oid in enumerate(oids):
+            row: dict[str, str] = {}
+            for key, vals in columns.items():
+                raw = vals[i] if i < len(vals) else ""
+                row[str(key)] = raw or "0"
+            rows.append((oid, row))
+        return rows
+    return list(row_data or ())
+
+
 def evaluate_custom_calc_rows(
-    row_data: Sequence[tuple[object, dict]],
+    row_data: Sequence[tuple[object, dict]] | tuple,
     expression: str,
     *,
     cancel_event: threading.Event | None = None,
@@ -69,7 +89,7 @@ def evaluate_custom_calc_rows(
     expr_template = (expression or "").strip()
     req_vars = re.findall(r"\[(.*?)\]", expr_template)
     math_scope = {k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
-    rows = list(row_data)
+    rows = expand_calc_row_data(row_data)
     tot = max(len(rows), 1)
     cancelled = False
     done = 0

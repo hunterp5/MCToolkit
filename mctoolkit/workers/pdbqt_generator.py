@@ -28,6 +28,8 @@ from PySide6.QtCore import QObject, QRunnable, Signal
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
+from ..chem.molecule_conversion import hydrate_structure_rows
+
 logger = logging.getLogger(__name__)
 
 _MEEKO_RES_FAIL = re.compile(
@@ -234,7 +236,7 @@ def _ligand_mols_from_request(req: PdbqtGenRequest) -> tuple[list[Chem.Mol] | No
     rows = list(req.ligand_rows or [])
     if not rows:
         return None, "No ligand rows were provided."
-    mols = [m for _oid, m in rows if m is not None]
+    mols = [m for _oid, m in hydrate_structure_rows(rows)]
     if not mols:
         return None, "No valid ligands in selected rows."
     return mols, ""

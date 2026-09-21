@@ -63,15 +63,9 @@ class ProtonateTools:
         if self._app._abort_if_only_selected_but_empty(only_selected, allowed, "Protonate"):
             return
 
-        data: list[tuple[int, object | None]] = []
-        oids_walk = self._app._all_oids_in_table_order()
-        if allowed is not None:
-            oids_walk = [o for o in oids_walk if o in allowed]
-        for oid in oids_walk:
-            mol = self._mol_for_structure_tool_oid(oid, src)
-            data.append((int(oid), mol))
-
-        data = [(oid, mol) for oid, mol in data if mol is not None]
+        data: list[tuple[int, object | None]] = list(
+            self._app.collect_scoped_structure_payloads(src, only_selected=only_selected)
+        )
         if not data:
             QMessageBox.information(
                 self._app,

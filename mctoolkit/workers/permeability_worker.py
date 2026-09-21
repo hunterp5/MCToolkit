@@ -21,18 +21,29 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 
 import shiboken6
 from PySide6.QtCore import QObject, QRunnable, Signal
 
 from ..predictions.permeability_prediction import (
     format_permeability_row,
+    mp_predict_permeability_chunk,
     permeability_model_available,
+    permeability_needs_cuda_isolation,
     permeability_stack_import_error,
     predict_permeability_batch,
 )
+from .chemprop_cuda_pool import (
+    chunk_smiles,
+    discard_chemprop_process_pool,
+    run_chemprop_chunked,
+)
 
 logger = logging.getLogger(__name__)
+
+discard_permeability_process_pool = discard_chemprop_process_pool
+_chunk_smiles = chunk_smiles
 
 
 def _safe_emit(obj, emitter_name: str, *args) -> None:
@@ -47,6 +58,48 @@ def _safe_emit(obj, emitter_name: str, *args) -> None:
         getattr(obj, emitter_name).emit(*args)
     except RuntimeError:
         pass
+
+
+def _predict_in_cuda_child(
+    smiles: list[str],
+    batch_size: int,
+    cancel_event: threading.Event | None,
+    progress_callback: Callable[[int, int], None] | None,
+) -> list[dict[str, float] | None]:
+    """Run Chemprop in a child process so CUDA never initializes in the GUI."""
+    return run_chemprop_chunked(
+        mp_predict_permeability_chunk,
+        smiles,
+        batch_size,
+        cancel_event=cancel_event,
+        progress_callback=progress_callback,
+        fail_message=(
+            "Predict Permeability GPU worker failed. CUDA Chemprop cannot fall "
+            "back to the GUI process; retry the job."
+        ),
+    )
+
+
+def dispatch_permeability_predict(
+    smiles: list[str],
+    *,
+    batch_size: int,
+    cancel_event: threading.Event | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> list[dict[str, float] | None]:
+    """Run GNN-MTL in-process on CPU, or in a CUDA child when the torch wheel is CUDA."""
+    if permeability_needs_cuda_isolation():
+        return _predict_in_cuda_child(
+            smiles,
+            batch_size,
+            cancel_event,
+            progress_callback,
+        )
+    return predict_permeability_batch(
+        smiles,
+        batch_size=batch_size,
+        progress_callback=progress_callback,
+    )
 
 
 class PermeabilityPredictorSignals(QObject):
@@ -87,6 +140,7 @@ class PermeabilityPredictorWorker(QRunnable):
         done = 0
         prog_last = 0.0
         throttle = [0, 0.0]
+        isolate = permeability_needs_cuda_isolation()
 
         def _emit_progress(message: str, *, force: bool = False) -> None:
             nonlocal prog_last
@@ -105,10 +159,11 @@ class PermeabilityPredictorWorker(QRunnable):
 
         _emit_progress("Predict Permeability…", force=True)
 
-        err = permeability_stack_import_error()
-        if err:
-            _safe_emit(self.permeability_signals, "failed", err)
-            return
+        if not isolate:
+            err = permeability_stack_import_error()
+            if err:
+                _safe_emit(self.permeability_signals, "failed", err)
+                return
         if not permeability_model_available():
             _safe_emit(
                 self.permeability_signals,
@@ -152,11 +207,20 @@ class PermeabilityPredictorWorker(QRunnable):
                     force_signal=batch_done >= batch_total,
                 )
 
-            preds = predict_permeability_batch(
+            preds = dispatch_permeability_predict(
                 smiles,
                 batch_size=self.batch_size,
+                cancel_event=cancel_ev,
                 progress_callback=_predict_progress,
             )
+        except RuntimeError as e:
+            logger.exception("Permeability prediction failed")
+            msg = str(e)
+            if msg.lower() == "cancelled":
+                _safe_emit(self.permeability_signals, "failed", "Cancelled.")
+            else:
+                _safe_emit(self.permeability_signals, "failed", f"Prediction failed: {e}")
+            return
         except Exception as e:
             logger.exception("Permeability prediction failed")
             _safe_emit(self.permeability_signals, "failed", f"Prediction failed: {e}")

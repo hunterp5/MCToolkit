@@ -14,7 +14,7 @@ Use before pH-dependent descriptors or protonation tools, or when you need a tab
 
 ## Inputs / scope
 
-A structure column or a SMILES string. Optional **Selected Rows Only**. Requires the **pka** extra (`unipkainfer`). The first run downloads Uni-pKa fold weights from Hugging Face (`unipka-download-model`; optional `model_dir` for offline copies).
+A structure column or a SMILES string. Optional **Selected Rows Only**. Requires the **pka** extra (`unipkainfer`). Fold weights (~550 MB) are prefetched by `scripts/install_pytorch_pka.*` or `python scripts/bootstrap_unipka_model.py`. If they are missing, the first Predict pKa still downloads them from Hugging Face (`unipka-download-model`).
 
 ## Options
 

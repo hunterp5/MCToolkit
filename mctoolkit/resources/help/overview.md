@@ -18,7 +18,7 @@ Works on the current session table (structures plus property columns). Most tool
 
 - **File** - open/import data, sessions, export, selection browser.
 - **Edit** - undo/redo, clipboard, and selection commands.
-- **Tools** - prepare structures (including tautomers), fingerprints, docking helpers, design tools, predictors (pKa, permeability, SOM), random generators, and **Query Database** (SQL, PubChem, ChEMBL, patents).
+- **Tools** - prepare structures (including tautomers), fingerprints, docking helpers, design tools, predictors (pKa, permeability, ADME, SOM), random generators, and **Query Database** (SQL, PubChem, ChEMBL, patents).
 - **Protein** - 3D structure viewer for PDB, mmCIF, and related crystallographic files, plus **Sequence** for MAFFT multiple-sequence alignment.
 - **Data** - statistics, plotter, MedChem plots, dimensionality reduction, QSAR, MPO, filters, and table search.
 - **Settings** - theme, fonts, hotkeys, WSL executable for Linux-only tools.

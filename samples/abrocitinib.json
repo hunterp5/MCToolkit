@@ -1,5 +1,5 @@
 {
-  "format": "molmanager.pharmacophore",
+  "format": "mctoolkit.pharmacophore",
   "version": 1,
   "features": [
     {

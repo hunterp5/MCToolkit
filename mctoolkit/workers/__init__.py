@@ -93,6 +93,7 @@ from .load_render import (
 )
 from .pka_predictor import PKaPredictorSignals, PKaPredictorWorker
 from .permeability_worker import PermeabilityPredictorSignals, PermeabilityPredictorWorker
+from .adme_worker import AdmePredictorSignals, AdmePredictorWorker
 from .som_worker import SomPredictorSignals, SomPredictorWorker
 from .biotransformer_worker import BiotransformerSignals, BiotransformerWorker
 from .protomer_generator import ProtomerGeneratorSignals, ProtomerGeneratorWorker
@@ -159,6 +160,8 @@ __all__ = [
     "PKaPredictorWorker",
     "PermeabilityPredictorSignals",
     "PermeabilityPredictorWorker",
+    "AdmePredictorSignals",
+    "AdmePredictorWorker",
     "SomPredictorSignals",
     "SomPredictorWorker",
     "BiotransformerSignals",

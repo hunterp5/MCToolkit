@@ -66,31 +66,21 @@ class TableCalcTools:
         allowed = self._app._selected_oids_set() if only_selected else None
         if self._app._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_CALCULATOR):
             return
-        numeric_vars = list(self._app.global_bounds.keys())
-        h_map = {h: i for i, h in enumerate(self._app.headers)}
-        oids_list = self._app._all_oids_in_table_order()
-        if allowed is not None:
-            oids_list = [o for o in oids_list if o in allowed]
-        row_data = [
-            (
-                o,
-                {
-                    v: self._app._table_cell_text(self._app.logical_row_for_oid(o), h_map[v]) or "0"
-                    for v in numeric_vars
-                },
-            )
-            for o in oids_list
-        ]
-        if not row_data:
+        numeric_vars = [v for v in self._app.global_bounds.keys() if v in self._app.headers]
+        from .table_dataframe import scoped_oid_column_snapshot
+
+        oids_list, texts = scoped_oid_column_snapshot(self._app, numeric_vars, allowed_oids=allowed)
+        if not oids_list:
             QMessageBox.information(
                 self._app, TOOL_CALCULATOR, "No rows to process for this scope."
             )
             self._app.status_label.setText("Ready.")
             return
+        row_data = (oids_list, texts)
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress("Calculator…", len(row_data))
+        self._app._begin_tool_progress("Calculator…", len(oids_list))
         self._app.process_queue.enqueue(
-            f"Calculator ({len(row_data)} rows)",
+            f"Calculator ({len(oids_list)} rows)",
             lambda ev, rd=row_data, ex=expr, sigs=self._app.signals, p=ps: CustomCalcWorker(
                 rd, ex, sigs, cancel_event=ev, progress_state=p
             ),

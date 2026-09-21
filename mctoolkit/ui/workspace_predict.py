@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
-"""pKa, permeability, SOM, metabolites, protomer, and tautomer prediction dialogs."""
+"""pKa, permeability, ADME, SOM, metabolites, protomer, and tautomer prediction dialogs."""
 
 from __future__ import annotations
 import re
@@ -37,6 +37,7 @@ class PredictJobState(Protocol):
 
     _pka_predictor_signals: Any
     _permeability_predictor_signals: Any
+    _adme_predictor_signals: Any
     _som_predictor_signals: Any
     _biotransformer_signals: Any
     _som_browse_records: Any
@@ -191,8 +192,85 @@ class PredictTools:
         if not ensure_table_ready_for_tool(self._app, "Predict Permeability"):
             return
         from .dialogs import PermeabilityPredictorDialog
+        from .pka_gpu_hint import maybe_remind_unipka_cuda_wheel
 
+        maybe_remind_unipka_cuda_wheel(self._app)
         dlg = PermeabilityPredictorDialog(self._app)
+        self._app._prepare_tool_dialog(dlg)
+        dlg.setAttribute(Qt.WA_DeleteOnClose, True)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    def _ensure_adme_predictor_signals(self):
+        sig = getattr(self._app, "_adme_predictor_signals", None)
+        if sig is not None:
+            return sig
+        from ..workers import AdmePredictorSignals
+
+        sig = AdmePredictorSignals(self._app)
+        sig.finished.connect(self._on_adme_prediction_finished, Qt.QueuedConnection)
+        sig.failed.connect(self._on_adme_prediction_failed, Qt.QueuedConnection)
+        self._app._adme_predictor_signals = sig
+        return sig
+
+    def schedule_adme_prediction(
+        self, src: str, *, only_selected: bool, output_columns: tuple[str, ...]
+    ) -> None:
+        """Gather rows and enqueue ADME prediction on the next event-loop tick."""
+        QTimer.singleShot(
+            0, lambda: self._start_adme_prediction(src, only_selected, output_columns)
+        )
+
+    def _start_adme_prediction(
+        self, src: str, only_selected: bool, output_columns: tuple[str, ...]
+    ) -> None:
+        from ..workers import AdmePredictorWorker
+
+        allowed = self._app._selected_oids_set() if only_selected else None
+        if self._app._abort_if_only_selected_but_empty(only_selected, allowed, "Predict ADME"):
+            return
+        rows_smi = self._app.collect_scoped_table_smiles(src, only_selected=only_selected)
+        if not rows_smi:
+            QMessageBox.information(
+                self._app,
+                "Predict ADME",
+                "No valid structures were found for this scope and source.",
+            )
+            return
+        adme_signals = self._ensure_adme_predictor_signals()
+        n = len(rows_smi)
+        prog = self._app._tool_progress_state
+        enqueue_process_queue_job(
+            self._app,
+            "Predict ADME",
+            n,
+            lambda ev, r=rows_smi, ws=self._app.signals, ps=adme_signals, c=output_columns, st=prog: (
+                AdmePredictorWorker(r, ws, ps, cancel_event=ev, output_columns=c, progress_state=st)
+            ),
+            queue_label=f"Predict ADME ({n} rows)",
+        )
+
+    def _on_adme_prediction_finished(self, results: list) -> None:
+        if not results:
+            self._app._finish_tool_progress("Predict ADME")
+            return
+        calc_h = list(results[0][1].keys())
+        res = [(oid, row_d) for oid, row_d in results]
+        self._app.on_calc_finished(res, calc_h, progress_label="Predict ADME")
+
+    def _on_adme_prediction_failed(self, msg: str) -> None:
+        self._app._finish_tool_progress("Predict ADME")
+        QMessageBox.warning(self._app, "Predict ADME", msg or "Prediction failed.")
+
+    def open_adme_predictor(self) -> None:
+        if not ensure_table_ready_for_tool(self._app, "Predict ADME"):
+            return
+        from .dialogs import AdmePredictorDialog
+        from .pka_gpu_hint import maybe_remind_unipka_cuda_wheel
+
+        maybe_remind_unipka_cuda_wheel(self._app)
+        dlg = AdmePredictorDialog(self._app)
         self._app._prepare_tool_dialog(dlg)
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
         dlg.show()

@@ -64,8 +64,8 @@ def maybe_remind_unipka_cuda_wheel(parent: QWidget | None) -> None:
     """Show a once-per-process dialog if nvidia-smi sees a GPU and torch is CPU-only.
 
     The check runs on a daemon thread so Predict pKa / Protonate / Generate
-    Protomers can open without stalling Qt on ``nvidia-smi`` (or a torch import
-    in older detection paths).
+    Protomers / Predict Permeability can open without stalling Qt on
+    ``nvidia-smi`` (or a torch import in older detection paths).
     """
     host = parent
     if host is None:

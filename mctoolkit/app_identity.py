@@ -68,11 +68,11 @@ def is_session_document_path(path: str) -> bool:
 
 
 def window_title(suffix: str | None = None) -> str:
-    """Main-window or dialog title, optionally with an em-dash suffix."""
+    """Main-table title, or a dialog title without the application name."""
     text = (suffix or "").strip()
     if not text:
         return APP_DISPLAY_NAME
-    return f"{APP_DISPLAY_NAME} — {text}"
+    return text
 
 
 def http_user_agent(purpose: str) -> str:
@@ -104,7 +104,9 @@ def apply_qt_application_identity(app: Any) -> None:
     app.setApplicationName(APP_DISPLAY_NAME)
     display = getattr(app, "setApplicationDisplayName", None)
     if callable(display):
-        display(APP_DISPLAY_NAME)
+        # Empty (not unset): Windows/Linux otherwise append " - mctoolkit" to every
+        # native caption. The main table sets its own title to APP_DISPLAY_NAME.
+        display("")
     qt_settings()
 
 
