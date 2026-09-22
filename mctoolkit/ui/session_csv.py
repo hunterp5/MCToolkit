@@ -24,6 +24,7 @@ import sys
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QMessageBox
 
+from ..platform_support.tool_progress import format_overlay_progress_text
 from ..storage import load_mols_from_parse_result
 from ..workers.session_rows_parse import (
     CsvSessionParseResult,
@@ -77,13 +78,17 @@ class SessionCsv:
 
         worker = CsvSessionParseWorker(path, signals, gen)
         if "pytest" in sys.modules:
-            signals.finished.connect(_on_parsed, type=Qt.DirectConnection)
-            signals.failed.connect(_on_failed, type=Qt.DirectConnection)
+            conn = Qt.DirectConnection
+            signals.finished.connect(_on_parsed, type=conn)
+            signals.failed.connect(_on_failed, type=conn)
+            self._bind_session_worker_progress(signals, conn, generation=gen)
             worker.run()
             self._drain_pending_session_load()
         else:
-            signals.finished.connect(_on_parsed, type=Qt.QueuedConnection)
-            signals.failed.connect(_on_failed, type=Qt.QueuedConnection)
+            conn = Qt.QueuedConnection
+            signals.finished.connect(_on_parsed, type=conn)
+            signals.failed.connect(_on_failed, type=conn)
+            self._bind_session_worker_progress(signals, conn, generation=gen)
             start_runnable_on_app_pool(self._app, worker)
 
     def _on_csv_session_parse_failed(self, message: str, generation: int) -> None:
@@ -93,16 +98,9 @@ class SessionCsv:
         self._app._csv_session_ctx = None
         self._app._session_awaiting_ready = False
         self._app._session_waiting_for_render = False
-        self._app._session_hold_workspace_surfaces = False
-        self._show_session_workspace_when_ready()
-        try:
-            self._app.table.setUpdatesEnabled(True)
-        except Exception:
-            pass
-        self._app._set_ingest_loading(False)
         self._app._session_mutation_paused = False
         self._app._pending_session_clean_on_ready = False
-        self._app._set_workspace_stack_index(1)
+        self._session_reveal_workspace_atomic()
         QMessageBox.warning(self._app, "Open Session", message or "Session CSV parse failed.")
 
     def _on_csv_session_parsed(self, result: object, generation: int) -> None:
@@ -137,8 +135,9 @@ class SessionCsv:
             "loaded": 0,
         }
         n = len(prepared)
-        self._app.status_label.setText(f"Loading session… (0/{n:,} rows)")
-        self._app._loading_detail.setText(f"Loading session…\n0 / {n:,} rows")
+        text = format_overlay_progress_text("Loading session…", 0, n)
+        self._app.status_label.setText(text)
+        self._app._loading_detail.setText(text)
         QTimer.singleShot(0, self._load_session_csv_step)
 
     def _load_session_csv_step(self) -> None:
@@ -159,8 +158,9 @@ class SessionCsv:
             self._app._table_model.append_rows_batch(batch)
         ctx["idx"] = end
         ctx["loaded"] = end
-        self._app.status_label.setText(f"Loading session… ({end:,}/{n:,} rows)")
-        self._app._loading_detail.setText(f"Loading session…\n{end:,} / {n:,} rows")
+        text = format_overlay_progress_text("Loading session…", end, n)
+        self._app.status_label.setText(text)
+        self._app._loading_detail.setText(text)
         if end < n:
             QTimer.singleShot(0, self._load_session_csv_step)
             return
