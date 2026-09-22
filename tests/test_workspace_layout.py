@@ -398,7 +398,8 @@ def test_move_widget_between_panes_keeps_other_pages(qapp):
 def test_plot_pane_has_close_button(qapp):
     del qapp
     pane = PlotPane("pane_test")
-    assert pane._close_btn.text() == "×"
+    assert pane._close_btn.text() == ""
+    assert not pane._close_btn.icon().isNull()
     assert pane._prev_btn.text() == ""
     assert not pane._prev_btn.icon().isNull()
     assert not pane._next_btn.icon().isNull()

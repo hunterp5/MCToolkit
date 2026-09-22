@@ -147,7 +147,10 @@ def test_pane_title_chrome_is_readable(qapp):  # noqa: ARG001
     assert f"font-size: {_FOOTER_TEXT_FONT_PX}px" in (edit.styleSheet() or "")
     assert edit.height() == _GLYPH_BTN_SIZE
     close = PlotPane("p1")._close_btn
-    assert f"font-size: {_FOOTER_TEXT_FONT_PX + 2}px" in (close.styleSheet() or "")
+    assert close.text() == ""
+    assert not close.icon().isNull()
+    assert close.width() == close.height() == _GLYPH_BTN_SIZE
+    assert "padding: 0px" in (close.styleSheet() or "")
     btn = QPushButton("Close")
     style_plot_footer_text_button(btn)
     assert f"font-size: {_FOOTER_TEXT_FONT_PX}px" in (btn.styleSheet() or "")
@@ -224,6 +227,28 @@ def test_pane_nav_arrow_glyph_is_vector(qapp):  # noqa: ARG001
     assert not btn.icon().isNull()
     assert btn.width() == btn.height() == _GLYPH_BTN_SIZE
     assert btn.toolTip() == "Previous plot in this pane"
+
+
+def test_pane_close_glyph_is_centered_icon(qapp):  # noqa: ARG001
+    from PyQt5.QtWidgets import QPushButton
+
+    from molmanager.ui.dockable_plot import (
+        _GLYPH_BTN_SIZE,
+        _GLYPH_ICON_SIZE,
+        pane_close_glyph_icon,
+        style_plot_pane_close_button,
+    )
+
+    icon = pane_close_glyph_icon()
+    assert not icon.isNull()
+    btn = QPushButton("×")
+    style_plot_pane_close_button(btn, "Close this plot pane")
+    assert btn.text() == ""
+    assert not btn.icon().isNull()
+    assert btn.iconSize().width() == btn.iconSize().height() == _GLYPH_ICON_SIZE
+    assert btn.width() == btn.height() == _GLYPH_BTN_SIZE
+    assert btn.toolTip() == "Close this plot pane"
+    assert "padding: 0px" in (btn.styleSheet() or "")
 
 
 def test_floating_title_edit_installed_when_undocked(qapp):  # noqa: ARG001

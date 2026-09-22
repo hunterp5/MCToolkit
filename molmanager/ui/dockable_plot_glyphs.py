@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import QPointF, QRectF, QSize, Qt
-from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
+from PyQt5.QtGui import QColor, QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PyQt5.QtWidgets import QLineEdit, QPushButton, QSizePolicy
 
 from .dockable_plot_constants import (
@@ -42,7 +42,7 @@ def _glyph_pen(width: float) -> QPen:
     return pen
 
 
-def _paint_glyph_icon(paint_fn, size: int = _GLYPH_ICON_SIZE) -> QIcon:
+def _paint_glyph_pixmap(paint_fn, size: int = _GLYPH_ICON_SIZE) -> QPixmap:
     """Rasterize a glyph with stroke inset so ink stays centered and unclipped."""
     dpr = 2.0
     pm = QPixmap(int(size * dpr), int(size * dpr))
@@ -55,7 +55,11 @@ def _paint_glyph_icon(paint_fn, size: int = _GLYPH_ICON_SIZE) -> QIcon:
     painter.translate(pad, pad)
     paint_fn(painter, float(size) - 2.0 * pad)
     painter.end()
-    return QIcon(pm)
+    return pm
+
+
+def _paint_glyph_icon(paint_fn, size: int = _GLYPH_ICON_SIZE) -> QIcon:
+    return QIcon(_paint_glyph_pixmap(paint_fn, size))
 
 
 def plot_options_glyph_icon(size: int = _GLYPH_ICON_SIZE) -> QIcon:
@@ -149,6 +153,31 @@ def clear_selection_glyph_icon(size: int = _GLYPH_ICON_SIZE) -> QIcon:
         p.drawLine(QPointF(s - m, m), QPointF(m, s - m))
 
     return _paint_glyph_icon(paint, size)
+
+
+def pane_close_glyph_icon(size: int = _GLYPH_ICON_SIZE) -> QIcon:
+    """Centered X for the plot-pane close control (red, matching prior × chrome)."""
+    ink = QColor(192, 57, 43)  # #c0392b
+    hover = QColor(231, 76, 60)  # #e74c3c
+    pressed = QColor(146, 43, 33)  # #922b21
+
+    def paint_for(color: QColor):
+        def paint(p: QPainter, s: float) -> None:
+            pen = QPen(color, max(1.8, s * 0.16))
+            pen.setCapStyle(Qt.RoundCap)
+            p.setPen(pen)
+            p.setBrush(Qt.NoBrush)
+            m = s * 0.22
+            p.drawLine(QPointF(m, m), QPointF(s - m, s - m))
+            p.drawLine(QPointF(s - m, m), QPointF(m, s - m))
+
+        return paint
+
+    icon = QIcon()
+    icon.addPixmap(_paint_glyph_pixmap(paint_for(ink), size), QIcon.Normal, QIcon.Off)
+    icon.addPixmap(_paint_glyph_pixmap(paint_for(hover), size), QIcon.Active, QIcon.Off)
+    icon.addPixmap(_paint_glyph_pixmap(paint_for(pressed), size), QIcon.Selected, QIcon.Off)
+    return icon
 
 
 def pane_nav_arrow_glyph_icon(direction: str, size: int = _GLYPH_ICON_SIZE) -> QIcon:
@@ -306,6 +335,15 @@ def style_plot_pane_nav_arrow(btn: QPushButton, direction: str, tooltip: str = "
     """Square antialiased triangle control for plot-pane pager / reorder."""
     style_plot_chrome_glyph_button(
         btn, pane_nav_arrow_glyph_icon(direction), tooltip or btn.toolTip()
+    )
+
+
+def style_plot_pane_close_button(btn: QPushButton, tooltip: str = "") -> None:
+    """Square antialiased X control for closing a plot pane."""
+    style_plot_chrome_glyph_button(
+        btn,
+        pane_close_glyph_icon(),
+        tooltip or btn.toolTip() or "Close this plot pane",
     )
 
 

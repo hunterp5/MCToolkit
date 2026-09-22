@@ -28,10 +28,12 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QHBoxLayout,
     QLineEdit,
     QMessageBox,
     QSpinBox,
     QVBoxLayout,
+    QWidget,
 )
 
 from ...table.random_number_columns import (
@@ -43,6 +45,18 @@ from ...table.random_number_columns import (
 from ..qt_widget_utils import make_window_minimizable
 from ..strings import TOOL_RANDOM_NUMBER
 from .scope import selection_scope_checked
+
+
+def _inline_field(*widgets: QWidget) -> QWidget:
+    """Spinbox plus trailing checkboxes on one form-row field."""
+    host = QWidget()
+    row = QHBoxLayout(host)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(8)
+    for widget in widgets:
+        stretch = 0 if isinstance(widget, QCheckBox) else 1
+        row.addWidget(widget, stretch, Qt.AlignVCenter)
+    return host
 
 
 @dataclass(frozen=True)
@@ -65,8 +79,8 @@ class RandomNumberDialog(QDialog):
 
     def _init_random_number_state(self, selected_row_count: int) -> None:
         self.setWindowTitle(TOOL_RANDOM_NUMBER)
-        self.setMinimumWidth(420)
-        self.resize(460, 0)
+        self.setMinimumWidth(480)
+        self.resize(520, 0)
         self._selected_row_count = int(selected_row_count)
         self._have_selection = selected_row_count > 0
 
@@ -102,7 +116,10 @@ class RandomNumberDialog(QDialog):
         self.max_sb.setDecimals(6)
         self.max_sb.setRange(-1e12, 1e12)
         self.max_sb.setValue(1.0)
-        form.addRow("Maximum:", self.max_sb)
+        self.clip_cb = QCheckBox("Clip to min/max")
+        self.clip_cb.setChecked(False)
+        self.clip_cb.setToolTip("Clip normal draws to the min/max range.")
+        form.addRow("Maximum:", _inline_field(self.max_sb, self.clip_cb))
 
         self.mean_sb = QDoubleSpinBox()
         self.mean_sb.setDecimals(6)
@@ -116,10 +133,6 @@ class RandomNumberDialog(QDialog):
         self.std_sb.setValue(1.0)
         form.addRow("Std. deviation:", self.std_sb)
 
-        self.clip_cb = QCheckBox("Clip normal draws to min/max")
-        self.clip_cb.setChecked(False)
-        form.addRow("", self.clip_cb)
-
         self.decimals_sb = QSpinBox()
         self.decimals_sb.setRange(0, 12)
         self.decimals_sb.setValue(4)
@@ -130,16 +143,11 @@ class RandomNumberDialog(QDialog):
 
         self.use_seed_cb = QCheckBox("Use seed")
         self.use_seed_cb.setChecked(False)
-        form.addRow("", self.use_seed_cb)
-
         self.seed_sb = QSpinBox()
         self.seed_sb.setRange(0, 2_147_483_647)
         self.seed_sb.setValue(0)
         self.seed_sb.setEnabled(False)
         self.seed_sb.setToolTip("Fixed seed for reproducible draws.")
-        form.addRow("Seed:", self.seed_sb)
-        root.addLayout(form)
-
         self.only_selected_cb = QCheckBox("Selected Rows Only")
         self._only_selected_scope_prefix = "Selected Rows Only"
         if self._have_selection:
@@ -148,7 +156,8 @@ class RandomNumberDialog(QDialog):
             )
         else:
             self.only_selected_cb.setEnabled(False)
-        root.addWidget(self.only_selected_cb)
+        form.addRow("Seed:", _inline_field(self.seed_sb, self.use_seed_cb, self.only_selected_cb))
+        root.addLayout(form)
 
         self._button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         root.addWidget(self._button_box)

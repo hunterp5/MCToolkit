@@ -41,6 +41,7 @@ from ..dockable_plot import (
     embed_in_plot_pane,
     plot_widget_display_title,
     restore_dock_header_buttons,
+    style_plot_pane_close_button,
     style_plot_pane_nav_arrow,
     style_plot_pane_title_edit,
     unembed_from_plot_pane,
@@ -174,24 +175,9 @@ class PlotPane(QFrame):
         self._trailing_close_ly.setContentsMargins(0, 0, 0, 0)
         self._trailing_close_ly.setSpacing(2)
         right_ly.addWidget(self._trailing_close_host, 0)
-        self._close_btn = QPushButton("×")
+        self._close_btn = QPushButton()
         self._close_btn.setObjectName("PlotPaneClose")
-        self._close_btn.setFixedSize(_GLYPH_BTN_SIZE, _GLYPH_BTN_SIZE)
-        self._close_btn.setFlat(False)
-        self._close_btn.setFocusPolicy(Qt.NoFocus)
-        self._close_btn.setAutoDefault(False)
-        self._close_btn.setDefault(False)
-        self._close_btn.setToolTip("Close this plot pane")
-        self._close_btn.setStyleSheet(
-            "QPushButton {"
-            " color: #c0392b;"
-            f" font-size: {_FOOTER_TEXT_FONT_PX + 2}px;"
-            " font-weight: 700;"
-            " padding: 0px;"
-            " }"
-            "QPushButton:hover { color: #e74c3c; }"
-            "QPushButton:pressed { color: #922b21; }"
-        )
+        style_plot_pane_close_button(self._close_btn, "Close this plot pane")
         self._close_btn.clicked.connect(lambda *_a: self.close_requested.emit(self))
         right_ly.addWidget(self._close_btn, 0)
 
@@ -266,6 +252,7 @@ class PlotPane(QFrame):
         self._style_nav_arrow(self._next_btn, "right")
         self._style_nav_arrow(self._move_earlier_btn, "up")
         self._style_nav_arrow(self._move_later_btn, "down")
+        style_plot_pane_close_button(self._close_btn, "Close this plot pane")
         style_plot_pane_title_edit(self._title_edit)
         self.update()
 

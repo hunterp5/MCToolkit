@@ -199,6 +199,8 @@ class GuiSettingsMixin:
         settings_menu.addAction(QAction("&Font…", self, triggered=self.open_font_dialog))
         settings_menu.addAction(QAction("&Hotkeys…", self, triggered=self.open_hotkeys_dialog))
         settings_menu.addSeparator()
+        settings_menu.addAction(self._act_status_bar)
+        settings_menu.addSeparator()
         settings_menu.addAction(QAction("&WSL…", self, triggered=self.open_wsl_settings_dialog))
         self._apply_status_bar_visible(self._act_status_bar.isChecked(), persist=False)
 
@@ -260,9 +262,6 @@ class GuiSettingsMixin:
 
         menu.addSeparator()
         menu.addAction(self._act_customize_colors)
-        status = getattr(self, "_act_status_bar", None)
-        if status is not None:
-            menu.addAction(status)
         self._sync_theme_menu_checks()
 
     def _sync_theme_menu_checks(self) -> None:

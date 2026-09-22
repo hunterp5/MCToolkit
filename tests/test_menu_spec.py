@@ -129,3 +129,20 @@ def test_help_follows_settings():
     help_menu = find_submenu(MAIN_WINDOW_MENUS, "Help")
     assert menu_outline(help_menu.items) == ["User Guide", "Citations"]
     assert help_menu.attr == "_help_menu"
+
+
+def test_data_table_operations_submenu():
+    data = find_submenu(MAIN_WINDOW_MENUS, "Data")
+    table = find_submenu(data.items, "Table")
+    assert menu_outline(table.items) == [
+        {
+            "Operations": [
+                "Add Row…",
+                "Add Column…",
+                "",
+                "Split Column…",
+                "Join Columns…",
+            ]
+        },
+        "Statistics…",
+    ]

@@ -852,8 +852,10 @@ def test_data_menu_nests_analyze_and_split_under_table(qapp):  # noqa: ARG001
     assert "Split Column…" not in labels
     table = next(a.menu() for a in data.actions() if a.text().replace("&", "") == "Table")
     table_labels = [a.text().replace("&", "") for a in table.actions() if not a.isSeparator()]
-    assert table_labels[:2] == ["Add Row…", "Add Column…"]
-    assert table_labels[2:] == ["Statistics…", "Split Column…", "Join Columns…"]
+    assert table_labels == ["Operations", "Statistics…"]
+    ops = next(a.menu() for a in table.actions() if a.text().replace("&", "") == "Operations")
+    ops_labels = [a.text().replace("&", "") for a in ops.actions() if not a.isSeparator()]
+    assert ops_labels == ["Add Row…", "Add Column…", "Split Column…", "Join Columns…"]
     w.close()
 
 
