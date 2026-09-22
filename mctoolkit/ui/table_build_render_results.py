@@ -33,6 +33,7 @@ from ..table.structure_depiction_layout import (
     structure_row_default_height,
 )
 from .strings import TOOL_RENDER_2D
+from .background_activity import RENDER2D_PROCESS_JOB_ID
 from .structure_pixmap import pixmap_from_structure_render_png
 
 
@@ -82,13 +83,17 @@ class TableBuildRenderResults:
                 self._app._render2d_progress_last_emit = now
                 self._app._render2d_progress_last_done = done
                 if not sharing:
-                    self._app._on_tool_progress(TOOL_RENDER_2D, done, total_g)
+                    self._app._on_tool_progress(
+                        TOOL_RENDER_2D, done, total_g, job_id=RENDER2D_PROCESS_JOB_ID
+                    )
         elif not sharing:
-            self._app._on_tool_progress(TOOL_RENDER_2D, done, total_g)
+            self._app._on_tool_progress(
+                TOOL_RENDER_2D, done, total_g, job_id=RENDER2D_PROCESS_JOB_ID
+            )
         if self._app._import_render_done >= self._app._import_render_goal:
             self._app._import_progress_active = False
             if not sharing:
-                self._app._clear_tool_progress()
+                self._app._clear_tool_progress(job_id=RENDER2D_PROCESS_JOB_ID)
                 self._app.status_label.setText("Ready")
             self._flush_render2d_batch_results()
             self._restore_render2d_batch_environment()
@@ -166,29 +171,41 @@ class TableBuildRenderResults:
     def _ensure_structure_lazy_scroll_hook(self) -> None:
         if getattr(self._app, "_structure_lazy_scroll_hooked", False):
             return
-        try:
-            self._app.table.verticalScrollBar().valueChanged.connect(self._on_structure_lazy_scroll)
-            self._app._structure_lazy_scroll_hooked = True
-        except Exception:
-            pass
+        table = getattr(self._app, "table", None)
+        if table is None:
+            return
+        bar = table.verticalScrollBar()
+        if bar is None:
+            return
+        bar.valueChanged.connect(self._on_structure_lazy_scroll)
+        timer = QTimer(table)
+        timer.setSingleShot(True)
+        timer.setInterval(32)
+        timer.timeout.connect(self._trim_visible_structure_pixmap_cache)
+        self._app._structure_lazy_scroll_timer = timer
+        self._app._structure_lazy_scroll_hooked = True
 
     def _on_structure_lazy_scroll(self, *_args) -> None:
         if not self._app._table_model.structure_png_store_active():
             return
-        self._refresh_visible_structure_cells()
+        timer = getattr(self._app, "_structure_lazy_scroll_timer", None)
+        if timer is None:
+            self._trim_visible_structure_pixmap_cache()
+            return
+        timer.start()
 
-    def _refresh_visible_structure_cells(self) -> None:
-        """Repaint only viewport-visible Structure cells (lazy PNG cache)."""
+    def _visible_structure_source_rows(self) -> tuple[list[int], set[int]]:
+        """Viewport source rows and the molecule ids currently on screen."""
         src = self._app._table_model
         if src.rowCount() <= 0:
-            return
+            return [], set()
         view = self._app.table
         proxy = view.model()
-        src = self._app._table_model
         try:
             vr0 = view.rowAt(0)
-            vr1 = view.rowAt(max(0, view.viewport().height() - 1))
-        except Exception:
+            height = view.viewport().height() if view.viewport() is not None else 0
+            vr1 = view.rowAt(max(0, int(height) - 1))
+        except RuntimeError:
             vr0, vr1 = 0, src.rowCount() - 1
         if vr0 < 0:
             vr0 = 0
@@ -207,15 +224,28 @@ class TableBuildRenderResults:
 
         source_rows: list[int] = []
         keep: set[int] = set()
-        store = getattr(src, "_structure_png_store", None)
         for vr in range(vr0, vr1 + 1):
             sr = _source_row(vr)
             if sr < 0:
                 continue
             source_rows.append(sr)
-            oid = src.row_oid(sr)
-            if store is not None and store.has_png(oid):
-                keep.add(int(oid))
+            keep.add(int(src.row_oid(sr)))
+        return source_rows, keep
+
+    def _trim_visible_structure_pixmap_cache(self) -> None:
+        """Drop off-screen decoded pixmaps. Paint already loads newly visible rows."""
+        src = self._app._table_model
+        store = getattr(src, "_structure_png_store", None)
+        if store is None:
+            return
+        _source_rows, keep = self._visible_structure_source_rows()
+        store.trim_decoded_cache(keep_oids=keep)
+
+    def _refresh_visible_structure_cells(self) -> None:
+        """Repaint viewport-visible Structure cells after attaching a lazy PNG store."""
+        source_rows, keep = self._visible_structure_source_rows()
+        src = self._app._table_model
+        store = getattr(src, "_structure_png_store", None)
         if store is not None:
             store.trim_decoded_cache(keep_oids=keep)
         if source_rows:
