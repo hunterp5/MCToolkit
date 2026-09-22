@@ -100,13 +100,33 @@ def _collapse_dummy_splitter_handle(splitter: QSplitter) -> None:
         handle.setMaximumSize(0, 0)
 
 
+class WorkspaceSplitterHandle(QSplitterHandle):
+    """Unmap Chromium while dragging so the GPU HWND is not live-resized."""
+
+    def __init__(self, orientation: Qt.Orientation, parent: QSplitter) -> None:
+        super().__init__(orientation, parent)
+        self.setAttribute(Qt.WA_DontCreateNativeAncestors, True)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 — Qt API
+        if event.button() == Qt.LeftButton:
+            from ..plot_web_surface import freeze_webengine_for_splitter_drag
+
+            freeze_webengine_for_splitter_drag(self.splitter())
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 — Qt API
+        super().mouseReleaseEvent(event)
+        if event.button() == Qt.LeftButton:
+            from ..plot_web_surface import thaw_webengine_after_splitter_drag
+
+            thaw_webengine_after_splitter_drag(self.splitter())
+
+
 class WorkspaceSplitter(QSplitter):
     """Splitter that does not promote handles to native HWNDs next to WebEngine."""
 
     def createHandle(self) -> QSplitterHandle:  # noqa: N802 — Qt API
-        handle = super().createHandle()
-        handle.setAttribute(Qt.WA_DontCreateNativeAncestors, True)
-        return handle
+        return WorkspaceSplitterHandle(self.orientation(), self)
 
     def addWidget(self, widget: QWidget) -> None:  # noqa: N802 — Qt API
         super().addWidget(widget)
