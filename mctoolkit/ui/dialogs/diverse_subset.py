@@ -40,6 +40,7 @@ from ...workers.diverse_subset_worker import (
     DiverseSubsetRequest,
     DiverseSubsetWorker,
 )
+from ..analysis_job_support import enqueue_process_queue_job
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -333,7 +334,6 @@ class DiverseSubsetDialog(QDialog):
             )
             return
 
-        app._begin_tool_progress("Diverse subset", n_est)
         req = DiverseSubsetRequest(
             fp_choice=fp_choice,
             subset_size=k,
@@ -345,9 +345,12 @@ class DiverseSubsetDialog(QDialog):
             use_onbits_column=use_onbits_col,
             mode=mode,
         )
-        app.process_queue.enqueue(
-            f"Diverse subset ({n_est} rows, pick {k}, {mode})",
+        app._diverse_subset_run_ctx["job_id"] = enqueue_process_queue_job(
+            app,
+            "Diverse subset",
+            n_est,
             lambda ev, r=req, s=sig, st=prog: DiverseSubsetWorker(
                 r, s, cancel_event=ev, progress_state=st
             ),
+            queue_label=f"Diverse subset ({n_est} rows, pick {k}, {mode})",
         )
