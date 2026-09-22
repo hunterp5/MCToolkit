@@ -22,12 +22,14 @@ import gzip
 import logging
 import os
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import IO, Any, TextIO
 
 from rdkit import Chem
+
+from ..platform_support.tool_progress import throttled_progress_should_emit
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +108,102 @@ def open_binary_maybe_gzip(path: str | Path) -> Iterator[IO[bytes]]:
     else:
         with open(path, "rb") as fh:
             yield fh
+
+
+def uncompressed_file_size(path: str | Path) -> int:
+    """On-disk size when *path* is not gzip; ``-1`` when compressed or unreadable."""
+    _ext, gzipped = table_path_parts(path)
+    if gzipped:
+        return -1
+    try:
+        return int(os.path.getsize(path))
+    except OSError:
+        return -1
+
+
+class ByteCountReader:
+    """File-like proxy that reports uncompressed bytes read for overlay percent."""
+
+    def __init__(
+        self,
+        handle: Any,
+        *,
+        size: int,
+        on_progress: Callable[[int, int], None],
+    ) -> None:
+        self._handle = handle
+        self._size = max(0, int(size))
+        self._on_progress = on_progress
+        self._n = 0
+        self._throttle: list = [0, 0.0]
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._handle, name)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        line = self.readline()
+        if not line:
+            raise StopIteration
+        return line
+
+    def _advance(self, n: int) -> None:
+        try:
+            shown = int(self._handle.tell())
+        except Exception:
+            if n <= 0:
+                return
+            self._n += int(n)
+            shown = self._n
+        else:
+            self._n = shown
+        if self._size <= 0:
+            return
+        shown = min(max(shown, 0), self._size)
+        if throttled_progress_should_emit(shown, self._size, self._throttle):
+            try:
+                self._on_progress(shown, self._size)
+            except Exception:
+                logger.debug("byte progress callback failed", exc_info=True)
+
+    def read(self, size: int = -1):
+        data = self._handle.read(size)
+        self._advance(len(data) if data else 0)
+        return data
+
+    def readline(self, *args, **kwargs):
+        data = self._handle.readline(*args, **kwargs)
+        self._advance(len(data) if data else 0)
+        return data
+
+    def readinto(self, b) -> int:
+        n = int(self._handle.readinto(b) or 0)
+        self._advance(n)
+        return n
+
+    def seek(self, offset: int, whence: int = 0):
+        result = self._handle.seek(offset, whence)
+        self._advance(0)
+        return result
+
+    def tell(self) -> int:
+        return int(self._handle.tell())
+
+
+def wrap_byte_progress(
+    handle: Any,
+    path: str | Path,
+    on_progress: Callable[[int, int], None] | None,
+) -> Any:
+    """Wrap *handle* when uncompressed size is known and a callback is provided."""
+    if on_progress is None:
+        return handle
+    size = uncompressed_file_size(path)
+    if size <= 0:
+        return handle
+    return ByteCountReader(handle, size=size, on_progress=on_progress)
 
 
 @contextmanager
