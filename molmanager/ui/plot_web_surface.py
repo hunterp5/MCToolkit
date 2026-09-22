@@ -18,7 +18,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
+from contextlib import suppress
+
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QLabel, QSizePolicy, QWidget
 
 from ..platform_support.qt_webengine_flags import webengine_views_supported
@@ -55,3 +57,75 @@ def no_web_surface(parent: QWidget) -> QWidget:
     label.setWordWrap(True)
     label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     return label
+
+
+def teardown_plot_web_view(view: QWidget | None) -> None:
+    """Stop loads and drop page content so Chromium destroy is cheaper later."""
+    if view is None:
+        return
+    try:
+        from PyQt5.QtWebEngineWidgets import QWebEngineView
+    except ImportError:
+        return
+    if not isinstance(view, QWebEngineView):
+        return
+    with suppress(RuntimeError, TypeError):
+        view.stop()
+    with suppress(RuntimeError, TypeError):
+        view.loadFinished.disconnect()
+    page = None
+    with suppress(RuntimeError, AttributeError):
+        page = view.page()
+    if page is not None:
+        with suppress(RuntimeError, TypeError):
+            page.setWebChannel(None)
+    with suppress(RuntimeError, TypeError):
+        view.setHtml("")
+
+
+def teardown_webengine_views_in(widget: QWidget | None) -> None:
+    """Blank every ``QWebEngineView`` owned by ``widget``."""
+    if widget is None:
+        return
+    views: list[QWidget] = []
+    for attr in ("web", "_web"):
+        candidate = getattr(widget, attr, None)
+        if candidate is not None:
+            views.append(candidate)
+    try:
+        from PyQt5.QtWebEngineWidgets import QWebEngineView
+    except ImportError:
+        QWebEngineView = None
+    if QWebEngineView is not None:
+        with suppress(RuntimeError):
+            views.extend(widget.findChildren(QWebEngineView))
+    seen: set[int] = set()
+    for view in views:
+        key = id(view)
+        if key in seen:
+            continue
+        seen.add(key)
+        teardown_plot_web_view(view)
+    if hasattr(widget, "_web_ready"):
+        with suppress(Exception):
+            widget._web_ready = False
+    if getattr(widget, "_pending_payload_json", None) is not None:
+        with suppress(Exception):
+            widget._pending_payload_json = None
+
+
+def schedule_webengine_widget_delete(widget: QWidget | None) -> None:
+    """Hide ``widget`` now; blank WebEngine views and deleteLater on the next tick."""
+    if widget is None:
+        return
+    with suppress(RuntimeError):
+        widget.hide()
+    with suppress(RuntimeError):
+        widget.setParent(None)
+
+    def _delete() -> None:
+        teardown_webengine_views_in(widget)
+        with suppress(RuntimeError):
+            widget.deleteLater()
+
+    QTimer.singleShot(0, _delete)

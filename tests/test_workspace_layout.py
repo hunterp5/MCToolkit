@@ -416,6 +416,24 @@ def test_plot_pane_has_close_button(qapp):
     assert not pane._next_btn.icon().isNull()
 
 
+def test_activate_filter_skips_webengine_descendants(qapp, monkeypatch):
+    from molmanager.ui.main_window import plot_pane as plot_pane_mod
+
+    class FakeWeb(QWidget):
+        pass
+
+    monkeypatch.setattr(plot_pane_mod, "_web_engine_view_type", lambda: FakeWeb)
+    root = QWidget()
+    chrome = QLabel("chrome", root)
+    web = FakeWeb(root)
+    inner = QLabel("chromium", web)
+    targets = list(plot_pane_mod._iter_activate_filter_widgets(root))
+    assert root in targets
+    assert chrome in targets
+    assert web in targets
+    assert inner not in targets
+
+
 def test_remove_pane_reduces_pane_count(qapp):
     mgr = _manager(qapp)
     assert len(mgr.plot_panes()) == 2

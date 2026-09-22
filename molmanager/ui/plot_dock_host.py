@@ -351,12 +351,9 @@ class PlotDockHost:
             self._app.status_label.setText("No docked plot to close.")
             return
         self._notify_docked_plot_closing(plot_widget)
-        self._release_plot_widget_from_panel_host(plot_widget)
-        try:
-            plot_widget.setParent(None)
-            plot_widget.deleteLater()
-        except RuntimeError:
-            pass
+        self._release_plot_widget_from_panel_host(plot_widget, discard=True)
+        self._schedule_plot_widget_delete(plot_widget)
+        self._apply_plot_panel_minimum_width()
         self._app.status_label.setText("Plot closed.")
 
     def close_plot_pane(self, pane=None) -> None:
@@ -385,14 +382,15 @@ class PlotDockHost:
             if reply != QMessageBox.Yes:
                 return
 
+        try:
+            pane.hide()
+        except RuntimeError:
+            pass
+
         for plot_widget in widgets:
             self._notify_docked_plot_closing(plot_widget)
-            self._release_plot_widget_from_panel_host(plot_widget)
-            try:
-                plot_widget.setParent(None)
-                plot_widget.deleteLater()
-            except RuntimeError:
-                pass
+            self._release_plot_widget_from_panel_host(plot_widget, discard=True)
+            self._schedule_plot_widget_delete(plot_widget)
 
         if not mgr.remove_pane(pane):
             self._app.status_label.setText("Could not close plot pane.")
@@ -409,13 +407,15 @@ class PlotDockHost:
                 f"Plot pane closed ({len(widgets)} plot(s) removed). Table-only layout."
             )
 
-    def _release_plot_widget_from_panel_host(self, plot_widget) -> None:
+    def _release_plot_widget_from_panel_host(self, plot_widget, *, discard: bool = False) -> None:
         mgr = self.workspace()
         if mgr is not None:
-            mgr.release_widget(plot_widget)
+            mgr.release_widget(plot_widget, discard=discard)
         teardown = getattr(plot_widget, "_scope_sync_disconnect", None)
         if callable(teardown):
             teardown()
+        if discard:
+            return
         sync_footer = getattr(plot_widget, "_sync_footer_chrome", None)
         if callable(sync_footer):
             try:
@@ -423,6 +423,11 @@ class PlotDockHost:
             except RuntimeError:
                 pass
         self._apply_plot_panel_minimum_width()
+
+    def _schedule_plot_widget_delete(self, plot_widget) -> None:
+        from .plot_web_surface import schedule_webengine_widget_delete
+
+        schedule_webengine_widget_delete(plot_widget)
 
     def _notify_docked_plot_closing(self, plot_widget) -> None:
         closing = getattr(plot_widget, "on_docked_plot_closing", None)

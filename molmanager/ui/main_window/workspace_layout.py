@@ -172,11 +172,11 @@ class WorkspaceLayoutManager(QWidget):
         self.set_preferred_pane(pane)
         return previous if previous is not widget else None
 
-    def release_widget(self, widget: QWidget) -> bool:
+    def release_widget(self, widget: QWidget, *, discard: bool = False) -> bool:
         pane = self.pane_for_widget(widget)
         if pane is None:
             return False
-        return pane.remove_plot_widget(widget)
+        return pane.remove_plot_widget(widget, discard=discard)
 
     def collect_splitter_sizes(self) -> dict:
         """Serializable nested splitter sizes for the current layout."""

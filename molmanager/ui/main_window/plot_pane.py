@@ -47,6 +47,46 @@ from ..dockable_plot import (
     unembed_from_plot_pane,
 )
 
+_WEB_ENGINE_VIEW_UNSET = object()
+_WEB_ENGINE_VIEW_CLS = _WEB_ENGINE_VIEW_UNSET
+
+
+def _web_engine_view_type():
+    """``QWebEngineView`` when importable; import stays local to avoid Chromium init."""
+    global _WEB_ENGINE_VIEW_CLS
+    if _WEB_ENGINE_VIEW_CLS is not _WEB_ENGINE_VIEW_UNSET:
+        return _WEB_ENGINE_VIEW_CLS
+    try:
+        from PyQt5.QtWebEngineWidgets import QWebEngineView
+    except ImportError:
+        _WEB_ENGINE_VIEW_CLS = None
+    else:
+        _WEB_ENGINE_VIEW_CLS = QWebEngineView
+    return _WEB_ENGINE_VIEW_CLS
+
+
+def _iter_activate_filter_widgets(widget: QWidget):
+    """Yield ``widget`` and chrome children, but not WebEngine internals."""
+    web_cls = _web_engine_view_type()
+    try:
+        yield widget
+        stack = [child for child in widget.children() if isinstance(child, QWidget)]
+    except RuntimeError:
+        return
+    while stack:
+        child = stack.pop()
+        try:
+            yield child
+            if web_cls is not None and isinstance(child, web_cls):
+                continue
+            stack.extend(
+                grandchild
+                for grandchild in child.children()
+                if isinstance(grandchild, QWidget)
+            )
+        except RuntimeError:
+            continue
+
 
 class _PaneActivateFilter(QObject):
     """Forward mouse presses on a docked plot to activate its host pane."""
@@ -416,12 +456,13 @@ class PlotPane(QFrame):
         self._refresh_pager()
         self._sync_visible_footer()
 
-    def remove_plot_widget(self, widget: QWidget) -> bool:
+    def remove_plot_widget(self, widget: QWidget, *, discard: bool = False) -> bool:
         """Detach ``widget`` from this pane. Returns True if it was present."""
         if widget not in self._pages:
             return False
         if getattr(self, "_header_button_owner", None) is widget:
-            restore_dock_header_buttons(widget)
+            if not discard:
+                restore_dock_header_buttons(widget)
             self._header_button_owner = None
         idx = self._pages.index(widget)
         self._uninstall_activate_filter(widget)
@@ -431,7 +472,8 @@ class PlotPane(QFrame):
             widget.setParent(None)
         except RuntimeError:
             pass
-        unembed_from_plot_pane(widget)
+        if not discard:
+            unembed_from_plot_pane(widget)
         if self._pages:
             self._stack.setCurrentIndex(min(idx, len(self._pages) - 1))
         self._refresh_pager()
@@ -561,23 +603,15 @@ class PlotPane(QFrame):
         self._title_edit.setToolTip(f"{title}\nDouble-click to rename")
 
     def _install_activate_filter(self, widget: QWidget) -> None:
-        widget.installEventFilter(self._activate_filter)
-        for child in widget.findChildren(QWidget):
-            child.installEventFilter(self._activate_filter)
+        for target in _iter_activate_filter_widgets(widget):
+            target.installEventFilter(self._activate_filter)
 
     def _uninstall_activate_filter(self, widget: QWidget) -> None:
-        try:
-            widget.removeEventFilter(self._activate_filter)
-        except RuntimeError:
-            pass
-        try:
-            for child in widget.findChildren(QWidget):
-                try:
-                    child.removeEventFilter(self._activate_filter)
-                except RuntimeError:
-                    pass
-        except RuntimeError:
-            pass
+        for target in _iter_activate_filter_widgets(widget):
+            try:
+                target.removeEventFilter(self._activate_filter)
+            except RuntimeError:
+                pass
 
     def clear_plot_widget(self) -> QWidget | None:
         """Remove the currently visible plot; other pages stay."""
