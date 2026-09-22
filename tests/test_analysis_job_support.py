@@ -148,7 +148,7 @@ def test_enqueue_process_queue_job_returns_id():
         enqueue_process_queue_job(app, "Clustering", 3, factory, queue_label="Cluster (3)")
         == "job-1"
     )
-    app._begin_tool_progress.assert_called_once_with("Clustering", 3)
+    app._begin_tool_progress.assert_called_once_with("Clustering", 3, job_id="job-1")
     app.process_queue.enqueue.assert_called_once_with("Cluster (3)", factory)
 
 
