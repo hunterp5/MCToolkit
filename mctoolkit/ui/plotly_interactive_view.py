@@ -239,6 +239,11 @@ class PlotlyInteractiveView(QWidget):
         run_javascript_set_selection(self.web.page(), self._selected_point_indices)
         QTimer.singleShot(0, self._sync_hover_persist_visual)
 
+    def _mark_plot_origin_selection(self) -> None:
+        from .plot_table_sync import mark_plot_origin_selection
+
+        mark_plot_origin_selection(self, self._selected_point_indices)
+
     def clear_table_selection(self, *, update_plot: bool = True) -> None:
         self._selected_point_indices = set()
         self._ignore_plot_clear_until = 0.0
@@ -408,6 +413,7 @@ class PlotlyInteractiveView(QWidget):
     def _on_plot_point_clicked(self, point_index: int, *, additive: bool = False) -> None:
         if point_index < 0 or self.parent_app is None:
             return
+        t0 = time.perf_counter()
         idx = int(point_index)
         if additive:
             self._selected_point_indices.add(idx)
@@ -416,6 +422,11 @@ class PlotlyInteractiveView(QWidget):
         self._arm_ignore_plot_clear()
         self._select_rows_for_point_indices(sorted(self._selected_point_indices))
         self.sync_selection_visual()
+        from .plot_table_sync import record_selection_perf
+
+        record_selection_perf(
+            self.parent_app, "plot_point_click_ms", (time.perf_counter() - t0) * 1000.0
+        )
         n = len(self._selected_point_indices)
         if n > 1:
             self.parent_app.status_label.setText(f"Plot: selected {n:,} point(s).")
@@ -428,6 +439,7 @@ class PlotlyInteractiveView(QWidget):
     def _on_plot_points_selected(self, points_json: str, *, additive: bool = False) -> None:
         if self.parent_app is None:
             return
+        t0 = time.perf_counter()
         try:
             raw = json.loads(points_json or "[]")
             idxs = [int(x) for x in raw if isinstance(x, (int, float))]
@@ -449,7 +461,12 @@ class PlotlyInteractiveView(QWidget):
         else:
             self._selected_point_indices = new_idxs
         self._arm_ignore_plot_clear()
+        self._mark_plot_origin_selection()
         sel_sorted = sorted(self._selected_point_indices)
         self._select_rows_for_point_indices(sel_sorted)
         self.parent_app.status_label.setText(f"Plot: selected {len(sel_sorted):,} point(s).")
-        self.sync_selection_visual()
+        from .plot_table_sync import record_selection_perf
+
+        record_selection_perf(
+            self.parent_app, "plot_lasso_select_ms", (time.perf_counter() - t0) * 1000.0
+        )
