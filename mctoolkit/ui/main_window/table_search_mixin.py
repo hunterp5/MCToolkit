@@ -623,15 +623,21 @@ class TableSearchMixin:
             "labels": [int(q[0]) for q in group_queries],
         }
         self.status_label.setText(f"Search: scanning substructure ({n_rows:,} rows)…")
+        job_id = f"search-{gen}"
         begin = getattr(self, "_begin_tool_progress", None)
         if callable(begin):
-            begin("Searching substructure", n_rows)
+            begin("Searching substructure", n_rows, job_id=job_id)
+        progress_state = getattr(self, "_tool_progress_state", None)
+        bind = getattr(progress_state, "bind", None)
+        if callable(bind):
+            progress_state = bind(job_id)
+        self._search_progress_job_id = job_id
         pool.start(
             SubstructureFilterWorker(
                 gen,
                 signals=sigs,
                 group_queries=group_queries,
-                progress_state=getattr(self, "_tool_progress_state", None),
+                progress_state=progress_state,
                 worker_signals=getattr(self, "signals", None),
             )
         )
@@ -645,7 +651,12 @@ class TableSearchMixin:
         self._search_pending = None
         finish = getattr(self, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Searching substructure", status_message=None)
+            finish(
+                "Searching substructure",
+                status_message=None,
+                job_id=getattr(self, "_search_progress_job_id", None),
+            )
+        self._search_progress_job_id = None
         specs: list[_SearchCriterionSpec] = list(pending["specs"])
         row_sets: list[set[int] | None] = list(pending["row_sets"])
         labels: list[int] = list(pending.get("labels") or [])
@@ -676,7 +687,12 @@ class TableSearchMixin:
         self._search_pending = None
         finish = getattr(self, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Searching substructure", status_message=None)
+            finish(
+                "Searching substructure",
+                status_message=None,
+                job_id=getattr(self, "_search_progress_job_id", None),
+            )
+        self._search_progress_job_id = None
         self.status_label.setText(f"Search failed: {msg}")
 
     def collect_table_search_session(self) -> dict | None:
