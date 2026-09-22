@@ -242,77 +242,23 @@ def test_plot_web_load_finished_reapplies_page_background(qapp):  # noqa: ARG001
         view.deleteLater()
 
 
-def test_freeze_web_view_hides_hwnd_behind_scaled_cover(qapp):
-    """Splitter drag must unmap Chromium; Fusion scales the last frame in the slot."""
-    from PySide6.QtCore import QSize
-    from PySide6.QtGui import QResizeEvent
-    from PySide6.QtWidgets import QVBoxLayout, QWidget
+def test_plot_web_surface_has_no_freeze_cover_stack():
+    """Settle-then-resize policy: no splitter hide/cover/thaw machinery."""
+    import mctoolkit.ui.plot_web_surface as pws
 
-    from mctoolkit.ui.plot_web_surface import (
-        _FORCE_HOST_RESIZE_JS,
-        _SPLIT_COVER_ATTR,
-        _PlotWebHostFilter,
-        _freeze_one_web_view,
-        _plot_web_cover_rect,
-        _thaw_one_web_view,
-    )
-
-    class _FakePage:
-        def __init__(self) -> None:
-            self.js: list[str] = []
-            self.bg = None
-
-        def runJavaScript(self, js: str) -> None:
-            self.js.append(js)
-
-        def setBackgroundColor(self, color) -> None:
-            self.bg = color
-
-    class _FakeView(QWidget):
-        def __init__(self, parent=None) -> None:
-            super().__init__(parent)
-            self._page = _FakePage()
-
-        def page(self):
-            return self._page
-
-    parent = QWidget()
-    layout = QVBoxLayout(parent)
-    layout.setContentsMargins(0, 0, 0, 0)
-    child = _FakeView(parent)
-    layout.addWidget(child, 1)
-    parent.resize(240, 180)
-    parent.show()
-    qapp.processEvents()
-    filt = _PlotWebHostFilter(child)
-    child.installEventFilter(filt)
-    try:
-        _freeze_one_web_view(child)
-        cover = getattr(child, _SPLIT_COVER_ATTR)
-        assert cover is not None
-        assert child.isHidden()
-        assert cover.isVisible()
-        assert cover.hasScaledContents()
-        assert cover.geometry() == _plot_web_cover_rect(child)
-        _freeze_one_web_view(child)
-        assert getattr(child, _SPLIT_COVER_ATTR) is cover
-        # Expanding the pane while Chromium is hidden must grow the cover, not leave gray.
-        parent.resize(400, 300)
-        qapp.processEvents()
-        assert cover.geometry() == _plot_web_cover_rect(child)
-        assert cover.width() >= 390
-        assert cover.height() >= 290
-        filt.eventFilter(child, QResizeEvent(QSize(160, 120), QSize(100, 80)))
-        assert cover.geometry() == _plot_web_cover_rect(child)
-        child._page.js.clear()
-        _thaw_one_web_view(child)
-        assert getattr(child, _SPLIT_COVER_ATTR, None) is None
-        assert child.isVisible()
-        qapp.processEvents()
-        assert _FORCE_HOST_RESIZE_JS in child._page.js
-        _thaw_one_web_view(child)
-    finally:
-        parent.deleteLater()
+    for name in (
+        "_freeze_one_web_view",
+        "_thaw_one_web_view",
+        "freeze_webengine_for_splitter_drag",
+        "thaw_webengine_after_splitter_drag",
+        "webengine_view_is_split_frozen",
+        "_SPLIT_COVER_ATTR",
+        "_FORCE_HOST_RESIZE_JS",
+    ):
+        assert not hasattr(pws, name), name
+    assert hasattr(pws, "_HOST_RESIZE_JS")
+    assert hasattr(pws, "_PlotWebHostFilter")
+    assert hasattr(pws, "build_plot_web_view")
 
 
 def test_no_module_scope_webengine_imports():
