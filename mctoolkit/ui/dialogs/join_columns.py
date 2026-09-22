@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
-"""Join two table columns with a delimiter (Data → Table → Join Columns)."""
+"""Join two table columns with a delimiter (Data → Table → Operations → Join Columns)."""
 
 from __future__ import annotations
 
