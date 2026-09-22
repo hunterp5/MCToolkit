@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
-from .analysis_job_support import ensure_text_column_tool_ready
+from .analysis_job_support import enqueue_process_queue_job, ensure_text_column_tool_ready
 from .strings import TOOL_REACTION_ENUMERATION, TOOL_REACTION_EXTRACT
 from ..chem.reaction_extract import extract_reaction_column_values, preferred_reaction_source_column
 from ..chem.reaction_file_io import reaction_smarts_from_app_selection
@@ -133,12 +133,14 @@ class ReactionTools:
             QMessageBox.warning(self._app, TOOL_REACTION_ENUMERATION, guard.message)
             return
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress(TOOL_REACTION_ENUMERATION, p.max_products)
-        self._app.process_queue.enqueue(
-            f"{TOOL_REACTION_ENUMERATION} ({p.reaction_name})",
+        enqueue_process_queue_job(
+            self._app,
+            TOOL_REACTION_ENUMERATION,
+            p.max_products,
             lambda ev, req=p, sigs=self._app.signals, prog=ps: ReactionEnumerationWorker(
                 req, TOOL_REACTION_ENUMERATION, sigs, cancel_event=ev, progress_state=prog
             ),
+            queue_label=f"{TOOL_REACTION_ENUMERATION} ({p.reaction_name})",
         )
 
     def on_reaction_enum_finished(self, result) -> None:
