@@ -180,7 +180,7 @@ class TableCalcTools:
             set_stack(1)
 
     def add_blank_table_row(self, count: int | None = None) -> None:
-        """Append empty rows (Data → Table → Add Row). *count* skips the dialog."""
+        """Append empty rows (Data → Table → Operations → Add Row). *count* skips the dialog."""
         from .dialogs.add_table import MAX_ADD_ROWS, AddTableRowsDialog
         from .main_window.table_undo_commands import UndoAddBlankRowCommand
 
@@ -194,7 +194,7 @@ class TableCalcTools:
         self._app._undo_stack.push(UndoAddBlankRowCommand(self._app, n))
 
     def add_blank_table_column(self, name: str | None = None, *, count: int | None = None) -> None:
-        """Append empty data columns (Data → Table → Add Column)."""
+        """Append empty data columns (Data → Table → Operations → Add Column)."""
         from .dialogs.add_table import MAX_ADD_COLUMNS, AddTableColumnsDialog
         from .main_window.table_undo_commands import UndoAddBlankColumnCommand
 
