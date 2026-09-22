@@ -25,24 +25,26 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from ...conformers.conformer_column_codec import serialize_confs_sidecar
 from ...ionization.microstate_cache import serialize_ionization_sidecar
 from ...services.filter_config import cfg_column
 from ...table.session_codec import (
     compact_global_bounds,
-    compact_session_document,
     dumps_session_document,
-    encode_mol_blob_b64,
     expand_session_document,
     loads_session_bytes,
-    SESSION_ENSEMBLES_KEY,
     session_format_ok,
     session_version_ok,
 )
-from ...chem.molecule_conversion import mol_graph_binary, mol_to_canonical_smiles
+from ...table.session_document_build import assemble_session_document
+from ...chem.molecule_conversion import mol_to_canonical_smiles
+from ...workers.session_save import SessionSaveWorker
+from ..background_jobs import register_background_job, unregister_background_job
+from ..threadpool_access import start_runnable_on_app_pool
 from ..widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
 
 logger = logging.getLogger(__name__)
@@ -65,12 +67,24 @@ class SessionSaveMixin:
     def duplicate_session(self) -> None:
         """Launch a new MolManager instance with the current table state."""
         try:
-            path = self._write_session_bundle_file()
-            subprocess.Popen(
-                [sys.executable, "-m", "molmanager", "--load-session", path], close_fds=True
-            )
+            path = self._session_bundle_temp_path()
+            snapshot = self._snapshot_session_save_inputs()
         except Exception as e:
             QMessageBox.warning(self, "Duplicate Session", str(e))
+            return
+        self._enqueue_session_save(
+            path,
+            snapshot,
+            clear_dirty=False,
+            status_prefix="Session duplicated to",
+            dialog_title="Duplicate Session",
+            on_success=lambda p=path: self._launch_duplicate_session(p),
+        )
+
+    def _launch_duplicate_session(self, path: str) -> None:
+        subprocess.Popen(
+            [sys.executable, "-m", "molmanager", "--load-session", path], close_fds=True
+        )
 
     def _write_session_csv(self) -> str:
         """Serialize current table to a session CSV (includes all columns except Structure image)."""
@@ -121,17 +135,48 @@ class SessionSaveMixin:
 
         return out_path
 
-    def _write_session_bundle_file(self) -> str:
-        """Write a full session bundle (.cms JSON) under the temp session directory."""
+    def _session_bundle_temp_path(self) -> str:
+        """Return a new ``.cms`` path under the temp session directory (does not write)."""
         session_dir = os.path.join(tempfile.gettempdir(), "MolManagerSessions")
         os.makedirs(session_dir, exist_ok=True)
         fname = f"session_{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}.cms"
-        out_path = os.path.join(session_dir, fname)
-        with open(out_path, "wb") as f:
-            f.write(dumps_session_document(self._build_session_document()))
-        return out_path
+        return os.path.join(session_dir, fname)
+
+    def _session_data_headers(self) -> list[str]:
+        return [h for h in self.headers if h not in ("ID_HIDDEN", "Structure")]
+
+    def _snapshot_structure_payloads(self, oids: set[int] | None) -> dict[int, tuple[bytes | None, str]]:
+        """One MolStore scan of ``(blob, smiles)`` — no RDKit hydrate on the GUI thread."""
+        payloads: dict[int, tuple[bytes | None, str]] = {}
+        iter_fn = getattr(self.mols, "iter_structure_payloads", None)
+        if not callable(iter_fn):
+            return payloads
+        for oid, blob, smi in iter_fn():
+            oid_i = int(oid)
+            if oids is not None and oid_i not in oids:
+                continue
+            payloads[oid_i] = (blob, smi or "")
+        return payloads
+
+    def _snapshot_session_save_inputs(self, *, oids: set[int] | None = None) -> dict:
+        """Cheap GUI snapshot: cell text + stored structure payloads, no RDKit serialize."""
+        data_headers = self._session_data_headers()
+        entries = self._table_model.export_rows_for_sqlite(data_headers)
+        if oids is not None:
+            entries = [(oid, cells) for oid, cells in entries if oid in oids]
+        return {
+            "headers": list(self.headers),
+            "entries": entries,
+            "payloads": self._snapshot_structure_payloads(oids),
+            "metadata": self._session_document_metadata(oids=oids),
+            "ensembles": self._ensembles_sqlite_for_session(oids),
+        }
 
     def _build_session_document(self, *, oids: set[int] | None = None) -> dict:
+        """Synchronous compact document (tests). File save uses :meth:`_enqueue_session_save`."""
+        return assemble_session_document(self._snapshot_session_save_inputs(oids=oids))
+
+    def _session_document_metadata(self, *, oids: set[int] | None = None) -> dict:
         hh = self.table.horizontalHeader()
         n = self._table_model.columnCount()
         logical_order = sorted(range(n), key=lambda lg: hh.visualIndex(lg)) if n else []
@@ -145,47 +190,7 @@ class SessionSaveMixin:
                 sort_col = sc
                 sort_asc = bool(ss.get("ascending", True))
                 sort_mode = str(ss.get("mode") or "auto")
-        rows_out: list[dict] = []
-        structure_smiles: list[str] = []
-        structure_mols: list[str] = []
-        n_rows = self._table_model.rowCount()
-        smiles_col = "SMILES" in self.headers
         want = oids
-        for r in range(n_rows):
-            oid = int(self._table_model.row_oid(r))
-            if want is not None and oid not in want:
-                continue
-            cells: dict[str, str] = {}
-            for ci, h in enumerate(self.headers):
-                if h in ("ID_HIDDEN", "Structure"):
-                    continue
-                if self._table_model.is_pixmap_data_column(h):
-                    cells[h] = self._table_model.backing_value_for_row_header(r, h)
-                else:
-                    cells[h] = self._table_cell_text(r, ci)
-            mol = None
-            blob = None
-            getter = getattr(self.mols, "blob_for", None)
-            if callable(getter):
-                blob = getter(oid)
-            if not blob:
-                mol = self.mols.get(oid)
-                if mol is None:
-                    mol = self._mol_for_structure_row(r)
-                blob = mol_graph_binary(mol)
-            structure_mols.append(encode_mol_blob_b64(blob))
-            smi = str(cells.get("SMILES") or "").strip() if smiles_col else ""
-            if smi:
-                structure_smiles.append(smi)
-            else:
-                if mol is None and blob:
-                    mol = self.mols.get(oid)
-                    if mol is None:
-                        mol = self._mol_for_structure_row(r)
-                structure_smiles.append(mol_to_canonical_smiles(mol) if mol is not None else "")
-                if smiles_col and mol is not None and not (cells.get("SMILES") or "").strip():
-                    cells["SMILES"] = structure_smiles[-1]
-            rows_out.append({"id": oid, "cells": cells})
         filters_out: list[dict] = []
         for f in self.filters:
             if isinstance(f, SubstructureFilterCard):
@@ -243,9 +248,6 @@ class SessionSaveMixin:
             "format": self._SESSION_FORMAT,
             "version": self._SESSION_VERSION,
             "headers": list(self.headers),
-            "rows": rows_out,
-            "structure_smiles": structure_smiles,
-            "structure_mols": structure_mols,
             "global_bounds": compact_global_bounds(getattr(self, "global_bounds", None)),
             "next_oid": int(self.next_oid),
             "zoomed_ids": sorted(int(x) for x in self.zoomed_ids if want is None or int(x) in want),
@@ -282,11 +284,7 @@ class SessionSaveMixin:
             search_payload = collect_search()
             if search_payload:
                 doc["table_search"] = search_payload
-        out = compact_session_document(doc)
-        ensembles = self._ensembles_sqlite_for_session(want)
-        if ensembles:
-            out[SESSION_ENSEMBLES_KEY] = ensembles
-        return out
+        return doc
 
     def _confs_sidecar_for_session(self, oids: set[int] | None) -> dict[tuple[int, str], str]:
         from ...storage import EnsembleStore
@@ -368,10 +366,10 @@ class SessionSaveMixin:
             mark()
 
     def save_session_as(self) -> bool:
-        """Prompt for a path and save the session. Returns True if a file was written."""
+        """Prompt for a path and save the session. Returns True if a write was started."""
         return self._prompt_save_session_document(
             dialog_title="Save Session",
-            document=self._build_session_document(),
+            oids=None,
             clear_dirty=True,
             status_prefix="Session saved to",
         )
@@ -388,7 +386,7 @@ class SessionSaveMixin:
             return False
         return self._prompt_save_session_document(
             dialog_title="Save Selected to Session",
-            document=self._build_session_document(oids=oids),
+            oids=oids,
             clear_dirty=False,
             status_prefix="Selected rows saved to session",
         )
@@ -397,7 +395,7 @@ class SessionSaveMixin:
         self,
         *,
         dialog_title: str,
-        document: dict,
+        oids: set[int] | None,
         clear_dirty: bool,
         status_prefix: str,
     ) -> bool:
@@ -410,22 +408,141 @@ class SessionSaveMixin:
         if not low.endswith(".cms") and not low.endswith(".json"):
             path += ".cms"
         try:
-            with open(path, "wb") as f:
-                f.write(dumps_session_document(document))
-            self.status_label.setText(f"{status_prefix} {path}")
-            if clear_dirty:
-                clear = getattr(self, "_clear_session_dirty", None)
-                if callable(clear):
-                    clear()
-            self._session_source_path = path
-            write_cache = getattr(self, "_write_session_structure_cache", None)
-            if callable(write_cache):
-                write_cache(path)
-            return True
+            snapshot = self._snapshot_session_save_inputs(oids=oids)
         except Exception as e:
-            logger.exception("Save session failed: %s", path)
+            logger.exception("Save session snapshot failed")
             QMessageBox.warning(self, dialog_title, str(e))
             return False
+        return self._enqueue_session_save(
+            path,
+            snapshot,
+            clear_dirty=clear_dirty,
+            status_prefix=status_prefix,
+            dialog_title=dialog_title,
+        )
+
+    def _enqueue_session_save(
+        self,
+        path: str,
+        snapshot: dict,
+        *,
+        clear_dirty: bool,
+        status_prefix: str,
+        dialog_title: str,
+        on_success: Callable[[], None] | None = None,
+    ) -> bool:
+        """Queue compact+write off the GUI thread. Returns True if a write was started."""
+        pending = {
+            "path": path,
+            "clear_dirty": bool(clear_dirty),
+            "status_prefix": str(status_prefix),
+            "dialog_title": str(dialog_title),
+            "on_success": on_success,
+        }
+        sigs = getattr(self, "_session_save_signals", None)
+        pool = getattr(self, "threadpool", None)
+        if sigs is None or pool is None:
+            return self._write_session_snapshot_sync(snapshot, pending)
+        self._session_save_gen = int(getattr(self, "_session_save_gen", 0)) + 1
+        gen = self._session_save_gen
+        jobs = getattr(self, "_session_save_pending", None)
+        if jobs is None:
+            jobs = {}
+            self._session_save_pending = jobs
+        jobs[gen] = pending
+        self._session_save_last_ok = False
+        n_rows = max(1, len(snapshot.get("entries") or []))
+        job_id = f"session-save-{gen}"
+        pending["job_id"] = job_id
+        register_background_job(self, job_id, f"Saving session ({n_rows:,} rows)")
+        begin = getattr(self, "_begin_tool_progress", None)
+        if callable(begin):
+            begin("Saving session", n_rows, job_id=job_id)
+        self.status_label.setText("Saving session…")
+        prog = getattr(self, "_tool_progress_state", None)
+        bind = getattr(prog, "bind", None)
+        if callable(bind) and job_id:
+            prog = bind(job_id)
+        start_runnable_on_app_pool(
+            self,
+            SessionSaveWorker(gen, path, snapshot, sigs, progress_state=prog),
+        )
+        return True
+
+    def _write_session_snapshot_sync(self, snapshot: dict, pending: dict) -> bool:
+        """Fallback when the thread pool or save signals are unavailable."""
+        path = pending["path"]
+        try:
+            payload = dumps_session_document(assemble_session_document(snapshot))
+            with open(path, "wb") as handle:
+                handle.write(payload)
+        except Exception as e:
+            logger.exception("Save session failed: %s", path)
+            QMessageBox.warning(self, pending.get("dialog_title") or "Save Session", str(e))
+            self._session_save_last_ok = False
+            return False
+        self._apply_session_save_success(pending)
+        self._session_save_last_ok = True
+        return True
+
+    def _unregister_session_save_job(self, pending: dict | None) -> None:
+        job_id = None if pending is None else pending.get("job_id")
+        if job_id:
+            unregister_background_job(self, str(job_id))
+        finish = getattr(self, "_finish_tool_progress", None)
+        if callable(finish):
+            finish("Saving session", status_message=None, job_id=job_id)
+
+    def _apply_session_save_success(self, pending: dict) -> None:
+        path = pending["path"]
+        self.status_label.setText(f"{pending['status_prefix']} {path}")
+        if pending.get("clear_dirty"):
+            clear = getattr(self, "_clear_session_dirty", None)
+            if callable(clear):
+                clear()
+        self._session_source_path = path
+        write_cache = getattr(self, "_write_session_structure_cache", None)
+        if callable(write_cache):
+            write_cache(path)
+        on_success = pending.get("on_success")
+        if callable(on_success):
+            on_success()
+
+    def _on_session_save_finished(self, job_gen: int, path: str) -> None:
+        jobs = getattr(self, "_session_save_pending", None) or {}
+        pending = jobs.pop(int(job_gen), None)
+        self._unregister_session_save_job(pending)
+        if pending is None:
+            return
+        self._session_save_last_ok = True
+        try:
+            self._apply_session_save_success(pending)
+        except Exception as e:
+            logger.exception("Session save follow-up failed: %s", path)
+            self._session_save_last_ok = False
+            QMessageBox.warning(
+                self, pending.get("dialog_title") or "Save Session", str(e)
+            )
+
+    def _on_session_save_failed(self, job_gen: int, message: str) -> None:
+        jobs = getattr(self, "_session_save_pending", None) or {}
+        pending = jobs.pop(int(job_gen), None)
+        self._unregister_session_save_job(pending)
+        self._session_save_last_ok = False
+        title = (pending or {}).get("dialog_title") or "Save Session"
+        self.status_label.setText("Ready.")
+        QMessageBox.warning(self, title, message or "Could not save the session.")
+
+    def _wait_session_save(self, timeout_ms: int = 120_000) -> bool:
+        """Drain the app thread pool so a queued session write can finish (quit / tests)."""
+        pool = getattr(self, "threadpool", None)
+        ok = True
+        if pool is not None:
+            ok = bool(pool.waitForDone(int(timeout_ms)))
+        app = QApplication.instance()
+        if app is not None:
+            app.processEvents()
+        return ok
 
     def open_session_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

@@ -119,6 +119,8 @@ def test_save_session_clears_dirty(qapp, monkeypatch, tmp_path):  # noqa: ARG001
         lambda *args, **kwargs: (str(out), "MolManager Session (*.cms)"),
     )
     assert w.save_session_as() is True
+    assert w.threadpool.waitForDone(60_000)
+    qapp.processEvents()
     assert not w._session_has_unsaved_changes()
 
 
@@ -159,6 +161,8 @@ def test_save_selected_to_session_writes_subset_without_clearing_dirty(qapp, mon
         lambda *args, **kwargs: (str(out), "MolManager Session (*.cms)"),
     )
     assert w.save_selected_to_session() is True
+    assert w.threadpool.waitForDone(60_000)
+    qapp.processEvents()
     assert w._session_has_unsaved_changes()
     doc = expand_session_document(loads_session_bytes(out.read_bytes()))
     assert [row["id"] for row in doc["rows"]] == [1]

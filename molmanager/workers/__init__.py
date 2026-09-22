@@ -113,10 +113,12 @@ from .signals import (
     FilterApplySignals,
     FPSimilaritySignals,
     PharmacophoreScreenSignals,
+    SessionSaveSignals,
     SqliteRebuildSignals,
     SubstructureFilterSignals,
     WorkerSignals,
 )
+from .session_save import SessionSaveWorker
 from .sqlite_rebuild import SqliteRebuildWorker
 from .filter_apply import FilterApplyWorker
 from .substructure_filter import SubstructureFilterWorker
@@ -169,6 +171,8 @@ __all__ = [
     "RenderWorker",
     "STRUCTURE_PAYLOAD_TAG",
     "RGroupDecompositionWorker",
+    "SessionSaveSignals",
+    "SessionSaveWorker",
     "SqliteRebuildSignals",
     "SqliteRebuildWorker",
     "SubstructureFilterSignals",

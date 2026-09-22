@@ -148,3 +148,10 @@ class SqliteRebuildSignals(QObject):
 
     finished = pyqtSignal(int, str)  # job_gen, path to rebuilt sqlite file
     failed = pyqtSignal(int, str)  # job_gen, message
+
+
+class SessionSaveSignals(QObject):
+    """Completion signals for :class:`SessionSaveWorker` (owned by the main window)."""
+
+    finished = pyqtSignal(int, str)  # job_gen, path written
+    failed = pyqtSignal(int, str)  # job_gen, message

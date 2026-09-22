@@ -133,6 +133,12 @@ class AppLifecycleMixin:
                     if callable(save) and not save():
                         event.ignore()
                         return
+                    wait = getattr(self, "_wait_session_save", None)
+                    if callable(wait):
+                        wait()
+                    if not getattr(self, "_session_save_last_ok", True):
+                        event.ignore()
+                        return
         self._prepare_application_shutdown()
         QMainWindow.closeEvent(self, event)
 

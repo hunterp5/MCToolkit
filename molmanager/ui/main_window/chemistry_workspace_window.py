@@ -47,6 +47,7 @@ from ...storage import EnsembleStore, MolStore, SqliteTableStore
 from ...workers import (
     FilterApplySignals,
     RenderWorker,
+    SessionSaveSignals,
     SqliteRebuildSignals,
     SubstructureFilterSignals,
     WorkerSignals,
@@ -421,6 +422,12 @@ class ChemistryWorkspaceWindow(
         self._sqlite_rebuild_signals = SqliteRebuildSignals()
         self._sqlite_rebuild_signals.finished.connect(self._on_sqlite_rebuild_finished, _qc)
         self._sqlite_rebuild_signals.failed.connect(self._on_sqlite_rebuild_failed, _qc)
+        self._session_save_signals = SessionSaveSignals()
+        self._session_save_signals.finished.connect(self._on_session_save_finished, _qc)
+        self._session_save_signals.failed.connect(self._on_session_save_failed, _qc)
+        self._session_save_gen = 0
+        self._session_save_pending: dict[int, dict] = {}
+        self._session_save_last_ok = True
         self._wire_sqlite_store_dirty_tracking()
         self._wire_table_plot_refresh()
         self._tool_progress_state = ToolProgressState()
