@@ -146,8 +146,8 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
         SEPARATOR,
         submenu(
             "&Session",
-            action("&Open Session…", "open_session_file"),
-            action("&Save Session…", "save_session_as"),
+            action("&Open Session…", "open_session_file", hotkey="file.open_session"),
+            action("&Save Session…", "save_session_as", hotkey="file.save_session"),
             action("Save Selected to Session…", "save_selected_to_session"),
             action("&New Session", "new_session"),
             action("&Duplicate Session", "duplicate_session"),
@@ -272,7 +272,7 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
                 hotkey="tools.render_2d",
                 tooltip=(
                     "Regenerate 2D structure drawings for selected rows as a background "
-                    "batch (see Processes)."
+                    "batch (see Log)."
                 ),
             ),
             tooltips_visible=True,
@@ -561,32 +561,36 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
         "&Data",
         submenu(
             "&Table",
-            action(
-                "Add &Row…",
-                "add_blank_table_row",
-                hotkey="data.add_row",
-                tooltip="Append one or more empty rows at the bottom of the table.",
+            submenu(
+                "&Operations",
+                action(
+                    "Add &Row…",
+                    "add_blank_table_row",
+                    hotkey="data.add_row",
+                    tooltip="Append one or more empty rows at the bottom of the table.",
+                ),
+                action(
+                    "Add &Column…",
+                    "add_blank_table_column",
+                    hotkey="data.add_column",
+                    tooltip="Append one or more empty data columns. You choose the name and count.",
+                ),
+                SEPARATOR,
+                action(
+                    "Split Column…",
+                    "open_split_column_dialog",
+                    hotkey="data.split_column",
+                    tooltip="Split a delimited column (comma, tab, space, semicolon, …) into new columns.",
+                ),
+                action(
+                    "Join Columns…",
+                    "open_join_columns_dialog",
+                    hotkey="data.join_columns",
+                    tooltip="Join two columns into one new column with a chosen delimiter.",
+                ),
+                tooltips_visible=True,
             ),
-            action(
-                "Add &Column…",
-                "add_blank_table_column",
-                hotkey="data.add_column",
-                tooltip="Append one or more empty data columns. You choose the name and count.",
-            ),
-            SEPARATOR,
             action("Statistics…", "open_data_analysis", hotkey="data.analyze_table"),
-            action(
-                "Split Column…",
-                "open_split_column_dialog",
-                hotkey="data.split_column",
-                tooltip="Split a delimited column (comma, tab, space, semicolon, …) into new columns.",
-            ),
-            action(
-                "Join Columns…",
-                "open_join_columns_dialog",
-                hotkey="data.join_columns",
-                tooltip="Join two columns into one new column with a chosen delimiter.",
-            ),
         ),
         SEPARATOR,
         action(
