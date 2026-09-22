@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QToolButton,
     QVBoxLayout,
@@ -136,17 +137,18 @@ class FontSettingsDialog(QDialog):
         self._sync_align_buttons()
         root.addLayout(form)
 
-        btn_row = QHBoxLayout()
-        reset_btn = QPushButton("Reset to Default")
-        reset_btn.clicked.connect(self._reset_default)
-        btn_row.addWidget(reset_btn)
-        btn_row.addStretch()
-        root.addLayout(btn_row)
-
+        actions = QHBoxLayout()
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
-        root.addWidget(bb)
+        actions.addWidget(bb)
+        actions.addStretch(1)
+        reset_btn = QPushButton("Reset to Default")
+        reset_btn.setToolTip("Reset to default font sizes and table alignment")
+        reset_btn.clicked.connect(self._reset_default)
+        actions.addWidget(reset_btn)
+        root.addLayout(actions)
 
         make_window_minimizable(self)
 
