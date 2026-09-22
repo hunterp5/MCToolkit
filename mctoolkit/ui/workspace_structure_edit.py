@@ -23,6 +23,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from ..chem.molecule_conversion import mol_to_canonical_smiles
 from ..workers import DisconnectFragmentsWorker
+from .analysis_job_support import enqueue_process_queue_job
 
 
 class StructureEditTools:
@@ -88,14 +89,16 @@ class StructureEditTools:
                 self._app.status_label.setText("Ready.")
                 return
             title = f"{queue_title_prefix}disconnect largest fragments"
-            self._app._begin_tool_progress("Disconnect fragments", len(data))
-            self._app.process_queue.enqueue(
-                title,
+            enqueue_process_queue_job(
+                self._app,
+                "Disconnect fragments",
+                len(data),
                 lambda ev, d=data, s=self._app.signals, ps=self._app._tool_progress_state: (
                     DisconnectFragmentsWorker(
                         d, s, is_smiles=False, cancel_event=ev, progress_state=ps
                     )
                 ),
+                queue_label=title,
             )
         else:
             data = self._app.collect_scoped_structure_payloads(src, only_selected=only_selected)
@@ -108,14 +111,16 @@ class StructureEditTools:
                 self._app.status_label.setText("Ready.")
                 return
             title = f"{queue_title_prefix}disconnect largest fragments (column)"
-            self._app._begin_tool_progress("Disconnect fragments", len(data))
-            self._app.process_queue.enqueue(
-                title,
+            enqueue_process_queue_job(
+                self._app,
+                "Disconnect fragments",
+                len(data),
                 lambda ev, d=data, s=self._app.signals, ps=self._app._tool_progress_state: (
                     DisconnectFragmentsWorker(
                         d, s, is_smiles=True, cancel_event=ev, progress_state=ps
                     )
                 ),
+                queue_label=title,
             )
 
     def run_add_explicit_hydrogens(self) -> None:
@@ -165,9 +170,10 @@ class StructureEditTools:
             )
             self._app.status_label.setText("Ready.")
             return
-        self._app._begin_tool_progress("Add explicit hydrogens", len(data))
-        self._app.process_queue.enqueue(
+        enqueue_process_queue_job(
+            self._app,
             "Add explicit hydrogens",
+            len(data),
             lambda ev, d=data, s=self._app.signals, ps=self._app._tool_progress_state: (
                 AddExplicitHydrogensWorker(
                     d, s, is_smiles=False, cancel_event=ev, progress_state=ps
@@ -224,9 +230,10 @@ class StructureEditTools:
             )
             self._app.status_label.setText("Ready.")
             return
-        self._app._begin_tool_progress("Remove explicit hydrogens", len(data))
-        self._app.process_queue.enqueue(
+        enqueue_process_queue_job(
+            self._app,
             "Remove explicit hydrogens",
+            len(data),
             lambda ev, d=data, s=self._app.signals, ps=self._app._tool_progress_state: (
                 RemoveExplicitHydrogensWorker(
                     d, s, is_smiles=False, cancel_event=ev, progress_state=ps
@@ -285,12 +292,14 @@ class StructureEditTools:
             self._app.status_label.setText("Ready.")
             return
         title = f"{queue_title_prefix}neutralize".strip() or "Neutralize"
-        self._app._begin_tool_progress("Neutralize", len(data))
-        self._app.process_queue.enqueue(
-            title,
+        enqueue_process_queue_job(
+            self._app,
+            "Neutralize",
+            len(data),
             lambda ev, d=data, s=self._app.signals, ps=self._app._tool_progress_state: (
                 NeutralizeWorker(d, s, is_smiles=False, cancel_event=ev, progress_state=ps)
             ),
+            queue_label=title,
         )
 
     def on_disconnect_fragments_finished(self, results):
