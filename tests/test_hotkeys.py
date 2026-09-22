@@ -37,6 +37,24 @@ def test_default_and_override_roundtrip():
     assert effective_shortcuts("tools.search") == default_shortcuts("tools.search")
 
 
+def test_ctrl_o_and_s_default_to_session():
+    clear_hotkey_overrides()
+    assert default_shortcuts("file.open_session") == ["Ctrl+O"]
+    assert default_shortcuts("file.save_session") == ["Ctrl+S"]
+    assert default_shortcuts("file.open") == []
+    assert default_shortcuts("file.export_all") == []
+    dups = find_duplicate_bindings(
+        {
+            "file.open": default_shortcuts("file.open"),
+            "file.export_all": default_shortcuts("file.export_all"),
+            "file.open_session": default_shortcuts("file.open_session"),
+            "file.save_session": default_shortcuts("file.save_session"),
+        }
+    )
+    assert dups == {}
+    clear_hotkey_overrides()
+
+
 def test_find_duplicate_bindings():
     dups = find_duplicate_bindings(
         {
