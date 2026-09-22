@@ -413,37 +413,37 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "data_pca",
                 "PCA",
                 "PCA",
-                "Data → Dimensionality Reduction → Principal Component Analysis.",
+                "Data → DimRed Plots → Principal Component Analysis.",
             ),
             _e(
                 "data_tsne",
                 "t-SNE",
                 "t-SNE",
-                "Data → Dimensionality Reduction → t-SNE Visualization.",
+                "Data → DimRed Plots → t-SNE Visualization.",
             ),
             _e(
                 "data_umap",
                 "UMAP",
                 "UMAP",
-                "Data → Dimensionality Reduction → UMAP Visualization.",
+                "Data → DimRed Plots → UMAP Visualization.",
             ),
             _e(
                 "data_som",
                 "SOM",
                 "Self-Organizing Map",
-                "Data → Dimensionality Reduction → Self-Organizing Map.",
+                "Data → DimRed Plots → Self-Organizing Map.",
             ),
             _e(
                 "data_boiled_egg",
                 "BOILED-Egg",
                 "BOILED-Egg",
-                "Data → MedChem → BOILED-Egg plot.",
+                "Data → MedChem Plots → BOILED-Egg plot.",
             ),
             _e(
                 "data_golden_triangle",
                 "Golden Triangle",
                 "Golden Triangle",
-                "Data → MedChem → Golden Triangle plot.",
+                "Data → MedChem Plots → Golden Triangle plot.",
             ),
             _e(
                 "data_sali",
@@ -466,7 +466,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
         ),
     ),
     GuideSection(
-        "11 — External data",
+        "11 — Query Database",
         (
             _e(
                 "ext_sql", "SQL Database", "SQL Database", "Load query results from a SQL database."

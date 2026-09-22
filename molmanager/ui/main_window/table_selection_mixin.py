@@ -389,6 +389,7 @@ class TableSelectionMixin:
         view_rows: list[int],
         *,
         clear_oid_override: bool,
+        extra_status: str = "",
         mode_flags=None,
     ) -> int:
         if clear_oid_override:
@@ -416,11 +417,13 @@ class TableSelectionMixin:
         self.table.setSelectionBehavior(prev_behavior)
         self._sync_table_selection_highlight()
         self._refresh_table_selection_visual(source_rows)
+        n = len(source_rows)
+        self._report_table_selection_status(n, extra=extra_status, pump=True)
         self._schedule_plot_sync_after_programmatic_selection()
         sync_dock = getattr(self, "_sync_dock_complex_viewer", None)
         if callable(sync_dock):
             sync_dock()
-        return len(source_rows)
+        return n
 
     def _finish_oid_override_selection(
         self,
@@ -485,6 +488,7 @@ class TableSelectionMixin:
         view_rows: list[int],
         *,
         clear_oid_override: bool,
+        extra_status: str = "",
     ) -> int:
         """Apply Qt selection in chunks so the UI stays responsive."""
         if clear_oid_override:
@@ -515,6 +519,7 @@ class TableSelectionMixin:
             "range_idx": 0,
             "ranges_per_tick": 80,
             "clear_oid_override": clear_oid_override,
+            "extra_status": extra_status,
             "prev_mode": prev_mode,
             "prev_behavior": prev_behavior,
         }
@@ -596,7 +601,11 @@ class TableSelectionMixin:
         self._table_selection_ctx = None
         self._sync_table_selection_highlight()
         self._refresh_table_selection_visual(source_rows)
-        self._report_table_selection_status(len(source_rows), pump=True)
+        self._report_table_selection_status(
+            len(source_rows),
+            extra=str(ctx.get("extra_status") or ""),
+            pump=True,
+        )
         self._schedule_plot_sync_after_programmatic_selection()
 
     def _apply_table_row_selection(
@@ -610,13 +619,15 @@ class TableSelectionMixin:
         if n_rows <= 0:
             if clear_oid_override:
                 self._selected_oids_override = None
-            self._report_table_selection_status(0)
+            self._report_table_selection_status(0, extra=extra_status)
             return 0
         uniq = sorted({int(r) for r in rows if 0 <= int(r) < n_rows})
         if not uniq:
             if clear_oid_override:
-                self._selected_oids_override = None
-            self._report_table_selection_status(0)
+                self.clear_table_selection()
+            else:
+                n_override = len(self._selected_oids_override or ())
+                self._report_table_selection_status(n_override, extra=extra_status)
             return 0
         cfg = load_config()
         oid_min = cfg.table_selection_oid_override_min
@@ -634,15 +645,23 @@ class TableSelectionMixin:
         if not view_rows:
             if not clear_oid_override and self._selected_oids_override:
                 n_override = len(self._selected_oids_override)
-                self._report_table_selection_status(n_override)
+                self._report_table_selection_status(n_override, extra=extra_status)
                 return n_override
-            self._report_table_selection_status(0)
+            self._report_table_selection_status(0, extra=extra_status)
             return 0
         if len(uniq) >= chunk_thresh:
-            self._start_chunked_qt_selection(uniq, view_rows, clear_oid_override=clear_oid_override)
+            self._start_chunked_qt_selection(
+                uniq,
+                view_rows,
+                clear_oid_override=clear_oid_override,
+                extra_status=extra_status,
+            )
             return len(uniq)
         return self._apply_qt_view_row_selection(
-            uniq, view_rows, clear_oid_override=clear_oid_override
+            uniq,
+            view_rows,
+            clear_oid_override=clear_oid_override,
+            extra_status=extra_status,
         )
 
     def _select_all_visible_rows(self) -> None:
@@ -701,7 +720,7 @@ class TableSelectionMixin:
             return
         if len(inverted) >= load_config().table_selection_oid_override_min:
             self._maybe_status_before_large_select()
-        self.select_table_rows(inverted)
+        self.select_table_rows(inverted, extra_status="Inverted.")
 
     def _select_first_occurrence_per_distinct_value(self, col: int) -> None:
         """Select the first visible row for each distinct non-empty cell text in this column."""

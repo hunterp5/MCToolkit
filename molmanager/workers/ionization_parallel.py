@@ -43,6 +43,9 @@ logger = logging.getLogger(__name__)
 # larger batch; several CPU workers keep smaller chunks so progress still moves.
 UNIPKA_STRUCTURE_CHUNK = 8
 UNIPKA_STRUCTURE_CHUNK_SERIAL = 16
+# Wait-loop poll while a chunk is in flight. Scoring stays batched; this only
+# refreshes the status bar from shared per-molecule flags.
+UNIPKA_PROGRESS_POLL_S = 0.1
 
 _POOL_LOCK = threading.Lock()
 _PERSISTENT_POOL: ProcessPoolExecutor | None = None
@@ -60,12 +63,54 @@ def unipka_cuda_available() -> bool:
     return torch_is_cuda_build()
 
 
+def structure_progress_flags(n: int):
+    """Shared 0/1 completion flags for unique structures (process-pool progress)."""
+    from multiprocessing import Array
+
+    n_i = max(0, int(n))
+    if n_i <= 0:
+        return None
+    return Array("B", n_i)
+
+
+def mark_structure_progress(flags, flag_indices: list[int] | None, done_local: int) -> None:
+    """Mark the first *done_local* chunk keys complete on *flags*."""
+    if flags is None or not flag_indices:
+        return
+    n_mark = min(max(int(done_local), 0), len(flag_indices))
+    for j in range(n_mark):
+        flags[flag_indices[j]] = 1
+
+
+def flagged_unique_count(flags, n: int) -> int:
+    """How many of the first *n* flag slots are set."""
+    if flags is None:
+        return 0
+    return sum(1 for i in range(max(0, int(n))) if flags[i])
+
+
+def flagged_row_count(
+    flags,
+    keys: list[str],
+    oids_map: dict[str, list],
+    base: int = 0,
+) -> int:
+    """Row progress: *base* plus table rows whose unique key is flagged."""
+    done = int(base)
+    if flags is None:
+        return done
+    for i, key in enumerate(keys):
+        if flags[i]:
+            done += len(oids_map.get(key, ()))
+    return done
+
+
 def chunk_structure_keys(keys: list[str], n_workers: int) -> list[list[str]]:
     """Split unique keys into process-pool tasks.
 
     Each task is one Uni-pKa free-energy call. Batching several structures
-    amortizes LMDB setup and GPU kernel launches; chunks stay small enough
-    that the status bar still advances on large jobs.
+    amortizes LMDB setup and GPU kernel launches; per-molecule status comes
+    from shared flags, not from shrinking these batches.
     """
     if not keys:
         return []
@@ -276,6 +321,8 @@ def _mp_compute_microstates(task: tuple[str, bytes]) -> tuple[str, object | None
 
 def _mp_compute_microstates_chunk(
     tasks: list[tuple[str, bytes]],
+    progress_flags=None,
+    flag_indices: list[int] | None = None,
 ) -> list[tuple[str, object | None]]:
     """Score a chunk of structures in one Uni-pKa free-energy call."""
     from molmanager.ionization.unipka_ensembles import (
@@ -301,12 +348,27 @@ def _mp_compute_microstates_chunk(
         else:
             mols.append(mol)
     usable_idx = [i for i, mol in enumerate(mols) if mol is not None]
+    if flag_indices is not None:
+        for i, mol in enumerate(mols):
+            if mol is None:
+                mark_structure_progress(progress_flags, [flag_indices[i]], 1)
     ensembles: list[object | None] = [None] * len(keys)
     if usable_idx:
+        usable_flags = (
+            [flag_indices[i] for i in usable_idx] if flag_indices is not None else None
+        )
+
+        def _report(done: int, _total: int) -> None:
+            mark_structure_progress(progress_flags, usable_flags, done)
+
         try:
-            scored = predict_ionization_ensembles([mols[i] for i in usable_idx])
+            scored = predict_ionization_ensembles(
+                [mols[i] for i in usable_idx],
+                on_progress=_report,
+            )
             for i, ens in zip(usable_idx, scored):
                 ensembles[i] = ens
+            _report(len(usable_idx), len(usable_idx))
         except Exception:
             logger.exception(
                 "Uni-pKa subprocess: batched prediction failed for %s structure(s)",
@@ -469,12 +531,28 @@ def build_microstates_cache_by_key(
     if use_mp:
         key_chunks = chunk_structure_keys(need, proc_workers)
         task_chunks = [[(k, rep[k].ToBinary()) for k in chunk] for chunk in key_chunks]
+        need_index = {k: i for i, k in enumerate(need)}
+        flags = structure_progress_flags(n_need)
+        n_cached = len(cache)
         pool_failed = False
         wrote_mmff = os.environ.get("MOLMANAGER_UNIPKA_MMFF_THREADS") is None and proc_workers > 1
         prev_mmff = _set_unipka_mmff_thread_env(proc_workers)
+
+        def _report_live(*, force: bool = False) -> None:
+            live = max(len(cache), n_cached + flagged_unique_count(flags, n_need))
+            _report_ionization(live, force=force)
+
         try:
             with ionization_process_pool(proc_workers, cancel_event=cancel_event) as ex:
-                pending = {ex.submit(_mp_compute_microstates_chunk, chunk) for chunk in task_chunks}
+                pending = {
+                    ex.submit(
+                        _mp_compute_microstates_chunk,
+                        chunk,
+                        flags,
+                        [need_index[k] for k in key_chunks[i]],
+                    )
+                    for i, chunk in enumerate(task_chunks)
+                }
                 while pending:
                     if should_terminate_process_pool(cancel_event):
                         completed, pending = wait(pending, timeout=0)
@@ -489,14 +567,22 @@ def build_microstates_cache_by_key(
                         for f in pending:
                             f.cancel()
                         break
-                    completed, pending = wait(pending, timeout=0.25, return_when=FIRST_COMPLETED)
+                    completed, pending = wait(
+                        pending,
+                        timeout=UNIPKA_PROGRESS_POLL_S,
+                        return_when=FIRST_COMPLETED,
+                    )
+                    _report_live()
                     for f in completed:
                         if f.cancelled():
                             continue
                         try:
                             for key, states in f.result():
                                 cache[key] = states
-                            _report_ionization(len(cache), force=True)
+                                idx = need_index.get(key)
+                                if idx is not None:
+                                    mark_structure_progress(flags, [idx], 1)
+                            _report_live(force=True)
                         except BrokenExecutor:
                             pool_failed = True
                             logger.warning(

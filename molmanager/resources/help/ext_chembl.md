@@ -23,7 +23,7 @@ Network access to ChEMBL; queries depend on the dialog (IDs, searches, random fe
 
 ## Workflow
 
-1. Open **ChEMBL** under **External**.
+1. Open **Tools → Query Database → ChEMBL**.
 2. Search or fetch the records of interest.
 3. Select results to keep.
 4. Add them to the table and standardize structures if needed.

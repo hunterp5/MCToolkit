@@ -46,6 +46,18 @@ from ..analysis_job_support import enqueue_process_queue_job
 logger = logging.getLogger(__name__)
 
 
+def _result_oids(results: list) -> list[int]:
+    oids: list[int] = []
+    for item in results or ():
+        if not item:
+            continue
+        try:
+            oids.append(int(item[0]))
+        except (TypeError, ValueError, IndexError):
+            continue
+    return oids
+
+
 class ConformersToolsMixin:
     def open_generate_conformations(self):
         if not self.headers or self._table_model.rowCount() == 0:
@@ -293,7 +305,7 @@ class ConformersToolsMixin:
         except Exception:
             pass
         try:
-            confs_col = self._next_packed_ensemble_column("confs")
+            confs_col = self._next_packed_ensemble_column("confs", _result_oids(results))
             self._write_ensemble_worker_results(confs_col, results)
             if output_opts is not None and output_opts.add_to_table:
                 added_rows = self._append_generated_conformers_as_rows(results)
@@ -485,7 +497,7 @@ class ConformersToolsMixin:
         except Exception:
             pass
         try:
-            superpose_col = self._next_packed_ensemble_column("superpose")
+            superpose_col = self._next_packed_ensemble_column("superpose", _result_oids(results))
             self._write_ensemble_worker_results(superpose_col, results)
             self.schedule_calculate_global_bounds()
             self.table.setSortingEnabled(False)
@@ -598,7 +610,7 @@ class ConformersToolsMixin:
         viewer_mols: list[Chem.Mol] = []
         superpose_col = "superpose"
         try:
-            superpose_col = self._next_packed_ensemble_column("superpose")
+            superpose_col = self._next_packed_ensemble_column("superpose", _result_oids(results))
             for _oid, mol, meta in results:
                 if mol is None or not (meta or {}).get("ok"):
                     continue
@@ -778,11 +790,11 @@ class ConformersToolsMixin:
             opened = True
         return n_ok
 
-    def _next_packed_ensemble_column(self, base: str) -> str:
-        """Return a unique packed-ensemble header, inserting it when it is not already in the table."""
+    def _next_packed_ensemble_column(self, base: str, result_oids: list[int] | None = None) -> str:
+        """Return a packed-ensemble header, inserting it when it is not already in the table."""
         from .conformer_writeback import next_packed_ensemble_column
 
-        return next_packed_ensemble_column(self, base)
+        return next_packed_ensemble_column(self, base, result_oids)
 
     def _write_packed_ensemble_cells(self, column: str, pairs: list[tuple[int, str]]) -> None:
         """Store packed ensembles under *column*, demoting payloads into the sidecar keyed by that header."""

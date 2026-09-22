@@ -422,6 +422,46 @@ class TableCalcMixin:
         dlg.raise_()
         dlg.activateWindow()
 
+    def _ensure_fp_similarity_signals(self):
+        """Signals on the main window so fingerprint-similarity jobs survive dialog close."""
+        sig = getattr(self, "_fp_similarity_signals", None)
+        if sig is not None:
+            return sig
+        from ...workers import FPSimilaritySignals
+
+        sig = FPSimilaritySignals(self)
+        sig.finished.connect(self._on_fp_similarity_finished)
+        sig.failed.connect(self._on_fp_similarity_failed)
+        self._fp_similarity_signals = sig
+        return sig
+
+    def _on_fp_similarity_finished(self, rows) -> None:
+        ctx = getattr(self, "_fp_similarity_run_ctx", None) or {}
+        job_id = ctx.get("job_id")
+        self._finish_tool_progress("Fingerprint similarity", job_id=job_id)
+        from ..dialogs.fp_similarity import apply_fp_similarity_column
+
+        apply_fp_similarity_column(
+            self,
+            compare_oids=set(ctx.get("compare_oids") or []),
+            column_name=str(ctx.get("pending_column_name") or ""),
+            rows=rows,
+        )
+
+    def _on_fp_similarity_failed(self, msg: str) -> None:
+        from ..analysis_job_support import report_cancellable_job_failure
+
+        ctx = getattr(self, "_fp_similarity_run_ctx", None) or {}
+        report_cancellable_job_failure(
+            self,
+            "Fingerprint Similarity",
+            msg,
+            progress_label="Fingerprint similarity",
+            failure_fallback="Fingerprint similarity failed.",
+            cancelled_status="Cancelled.",
+            job_id=ctx.get("job_id"),
+        )
+
     def open_diverse_subset(self) -> None:
         if not self.headers:
             return

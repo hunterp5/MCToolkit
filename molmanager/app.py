@@ -18,6 +18,10 @@ import logging
 import os
 import sys
 
+from .platform_support.windows_console import ensure_stdio, hide_owned_windows_console
+
+ensure_stdio()
+
 from .platform_support.qt_webengine_flags import configure_qtwebengine_quiet_logs
 
 configure_qtwebengine_quiet_logs()
@@ -84,6 +88,7 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv
 
+    hide_owned_windows_console()
     _configure_logging()
     try:
         configure_rdkit_for_desktop_app()

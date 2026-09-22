@@ -33,7 +33,6 @@ from ...platform_support.config import load_config
 from ...plotting.plot_radar import resolve_entry_row_oid
 from ...chem.molecule_conversion import parse_molecule_from_cell_text
 from ...workers import (
-    FPSimilaritySignals,
     FPSimilarityWorker,
     SIMILARITY_FP_TYPE_LABELS,
     SIMILARITY_METRIC_LABELS,
@@ -57,7 +56,6 @@ class FPSimilarityDialog(QDialog):
         self._have_selection = n_sel > 0
         self._compare_oids: set[int] = set()
         self._pending_column_name = ""
-        self._writer: ChunkedTableWriter | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
@@ -113,10 +111,6 @@ class FPSimilarityDialog(QDialog):
         btn_row.addWidget(self.compute_btn)
         btn_row.addStretch()
         root.addLayout(btn_row)
-
-        self._fp_sim_signals = FPSimilaritySignals(self.parent_app)
-        self._fp_sim_signals.finished.connect(self._on_fp_similarity_finished)
-        self._fp_sim_signals.failed.connect(self._on_fp_similarity_failed)
 
         self.query_combo.currentIndexChanged.connect(self._toggle_query_mode)
         make_window_minimizable(self)
@@ -220,19 +214,23 @@ class FPSimilarityDialog(QDialog):
 
         self._compare_oids = compare_oids
         self._pending_column_name = self._unique_column_name(self.column_name_edit.text())
-
-        self.compute_btn.setEnabled(False)
+        app = self.parent_app
+        app._fp_similarity_run_ctx = {
+            "compare_oids": set(compare_oids),
+            "pending_column_name": self._pending_column_name,
+        }
+        sig = app._ensure_fp_similarity_signals()
         n_targets = len(targets)
-        enqueue_fast_process_queue_job(
-            self.parent_app,
+        app._fp_similarity_run_ctx["job_id"] = enqueue_fast_process_queue_job(
+            app,
             "Fingerprint similarity",
             max(1, n_targets + 1),
-            lambda ev, ps, q=qmol, t=targets, c=fp_choice, m=metric, sig=self._fp_sim_signals: (
+            lambda ev, ps, q=qmol, t=targets, c=fp_choice, m=metric, s=sig: (
                 FPSimilarityWorker(
                     q,
                     t,
                     c,
-                    sig,
+                    s,
                     metric=m,
                     cancel_event=ev,
                     progress_state=ps,
@@ -240,79 +238,73 @@ class FPSimilarityDialog(QDialog):
             ),
             queue_label="Fingerprint similarity",
         )
+        self.close()
 
-    def _write_similarity_column(self, rows) -> None:
-        app = self.parent_app
-        success = {oid: f"{sim:.4f}" for oid, sim, _ in (rows or [])}
-        oid_map = {oid: success.get(oid, "N/A") for oid in self._compare_oids}
-        name = self._pending_column_name
-        model = app._table_model
-        app.headers.append(name)
-        model.insert_column_at(model.columnCount(), name, None)
 
-        n_rows = model.rowCount()
-        n_scored = len(success)
-        n_na = len(self._compare_oids) - n_scored
-        cfg = load_config()
-        chunked = n_rows >= max(500, int(cfg.table_selection_chunk_rows))
+def apply_fp_similarity_column(
+    app, *, compare_oids: set[int], column_name: str, rows
+) -> None:
+    """Write fingerprint-similarity scores into a new table column."""
+    name = (column_name or "").strip()
+    if not name:
+        return
+    success = {oid: f"{sim:.4f}" for oid, sim, _ in (rows or [])}
+    oid_map = {oid: success.get(oid, "N/A") for oid in compare_oids}
+    model = app._table_model
+    app.headers.append(name)
+    model.insert_column_at(model.columnCount(), name, None)
 
-        def write_chunk(start: int, end: int, is_last: bool) -> None:
-            model.fill_column_from_oid_map(
-                name,
-                oid_map,
-                default="",
-                start_row=start,
-                end_row=end,
-                emit=True,
-                rebuild_color=is_last,
-            )
+    n_rows = model.rowCount()
+    n_scored = len(success)
+    n_na = len(compare_oids) - n_scored
+    cfg = load_config()
+    chunked = n_rows >= max(500, int(cfg.table_selection_chunk_rows))
 
-        def on_done() -> None:
-            app._sync_global_bounds_for_headers([name], refresh_filters=True)
-            if chunked:
-                app._finish_tool_progress(
-                    "Writing results", status_message=None, job_id=write_job_id
-                )
-            app.status_label.setText(
-                f"Added '{name}' with {n_scored} score(s); {n_na} N/A in scope"
-            )
-
-        if self._writer is not None:
-            self._writer.cancel()
-        write_job_id = str(uuid.uuid4())[:8] if chunked else None
-        self._writer = ChunkedTableWriter(
-            table=app.table,
-            total=n_rows,
-            chunk=max(250, int(cfg.ingest_gui_chunk_size)) if chunked else max(1, n_rows),
-            write_chunk=write_chunk,
-            on_progress=(
-                (
-                    lambda done, total, jid=write_job_id: app._tool_progress_state.update(
-                        "Writing results…", done, total, job_id=jid
-                    )
-                )
-                if chunked
-                else None
-            ),
-            on_done=on_done,
-            should_continue=lambda: self.parent_app is not None,
+    def write_chunk(start: int, end: int, is_last: bool) -> None:
+        model.fill_column_from_oid_map(
+            name,
+            oid_map,
+            default="",
+            start_row=start,
+            end_row=end,
+            emit=True,
+            rebuild_color=is_last,
         )
+
+    def on_done() -> None:
+        app._sync_global_bounds_for_headers([name], refresh_filters=True)
         if chunked:
-            app._begin_tool_progress("Writing results", n_rows, job_id=write_job_id)
-            self._writer.start()
-        else:
-            self._writer.run_now()
-
-    def _on_fp_similarity_finished(self, rows) -> None:
-        self.compute_btn.setEnabled(True)
-        self.parent_app._finish_tool_progress("Fingerprint similarity")
-        if not self._pending_column_name:
-            return
-        self._write_similarity_column(rows)
-
-    def _on_fp_similarity_failed(self, msg: str) -> None:
-        self.compute_btn.setEnabled(True)
-        self.parent_app._finish_tool_progress("Fingerprint similarity")
-        self.parent_app.status_label.setText(
-            f"Fingerprint similarity failed: {msg or 'Computation failed.'}"
+            app._finish_tool_progress(
+                "Writing results", status_message=None, job_id=write_job_id
+            )
+        app.status_label.setText(
+            f"Added '{name}' with {n_scored} score(s); {n_na} N/A in scope"
         )
+
+    writer = getattr(app, "_fp_similarity_writer", None)
+    if writer is not None:
+        writer.cancel()
+    write_job_id = str(uuid.uuid4())[:8] if chunked else None
+    writer = ChunkedTableWriter(
+        table=app.table,
+        total=n_rows,
+        chunk=max(250, int(cfg.ingest_gui_chunk_size)) if chunked else max(1, n_rows),
+        write_chunk=write_chunk,
+        on_progress=(
+            (
+                lambda done, total, jid=write_job_id: app._tool_progress_state.update(
+                    "Writing results…", done, total, job_id=jid
+                )
+            )
+            if chunked
+            else None
+        ),
+        on_done=on_done,
+        should_continue=lambda: True,
+    )
+    app._fp_similarity_writer = writer
+    if chunked:
+        app._begin_tool_progress("Writing results", n_rows, job_id=write_job_id)
+        writer.start()
+    else:
+        writer.run_now()

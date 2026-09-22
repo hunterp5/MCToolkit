@@ -115,6 +115,11 @@ class TableUIMixin(
         self.table.setSortingEnabled(False)
         self._table_model.sort(logical_col, order, sort_kind=sort_kind)
         self._session_sort = {"column": logical_col, "ascending": ascending, "mode": sort_kind}
+        header = self.headers[logical_col] if 0 <= int(logical_col) < len(self.headers) else ""
+        kind = "numeric" if str(sort_kind) == "numeric" else "alphabetic"
+        direction = "ascending" if ascending else "descending"
+        name = f" '{header}'" if header else ""
+        self.status_label.setText(f"Sorted{name} {kind} {direction}.")
 
     def _on_horizontal_header_section_clicked(self, logical_index: int) -> None:
         if logical_index < 0 or logical_index >= len(self.headers):

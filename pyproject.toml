@@ -61,7 +61,7 @@ dev = [
     "pip-audit>=2.7",
 ]
 
-[project.scripts]
+[project.gui-scripts]
 molmanager = "molmanager.app:main"
 
 [tool.setuptools.packages.find]

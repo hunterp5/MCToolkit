@@ -34,6 +34,7 @@ import math
 import os
 import tempfile
 from collections import defaultdict
+from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -697,6 +698,93 @@ def _microstate_rows_for_mol(mol: Chem.Mol) -> list[tuple[int, str, Chem.Mol]] |
     return flat
 
 
+def unique_microstate_progress_thresholds(
+    flats: Sequence[list[tuple[int, str, Chem.Mol]] | None],
+) -> list[int]:
+    """Cumulative unique microstate-SMILES counts after each parent molecule."""
+    seen: set[str] = set()
+    thresholds: list[int] = []
+    n_unique = 0
+    for flat in flats:
+        if flat:
+            for _charge, smi, _mol in flat:
+                key = str(smi)
+                if key not in seen:
+                    seen.add(key)
+                    n_unique += 1
+        thresholds.append(n_unique)
+    return thresholds
+
+
+def ionization_progress_from_preprocess(
+    n_calls: int,
+    thresholds: Sequence[int],
+    n_parents: int,
+    *,
+    finished: bool = False,
+) -> int:
+    """Map Uni-pKa MMFF/LMDB writes onto parent-molecule ``done`` counts.
+
+    The last tick is reserved until ``finished`` so GPU inference is not shown
+    as 100% while the batched free-energy call is still running.
+    """
+    n = max(0, int(n_parents))
+    if n <= 0:
+        return 0
+    if finished:
+        return n
+    done = 0
+    calls = max(0, int(n_calls))
+    for threshold in thresholds:
+        if calls >= int(threshold):
+            done += 1
+        else:
+            break
+    if n == 1:
+        return 0
+    return min(done, n - 1)
+
+
+def _notify_ionization_progress(on_progress, done: int, total: int) -> None:
+    if on_progress is None:
+        return
+    try:
+        on_progress(int(done), int(total))
+    except Exception:
+        logger.debug("ionization progress callback failed", exc_info=True)
+
+
+@contextmanager
+def _unipka_preprocess_progress(on_record: Callable[[], None] | None):
+    """Call *on_record* after each Uni-pKa MMFF/LMDB unique-SMILES write."""
+    if on_record is None:
+        yield
+        return
+    try:
+        from unipkainfer.pka_predictor import free_energy as fe_mod
+    except Exception:
+        yield
+        return
+    orig = getattr(fe_mod, "_smiles_to_free_energy_record", None)
+    if orig is None:
+        yield
+        return
+
+    def wrapped(smi, cfg):
+        rec = orig(smi, cfg)
+        try:
+            on_record()
+        except Exception:
+            logger.debug("Uni-pKa preprocess progress callback failed", exc_info=True)
+        return rec
+
+    fe_mod._smiles_to_free_energy_record = wrapped
+    try:
+        yield
+    finally:
+        fe_mod._smiles_to_free_energy_record = orig
+
+
 def _ensembles_from_flats(
     flats: list[list[tuple[int, str, Chem.Mol]] | None],
     energies: list[float],
@@ -718,26 +806,59 @@ def predict_ionization_ensembles(
     mols: list[Chem.Mol],
     *,
     score_fn=None,
+    on_progress=None,
 ) -> list[PicklableIonizationEnsemble | None]:
-    """Enumerate and score many structures in one Uni-pKa free-energy call."""
+    """Enumerate and score many structures in one Uni-pKa free-energy call.
+
+    ``on_progress(done, total)`` is optional status only: scoring stays one
+    batched ``score_fn`` call. With the default scorer, ticks follow Uni-pKa
+    MMFF/LMDB writes so a small job is not stuck at 0% until inference returns.
+    """
+    n = len(mols)
     flats = [_microstate_rows_for_mol(mol) for mol in mols]
     all_mols = [row[2] for flat in flats if flat for row in flat]
     if not all_mols:
-        return [None] * len(mols)
+        _notify_ionization_progress(on_progress, n, n)
+        return [None] * n
     scorer = score_fn if score_fn is not None else score_microstate_free_energies
+    thresholds = unique_microstate_progress_thresholds(flats)
+    n_calls = 0
+
+    def _tick(*, finished: bool = False) -> None:
+        _notify_ionization_progress(
+            on_progress,
+            ionization_progress_from_preprocess(n_calls, thresholds, n, finished=finished),
+            n,
+        )
+
+    def _on_record() -> None:
+        nonlocal n_calls
+        n_calls += 1
+        _tick()
+
+    def _score_all(target_mols: list[Chem.Mol]) -> list[float]:
+        if on_progress is None or score_fn is not None:
+            return scorer(target_mols)
+        _tick()
+        with _unipka_preprocess_progress(_on_record):
+            return scorer(target_mols)
+
     try:
-        energies = scorer(all_mols)
+        energies = _score_all(all_mols)
         if len(energies) != len(all_mols):
             raise ValueError("score_fn must return one free energy per microstate")
-        return _ensembles_from_flats(flats, energies)
+        out = _ensembles_from_flats(flats, energies)
+        _notify_ionization_progress(on_progress, n, n)
+        return out
     except Exception:
         if len(mols) == 1:
             raise
         logger.debug("batched Uni-pKa scoring failed; retrying per molecule", exc_info=True)
         out: list[PicklableIonizationEnsemble | None] = []
-        for mol, flat in zip(mols, flats):
+        for i, (_mol, flat) in enumerate(zip(mols, flats), start=1):
             if not flat:
                 out.append(None)
+                _notify_ionization_progress(on_progress, min(i, n), n)
                 continue
             try:
                 chunk_e = scorer([row[2] for row in flat])
@@ -747,6 +868,7 @@ def predict_ionization_ensembles(
             except Exception:
                 logger.debug("Uni-pKa scoring failed for one structure", exc_info=True)
                 out.append(None)
+            _notify_ionization_progress(on_progress, min(i, n), n)
         return out
 
 

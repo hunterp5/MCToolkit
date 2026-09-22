@@ -18,12 +18,30 @@
 
 from __future__ import annotations
 
-from molmanager.ui.main_window.column_write_mixin import ColumnWriteMixin
+from molmanager.ui.main_window.column_write_mixin import ColumnWriteMixin, cell_looks_uncalculated
 
 
 class _Host(ColumnWriteMixin):
     def __init__(self, headers: list[str]) -> None:
         self.headers = list(headers)
+
+
+class _ModelHost(ColumnWriteMixin):
+    def __init__(self, headers: list[str], rows: dict[int, dict[str, str]]) -> None:
+        self.headers = list(headers)
+        self._rows = rows
+
+        class _Model:
+            def __init__(self, outer: _ModelHost) -> None:
+                self._outer = outer
+
+            def logical_row_for_oid(self, oid: int) -> int:
+                return oid if oid in self._outer._rows else -1
+
+            def backing_value_for_row_header(self, row: int, header: str) -> str:
+                return str(self._outer._rows.get(row, {}).get(header, "") or "")
+
+        self._table_model = _Model(self)
 
 
 def test_unique_table_column_names_skips_existing() -> None:
@@ -36,6 +54,55 @@ def test_unique_table_column_names_dedupes_batch() -> None:
     host = _Host(["ID_HIDDEN", "Structure"])
     names = host._unique_table_column_names(["Score", "Score", "Other"])
     assert names == ["Score", "Score (1)", "Other"]
+
+
+def test_cell_looks_uncalculated_covers_placeholders() -> None:
+    assert cell_looks_uncalculated("")
+    assert cell_looks_uncalculated("N/A")
+    assert cell_looks_uncalculated("Cancelled.")
+    assert cell_looks_uncalculated("Error (see log)")
+    assert not cell_looks_uncalculated("1.23")
+
+
+def test_result_column_names_reuses_when_selected_cells_are_empty() -> None:
+    host = _ModelHost(
+        ["ID_HIDDEN", "Structure", "SOM Map", "LogP"],
+        {0: {"SOM Map": "CCO", "LogP": "1.2"}, 1: {"SOM Map": "", "LogP": ""}},
+    )
+    names = host._result_column_names(["SOM Map", "LogP"], [1])
+    assert names == ["SOM Map", "LogP"]
+
+
+def test_result_column_names_reuses_cancelled_placeholder() -> None:
+    host = _ModelHost(
+        ["ID_HIDDEN", "Structure", "SOM Map"],
+        {0: {"SOM Map": "CCO"}, 1: {"SOM Map": "Cancelled."}},
+    )
+    names = host._result_column_names(["SOM Map"], [1])
+    assert names == ["SOM Map"]
+
+
+def test_result_column_names_reuses_error_placeholder() -> None:
+    host = _ModelHost(
+        ["ID_HIDDEN", "Structure", "pKa"],
+        {0: {"pKa": "Error (see log)"}},
+    )
+    # pKa always reuses; also cover a non-always column with error text
+    host2 = _ModelHost(
+        ["ID_HIDDEN", "Structure", "LogP"],
+        {0: {"LogP": "Error (see log)"}},
+    )
+    assert host._result_column_names(["pKa"], [0]) == ["pKa"]
+    assert host2._result_column_names(["LogP"], [0]) == ["LogP"]
+
+
+def test_result_column_names_suffixes_when_all_selected_cells_are_filled() -> None:
+    host = _ModelHost(
+        ["ID_HIDDEN", "Structure", "LogP"],
+        {0: {"LogP": "1.23"}},
+    )
+    names = host._result_column_names(["LogP"], [0])
+    assert names == ["LogP (1)"]
 
 
 def test_on_calc_finished_does_not_replace_existing_column(qapp):  # noqa: ARG001
@@ -102,6 +169,29 @@ def test_on_calc_finished_updates_pka_and_pi_in_place(qapp):  # noqa: ARG001
     assert "pKa (1)" not in w.headers
     assert w._table_model.value_for_header(0, "pKa") == "9.50"
     assert w._table_model.value_for_header(0, "pI") == "5.97"
+    w.close()
+
+
+def test_on_calc_finished_reuses_column_for_empty_rows(qapp):  # noqa: ARG001
+    from molmanager.predictions.som_prediction import SOM_MAP_COLUMN, SOM_SITES_COLUMN
+    from molmanager.ui.main_window import ChemistryWorkspaceWindow
+
+    w = ChemistryWorkspaceWindow()
+    w.headers = ["ID_HIDDEN", "Structure", SOM_MAP_COLUMN, SOM_SITES_COLUMN]
+    w._table_model.set_headers(list(w.headers))
+    w._table_model.append_row(0, {SOM_MAP_COLUMN: "CCO", SOM_SITES_COLUMN: "0"})
+    w._table_model.append_row(1, {})
+    w.mols = {}
+    w.next_oid = 2
+    written = w.on_calc_finished(
+        [(1, {SOM_MAP_COLUMN: "c1ccccc1", SOM_SITES_COLUMN: "1"})],
+        [SOM_MAP_COLUMN, SOM_SITES_COLUMN],
+        finish_progress=False,
+    )
+    assert written == [SOM_MAP_COLUMN, SOM_SITES_COLUMN]
+    assert f"{SOM_MAP_COLUMN} (1)" not in w.headers
+    assert w._table_model.value_for_header(0, SOM_MAP_COLUMN) == "CCO"
+    assert w._table_model.value_for_header(1, SOM_MAP_COLUMN) == "c1ccccc1"
     w.close()
 
 

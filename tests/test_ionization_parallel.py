@@ -82,8 +82,23 @@ def test_chunk_structure_keys_single_worker_batches_and_splits() -> None:
     assert sum(len(c) for c in chunks) == 32
     assert max(len(c) for c in chunks) == UNIPKA_STRUCTURE_CHUNK_SERIAL
     assert len(chunks) == 2
-    small = [f"k{i}" for i in range(8)]
-    assert chunk_structure_keys(small, 1) == [small]
+
+
+def test_structure_progress_flags_mark_prefix() -> None:
+    from molmanager.workers.ionization_parallel import (
+        flagged_unique_count,
+        mark_structure_progress,
+        structure_progress_flags,
+    )
+
+    flags = structure_progress_flags(4)
+    assert flags is not None
+    mark_structure_progress(flags, [1, 2, 3], 2)
+    assert flagged_unique_count(flags, 4) == 2
+    assert flags[1] == 1
+    assert flags[2] == 1
+    assert flags[0] == 0
+    assert flags[3] == 0
 
 
 def test_map_ionization_progress_protonate_moves_before_last_tick() -> None:

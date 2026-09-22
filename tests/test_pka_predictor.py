@@ -191,3 +191,68 @@ def test_pka_worker_emits_include_pi_flag(monkeypatch) -> None:
         include_pi=True,
     ).run()
     assert flags == [True]
+
+
+def test_pka_worker_updates_progress_per_molecule(monkeypatch) -> None:
+    from molmanager.platform_support.tool_progress import ToolProgressState
+
+    seen: list[int] = []
+    state = ToolProgressState()
+    orig = state.update
+
+    def _capture(message, done, total=None, job_id=None):
+        seen.append(int(done))
+        orig(message, done, total, job_id=job_id)
+
+    state.update = _capture  # type: ignore[method-assign]
+    monkeypatch.setattr(
+        "molmanager.workers.pka_predictor.predict_ionization_ensemble",
+        lambda _mol: _ensemble(7.0),
+    )
+    ws = WorkerSignals()
+    ps = PKaPredictorSignals()
+
+    class _CancelNever:
+        def is_set(self) -> bool:
+            return False
+
+    rows = [
+        (1, Chem.MolFromSmiles("CCO")),
+        (2, Chem.MolFromSmiles("CCN")),
+        (3, Chem.MolFromSmiles("CCC")),
+    ]
+    assert all(mol is not None for _oid, mol in rows)
+    PKaPredictorWorker(
+        rows, ws, ps, cancel_event=_CancelNever(), progress_state=state
+    ).run()
+    assert 1 in seen
+    assert 2 in seen
+    assert seen[-1] == 3
+
+
+def test_mp_pka_chunk_marks_progress_flags_per_molecule(monkeypatch) -> None:
+    from molmanager.workers.pka_predictor import _mp_compute_pka_chunk
+    from molmanager.services.structure_grouping import structure_key
+
+    mols = [Chem.MolFromSmiles(s) for s in ("CCO", "CCN", "CCC")]
+    assert all(mol is not None for mol in mols)
+    tasks = []
+    for mol in mols:
+        tasks.append((structure_key(mol), mol.ToBinary(), False, False))
+    snapshots: list[list[int]] = []
+
+    def _predict(mols_in, *, score_fn=None, on_progress=None):
+        n = len(mols_in)
+        for i in range(1, n + 1):
+            if on_progress is not None:
+                on_progress(i, n)
+                snapshots.append([int(v) for v in flags])
+        return [_ensemble(7.0) for _mol in mols_in]
+
+    monkeypatch.setattr("molmanager.workers.pka_predictor.predict_ionization_ensembles", _predict)
+    flags = [0, 0, 0]
+    out = _mp_compute_pka_chunk(tasks, flags, [0, 1, 2])
+    assert len(out) == 3
+    assert flags == [1, 1, 1]
+    assert [1, 0, 0] in snapshots
+    assert [1, 1, 0] in snapshots

@@ -443,91 +443,45 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             tooltips_visible=True,
         ),
         SEPARATOR,
-        action(
-            "Calculator…",
-            "open_calculator",
-            hotkey="tools.calculator",
-            attr="_act_custom_calc",
-            tooltip="Add a numeric column from a math expression using existing column names (e.g. sqrt, log10, exp).",
-        ),
         submenu(
-            "&Random",
+            "&Utilities",
             action(
-                "Number…",
-                "open_random_number_dialog",
-                tooltip=(
-                    "Fill a column with random numbers (uniform, integer, or normal) "
-                    "for all or selected rows."
-                ),
+                "Calculator…",
+                "open_calculator",
+                hotkey="tools.calculator",
+                attr="_act_custom_calc",
+                tooltip="Add a numeric column from a math expression using existing column names (e.g. sqrt, log10, exp).",
             ),
-            action(
-                "Molecule…",
-                "open_random_molecule_dialog",
-                tooltip=(
-                    "Fetch random small molecules from ChEMBL, PubChem, or ZINC and add them "
-                    "to the table."
+            submenu(
+                "&Random",
+                action(
+                    "Number…",
+                    "open_random_number_dialog",
+                    tooltip=(
+                        "Fill a column with random numbers (uniform, integer, or normal) "
+                        "for all or selected rows."
+                    ),
                 ),
+                action(
+                    "Molecule…",
+                    "open_random_molecule_dialog",
+                    tooltip=(
+                        "Fetch random small molecules from ChEMBL, PubChem, or ZINC and add them "
+                        "to the table."
+                    ),
+                ),
+                tooltips_visible=True,
             ),
             tooltips_visible=True,
         ),
-        SEPARATOR,
         submenu(
-            "&Filter",
-            action(
-                "Toggle Panel",
-                "toggle_filter_panel",
-                hotkey="tools.toggle_filter_panel",
-                attr="_act_toggle_filter_panel",
-                add_to_window=True,
-                tooltip="Show or hide the filter panel (Ctrl+Shift+L).",
-            ),
+            "Query &Database",
+            action("PubChem…", "open_pubchem"),
+            action("ChEMBL…", "open_chembl"),
+            action("Patents…", "open_patent_query"),
             SEPARATOR,
-            action(
-                "Add Substructure",
-                "add_substructure_filter_card",
-                tooltip="Add a filter card that matches a SMARTS substructure in the Structure column.",
-            ),
-            action(
-                "Add Slider",
-                "add_filter_card",
-                tooltip="Add a numeric range slider filter for a column.",
-            ),
-            action(
-                "Add Text",
-                "add_text_filter_card",
-                tooltip="Add a text contains / equals filter for a column.",
-            ),
-            action(
-                "Add Category",
-                "add_category_filter_card",
-                tooltip="Add a categorical multi-select filter for a column.",
-            ),
-            SEPARATOR,
-            action(
-                "Enable All Filters",
-                "enable_all_filters_keep_panel",
-                tooltip="Turn on every filter card in the panel.",
-            ),
-            action(
-                "Disable All Filters",
-                "disable_all_filters_keep_panel",
-                tooltip=(
-                    "Turn off every filter card. Cards stay in the panel; use On on each card "
-                    "to enable again."
-                ),
-            ),
-            action(
-                "Delete All Filters",
-                "delete_all_filters_from_panel",
-                tooltip="Remove every filter card from the panel.",
-            ),
+            action("SQL…", "open_external_db"),
             tooltips_visible=True,
-        ),
-        action(
-            "&Search…",
-            "toggle_table_search_panel",
-            hotkey="tools.search",
-            tooltip="Open or hide the in-table search panel (Ctrl+F). Queries stay until deleted with −.",
         ),
         SEPARATOR,
         action(
@@ -657,26 +611,25 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             ),
         ),
         SEPARATOR,
-        action(
-            "&Plotter…",
-            "open_plot",
-            hotkey="data.plotter",
-            tooltip="Open the plotter or show the docked plot panel.",
-        ),
-        SEPARATOR,
         submenu(
-            "&MedChem",
+            "&MedChem Plots",
             action("BOILED-Egg plot…", "open_boiled_egg_plot"),
             action("Golden Triangle plot…", "open_golden_triangle_plot"),
             tooltips_visible=True,
         ),
         submenu(
-            "&Dimensionality Reduction",
+            "&DimRed Plots",
             action("Principal Component Analysis…", "open_pca_dialog"),
             action("t-SNE Visualization…", "open_tsne_dialog"),
             action("UMAP Visualization…", "open_umap_dialog"),
             action("Self-Organizing Map…", "open_som_dialog"),
             tooltips_visible=True,
+        ),
+        action(
+            "&Plotter…",
+            "open_plot",
+            hotkey="data.plotter",
+            tooltip="Open the plotter or show the docked plot panel.",
         ),
         SEPARATOR,
         action(
@@ -686,14 +639,66 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
             tooltip="Open the selection browser to review and act on selected rows. "
             "Right-click a structure for Browser; settings pick RDKit 2D, 3Dmol 2D, or 3Dmol 3D.",
         ),
-    ),
-    submenu(
-        "E&xternal",
-        action("Connect to SQL database…", "open_external_db"),
         SEPARATOR,
-        action("Query PubChem…", "open_pubchem"),
-        action("Query ChEMBL…", "open_chembl"),
-        action("Query Patents…", "open_patent_query"),
+        submenu(
+            "&Filter",
+            action(
+                "Toggle Panel",
+                "toggle_filter_panel",
+                hotkey="tools.toggle_filter_panel",
+                attr="_act_toggle_filter_panel",
+                add_to_window=True,
+                tooltip="Show or hide the filter panel (Ctrl+Shift+L).",
+            ),
+            SEPARATOR,
+            action(
+                "Add Substructure",
+                "add_substructure_filter_card",
+                tooltip="Add a filter card that matches a SMARTS substructure in the Structure column.",
+            ),
+            action(
+                "Add Slider",
+                "add_filter_card",
+                tooltip="Add a numeric range slider filter for a column.",
+            ),
+            action(
+                "Add Text",
+                "add_text_filter_card",
+                tooltip="Add a text contains / equals filter for a column.",
+            ),
+            action(
+                "Add Category",
+                "add_category_filter_card",
+                tooltip="Add a categorical multi-select filter for a column.",
+            ),
+            SEPARATOR,
+            action(
+                "Enable All Filters",
+                "enable_all_filters_keep_panel",
+                tooltip="Turn on every filter card in the panel.",
+            ),
+            action(
+                "Disable All Filters",
+                "disable_all_filters_keep_panel",
+                tooltip=(
+                    "Turn off every filter card. Cards stay in the panel; use On on each card "
+                    "to enable again."
+                ),
+            ),
+            action(
+                "Delete All Filters",
+                "delete_all_filters_from_panel",
+                tooltip="Remove every filter card from the panel.",
+            ),
+            tooltips_visible=True,
+        ),
+        action(
+            "&Search…",
+            "toggle_table_search_panel",
+            hotkey="tools.search",
+            tooltip="Open or hide the in-table search panel (Ctrl+F). Queries stay until deleted with −.",
+        ),
+        tooltips_visible=True,
     ),
     SETTINGS,
     submenu(

@@ -547,7 +547,7 @@ class ChEMBLDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
-        self.setWindowTitle("External — ChEMBL query")
+        self.setWindowTitle("Query Database — ChEMBL query")
         self.resize(980, 640)
 
         self._last: list[ChEMBLResult] = []

@@ -55,6 +55,14 @@ def test_ctrl_o_and_s_default_to_session():
     clear_hotkey_overrides()
 
 
+def test_search_and_filter_hotkeys_are_data_category():
+    from molmanager.ui.hotkeys import HOTKEY_SPECS
+
+    by_id = {spec.action_id: spec for spec in HOTKEY_SPECS}
+    assert by_id["tools.search"].category == "Data"
+    assert by_id["tools.toggle_filter_panel"].category == "Data"
+
+
 def test_find_duplicate_bindings():
     dups = find_duplicate_bindings(
         {

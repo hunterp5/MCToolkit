@@ -425,6 +425,7 @@ class ClusterDialog(QDialog):
         self.parent_app.process_queue.thread_finished.connect(
             self._on_process_queue_thread_finished
         )
+        self.close()
 
     def _unique_cluster_column(self) -> str:
         base = "Cluster"

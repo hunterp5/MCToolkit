@@ -230,9 +230,13 @@ def export_conformer_viewer_to_table(
     return len(batch_rows)
 
 
-def next_packed_ensemble_column(app, base: str) -> str:
-    """Return a unique packed-ensemble header, inserting it when it is not already in the table."""
-    col = app._unique_table_column_names([base])[0]
+def next_packed_ensemble_column(app, base: str, result_oids: list[int] | None = None) -> str:
+    """Return a packed-ensemble header, inserting it when it is not already in the table.
+
+    Reuses *base* when any of *result_oids* is still uncalculated in that column
+    so a cancelled confs/superpose/poses job can finish without a suffixed copy.
+    """
+    col = app._result_column_names([base], result_oids)[0]
     if col not in app.headers:
         col_at = len(app.headers)
         app.headers.append(col)

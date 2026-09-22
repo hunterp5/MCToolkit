@@ -173,9 +173,22 @@ class FilterCardsMixin:
 
     def toggle_filter_panel(self) -> None:
         """Show or hide the filter panel and resync card width when opening."""
-        self.f_panel.setVisible(not self.f_panel.isVisible())
-        if self.f_panel.isVisible():
+        show = self.f_panel.isHidden()
+        self.f_panel.setVisible(show)
+        if show:
             QTimer.singleShot(0, self._sync_filter_panel_scroll_content)
+        self._report_filter_panel_visibility()
+
+    def _report_filter_panel_visibility(self) -> None:
+        label = getattr(self, "status_label", None)
+        if label is None:
+            return
+        if self.f_panel.isHidden():
+            label.setText("Filter panel hidden.")
+            return
+        n = len(self.filters)
+        noun = "filter" if n == 1 else "filters"
+        label.setText(f"Filter panel shown ({n} {noun}).")
 
     def enable_all_filters_keep_panel(self) -> None:
         """Turn on every filter card but leave the filter panel open."""
@@ -193,7 +206,9 @@ class FilterCardsMixin:
         """Hide the filter panel and turn off every filter card (cards remain; re-enable with On)."""
         self.disable_all_filters_keep_panel()
         self.f_panel.setVisible(False)
+        self._report_filter_panel_visibility()
 
     def close_filter_panel_keep_filters(self) -> None:
         """Hide the filter panel only; active filters keep affecting the table."""
         self.f_panel.setVisible(False)
+        self._report_filter_panel_visibility()

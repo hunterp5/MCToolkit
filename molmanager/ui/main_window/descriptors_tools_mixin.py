@@ -45,7 +45,6 @@ class DescriptorsToolsMixin:
         from ...descriptors.descriptors_3d import int_fns_need_3d
 
         disp, fns = d.get_selected()
-        calc_headers = self._unique_table_column_names(disp)
         src = d.src_combo.currentText()
         is_s = src != "Structure"
         s_idx = self.headers.index(src)
@@ -56,6 +55,8 @@ class DescriptorsToolsMixin:
         oids_list = self._all_oids_in_table_order()
         if allowed is not None:
             oids_list = [o for o in oids_list if o in allowed]
+        calc_headers = self._result_column_names(disp, oids_list)
+
         packed_confs, confs_cols, ensemble_db = (
             self._ensemble_inputs_for_descriptor_job(oids_list, src)
             if int_fns_need_3d(fns)

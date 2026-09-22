@@ -31,7 +31,6 @@ import contextlib
 import logging
 import os
 import threading
-import time
 from concurrent.futures import FIRST_COMPLETED, wait
 
 from PyQt5 import sip
@@ -142,8 +141,12 @@ def _na_pka_row(key: str, *, cacheable: bool = True) -> tuple[str, str, str, obj
 
 def _mp_compute_pka_chunk(
     tasks: list[tuple[str, bytes, bool, bool]],
+    progress_flags=None,
+    flag_indices: list[int] | None = None,
 ) -> list[tuple[str, str, str, object | None, bool]]:
     """Score a chunk of structures in one Uni-pKa free-energy call."""
+    from .ionization_parallel import mark_structure_progress
+
     pin_unipka_torch_threads()
     err = unipka_import_error()
     if err:
@@ -178,15 +181,30 @@ def _mp_compute_pka_chunk(
         else:
             mols.append(safe)
 
+    if flag_indices is not None:
+        for i in na_results:
+            mark_structure_progress(progress_flags, [flag_indices[i]], 1)
+
     usable_idx = [i for i, mol in enumerate(mols) if mol is not None]
     ensembles: list[object | None] = [None] * len(keys)
     failed = False
     if usable_idx:
+        usable_flags = (
+            [flag_indices[i] for i in usable_idx] if flag_indices is not None else None
+        )
+
+        def _report(done: int, _total: int) -> None:
+            mark_structure_progress(progress_flags, usable_flags, done)
+
         try:
             with _discard_stdout_only():
-                scored = predict_ionization_ensembles([mols[i] for i in usable_idx])
+                scored = predict_ionization_ensembles(
+                    [mols[i] for i in usable_idx],
+                    on_progress=_report,
+                )
             for i, ens in zip(usable_idx, scored):
                 ensembles[i] = ens
+            _report(len(usable_idx), len(usable_idx))
         except Exception:
             failed = True
             logger.exception(
@@ -275,32 +293,31 @@ class PKaPredictorWorker(QRunnable):
             from ..platform_support.config import load_config
             from molmanager.ionization.microstate_cache import lookup as cache_lookup
             from .ionization_parallel import (
+                UNIPKA_PROGRESS_POLL_S,
                 chunk_structure_keys,
+                flagged_row_count,
+                mark_structure_progress,
                 plan_ionization_process_workers,
+                structure_progress_flags,
             )
 
             done_cum = sum(1 for oid, mol in self.rows if mol is None)
             cancelled = False
-            prog_last = 0.0
 
             from ..platform_support.tool_progress import report_tool_progress
 
             throttle = [0, 0.0]
 
             def _emit(done: int, *, force: bool = False) -> None:
-                nonlocal prog_last
-                now = time.monotonic()
-                if force or done >= tot or (now - prog_last) >= 0.12:
-                    prog_last = now
-                    report_tool_progress(
-                        message="pKa prediction",
-                        done=min(done, tot),
-                        total=tot,
-                        progress_state=self.progress_state,
-                        signals=self.worker_signals,
-                        throttle=throttle,
-                        force_signal=force,
-                    )
+                report_tool_progress(
+                    message="pKa prediction",
+                    done=min(done, tot),
+                    total=tot,
+                    progress_state=self.progress_state,
+                    signals=self.worker_signals,
+                    throttle=throttle,
+                    force_signal=force,
+                )
 
             _emit(done_cum, force=True)
 
@@ -348,6 +365,9 @@ class PKaPredictorWorker(QRunnable):
                     ]
                     for chunk in key_chunks
                 ]
+                key_index = {k: i for i, k in enumerate(order)}
+                flags = structure_progress_flags(n_unique)
+                done_base = done_cum
                 results_by_key: dict[str, tuple[str, str]] = {}
                 wrote_mmff = (
                     os.environ.get("MOLMANAGER_UNIPKA_MMFF_THREADS") is None and proc_workers > 1
@@ -358,9 +378,23 @@ class PKaPredictorWorker(QRunnable):
                     proc_workers,
                     n_unique,
                 )
+
+                def _emit_live(*, force: bool = False) -> None:
+                    nonlocal done_cum
+                    done_cum = flagged_row_count(flags, order, oids_map, done_base)
+                    _emit(done_cum, force=force)
+
                 try:
                     with ionization_process_pool(proc_workers, cancel_event=cancel_ev) as ex:
-                        pending = {ex.submit(_mp_compute_pka_chunk, chunk) for chunk in task_chunks}
+                        pending = {
+                            ex.submit(
+                                _mp_compute_pka_chunk,
+                                chunk,
+                                flags,
+                                [key_index[k] for k in key_chunks[i]],
+                            )
+                            for i, chunk in enumerate(task_chunks)
+                        }
                         while pending:
                             if (
                                 should_terminate_process_pool(cancel_ev)
@@ -371,8 +405,11 @@ class PKaPredictorWorker(QRunnable):
                                     f.cancel()
                                 break
                             completed, pending = wait(
-                                pending, timeout=0.25, return_when=FIRST_COMPLETED
+                                pending,
+                                timeout=UNIPKA_PROGRESS_POLL_S,
+                                return_when=FIRST_COMPLETED,
                             )
+                            _emit_live()
                             for f in completed:
                                 if f.cancelled():
                                     continue
@@ -381,10 +418,12 @@ class PKaPredictorWorker(QRunnable):
                                         results_by_key[key] = (txt, pi_txt)
                                         if cacheable:
                                             cache_store(key, ensemble)
-                                        done_cum += len(oids_map.get(key, ()))
+                                        idx = key_index.get(key)
+                                        if idx is not None:
+                                            mark_structure_progress(flags, [idx], 1)
                                 except Exception:
                                     logger.exception("pKa process-pool task failed")
-                                _emit(done_cum)
+                                _emit_live()
                 finally:
                     _restore_unipka_mmff_thread_env(prev_mmff, wrote_mmff)
                 for key in order:

@@ -23,7 +23,7 @@ Network-backed patent chemistry search from a query structure/SMILES as required
 
 ## Workflow
 
-1. Open **Patents** from **External**.
+1. Open **Tools → Query Database → Patents**.
 2. Provide the query molecule.
 3. Review similar patent chemistry hits.
 4. Add relevant structures for deeper in-app comparison.

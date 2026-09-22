@@ -474,7 +474,7 @@ class DockToolsMixin:
         by_oid, orphan_groups = group_dock_poses(usable, known)
         if not by_oid and not orphan_groups:
             return None
-        col = self._next_packed_ensemble_column("poses")
+        col = self._next_packed_ensemble_column("poses", list(by_oid))
         pairs: list[tuple[int, str]] = []
         for oid, group in by_oid.items():
             pairs.append((int(oid), pack_mols_as_confs_cell(dock_poses_pack_meta(group), group)))

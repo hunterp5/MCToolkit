@@ -63,7 +63,7 @@ class SqlLoadMixin:
         automatically after apply.
 
         ``read_only`` (default True) opens SQLite with ``mode=ro`` and refuses queries that
-        look destructive. Uncheck read-only in the External SQL dialog only when you
+        look destructive. Uncheck read-only in the Query Database SQL dialog only when you
         intentionally need a write connection.
         """
         try:
@@ -89,7 +89,7 @@ class SqlLoadMixin:
             if read_only:
                 raise ValueError(
                     "This SQL looks like it may modify the database. "
-                    "Uncheck “Read-only connection” in the External SQL dialog only if you "
+                    "Uncheck “Read-only connection” in the Query Database SQL dialog only if you "
                     "intentionally need a write connection, then confirm the warning."
                 )
             r = QMessageBox.warning(

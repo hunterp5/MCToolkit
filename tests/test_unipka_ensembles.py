@@ -36,6 +36,7 @@ from molmanager.ionization.unipka_ensembles import (
     format_isoelectric_point,
     format_pka_and_pi,
     format_pka_values,
+    ionization_progress_from_preprocess,
     isoelectric_point_from_states,
     logd74_from_microstates,
     most_acidic_pka_from_states,
@@ -45,6 +46,7 @@ from molmanager.ionization.unipka_ensembles import (
     predict_ionization_ensemble,
     predict_ionization_ensembles,
     score_microstate_free_energies,
+    unique_microstate_progress_thresholds,
     unipka_use_gpu,
 )
 from molmanager.ionization.unipka_enumerator import (
@@ -173,6 +175,7 @@ def test_predict_ensemble_with_fake_scorer_enumerates_acetic() -> None:
 
 def test_predict_ensembles_scores_all_microstates_in_one_call() -> None:
     calls: list[int] = []
+    ticks: list[tuple[int, int]] = []
 
     def _score(mols):
         calls.append(len(mols))
@@ -180,10 +183,34 @@ def test_predict_ensembles_scores_all_microstates_in_one_call() -> None:
 
     mols = [Chem.MolFromSmiles("CC(=O)O"), Chem.MolFromSmiles("Nc1ccccc1")]
     assert all(m is not None for m in mols)
-    out = predict_ionization_ensembles(mols, score_fn=_score)
+    out = predict_ionization_ensembles(
+        mols, score_fn=_score, on_progress=lambda done, total: ticks.append((done, total))
+    )
     assert len(out) == 2
     assert all(ens is not None for ens in out)
     assert calls == [sum(len(ens.microstates) for ens in out)]
+    assert ticks[-1] == (2, 2)
+
+
+def test_ionization_progress_from_preprocess_reserves_last_tick() -> None:
+    thresholds = [2, 5, 8]
+    assert ionization_progress_from_preprocess(0, thresholds, 3) == 0
+    assert ionization_progress_from_preprocess(2, thresholds, 3) == 1
+    assert ionization_progress_from_preprocess(5, thresholds, 3) == 2
+    assert ionization_progress_from_preprocess(8, thresholds, 3) == 2
+    assert ionization_progress_from_preprocess(8, thresholds, 3, finished=True) == 3
+    assert ionization_progress_from_preprocess(0, [3], 1) == 0
+    assert ionization_progress_from_preprocess(3, [3], 1, finished=True) == 1
+
+
+def test_unique_microstate_progress_thresholds_counts_new_smiles() -> None:
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol is not None
+    flats = [
+        [(0, "CCO", mol), (-1, "CC[O-]", mol)],
+        [(0, "CCO", mol), (1, "CC[OH2+]", mol)],
+    ]
+    assert unique_microstate_progress_thresholds(flats) == [2, 3]
 
 
 def test_aniline_and_glycine_enumeration_for_spike() -> None:

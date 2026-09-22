@@ -18,27 +18,88 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from ..chunked_table_write import ChunkedTableWriter
 from ..widgets import CategoryFilterCard, FilterCard, TextFilterCard
+
+# Keep filling these headers in place even when the selected cells already have values.
+_ALWAYS_REUSE_COLUMNS = frozenset({"pKa", "pI"})
+_UNCALCULATED_CELL_VALUES = frozenset({"", "n/a", "cancelled", "cancelled."})
+
+
+def cell_looks_uncalculated(text: str) -> bool:
+    """True for blank, ``N/A``, cancel, or error placeholders a later run may fill."""
+    t = (text or "").strip().lower()
+    if t in _UNCALCULATED_CELL_VALUES:
+        return True
+    return t.startswith("error")
 
 
 class ColumnWriteMixin:
     def _unique_table_column_names(self, bases: list[str]) -> list[str]:
         """Return column header names; append `` (n)`` when a name already exists in the table."""
+        return self._result_column_names(bases, result_oids=None)
+
+    def _column_has_uncalculated_oids(self, header: str, oids: Sequence[int]) -> bool:
+        """True when *header* is missing or any of *oids* still has a fillable cell."""
+        if header not in self.headers:
+            return True
+        model = getattr(self, "_table_model", None)
+        row_of = getattr(model, "logical_row_for_oid", None)
+        if model is None or not callable(row_of):
+            return False
+        backing = getattr(model, "backing_value_for_row_header", None)
+        value_of = getattr(model, "value_for_header", None)
+        for oid in oids:
+            try:
+                row = int(row_of(int(oid)))
+            except (TypeError, ValueError):
+                return True
+            if row < 0:
+                return True
+            if callable(backing):
+                text = str(backing(row, header) or "")
+            elif callable(value_of):
+                text = str(value_of(row, header) or "")
+            else:
+                return False
+            if cell_looks_uncalculated(text):
+                return True
+        return False
+
+    def _result_column_names(
+        self, bases: list[str], result_oids: Sequence[int] | None = None
+    ) -> list[str]:
+        """Choose write headers, reusing an existing column when filling uncalculated cells.
+
+        ``pKa`` / ``pI`` always update in place. Other names reuse the existing
+        header when any of *result_oids* is still blank / ``N/A`` / cancelled /
+        error in that column, so a cancelled job can finish without splitting
+        ``confs``, ``SOM Map``, and similar results across suffixed copies.
+        Otherwise a `` (n)`` suffix is added so filled cells are not replaced.
+        """
+        oids = [int(oid) for oid in (result_oids or ()) if oid is not None]
         out: list[str] = []
         used = set(self.headers)
+        assigned: set[str] = set()
         for raw in bases:
             base = (raw or "").strip() or "Column"
-            col = base
-            if col in used:
-                cnt = 1
-                while f"{base} ({cnt})" in used:
-                    cnt += 1
-                col = f"{base} ({cnt})"
+            reuse = base in _ALWAYS_REUSE_COLUMNS or base not in used
+            if not reuse and oids:
+                reuse = self._column_has_uncalculated_oids(base, oids)
+            if reuse and base not in assigned:
+                col = base
+            else:
+                col = base
+                if col in used:
+                    cnt = 1
+                    while f"{base} ({cnt})" in used:
+                        cnt += 1
+                    col = f"{base} ({cnt})"
             out.append(col)
             used.add(col)
+            assigned.add(col)
         return out
 
     def _ensure_columns(self, col_names: list[str]) -> None:
@@ -181,9 +242,11 @@ class ColumnWriteMixin:
     ) -> list[str]:
         """Write tool results into the table, adding columns as needed.
 
-        Colliding names are rewritten to ``Name (1)``, ``Name (2)``, … via
-        :meth:`_unique_table_column_names`, except ``pKa`` and ``pI``: those
-        Uni-pKa metadata columns are updated in place when they already exist.
+        Existing headers are reused when any incoming row is still uncalculated
+        in that column (blank / ``N/A`` / cancelled / error), so a cancelled run
+        can finish without splitting results. Filled cells keep their column:
+        colliding names become ``Name (1)``, ``Name (2)``, … via
+        :meth:`_result_column_names`. ``pKa`` and ``pI`` always update in place.
         ``pI`` is only written when Predict pKa is run with isoelectric point enabled.
         Returns the final header list written. Large result sets are applied in
         GUI-budgeted chunks; ``on_complete`` runs after values (and coloring) land.
@@ -197,11 +260,10 @@ class ColumnWriteMixin:
                 on_complete([])
             return []
 
-        shared = {"pKa", "pI"}
-        to_unique = [h for h in calc_h if h not in shared]
-        unique_h = self._unique_table_column_names(to_unique) if to_unique else []
-        rename = {old: new for old, new in zip(to_unique, unique_h) if old != new}
-        calc_h = [rename.get(h, h) for h in calc_h]
+        result_oids = [int(oid) for oid, _row in res if oid is not None]
+        unique_h = self._result_column_names(calc_h, result_oids)
+        rename = {old: new for old, new in zip(calc_h, unique_h) if old != new}
+        calc_h = list(unique_h)
         if rename:
             remapped: list[tuple[int, dict]] = []
             for oid, row_d in res:

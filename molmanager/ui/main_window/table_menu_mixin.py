@@ -228,22 +228,33 @@ class TableMenuMixin:
         elif name == "header_rename":
             name_in, ok = QInputDialog.getText(self, "Rename", "New name:", text=old_n)
             if ok and name_in:
-                self.headers[col] = name_in
-                self._table_model.rename_header_at(col, name_in)
-                logs = getattr(self, "_logarithmic_columns", None)
-                if logs is not None and old_n in logs:
-                    logs.discard(old_n)
-                    logs.add(name_in)
-                if old_n in self.global_bounds:
-                    self.global_bounds[name_in] = self.global_bounds.pop(old_n)
-                cols = self._filterable_data_column_names()
-                for f in self.filters:
-                    if isinstance(f, FilterCard):
-                        f.update_prop_list(list(self.global_bounds.keys()), old_n, name_in)
-                    elif isinstance(f, (TextFilterCard, CategoryFilterCard)):
-                        f.update_prop_list(cols, old_n, name_in)
+                self._rename_column_header(col, name_in)
         elif name == "header_duplicate":
             self._undo_stack.push(UndoDuplicateColumnCommand(self, col, old_n))
+
+    def _rename_column_header(self, col: int, new_name: str) -> None:
+        """Rename a data column header and update filters / bounds that reference it."""
+        if col < 0 or col >= len(self.headers):
+            return
+        old_n = self.headers[col]
+        name_in = str(new_name or "").strip()
+        if not name_in:
+            return
+        self.headers[col] = name_in
+        self._table_model.rename_header_at(col, name_in)
+        logs = getattr(self, "_logarithmic_columns", None)
+        if logs is not None and old_n in logs:
+            logs.discard(old_n)
+            logs.add(name_in)
+        if old_n in self.global_bounds:
+            self.global_bounds[name_in] = self.global_bounds.pop(old_n)
+        cols = self._filterable_data_column_names()
+        for f in self.filters:
+            if isinstance(f, FilterCard):
+                f.update_prop_list(list(self.global_bounds.keys()), old_n, name_in)
+            elif isinstance(f, (TextFilterCard, CategoryFilterCard)):
+                f.update_prop_list(cols, old_n, name_in)
+        self.status_label.setText(f"Renamed column '{old_n}' to '{name_in}'.")
 
     def _column_can_toggle_logarithmic(self, header_name: str) -> bool:
         if header_name in ("ID_HIDDEN", "Structure"):

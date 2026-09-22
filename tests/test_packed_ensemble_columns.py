@@ -91,6 +91,24 @@ def test_on_conformers_finished_does_not_replace_existing_column(qapp):  # noqa:
         w.close()
 
 
+def test_on_conformers_finished_reuses_column_for_empty_rows(qapp):  # noqa: ARG001
+    packed = _packed_cell("new")
+    w = _app_with_row(["ID_HIDDEN", "Structure", "confs"], {"confs": "old"})
+    try:
+        w._table_model.append_row(1, {})
+        w.next_oid = 2
+        w.on_conformers_finished([(1, None, packed)])
+        assert "confs (1)" not in w.headers
+        assert w._table_model.value_for_header(0, "confs") == "old"
+        new_cell = w._table_model.value_for_header(1, "confs")
+        assert '"h":"confs"' in new_cell
+        sc = w._confs_blocks_sidecar or {}
+        assert (1, "confs") in sc
+        assert (0, "confs") not in sc
+    finally:
+        w.close()
+
+
 def test_on_superpose_finished_creates_superpose_when_missing(qapp):  # noqa: ARG001
     packed = _packed_cell("overlay")
     w = _app_with_row(["ID_HIDDEN", "Structure"], {})

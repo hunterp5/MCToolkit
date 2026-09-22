@@ -459,6 +459,63 @@ def test_delete_selection_kind_rows_columns_cells(qapp):  # noqa: ARG001
     w._select_columns([3])
     qapp.processEvents()
     assert w._delete_selection_kind() == "both"
+    w.close()
+
+
+def test_select_table_rows_updates_status(qapp):  # noqa: ARG001
+    w = ChemistryWorkspaceWindow()
+    _seed_two_rows(w)
+    w.select_table_rows([0])
+    qapp.processEvents()
+    assert w.status_label.text() == "Selected 1 of 2 row(s)."
+    w.close()
+
+
+def test_invert_table_selection_updates_status(qapp):  # noqa: ARG001
+    w = ChemistryWorkspaceWindow()
+    _seed_two_rows(w)
+    w.select_table_rows([0])
+    qapp.processEvents()
+    w.invert_table_selection()
+    qapp.processEvents()
+    assert w.status_label.text() == "Selected 1 of 2 row(s). Inverted."
+    w.close()
+
+
+def test_rename_column_header_updates_status(qapp):  # noqa: ARG001
+    w = ChemistryWorkspaceWindow()
+    _seed_two_rows(w)
+    mw = w.headers.index("MW")
+    w._rename_column_header(mw, "MolWt")
+    assert w.headers[mw] == "MolWt"
+    assert w.status_label.text() == "Renamed column 'MW' to 'MolWt'."
+    w.close()
+
+
+def test_toggle_filter_panel_updates_status(qapp):  # noqa: ARG001
+    w = ChemistryWorkspaceWindow()
+    _seed_two_rows(w)
+    assert w.f_panel.isHidden()
+    w.toggle_filter_panel()
+    assert not w.f_panel.isHidden()
+    assert w.status_label.text() == "Filter panel shown (0 filters)."
+    w.toggle_filter_panel()
+    assert w.f_panel.isHidden()
+    assert w.status_label.text() == "Filter panel hidden."
+    w.close()
+
+
+def test_apply_table_sort_updates_status(qapp):  # noqa: ARG001
+    w = ChemistryWorkspaceWindow()
+    _seed_two_rows(w)
+    mw = w.headers.index("MW")
+    w._apply_table_sort(mw, True, "numeric")
+    assert [w._table_model.row_oid(i) for i in range(2)] == [1, 0]
+    assert w.status_label.text() == "Sorted 'MW' numeric ascending."
+    w._apply_table_sort(mw, False, "alphabetic")
+    assert [w._table_model.row_oid(i) for i in range(2)] == [0, 1]
+    assert w.status_label.text() == "Sorted 'MW' alphabetic descending."
+    w.close()
 
 
 def test_delete_selection_clears_cells_after_confirm(qapp, monkeypatch):  # noqa: ARG001
@@ -886,23 +943,23 @@ def test_data_menu_nests_medchem_with_dimensionality_reduction(qapp):  # noqa: A
     assert "MedChem" not in tools_labels
     data = next(a.menu() for a in mb.actions() if a.text().replace("&", "") == "Data")
     data_labels = [a.text().replace("&", "") for a in data.actions()]
-    assert "MedChem" in data_labels
-    assert "Dimensionality Reduction" in data_labels
+    assert "MedChem Plots" in data_labels
+    assert "DimRed Plots" in data_labels
+    assert "Filter" in data_labels
+    assert "Search…" in data_labels
     assert "BOILED-Egg plot…" not in data_labels
     assert "Golden Triangle plot…" not in data_labels
     assert "Principal Component Analysis…" not in data_labels
     assert "t-SNE Visualization…" not in data_labels
     assert "UMAP Visualization…" not in data_labels
     assert "Self-Organizing Map…" not in data_labels
-    assert data_labels.index("Dimensionality Reduction") == data_labels.index("MedChem") + 1
-    medchem = next(a.menu() for a in data.actions() if a.text().replace("&", "") == "MedChem")
+    assert data_labels.index("DimRed Plots") == data_labels.index("MedChem Plots") + 1
+    medchem = next(a.menu() for a in data.actions() if a.text().replace("&", "") == "MedChem Plots")
     assert [a.text().replace("&", "") for a in medchem.actions()] == [
         "BOILED-Egg plot…",
         "Golden Triangle plot…",
     ]
-    dimred = next(
-        a.menu() for a in data.actions() if a.text().replace("&", "") == "Dimensionality Reduction"
-    )
+    dimred = next(a.menu() for a in data.actions() if a.text().replace("&", "") == "DimRed Plots")
     assert [a.text().replace("&", "") for a in dimred.actions()] == [
         "Principal Component Analysis…",
         "t-SNE Visualization…",

@@ -45,9 +45,22 @@ class BackgroundActivityHub(QObject):
         pq = getattr(self._app, "process_queue", None)
         if pq is not None:
             pq.snapshot_changed.connect(self.changed.emit)
+        self.changed.connect(self._sync_prevent_sleep)
+        self._sync_prevent_sleep()
 
     def notify_changed(self) -> None:
         self.changed.emit()
+
+    def _sync_prevent_sleep(self) -> None:
+        """Block Windows idle suspend while any Log-visible job is active."""
+        from ..platform_support.windows_sleep import set_system_required_while_busy
+
+        rows, _metas = self.processes_view_rows()
+        busy = bool(rows)
+        if not busy:
+            status_active = getattr(self._app, "_status_work_is_active", None)
+            busy = bool(status_active()) if callable(status_active) else False
+        set_system_required_while_busy(busy)
 
     def render2d_batch_active(self) -> bool:
         fn = getattr(self._app, "render2d_batch_active", None)
@@ -285,6 +298,9 @@ class BackgroundActivityHub(QObject):
 
     def prepare_for_quit(self) -> None:
         """Cooperatively stop background jobs before draining thread pools (window close)."""
+        from ..platform_support.windows_sleep import clear_system_required
+
+        clear_system_required()
         app = self._app
         if hasattr(app, "_invalidate_substructure_async_jobs"):
             app._invalidate_substructure_async_jobs()
