@@ -40,8 +40,10 @@ class HotkeySpec:
 
 # Stable ids — defaults mirror the built-in menubar shortcuts.
 HOTKEY_SPECS: tuple[HotkeySpec, ...] = (
-    HotkeySpec("file.open", "Open File…", "File", ("Ctrl+O",)),
-    HotkeySpec("file.export_all", "Save File…", "File", ("Ctrl+S",)),
+    HotkeySpec("file.open", "Open File…", "File", ()),
+    HotkeySpec("file.export_all", "Save File…", "File", ()),
+    HotkeySpec("file.open_session", "Open Session…", "File", ("Ctrl+O",)),
+    HotkeySpec("file.save_session", "Save Session…", "File", ("Ctrl+S",)),
     HotkeySpec("file.browser", "Browser…", "Data", ()),
     HotkeySpec("edit.undo", "Undo", "Edit", ("Ctrl+Z",)),
     HotkeySpec("edit.redo", "Redo", "Edit", ("Ctrl+Y", "Ctrl+Shift+Z")),
