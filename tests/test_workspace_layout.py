@@ -764,3 +764,25 @@ def test_plot_pane_fills_fusion_window(qapp):  # noqa: ARG001
         assert pane._stack.autoFillBackground()
     finally:
         pane.deleteLater()
+
+
+def test_workspace_splitter_handle_blocks_native_ancestors(qapp):  # noqa: ARG001
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QWidget
+
+    from mctoolkit.ui.main_window.workspace_layout import (
+        WorkspaceSplitter,
+        WorkspaceSplitterHandle,
+    )
+
+    splitter = WorkspaceSplitter(Qt.Horizontal)
+    left = QWidget()
+    right = QWidget()
+    splitter.addWidget(left)
+    splitter.addWidget(right)
+    try:
+        handle = splitter.handle(1)
+        assert isinstance(handle, WorkspaceSplitterHandle)
+        assert handle.testAttribute(Qt.WA_DontCreateNativeAncestors)
+    finally:
+        splitter.deleteLater()
