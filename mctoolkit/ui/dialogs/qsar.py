@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
+import uuid
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent
@@ -478,17 +479,19 @@ class QSARDialog(QDialog):
             return
         n = len(params["oids"])
         self._active_progress_label = "QSAR"
-        self.parent_app._begin_tool_progress("QSAR", n)
         self.results_text.setPlainText("Training…")
         self._set_job_running(True)
         self._fit_result = None
         prog = self.parent_app._tool_progress_state
         self._disconnect_process_queue_thread_finished()
+        job_id = str(uuid.uuid4())[:8]
+        self.parent_app._begin_tool_progress("QSAR", n, job_id=job_id)
         self._active_qsar_job_id = self.parent_app.process_queue.enqueue(
             f"QSAR train ({n} rows)",
             lambda ev, p=params, sigs=self._signals, st=prog: QSARTrainWorker(
                 p, sigs, cancel_event=ev, progress_state=st
             ),
+            job_id=job_id,
         )
         self.parent_app.process_queue.thread_finished.connect(
             self._on_process_queue_thread_finished
@@ -510,15 +513,17 @@ class QSARDialog(QDialog):
         }
         n = len(oids)
         self._active_progress_label = "QSAR predictions"
-        self.parent_app._begin_tool_progress("QSAR predictions", n)
         self._set_job_running(True)
         prog = self.parent_app._tool_progress_state
         self._disconnect_process_queue_thread_finished()
+        job_id = str(uuid.uuid4())[:8]
+        self.parent_app._begin_tool_progress("QSAR predictions", n, job_id=job_id)
         self._active_qsar_job_id = self.parent_app.process_queue.enqueue(
             f"QSAR predict ({n} rows)",
             lambda ev, p=params, sigs=self._signals, st=prog: QSARPredictWorker(
                 p, sigs, cancel_event=ev, progress_state=st
             ),
+            job_id=job_id,
         )
         self.parent_app.process_queue.thread_finished.connect(
             self._on_process_queue_thread_finished
@@ -538,12 +543,15 @@ class QSARDialog(QDialog):
     def _on_process_queue_thread_finished(self, job_id: str) -> None:
         if job_id != self._active_qsar_job_id or not self._job_running:
             return
+        self._reset_after_job_failure("Cancelled.", job_id=job_id)
         self._active_qsar_job_id = None
-        self._reset_after_job_failure("Cancelled.")
 
-    def _reset_after_job_failure(self, msg: str) -> None:
+    def _reset_after_job_failure(self, msg: str, *, job_id: str | None = None) -> None:
         if self.parent_app is not None:
-            self.parent_app._finish_tool_progress(self._active_progress_label)
+            self.parent_app._finish_tool_progress(
+                self._active_progress_label,
+                job_id=job_id or self._active_qsar_job_id,
+            )
         self._set_job_running(False)
         self._disconnect_process_queue_thread_finished()
         if msg and msg != "Cancelled.":
@@ -552,9 +560,10 @@ class QSARDialog(QDialog):
             QMessageBox.warning(self, "QSAR", msg)
 
     def _on_train_finished(self, result: object) -> None:
+        job_id = self._active_qsar_job_id
         self._active_qsar_job_id = None
         self._disconnect_process_queue_thread_finished()
-        self.parent_app._finish_tool_progress("QSAR", status_message=None)
+        self.parent_app._finish_tool_progress("QSAR", status_message=None, job_id=job_id)
         self._set_job_running(False)
         if not isinstance(result, QSARFitResult):
             return
@@ -570,9 +579,12 @@ class QSARDialog(QDialog):
             )
 
     def _on_predict_finished(self, rows: list) -> None:
+        job_id = self._active_qsar_job_id
         self._active_qsar_job_id = None
         self._disconnect_process_queue_thread_finished()
-        self.parent_app._finish_tool_progress("QSAR predictions", status_message=None)
+        self.parent_app._finish_tool_progress(
+            "QSAR predictions", status_message=None, job_id=job_id
+        )
         self._set_job_running(False)
         if not rows or self.parent_app is None or self._fit_result is None:
             QMessageBox.information(
