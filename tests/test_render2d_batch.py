@@ -169,10 +169,10 @@ class _App:
     def _resolve_structure_row_for_oid(self, oid):
         return 0 if oid in self._rows else -1
 
-    def _on_tool_progress(self, msg, done, total):
+    def _on_tool_progress(self, msg, done, total, job_id=None):
         self.progress.append((msg, done, total))
 
-    def _clear_tool_progress(self):
+    def _clear_tool_progress(self, **kwargs):
         pass
 
     def _flush_render2d_batch_results(self):
