@@ -20,7 +20,9 @@ import sys
 
 from .platform_support.qt_webengine_flags import configure_qtwebengine_quiet_logs
 from .platform_support.qt_windows_caption import configure_windows_native_caption_platform
+from .platform_support.windows_console import ensure_stdio, hide_owned_windows_console
 
+ensure_stdio()
 configure_windows_native_caption_platform()
 configure_qtwebengine_quiet_logs()
 
@@ -43,7 +45,12 @@ def _configure_logging() -> None:
 
 
 def _preload_qt_webengine() -> None:
-    """Import QtWebEngine *before* ``QApplication`` — required for Chromium/QtWebEngineProcess on Windows."""
+    """Import QtWebEngine *before* ``QApplication`` — required for Chromium/QtWebEngineProcess on Windows.
+
+    Do not construct a ``QWebEngineView`` here. Creating one at launch (the old Chromium
+    prewarm) maps extra captioned HWNDs on Windows, so a dummy window opens and closes
+    before the workspace appears. Chromium starts later, when a plot or 3D view needs it.
+    """
     configure_qtwebengine_quiet_logs()
     try:
         import PySide6.QtWebEngineWidgets  # noqa: F401 — side effect: registers WebEngine with Qt
@@ -87,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv
 
+    hide_owned_windows_console()
     _configure_logging()
     try:
         configure_rdkit_for_desktop_app()
@@ -110,25 +118,33 @@ def main(argv: list[str] | None = None) -> int:
     bootstrap_application_gui(app)
 
     w = ChemistryWorkspaceWindow()
+    if load_session:
+        # First painted frame should be the loading page, not an empty workspace.
+        w._show_session_open_overlay()
     w.show()
-    from .platform_support.qt_webengine_flags import schedule_qtwebengine_prewarm
     from .platform_support.qt_windows_caption import apply_classic_native_captions
 
     apply_classic_native_captions(app)
-    schedule_qtwebengine_prewarm()
     if load_session:
-        try:
-            if is_session_document_path(load_session):
-                w.apply_saved_session_from_file(load_session)
-            elif load_session.lower().endswith(".cms"):
+        session_path = load_session
+
+        def _do_session() -> None:
+            try:
+                if is_session_document_path(session_path):
+                    w.apply_saved_session_from_file(session_path)
+                elif session_path.lower().endswith(".cms"):
+                    logger.warning(
+                        "Startup session load skipped (%s): .cms sessions are not supported",
+                        session_path,
+                    )
+                else:
+                    w.load_session_csv(session_path)
+            except Exception as e:
                 logger.warning(
-                    "Startup session load skipped (%s): .cms sessions are not supported",
-                    load_session,
+                    "Startup session load failed (%s): %s", session_path, e, exc_info=True
                 )
-            else:
-                w.load_session_csv(load_session)
-        except Exception as e:
-            logger.warning("Startup session load failed (%s): %s", load_session, e, exc_info=True)
+
+        QTimer.singleShot(0, _do_session)
     if open_file:
         path = os.path.abspath(open_file)
 
