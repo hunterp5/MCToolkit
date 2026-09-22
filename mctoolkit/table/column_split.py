@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with mctoolkit.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Split delimited table-cell text into fields (Data → Table → Split Column)."""
+"""Split delimited table-cell text into fields (Data → Table → Operations → Split Column)."""
 
 from __future__ import annotations
 
