@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
-"""Data → Table → Add Row / Add Column count dialogs."""
+"""Data → Table → Operations → Add Row / Add Column count dialogs."""
 
 from __future__ import annotations
 
