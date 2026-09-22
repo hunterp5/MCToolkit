@@ -24,6 +24,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
 from ..table.structure_depiction_layout import structure_depict_height, structure_depict_width
+from .analysis_job_support import enqueue_process_queue_job
 
 logger = logging.getLogger(__name__)
 
@@ -85,11 +86,12 @@ class ProtonateTools:
         sig = self._ensure_protonate_signals()
         n = len(data)
         prog = self._app._tool_progress_state
-        self._app._begin_tool_progress("Protonate", n)
         from ..workers.protonate_worker import ProtonateWorker
 
-        self._app.process_queue.enqueue(
-            f"Protonate ({n} molecules)",
+        self._app._protonate_run_ctx["job_id"] = enqueue_process_queue_job(
+            self._app,
+            "Protonate",
+            n,
             lambda ev, r=data, ph=ph, s=sig, st=prog, ws=self._app.signals: ProtonateWorker(
                 r,
                 ph,
@@ -99,6 +101,7 @@ class ProtonateTools:
                 worker_signals=ws,
                 progress_message="Protonate",
             ),
+            queue_label=f"Protonate ({n} molecules)",
         )
 
     def _on_protonate_finished(self, rows: list) -> None:
@@ -109,10 +112,11 @@ class ProtonateTools:
         pct_col = protomer_percent_column_name(float(ctx.get("ph", 7.4)))
         render_2d = bool(ctx.get("render_2d"))
         allowed = ctx.get("allowed_oids") or None
+        job_id = ctx.get("job_id")
         self._app._protonate_run_ctx = None
 
         if not rows:
-            self._app._finish_tool_progress("Protonate")
+            self._app._finish_tool_progress("Protonate", job_id=job_id)
             self._app.status_label.setText(
                 self._app._consume_partial_results_notice() or "Protonate: no results."
             )
@@ -135,6 +139,7 @@ class ProtonateTools:
             res,
             [out_col, pct_col, "pKa"],
             progress_label="Protonate",
+            job_id=job_id,
             on_complete=lambda cols, a=allowed, r=render_2d: self._protonate_after_table_write(
                 cols, a, r
             ),
@@ -168,7 +173,10 @@ class ProtonateTools:
             logger.exception("Protonate: render 2D scheduling failed")
 
     def _on_protonate_failed(self, msg: str) -> None:
-        self._app._finish_tool_progress("Protonate")
+        ctx = getattr(self._app, "_protonate_run_ctx", {}) or {}
+        job_id = ctx.get("job_id")
+        self._app._protonate_run_ctx = None
+        self._app._finish_tool_progress("Protonate", job_id=job_id)
         if msg == "Cancelled.":
             self._app.status_label.setText(
                 self._app._consume_partial_results_notice() or "Cancelled."
