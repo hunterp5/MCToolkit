@@ -48,13 +48,17 @@ from ..storage import EnsembleStore
 from ..table.session_codec import (
     SESSION_ENSEMBLES_KEY,
     compact_global_bounds,
-    expand_session_document,
-    loads_session_bytes,
     session_format_ok,
     session_version_ok,
 )
 from ..table.session_document_build import assemble_session_document, dumps_session_snapshot
+from .theme import gui_theme_session_payload
+from .threadpool_access import start_runnable_on_app_pool
 from .widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
+from ..workers.session_rows_parse import (
+    SessionOpenWorker,
+    SessionRowsParseSignals,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +261,7 @@ class SessionSave:
                 int(x) for x in self._app.zoomed_ids if want is None or int(x) in want
             ),
             "structure_field_override": getattr(self._app, "_structure_field_override", None),
+            "gui_theme": gui_theme_session_payload(getattr(self._app, "_gui_theme", None)),
             "filter_panel_visible": bool(self._app.f_panel.isVisible()),
             "workspace_layout": (
                 self._app._workspace_layout.collect_splitter_sizes()
@@ -482,27 +487,31 @@ class SessionSave:
                 SESSION_INVALID_MESSAGE,
             )
             return False
-        try:
-            with open(path, "rb") as f:
-                raw = f.read()
-            d = expand_session_document(loads_session_bytes(raw))
-        except Exception as e:
-            logger.exception("Open session: could not read %s", path)
-            QMessageBox.warning(self._app, "Open Session", f"Could not read file: {e}")
-            return False
-        if not self._session_format_ok(d.get("format")) or not self._session_version_ok(
-            d.get("version")
-        ):
-            QMessageBox.warning(
-                self._app,
-                "Open Session",
-                SESSION_INVALID_MESSAGE,
-            )
-            return False
-        try:
-            self._apply_session_document(d)
-        except Exception as e:
-            logger.exception("Open session: apply failed for %s", path)
-            QMessageBox.warning(self._app, "Open Session", str(e))
-            return False
+        self._show_session_open_overlay()
+        self._app._session_open_token = int(getattr(self._app, "_session_open_token", 0)) + 1
+        token = int(self._app._session_open_token)
+        self._app._session_parse_busy = True
+        self._app._session_open_ok = True
+        signals = SessionRowsParseSignals(self._app)
+
+        def _on_ok(result, t=token) -> None:
+            self._on_session_file_decoded(result, t)
+
+        def _on_fail(message, t=token) -> None:
+            self._on_session_file_decode_failed(message, t)
+
+        worker = SessionOpenWorker(path, signals, token)
+        if "pytest" in sys.modules:
+            conn = Qt.DirectConnection
+            signals.finished.connect(_on_ok, type=conn)
+            signals.failed.connect(_on_fail, type=conn)
+            self._bind_session_worker_progress(signals, conn, token=token)
+            worker.run()
+            self._drain_pending_session_load()
+            return bool(getattr(self._app, "_session_open_ok", True))
+        conn = Qt.QueuedConnection
+        signals.finished.connect(_on_ok, type=conn)
+        signals.failed.connect(_on_fail, type=conn)
+        self._bind_session_worker_progress(signals, conn, token=token)
+        start_runnable_on_app_pool(self._app, worker)
         return True
