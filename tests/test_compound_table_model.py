@@ -441,6 +441,29 @@ def test_is_structure_paint_data_change(model: CompoundTableModel):
     )
 
 
+def test_structure_paint_does_not_mark_sqlite_store_dirty(model: CompoundTableModel):
+    from mctoolkit.ui.main_window.app_lifecycle_mixin import AppLifecycleMixin
+
+    class _Host(AppLifecycleMixin):
+        def __init__(self) -> None:
+            self._table_model = model
+            self._ingest_sqlite_paused_dirty = False
+            self._sqlite_store = object()
+            self._sqlite_store_dirty = False
+            self._sqlite_rebuild_in_progress = False
+            self._session_mutation_paused = False
+            self._session_dirty = False
+            self._wire_sqlite_store_dirty_tracking()
+
+    model.append_row(1, {"SMILES": "C", "MW": "16"})
+    host = _Host()
+    model.notify_structure_column_changed(0, 0)
+    assert host._sqlite_store_dirty is False
+    assert host._session_dirty is False
+    model.set_cell_text(1, "MW", "18")
+    assert host._sqlite_store_dirty is True
+
+
 def test_data_cells_are_not_inline_editable(model: CompoundTableModel):
     model.append_row(1, {"SMILES": "C", "MW": "16"})
     smiles = model.index(0, model._headers.index("SMILES"))
