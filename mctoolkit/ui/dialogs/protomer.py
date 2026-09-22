@@ -75,6 +75,7 @@ class ProtomerGeneratorDialog(QDialog):
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
         self._selected_row_count = n_sel
         self._have_selection = n_sel > 0
+        self._active_job_id: str | None = None
 
     def _build_protomer_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -130,7 +131,7 @@ class ProtomerGeneratorDialog(QDialog):
         req = ProtomerGeneratorRequest(rows=rows, pH=float(self.ph_spin.value()))
         n = len(rows)
         prog = self.parent_app._tool_progress_state
-        enqueue_process_queue_job(
+        self._active_job_id = enqueue_process_queue_job(
             self.parent_app,
             "Generate protomers",
             n,
@@ -151,9 +152,12 @@ class ProtomerGeneratorDialog(QDialog):
                 f"{n_forms} protomer form(s) from {max(n_sources, 1)} parent(s)."
             )
         if self.parent_app is not None:
+            job_id = self._active_job_id
+            self._active_job_id = None
             self.parent_app._finish_tool_progress(
                 "Generate protomers",
                 status_message=self.parent_app._consume_partial_results_notice() or "Ready.",
+                job_id=job_id,
             )
             source_oids = {int(oid) for oid, _smi, _pct in rows if oid is not None}
             self._write_unipka_pka_for_oids(source_oids)
@@ -164,7 +168,9 @@ class ProtomerGeneratorDialog(QDialog):
     def _on_failed(self, msg: str) -> None:
         self.generate_btn.setEnabled(True)
         if self.parent_app is not None:
-            self.parent_app._finish_tool_progress("Generate protomers")
+            job_id = self._active_job_id
+            self._active_job_id = None
+            self.parent_app._finish_tool_progress("Generate protomers", job_id=job_id)
         QMessageBox.warning(self, "Generate Protomers", msg or "Generation failed.")
 
     def _write_unipka_pka_for_oids(self, source_oids: set[int]) -> None:
