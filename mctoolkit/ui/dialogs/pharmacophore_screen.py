@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -47,6 +48,7 @@ from ...protein.pharmacophore_screen import (
 from ...workers.pharmacophore_screen import PharmacophoreScreenWorker
 from ...workers.signals import PharmacophoreScreenSignals
 from ..chunked_table_write import ChunkedTableWriter
+from ..analysis_job_support import enqueue_fast_process_queue_job
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -86,6 +88,7 @@ class PharmacophoreScreenDialog(QDialog):
         self._ensemble_db: str | None = None
         self._ensemble_column: str | None = None
         self._writer: ChunkedTableWriter | None = None
+        self._active_job_id: str | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -337,13 +340,14 @@ class PharmacophoreScreenDialog(QDialog):
         self._select_hits = self.chk_select_hits.isChecked()
         self.run_btn.setEnabled(False)
         prog = app._tool_progress_state
-        app._begin_tool_progress("Pharmacophore screen", max(1, len(targets)))
         query = pharma.to_dict()
         slack = float(self.spin_slack.value())
         db = getattr(self, "_ensemble_db", None)
         col = getattr(self, "_ensemble_column", None)
-        app.process_queue.enqueue_fast(
+        self._active_job_id = enqueue_fast_process_queue_job(
+            app,
             "Pharmacophore screen",
+            max(1, len(targets)),
             lambda ev, q=query, t=targets, s=slack, m=min_matched, sig=self._signals, st=prog, edb=db, ecol=col: (
                 PharmacophoreScreenWorker(
                     q,
@@ -423,18 +427,28 @@ class PharmacophoreScreenDialog(QDialog):
         def on_done() -> None:
             app._sync_global_bounds_for_headers(names, refresh_filters=True)
             if chunked:
-                app._finish_tool_progress("Writing results", status_message=None)
+                app._finish_tool_progress(
+                    "Writing results", status_message=None, job_id=write_job_id
+                )
             self._finish_screen_results(n_hit, n_scope, hit_oids)
 
         if self._writer is not None:
             self._writer.cancel()
+        write_job_id = None
+        if chunked:
+            write_job_id = str(uuid.uuid4())[:8]
+            app._begin_tool_progress("Writing results", n_rows, job_id=write_job_id)
         self._writer = ChunkedTableWriter(
             table=app.table,
             total=n_rows,
             chunk=max(250, int(cfg.ingest_gui_chunk_size)) if chunked else max(1, n_rows),
             write_chunk=write_chunk,
             on_progress=(
-                (lambda done, total: app._on_tool_progress("Writing results…", done, total))
+                (
+                    lambda done, total, jid=write_job_id: app._on_tool_progress(
+                        "Writing results…", done, total, job_id=jid
+                    )
+                )
                 if chunked
                 else None
             ),
@@ -442,7 +456,6 @@ class PharmacophoreScreenDialog(QDialog):
             should_continue=lambda: self.parent_app is not None,
         )
         if chunked:
-            app._begin_tool_progress("Writing results", n_rows)
             self._writer.start()
         else:
             self._writer.run_now()
@@ -476,14 +489,18 @@ class PharmacophoreScreenDialog(QDialog):
 
     def _on_finished(self, rows) -> None:
         self.run_btn.setEnabled(True)
-        self.parent_app._finish_tool_progress("Pharmacophore screen")
+        job_id = self._active_job_id
+        self._active_job_id = None
+        self.parent_app._finish_tool_progress("Pharmacophore screen", job_id=job_id)
         if not self._pending_columns:
             return
         self._write_columns(rows)
 
     def _on_failed(self, msg: str) -> None:
         self.run_btn.setEnabled(True)
-        self.parent_app._finish_tool_progress("Pharmacophore screen")
+        job_id = self._active_job_id
+        self._active_job_id = None
+        self.parent_app._finish_tool_progress("Pharmacophore screen", job_id=job_id)
         self.parent_app.status_label.setText(
             f"Pharmacophore screen failed: {msg or 'Computation failed.'}"
         )
