@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
@@ -764,6 +765,7 @@ class MedChemPlotPanel(DockableResultPlotPanel):
         app._ensure_columns(columns)
         self._cancel_table_write_job()
         label = f"{self._window_title}: writing descriptors"
+        write_job_id = str(uuid.uuid4())[:8]
 
         def write_chunk(start: int, end: int, _is_last: bool) -> None:
             app._table_model.apply_columns_values_bulk(columns, updates[start:end])
@@ -771,15 +773,20 @@ class MedChemPlotPanel(DockableResultPlotPanel):
         def on_done() -> None:
             self._table_writer = None
             app._sync_global_bounds_for_headers(columns, refresh_filters=True)
-            app._finish_tool_progress(f"{self._window_title}: descriptors written")
+            app._finish_tool_progress(
+                f"{self._window_title}: descriptors written",
+                job_id=write_job_id,
+            )
 
-        app._begin_tool_progress(label, len(updates))
+        app._begin_tool_progress(label, len(updates), job_id=write_job_id)
         self._table_writer = ChunkedTableWriter(
             table=app.table,
             total=len(updates),
             chunk=max(500, load_config().table_selection_chunk_rows // 4),
             write_chunk=write_chunk,
-            on_progress=lambda done, total: app._tool_progress_state.update(label, done, total),
+            on_progress=lambda done, total: app._tool_progress_state.update(
+                label, done, total, job_id=write_job_id
+            ),
             on_done=on_done,
             should_continue=lambda: self.parent_app is not None,
         )
