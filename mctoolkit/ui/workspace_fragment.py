@@ -23,7 +23,7 @@ from typing import Protocol
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
-from .analysis_job_support import ensure_table_ready_for_tool
+from .analysis_job_support import enqueue_process_queue_job, ensure_table_ready_for_tool
 from .strings import (
     TOOL_BRICS_DECOMP,
     TOOL_BRICS_RECOMP,
@@ -82,9 +82,10 @@ class FragmentTools:
             self._app.status_label.setText("Ready.")
             return
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress("Core-based decomposition", len(data))
-        self._app.process_queue.enqueue(
-            f"Core-based decomposition ({len(data)} rows)",
+        enqueue_process_queue_job(
+            self._app,
+            "Core-based decomposition",
+            len(data),
             lambda ev, dt=data, pp=p, sigs=self._app.signals, prog=ps: RGroupDecompositionWorker(
                 dt,
                 pp.core_query,
@@ -96,6 +97,7 @@ class FragmentTools:
                 cancel_event=ev,
                 progress_state=prog,
             ),
+            queue_label=f"Core-based decomposition ({len(data)} rows)",
         )
 
     def on_rgroup_decomp_finished(self, res, col_headers: list) -> None:
@@ -160,14 +162,16 @@ class FragmentTools:
         method = "brics" if p.method == "brics" else "recap"
         self._app._fragment_decomp_render_2d_after = bool(getattr(p, "render_2d", False))
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress(p.tool_title, len(data))
-        self._app.process_queue.enqueue(
-            f"{p.tool_title} ({len(data)} rows)",
+        enqueue_process_queue_job(
+            self._app,
+            p.tool_title,
+            len(data),
             lambda ev, dt=data, m=method, pref=prefix, title=p.tool_title, sigs=self._app.signals, prog=ps: (
                 FragmentDecompositionWorker(
                     dt, m, pref, title, sigs, cancel_event=ev, progress_state=prog
                 )
             ),
+            queue_label=f"{p.tool_title} ({len(data)} rows)",
         )
 
     def on_fragment_decomp_finished(self, res, col_headers: list, tool_title: str) -> None:
@@ -293,9 +297,10 @@ class FragmentTools:
             return
         method = "brics" if p.method == "brics" else "recap"
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress(p.tool_title, p.max_products)
-        self._app.process_queue.enqueue(
-            f"{p.tool_title} ({len(fragments)} fragments)",
+        enqueue_process_queue_job(
+            self._app,
+            p.tool_title,
+            p.max_products,
             lambda ev, fr=fragments, pp=p, m=method, sigs=self._app.signals, prog=ps: (
                 FragmentRecompositionWorker(
                     fr,
@@ -309,6 +314,7 @@ class FragmentTools:
                     progress_state=prog,
                 )
             ),
+            queue_label=f"{p.tool_title} ({len(fragments)} fragments)",
         )
 
     def on_fragment_recomp_finished(
