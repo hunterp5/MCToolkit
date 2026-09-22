@@ -1,6 +1,6 @@
 # Join Columns
 
-Join Columns concatenates two table columns into one new column with a delimiter you choose. Open from **Data → Table → Join Columns**.
+Join Columns concatenates two table columns into one new column with a delimiter you choose. Open from **Data → Table → Operations → Join Columns**.
 
 ## Goal
 
