@@ -36,6 +36,7 @@ from ...workers import (
     SIMILARITY_FP_TYPE_LABELS,
     SIMILARITY_METRIC_LABELS,
 )
+from ..analysis_job_support import enqueue_process_queue_job
 from ..qt_widget_utils import make_window_minimizable
 
 
@@ -95,6 +96,7 @@ class BulkSimilarityDialog(QDialog):
         self._sig = BulkSimilaritySignals(self)
         self._sig.finished.connect(self._on_finished)
         self._sig.failed.connect(self._on_failed)
+        self._active_job_id: str | None = None
 
         make_window_minimizable(self)
         self._sync_selection_label()
@@ -154,9 +156,10 @@ class BulkSimilarityDialog(QDialog):
         self.table.setRowCount(0)
 
         prog = app._tool_progress_state
-        app._begin_tool_progress("Bulk similarity", max(1, len(rows)))
-        app.process_queue.enqueue(
-            f"Bulk similarity ({len(rows)} rows)",
+        self._active_job_id = enqueue_process_queue_job(
+            app,
+            "Bulk similarity",
+            max(1, len(rows)),
             lambda ev, r=rows, fp=fp_choice, m=metric, k=top_k, sig=self._sig, st=prog: (
                 BulkSimilarityWorker(
                     r,
@@ -168,12 +171,15 @@ class BulkSimilarityDialog(QDialog):
                     progress_state=st,
                 )
             ),
+            queue_label=f"Bulk similarity ({len(rows)} rows)",
         )
 
     def _on_finished(self, res) -> None:
         app = self.parent_app
+        job_id = self._active_job_id
+        self._active_job_id = None
         if app is not None:
-            app._finish_tool_progress("Bulk similarity")
+            app._finish_tool_progress("Bulk similarity", job_id=job_id)
         self.run_btn.setEnabled(True)
 
         mean = "N/A" if res.mean_similarity is None else f"{res.mean_similarity:.4f}"
@@ -197,8 +203,10 @@ class BulkSimilarityDialog(QDialog):
 
     def _on_failed(self, msg: str) -> None:
         app = self.parent_app
+        job_id = self._active_job_id
+        self._active_job_id = None
         if app is not None:
-            app._finish_tool_progress("Bulk similarity")
+            app._finish_tool_progress("Bulk similarity", job_id=job_id)
         self.run_btn.setEnabled(True)
         self.summary_lbl.setText(
             "Cancelled." if msg == "Cancelled." else (msg or "Bulk similarity failed.")
