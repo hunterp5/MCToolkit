@@ -77,7 +77,7 @@ def test_corner_chrome_is_layout_and_processes(qapp):  # noqa: ARG001
     ly = corner.layout()
     widgets = [ly.itemAt(i).widget() for i in range(ly.count())]
     assert widgets == [w._btn_workspace_layout, w._btn_processes]
-    assert w._btn_processes.text() == "Processes"
+    assert w._btn_processes.text() == "Log"
     assert getattr(w, "_btn_app_log", None) is None
     w.close()
 
@@ -99,6 +99,7 @@ def test_processes_dialog_embeds_session_log(qapp):  # noqa: ARG001
     session_log_buffer().clear()
     record_ui_log("Starting pdb2pqr", name="mctoolkit.ui.tools")
     dlg = ProcessesDialog()
+    assert dlg.windowTitle() == "Log"
     assert dlg._log is not None
     assert "Starting pdb2pqr" in dlg._log._view.toPlainText()
     splitter = dlg.layout().itemAt(0).widget()
