@@ -150,9 +150,14 @@ class FilterSubstructure:
             self._unregister_substructure_background_job(gen)
         finish = getattr(self._app, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Filtering substructure", status_message="Substructure filter cancelled.")
+            finish(
+                "Filtering substructure",
+                status_message="Substructure filter cancelled.",
+                job_id=job_id,
+            )
 
     def _on_substructure_filter_finished(self, job_gen: int, matched) -> None:
+        job_id = getattr(self._app, "_substructure_bg_job_id", None)
         self._unregister_substructure_background_job(job_gen)
         if job_gen != getattr(self._app, "_substructure_job_gen", 0):
             return
@@ -164,7 +169,7 @@ class FilterSubstructure:
         ]
         finish = getattr(self._app, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Filtering substructure", status_message=None)
+            finish("Filtering substructure", status_message=None, job_id=job_id)
         overrides = self._normalize_substructure_overrides(matched)
         if not overrides and isinstance(matched, frozenset):
             if len(dispatched_queries) == 1:
