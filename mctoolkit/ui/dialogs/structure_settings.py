@@ -22,10 +22,10 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
-    QFormLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QVBoxLayout,
 )
@@ -49,19 +49,12 @@ class StructureSettingsDialog(QDialog):
     def __init__(self, current_width: int, current_height: int, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("2D Render")
-        self.setMinimumWidth(360)
+        self.setMinimumWidth(280)
 
         root = QVBoxLayout(self)
-        root.addWidget(
-            QLabel(
-                "Control the pixel size of 2D structure drawings in the table, "
-                "Render 2D, browsers, and other structure images. "
-                "Accepting re-draws table structures at the new size."
-            )
-        )
-        root.addWidget(QLabel(""))
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(6)
 
-        form = QFormLayout()
         self._width_spin = self._make_spin(
             current_width,
             DEFAULT_STRUCTURE_DEPICT_WIDTH,
@@ -76,21 +69,27 @@ class StructureSettingsDialog(QDialog):
         )
         self._width_spin.valueChanged.connect(self._emit_preview)
         self._height_spin.valueChanged.connect(self._emit_preview)
-        form.addRow("Image width:", self._width_spin)
-        form.addRow("Image height:", self._height_spin)
-        root.addLayout(form)
 
-        btn_row = QHBoxLayout()
-        reset_btn = QPushButton("Reset to Default")
-        reset_btn.clicked.connect(self._reset_default)
-        btn_row.addWidget(reset_btn)
-        btn_row.addStretch()
-        root.addLayout(btn_row)
+        size_row = QHBoxLayout()
+        size_row.setSpacing(6)
+        size_row.addWidget(QLabel("Width:"))
+        size_row.addWidget(self._width_spin, 1)
+        size_row.addWidget(QLabel("Height:"))
+        size_row.addWidget(self._height_spin, 1)
+        root.addLayout(size_row)
 
+        actions = QHBoxLayout()
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
-        root.addWidget(bb)
+        actions.addWidget(bb)
+        actions.addStretch(1)
+        reset_btn = QPushButton("Reset to Default")
+        reset_btn.setToolTip("Reset to default 2D render size")
+        reset_btn.clicked.connect(self._reset_default)
+        actions.addWidget(reset_btn)
+        root.addLayout(actions)
 
         make_window_minimizable(self)
 
