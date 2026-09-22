@@ -22,6 +22,7 @@ process-queue wiring stays in one place (AnalysisJobRunner pattern without a hea
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
@@ -63,7 +64,19 @@ class AnalysisJobOps(Protocol):
     def collect_scoped_structure_payloads(
         self, src: str, *, only_selected: bool = False, only_visible: bool = False
     ) -> list[tuple[int, object]]: ...
-    def _clear_tool_progress(self, *, status_message: str | None = None) -> None: ...
+    def _clear_tool_progress(
+        self, *, status_message: str | None = None, job_id: str | None = None
+    ) -> None: ...
+    def _finish_tool_progress(
+        self,
+        message: str | None = None,
+        *,
+        status_message: str | None = None,
+        job_id: str | None = None,
+    ) -> None: ...
+    def _begin_tool_progress(
+        self, message: str, total: int, job_id: str | None = None
+    ) -> None: ...
 
 
 class AnalysisJobHost(
@@ -297,15 +310,30 @@ def enqueue_process_queue_job(
     factory: Callable,
     *,
     queue_label: str | None = None,
-) -> Any:
-    """Begin tool progress and enqueue a process-queue worker factory.
+) -> str:
+    """Begin a named progress slot, then enqueue a process-queue worker factory.
 
-    Returns the queue job id from ``process_queue.enqueue``.
+    Returns the job id shared by the Log row and ``ToolProgressState`` slot.
     """
     label = queue_label or f"{tool_label} ({int(n_items)} rows)"
-    job_id = app.process_queue.enqueue(label, factory)
+    job_id = str(uuid.uuid4())[:8]
     app._begin_tool_progress(tool_label, int(n_items), job_id=job_id)
-    return job_id
+    return str(app.process_queue.enqueue(label, factory, job_id=job_id))
+
+
+def enqueue_fast_process_queue_job(
+    app: AnalysisJobHost,
+    tool_label: str,
+    n_items: int,
+    factory: Callable,
+    *,
+    queue_label: str | None = None,
+) -> str:
+    """Like :func:`enqueue_process_queue_job` but uses the interactive fast pool."""
+    label = queue_label or f"{tool_label} ({int(n_items)} rows)"
+    job_id = str(uuid.uuid4())[:8]
+    app._begin_tool_progress(tool_label, int(n_items), job_id=job_id)
+    return str(app.process_queue.enqueue_fast(label, factory, job_id=job_id))
 
 
 def start_scoped_structure_job(
@@ -337,18 +365,24 @@ def start_scoped_structure_job(
     )
     if not mols:
         return None
+    job_id = str(uuid.uuid4())[:8]
     ps = app._tool_progress_state
-    return enqueue_process_queue_job(
-        app,
-        tool_label,
-        len(mols),
-        lambda ev, rows=mols, sigs=app.signals, prog=ps: make_worker(
-            rows,
-            cancel_event=ev,
-            signals=sigs,
-            progress_state=prog,
-        ),
-        queue_label=queue_label,
+    bind = getattr(ps, "bind", None)
+    if callable(bind):
+        ps = bind(job_id)
+    label = queue_label or f"{tool_label} ({len(mols)} rows)"
+    app._begin_tool_progress(tool_label, len(mols), job_id=job_id)
+    return str(
+        app.process_queue.enqueue(
+            label,
+            lambda ev, rows=mols, sigs=app.signals, prog=ps: make_worker(
+                rows,
+                cancel_event=ev,
+                signals=sigs,
+                progress_state=prog,
+            ),
+            job_id=job_id,
+        )
     )
 
 
@@ -377,17 +411,21 @@ def start_scoped_activity_job(
     )
     if not records:
         return False
+    job_id = str(uuid.uuid4())[:8]
     ps = app._tool_progress_state
-    enqueue_process_queue_job(
-        app,
-        tool_label,
-        len(records),
+    bind = getattr(ps, "bind", None)
+    if callable(bind):
+        ps = bind(job_id)
+    app._begin_tool_progress(tool_label, len(records), job_id=job_id)
+    app.process_queue.enqueue(
+        f"{tool_label} ({len(records)} rows)",
         lambda ev, rec=records, sigs=app.signals, prog=ps: make_worker(
             rec,
             cancel_event=ev,
             signals=sigs,
             progress_state=prog,
         ),
+        job_id=job_id,
     )
     return True
 
@@ -398,9 +436,10 @@ def finish_analysis_pairs(
     pairs: Sequence[Any] | None,
     *,
     empty_message: str,
+    job_id: str | None = None,
 ) -> list[Any] | None:
     """Finish tool progress; return pairs list or ``None`` when empty (after UI notice)."""
-    app._finish_tool_progress(tool_label)
+    app._finish_tool_progress(tool_label, job_id=job_id)
     out = list(pairs or [])
     if not out:
         app.status_label.setText("Ready.")
@@ -415,9 +454,10 @@ def report_analysis_failure(
     message: str,
     *,
     fallback: str,
+    job_id: str | None = None,
 ) -> None:
     """Clear progress and show a warning for a failed analysis job."""
-    app._clear_tool_progress()
+    app._clear_tool_progress(job_id=job_id)
     app.status_label.setText("Ready.")
     QMessageBox.warning(app, tool_label, message or fallback)
 
@@ -431,12 +471,13 @@ def report_cancellable_job_failure(
     failure_fallback: str,
     cancelled_status: str | None = None,
     after_finish: Callable[[], None] | None = None,
+    job_id: str | None = None,
 ) -> None:
     """Finish progress for cancellable queue jobs (Cluster, Diverse subset, predictors).
 
     Cancelled jobs update the status bar only; other failures show a warning.
     """
-    app._finish_tool_progress(progress_label)
+    app._finish_tool_progress(progress_label, job_id=job_id)
     if after_finish is not None:
         after_finish()
     if message == "Cancelled.":
