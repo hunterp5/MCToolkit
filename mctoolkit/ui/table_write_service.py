@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Callable
 from contextlib import suppress
 from typing import Any, Protocol
@@ -174,6 +175,7 @@ class TableWriteService:
         bulk_rows: list[tuple[int, dict[str, str]]],
         *,
         on_complete: Callable[[list[str]], None] | None = None,
+        write_job_id: str | None = None,
     ) -> None:
         """Apply result rows in GUI-budgeted chunks, yielding between each one."""
         app = self._app
@@ -185,7 +187,7 @@ class TableWriteService:
         def on_progress(done: int, total: int) -> None:
             on_prog = getattr(progress, "_on_tool_progress", None)
             if callable(on_prog):
-                on_prog("Writing results…", done, total)
+                on_prog("Writing results…", done, total, job_id=write_job_id)
             else:
                 app.status_label.setText(f"Writing results… ({done:,}/{total:,})")
 
@@ -193,7 +195,7 @@ class TableWriteService:
             self._calc_writer = None
             finish = getattr(progress, "_finish_tool_progress", None)
             if callable(finish):
-                finish("Writing results", status_message=None)
+                finish("Writing results", status_message=None, job_id=write_job_id)
             self._finalize_calc_writeback(calc_h, new_h, on_complete=on_complete)
 
         writer = self._calc_writer
@@ -218,6 +220,7 @@ class TableWriteService:
         progress_label: str | None = None,
         on_complete: Callable[[list[str]], None] | None = None,
         immediate: bool = False,
+        job_id: str | None = None,
     ) -> list[str]:
         """Write tool results into the table, adding columns as needed.
 
@@ -235,7 +238,9 @@ class TableWriteService:
         calc_h = [str(h) for h in (calc_h or [])]
         if not calc_h:
             if finish_progress:
-                progress._finish_tool_progress(progress_label, status_message=None)
+                progress._finish_tool_progress(
+                    progress_label, status_message=None, job_id=job_id
+                )
             app.status_label.setText(progress._consume_partial_results_notice() or "Done.")
             if on_complete is not None:
                 on_complete([])
@@ -272,18 +277,25 @@ class TableWriteService:
         ]
         async_min = self._calc_writeback_async_min_rows()
         if not immediate and bulk_rows and len(bulk_rows) >= async_min:
+            write_job_id = str(uuid.uuid4())[:8]
             begin = getattr(progress, "_begin_tool_progress", None)
             if callable(begin):
-                begin("Writing results", len(bulk_rows))
+                begin("Writing results", len(bulk_rows), job_id=write_job_id)
             with suppress(RuntimeError):
                 app.table.setUpdatesEnabled(True)
             self._start_calc_writeback(
-                list(calc_h), list(new_h), bulk_rows, on_complete=on_complete
+                list(calc_h),
+                list(new_h),
+                bulk_rows,
+                on_complete=on_complete,
+                write_job_id=write_job_id,
             )
             return list(calc_h)
 
         if finish_progress:
-            progress._finish_tool_progress(progress_label, status_message=None)
+            progress._finish_tool_progress(
+                progress_label, status_message=None, job_id=job_id
+            )
         try:
             self._apply_calc_bulk_rows(calc_h, bulk_rows)
             self._finalize_calc_writeback(calc_h, new_h, on_complete=on_complete)
