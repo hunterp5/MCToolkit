@@ -283,6 +283,24 @@ class PlotPane(QFrame):
     def is_empty(self) -> bool:
         return not self._pages
 
+    def take_plot_widgets(self) -> list[QWidget]:
+        """Detach pages for a layout rebuild without unembed or chrome restore."""
+        widgets = list(self._pages)
+        self._header_button_owner = None
+        self._stack.blockSignals(True)
+        try:
+            for widget in widgets:
+                self._uninstall_activate_filter(widget)
+                self._stack.removeWidget(widget)
+                try:
+                    widget.setParent(None)
+                except RuntimeError:
+                    pass
+            self._pages = []
+        finally:
+            self._stack.blockSignals(False)
+        return widgets
+
     def display_title(self) -> str:
         return plot_widget_display_title(self.plot_widget())
 
@@ -382,8 +400,6 @@ class PlotPane(QFrame):
             self._stack.blockSignals(False)
         self._refresh_pager()
         self._sync_visible_footer()
-        for widget in self._pages:
-            embed_in_plot_pane(widget)
 
     def add_plot_widget(self, widget: QWidget) -> None:
         """Append ``widget`` and show it. If it is already here, just show it."""
@@ -392,7 +408,6 @@ class PlotPane(QFrame):
             self._stack.setCurrentWidget(widget)
             self._refresh_pager()
             self._sync_visible_footer()
-            embed_in_plot_pane(widget)
             return
         self._pages.append(widget)
         self._stack.addWidget(widget)
@@ -400,7 +415,6 @@ class PlotPane(QFrame):
         self._stack.setCurrentWidget(widget)
         self._refresh_pager()
         self._sync_visible_footer()
-        embed_in_plot_pane(widget)
 
     def remove_plot_widget(self, widget: QWidget) -> bool:
         """Detach ``widget`` from this pane. Returns True if it was present."""

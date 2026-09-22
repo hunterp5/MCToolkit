@@ -59,6 +59,7 @@ from ..dockable_plot import (
     add_centered_browser_nav,
     style_browser_nav_buttons,
     style_plot_footer_text_button,
+    sync_footer_on_parent_change,
 )
 from ..strings import TOOL_PREDICT_METABOLITES
 from ..widgets import NumericTableWidgetItem
@@ -483,10 +484,7 @@ class MetaboliteBrowserWidget(QWidget):
 
     def event(self, event) -> bool:  # noqa: N802 — Qt API
         if event.type() == QEvent.ParentChange:
-            try:
-                self._sync_footer_chrome()
-            except RuntimeError:
-                pass
+            sync_footer_on_parent_change(self)
         return super().event(event)
 
     def resizeEvent(self, event) -> None:  # noqa: N802 — Qt API

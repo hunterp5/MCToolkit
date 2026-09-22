@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager, suppress
+
 from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtWidgets import QHBoxLayout, QLayout, QSizePolicy, QWidget
 
@@ -33,6 +35,34 @@ from .dockable_plot_constants import (
     _PANE_EMBED_ATTR,
 )
 from .dockable_plot_title import sync_floating_title_chrome
+
+_PARENT_CHANGE_CHROME_DEPTH = 0
+
+
+@contextmanager
+def suspend_parent_change_chrome():
+    """Skip footer chrome work while workspace layout reparents widgets."""
+    global _PARENT_CHANGE_CHROME_DEPTH
+    _PARENT_CHANGE_CHROME_DEPTH += 1
+    try:
+        yield
+    finally:
+        _PARENT_CHANGE_CHROME_DEPTH -= 1
+
+
+def parent_change_chrome_suspended() -> bool:
+    return _PARENT_CHANGE_CHROME_DEPTH > 0
+
+
+def sync_footer_on_parent_change(widget: QWidget) -> None:
+    """Run ``_sync_footer_chrome`` unless a layout apply is in progress."""
+    if _PARENT_CHANGE_CHROME_DEPTH:
+        return
+    sync = getattr(widget, "_sync_footer_chrome", None)
+    if not callable(sync):
+        return
+    with suppress(RuntimeError):
+        sync()
 
 
 def iter_plot_selection_views(root: QWidget | None) -> list:

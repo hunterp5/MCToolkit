@@ -68,6 +68,7 @@ from ..dockable_plot import (
     make_send_window_button,
     add_centered_browser_nav,
     style_browser_nav_buttons,
+    sync_footer_on_parent_change,
 )
 from ..strings import TOOL_PREDICT_SOM
 from ..widgets import NumericTableWidgetItem
@@ -710,10 +711,7 @@ class SomBrowserWidget(QWidget):
 
     def event(self, event) -> bool:  # noqa: N802 — Qt API
         if event.type() == QEvent.ParentChange:
-            try:
-                self._sync_footer_chrome()
-            except RuntimeError:
-                pass
+            sync_footer_on_parent_change(self)
         return super().event(event)
 
     def resizeEvent(self, event) -> None:  # noqa: N802 — Qt API

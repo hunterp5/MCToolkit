@@ -29,7 +29,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ..dockable_plot import PLOT_PANEL_DEFAULT_WIDTH
+from ..dockable_plot import PLOT_PANEL_DEFAULT_WIDTH, suspend_parent_change_chrome
 from .plot_pane import PlotPane
 
 LAYOUT_TABLE_ONLY = "table_only"
@@ -48,6 +48,15 @@ LAYOUT_PRESETS: tuple[tuple[str, str], ...] = (
     (LAYOUT_QUADRANTS, "Quadrants (table upper-left)"),
     (LAYOUT_TABLE_GRID, "Grid 2×3 (table upper-left)"),
 )
+
+_LAYOUT_PANE_COUNTS: dict[str, int] = {
+    LAYOUT_TABLE_ONLY: 0,
+    LAYOUT_TABLE_SINGLE: 1,
+    LAYOUT_TABLE_STACK: 2,
+    LAYOUT_TABLE_SIDE: 2,
+    LAYOUT_QUADRANTS: 3,
+    LAYOUT_TABLE_GRID: 5,
+}
 
 
 def _equalize_splitter(splitter: QSplitter) -> None:
@@ -263,71 +272,83 @@ class WorkspaceLayoutManager(QWidget):
         """
         if layout_id not in {p[0] for p in LAYOUT_PRESETS}:
             layout_id = DEFAULT_LAYOUT_ID
+        if (
+            layout_id == self._layout_id
+            and len(self._panes) == _LAYOUT_PANE_COUNTS.get(layout_id, 0)
+        ):
+            return []
 
         kept_stacks: list[tuple[list[QWidget], int]] = []
-        if preserve_plots:
-            for pane in self._panes:
-                widgets = pane.plot_widgets()
-                if widgets:
-                    kept_stacks.append((widgets, pane.page_index()))
-
-        # Detach table and plots before destroying the tree.
-        self._table_area.setParent(None)
-        for widgets, _idx in kept_stacks:
-            for w in widgets:
-                w.setParent(None)
-        for p in self._panes:
-            p.set_plot_widget(None)
-
-        if self._workspace_root is not None:
-            self._root_ly.removeWidget(self._workspace_root)
-            self._workspace_root.setParent(None)
-            self._workspace_root.deleteLater()
-            self._workspace_root = None
-
-        self._splitters.clear()
-        self._panes.clear()
-        self._layout_id = layout_id
-
-        if layout_id == LAYOUT_TABLE_ONLY:
-            root = self._build_table_only()
-        elif layout_id == LAYOUT_QUADRANTS:
-            root = self._build_quadrants()
-        elif layout_id == LAYOUT_TABLE_GRID:
-            root = self._build_table_grid()
-        elif layout_id == LAYOUT_TABLE_SIDE:
-            root = self._build_table_with_plot_area(Qt.Horizontal, 2)
-        elif layout_id == LAYOUT_TABLE_SINGLE:
-            root = self._build_table_with_plot_area(None, 1)
-        elif layout_id == LAYOUT_TABLE_STACK:
-            root = self._build_table_with_plot_area(Qt.Vertical, 2)
-        else:
-            self._layout_id = DEFAULT_LAYOUT_ID
-            root = self._build_table_only()
-
-        self._workspace_root = root
-        self._root_ly.addWidget(root, 1)
-        if self._layout_id == LAYOUT_QUADRANTS:
-            self.equalize_quadrant_splitters()
-            self._schedule_equal_quadrants()
-
         extras: list[QWidget] = []
-        for i, (widgets, idx) in enumerate(kept_stacks):
-            if i < len(self._panes):
-                self._panes[i].set_plot_widgets(widgets, current=idx)
-            else:
-                extras.extend(widgets)
-                if on_extra_plot is not None:
-                    for widget in widgets:
-                        on_extra_plot(widget)
+        self.setUpdatesEnabled(False)
+        table_updates = self._table_area.updatesEnabled()
+        self._table_area.setUpdatesEnabled(False)
+        try:
+            with suspend_parent_change_chrome():
+                if preserve_plots:
+                    for pane in list(self._panes):
+                        widgets = pane.plot_widgets()
+                        if not widgets:
+                            continue
+                        idx = pane.page_index()
+                        pane.take_plot_widgets()
+                        kept_stacks.append((widgets, idx))
+                else:
+                    for pane in list(self._panes):
+                        pane.take_plot_widgets()
 
-        pref = self.preferred_pane()
-        self.set_preferred_pane(pref)
-        for p in self._panes:
-            self._wire_pane(p)
+                self._table_area.setParent(None)
 
-        self.layout_changed.emit(self._layout_id)
-        return extras
+                if self._workspace_root is not None:
+                    self._root_ly.removeWidget(self._workspace_root)
+                    self._workspace_root.setParent(None)
+                    self._workspace_root.deleteLater()
+                    self._workspace_root = None
+
+                self._splitters.clear()
+                self._panes.clear()
+                self._layout_id = layout_id
+
+                if layout_id == LAYOUT_TABLE_ONLY:
+                    root = self._build_table_only()
+                elif layout_id == LAYOUT_QUADRANTS:
+                    root = self._build_quadrants()
+                elif layout_id == LAYOUT_TABLE_GRID:
+                    root = self._build_table_grid()
+                elif layout_id == LAYOUT_TABLE_SIDE:
+                    root = self._build_table_with_plot_area(Qt.Horizontal, 2)
+                elif layout_id == LAYOUT_TABLE_SINGLE:
+                    root = self._build_table_with_plot_area(None, 1)
+                elif layout_id == LAYOUT_TABLE_STACK:
+                    root = self._build_table_with_plot_area(Qt.Vertical, 2)
+                else:
+                    self._layout_id = DEFAULT_LAYOUT_ID
+                    root = self._build_table_only()
+
+                self._workspace_root = root
+                self._root_ly.addWidget(root, 1)
+                if self._layout_id == LAYOUT_QUADRANTS:
+                    self.equalize_quadrant_splitters()
+                    self._schedule_equal_quadrants()
+
+                for i, (widgets, idx) in enumerate(kept_stacks):
+                    if i < len(self._panes):
+                        self._panes[i].set_plot_widgets(widgets, current=idx)
+                    else:
+                        extras.extend(widgets)
+                        if on_extra_plot is not None:
+                            for widget in widgets:
+                                on_extra_plot(widget)
+
+                pref = self.preferred_pane()
+                self.set_preferred_pane(pref)
+                for p in self._panes:
+                    self._wire_pane(p)
+            self.layout_changed.emit(self._layout_id)
+            return extras
+        finally:
+            self._table_area.setUpdatesEnabled(table_updates)
+            self.setUpdatesEnabled(True)
 
     def _splitter_containing(self, widget: QWidget) -> QSplitter | None:
         for splitter in self._splitters:
@@ -340,52 +361,145 @@ class WorkspaceLayoutManager(QWidget):
         """Remove a plot pane from the splitter tree (plots must already be detached)."""
         if pane not in self._panes:
             return False
-        if len(self._panes) <= 1:
-            pane.set_plot_widgets([])
-            self._panes.remove(pane)
-            if self._preferred_pane_id == pane.pane_id:
-                self._preferred_pane_id = None
-            pane.setParent(None)
-            pane.deleteLater()
-            self.apply_layout(LAYOUT_TABLE_ONLY, preserve_plots=False)
-            return True
-
+        is_last = len(self._panes) <= 1
         splitter = self._splitter_containing(pane)
-        if splitter is None:
+        if splitter is None and not is_last:
             return False
 
         index = -1
-        for i in range(splitter.count()):
-            if splitter.widget(i) is pane:
-                index = i
-                break
-        if index < 0:
-            return False
-
-        old_sizes = [int(s) for s in splitter.sizes()]
-        removed_size = old_sizes[index] if index < len(old_sizes) else 0
+        removed_size = 0
+        if splitter is not None:
+            for i in range(splitter.count()):
+                if splitter.widget(i) is pane:
+                    index = i
+                    break
+            if index < 0 and not is_last:
+                return False
+            if index >= 0:
+                old_sizes = [int(s) for s in splitter.sizes()]
+                removed_size = old_sizes[index] if index < len(old_sizes) else 0
 
         if self._preferred_pane_id == pane.pane_id:
             self._preferred_pane_id = None
 
         pane.set_plot_widgets([])
         self._panes.remove(pane)
+        pane.hide()
         pane.setParent(None)
         pane.deleteLater()
 
-        remaining = splitter.count()
-        if remaining > 0 and removed_size > 0:
-            new_sizes = [int(s) for s in splitter.sizes()]
-            target = min(index, remaining - 1)
-            new_sizes[target] = max(0, new_sizes[target] + removed_size)
-            splitter.setSizes(new_sizes)
+        if splitter is not None and index >= 0:
+            remaining = splitter.count()
+            if remaining > 0 and removed_size > 0:
+                new_sizes = [int(s) for s in splitter.sizes()]
+                target = min(index, remaining - 1)
+                new_sizes[target] = max(0, new_sizes[target] + removed_size)
+                splitter.setSizes(new_sizes)
 
+        if not self._panes:
+            self._collapse_to_table_only()
+            self.layout_changed.emit(self._layout_id)
+            return True
+
+        self._flatten_redundant_splitters()
         pref = self.preferred_pane()
         self.set_preferred_pane(pref)
         # Closing one of two stacked/side panes looks like split view; persist it that way.
         if len(self._panes) == 1 and self._layout_id != LAYOUT_TABLE_SINGLE:
-            self.apply_layout(LAYOUT_TABLE_SINGLE, preserve_plots=True)
+            self._layout_id = LAYOUT_TABLE_SINGLE
+            self.layout_changed.emit(self._layout_id)
         return True
+
+    def _drop_splitter(self, splitter: QSplitter) -> None:
+        if splitter in self._splitters:
+            self._splitters.remove(splitter)
+        splitter.hide()
+        splitter.setParent(None)
+        splitter.deleteLater()
+
+    def _discard_splitter_branch(self, widget: QWidget) -> None:
+        """Hide and delete a splitter subtree that is not the compound table."""
+        if widget is self._table_area:
+            return
+        if isinstance(widget, PlotPane):
+            if widget in self._panes:
+                self._panes.remove(widget)
+            widget.hide()
+            widget.setParent(None)
+            widget.deleteLater()
+            return
+        if isinstance(widget, QSplitter):
+            for i in range(widget.count() - 1, -1, -1):
+                child = widget.widget(i)
+                if child is not None:
+                    self._discard_splitter_branch(child)
+            self._drop_splitter(widget)
+            return
+        widget.hide()
+        widget.setParent(None)
+        widget.deleteLater()
+
+    def _flatten_redundant_splitters(self) -> None:
+        """Unwrap 1-child splitters so a leftover pane sits beside the table."""
+        changed = True
+        while changed:
+            changed = False
+            for splitter in list(self._splitters):
+                try:
+                    if splitter.count() != 1:
+                        continue
+                    child = splitter.widget(0)
+                except RuntimeError:
+                    continue
+                parent = splitter.parentWidget()
+                if isinstance(parent, QSplitter):
+                    idx = next(
+                        (i for i in range(parent.count()) if parent.widget(i) is splitter),
+                        -1,
+                    )
+                    if idx < 0:
+                        continue
+                    sizes = [int(s) for s in parent.sizes()]
+                    child.setParent(None)
+                    parent.insertWidget(idx, child)
+                    self._drop_splitter(splitter)
+                    if len(sizes) == parent.count():
+                        parent.setSizes(sizes)
+                    changed = True
+                    break
+                if splitter is self._workspace_root:
+                    self._root_ly.removeWidget(splitter)
+                    child.setParent(None)
+                    self._workspace_root = child
+                    self._root_ly.addWidget(child, 1)
+                    self._drop_splitter(splitter)
+                    changed = True
+                    break
+
+    def _collapse_to_table_only(self) -> None:
+        """Give the table the full workspace without rebuilding the host tree."""
+        self._layout_id = LAYOUT_TABLE_ONLY
+        self._preferred_pane_id = None
+        table = self._table_area
+        node: QWidget | None = table
+        while node is not None and node is not self and node is not self._workspace_root:
+            parent = node.parentWidget()
+            if isinstance(parent, QSplitter):
+                for i in range(parent.count() - 1, -1, -1):
+                    child = parent.widget(i)
+                    if child is not None and child is not node:
+                        self._discard_splitter_branch(child)
+                try:
+                    span = int(
+                        parent.width()
+                        if parent.orientation() == Qt.Horizontal
+                        else parent.height()
+                    )
+                except RuntimeError:
+                    span = 1
+                parent.setSizes([max(span, 1)])
+            node = parent
+        self._flatten_redundant_splitters()
 
     def _on_pane_activated(self, pane: PlotPane) -> None:
         self.set_preferred_pane(pane)

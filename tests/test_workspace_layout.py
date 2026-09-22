@@ -75,6 +75,17 @@ def test_apply_layout_pane_counts(qapp):
     assert len(mgr.plot_panes()) == 2
 
 
+def test_apply_layout_same_id_is_noop(qapp):
+    mgr = _manager(qapp)
+    panes = mgr.plot_panes()
+    widget = QLabel("keep")
+    mgr.dock_into_pane(panes[0], widget)
+    extras = mgr.apply_layout(LAYOUT_TABLE_STACK, preserve_plots=True)
+    assert extras == []
+    assert mgr.plot_panes() == panes
+    assert panes[0].plot_widget() is widget
+
+
 def _assert_equal_splitter_pair(splitter) -> None:
     sizes = [int(s) for s in splitter.sizes()]
     assert len(sizes) == 2
@@ -408,12 +419,16 @@ def test_plot_pane_has_close_button(qapp):
 def test_remove_pane_reduces_pane_count(qapp):
     mgr = _manager(qapp)
     assert len(mgr.plot_panes()) == 2
-    p1 = mgr.plot_panes()[1]
+    p0, p1 = mgr.plot_panes()
+    surviving = QLabel("keep")
+    mgr.dock_into_pane(p0, surviving)
     assert mgr.remove_pane(p1) is True
-    assert len(mgr.plot_panes()) == 1
+    assert mgr.plot_panes() == [p0]
     assert p1 not in mgr.plot_panes()
     assert mgr.layout_id == LAYOUT_TABLE_SINGLE
     assert mgr.session_layout_id() == LAYOUT_TABLE_SINGLE
+    assert p0.plot_widget() is surviving
+    assert surviving.parentWidget() is not None
 
 
 def test_session_layout_id_canonicalizes_leftover_single_pane(qapp):
@@ -428,12 +443,16 @@ def test_session_layout_id_canonicalizes_leftover_single_pane(qapp):
 
 def test_remove_last_pane_switches_to_table_only(qapp):
     mgr = _manager(qapp)
+    table = mgr._table_area
     mgr.apply_layout(LAYOUT_TABLE_SINGLE, preserve_plots=False)
     assert len(mgr.plot_panes()) == 1
     p0 = mgr.plot_panes()[0]
     assert mgr.remove_pane(p0) is True
     assert mgr.layout_id == LAYOUT_TABLE_ONLY
     assert mgr.plot_panes() == []
+    assert table.parentWidget() is not None
+    assert table.parentWidget() is not table
+
 
 
 def test_plot_pane_refresh_theme_reapplies_selection_outline(qapp):

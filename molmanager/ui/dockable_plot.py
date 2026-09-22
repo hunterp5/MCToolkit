@@ -54,10 +54,13 @@ from .dockable_plot_embed import (
     iter_dock_send_window_buttons,
     iter_dock_trailing_close_buttons,
     iter_plot_selection_views,
+    parent_change_chrome_suspended,
     plot_embedded_minimum_width,
     plot_embedded_preferred_width,
     restore_dock_header_buttons,
+    suspend_parent_change_chrome,
     sync_docked_footer_bar,
+    sync_footer_on_parent_change,
     unembed_from_plot_pane,
 )
 from .dockable_plot_glyphs import (
@@ -134,6 +137,7 @@ __all__ = [
     "make_send_window_button",
     "pane_close_glyph_icon",
     "pane_nav_arrow_glyph_icon",
+    "parent_change_chrome_suspended",
     "plot_embedded_minimum_width",
     "plot_embedded_preferred_width",
     "plot_options_glyph_icon",
@@ -155,7 +159,9 @@ __all__ = [
     "style_plot_pane_close_button",
     "style_plot_pane_nav_arrow",
     "style_plot_pane_title_edit",
+    "suspend_parent_change_chrome",
     "sync_docked_footer_bar",
     "sync_floating_title_chrome",
+    "sync_footer_on_parent_change",
     "unembed_from_plot_pane",
 ]

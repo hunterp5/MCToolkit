@@ -69,6 +69,7 @@ from ..dockable_plot import (
     show_plot_options_dialog,
     style_browser_nav_buttons,
     style_plot_footer_text_button,
+    sync_footer_on_parent_change,
 )
 from ..widgets import NumericTableWidgetItem
 from .chrome import (
@@ -737,10 +738,7 @@ class PoseBrowserWidget(QWidget):
 
     def event(self, event) -> bool:  # noqa: N802 — Qt API
         if event.type() == QEvent.ParentChange:
-            try:
-                self._sync_footer_chrome()
-            except RuntimeError:
-                pass
+            sync_footer_on_parent_change(self)
         return super().event(event)
 
     def _go_first(self) -> None:

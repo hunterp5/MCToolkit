@@ -50,6 +50,7 @@ from .dockable_plot import (
     make_send_window_button,
     request_close_plot_widget,
     show_plot_options_dialog,
+    sync_footer_on_parent_change,
 )
 from .plot_color_range_controls import PlotColorRangeControls
 from .plot_on_hover_controls import PlotOnHoverControls
@@ -290,7 +291,7 @@ class DockableResultPlotPanel(QWidget):
 
     def event(self, event):  # noqa: N802 — Qt API name
         if event.type() == QEvent.ParentChange:
-            self._sync_footer_chrome()
+            sync_footer_on_parent_change(self)
         return super().event(event)
 
     def _reload_color_columns(self) -> None:

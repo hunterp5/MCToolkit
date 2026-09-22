@@ -87,6 +87,7 @@ from .dockable_plot import (
     make_send_window_button,
     request_close_plot_widget,
     show_plot_options_dialog,
+    sync_footer_on_parent_change,
 )
 from ..plotting.plot_marker_color import PLOT_COLORSCALE_CHOICES
 from ..plotting.plot_radar import (
@@ -600,7 +601,7 @@ class PlotWidget(
 
     def event(self, event):  # noqa: N802 — Qt API name
         if event.type() == QEvent.ParentChange:
-            self._sync_footer_chrome()
+            sync_footer_on_parent_change(self)
         return super().event(event)
 
     def create_floating_dialog(self, parent_app) -> PlotDialog:

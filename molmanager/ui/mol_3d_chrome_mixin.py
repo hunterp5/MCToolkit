@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 from PyQt5.QtCore import QEvent
 from PyQt5.QtWidgets import QHBoxLayout, QLayout, QSizePolicy, QWidget
 
-from .dockable_plot import show_plot_options_dialog
+from .dockable_plot import show_plot_options_dialog, sync_footer_on_parent_change
 
 if TYPE_CHECKING:
     from .mol_3d_dialog import Molecule3DViewerDialog
@@ -193,7 +193,7 @@ class Mol3DChromeMixin:
 
     def event(self, event):  # noqa: N802 — Qt API name
         if event.type() == QEvent.ParentChange:
-            self._sync_footer_chrome()
+            sync_footer_on_parent_change(self)
         return super().event(event)
 
     def _host_app(self) -> QWidget | None:
