@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -141,6 +142,7 @@ class PdbqtGeneratorDialog(QDialog):
         root.addLayout(btn_row)
 
         self._jobs = 0
+        self._pending_job_ids: list[str] = []
         self._signals = PdbqtGenSignals(self)
         self._signals.finished.connect(self._on_finished)
         self._signals.failed.connect(self._on_failed)
@@ -240,14 +242,17 @@ class PdbqtGeneratorDialog(QDialog):
             return
         self._begin_job()
         self._append_log(f"Starting {title}…")
+        job_id = str(uuid.uuid4())[:8]
+        self._pending_job_ids.append(job_id)
         begin = getattr(app, "_begin_tool_progress", None)
         if callable(begin):
-            begin(title, 1)
+            begin(title, 1, job_id=job_id)
         app.process_queue.enqueue(
             title,
             lambda ev, r=req, sig=self._signals: PdbqtGeneratorWorker(
                 r, signals=sig, cancel_event=ev
             ),
+            job_id=job_id,
         )
 
     def _on_run_receptor(self) -> None:
@@ -351,9 +356,10 @@ class PdbqtGeneratorDialog(QDialog):
         app = self.parent_app
         if app is None:
             return
+        job_id = self._pending_job_ids.pop(0) if self._pending_job_ids else None
         finish = getattr(app, "_finish_tool_progress", None)
         if callable(finish):
-            finish(status_message=None)
+            finish(status_message=None, job_id=job_id)
 
     def _on_finished(self, receptor_pdbqt: str, ligand_pdbqt: str) -> None:
         self._end_job()
