@@ -231,12 +231,19 @@ def test_session_gui_chunk_covers_typical_library(qapp):  # noqa: ARG001
 
 def test_session_plots_ready_without_waiting_for_webengine(qapp):  # noqa: ARG001
     class _Host:
+        web = object()
+        _web_ready = False
+        _pending_payload_json = "{}"
+
+    class _PlainHost:
         _web_ready = False
         _pending_payload_json = "{}"
 
     w = ChemistryWorkspaceWindow()
-    w._iter_active_plot_hosts = lambda: [_Host()]
+    # No WebEngine view → reveal does not wait.
+    w._iter_active_plot_hosts = lambda: [_PlainHost()]
     assert w._session_plots_ready_for_reveal() is True
+    # Host with a web view that has not finished loading → wait.
     assert w._session_plot_host_waiting_for_web(_Host()) is True
 
 

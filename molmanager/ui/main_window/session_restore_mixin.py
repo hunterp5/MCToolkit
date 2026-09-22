@@ -45,6 +45,9 @@ from ...workers.session_rows_parse import (
 
 logger = logging.getLogger(__name__)
 
+# Cap how long Open waits on Plotly/WebEngine after Render 2D finishes.
+_SESSION_PLOT_WAIT_S = 3.0
+
 
 class SessionRestoreMixin:
     def _append_filter_widget(self, card, *, title: str | None = None) -> None:
@@ -175,6 +178,7 @@ class SessionRestoreMixin:
             busy = busy or getattr(self, "_csv_session_ctx", None) is not None
             busy = busy or getattr(self, "_session_finalize_ctx", None) is not None
             busy = busy or bool(getattr(self, "_session_awaiting_ready", False))
+            busy = busy or bool(getattr(self, "_session_waiting_for_render", False))
             if not busy:
                 return
             QApplication.processEvents()
@@ -303,19 +307,23 @@ class SessionRestoreMixin:
                 )
                 return
             if step == 1:
-                self._loading_detail.setText("Restoring workspace and plots…")
-                self._finalize_session_workspace_and_plots(doc)
+                self._loading_detail.setText("Applying sort, colors, and filters…")
+                self._finalize_session_table_chrome(doc)
+                # Start 2D under the overlay so it overlaps plot restore.
+                self._start_session_auto_render2d()
                 ctx["step"] = 2
                 QTimer.singleShot(0, self._session_finalize_step)
                 return
             if step == 2:
-                self._loading_detail.setText("Applying sort, colors, and filters…")
-                self._finalize_session_table_chrome(doc)
+                if not getattr(self, "_session_waiting_for_render", False):
+                    self._loading_detail.setText("Restoring workspace and plots…")
+                self._finalize_session_workspace_and_plots(doc)
                 ctx["step"] = 3
                 QTimer.singleShot(0, self._session_finalize_step)
                 return
             # step 3 — sidecars + reveal
-            self._loading_detail.setText("Restoring tool data…")
+            if not getattr(self, "_session_waiting_for_render", False):
+                self._loading_detail.setText("Restoring tool data…")
             self._finalize_session_sidecars_and_reveal(doc)
             self._session_finalize_ctx = None
         except Exception:
@@ -504,13 +512,12 @@ class SessionRestoreMixin:
         if callable(restore_search):
             restore_search(doc.get("table_search"))
         self._session_awaiting_ready = True
-        self._session_waiting_for_render = False
         self._session_plot_wait_deadline = None
         self._hide_session_workspace_until_ready()
         self._deferred_session_post_load_follow_up()
 
     def _reveal_table_after_session_prep(self) -> None:
-        """Leave the loading overlay once session rows, filters, and plots are ready."""
+        """Leave the loading overlay once session rows, 2D, filters, and plots are ready."""
         self._set_ingest_loading(False)
         self._set_workspace_stack_index(1)
         finish_clean = getattr(self, "_finish_session_clean_if_pending", None)
@@ -521,7 +528,6 @@ class SessionRestoreMixin:
         except Exception:
             pass
         self._restore_pending_session_som_maps()
-        self._start_deferred_session_auto_render2d()
 
     def _restore_pending_session_som_maps(self) -> None:
         """Redraw SOM Map pixmaps after the overlay lifts so Open is not blocked on depictions."""
@@ -542,16 +548,28 @@ class SessionRestoreMixin:
         else:
             QTimer.singleShot(0, _apply)
 
-    def _start_deferred_session_auto_render2d(self) -> None:
-        """Start auto Render 2D after the workspace is shown so plot restore keeps the overlay."""
+    def _start_session_auto_render2d(self) -> None:
+        """Start auto Render 2D under the overlay; full ``.mctcache`` hit skips the wait."""
         if self._try_load_session_structure_cache():
+            self._session_waiting_for_render = False
             return
         render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
-        if callable(render):
-            render()
+        # Set the wait flag first so a synchronous batch-finished callback cannot
+        # race past a later True assignment and leave Open hanging.
+        self._session_waiting_for_render = True
+        n = int(self._table_model.rowCount()) if getattr(self, "_table_model", None) else 0
+        detail = getattr(self, "_loading_detail", None)
+        if detail is not None and n > 0:
+            try:
+                detail.setText(f"{TOOL_RENDER_2D}…\n0 / {n:,}")
+            except RuntimeError:
+                pass
+        started = bool(callable(render) and render())
+        if not started:
+            self._session_waiting_for_render = False
 
     def _try_load_session_structure_cache(self) -> bool:
-        """Install Structure PNGs from a sidecar cache; True when auto-render can be skipped."""
+        """Install Structure PNGs from a sidecar cache; True on a full hit (skip auto-render)."""
         path = getattr(self, "_session_source_path", None)
         if not path:
             return False
@@ -578,13 +596,10 @@ class SessionRestoreMixin:
             return False
         row_count = int(model.rowCount())
         if row_count > 0 and n < row_count:
-            # Partial hit: keep cached PNGs and fill the rest via auto-render.
+            # Partial hit: keep cached PNGs; caller starts auto-render for the rest.
             model.set_structure_png_store(store)
             self._session_structure_cache_missing = True
-            render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
-            if callable(render):
-                render()
-            return True
+            return False
         model.set_structure_png_store(store)
         self._session_structure_cache_hit = True
         refresh = getattr(self, "_refresh_visible_structure_cells", None)
@@ -592,7 +607,6 @@ class SessionRestoreMixin:
             refresh()
         self.status_label.setText(f"Loaded structure cache ({n:,} depiction(s)).")
         return True
-
     def _write_session_structure_cache(self, session_path: str | None = None) -> None:
         """Persist current Structure PNGs next to *session_path* (or the open session)."""
         path = session_path or getattr(self, "_session_source_path", None)
@@ -652,7 +666,7 @@ class SessionRestoreMixin:
         self._session_search_want_visible = False
 
     def _session_plot_host_waiting_for_web(self, host) -> bool:
-        """True when a restored plot still has a Plotly payload waiting on the WebEngine."""
+        """True when a restored plot has a WebEngine view that has not finished loading."""
         stack = [host]
         seen: set[int] = set()
         while stack:
@@ -663,8 +677,9 @@ class SessionRestoreMixin:
             if key in seen:
                 continue
             seen.add(key)
-            if hasattr(widget, "_web_ready") and not bool(getattr(widget, "_web_ready", False)):
-                if getattr(widget, "_pending_payload_json", None):
+            web = getattr(widget, "web", None)
+            if web is not None:
+                if hasattr(widget, "_web_ready") and not bool(getattr(widget, "_web_ready", False)):
                     return True
             for attr in ("_plot_widget", "_panel", "_viewer_widget", "_view"):
                 child = getattr(widget, attr, None)
@@ -672,9 +687,29 @@ class SessionRestoreMixin:
                     stack.append(child)
         return False
 
+    def _set_session_plot_wait_progress(self) -> None:
+        """Phase label only: Plotly/WebEngine do not expose a real draw percent."""
+        detail = getattr(self, "_loading_detail", None)
+        if detail is None:
+            return
+        try:
+            detail.setText("Preparing plots…")
+        except RuntimeError:
+            pass
+
     def _session_plots_ready_for_reveal(self) -> bool:
-        """Do not stall overlay on Plotly WebEngine; widgets are already constructed."""
-        return True
+        """True when restored Plotly views are ready, or the wait deadline has passed."""
+        hosts_fn = getattr(self, "_iter_active_plot_hosts", None)
+        hosts = list(hosts_fn()) if callable(hosts_fn) else []
+        waiting = any(self._session_plot_host_waiting_for_web(host) for host in hosts)
+        if not waiting:
+            return True
+        now = time.monotonic()
+        deadline = getattr(self, "_session_plot_wait_deadline", None)
+        if deadline is None:
+            self._session_plot_wait_deadline = now + _SESSION_PLOT_WAIT_S
+            return False
+        return now >= float(deadline)
 
     def _session_on_render2d_batch_finished(self) -> None:
         """Continue session reveal after auto Render 2D (or cancel) completes."""
@@ -685,27 +720,17 @@ class SessionRestoreMixin:
             self._session_waiting_for_render = False
         if not getattr(self, "_session_awaiting_ready", False):
             return
-        detail = getattr(self, "_loading_detail", None)
-        if detail is not None:
-            try:
-                detail.setText("Preparing plots…")
-            except RuntimeError:
-                pass
+        self._set_session_plot_wait_progress()
         QTimer.singleShot(0, self._session_try_reveal_when_ready)
 
     def _session_try_reveal_when_ready(self) -> None:
-        """Show the workspace after session prep; Plotly may still be drawing."""
+        """Show the workspace after rows, 2D, and restored plots are ready."""
         if not getattr(self, "_session_awaiting_ready", False):
             return
         if getattr(self, "_session_waiting_for_render", False):
             return
         if not self._session_plots_ready_for_reveal():
-            detail = getattr(self, "_loading_detail", None)
-            if detail is not None:
-                try:
-                    detail.setText("Preparing plots…")
-                except RuntimeError:
-                    pass
+            self._set_session_plot_wait_progress()
             QTimer.singleShot(50, self._session_try_reveal_when_ready)
             return
         self._session_awaiting_ready = False
@@ -726,7 +751,7 @@ class SessionRestoreMixin:
         self.status_label.setText(loaded_session_status(n) if n else "Ready.")
 
     def _deferred_session_post_load_follow_up(self) -> None:
-        """Migrate packed ensembles, restore chrome, then reveal; auto-render 2D after overlay lifts."""
+        """Migrate packed ensembles, restore chrome, then reveal when 2D and plots are ready."""
         migrate = getattr(self, "_migrate_legacy_confs_cells_to_sidecar", None)
         if callable(migrate):
             migrate()

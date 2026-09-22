@@ -37,7 +37,6 @@ def test_clear_all_resets_table_and_ingest_flags(qapp):  # noqa: ARG001
     w = ChemistryWorkspaceWindow()
     _seed_two_rows(w)
     w._selected_oids_override = frozenset({0})
-    w._set_ingest_loading(True)
 
     w.clear_all()
 
@@ -47,6 +46,19 @@ def test_clear_all_resets_table_and_ingest_flags(qapp):  # noqa: ARG001
     assert w.next_oid == 0
     assert w._selected_oids_override is None
     assert w._ingest_loading is False
+
+
+def test_clear_all_keeps_loading_overlay_during_open(qapp):  # noqa: ARG001
+    """Session/file open sets the overlay before clear_all; do not flash the empty table."""
+    w = ChemistryWorkspaceWindow()
+    _seed_two_rows(w)
+    w._set_ingest_loading(True)
+    w._set_workspace_stack_index(0)
+
+    w.clear_all()
+
+    assert w._ingest_loading is True
+    assert w._table_stack.currentIndex() == 0
 
 
 def test_exit_save_prompt_skipped_when_clean(qapp, monkeypatch):  # noqa: ARG001
@@ -215,12 +227,16 @@ def test_session_load_uses_loading_page_then_reveals(qapp, monkeypatch):  # noqa
     assert not w._ingest_loading
 
 
-def test_session_load_reveals_before_auto_render_finishes(qapp, monkeypatch):  # noqa: ARG001
-    held = {"loading": True, "called": False}
+def test_session_load_waits_for_auto_render_before_reveal(qapp, monkeypatch):  # noqa: ARG001
+    from PyQt5.QtCore import QTimer
+
+    held = {"loading": False, "called": False}
 
     def fake_render(self):
         held["called"] = True
         held["loading"] = self._table_stack.currentIndex() == 0
+        # Finish on the next turn so drain can wait under the overlay.
+        QTimer.singleShot(0, self._session_on_render2d_batch_finished)
         return True
 
     monkeypatch.setattr(
@@ -238,7 +254,7 @@ def test_session_load_reveals_before_auto_render_finishes(qapp, monkeypatch):  #
     }
     w._apply_session_document(doc)
     assert held["called"] is True
-    assert held["loading"] is False
+    assert held["loading"] is True
     assert w._table_stack.currentIndex() == 1
     assert not w._session_awaiting_ready
     assert not w._session_waiting_for_render
@@ -772,6 +788,7 @@ def test_clear_all_re_enables_menubar_after_ingest(qapp):  # noqa: ARG001
     w._set_ingest_loading(True)
     assert not file_menu.isEnabled()
 
+    w._set_ingest_loading(False)
     w.clear_all()
 
     assert file_menu.isEnabled()
