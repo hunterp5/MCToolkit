@@ -52,7 +52,14 @@ class AppLifecycleMixin:
         if model is None:
             return
         mark = self._mark_sqlite_store_dirty
-        model.dataChanged.connect(lambda *_args: mark())
+
+        def _on_data_changed(top_left, bottom_right, roles=()) -> None:
+            # Lazy Structure decode/scroll paint is not a session or SQLite edit.
+            if CompoundTableModel.is_structure_paint_data_change(top_left, bottom_right, roles):
+                return
+            mark()
+
+        model.dataChanged.connect(_on_data_changed)
         model.rowsInserted.connect(lambda *_args: mark())
         model.rowsRemoved.connect(lambda *_args: mark())
         model.columnsInserted.connect(lambda *_args: mark())
