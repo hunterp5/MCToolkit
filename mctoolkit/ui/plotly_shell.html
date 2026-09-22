@@ -531,8 +531,9 @@
       }
       function beginSuppressPlotBridge(ms) {
         // Generation token so an earlier timeout cannot clear a later suppress window.
+        // Keep this short: only swallow echo deselects from clearing lasso shapes.
         suppressPlotBridge = true;
-        var hold = (typeof ms === "number" && ms >= 0) ? ms : 250;
+        var hold = (typeof ms === "number" && ms >= 0) ? ms : 80;
         var gen = ++suppressPlotBridgeGen;
         setTimeout(function() {
           if (gen === suppressPlotBridgeGen) suppressPlotBridge = false;
@@ -992,12 +993,17 @@
       }
       function applySelectionIndices(indicesJson) {
         try {
-          // Clearing Plotly lasso shapes can re-fire plotly_selected; ignore bridge while we paint.
-          beginSuppressPlotBridge(500);
+          // Clearing Plotly lasso shapes can re-fire plotly_selected; ignore bridge briefly.
+          beginSuppressPlotBridge(80);
           freezeAxisAutorange();
           var view = viewForSelectionRestore();
           function keepView(op) {
             return afterSelectionDraw(op, view);
+          }
+          function keepViewLight(op) {
+            // Large selections: skip extra relayout when axes are already frozen.
+            freezeAxisAutorange();
+            return Promise.resolve(op).catch(function() {});
           }
           var idxs = parseSelectionIndices(indicesJson);
           if (!gd || !gd.data || !gd.data.length) return;
@@ -1006,11 +1012,13 @@
           var main = resolved.main;
           var selTi = resolved.ti;
           if (!main) return;
+          var largeSel = idxs.length > SELECTION_OVERLAY_MAX;
+          var keep = largeSel ? keepViewLight : keepView;
           if (main.type === "scatter3d") {
             var overlay3dIdx = findSelectedOverlayTraceIndex();
             if (!idxs.length || idxs.length > SELECTION_OVERLAY_MAX) {
               if (overlay3dIdx >= 0) {
-                keepView(Plotly.deleteTraces(gd, [overlay3dIdx]));
+                keep(Plotly.deleteTraces(gd, [overlay3dIdx]));
               }
               return;
             }
@@ -1024,12 +1032,12 @@
             }
             if (overlay3dIdx >= 0) {
               if (sx.length) {
-                keepView(Plotly.restyle(gd, {x: [sx], y: [sy], z: [sz]}, [overlay3dIdx]));
+                keep(Plotly.restyle(gd, {x: [sx], y: [sy], z: [sz]}, [overlay3dIdx]));
               } else {
-                keepView(Plotly.deleteTraces(gd, [overlay3dIdx]));
+                keep(Plotly.deleteTraces(gd, [overlay3dIdx]));
               }
             } else if (sx.length) {
-              keepView(Plotly.addTraces(gd, {
+              keep(Plotly.addTraces(gd, {
                 type: "scatter3d", x: sx, y: sy, z: sz, mode: "markers",
                 marker: {size: 7, opacity: 1.0, color: "#d62828"},
                 name: "Selected", showlegend: false, hoverinfo: "skip"
@@ -1049,18 +1057,18 @@
               && idxs.length > 0
               && idxs.length <= SELECTION_OVERLAY_MAX;
             if (useOverlay) {
-              var sx = [], sy = [];
-              var x0 = main.x || [], y0 = main.y || [];
-              for (var j = 0; j < idxs.length; j++) {
-                var ii = idxs[j];
-                if (ii >= 0 && ii < x0.length) {
-                  sx.push(x0[ii]); sy.push(y0[ii]);
+              var sx2 = [], sy2 = [];
+              var x1 = main.x || [], y1 = main.y || [];
+              for (var j2 = 0; j2 < idxs.length; j2++) {
+                var ii2 = idxs[j2];
+                if (ii2 >= 0 && ii2 < x1.length) {
+                  sx2.push(x1[ii2]); sy2.push(y1[ii2]);
                 }
               }
               var overlay = {
                 type: main.type,
-                x: sx,
-                y: sy,
+                x: sx2,
+                y: sy2,
                 mode: "markers",
                 marker: {size: 10, color: "#d62828", opacity: 1.0, line: {width: 1, color: "#8b0000"}},
                 name: "Selected",
@@ -1068,14 +1076,14 @@
                 hoverinfo: "skip",
               };
               var overlayOp = (overlayIdx >= 0)
-                ? Plotly.restyle(gd, {x: [sx], y: [sy]}, [overlayIdx])
+                ? Plotly.restyle(gd, {x: [sx2], y: [sy2]}, [overlayIdx])
                 : Plotly.addTraces(gd, overlay);
               var dimPatch = {"unselected.marker.opacity": [], selectedpoints: []};
               for (var di = 0; di < selTraces.length; di++) {
                 dimPatch["unselected.marker.opacity"].push(0.35);
                 dimPatch.selectedpoints.push([]);
               }
-              keepView(Promise.resolve(overlayOp).then(function() {
+              keep(Promise.resolve(overlayOp).then(function() {
                 return Plotly.restyle(gd, dimPatch, selTraces);
               }));
             } else {
@@ -1089,16 +1097,17 @@
                   clearPatchSc.selectedpoints.push(null);
                   clearPatchSc["unselected.marker.opacity"].push(0.85);
                 }
-                keepView(Promise.resolve(scatterOp).then(function() {
+                keep(Promise.resolve(scatterOp).then(function() {
                   return Plotly.restyle(gd, clearPatchSc, selTraces);
                 }));
               } else {
+                // Share one index array across traces (avoid N× copies of large selections).
                 var selPatchSc = {selectedpoints: [], "unselected.marker.opacity": []};
                 for (var siSc = 0; siSc < selTraces.length; siSc++) {
                   selPatchSc.selectedpoints.push(idxs);
                   selPatchSc["unselected.marker.opacity"].push(0.35);
                 }
-                keepView(Promise.resolve(scatterOp).then(function() {
+                keep(Promise.resolve(scatterOp).then(function() {
                   return Plotly.restyle(gd, selPatchSc, selTraces);
                 }));
               }
@@ -1111,7 +1120,7 @@
               clearPatch.selectedpoints.push(null);
               clearPatch["unselected.marker.opacity"].push(0.85);
             }
-            keepView(Plotly.restyle(gd, clearPatch, selTraces));
+            keep(Plotly.restyle(gd, clearPatch, selTraces));
             return;
           }
           var selPatch = {selectedpoints: [], "unselected.marker.opacity": []};
@@ -1119,7 +1128,7 @@
             selPatch.selectedpoints.push(idxs);
             selPatch["unselected.marker.opacity"].push(0.35);
           }
-          keepView(Plotly.restyle(gd, selPatch, selTraces));
+          keep(Plotly.restyle(gd, selPatch, selTraces));
         } catch (_selVis) {}
       }
       function flushPendingSelection() {
@@ -1153,7 +1162,7 @@
           var layout = payload.layout || {};
           var config = payload.config || {};
           if (config.scrollZoom === undefined) config.scrollZoom = false;
-          beginSuppressPlotBridge(800);
+          beginSuppressPlotBridge(200);
           applyInFlight = true;
           pendingSelectionJson = null;
           hoverPinned = false;
@@ -1318,7 +1327,7 @@
           }).finally(function() {
             applyInFlight = false;
             // Hold a bit after react so restyle/relayout echo events stay suppressed.
-            beginSuppressPlotBridge(400);
+            beginSuppressPlotBridge(150);
           });
         } catch (e) {
           console.error('mctoolkit Plotly embed failed:', e);
@@ -1351,49 +1360,40 @@
         } catch (_sz) {}
         return {w: w, h: h};
       }
-      function kickCompositor() {
-        try {
-          var el = document.documentElement;
-          var prev = el.style.transform;
-          el.style.transform = 'translateZ(0)';
-          requestAnimationFrame(function() {
-            el.style.transform = prev;
-          });
-        } catch (_k) {}
-      }
       function resizePlot() {
+        // Quiet settle: one Plots.resize after size settles. Mid-drag CSS stretch and
+        // settle redraw/kick were tried and rejected (worse flash / hit-test feel).
         var sz = plotHostSize();
         if (sz.w < 8 || sz.h < 8) return;
         try {
           if (gd && gd.data) Plotly.Plots.resize(gd);
         } catch (_r) {}
-        try {
-          if (gd && gd.data) Plotly.redraw(gd);
-        } catch (_rd) {}
         syncShellBackground();
-        kickCompositor();
         schedulePinnedHoverReposition();
       }
       var hostResizeSettle = null;
       var lastHostW = -1;
       var lastHostH = -1;
+      // Quiet debounce. Do not Plots.resize on every HWND tick — continuous resize
+      // clears scattergl and flashes black/white.
+      var HOST_RESIZE_SETTLE_MS = 50;
       function onHostResize() {
         var sz = plotHostSize();
-        if (sz.w === lastHostW && sz.h === lastHostH) return;
-        lastHostW = sz.w;
-        lastHostH = sz.h;
         if (sz.w < 8 || sz.h < 8) return;
         syncShellBackground();
         if (hostResizeSettle) clearTimeout(hostResizeSettle);
         hostResizeSettle = setTimeout(function() {
           hostResizeSettle = null;
+          var next = plotHostSize();
+          if (next.w === lastHostW && next.h === lastHostH) return;
+          lastHostW = next.w;
+          lastHostH = next.h;
+          if (next.w < 8 || next.h < 8) return;
           resizePlot();
-        }, 64);
+        }, HOST_RESIZE_SETTLE_MS);
       }
-      function forceHostResize(retries) {
-        /* After splitter thaw, Chromium may still report the pre-drag size and
-           onHostResize early-outs; invalidate and resize once the HWND is real. */
-        if (retries == null) retries = 8;
+      function forceHostResize() {
+        /* Invalidate size cache and resize once (e.g. after figure apply). */
         lastHostW = -1;
         lastHostH = -1;
         if (hostResizeSettle) {
@@ -1401,27 +1401,25 @@
           hostResizeSettle = null;
         }
         syncShellBackground();
-        requestAnimationFrame(function() {
-          var sz = plotHostSize();
-          if (sz.w < 8 || sz.h < 8) {
-            if (retries > 0) {
-              setTimeout(function() { forceHostResize(retries - 1); }, 32);
-            }
-            return;
-          }
-          lastHostW = sz.w;
-          lastHostH = sz.h;
-          resizePlot();
-        });
+        var sz = plotHostSize();
+        if (sz.w < 8 || sz.h < 8) {
+          setTimeout(function() {
+            var again = plotHostSize();
+            if (again.w < 8 || again.h < 8) return;
+            lastHostW = again.w;
+            lastHostH = again.h;
+            resizePlot();
+          }, 50);
+          return;
+        }
+        lastHostW = sz.w;
+        lastHostH = sz.h;
+        resizePlot();
       }
       window.mctoolkitOnHostResize = onHostResize;
       window.mctoolkitForceHostResize = forceHostResize;
-      if (typeof ResizeObserver === 'function') {
-        try {
-          new ResizeObserver(onHostResize).observe(document.documentElement);
-          if (gd) new ResizeObserver(onHostResize).observe(gd);
-        } catch (_ro) {}
-      }
+      // Qt _PlotWebHostFilter is the authoritative HWND poke. No ResizeObserver here —
+      // dual listeners caused overlapping settle timers and mid-drag Plots.resize.
       window.addEventListener('resize', onHostResize);
     })();
   </script>
