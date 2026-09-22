@@ -60,7 +60,7 @@ dev = [
     "pip-audit>=2.7",
 ]
 
-[project.scripts]
+[project.gui-scripts]
 mctoolkit = "mctoolkit.app:main"
 
 [tool.setuptools.packages.find]
