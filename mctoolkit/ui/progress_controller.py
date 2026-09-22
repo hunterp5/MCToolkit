@@ -143,7 +143,7 @@ class ProgressController:
         job_id: str | None = None,
     ) -> None:
         """Show 100% once, then stop polling and optionally reset the status line."""
-        key = job_id or self._running_queue_job_id()
+        key = self._resolve_progress_job_id(job_id, message=message)
         state = self._app._tool_progress_state
         try:
             msg, done, total, active = state.snapshot(job_id=key)
@@ -166,6 +166,39 @@ class ProgressController:
             self._refresh_status_from_slots()
         self._notify_activity_hub()
 
+    def _resolve_progress_job_id(
+        self,
+        job_id: str | None,
+        *,
+        message: str | None = None,
+    ) -> str | None:
+        """Pick the slot to finish/clear: explicit id, label match, running queue, or sole named."""
+        if job_id:
+            return str(job_id)
+        state = self._app._tool_progress_state
+        snaps_fn = getattr(state, "snapshots", None)
+        snaps = snaps_fn() if callable(snaps_fn) else {}
+        label = str(message or "").strip().rstrip(".…")
+        if label:
+            matches = [
+                jid
+                for jid, (msg, _d, _t, _a) in snaps.items()
+                if jid and str(msg or "").strip().rstrip(".…").startswith(label)
+            ]
+            if len(matches) == 1:
+                return str(matches[0])
+            # Prefer not stealing another active job when the label does not match.
+            if not matches:
+                return None
+            return None
+        running = self._running_queue_job_id()
+        if running:
+            return running
+        named = [jid for jid in snaps if jid]
+        if len(named) == 1:
+            return str(named[0])
+        return None
+
     def _clear_tool_progress(
         self,
         *,
@@ -173,7 +206,8 @@ class ProgressController:
         job_id: str | None = None,
     ) -> None:
         """Stop polled tool progress; reset status line unless ``status_message`` is ``None``."""
-        self._app._tool_progress_state.end(job_id=job_id)
+        key = self._resolve_progress_job_id(job_id)
+        self._app._tool_progress_state.end(job_id=key)
         if self._progress_any_active():
             self._refresh_status_from_slots()
             self._notify_activity_hub()
