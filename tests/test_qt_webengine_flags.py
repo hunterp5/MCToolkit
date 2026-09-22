@@ -33,6 +33,7 @@ def test_configure_qtwebengine_quiet_logs_sets_log_level(monkeypatch):
     monkeypatch.delenv("QTWEBENGINE_CHROMIUM_FLAGS", raising=False)
     flags = configure_qtwebengine_quiet_logs()
     assert "--log-level=3" in flags
+    assert "--default-background-color=ffffffff" in flags
     assert flags == configure_qtwebengine_quiet_logs()
 
 
@@ -41,14 +42,38 @@ def test_configure_qtwebengine_quiet_logs_keeps_user_log_level(monkeypatch):
     flags = configure_qtwebengine_quiet_logs()
     assert "--log-level=0" in flags
     assert flags.count("--log-level=") == 1
+    assert "--default-background-color=ffffffff" in flags
 
 
-def test_schedule_qtwebengine_prewarm_skips_pytest():
+def test_configure_qtwebengine_quiet_logs_keeps_user_background(monkeypatch):
+    monkeypatch.setenv("QTWEBENGINE_CHROMIUM_FLAGS", "--default-background-color=000000ff")
+    flags = configure_qtwebengine_quiet_logs()
+    assert "--default-background-color=000000ff" in flags
+    assert flags.count("--default-background-color=") == 1
+
+
+def test_startup_does_not_construct_a_webengine_view():
+    """Chromium at launch maps extra HWNDs on Windows; keep it off until a plot or 3D view."""
+    import ast
+    from pathlib import Path
+
+    import mctoolkit.app as app_mod
     from mctoolkit.platform_support import qt_webengine_flags
 
-    qt_webengine_flags.schedule_qtwebengine_prewarm()
-    qt_webengine_flags.prewarm_qtwebengine()
-    assert qt_webengine_flags._PREWARM_VIEW is None
+    source = Path(app_mod.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    calls: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name):
+                calls.append(func.id)
+            elif isinstance(func, ast.Attribute):
+                calls.append(func.attr)
+    assert "schedule_qtwebengine_prewarm" not in calls
+    assert "prewarm_qtwebengine" not in calls
+    assert not hasattr(qt_webengine_flags, "prewarm_qtwebengine")
+    assert not hasattr(qt_webengine_flags, "schedule_qtwebengine_prewarm")
 
 
 def test_prepare_embedded_webengine_view_blocks_ancestor_hwnds(qapp):  # noqa: ARG001
@@ -127,8 +152,8 @@ def test_interactive_plot_skips_webengine_under_offscreen(qapp, monkeypatch):  #
 
 def test_plot_web_host_filter_pokes_shell_after_resize(qapp):
     """Splitter HWND resizes must reach the Plotly shell even without window.resize."""
-    from PySide6.QtCore import QSize
-    from PySide6.QtGui import QResizeEvent
+    from PySide6.QtCore import QSize, Qt
+    from PySide6.QtGui import QColor, QResizeEvent
     from PySide6.QtWidgets import QWidget
 
     from mctoolkit.ui.plot_web_surface import (
@@ -164,7 +189,7 @@ def test_plot_web_host_filter_pokes_shell_after_resize(qapp):
     try:
         assert _page_of(plain) is None
         _sync_webengine_page_background(view)
-        assert view._page.bg is not None
+        assert view._page.bg == QColor(Qt.white)
         _notify_plot_shell_host_resized(view)
         assert view._page.js == [_HOST_RESIZE_JS]
         view._page.js.clear()
@@ -176,6 +201,118 @@ def test_plot_web_host_filter_pokes_shell_after_resize(qapp):
     finally:
         plain.deleteLater()
         view.deleteLater()
+
+
+def test_plot_web_load_finished_reapplies_page_background(qapp):  # noqa: ARG001
+    """Loading the Plotly shell must not leave Chromium's page fill transparent/black."""
+    from PySide6.QtCore import Qt, Signal
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QWidget
+
+    from mctoolkit.ui.plot_web_surface import _wire_plot_web_lifecycle
+
+    class _FakePage:
+        def __init__(self) -> None:
+            self.bg = None
+
+        def setBackgroundColor(self, color) -> None:
+            self.bg = color
+
+        def runJavaScript(self, _js: str) -> None:
+            return None
+
+    class _FakeView(QWidget):
+        loadFinished = Signal(bool)
+
+        def __init__(self) -> None:
+            super().__init__()
+            self._page = _FakePage()
+
+        def page(self):
+            return self._page
+
+    view = _FakeView()
+    try:
+        _wire_plot_web_lifecycle(view)
+        assert view._page.bg == QColor(Qt.white)
+        view._page.bg = None
+        view.loadFinished.emit(True)
+        assert view._page.bg == QColor(Qt.white)
+    finally:
+        view.deleteLater()
+
+
+def test_freeze_web_view_hides_hwnd_behind_scaled_cover(qapp):
+    """Splitter drag must unmap Chromium; Fusion scales the last frame in the slot."""
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QResizeEvent
+    from PySide6.QtWidgets import QVBoxLayout, QWidget
+
+    from mctoolkit.ui.plot_web_surface import (
+        _FORCE_HOST_RESIZE_JS,
+        _SPLIT_COVER_ATTR,
+        _PlotWebHostFilter,
+        _freeze_one_web_view,
+        _plot_web_cover_rect,
+        _thaw_one_web_view,
+    )
+
+    class _FakePage:
+        def __init__(self) -> None:
+            self.js: list[str] = []
+            self.bg = None
+
+        def runJavaScript(self, js: str) -> None:
+            self.js.append(js)
+
+        def setBackgroundColor(self, color) -> None:
+            self.bg = color
+
+    class _FakeView(QWidget):
+        def __init__(self, parent=None) -> None:
+            super().__init__(parent)
+            self._page = _FakePage()
+
+        def page(self):
+            return self._page
+
+    parent = QWidget()
+    layout = QVBoxLayout(parent)
+    layout.setContentsMargins(0, 0, 0, 0)
+    child = _FakeView(parent)
+    layout.addWidget(child, 1)
+    parent.resize(240, 180)
+    parent.show()
+    qapp.processEvents()
+    filt = _PlotWebHostFilter(child)
+    child.installEventFilter(filt)
+    try:
+        _freeze_one_web_view(child)
+        cover = getattr(child, _SPLIT_COVER_ATTR)
+        assert cover is not None
+        assert child.isHidden()
+        assert cover.isVisible()
+        assert cover.hasScaledContents()
+        assert cover.geometry() == _plot_web_cover_rect(child)
+        _freeze_one_web_view(child)
+        assert getattr(child, _SPLIT_COVER_ATTR) is cover
+        # Expanding the pane while Chromium is hidden must grow the cover, not leave gray.
+        parent.resize(400, 300)
+        qapp.processEvents()
+        assert cover.geometry() == _plot_web_cover_rect(child)
+        assert cover.width() >= 390
+        assert cover.height() >= 290
+        filt.eventFilter(child, QResizeEvent(QSize(160, 120), QSize(100, 80)))
+        assert cover.geometry() == _plot_web_cover_rect(child)
+        child._page.js.clear()
+        _thaw_one_web_view(child)
+        assert getattr(child, _SPLIT_COVER_ATTR, None) is None
+        assert child.isVisible()
+        qapp.processEvents()
+        assert _FORCE_HOST_RESIZE_JS in child._page.js
+        _thaw_one_web_view(child)
+    finally:
+        parent.deleteLater()
 
 
 def test_no_module_scope_webengine_imports():
