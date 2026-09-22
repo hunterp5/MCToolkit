@@ -18,15 +18,11 @@
 
 from __future__ import annotations
 
-import logging
 import os
-import sys
-
-logger = logging.getLogger(__name__)
 
 _QTWEBENGINE_CHROMIUM_FLAGS_ENV = "QTWEBENGINE_CHROMIUM_FLAGS"
 _QUIET_LOG_LEVEL_FLAG = "--log-level=3"
-_PREWARM_VIEW = None
+_DEFAULT_BACKGROUND_FLAG = "--default-background-color=ffffffff"
 
 # Chromium needs a real windowing surface. These platform plugins provide none.
 _PLATFORMS_WITHOUT_WEBENGINE = frozenset({"offscreen", "minimal", "vnc"})
@@ -81,6 +77,11 @@ def _webengine_views_in(root) -> list:
     return unique
 
 
+def embedded_webengine_views(root) -> list:
+    """``QWebEngineView`` widgets under *root*, including *root* when it is a view."""
+    return _webengine_views_in(root)
+
+
 def set_descendant_webengine_visible(root, visible: bool) -> None:
     """Map or unmap Chromium HWNDs. Hiding a Fusion parent leaves them painted."""
     for view in _webengine_views_in(root):
@@ -94,58 +95,16 @@ def configure_qtwebengine_quiet_logs() -> str:
     """
     Hide Chromium GPU ERROR spam on stderr (SharedImage / GLES while rotating WebGL).
 
+    Also set an opaque white compositor clear so HWND resize gaps are not black.
     Must run before ``QtWebEngineWidgets`` is imported. Leaves an existing
-    ``--log-level=`` value alone so a user can still raise Chromium verbosity.
+    ``--log-level=`` or ``--default-background-color=`` value alone.
     """
     current = (os.environ.get(_QTWEBENGINE_CHROMIUM_FLAGS_ENV) or "").strip()
     parts = current.split()
     if not any(part.startswith("--log-level=") for part in parts):
         parts.append(_QUIET_LOG_LEVEL_FLAG)
+    if not any(part.startswith("--default-background-color=") for part in parts):
+        parts.append(_DEFAULT_BACKGROUND_FLAG)
     flags = " ".join(parts)
     os.environ[_QTWEBENGINE_CHROMIUM_FLAGS_ENV] = flags
     return flags
-
-
-def schedule_qtwebengine_prewarm(*, delay_ms: int = 0) -> None:
-    """Start Chromium after the first GUI paint so later 3D views do not stall."""
-    if "pytest" in sys.modules:
-        return
-    from PySide6.QtCore import QTimer
-
-    QTimer.singleShot(max(0, int(delay_ms)), prewarm_qtwebengine)
-
-
-def prewarm_qtwebengine() -> None:
-    """Create a hidden WebEngine view so the first protein canvas is not the Chromium cold start."""
-    global _PREWARM_VIEW
-    if _PREWARM_VIEW is not None or "pytest" in sys.modules:
-        return
-    try:
-        from PySide6.QtCore import Qt
-        from PySide6.QtWebEngineWidgets import QWebEngineView
-        from PySide6.QtWidgets import QApplication
-
-        app = QApplication.instance()
-        if app is None:
-            return
-        view = QWebEngineView()
-        prepare_embedded_webengine_view(view)
-        view.setAttribute(Qt.WA_DontShowOnScreen, True)
-        view.resize(2, 2)
-        view.setHtml("<!DOCTYPE html><html><body></body></html>")
-        _PREWARM_VIEW = view
-        app.aboutToQuit.connect(_release_qtwebengine_prewarm)
-    except Exception:
-        logger.debug("Qt WebEngine prewarm skipped", exc_info=True)
-
-
-def _release_qtwebengine_prewarm() -> None:
-    global _PREWARM_VIEW
-    view = _PREWARM_VIEW
-    _PREWARM_VIEW = None
-    if view is None:
-        return
-    try:
-        view.deleteLater()
-    except RuntimeError:
-        pass
