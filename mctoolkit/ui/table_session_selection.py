@@ -228,7 +228,7 @@ class TableSessionSelection:
     def _maybe_status_before_large_select(self) -> None:
         total = self._app._table_model.rowCount()
         if total >= load_config().table_selection_oid_override_min:
-            self._set_selection_status(f"Selecting… (0/{total:,} rows)", pump=True)
+            self._set_selection_status(f"Selecting… (0/{total:,} rows)", pump=False)
 
     def _use_filter_proxy_for_table(self) -> bool:
         proxy = getattr(self._app, "_filter_proxy_model", None)
@@ -326,6 +326,30 @@ class TableSessionSelection:
         sync_dock = getattr(self._app, "_sync_dock_complex_viewer", None)
         if callable(sync_dock):
             sync_dock()
+        self._schedule_promote_large_qt_selection()
+
+    def _schedule_promote_large_qt_selection(self) -> None:
+        """After Shift/rubber-band settles, convert giant Qt selections to OID highlights."""
+        timer = getattr(self._app, "_promote_oid_selection_timer", None)
+        if timer is None:
+            timer = QTimer(self._app)
+            timer.setSingleShot(True)
+            timer.timeout.connect(self._promote_large_qt_selection_if_needed)
+            self._app._promote_oid_selection_timer = timer
+        timer.start(80)
+
+    def _promote_large_qt_selection_if_needed(self) -> None:
+        if getattr(self._app, "_in_programmatic_table_selection", False):
+            return
+        if getattr(self._app, "_selected_oids_override", None):
+            return
+        sm = self._app.table.selectionModel()
+        n_sel = len(sm.selectedRows()) if sm is not None else 0
+        if n_sel < load_config().table_selection_oid_override_min:
+            return
+        rows = self._selected_logical_rows()
+        if rows:
+            self._start_chunked_oid_selection(rows, clear_oid_override=True)
 
     def select_table_rows(
         self,
@@ -333,11 +357,15 @@ class TableSessionSelection:
         *,
         clear_oid_override: bool = True,
         extra_status: str = "",
+        force_oid_override: bool = False,
     ) -> int:
         """Replace the selection with the given source-model row indices (skips invalid indices)."""
         self._cancel_chunked_table_selection()
         return self._apply_table_row_selection(
-            rows, clear_oid_override=clear_oid_override, extra_status=extra_status
+            rows,
+            clear_oid_override=clear_oid_override,
+            extra_status=extra_status,
+            force_oid_override=force_oid_override,
         )
 
     def select_table_oids(
@@ -445,7 +473,7 @@ class TableSessionSelection:
         self._sync_table_selection_highlight()
         self._refresh_table_selection_visual(anchor)
         n = len(oids)
-        self._report_table_selection_status(n, extra=extra_status, pump=True)
+        self._report_table_selection_status(n, extra=extra_status, pump=False)
         self._schedule_plot_sync_after_programmatic_selection()
         return n
 
@@ -476,7 +504,7 @@ class TableSessionSelection:
             "oids": set(),
             "chunk": max(2000, load_config().table_selection_chunk_rows),
         }
-        self._set_selection_status(f"Selecting… (0/{total:,} rows)", pump=True)
+        self._set_selection_status(f"Selecting… (0/{total:,} rows)", pump=False)
         QTimer.singleShot(0, self._table_selection_chunk_step)
         return total
 
@@ -519,7 +547,7 @@ class TableSessionSelection:
             "prev_mode": prev_mode,
             "prev_behavior": prev_behavior,
         }
-        self._set_selection_status(f"Selecting… (0/{total:,} rows)", pump=True)
+        self._set_selection_status(f"Selecting… (0/{total:,} rows)", pump=False)
         QTimer.singleShot(0, self._table_selection_chunk_step)
         return total
 
@@ -546,8 +574,7 @@ class TableSessionSelection:
             except (IndexError, ValueError, TypeError):
                 continue
         ctx["idx"] = end
-        self._app._table_model.set_highlighted_oids(frozenset(oids))
-        self._repaint_table_selection_viewport()
+        # Defer highlight paint until the override is finished (status text only mid-flight).
         self._set_selection_status(f"Selecting… ({end:,}/{total:,} rows)")
         if end < total:
             QTimer.singleShot(0, self._table_selection_chunk_step)
@@ -597,7 +624,7 @@ class TableSessionSelection:
         self._table_selection_ctx = None
         self._sync_table_selection_highlight()
         self._refresh_table_selection_visual(source_rows)
-        self._report_table_selection_status(len(source_rows), pump=True)
+        self._report_table_selection_status(len(source_rows), pump=False)
         self._schedule_plot_sync_after_programmatic_selection()
 
     def _apply_table_row_selection(
@@ -606,6 +633,7 @@ class TableSessionSelection:
         *,
         clear_oid_override: bool = True,
         extra_status: str = "",
+        force_oid_override: bool = False,
     ) -> int:
         n_rows = self._app._table_model.rowCount()
         if n_rows <= 0:
@@ -624,11 +652,20 @@ class TableSessionSelection:
         cfg = load_config()
         oid_min = cfg.table_selection_oid_override_min
         chunk_thresh = cfg.table_selection_chunk_rows
-        if len(uniq) >= oid_min:
+        if force_oid_override or len(uniq) >= oid_min:
             extra = str(extra_status or "")
-            if len(uniq) < n_rows:
+            if len(uniq) < n_rows and not force_oid_override:
                 hint = "(tools use full selection; hidden rows included via logical selection)"
                 extra = f"{extra} {hint}".strip() if extra else hint
+            # Plot multi-select: apply OID override immediately when the set is modest.
+            if force_oid_override and len(uniq) < max(oid_min, chunk_thresh):
+                oids = self._oids_for_source_rows(uniq)
+                return self._finish_oid_override_selection(
+                    uniq,
+                    oids,
+                    clear_oid_override=clear_oid_override,
+                    extra_status=extra,
+                )
             self._start_chunked_oid_selection(
                 uniq, clear_oid_override=clear_oid_override, extra_status=extra
             )
