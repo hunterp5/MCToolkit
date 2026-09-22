@@ -161,6 +161,23 @@ def test_help_follows_settings():
     assert help_menu.attr == "_help_menu"
 
 
+def test_data_table_operations_submenu():
+    data = find_submenu(MAIN_WINDOW_MENUS, "Data")
+    table = find_submenu(data.items, "Table")
+    assert menu_outline(table.items) == [
+        {
+            "Operations": [
+                "Add Row…",
+                "Add Column…",
+                "",
+                "Split Column…",
+                "Join Columns…",
+            ]
+        },
+        "Statistics…",
+    ]
+
+
 def test_data_menu_filter_and_search_group_is_last():
     tools = find_submenu(MAIN_WINDOW_MENUS, "Tools")
     tools_labels = [x if isinstance(x, str) else next(iter(x)) for x in menu_outline(tools.items)]
