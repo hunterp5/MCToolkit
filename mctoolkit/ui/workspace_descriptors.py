@@ -19,7 +19,7 @@
 from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
-from .analysis_job_support import ensure_table_ready_for_tool
+from .analysis_job_support import enqueue_process_queue_job, ensure_table_ready_for_tool
 from ..workers.chemistry_descriptors import CalcDescriptorsRequest, CalcWorker
 
 
@@ -73,7 +73,6 @@ class DescriptorsTools:
             self._app.status_label.setText("Ready.")
             return
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress("Calculate descriptors", len(data))
         req = CalcDescriptorsRequest(
             data=data,
             disp_headers=calc_headers,
@@ -87,8 +86,11 @@ class DescriptorsTools:
         def _make_calc_worker(ev, request=req):
             return CalcWorker(request, self._app.signals, cancel_event=ev, progress_state=ps)
 
-        self._app.process_queue.enqueue(
-            f"Calculate descriptors ({len(data)} rows)", _make_calc_worker
+        enqueue_process_queue_job(
+            self._app,
+            "Calculate descriptors",
+            len(data),
+            _make_calc_worker,
         )
 
     def _ensemble_inputs_for_descriptor_job(
