@@ -18,10 +18,10 @@ Global UI preferences for this installation/session; they do not alter table che
 
 - **Light Mode** / **Dark Mode** / **Groovy Mode** - built-in themes.
 - **Custom Colors...** - edit named custom themes (palette roles, save/delete).
-- **Status Bar** - under **GUI**; show or hide the bottom bar (status messages and memory use).
 - **2D Render...** - pixel size of 2D structure drawings in the Structure column.
 - **Font...** - **Application font size**, **Table font size**, **Table text alignment** (3×3: top/center/bottom × left/center/right), **Reset to Default**.
-- **Hotkeys...** - category/command/shortcut table with **Reset to Defaults**, **Clear Selected**, and OK/Cancel.
+- **Hotkeys...** - category/command/shortcut table with OK/Cancel, **Clear Selected**, and **Reset to Default**.
+- **Status Bar** - show or hide the bottom bar (status messages and memory use).
 - **WSL...** - path to ``wsl.exe`` so Windows can run Linux-only tools (AmberTools / GAFF for OpenMM, and similar). **Test** runs ``uname -s`` inside WSL.
 
 ## Workflow
