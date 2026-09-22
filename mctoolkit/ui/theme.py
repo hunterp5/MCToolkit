@@ -475,6 +475,32 @@ def save_custom_theme(name: str, colors: dict[str, str]) -> str:
     return cleaned
 
 
+def gui_theme_session_payload(theme: str | None = None) -> dict[str, object]:
+    """JSON-safe GUI theme snapshot for a session document."""
+    name = _normalize_theme_name(theme) if theme else current_theme_name()
+    payload: dict[str, object] = {"name": name}
+    if is_custom_theme_id(name):
+        payload["colors"] = dict(load_custom_theme_colors(name))
+    return payload
+
+
+def theme_name_from_session_payload(payload: object) -> str | None:
+    """Theme id from a session ``gui_theme`` blob, or None when absent/invalid.
+
+    Named custom colors in the payload are written to QSettings so apply can find them.
+    """
+    if not isinstance(payload, dict):
+        return None
+    raw = payload.get("name")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    name = _normalize_theme_name(raw)
+    colors = payload.get("colors")
+    if is_custom_theme_id(name) and isinstance(colors, dict):
+        save_custom_theme(custom_theme_display_name(name), colors)
+    return name
+
+
 def delete_custom_theme(name: str) -> bool:
     """Remove a named custom theme. Returns True if it existed."""
     cleaned = " ".join(str(name or "").split()).strip()
