@@ -184,9 +184,11 @@ class SqlLoadTools:
         self._app._sql_load_ctx = None
         self._app._sql_load_clear_first = bool(clear_first)
         progress_total = limit_eff if limit_eff > 0 else 1
+        job_id = f"sql-load-{gen}"
+        self._app._sql_load_job_id = job_id
         begin = getattr(self._app, "_begin_tool_progress", None)
         if callable(begin):
-            begin("SQL load", progress_total)
+            begin("SQL load", progress_total, job_id=job_id)
         else:
             try:
                 self._app.status_label.setText("SQL load: fetching…")
@@ -194,10 +196,11 @@ class SqlLoadTools:
                 pass
         cancel_event = threading.Event()
         self._app._sql_load_cancel_event = cancel_event
-        job_id = f"sql-load-{gen}"
-        self._app._sql_load_job_id = job_id
         register_background_job(self._app, job_id, "SQL load…", cancel=cancel_event.set)
         prog = getattr(self._app, "_tool_progress_state", None)
+        bind = getattr(prog, "bind", None)
+        if callable(bind):
+            prog = bind(job_id)
         signals = SqlLoadSignals(self._app)
 
         def _on_chunk(result, g=gen) -> None:
@@ -260,10 +263,11 @@ class SqlLoadTools:
             return
         self._app._sql_load_busy = False
         self._app._sql_load_ctx = None
+        job_id = getattr(self._app, "_sql_load_job_id", None)
         self._clear_sql_load_job()
         finish = getattr(self._app, "_finish_tool_progress", None)
         if callable(finish):
-            finish("SQL load", status_message=None)
+            finish("SQL load", status_message=None, job_id=job_id)
         try:
             self._app.table.setUpdatesEnabled(True)
         except Exception:
@@ -332,7 +336,12 @@ class SqlLoadTools:
             on_prog = getattr(self._app, "_on_tool_progress", None)
             total_ui = int(result.limit_eff) if result.limit_eff else max(applied, 1)
             if callable(on_prog):
-                on_prog("SQL load: applying…", applied, total_ui)
+                on_prog(
+                    "SQL load: applying…",
+                    applied,
+                    total_ui,
+                    job_id=getattr(self._app, "_sql_load_job_id", None),
+                )
             else:
                 try:
                     self._app.status_label.setText(f"SQL load: applying… ({applied:,})")
@@ -356,6 +365,7 @@ class SqlLoadTools:
         self._app.next_oid = int(result.next_oid or self._app.next_oid)
         self._app._sql_load_ctx = None
         self._app._sql_load_busy = False
+        job_id = getattr(self._app, "_sql_load_job_id", None)
         self._clear_sql_load_job()
         try:
             self._app.table.setUpdatesEnabled(True)
@@ -363,7 +373,7 @@ class SqlLoadTools:
             pass
         finish = getattr(self._app, "_finish_tool_progress", None)
         if callable(finish):
-            finish("SQL load", status_message=None)
+            finish("SQL load", status_message=None, job_id=job_id)
         if rows_hit_limit:
             QMessageBox.information(
                 self._app,
