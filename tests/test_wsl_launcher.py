@@ -95,11 +95,11 @@ def test_settings_menu_has_wsl(qapp) -> None:  # noqa: ARG001
     labels = [a.text().replace("&", "") for a in settings.actions() if not a.isSeparator()]
     assert "WSL…" in labels
     assert labels[-1] == "WSL…"
-    assert "Status Bar" not in labels
+    assert "Status Bar" in labels
+    assert labels[-2] == "Status Bar"
     assert "Structure…" not in labels
     assert "2D Render…" in labels
     gui = qt_submenu(settings, "GUI")
     gui_labels = [a.text().replace("&", "") for a in gui.actions() if not a.isSeparator()]
-    assert "Status Bar" in gui_labels
-    assert gui_labels[-1] == "Status Bar"
+    assert "Status Bar" not in gui_labels
     w.close()
