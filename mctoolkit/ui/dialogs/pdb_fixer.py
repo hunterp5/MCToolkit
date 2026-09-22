@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -151,6 +152,7 @@ class PdbFixerDialog(QDialog):
         self._signals = PdbFixerSignals(self)
         self._signals.finished.connect(self._on_finished)
         self._signals.failed.connect(self._on_failed)
+        self._active_job_id: str | None = None
 
         make_window_minimizable(self)
         self.chk_skip_long_gaps.toggled.connect(self.spin_max_gap.setEnabled)
@@ -234,29 +236,36 @@ class PdbFixerDialog(QDialog):
 
         self.btn_run.setEnabled(False)
         self._append_log("Starting PDB preparation with PDBFixer…")
+        job_id = str(uuid.uuid4())[:8]
+        self._active_job_id = job_id
         begin = getattr(app, "_begin_tool_progress", None)
         if callable(begin):
-            begin("Prepare PDB", 1)
+            begin("Prepare PDB", 1, job_id=job_id)
         app.process_queue.enqueue(
             "Prepare PDB",
             lambda ev, r=req, sig=self._signals: PdbFixerWorker(r, signals=sig, cancel_event=ev),
+            job_id=job_id,
         )
 
     def _on_finished(self, output_pdb: str) -> None:
         self.btn_run.setEnabled(True)
         app = self.parent_app
+        job_id = self._active_job_id
+        self._active_job_id = None
         if app is not None:
             finish = getattr(app, "_finish_tool_progress", None)
             if callable(finish):
-                finish("Prepare PDB", status_message=None)
+                finish("Prepare PDB", status_message=None, job_id=job_id)
         self._append_log(f"Prepared PDB written: {output_pdb}")
         self._populate_open_prepare_paths(output_pdb)
 
     def _on_failed(self, msg: str) -> None:
         self.btn_run.setEnabled(True)
         app = self.parent_app
+        job_id = self._active_job_id
+        self._active_job_id = None
         if app is not None:
             finish = getattr(app, "_finish_tool_progress", None)
             if callable(finish):
-                finish("Prepare PDB", status_message=None)
+                finish("Prepare PDB", status_message=None, job_id=job_id)
         self._append_log(msg or "PDB preparation failed.")
