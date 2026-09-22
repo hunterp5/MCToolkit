@@ -62,7 +62,7 @@ class AppMenuMixin:
         corner_ly.addWidget(btn_layout)
 
         btn_proc = QToolButton(corner)
-        btn_proc.setText("Processes")
+        btn_proc.setText("Log")
         btn_proc.setToolTip(
             "View running and queued jobs, and the session log "
             "(tool output, status history, warnings)."
