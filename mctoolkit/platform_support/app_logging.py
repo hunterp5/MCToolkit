@@ -79,10 +79,12 @@ def configure_app_logging() -> Path | None:
         isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler)
         for h in root.handlers
     ):
-        console = logging.StreamHandler(sys.stderr)
-        console.setFormatter(formatter)
-        console.setLevel(level)
-        root.addHandler(console)
+        stream = sys.stderr if sys.stderr is not None else sys.stdout
+        if stream is not None:
+            console = logging.StreamHandler(stream)
+            console.setFormatter(formatter)
+            console.setLevel(level)
+            root.addHandler(console)
 
     log_to_file = (env_get("MCTOOLKIT_LOG_TO_FILE") or "1").strip().lower() not in (
         "0",
