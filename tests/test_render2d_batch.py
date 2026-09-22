@@ -235,3 +235,85 @@ def test_batched_handler_tolerates_empty_payload(rows) -> None:
     app.on_render2d_rows_ready(rows, 7)
     assert app._render2d_pending == {}
     assert app._import_render_done == 0
+
+
+def test_lazy_scroll_trims_cache_without_data_changed() -> None:
+    from mctoolkit.storage.structure_render_store import StructureRenderStore
+    from mctoolkit.ui.compound_table_model import CompoundTableModel
+    from mctoolkit.ui.table_build_render_results import TableBuildRenderResults
+
+    model = CompoundTableModel(["ID_HIDDEN", "Structure", "SMILES"])
+    for oid in range(1, 6):
+        model.append_row(oid, {"SMILES": "C"})
+    store = StructureRenderStore(max_decoded_pixmaps=8)
+    store.ingest_batch([(oid, b"png") for oid in range(1, 6)])
+    model.set_structure_png_store(store)
+    for oid in range(1, 6):
+        store._lru[oid] = object()  # type: ignore[assignment]
+
+    class _Viewport:
+        def height(self) -> int:
+            return 40
+
+    class _View:
+        def rowAt(self, y: int) -> int:
+            return 0 if y == 0 else 1
+
+        def viewport(self) -> _Viewport:
+            return _Viewport()
+
+        def model(self):
+            return model
+
+    class _Host(TableBuildRenderResults):
+        def __init__(self) -> None:
+            self._app = self
+            self._table_model = model
+            self.table = _View()
+            self._structure_lazy_scroll_timer = None
+            self._structure_lazy_scroll_hooked = True
+
+    host = _Host()
+    changes: list[object] = []
+    model.dataChanged.connect(lambda *_a: changes.append(1))
+    host._on_structure_lazy_scroll()
+    assert changes == []
+    assert set(store._lru) == {1, 2}
+
+
+def test_refresh_visible_structure_cells_notifies_once() -> None:
+    from mctoolkit.storage.structure_render_store import StructureRenderStore
+    from mctoolkit.ui.compound_table_model import CompoundTableModel
+    from mctoolkit.ui.table_build_render_results import TableBuildRenderResults
+
+    model = CompoundTableModel(["ID_HIDDEN", "Structure", "SMILES"])
+    model.append_row(1, {"SMILES": "C"})
+    store = StructureRenderStore(max_decoded_pixmaps=8)
+    store.ingest_png(1, b"png")
+    model.set_structure_png_store(store)
+
+    class _Viewport:
+        def height(self) -> int:
+            return 40
+
+    class _View:
+        def rowAt(self, _y: int) -> int:
+            return 0
+
+        def viewport(self) -> _Viewport:
+            return _Viewport()
+
+        def model(self):
+            return model
+
+    class _Host(TableBuildRenderResults):
+        def __init__(self) -> None:
+            self._app = self
+            self._table_model = model
+            self.table = _View()
+
+    host = _Host()
+    changes: list[object] = []
+    model.dataChanged.connect(lambda *_a: changes.append(1))
+    host._refresh_visible_structure_cells()
+    assert changes == [1]
