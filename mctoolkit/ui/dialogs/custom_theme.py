@@ -84,13 +84,6 @@ class CustomThemeDialog(QDialog):
         theme_row.addWidget(self._delete_btn)
         root.addWidget(self._theme_row_widget)
 
-        name_row = QHBoxLayout()
-        name_row.addWidget(QLabel("Save as:"))
-        self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("Theme name")
-        name_row.addWidget(self._name_edit, 1)
-        root.addLayout(name_row)
-
         form = QFormLayout()
         form.setSpacing(4)
         form.setContentsMargins(0, 4, 0, 4)
@@ -111,14 +104,17 @@ class CustomThemeDialog(QDialog):
         root.addLayout(form_wrap)
 
         actions = QHBoxLayout()
-        reset_btn = QPushButton("Reset to Light Mode Defaults")
-        reset_btn.clicked.connect(self._reset_defaults)
-        actions.addWidget(reset_btn)
-        actions.addStretch(1)
+        self._name_edit = QLineEdit()
+        self._name_edit.setPlaceholderText("Theme name")
+        actions.addWidget(self._name_edit, 1)
         self._save_btn = QPushButton("Save")
         self._save_btn.setDefault(True)
         self._save_btn.clicked.connect(self._save_current)
         actions.addWidget(self._save_btn)
+        reset_btn = QPushButton("Reset to Default")
+        reset_btn.setToolTip("Reset to light mode defaults")
+        reset_btn.clicked.connect(self._reset_defaults)
+        actions.addWidget(reset_btn)
         root.addLayout(actions)
 
         start_name = ""
