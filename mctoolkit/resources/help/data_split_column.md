@@ -1,6 +1,6 @@
 # Split Column
 
-Split Column takes one table column whose cells contain several values (comma, tab, space, semicolon, pipe, or a custom character) and writes each field into its own new column. Open from **Data → Table → Split Column**.
+Split Column takes one table column whose cells contain several values (comma, tab, space, semicolon, pipe, or a custom character) and writes each field into its own new column. Open from **Data → Table → Operations → Split Column**.
 
 ## Goal
 
