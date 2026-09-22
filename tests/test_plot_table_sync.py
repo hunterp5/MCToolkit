@@ -143,8 +143,40 @@ def test_apply_table_selection_uses_select_table_rows() -> None:
 
     apply_table_selection_for_source_rows(app, [0, 1], scroll=False)
 
-    app.select_table_rows.assert_called_once_with([0, 1])
+    app.select_table_rows.assert_called_once_with([0, 1], force_oid_override=True)
     sm.select.assert_not_called()
+
+
+def test_apply_table_selection_single_row_skips_force_oid() -> None:
+    from unittest.mock import MagicMock
+
+    sm = MagicMock()
+    sm.selectedRows.return_value = []
+    table = MagicMock()
+    table.selectionModel.return_value = sm
+    table.model.return_value = MagicMock()
+
+    app = MagicMock()
+    app.table = table
+    app._source_rows_to_view_rows.return_value = [0]
+    app._selected_oids_override = None
+
+    apply_table_selection_for_source_rows(app, [0], scroll=False)
+
+    app.select_table_rows.assert_called_once_with([0])
+    sm.select.assert_not_called()
+
+
+def test_mark_plot_origin_selection_sets_push_key() -> None:
+    from types import SimpleNamespace
+
+    from mctoolkit.ui.plot_table_sync import mark_plot_origin_selection, selection_visual_push_key
+
+    view = SimpleNamespace(_last_pushed_selection_key=None, _selection_origin=None)
+    idxs = {1, 5, 9}
+    mark_plot_origin_selection(view, idxs)
+    assert view._selection_origin == "plot"
+    assert view._last_pushed_selection_key == selection_visual_push_key(idxs)
 
 
 def test_clear_table_selection_from_plot_uses_app_clear() -> None:
