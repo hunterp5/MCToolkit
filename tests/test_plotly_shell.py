@@ -37,21 +37,28 @@ def test_interactive_plot_shell_includes_bridge_handlers():
     assert "radarTraceClicked" in html
     assert "mctoolkit_selection_traces" in html
     assert "Plotly.Plots.resize" in html
-    assert "Plotly.redraw" in html
-    assert "addEventListener('resize'" in html
-    assert "ResizeObserver" in html
     assert "mctoolkitOnHostResize" in html
     assert "mctoolkitForceHostResize" in html
-    assert "kickCompositor" in html
     assert "stretchPlotToHost" not in html
     assert "querySelectorAll('canvas, svg.main-svg')" not in html
     assert "setTimeout(resizePlot, 50)" not in html
+    # Quiet settle: no live throttle / compositor kicks / CSS stretch.
+    assert "HOST_RESIZE_SETTLE_MS = 50" in html
+    assert "HOST_RESIZE_THROTTLE_MS" not in html
+    assert "kickCompositor" not in html
+    # Plotly.js itself mentions ResizeObserver; we must not wire one to onHostResize.
+    assert "new ResizeObserver(onHostResize)" not in html
+    assert "addEventListener('resize', onHostResize)" in html
     assert "SELECTION_OVERLAY_MAX" in html
     assert "idxs.length > SELECTION_OVERLAY_MAX" in html
     assert 'typeof payloadJson === "string"' in html
     assert "viewNavBusy || middlePan" in html
     assert "captureAxisView" in html
     assert "afterSelectionDraw" in html
+    assert "keepViewLight" in html
+    assert "beginSuppressPlotBridge(80)" in html
+    assert "beginSuppressPlotBridge(500)" not in html
+    assert "Plotly.redraw(gd)" not in html
     assert "savedViewOnPointerDown" in html
     assert "xaxis.autorange" in html
     assert "scene.camera" in html
