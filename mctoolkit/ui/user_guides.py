@@ -87,7 +87,7 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
                 "log",
                 "Log",
                 "Log",
-                "Session-wide tool output, status history, and application logging in Processes.",
+                "Session-wide tool output, status history, and application logging in Log.",
             ),
             _e(
                 "settings",
