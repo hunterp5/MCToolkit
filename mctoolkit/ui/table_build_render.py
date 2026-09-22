@@ -37,6 +37,7 @@ from ..workers import (
     Render2DBatchProcessWorker,
 )
 from .strings import TOOL_RENDER_2D
+from .background_activity import RENDER2D_PROCESS_JOB_ID
 
 
 class TableBuildRender:
@@ -186,9 +187,9 @@ class TableBuildRender:
         return True
 
     def _auto_render2d_blocks_workspace_reveal(self, n_rows: int | None = None) -> bool:
-        """True when ingest/session should wait for auto Render 2D before showing the table.
+        """Ingest reveal stays independent of auto Render 2D.
 
-        Auto 2D continues in the background after the workspace appears. ``n_rows`` is
+        Session Open waits on ``_session_waiting_for_render`` instead. ``n_rows`` is
         accepted for call-site compatibility.
         """
         _ = n_rows
@@ -463,7 +464,9 @@ class TableBuildRender:
         self._app._import_render_goal = len(renders)
         self._app._import_render_done = 0
         if not self._render2d_shares_ui_with_queue_job():
-            self._app._on_tool_progress(TOOL_RENDER_2D, 0, len(renders))
+            self._app._on_tool_progress(
+                TOOL_RENDER_2D, 0, len(renders), job_id=RENDER2D_PROCESS_JOB_ID
+            )
         self._app._render2d_cancel_event = (
             cancel_event if cancel_event is not None else threading.Event()
         )
