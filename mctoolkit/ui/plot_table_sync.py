@@ -32,6 +32,23 @@ if TYPE_CHECKING:
 _PLOT_TABLE_SELECT_DEBOUNCE_MS = 60
 
 
+def record_selection_perf(parent_app, name: str, elapsed_ms: float) -> None:
+    """Record a selection hot-path sample when ``MCTOOLKIT_PERF_METRICS`` is on."""
+    perf = getattr(parent_app, "_perf", None)
+    if perf is None:
+        return
+    record = getattr(perf, "record", None)
+    if callable(record):
+        record(name, elapsed_ms)
+
+
+def mark_plot_origin_selection(view, indices: set[int] | frozenset[int]) -> None:
+    """Mark *indices* as already painted by Plotly so table→plot sync will not echo-restyle."""
+    key = selection_visual_push_key(indices)
+    view._last_pushed_selection_key = key
+    view._selection_origin = "plot"
+
+
 def visible_oids_for_plot(app: ChemistryWorkspaceWindow | None) -> frozenset[int] | None:
     """OIDs currently shown by table filters. ``None`` means every row is visible."""
     if app is None:
@@ -196,6 +213,7 @@ def _apply_table_selection_now(
     source_rows: list[int],
     *,
     scroll: bool,
+    force_oid_override: bool = False,
 ) -> None:
     """Select visible proxy rows for source-model row indices (plot lasso / click)."""
     if not source_rows:
@@ -207,7 +225,10 @@ def _apply_table_selection_now(
     # Large sets: use the app's chunked / OID-override path (keeps UI responsive).
     select_rows = getattr(parent_app, "select_table_rows", None)
     if callable(select_rows):
-        select_rows(uniq)
+        if force_oid_override:
+            select_rows(uniq, force_oid_override=True)
+        else:
+            select_rows(uniq)
         if scroll:
             _scroll_table_to_first_source_row(parent_app, uniq)
         return
@@ -266,6 +287,7 @@ def apply_table_selection_for_source_rows(
     *,
     scroll: bool = True,
     debounce: bool = False,
+    force_oid_override: bool = False,
 ) -> None:
     """Select visible proxy rows for source-model row indices (plot lasso / click).
 
@@ -273,15 +295,20 @@ def apply_table_selection_for_source_rows(
     Re-sync paths should pass ``scroll=False`` so table scrolling is not fought.
 
     When ``debounce`` is True, coalesce rapid updates (large lassos / echo events).
+    ``force_oid_override`` skips Qt ``QItemSelection`` (plot multi-select path).
     """
     if not source_rows:
         return
     uniq = sorted({int(r) for r in source_rows})
+    # Plot multi-select always uses the cheap OID highlight path.
+    use_oid = bool(force_oid_override) or len(uniq) > 1
     if not debounce or len(uniq) <= 1:
-        _apply_table_selection_now(parent_app, uniq, scroll=scroll)
+        _apply_table_selection_now(
+            parent_app, uniq, scroll=scroll, force_oid_override=use_oid
+        )
         return
 
-    parent_app._plot_table_select_pending = (uniq, scroll)  # type: ignore[attr-defined]
+    parent_app._plot_table_select_pending = (uniq, scroll, use_oid)  # type: ignore[attr-defined]
     timer = getattr(parent_app, "_plot_table_select_timer", None)
     if timer is None:
         timer = QTimer(parent_app)
@@ -292,8 +319,14 @@ def apply_table_selection_for_source_rows(
             parent_app._plot_table_select_pending = None  # type: ignore[attr-defined]
             if not pending:
                 return
-            rows, do_scroll = pending
-            _apply_table_selection_now(parent_app, rows, scroll=bool(do_scroll))
+            if len(pending) == 3:
+                rows, do_scroll, oid = pending
+            else:
+                rows, do_scroll = pending
+                oid = len(rows) > 1
+            _apply_table_selection_now(
+                parent_app, rows, scroll=bool(do_scroll), force_oid_override=bool(oid)
+            )
 
         timer.timeout.connect(_flush)
         parent_app._plot_table_select_timer = timer  # type: ignore[attr-defined]
