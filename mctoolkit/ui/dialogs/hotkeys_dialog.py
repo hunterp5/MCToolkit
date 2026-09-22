@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -51,13 +52,6 @@ class HotkeysDialog(QDialog):
         self.setWindowTitle("Hotkeys")
         self.setMinimumSize(520, 420)
         root = QVBoxLayout(self)
-        hint = QLabel(
-            "Assign a shortcut to each command. Double-click a shortcut cell and press the key "
-            "combination, or type a shortcut (e.g. Ctrl+F). Use semicolons for alternates "
-            "(Ctrl+Y; Ctrl+Shift+Z). Leave empty for no shortcut."
-        )
-        hint.setWordWrap(True)
-        root.addWidget(hint)
 
         self._table = QTableWidget(len(HOTKEY_SPECS), 3)
         self._table.setHorizontalHeaderLabels(["Category", "Command", "Shortcut"])
@@ -81,20 +75,20 @@ class HotkeysDialog(QDialog):
             shortcuts = effective_shortcuts(spec.action_id, overrides)
             self._table.setItem(row, 2, QTableWidgetItem(_format_shortcuts(shortcuts)))
 
-        btn_row = QHBoxLayout()
-        reset_btn = QPushButton("Reset to Defaults")
-        reset_btn.clicked.connect(self._reset_defaults)
-        clear_btn = QPushButton("Clear Selected")
-        clear_btn.clicked.connect(self._clear_selected)
-        btn_row.addWidget(reset_btn)
-        btn_row.addWidget(clear_btn)
-        btn_row.addStretch()
-        root.addLayout(btn_row)
-
+        actions = QHBoxLayout()
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         bb.accepted.connect(self._on_accept)
         bb.rejected.connect(self.reject)
-        root.addWidget(bb)
+        actions.addWidget(bb)
+        clear_btn = QPushButton("Clear Selected")
+        clear_btn.clicked.connect(self._clear_selected)
+        actions.addWidget(clear_btn)
+        actions.addStretch(1)
+        reset_btn = QPushButton("Reset to Default")
+        reset_btn.clicked.connect(self._reset_defaults)
+        actions.addWidget(reset_btn)
+        root.addLayout(actions)
         make_window_minimizable(self)
 
     def _capture_shortcut_for_cell(self, row: int, column: int) -> None:
