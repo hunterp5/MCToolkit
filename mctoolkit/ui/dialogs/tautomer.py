@@ -59,6 +59,7 @@ class TautomerGeneratorDialog(QDialog):
         n_sel = len(parent._selected_logical_rows()) if parent is not None else 0
         self._selected_row_count = n_sel
         self._have_selection = n_sel > 0
+        self._active_job_id: str | None = None
 
     def _build_tautomer_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -117,7 +118,7 @@ class TautomerGeneratorDialog(QDialog):
         req = TautomerGeneratorRequest(rows=rows, max_tautomers=int(self.max_spin.value()))
         n = len(rows)
         prog = self.parent_app._tool_progress_state
-        enqueue_process_queue_job(
+        self._active_job_id = enqueue_process_queue_job(
             self.parent_app,
             "Generate tautomers",
             n,
@@ -139,9 +140,12 @@ class TautomerGeneratorDialog(QDialog):
         else:
             self.status_label.setText(f"{n_forms} tautomer form(s).")
         if self.parent_app is not None:
+            job_id = self._active_job_id
+            self._active_job_id = None
             self.parent_app._finish_tool_progress(
                 "Generate tautomers",
                 status_message=self.parent_app._consume_partial_results_notice() or "Ready.",
+                job_id=job_id,
             )
             opener = getattr(self.parent_app, "open_tautomer_browser", None)
             if n_forms and callable(opener):
@@ -150,5 +154,7 @@ class TautomerGeneratorDialog(QDialog):
     def _on_failed(self, msg: str) -> None:
         self.generate_btn.setEnabled(True)
         if self.parent_app is not None:
-            self.parent_app._finish_tool_progress("Generate tautomers")
+            job_id = self._active_job_id
+            self._active_job_id = None
+            self.parent_app._finish_tool_progress("Generate tautomers", job_id=job_id)
         QMessageBox.warning(self, TOOL_TAUTOMERS, msg or "Generation failed.")
