@@ -23,7 +23,7 @@ from typing import Any, Protocol
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
-from .analysis_job_support import ensure_table_ready_for_tool
+from .analysis_job_support import enqueue_process_queue_job, ensure_table_ready_for_tool
 from ..chem.molecule_conversion import is_rdkit_mol, mol_to_molblock
 from ..conformers.conformer_output import write_conformer_results_to_sdf
 from ..conformers.conformer_column_codec import (
@@ -159,12 +159,14 @@ class ConformersTools:
             force_field=str(params.force_field or "MMFF94s")
         )
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress("Generate conformations", n)
-        self._app.process_queue.enqueue(
-            f"Generate conformations ({n} structures)",
+        enqueue_process_queue_job(
+            self._app,
+            "Generate conformations",
+            n,
             lambda ev, d=data, p=params, sigs=self._app.signals, prog=ps: ConformerGenerationWorker(
                 d, p, sigs, cancel_event=ev, progress_state=prog
             ),
+            queue_label=f"Generate conformations ({n} structures)",
         )
 
     def _on_systematic_conformations_dialog_accepted(self, d) -> None:
@@ -202,12 +204,14 @@ class ConformersTools:
 
         self._app._pending_strain_params = StrainEnergyParams(force_field="MMFF")
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress("Systematic conformations", n)
-        self._app.process_queue.enqueue(
-            f"Systematic conformations ({n} structures)",
+        enqueue_process_queue_job(
+            self._app,
+            "Systematic conformations",
+            n,
             lambda ev, d=data, p=params, sigs=self._app.signals, prog=ps: SystematicConformerWorker(
                 d, p, sigs, cancel_event=ev, progress_state=prog
             ),
+            queue_label=f"Systematic conformations ({n} structures)",
         )
 
     def _on_conforge_conformations_dialog_accepted(self, d) -> None:
@@ -245,12 +249,14 @@ class ConformersTools:
 
         self._app._pending_strain_params = StrainEnergyParams(force_field="MMFF")
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress("CONFORGE conformations", n)
-        self._app.process_queue.enqueue(
-            f"CONFORGE conformations ({n} structures)",
+        enqueue_process_queue_job(
+            self._app,
+            "CONFORGE conformations",
+            n,
             lambda ev, d=data, p=params, sigs=self._app.signals, prog=ps: ConforgeConformerWorker(
                 d, p, sigs, cancel_event=ev, progress_state=prog
             ),
+            queue_label=f"CONFORGE conformations ({n} structures)",
         )
 
     def cancel_active_tool_process(self) -> None:
@@ -455,14 +461,16 @@ class ConformersTools:
             )
         n = len(data)
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress("Superpose", n)
-        self._app.process_queue.enqueue(
-            f"Superpose ({n} rows)",
+        enqueue_process_queue_job(
+            self._app,
+            "Superpose",
+            n,
             lambda ev, d=data, p=params, sigs=self._app.signals, prog=ps, db=db_path: (
                 SuperposeConformersWorker(
                     d, p, sigs, cancel_event=ev, progress_state=prog, ensemble_db=db
                 )
             ),
+            queue_label=f"Superpose ({n} rows)",
         )
 
     def on_superpose_finished(self, results: list) -> None:
@@ -548,14 +556,16 @@ class ConformersTools:
         ref_oid, ref_mol = probes[0]
         n = len(probes)
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress("Superpose", n)
-        self._app.process_queue.enqueue(
-            f"Superpose ({n} structures)",
+        enqueue_process_queue_job(
+            self._app,
+            "Superpose",
+            n,
             lambda ev, rid=ref_oid, rm=ref_mol, pr=probes, p=params, sigs=self._app.signals, prog=ps: (
                 SuperposeStructuresWorker(
                     rid, rm, pr, p, sigs, cancel_event=ev, progress_state=prog
                 )
             ),
+            queue_label=f"Superpose ({n} structures)",
         )
 
     def on_superpose_structures_finished(self, payload) -> None:
