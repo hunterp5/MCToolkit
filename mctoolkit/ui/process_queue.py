@@ -93,12 +93,22 @@ class ProcessQueueManager(QObject):
         """Try to start the next queued job after external activity completes."""
         self._maybe_start_next()
 
-    def enqueue(self, title: str, factory: Callable[[threading.Event], QRunnable]) -> str:
-        """Queue a job; returns job id. ``factory`` receives a fresh cancel event for this run."""
-        job_id = str(uuid.uuid4())[:8]
+    def enqueue(
+        self,
+        title: str,
+        factory: Callable[[threading.Event], QRunnable],
+        *,
+        job_id: str | None = None,
+    ) -> str:
+        """Queue a job; returns job id. ``factory`` receives a fresh cancel event for this run.
+
+        Pass *job_id* when tool progress was already begun for that id so the Log row
+        and progress slot stay aligned from the first tick.
+        """
+        jid = str(job_id) if job_id else str(uuid.uuid4())[:8]
         self._queue.append(
             _QueuedJob(
-                job_id=job_id,
+                job_id=jid,
                 title=title.strip() or "Job",
                 factory=factory,
                 enqueued_at=time.monotonic(),
@@ -106,31 +116,37 @@ class ProcessQueueManager(QObject):
         )
         self.snapshot_changed.emit()
         self._maybe_start_next()
-        return job_id
+        return jid
 
-    def enqueue_fast(self, title: str, factory: Callable[[threading.Event], QRunnable]) -> str:
+    def enqueue_fast(
+        self,
+        title: str,
+        factory: Callable[[threading.Event], QRunnable],
+        *,
+        job_id: str | None = None,
+    ) -> str:
         """Start an interactive job on a separate small pool (does not block heavy queue)."""
         if (
             self.has_running_job()
             or self.has_pending_jobs()
             or self.is_blocked_by_external_activity()
         ):
-            return self.enqueue(title, factory)
-        job_id = str(uuid.uuid4())[:8]
+            return self.enqueue(title, factory, job_id=job_id)
+        jid = str(job_id) if job_id else str(uuid.uuid4())[:8]
         cancel_ev = threading.Event()
         try:
             inner = factory(cancel_ev)
         except Exception:
-            logger.exception("Fast job factory failed (job_id=%s)", job_id)
-            return job_id
-        self._fast_running[job_id] = {
+            logger.exception("Fast job factory failed (job_id=%s)", jid)
+            return jid
+        self._fast_running[jid] = {
             "title": title.strip() or "Interactive job",
             "cancel": cancel_ev,
             "started_at": time.monotonic(),
         }
         self.snapshot_changed.emit()
-        self._fast_threadpool().start(_FastQueueJobRunner(self, job_id, inner))
-        return job_id
+        self._fast_threadpool().start(_FastQueueJobRunner(self, jid, inner))
+        return jid
 
     def cancel_fast_job(self, job_id: str) -> bool:
         info = self._fast_running.get(job_id)
