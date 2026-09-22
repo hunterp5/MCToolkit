@@ -25,6 +25,7 @@ from ..platform_support.config import load_config
 from ..table.structure_depiction_layout import structure_depict_height, structure_depict_width
 from ..chem.molecule_conversion import mol_from_binary_blob
 from ..workers.load_render import STRUCTURE_PAYLOAD_TAG
+from .analysis_job_support import enqueue_process_queue_job
 
 
 def _unpack_fast_prepare_row(row) -> tuple[int, bytes, str, str, bytes]:
@@ -130,12 +131,14 @@ class FastPrepareTools:
             batch_size=int(cfg.fast_prepare_batch_size),
             process_pool_min_rows=int(cfg.fast_prepare_process_pool_min_rows),
         )
-        self._app._begin_tool_progress("Fast prepare", len(data))
-        self._app.process_queue.enqueue(
-            "Fast prepare: prepare structures",
+        enqueue_process_queue_job(
+            self._app,
+            "Fast prepare",
+            len(data),
             lambda ev, d=data, p=params, s=self._app.signals, ps=self._app._tool_progress_state: (
                 FastPrepareWorker(d, p, s, cancel_event=ev, progress_state=ps)
             ),
+            queue_label="Fast prepare: prepare structures",
         )
 
     def _fast_prepare_structure_items(self, oids_walk: list[int], src: str) -> list[tuple]:
