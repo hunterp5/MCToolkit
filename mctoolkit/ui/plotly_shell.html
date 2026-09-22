@@ -1314,8 +1314,7 @@
             applyInFlight = false;
             flushPendingSelection();
             syncShellBackground();
-            try { Plotly.Plots.resize(gd); } catch (_rz) {}
-            schedulePinnedHoverReposition();
+            resizePlot();
           }).finally(function() {
             applyInFlight = false;
             // Hold a bit after react so restyle/relayout echo events stay suppressed.
@@ -1352,21 +1351,15 @@
         } catch (_sz) {}
         return {w: w, h: h};
       }
-      function stretchPlotToHost() {
-        var sz = plotHostSize();
-        if (sz.w < 8 || sz.h < 8 || !gd) return;
+      function kickCompositor() {
         try {
-          var container = gd.querySelector('.svg-container');
-          if (container) {
-            container.style.width = sz.w + 'px';
-            container.style.height = sz.h + 'px';
-          }
-          var nodes = gd.querySelectorAll('canvas, svg.main-svg');
-          for (var i = 0; i < nodes.length; i++) {
-            nodes[i].style.width = sz.w + 'px';
-            nodes[i].style.height = sz.h + 'px';
-          }
-        } catch (_st) {}
+          var el = document.documentElement;
+          var prev = el.style.transform;
+          el.style.transform = 'translateZ(0)';
+          requestAnimationFrame(function() {
+            el.style.transform = prev;
+          });
+        } catch (_k) {}
       }
       function resizePlot() {
         var sz = plotHostSize();
@@ -1374,10 +1367,13 @@
         try {
           if (gd && gd.data) Plotly.Plots.resize(gd);
         } catch (_r) {}
+        try {
+          if (gd && gd.data) Plotly.redraw(gd);
+        } catch (_rd) {}
         syncShellBackground();
+        kickCompositor();
         schedulePinnedHoverReposition();
       }
-      var hostResizeRaf = null;
       var hostResizeSettle = null;
       var lastHostW = -1;
       var lastHostH = -1;
@@ -1387,19 +1383,39 @@
         lastHostW = sz.w;
         lastHostH = sz.h;
         if (sz.w < 8 || sz.h < 8) return;
-        if (hostResizeRaf === null) {
-          hostResizeRaf = requestAnimationFrame(function() {
-            hostResizeRaf = null;
-            stretchPlotToHost();
-          });
-        }
+        syncShellBackground();
         if (hostResizeSettle) clearTimeout(hostResizeSettle);
         hostResizeSettle = setTimeout(function() {
           hostResizeSettle = null;
           resizePlot();
         }, 64);
       }
+      function forceHostResize(retries) {
+        /* After splitter thaw, Chromium may still report the pre-drag size and
+           onHostResize early-outs; invalidate and resize once the HWND is real. */
+        if (retries == null) retries = 8;
+        lastHostW = -1;
+        lastHostH = -1;
+        if (hostResizeSettle) {
+          clearTimeout(hostResizeSettle);
+          hostResizeSettle = null;
+        }
+        syncShellBackground();
+        requestAnimationFrame(function() {
+          var sz = plotHostSize();
+          if (sz.w < 8 || sz.h < 8) {
+            if (retries > 0) {
+              setTimeout(function() { forceHostResize(retries - 1); }, 32);
+            }
+            return;
+          }
+          lastHostW = sz.w;
+          lastHostH = sz.h;
+          resizePlot();
+        });
+      }
       window.mctoolkitOnHostResize = onHostResize;
+      window.mctoolkitForceHostResize = forceHostResize;
       if (typeof ResizeObserver === 'function') {
         try {
           new ResizeObserver(onHostResize).observe(document.documentElement);
