@@ -47,7 +47,7 @@ class ProcessesDialog(QDialog):
     def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent)
         self._app: Any = parent
-        self.setWindowTitle("Processes")
+        self.setWindowTitle("Log")
         self.resize(820, 680)
         self.setModal(False)
         self.setWindowModality(Qt.NonModal)
