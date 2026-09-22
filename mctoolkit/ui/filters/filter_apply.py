@@ -120,6 +120,8 @@ class FilterApply:
         mark = getattr(self._app, "_mark_session_dirty", None)
         if callable(mark):
             mark()
+        if getattr(self._app, "_session_filter_restore_paused", False):
+            return
         n = self._app._table_model.rowCount()
         cfg = load_config()
         if self._filters_include_substructure():
@@ -163,30 +165,33 @@ class FilterApply:
 
     def _cancel_async_filter_apply(self) -> None:
         """Processes Cancel: discard the in-flight SQLite/chunked filter job."""
+        job_id = getattr(self._app, "_filter_bg_job_id", None)
         self._invalidate_filter_jobs()
         finish = getattr(self._app, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Applying filters", status_message="Filter cancelled.")
+            finish("Applying filters", status_message="Filter cancelled.", job_id=job_id)
 
     def _on_filter_apply_finished(self, job_gen: int, matched) -> None:
+        job_id = getattr(self._app, "_filter_bg_job_id", None)
         self._unregister_filter_background_job(job_gen)
         if job_gen != getattr(self._app, "_filter_job_gen", 0):
             return
         finish = getattr(self._app, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Applying filters", status_message=None)
+            finish("Applying filters", status_message=None, job_id=job_id)
         sub = getattr(self._app, "_filter_pending_substructure", None)
         self._app._filter_pending_substructure = None
         oids = matched if isinstance(matched, frozenset) else frozenset()
         self._apply_filters_impl_sync(sub, sqlite_oids=oids)
 
     def _on_filter_apply_failed(self, job_gen: int, msg: str) -> None:
+        job_id = getattr(self._app, "_filter_bg_job_id", None)
         self._unregister_filter_background_job(job_gen)
         if job_gen != getattr(self._app, "_filter_job_gen", 0):
             return
         finish = getattr(self._app, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Applying filters", status_message=None)
+            finish("Applying filters", status_message=None, job_id=job_id)
         logger.warning("Filter apply job failed: %s", msg)
         pending = getattr(self._app, "_filter_pending_substructure", None)
         self._app._filter_pending_substructure = None
@@ -220,9 +225,12 @@ class FilterApply:
         )
         begin = getattr(self._app, "_begin_tool_progress", None)
         if callable(begin):
-            begin("Applying filters", n_rows)
+            begin("Applying filters", n_rows, job_id=job_id)
         worker_signals = getattr(self._app, "signals", None)
         progress_state = getattr(self._app, "_tool_progress_state", None)
+        bind = getattr(progress_state, "bind", None)
+        if callable(bind):
+            progress_state = bind(job_id)
         self._app.threadpool.start(
             FilterApplyWorker(
                 gen,
@@ -250,9 +258,11 @@ class FilterApply:
             "substructure_matches": substructure_matches,
             "sqlite_oids": self._sqlite_filter_matched_oids(),
         }
+        job_id = f"filter-{gen}"
+        self._app._filter_bg_job_id = job_id
         begin = getattr(self._app, "_begin_tool_progress", None)
         if callable(begin):
-            begin("Applying filters", n_rows)
+            begin("Applying filters", n_rows, job_id=job_id)
         timer = getattr(self._app, "_chunked_filter_timer", None)
         if timer is None:
             self._apply_filters_impl_sync(substructure_matches)
@@ -356,12 +366,21 @@ class FilterApply:
         state["visible_oids"] = visible_oids
         on_progress = getattr(self._app, "_on_tool_progress", None)
         if callable(on_progress):
-            on_progress("Applying filters…", end, n_rows)
+            on_progress(
+                "Applying filters…",
+                end,
+                n_rows,
+                job_id=getattr(self._app, "_filter_bg_job_id", None),
+            )
         if end >= n_rows:
             self._app._chunked_filter_state = None
             finish = getattr(self._app, "_finish_tool_progress", None)
             if callable(finish):
-                finish("Applying filters", status_message=None)
+                finish(
+                    "Applying filters",
+                    status_message=None,
+                    job_id=getattr(self._app, "_filter_bg_job_id", None),
+                )
             if sqlite_oids is not None and overrides:
                 visible_oids = self._apply_substructure_overrides_to_visible(
                     frozenset(sqlite_oids), overrides
@@ -673,9 +692,12 @@ class FilterApply:
             )
             begin = getattr(self._app, "_begin_tool_progress", None)
             if callable(begin):
-                begin("Filtering substructure", n_rows)
+                begin("Filtering substructure", n_rows, job_id=job_id)
             worker_signals = getattr(self._app, "signals", None)
             progress_state = getattr(self._app, "_tool_progress_state", None)
+            bind = getattr(progress_state, "bind", None)
+            if callable(bind):
+                progress_state = bind(job_id)
             self._app.threadpool.start(
                 SubstructureFilterWorker(
                     gen,
