@@ -267,7 +267,7 @@ def load_config() -> mctoolkitConfig:
         status_memory_enabled=_env_bool("MCTOOLKIT_STATUS_MEMORY", True),
         status_memory_poll_ms=_env_int("MCTOOLKIT_STATUS_MEMORY_POLL_MS", 2000, lo=500, hi=60_000),
         table_selection_oid_override_min=_env_int(
-            "MCTOOLKIT_TABLE_SELECTION_OID_OVERRIDE_MIN", 2500, lo=100, hi=10_000_000
+            "MCTOOLKIT_TABLE_SELECTION_OID_OVERRIDE_MIN", 500, lo=100, hi=10_000_000
         ),
         table_selection_chunk_rows=_env_int(
             "MCTOOLKIT_TABLE_SELECTION_CHUNK_ROWS", 2000, lo=64, hi=100_000
