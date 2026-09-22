@@ -194,10 +194,6 @@ class ProcessesDialog(QDialog):
     def _meta_matches_row(prev: dict, cur: dict) -> bool:
         if prev.get("kind") != cur.get("kind"):
             return False
-        if prev.get("kind") == "render2d":
-            return True
-        if prev.get("kind") in {"gnina", "smina"}:
-            return True
         return prev.get("job_id") == cur.get("job_id")
 
     @staticmethod
