@@ -77,6 +77,7 @@ lightning_logs/
 test_export.sdf
 test_session.cms
 testcsv.csv
+*.mctcache
 
 # Large local BindingDB extracts (too big for git)
 samples/binding_db_all.sdf

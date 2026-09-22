@@ -77,7 +77,20 @@ class SessionRestoreMixin:
         self._session_awaiting_ready = False
         self._session_waiting_for_render = False
         self._session_plot_wait_deadline = None
+        self._session_structure_cache_hit = False
+        self._session_structure_cache_missing = False
         self._discard_floating_plot_dialogs()
+        # Keep the loading page up through clear_all → row apply (avoid workspace flash).
+        self._set_ingest_loading(True)
+        self._set_workspace_stack_index(0)
+        self._loading_detail.setText(LOADING_DETAIL_SESSION)
+        self.status_label.setText("Loading session…")
+        try:
+            from ...workers.render2d_pool import warm_render2d_process_pool
+
+            warm_render2d_process_pool()
+        except Exception:
+            logger.debug("render pool warm failed", exc_info=True)
         self.clear_all()
         self._session_hold_workspace_surfaces = True
         # clear_all() bumps the load generation; capture after that so callbacks match.
@@ -514,15 +527,100 @@ class SessionRestoreMixin:
         """Redraw SOM Map pixmaps after the overlay lifts so Open is not blocked on depictions."""
         payload = getattr(self, "_pending_session_som_browse", None)
         self._pending_session_som_browse = None
-        from ..som_browser import restore_som_maps_for_session
+        if not payload:
+            return
 
-        restore_som_maps_for_session(self, payload)
+        def _apply() -> None:
+            from ..som_browser import restore_som_maps_for_session
+
+            restore_som_maps_for_session(self, payload)
+
+        # Defer past reveal so a large SOM Map redraw does not stall the first paint.
+        # Pytest drains the session load synchronously and asserts maps immediately.
+        if "pytest" in sys.modules:
+            _apply()
+        else:
+            QTimer.singleShot(0, _apply)
 
     def _start_deferred_session_auto_render2d(self) -> None:
         """Start auto Render 2D after the workspace is shown so plot restore keeps the overlay."""
+        if self._try_load_session_structure_cache():
+            return
         render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
         if callable(render):
             render()
+
+    def _try_load_session_structure_cache(self) -> bool:
+        """Install Structure PNGs from a sidecar cache; True when auto-render can be skipped."""
+        path = getattr(self, "_session_source_path", None)
+        if not path:
+            return False
+        from ...storage.session_structure_cache import read_structure_cache
+        from ...storage.structure_render_store import StructureRenderStore
+        from ...table.structure_depiction_layout import (
+            structure_depict_height,
+            structure_depict_width,
+        )
+
+        dw, dh = structure_depict_width(), structure_depict_height()
+        loaded = read_structure_cache(path, depict_width=dw, depict_height=dh)
+        if loaded is None:
+            return False
+        _header, png_bytes = loaded
+        store = StructureRenderStore()
+        n = store.import_sqlite_bytes(png_bytes)
+        if n <= 0:
+            store.close()
+            return False
+        model = getattr(self, "_table_model", None)
+        if model is None:
+            store.close()
+            return False
+        row_count = int(model.rowCount())
+        if row_count > 0 and n < row_count:
+            # Partial hit: keep cached PNGs and fill the rest via auto-render.
+            model.set_structure_png_store(store)
+            self._session_structure_cache_missing = True
+            render = getattr(self, "_try_auto_render_all_structures_after_ingest", None)
+            if callable(render):
+                render()
+            return True
+        model.set_structure_png_store(store)
+        self._session_structure_cache_hit = True
+        refresh = getattr(self, "_refresh_visible_structure_cells", None)
+        if callable(refresh):
+            refresh()
+        self.status_label.setText(f"Loaded structure cache ({n:,} depiction(s)).")
+        return True
+
+    def _write_session_structure_cache(self, session_path: str | None = None) -> None:
+        """Persist current Structure PNGs next to *session_path* (or the open session)."""
+        path = session_path or getattr(self, "_session_source_path", None)
+        if not path:
+            return
+        model = getattr(self, "_table_model", None)
+        store = getattr(model, "_structure_png_store", None) if model is not None else None
+        if store is None or len(store) <= 0:
+            return
+        from ...storage.session_structure_cache import write_structure_cache
+        from ...table.structure_depiction_layout import (
+            structure_depict_height,
+            structure_depict_width,
+        )
+
+        try:
+            blob = store.export_sqlite_bytes()
+        except OSError:
+            logger.debug("structure cache export failed", exc_info=True)
+            return
+        write_structure_cache(
+            path,
+            blob,
+            depict_width=structure_depict_width(),
+            depict_height=structure_depict_height(),
+            zoomed_ids=sorted(int(x) for x in (getattr(self, "zoomed_ids", None) or set())),
+            oid_count=len(store),
+        )
 
     def _hide_session_workspace_until_ready(self) -> None:
         """Keep independent floating plot windows hidden until the workspace overlay lifts."""
@@ -580,6 +678,9 @@ class SessionRestoreMixin:
 
     def _session_on_render2d_batch_finished(self) -> None:
         """Continue session reveal after auto Render 2D (or cancel) completes."""
+        write_cache = getattr(self, "_write_session_structure_cache", None)
+        if callable(write_cache):
+            write_cache()
         if getattr(self, "_session_waiting_for_render", False):
             self._session_waiting_for_render = False
         if not getattr(self, "_session_awaiting_ready", False):

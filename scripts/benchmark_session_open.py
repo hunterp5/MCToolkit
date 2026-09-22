@@ -219,10 +219,14 @@ def main() -> None:
         render_active = bool(getattr(win, "_render2d_batch_active", False))
         if render_active:
             state["render_started"] = True
+        cache_hit = bool(getattr(win, "_session_structure_cache_hit", False))
         if args.no_render:
             finished = revealed and not busy
         else:
-            finished = revealed and not busy and state["render_started"] and not render_active
+            # Full ``.mctcache`` hit skips auto Render 2D; treat that as complete.
+            finished = revealed and not busy and (
+                cache_hit or (state["render_started"] and not render_active)
+            )
         if finished:
             state["done"] = True
             state["t_done"] = time.perf_counter() - t_start

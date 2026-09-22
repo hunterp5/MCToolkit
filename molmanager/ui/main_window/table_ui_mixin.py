@@ -212,6 +212,7 @@ class TableUIMixin(
     def clear_all(self):
         from ...storage import reset_confs_sidecar, reset_mol_store
 
+        keep_loading = bool(getattr(self, "_ingest_loading", False))
         reset_confs_sidecar(self)
         reset_mol_store(self)
         self._som_browse_records = []
@@ -236,11 +237,12 @@ class TableUIMixin(
         except Exception:
             log_swallowed_exception(logger, "microstate_cache.clear failed during clear_all")
         self._table_model.clear()
-        set_stack = getattr(self, "_set_workspace_stack_index", None)
-        if callable(set_stack):
-            set_stack(1)
-        elif getattr(self, "_table_stack", None) is not None:
-            self._table_stack.setCurrentIndex(1)
+        if not keep_loading:
+            set_stack = getattr(self, "_set_workspace_stack_index", None)
+            if callable(set_stack):
+                set_stack(1)
+            elif getattr(self, "_table_stack", None) is not None:
+                self._table_stack.setCurrentIndex(1)
         self.zoomed_ids = set()
         for f in self.filters:
             f.deleteLater()
@@ -264,9 +266,10 @@ class TableUIMixin(
         reset_search = getattr(self, "_reset_table_search_panel", None)
         if callable(reset_search):
             reset_search()
-        show_ws = getattr(self, "_show_session_workspace_when_ready", None)
-        if callable(show_ws):
-            show_ws()
+        if not keep_loading:
+            show_ws = getattr(self, "_show_session_workspace_when_ready", None)
+            if callable(show_ws):
+                show_ws()
         self._restore_render2d_batch_environment()
         self._session_restore_ctx = None
         abort_csv = getattr(self, "_abort_csv_session_load", None)
@@ -281,7 +284,8 @@ class TableUIMixin(
         self._pending_batches = []
         self._processing_batches = False
         self._last_batch_received = False
-        self._set_ingest_loading(False)
+        if not keep_loading:
+            self._set_ingest_loading(False)
         self._ingest_sqlite_bulk_active = False
         self._ingest_sqlite_paused_dirty = False
         self._ingest_sqlite_bulk_headers = None

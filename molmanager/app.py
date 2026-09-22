@@ -134,7 +134,9 @@ def main(argv: list[str] | None = None) -> int:
     code = app.exec_()
     try:
         from .workers.process_pool_utils import reap_after_gui_exit
+        from .workers.render2d_pool import release_render2d_process_pool
 
+        release_render2d_process_pool(kill_workers=True)
         reap_after_gui_exit(code)
     except Exception:
         logger.debug("post-GUI process reap failed", exc_info=True)

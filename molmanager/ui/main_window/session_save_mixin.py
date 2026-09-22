@@ -417,6 +417,10 @@ class SessionSaveMixin:
                 clear = getattr(self, "_clear_session_dirty", None)
                 if callable(clear):
                     clear()
+            self._session_source_path = path
+            write_cache = getattr(self, "_write_session_structure_cache", None)
+            if callable(write_cache):
+                write_cache(path)
             return True
         except Exception as e:
             logger.exception("Save session failed: %s", path)
@@ -455,6 +459,7 @@ class SessionSaveMixin:
                 "Not a MolManager session file (expected .cms / version 1–2).",
             )
             return False
+        self._session_source_path = path
         try:
             self._apply_session_document(d)
         except Exception as e:

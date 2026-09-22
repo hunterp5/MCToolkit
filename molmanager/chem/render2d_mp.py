@@ -1,0 +1,98 @@
+# This file is part of MolManager.
+# Copyright (C) 2026 Hunter Picard
+#
+# MolManager is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# MolManager is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with MolManager. If not, see <https://www.gnu.org/licenses/>.
+
+"""Leaf ProcessPool entry for batch 2D structure rendering (no Qt).
+
+Lives under ``chem`` (not ``workers``) so spawned children on Windows ``spawn``
+do not import the Qt-heavy ``workers`` package.
+"""
+
+from __future__ import annotations
+
+from rdkit import Chem
+
+from .structure_2d_depiction import render_molecule_png, render_reaction_png
+
+# Tags for serialized Render 2D payloads. Keeping structures in these forms lets the GUI
+# thread hand rows straight to the child processes without building RDKit mols first.
+REACTION_PAYLOAD_TAG = "rxn"
+STRUCTURE_PAYLOAD_TAG = "mol"
+
+
+def _as_text(raw) -> str:
+    return raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw or "")
+
+
+def _mol_from_render_payload(blob, smiles: str):
+    """Rebuild a structure from its stored pickle, falling back to SMILES.
+
+    The fallback matters for sessions written by a newer RDKit, whose pickles this build
+    cannot read; without it those rows would silently render blank.
+    """
+    if blob:
+        try:
+            mol = Chem.Mol(bytes(blob))
+        except Exception:  # noqa: BLE001 — RDKit raises varied C++ wrap errors
+            mol = None
+        if mol is not None:
+            return mol
+    if not smiles:
+        return None
+    try:
+        return Chem.MolFromSmiles(smiles)
+    except Exception:  # noqa: BLE001 — RDKit raises varied C++ wrap errors
+        return None
+
+
+def mp_render_structure_batch(args: tuple) -> list[tuple]:
+    """Render many structures per child-process task.
+
+    One task per molecule left the parent process submitting futures and unpickling results faster
+    than it could keep up, capping throughput regardless of how many workers were running. Batching
+    moves that ceiling so extra cores actually help. Batch renders never read mol properties, so
+    rows are ``(oid, png, ok, w, h)``.
+
+    Each item is ``(oid, mol_bytes)``, ``(oid, (REACTION_PAYLOAD_TAG, smarts_bytes))``, or
+    ``(oid, (STRUCTURE_PAYLOAD_TAG, mol_bytes, smiles_bytes))``.
+    """
+    items, w, h = args
+    width, height = int(w), int(h)
+    out: list[tuple] = []
+    for item in items:
+        oid = int(item[0])
+        payload = item[1]
+        if not payload:
+            out.append((oid, b"", False, width, height))
+            continue
+        try:
+            if isinstance(payload, tuple) and payload[0] == REACTION_PAYLOAD_TAG:
+                png = render_reaction_png(_as_text(payload[1]), width, height)
+            elif isinstance(payload, tuple) and payload[0] == STRUCTURE_PAYLOAD_TAG:
+                mol = _mol_from_render_payload(payload[1], _as_text(payload[2]))
+                if mol is None:
+                    out.append((oid, b"", False, width, height))
+                    continue
+                png = render_molecule_png(mol, width, height)
+            else:
+                png = render_molecule_png(Chem.Mol(payload), width, height)
+            out.append((oid, png, True, width, height))
+        except Exception:  # noqa: BLE001 — per-row draw failures must not abort the batch
+            out.append((oid, b"", False, width, height))
+    return out
+
+
+# Back-compat alias used by older call sites / tests.
+_mp_render_structure_batch = mp_render_structure_batch

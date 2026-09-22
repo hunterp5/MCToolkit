@@ -20,19 +20,24 @@ import csv
 import logging
 import os
 import threading
-from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, wait
 
 from .process_pool_utils import (
-    register_process_pool,
     should_terminate_process_pool,
     shutdown_process_pool_executor,
 )
+from .render2d_pool import ensure_render2d_process_pool, render2d_process_worker_count
 
 from PyQt5.QtCore import QRunnable
 from rdkit import Chem
 
 from ..table.structure_depiction_layout import structure_depict_height, structure_depict_width
 from ..platform_support.config import load_config
+from ..chem.render2d_mp import (
+    REACTION_PAYLOAD_TAG,
+    STRUCTURE_PAYLOAD_TAG,
+    mp_render_structure_batch,
+)
 from ..chem.structure_source_headers import needs_structure_source_picker
 from ..table.text_file_ingest import (
     csv_row_to_cells,
@@ -71,11 +76,6 @@ from ..platform_support.tool_progress import ToolProgressState, report_tool_prog
 from .signals import WorkerSignals, emit_partial_results_if_cancelled
 
 logger = logging.getLogger(__name__)
-
-# Tags for serialized Render 2D payloads. Keeping structures in these forms lets the GUI
-# thread hand rows straight to the child processes without building RDKit mols first.
-REACTION_PAYLOAD_TAG = "rxn"
-STRUCTURE_PAYLOAD_TAG = "mol"
 
 
 def _emit_structure_tool_progress(
@@ -124,79 +124,15 @@ def _mol_ingest_item(mol: "Chem.Mol", data_headers: list[str]) -> tuple[bytes, d
     return mol_to_ingest_blob(mol), row_cells_from_mol(mol, data_headers)
 
 
-def _mp_render_structure_batch(args: tuple) -> list[tuple]:
-    """Render many structures per child-process task.
-
-    One task per molecule left the parent process submitting futures and unpickling results faster
-    than it could keep up, capping throughput regardless of how many workers were running. Batching
-    moves that ceiling so extra cores actually help. Batch renders never read mol properties, so
-    rows are ``(oid, png, ok, w, h)``.
-
-    Each item is ``(oid, mol_bytes)``, ``(oid, (REACTION_PAYLOAD_TAG, smarts_bytes))``, or
-    ``(oid, (STRUCTURE_PAYLOAD_TAG, mol_bytes, smiles_bytes))``.
-    """
-    items, w, h = args
-    width, height = int(w), int(h)
-    out: list[tuple] = []
-    for item in items:
-        oid = int(item[0])
-        payload = item[1]
-        if not payload:
-            out.append((oid, b"", False, width, height))
-            continue
-        try:
-            if isinstance(payload, tuple) and payload[0] == REACTION_PAYLOAD_TAG:
-                png = render_reaction_png(_as_text(payload[1]), width, height)
-            elif isinstance(payload, tuple) and payload[0] == STRUCTURE_PAYLOAD_TAG:
-                mol = _mol_from_render_payload(payload[1], _as_text(payload[2]))
-                if mol is None:
-                    out.append((oid, b"", False, width, height))
-                    continue
-                png = render_molecule_png(mol, width, height)
-            else:
-                png = render_molecule_png(Chem.Mol(payload), width, height)
-            out.append((oid, png, True, width, height))
-        except Exception:
-            out.append((oid, b"", False, width, height))
-    return out
-
-
-def _as_text(raw) -> str:
-    return raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw or "")
-
-
-def _mol_from_render_payload(blob, smiles: str):
-    """Rebuild a structure from its stored pickle, falling back to SMILES.
-
-    The fallback matters for sessions written by a newer RDKit, whose pickles this build
-    cannot read; without it those rows would silently render blank.
-    """
-    if blob:
-        try:
-            mol = Chem.Mol(bytes(blob))
-        except Exception:
-            mol = None
-        if mol is not None:
-            return mol
-    if not smiles:
-        return None
-    try:
-        return Chem.MolFromSmiles(smiles)
-    except Exception:
-        return None
+# Re-export for call sites / tests that still import the private name from this module.
+_mp_render_structure_batch = mp_render_structure_batch
 
 
 def render2d_process_worker_count() -> int:
-    """Child-process count for batch 2D rendering.
+    """Child-process count for batch 2D rendering (delegates to the shared pool helper)."""
+    from .render2d_pool import render2d_process_worker_count as _count
 
-    PNG encoding is ~70% of each render and runs entirely in the children, so this scales past the
-    physical core count on SMT machines.
-    """
-    cfg = load_config()
-    configured = cfg.render2d_process_workers
-    if configured:
-        return max(1, int(configured))
-    return max(2, min(12, (os.cpu_count() or 4) - 1))
+    return _count()
 
 
 class Render2DBatchHeldJob(QRunnable):
@@ -299,14 +235,16 @@ class Render2DBatchProcessWorker(QRunnable):
 
         it = iter(tasks)
         pending = set()
-        ex = register_process_pool(ProcessPoolExecutor(max_workers=proc_workers))
+        ex = ensure_render2d_process_pool(max_workers=proc_workers)
+        if ex is None:
+            return
 
         def _fill() -> None:
             while len(pending) < max_inflight:
                 t = next(it, None)
                 if t is None:
                     break
-                pending.add(ex.submit(_mp_render_structure_batch, t))
+                pending.add(ex.submit(mp_render_structure_batch, t))
 
         try:
             _fill()
@@ -330,7 +268,12 @@ class Render2DBatchProcessWorker(QRunnable):
                         self.signals.rendered_batch.emit(rows, self.batch_session)
                 _fill()
         finally:
-            shutdown_process_pool_executor(ex, kill_workers=should_terminate_process_pool(ev))
+            # Shared pool stays warm across session opens. Cancel / app exit kills workers via
+            # the dedicated release helper so the module-level handle cannot go stale.
+            if should_terminate_process_pool(ev):
+                from .render2d_pool import release_render2d_process_pool
+
+                release_render2d_process_pool(kill_workers=True)
 
 
 class UniversalLoadWorker(QRunnable):

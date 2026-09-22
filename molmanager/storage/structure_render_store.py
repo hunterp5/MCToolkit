@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import os
 from collections import OrderedDict
 from pathlib import Path
 
@@ -145,6 +146,44 @@ class StructureRenderStore:
             self._upsert(int(oid), bytes(png_bytes))
         self._conn.commit()
         self._trim_png_entries()
+
+    def export_sqlite_bytes(self) -> bytes:
+        """Return a snapshot of the PNG SQLite file for sidecar caching."""
+        self._conn.commit()
+        # Ensure pending pages are on disk before reading the file bytes.
+        try:
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass
+        path = Path(self._path)
+        return path.read_bytes()
+
+    def import_sqlite_bytes(self, raw: bytes) -> int:
+        """Replace store contents from a sidecar PNG SQLite blob. Returns imported OID count."""
+        if not raw:
+            return 0
+        import sqlite3
+        import tempfile
+
+        fd, tmp_name = tempfile.mkstemp(prefix="molmanager_png_import_", suffix=".sqlite")
+        os.close(fd)
+        tmp_path = Path(tmp_name)
+        try:
+            tmp_path.write_bytes(bytes(raw))
+            src = sqlite3.connect(str(tmp_path), check_same_thread=False)
+            try:
+                rows = list(src.execute("SELECT oid, blob FROM pngs"))
+            finally:
+                src.close()
+            self.clear()
+            items = [(int(oid), bytes(blob)) for oid, blob in rows if blob]
+            self.ingest_batch(items)
+            return len(items)
+        finally:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def expand_png_capacity(self, needed: int) -> None:
         """Raise the PNG entry cap so at least *needed* entries can be retained (0 = unlimited)."""
