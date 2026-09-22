@@ -26,6 +26,7 @@ from ..platform_support.config import load_config
 from ..chem.molecule_conversion import safe_float
 from ..workers import CustomCalcWorker
 from .analysis_job_support import (
+    enqueue_process_queue_job,
     ensure_calculator_ready,
     ensure_table_ready_for_tool,
     ensure_text_column_tool_ready,
@@ -78,9 +79,10 @@ class TableCalcTools:
             return
         row_data = (oids_list, texts)
         ps = self._app._tool_progress_state
-        self._app._begin_tool_progress("Calculator…", len(oids_list))
-        self._app.process_queue.enqueue(
-            f"Calculator ({len(oids_list)} rows)",
+        enqueue_process_queue_job(
+            self._app,
+            "Calculator…",
+            len(oids_list),
             lambda ev, rd=row_data, ex=expr, sigs=self._app.signals, p=ps: CustomCalcWorker(
                 rd, ex, sigs, cancel_event=ev, progress_state=p
             ),
@@ -422,8 +424,9 @@ class TableCalcTools:
         return sig
 
     def _on_fp_similarity_finished(self, rows) -> None:
-        self._app._finish_tool_progress("Fingerprint similarity")
         ctx = getattr(self._app, "_fp_similarity_run_ctx", None) or {}
+        job_id = ctx.get("job_id")
+        self._app._finish_tool_progress("Fingerprint similarity", job_id=job_id)
         from .dialogs.fp_similarity import apply_fp_similarity_column
 
         apply_fp_similarity_column(
@@ -434,6 +437,7 @@ class TableCalcTools:
         )
 
     def _on_fp_similarity_failed(self, msg: str) -> None:
+        ctx = getattr(self._app, "_fp_similarity_run_ctx", None) or {}
         report_cancellable_job_failure(
             self._app,
             "Fingerprint Similarity",
@@ -441,6 +445,7 @@ class TableCalcTools:
             progress_label="Fingerprint similarity",
             failure_fallback="Fingerprint similarity failed.",
             cancelled_status="Cancelled.",
+            job_id=ctx.get("job_id"),
         )
 
     def open_diverse_subset(self) -> None:
@@ -472,8 +477,8 @@ class TableCalcTools:
     ) -> None:
         from PySide6.QtCore import QTimer
 
-        self._app._finish_tool_progress("Diverse subset")
         ctx = getattr(self._app, "_diverse_subset_run_ctx", None) or {}
+        self._app._finish_tool_progress("Diverse subset", job_id=ctx.get("job_id"))
         picked = [int(o) for o in picked_oids or []]
 
         def _apply_results() -> None:
@@ -523,7 +528,8 @@ class TableCalcTools:
         QTimer.singleShot(0, _apply_results)
 
     def _on_diverse_subset_failed(self, msg: str) -> None:
-        self._app._finish_tool_progress("Diverse subset")
+        ctx = getattr(self._app, "_diverse_subset_run_ctx", None) or {}
+        self._app._finish_tool_progress("Diverse subset", job_id=ctx.get("job_id"))
         if msg == "Cancelled.":
             self._app.status_label.setText("Cancelled.")
         else:
