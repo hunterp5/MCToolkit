@@ -302,9 +302,10 @@ def enqueue_process_queue_job(
 
     Returns the queue job id from ``process_queue.enqueue``.
     """
-    app._begin_tool_progress(tool_label, int(n_items))
     label = queue_label or f"{tool_label} ({int(n_items)} rows)"
-    return app.process_queue.enqueue(label, factory)
+    job_id = app.process_queue.enqueue(label, factory)
+    app._begin_tool_progress(tool_label, int(n_items), job_id=job_id)
+    return job_id
 
 
 def start_scoped_structure_job(
