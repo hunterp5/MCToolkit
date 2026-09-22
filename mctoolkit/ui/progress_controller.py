@@ -29,7 +29,7 @@ from typing import Any, Protocol
 from PySide6.QtCore import QTimer
 
 from ..platform_support.config import load_config
-from ..platform_support.tool_progress import format_tool_progress_text
+from ..platform_support.tool_progress import format_overlay_progress_text, format_tool_progress_text
 from .strings import STATUS_READY
 
 
@@ -61,28 +61,50 @@ class ProgressController:
         self._poll_timer.setInterval(self._poll_interval_ms)
         self._poll_timer.timeout.connect(self._poll_tool_progress_state)
 
-    def current_status_text(self) -> str:
-        """Last text written to the status line, for the background-activity hub."""
-        return self._last_status_text
+    def _progress_any_active(self) -> bool:
+        state = self._app._tool_progress_state
+        fn = getattr(state, "any_active", None)
+        if callable(fn):
+            return bool(fn())
+        snapshot = getattr(state, "snapshot", None)
+        if callable(snapshot):
+            return bool(snapshot()[3])
+        return False
 
     def has_partial_results_notice(self) -> bool:
         return bool(self._partial_results_notice)
 
-    def _begin_tool_progress(self, message: str, total: int) -> None:
+    def _running_queue_job_id(self) -> str | None:
+        pq = getattr(self._app, "process_queue", None)
+        snap_fn = getattr(pq, "snapshot", None) if pq is not None else None
+        if not callable(snap_fn):
+            return None
+        running = (snap_fn() or {}).get("running") or {}
+        job_id = running.get("job_id")
+        return str(job_id) if job_id else None
+
+    def _status_progress_snapshot(self) -> tuple[str, int, int, bool]:
+        state = self._app._tool_progress_state
+        preferred = getattr(state, "preferred_snapshot", None)
+        if callable(preferred):
+            return preferred(self._running_queue_job_id())
+        return state.snapshot()
+
+    def _begin_tool_progress(self, message: str, total: int, job_id: str | None = None) -> None:
         """Start polled status updates for a long-running queued tool."""
         total_i = max(1, int(total))
         self._active_label = str(message or "")
-        self._app._tool_progress_state.begin(message, total_i)
-        self._on_tool_progress(message, 0, total_i)
+        self._app._tool_progress_state.begin(message, total_i, job_id=job_id)
+        self._on_tool_progress(message, 0, total_i, job_id=job_id)
         if not self._poll_timer.isActive():
             self._poll_timer.start()
 
     def _poll_tool_progress_state(self) -> None:
-        message, done, total, active = self._app._tool_progress_state.snapshot()
-        if not active:
+        if not self._progress_any_active():
             self._poll_timer.stop()
             return
-        self._on_tool_progress(message, done, total)
+        self._refresh_status_from_slots()
+        self._notify_activity_hub()
 
     def _background_job_ui_active(self) -> bool:
         return self._background_job_ui_depth > 0
@@ -118,21 +140,44 @@ class ProgressController:
         message: str | None = None,
         *,
         status_message: str | None = STATUS_READY,
+        job_id: str | None = None,
     ) -> None:
         """Show 100% once, then stop polling and optionally reset the status line."""
-        msg, done, total, active = self._app._tool_progress_state.snapshot()
+        key = job_id or self._running_queue_job_id()
+        state = self._app._tool_progress_state
+        try:
+            msg, done, total, active = state.snapshot(job_id=key)
+        except TypeError:
+            msg, done, total, active = state.snapshot()
         final_msg = message or msg or self._active_label
         if total > 0 and (active or done < total):
-            self._on_tool_progress(final_msg, total, total)
-        self._app._tool_progress_state.end()
-        self._active_label = ""
-        self._poll_timer.stop()
-        if status_message is not None:
-            self._app.status_label.setText(status_message)
+            self._on_tool_progress(final_msg, total, total, job_id=key)
+        state.end(job_id=key)
+        leftover = getattr(state, "snapshots", None)
+        if key and callable(leftover) and not any(jid for jid in leftover() if jid):
+            state.end()
+        if not self._progress_any_active():
+            self._active_label = ""
+            self._poll_timer.stop()
+            if status_message is not None:
+                self._app.status_label.setText(status_message)
+                self._last_status_text = str(status_message or "")
+        else:
+            self._refresh_status_from_slots()
+        self._notify_activity_hub()
 
-    def _clear_tool_progress(self, *, status_message: str | None = STATUS_READY) -> None:
+    def _clear_tool_progress(
+        self,
+        *,
+        status_message: str | None = STATUS_READY,
+        job_id: str | None = None,
+    ) -> None:
         """Stop polled tool progress; reset status line unless ``status_message`` is ``None``."""
-        self._app._tool_progress_state.end()
+        self._app._tool_progress_state.end(job_id=job_id)
+        if self._progress_any_active():
+            self._refresh_status_from_slots()
+            self._notify_activity_hub()
+            return
         self._active_label = ""
         self._last_status_text = ""
         if self._poll_timer.isActive():
@@ -146,29 +191,58 @@ class ProgressController:
         self._clear_tool_progress(status_message=None)
         self._app.status_label.setText(message)
 
-    def _on_tool_progress(self, message: str, done: int, total: int) -> None:
-        state = self._app._tool_progress_state
-        if message:
-            if total < 0:
-                state.update(message, 0, -1)
-            else:
-                state.update(message, done, total)
-        text = format_tool_progress_text(message, done, total)
-        if text and text == self._last_status_text:
+    def _refresh_status_from_slots(self) -> None:
+        message, done, total, active = self._status_progress_snapshot()
+        text = format_tool_progress_text(message, done, total) if active else ""
+        if text == self._last_status_text:
             return
         self._last_status_text = text
         if text:
             self._app.status_label.setText(text)
-        if (
-            text
-            and self._app._workspace_loading_overlay_visible()
-            and not self._app._session_overlay_owns_loading_detail()
-        ):
+
+    def _on_tool_progress(
+        self,
+        message: str,
+        done: int,
+        total: int,
+        job_id: str | None = None,
+    ) -> None:
+        state = self._app._tool_progress_state
+        if message or job_id:
+            if total < 0:
+                state.update(message, 0, -1, job_id=job_id)
+            else:
+                state.update(message, done, total, job_id=job_id)
+        message, done, total, active = self._status_progress_snapshot()
+        text = format_tool_progress_text(message, done, total) if active else ""
+        if text != self._last_status_text:
+            self._last_status_text = text
+            if text:
+                self._app.status_label.setText(text)
+            if (
+                text
+                and self._app._workspace_loading_overlay_visible()
+                and not self._app._session_overlay_owns_loading_detail()
+            ):
+                detail = self._app._loading_detail
+                if detail is not None:
+                    with suppress(RuntimeError):
+                        detail.setText(format_overlay_progress_text(message, done, total))
+        self._notify_activity_hub()
+
+    def set_loading_count_progress(self, message: str, done: int, total: int) -> None:
+        """Write throttled count/percent onto the loading overlay and status line."""
+        overlay = format_overlay_progress_text(message, done, total)
+        status = format_tool_progress_text(message, done, total)
+        try:
             detail = self._app._loading_detail
             if detail is not None:
-                with suppress(RuntimeError):
-                    detail.setText(text)
-        self._notify_activity_hub()
+                detail.setText(overlay)
+            if status:
+                self._app.status_label.setText(status)
+                self._last_status_text = status
+        except RuntimeError:
+            return
 
     def _on_partial_results_notice(self, tool_label: str, done: int, total: int) -> None:
         d = max(0, int(done))
