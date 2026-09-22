@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -38,6 +40,7 @@ from ...workers import (
 from ..strings import COLUMN_TANIMOTO_SIMILARITY
 from ..chunked_table_write import ChunkedTableWriter
 from ..qt_widget_utils import make_window_minimizable
+from ..analysis_job_support import enqueue_fast_process_queue_job
 from .scope import selection_scope_checked
 
 _DEFAULT_METRIC = "Tanimoto"
@@ -217,9 +220,10 @@ class FPSimilarityDialog(QDialog):
         sig = app._ensure_fp_similarity_signals()
         n_targets = len(targets)
         prog = app._tool_progress_state
-        app._begin_tool_progress("Fingerprint similarity", max(1, n_targets + 1))
-        app.process_queue.enqueue_fast(
+        app._fp_similarity_run_ctx["job_id"] = enqueue_fast_process_queue_job(
+            app,
             "Fingerprint similarity",
+            max(1, n_targets + 1),
             lambda ev, q=qmol, t=targets, c=fp_choice, m=metric, s=sig, st=prog: FPSimilarityWorker(
                 q,
                 t,
@@ -264,19 +268,29 @@ def apply_fp_similarity_column(app, *, compare_oids: set[int], column_name: str,
     def on_done() -> None:
         app._sync_global_bounds_for_headers([name], refresh_filters=True)
         if chunked:
-            app._finish_tool_progress("Writing results", status_message=None)
+            app._finish_tool_progress(
+                "Writing results", status_message=None, job_id=write_job_id
+            )
         app.status_label.setText(f"Added '{name}' with {n_scored} score(s); {n_na} N/A in scope")
 
     writer = getattr(app, "_fp_similarity_writer", None)
     if writer is not None:
         writer.cancel()
+    write_job_id = None
+    if chunked:
+        write_job_id = str(uuid.uuid4())[:8]
+        app._begin_tool_progress("Writing results", n_rows, job_id=write_job_id)
     writer = ChunkedTableWriter(
         table=app.table,
         total=n_rows,
         chunk=max(250, int(cfg.ingest_gui_chunk_size)) if chunked else max(1, n_rows),
         write_chunk=write_chunk,
         on_progress=(
-            (lambda done, total: app._on_tool_progress("Writing results…", done, total))
+            (
+                lambda done, total, jid=write_job_id: app._on_tool_progress(
+                    "Writing results…", done, total, job_id=jid
+                )
+            )
             if chunked
             else None
         ),
@@ -285,7 +299,6 @@ def apply_fp_similarity_column(app, *, compare_oids: set[int], column_name: str,
     )
     app._fp_similarity_writer = writer
     if chunked:
-        app._begin_tool_progress("Writing results", n_rows)
         writer.start()
     else:
         writer.run_now()
