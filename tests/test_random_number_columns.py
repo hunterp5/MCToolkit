@@ -89,5 +89,8 @@ def test_random_number_dialog_distribution_uses_item_data(qapp):  # noqa: ARG001
         assert dlg._distribution_key() == "integer"
         assert not dlg.decimals_sb.isEnabled()
         assert not dlg.mean_sb.isEnabled()
+        assert dlg.clip_cb.parent() is dlg.max_sb.parent()
+        assert dlg.use_seed_cb.parent() is dlg.seed_sb.parent()
+        assert dlg.only_selected_cb.parent() is dlg.seed_sb.parent()
     finally:
         dlg.close()
