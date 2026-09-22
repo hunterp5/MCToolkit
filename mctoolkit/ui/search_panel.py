@@ -59,51 +59,50 @@ class SearchCriterionRow(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
 
-        self.remove_btn = QPushButton("−")
+        self.remove_btn = QPushButton("−", self)
         self.remove_btn.setFixedWidth(28)
-        self.remove_btn.setVisible(True)
         self.remove_btn.setToolTip("Delete this search and close Search.")
         if on_remove is not None:
             self.remove_btn.clicked.connect(on_remove)
         lay.addWidget(self.remove_btn)
 
-        self.glue_combo = QComboBox()
+        self.glue_combo = QComboBox(self)
         self.glue_combo.addItem("AND", "and")
         self.glue_combo.addItem("OR", "or")
         self.glue_combo.setFixedWidth(58)
-        self.glue_combo.setVisible(show_glue)
         self.glue_combo.setToolTip("Combine this criterion with the row above (AND or OR).")
         lay.addWidget(self.glue_combo)
+        self.glue_combo.setVisible(show_glue)
 
-        self.add_btn = QPushButton("Add")
-        self.add_btn.setVisible(show_add)
+        self.add_btn = QPushButton("Add", self)
         self.add_btn.setToolTip("Add another column query below.")
         if on_add is not None:
             self.add_btn.clicked.connect(on_add)
         lay.addWidget(self.add_btn)
+        self.add_btn.setVisible(show_add)
 
-        lay.addWidget(QLabel("Column:"))
-        self.col_combo = QComboBox()
+        lay.addWidget(QLabel("Column:", self))
+        self.col_combo = QComboBox(self)
         self.col_combo.setMinimumWidth(140)
         lay.addWidget(self.col_combo)
 
-        self.query_edit = QLineEdit()
+        self.query_edit = QLineEdit(self)
         self.query_edit.setPlaceholderText(_PLACEHOLDER_TEXT)
         self.query_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         lay.addWidget(self.query_edit, 1)
 
-        self.partial_cb = QCheckBox("Partial match")
+        self.partial_cb = QCheckBox("Partial match", self)
         self.partial_cb.setChecked(True)
         self.partial_cb.setToolTip(
             "Substring match (and * ? wildcards). Off = whole cell must match."
         )
         lay.addWidget(self.partial_cb)
 
-        self.case_cb = QCheckBox("Case Sensitive")
+        self.case_cb = QCheckBox("Case Sensitive", self)
         self.case_cb.setToolTip("When on, letter case must match.")
         lay.addWidget(self.case_cb)
 
-        self.substructure_cb = QCheckBox("Substructure")
+        self.substructure_cb = QCheckBox("Substructure", self)
         self.substructure_cb.setToolTip(
             "Match structures with SMARTS/SMILES instead of column text."
         )
