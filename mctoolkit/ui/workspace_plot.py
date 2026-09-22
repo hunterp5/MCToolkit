@@ -228,14 +228,19 @@ class PlotSync:
                     pass
 
     def _sync_active_plots_from_table_selection(self) -> None:
-        from .plot_table_sync import selected_oids_for_plot
+        import time
 
+        from .plot_table_sync import record_selection_perf, selected_oids_for_plot
+
+        t0 = time.perf_counter()
         self._app._refresh_attached_tool_scope_labels()
         selected = selected_oids_for_plot(self._app)
         self._app._cached_plot_selected_oids = frozenset(selected)
         try:
             for view in self._iter_active_plot_selection_views():
                 try:
+                    if not self._plot_selection_view_is_live(view):
+                        continue
                     sync = getattr(view, "sync_from_table_selection", None)
                     if not callable(sync):
                         continue
@@ -247,6 +252,25 @@ class PlotSync:
                     pass
         finally:
             self._app._cached_plot_selected_oids = None
+        record_selection_perf(
+            self._app, "table_to_plot_sync_ms", (time.perf_counter() - t0) * 1000.0
+        )
+
+    def _plot_selection_view_is_live(self, view) -> bool:
+        """Skip hidden plot surfaces during table→plot selection sync."""
+        try:
+            if not view.isVisible():
+                return False
+        except RuntimeError:
+            return False
+        web = getattr(view, "web", None)
+        if web is not None:
+            try:
+                if not web.isVisible():
+                    return False
+            except RuntimeError:
+                return False
+        return True
 
     def _schedule_sync_active_plots_from_table_selection(self) -> None:
         timer = getattr(self._app, "_plot_table_sync_timer", None)
