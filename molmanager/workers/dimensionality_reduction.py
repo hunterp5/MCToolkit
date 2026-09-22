@@ -34,6 +34,7 @@ from ..analysis.dimensionality_reduction import (
     run_umap,
     subsample_row_indices,
 )
+from ..chem.structure_payload import mol_rows_from_job_params
 from ..descriptors.ml_feature_matrix import (
     build_combined_feature_matrix,
     standardize_feature_matrix,
@@ -97,7 +98,7 @@ def _compute(params: dict) -> DimensionReductionResult:
     oids: list[int] = list(params["oids"])
     feature_columns = list(params.get("feature_columns") or [])
     fp_choice = str(params.get("fingerprint") or "").strip() or None
-    mol_rows = list(params.get("mol_rows") or []) if params.get("use_fingerprints") else None
+    mol_rows = mol_rows_from_job_params(params) if params.get("use_fingerprints") else None
     if method != "pca":
         pick = subsample_row_indices(
             len(oids),

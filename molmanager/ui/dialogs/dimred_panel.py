@@ -40,8 +40,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from rdkit import Chem
-
 from ..dockable_plot import hide_plot_options_dialog
 from ...analysis.dimensionality_reduction import (
     EMBEDDING_PCA_DIM,
@@ -591,11 +589,11 @@ class DimensionReductionPanel(DockableResultPlotPanel):
                 cols.append(item.text())
         return cols
 
-    def _collect_table_mols(self, src: str, only_selected: bool) -> list[tuple[int, Chem.Mol]]:
-        """Fingerprint mols for Run: all table rows; table filters only hide points at draw time."""
+    def _collect_table_payloads(self, src: str, only_selected: bool):
+        """Fingerprint payloads for Run: all table rows; table filters only hide points at draw time."""
         app = self.parent_app
         assert app is not None
-        return app.collect_scoped_table_mols(
+        return app.collect_scoped_table_structure_payloads(
             src,
             only_selected=only_selected,
             only_visible=False,
@@ -692,12 +690,12 @@ class DimensionReductionPanel(DockableResultPlotPanel):
                 self._ui_parent(), self._window_title, "No rows in the current scope."
             )
             return
-        mol_rows = None
+        mol_payloads = None
         if use_fp:
             src = str(prep.get("struct_src") or "")
             self.parent_app.status_label.setText(f"{self._window_title}: collecting structures…")
-            mol_rows = self._collect_table_mols(src, only_sel)
-            if len(mol_rows) < 2 and not features:
+            mol_payloads = self._collect_table_payloads(src, only_sel)
+            if len(mol_payloads) < 2 and not features:
                 self._reset_dimred_job_ui()
                 QMessageBox.information(
                     self._ui_parent(),
@@ -711,7 +709,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
             "oids": oids,
             "feature_columns": features,
             "use_fingerprints": use_fp,
-            "mol_rows": mol_rows,
+            "mol_payloads": mol_payloads,
             "fingerprint": prep.get("fingerprint"),
             "standardize": bool(prep.get("standardize", True)),
             "color_column": color_col,

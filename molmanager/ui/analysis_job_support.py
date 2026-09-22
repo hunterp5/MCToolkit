@@ -30,6 +30,11 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QMessageBox
 from rdkit import Chem
 
+from ..chem.structure_payload import (
+    StructurePayload,
+    mol_from_payload,
+    oid_mol_rows_from_payloads,
+)
 from ..services.activity_records import build_oid_mol_activity_records, parse_activity_float
 from ..workflows.tool_readiness import ToolBlocker, plan_activity_analysis, plan_table_readiness
 from .tool_dialog_scope import abort_if_only_selected_but_empty, prepare_tool_dialog
@@ -128,19 +133,58 @@ def prepare_scoped_structure_mols(
 ) -> list[tuple[int, Chem.Mol]] | None:
     """Validate scope and collect ``(oid, mol)`` pairs for structure-only jobs.
 
+    Hydrates on the caller thread. Queued tools should use
+    :func:`prepare_scoped_structure_payloads` and hydrate in the worker factory.
+    Returns ``None`` after informing the user when the job should not start.
+    """
+    payloads = prepare_scoped_structure_payloads(
+        app,
+        tool_label=tool_label,
+        structure_source=structure_source,
+        only_selected=only_selected,
+        min_mols=min_mols,
+        empty_message=empty_message,
+        too_few_message=too_few_message,
+    )
+    if payloads is None:
+        return None
+    return oid_mol_rows_from_payloads(payloads)
+
+
+def prepare_scoped_structure_payloads(
+    app: Any,
+    *,
+    tool_label: str,
+    structure_source: str,
+    only_selected: bool,
+    min_mols: int = 1,
+    empty_message: str | None = None,
+    too_few_message: str | None = None,
+) -> list[StructurePayload] | None:
+    """Validate scope and snapshot structure payloads without RDKit hydrate.
+
     Returns ``None`` after informing the user when the job should not start.
     """
     if abort_if_only_selected_but_empty(app, only_selected, app._selected_oids_set(), tool_label):
         return None
-    mol_data = app.collect_scoped_table_mols(structure_source, only_selected=only_selected)
-    if not mol_data:
+    collect = getattr(app, "collect_scoped_table_structure_payloads", None)
+    if callable(collect):
+        payloads = list(collect(structure_source, only_selected=only_selected) or [])
+    else:
+        payloads = [
+            StructurePayload(int(oid), None, "")
+            for oid, _mol in (
+                app.collect_scoped_table_mols(structure_source, only_selected=only_selected) or []
+            )
+        ]
+    if not payloads:
         QMessageBox.information(
             app,
             tool_label,
             empty_message or "No valid structures were found for the selected source and scope.",
         )
         return None
-    if len(mol_data) < int(min_mols):
+    if len(payloads) < int(min_mols):
         QMessageBox.information(
             app,
             tool_label,
@@ -148,7 +192,7 @@ def prepare_scoped_structure_mols(
             or f"Need at least {int(min_mols)} row(s) with valid structures in this scope.",
         )
         return None
-    return list(mol_data)
+    return payloads
 
 
 def prepare_scoped_activity_mol_records(
@@ -162,8 +206,46 @@ def prepare_scoped_activity_mol_records(
 ) -> list[tuple[int, Chem.Mol, float]] | None:
     """Validate scope + activity column and build MMP/SALI worker records.
 
-    Returns ``None`` after informing the user when the job should not start.
+    Hydrates on the caller thread. Queued tools should use
+    :func:`prepare_scoped_activity_payload_records`.
     """
+    records = prepare_scoped_activity_payload_records(
+        app,
+        tool_label=tool_label,
+        structure_source=structure_source,
+        activity_column=activity_column,
+        only_selected=only_selected,
+        min_records=min_records,
+    )
+    if records is None:
+        return None
+    out: list[tuple[int, Chem.Mol, float]] = []
+    for oid, payload, activity in records:
+        mol = mol_from_payload(payload)
+        if mol is None:
+            continue
+        out.append((int(oid), mol, float(activity)))
+    if len(out) < int(min_records):
+        QMessageBox.information(
+            app,
+            tool_label,
+            "Need at least two molecules with both a structure and a numeric activity value.",
+        )
+        app.status_label.setText("Ready.")
+        return None
+    return out
+
+
+def prepare_scoped_activity_payload_records(
+    app: Any,
+    *,
+    tool_label: str,
+    structure_source: str,
+    activity_column: str,
+    only_selected: bool,
+    min_records: int = 2,
+) -> list[tuple[int, StructurePayload, float]] | None:
+    """Snapshot payloads + numeric activity without hydrating RDKit molecules."""
     if abort_if_only_selected_but_empty(app, only_selected, app._selected_oids_set(), tool_label):
         return None
     if not activity_column or str(activity_column).startswith("("):
@@ -177,7 +259,17 @@ def prepare_scoped_activity_mol_records(
         )
         return None
 
-    mol_data = app.collect_scoped_table_mols(structure_source, only_selected=only_selected)
+    collect = getattr(app, "collect_scoped_table_structure_payloads", None)
+    if callable(collect):
+        payloads = list(collect(structure_source, only_selected=only_selected) or [])
+        mol_data = [(int(p.oid), p) for p in payloads if p.oid is not None]
+    else:
+        mol_data = [
+            (int(oid), StructurePayload(int(oid), None, ""))
+            for oid, _mol in (
+                app.collect_scoped_table_mols(structure_source, only_selected=only_selected) or []
+            )
+        ]
     if not mol_data:
         QMessageBox.information(
             app,
@@ -271,13 +363,13 @@ def start_scoped_structure_job(
     empty_message: str | None = None,
     too_few_message: str | None = None,
 ) -> Any | None:
-    """Prepare scoped mols and enqueue ``make_worker(mols, …)``.
+    """Snapshot scoped payloads and enqueue ``make_worker(mols, …)``.
 
-    ``make_worker`` receives ``(mols, *, cancel_event, signals, progress_state)``
-    and must return a process-queue runnable. Returns the queue job id, or ``None``
-    when the job did not start.
+    ``make_worker`` receives hydrated ``(mols, *, cancel_event, signals, progress_state)``
+    on the process-queue thread. Returns the queue job id, or ``None`` when the job
+    did not start.
     """
-    mols = prepare_scoped_structure_mols(
+    payloads = prepare_scoped_structure_payloads(
         app,
         tool_label=tool_label,
         structure_source=structure_source,
@@ -286,14 +378,14 @@ def start_scoped_structure_job(
         empty_message=empty_message,
         too_few_message=too_few_message,
     )
-    if not mols:
+    if not payloads:
         return None
-    job_id, ps = prepare_queue_progress(app, tool_label, len(mols))
-    label = queue_label or f"{tool_label} ({len(mols)} rows)"
+    job_id, ps = prepare_queue_progress(app, tool_label, len(payloads))
+    label = queue_label or f"{tool_label} ({len(payloads)} rows)"
     return app.process_queue.enqueue(
         label,
-        lambda ev, rows=mols, sigs=app.signals, prog=ps: make_worker(
-            rows,
+        lambda ev, rows=payloads, sigs=app.signals, prog=ps: make_worker(
+            oid_mol_rows_from_payloads(rows),
             cancel_event=ev,
             signals=sigs,
             progress_state=prog,
@@ -312,12 +404,12 @@ def start_scoped_activity_job(
     make_worker: WorkerFactory,
     min_records: int = 2,
 ) -> bool:
-    """Prepare scoped records and enqueue ``make_worker(records, …)``.
+    """Snapshot scoped payloads and enqueue ``make_worker(records, …)``.
 
-    ``make_worker`` receives ``(records, *, cancel_event, signals, progress_state)``
-    and must return a process-queue runnable.
+    ``make_worker`` receives hydrated ``(records, *, cancel_event, signals, progress_state)``
+    on the process-queue thread.
     """
-    records = prepare_scoped_activity_mol_records(
+    records = prepare_scoped_activity_payload_records(
         app,
         tool_label=tool_label,
         structure_source=structure_source,
@@ -328,10 +420,20 @@ def start_scoped_activity_job(
     if not records:
         return False
     job_id, ps = prepare_queue_progress(app, tool_label, len(records))
+
+    def _hydrate_records(rec):
+        out = []
+        for oid, payload, activity in rec:
+            mol = mol_from_payload(payload)
+            if mol is None:
+                continue
+            out.append((int(oid), mol, float(activity)))
+        return out
+
     app.process_queue.enqueue(
         f"{tool_label} ({len(records)} rows)",
         lambda ev, rec=records, sigs=app.signals, prog=ps: make_worker(
-            rec,
+            _hydrate_records(rec),
             cancel_event=ev,
             signals=sigs,
             progress_state=prog,

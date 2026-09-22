@@ -33,6 +33,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...chem.structure_payload import mols_from_payloads
 from ...predictions.biotransformer_metabolites import (
     CYP_MODE_LABELS,
     DEFAULT_CYP_MODE,
@@ -257,26 +258,31 @@ class BiotransformerDialog(QDialog):
             QMessageBox.warning(self, TOOL_PREDICT_METABOLITES, guard.message)
             return
         add_as_rows = bool(self.add_rows_cb.isChecked())
-        rows = self._structure_input.collect_rows(self, TOOL_PREDICT_METABOLITES)
-        if rows is None:
+        payloads = self._structure_input.collect_payloads(self, TOOL_PREDICT_METABOLITES)
+        if payloads is None:
             return
 
-        req = BiotransformerRequest(
-            rows=rows,
-            metabolism=metabolism,
-            nsteps=nsteps,
-            cyp_mode=cyp_mode,
-            max_metabolites=max_mets,
-            add_as_rows=add_as_rows,
-        )
         bt_signals = self.parent_app._ensure_biotransformer_signals()
-        n = len(rows)
+        n = len(payloads)
         enqueue_process_queue_job(
             self.parent_app,
             TOOL_PREDICT_METABOLITES,
             n,
-            lambda ev, ps, r=req, ws=self.parent_app.signals, sig=bt_signals: (
-                BiotransformerWorker(r, ws, sig, cancel_event=ev, progress_state=ps)
+            lambda ev, ps, p=payloads, met=metabolism, ns=nsteps, cm=cyp_mode, mm=max_mets, ar=add_as_rows, ws=self.parent_app.signals, sig=bt_signals: (
+                BiotransformerWorker(
+                    BiotransformerRequest(
+                        rows=mols_from_payloads(p),
+                        metabolism=met,
+                        nsteps=ns,
+                        cyp_mode=cm,
+                        max_metabolites=mm,
+                        add_as_rows=ar,
+                    ),
+                    ws,
+                    sig,
+                    cancel_event=ev,
+                    progress_state=ps,
+                )
             ),
             queue_label=f"{TOOL_PREDICT_METABOLITES} ({n} molecules)",
         )

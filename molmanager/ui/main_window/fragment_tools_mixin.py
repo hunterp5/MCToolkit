@@ -32,6 +32,7 @@ from ..strings import (
     TOOL_RECAP_DECOMP,
     TOOL_RECAP_RECOMP,
 )
+from ...chem.structure_payload import oid_mol_rows_from_payloads
 from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
 from ...workers import (
     FragmentDecompositionWorker,
@@ -68,8 +69,8 @@ class FragmentToolsMixin:
         if self._abort_if_only_selected_but_empty(only_selected, allowed, TOOL_CORE_DECOMP):
             return
         src = p.structure_source
-        data = self.collect_scoped_table_mols(src, only_selected=only_selected)
-        if not data:
+        payloads = self.collect_scoped_table_structure_payloads(src, only_selected=only_selected)
+        if not payloads:
             QMessageBox.information(
                 self,
                 TOOL_CORE_DECOMP,
@@ -80,9 +81,9 @@ class FragmentToolsMixin:
         enqueue_process_queue_job(
             self,
             "Core-based decomposition",
-            len(data),
-            lambda ev, ps, dt=data, pp=p, sigs=self.signals: RGroupDecompositionWorker(
-                dt,
+            len(payloads),
+            lambda ev, ps, dt=payloads, pp=p, sigs=self.signals: RGroupDecompositionWorker(
+                oid_mol_rows_from_payloads(dt),
                 pp.core_query,
                 pp.column_prefix,
                 pp.only_match_at_r_groups,
@@ -92,7 +93,7 @@ class FragmentToolsMixin:
                 cancel_event=ev,
                 progress_state=ps,
             ),
-            queue_label=f"Core-based decomposition ({len(data)} rows)",
+            queue_label=f"Core-based decomposition ({len(payloads)} rows)",
         )
 
     def on_rgroup_decomp_finished(self, res, col_headers: list) -> None:
@@ -153,7 +154,9 @@ class FragmentToolsMixin:
             only_selected, self._selected_oids_set(), p.tool_title
         ):
             return
-        data = self.collect_scoped_table_mols(p.structure_source, only_selected=only_selected)
+        data = self.collect_scoped_table_structure_payloads(
+            p.structure_source, only_selected=only_selected
+        )
         if not data:
             QMessageBox.information(
                 self,
@@ -171,7 +174,7 @@ class FragmentToolsMixin:
             len(data),
             lambda ev, ps, dt=data, m=method, pref=prefix, title=p.tool_title, sigs=self.signals: (
                 FragmentDecompositionWorker(
-                    dt,
+                    oid_mol_rows_from_payloads(dt),
                     m,
                     pref,
                     title,

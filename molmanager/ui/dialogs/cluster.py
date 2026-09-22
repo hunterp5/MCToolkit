@@ -43,9 +43,10 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from ...chem.structure_payload import oid_mol_rows_from_payloads
 from ...workers import ClusterExploreWorker, ClusterWorker, SIMILARITY_FP_TYPE_LABELS
 from ...workers.cluster_worker import CLUSTER_METHOD_LABELS, CLUSTER_METHOD_SHORT_LABELS
-from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_mols
+from ..analysis_job_support import enqueue_process_queue_job, prepare_scoped_structure_payloads
 from ..qt_widget_utils import make_window_minimizable
 from .scope import selection_scope_checked
 
@@ -384,7 +385,7 @@ class ClusterDialog(QDialog):
 
         only_selected = selection_scope_checked(self)
         src = self.src_combo.currentText()
-        rows = self._prepare_cluster_mols(src, only_selected)
+        rows = self._prepare_cluster_payloads(src, only_selected)
         if not rows:
             return
 
@@ -398,9 +399,9 @@ class ClusterDialog(QDialog):
             return
         self.src_combo.addItems(self.parent_app.chemistry_tool_structure_sources())
 
-    def _prepare_cluster_mols(self, src: str, only_selected: bool):
+    def _prepare_cluster_payloads(self, src: str, only_selected: bool):
         need = "Need at least two rows with valid structures in this scope."
-        return prepare_scoped_structure_mols(
+        return prepare_scoped_structure_payloads(
             self.parent_app,
             tool_label="Cluster",
             structure_source=src,
@@ -418,7 +419,16 @@ class ClusterDialog(QDialog):
             "Clustering",
             len(rows),
             lambda ev, ps, r=rows, fc=fp_choice, m=method, p=params, c=col_name, ws=self.parent_app.signals: (
-                ClusterWorker(r, fc, m, p, c, ws, cancel_event=ev, progress_state=ps)
+                ClusterWorker(
+                    oid_mol_rows_from_payloads(r),
+                    fc,
+                    m,
+                    p,
+                    c,
+                    ws,
+                    cancel_event=ev,
+                    progress_state=ps,
+                )
             ),
             queue_label=f"Cluster ({len(rows)} rows, {method})",
         )
@@ -441,7 +451,7 @@ class ClusterDialog(QDialog):
             return
         only_selected = selection_scope_checked(self)
         src = self.src_combo.currentText()
-        rows = self._prepare_cluster_mols(src, only_selected)
+        rows = self._prepare_cluster_payloads(src, only_selected)
         if not rows:
             return
 
@@ -478,7 +488,15 @@ class ClusterDialog(QDialog):
                 "Exploring clusters",
                 len(rows),
                 lambda ev, ps, r=rows, fc=fp_choice, mr=max_runs, inc=include, ws=self.parent_app.signals: (
-                    ClusterExploreWorker(r, fc, mr, inc, ws, cancel_event=ev, progress_state=ps)
+                    ClusterExploreWorker(
+                        oid_mol_rows_from_payloads(r),
+                        fc,
+                        mr,
+                        inc,
+                        ws,
+                        cancel_event=ev,
+                        progress_state=ps,
+                    )
                 ),
                 queue_label=f"Cluster explore ({len(rows)} rows, ≤{max_runs} trials)",
             )

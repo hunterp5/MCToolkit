@@ -25,6 +25,7 @@ from PyQt5.QtCore import QObject, QRunnable, pyqtSignal
 
 from ..platform_support.exception_policy import log_swallowed_exception
 from ..analysis.qsar_models import fit_qsar_model, predict_qsar_rows
+from ..chem.structure_payload import mol_rows_from_job_params
 from ..platform_support.tool_progress import ToolProgressState, report_tool_progress
 
 logger = logging.getLogger(__name__)
@@ -73,13 +74,14 @@ class QSARTrainWorker(QRunnable):
                 progress_state=self.progress_state,
             )
             use_fp = bool(self.params.get("use_fingerprints"))
+            mol_rows = mol_rows_from_job_params(self.params) if use_fp else None
             result = fit_qsar_model(
                 df=self.params["dataframe"],
                 oids=oids,
                 activity_column=str(self.params["activity_column"]),
                 feature_columns=self.params.get("feature_columns"),
                 fp_choice=self.params.get("fp_choice") if use_fp else None,
-                mol_rows=self.params.get("mol_rows") if use_fp else None,
+                mol_rows=mol_rows,
                 model_key=str(self.params["model_key"]),
                 task_mode=str(self.params.get("task_mode") or "auto"),
                 train_fraction=float(self.params.get("train_fraction", 0.8)),
@@ -139,7 +141,7 @@ class QSARPredictWorker(QRunnable):
                 bundle,
                 df=self.params["dataframe"],
                 oids=oids,
-                mol_rows=self.params.get("mol_rows"),
+                mol_rows=mol_rows_from_job_params(self.params),
                 output_column=self.params.get("output_column"),
             )
             if self.cancel_event is not None and self.cancel_event.is_set():

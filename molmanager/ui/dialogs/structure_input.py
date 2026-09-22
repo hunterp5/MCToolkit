@@ -31,7 +31,8 @@ from PyQt5.QtWidgets import (
 )
 
 from ...chem.molecule_conversion import parse_molecule_from_cell_text
-from ..analysis_job_support import prepare_scoped_structure_mols
+from ...chem.structure_payload import StructurePayload, mols_from_payloads
+from ..analysis_job_support import prepare_scoped_structure_payloads
 from .scope import selection_scope_checked
 
 STRUCTURE_INPUT_MODE_LABELS: tuple[tuple[str, str], ...] = (
@@ -104,8 +105,8 @@ class StructureInputPanel(QWidget):
             return
         self.src_combo.addItems(parent_app.chemistry_tool_structure_sources())
 
-    def collect_rows(self, dialog, tool_label: str) -> list | None:
-        """Return ``(oid, mol)`` rows, or ``None`` after showing a validation message."""
+    def collect_payloads(self, dialog, tool_label: str) -> list[StructurePayload] | None:
+        """Return structure payloads, or ``None`` after showing a validation message."""
         parent_app = getattr(dialog, "parent_app", None)
         if parent_app is None:
             return None
@@ -118,17 +119,24 @@ class StructureInputPanel(QWidget):
             if mol is None:
                 QMessageBox.warning(dialog, tool_label, "Could not parse SMILES.")
                 return None
-            return [(None, mol)]
-        rows_m = prepare_scoped_structure_mols(
+            return [StructurePayload(None, None, smi)]
+        payloads = prepare_scoped_structure_payloads(
             parent_app,
             tool_label=tool_label,
             structure_source=self.src_combo.currentText(),
             only_selected=selection_scope_checked(dialog),
             empty_message="No valid structures were found for this scope and source.",
         )
-        if not rows_m:
+        if not payloads:
             return None
-        return list(rows_m)
+        return list(payloads)
+
+    def collect_rows(self, dialog, tool_label: str) -> list | None:
+        """Return ``(oid, mol)`` rows, or ``None`` after showing a validation message."""
+        payloads = self.collect_payloads(dialog, tool_label)
+        if payloads is None:
+            return None
+        return list(mols_from_payloads(payloads))
 
     def _sync_mode(self, _idx: int = 0) -> None:
         is_smiles = self.mode() == "smiles"

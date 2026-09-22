@@ -410,10 +410,10 @@ class QSARDialog(QDialog):
         self.model_combo.blockSignals(False)
         self._rebuild_model_params()
 
-    def _collect_mols(self) -> list:
+    def _collect_payloads(self) -> list:
         app = self.parent_app
         assert app is not None
-        return app.collect_scoped_table_mols(
+        return app.collect_scoped_table_structure_payloads(
             self.struct_src_combo.currentText(),
             only_selected=selection_scope_checked(self),
             only_visible=self.chk_visible.isChecked(),
@@ -436,8 +436,8 @@ class QSARDialog(QDialog):
                 "Select at least one numeric feature column (X) and/or enable 2D fingerprints.",
             )
             return None
-        mol_rows = self._collect_mols() if use_fp else None
-        if use_fp and len(mol_rows or []) < 8 and not feature_columns:
+        mol_payloads = self._collect_payloads() if use_fp else None
+        if use_fp and len(mol_payloads or []) < 8 and not feature_columns:
             QMessageBox.information(
                 self,
                 "QSAR",
@@ -456,7 +456,7 @@ class QSARDialog(QDialog):
             "use_fingerprints": use_fp,
             "feature_columns": feature_columns or None,
             "fp_choice": self.fp_combo.currentText() if use_fp else None,
-            "mol_rows": mol_rows,
+            "mol_payloads": mol_payloads,
             "model_key": str(model_key),
             "task_mode": self._task_mode_key(),
             "train_fraction": float(self.train_frac_spin.value()),
@@ -506,7 +506,7 @@ class QSARDialog(QDialog):
             "bundle": bundle,
             "dataframe": df,
             "oids": oids,
-            "mol_rows": self._collect_mols() if use_fp else None,
+            "mol_payloads": self._collect_payloads() if use_fp else None,
             "output_column": out_col,
         }
         n = len(oids)

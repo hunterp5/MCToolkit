@@ -31,6 +31,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ...services.column_labels import COLUMN_PARENT_OID, COLUMN_PROTOMER_SOURCE_OID_LEGACY
+from ...chem.structure_payload import mols_from_payloads
 from ...workers.protomer_generator import (
     ProtomerGeneratorRequest,
     ProtomerGeneratorSignals,
@@ -117,19 +118,25 @@ class ProtomerGeneratorDialog(QDialog):
     def _on_generate(self) -> None:
         if self.parent_app is None:
             return
-        rows = self._structure_input.collect_rows(self, "Generate Protomers")
-        if rows is None:
+        payloads = self._structure_input.collect_payloads(self, "Generate Protomers")
+        if payloads is None:
             return
 
         self.generate_btn.setEnabled(False)
-        req = ProtomerGeneratorRequest(rows=rows, pH=float(self.ph_spin.value()))
-        n = len(rows)
+        ph = float(self.ph_spin.value())
+        n = len(payloads)
         enqueue_process_queue_job(
             self.parent_app,
             "Generate protomers",
             n,
-            lambda ev, ps, r=req, ws=self.parent_app.signals, sig=self._prot_signals: (
-                ProtomerGeneratorWorker(r, ws, sig, cancel_event=ev, progress_state=ps)
+            lambda ev, ps, p=payloads, h=ph, ws=self.parent_app.signals, sig=self._prot_signals: (
+                ProtomerGeneratorWorker(
+                    ProtomerGeneratorRequest(rows=mols_from_payloads(p), pH=h),
+                    ws,
+                    sig,
+                    cancel_event=ev,
+                    progress_state=ps,
+                )
             ),
             queue_label=f"Generate protomers ({n} molecules)",
         )

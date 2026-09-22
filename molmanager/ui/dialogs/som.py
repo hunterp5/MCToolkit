@@ -29,6 +29,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...chem.structure_payload import mols_from_payloads
 from ...predictions.som_prediction import (
     DEFAULT_THRESHOLD,
     METABOLISM_SUBSET_OPTIONS,
@@ -119,8 +120,8 @@ class SomPredictorDialog(QDialog):
     def _on_predict(self) -> None:
         if self.parent_app is None:
             return
-        rows = self._structure_input.collect_rows(self, TOOL_PREDICT_SOM)
-        if rows is None:
+        payloads = self._structure_input.collect_payloads(self, TOOL_PREDICT_SOM)
+        if payloads is None:
             return
 
         from ...table.structure_depiction_layout import (
@@ -128,22 +129,32 @@ class SomPredictorDialog(QDialog):
             structure_depict_width,
         )
 
-        req = SomPredictorRequest(
-            rows=rows,
-            metabolism_subset=str(self.subset_combo.currentData() or "all"),
-            fame_score=bool(self.fame_score_cb.isChecked()),
-            threshold=float(self.threshold_spin.value()),
-            map_width=structure_depict_width(),
-            map_height=structure_depict_height(),
-        )
+        map_w = structure_depict_width()
+        map_h = structure_depict_height()
+        metabolism = str(self.subset_combo.currentData() or "all")
+        fame = bool(self.fame_score_cb.isChecked())
+        thresh = float(self.threshold_spin.value())
         som_signals = self.parent_app._ensure_som_predictor_signals()
-        n = len(rows)
+        n = len(payloads)
         enqueue_process_queue_job(
             self.parent_app,
             "Predict SOM",
             n,
-            lambda ev, ps, r=req, ws=self.parent_app.signals, sig=som_signals: (
-                SomPredictorWorker(r, ws, sig, cancel_event=ev, progress_state=ps)
+            lambda ev, ps, p=payloads, ms=metabolism, fs=fame, th=thresh, mw=map_w, mh=map_h, ws=self.parent_app.signals, sig=som_signals: (
+                SomPredictorWorker(
+                    SomPredictorRequest(
+                        rows=mols_from_payloads(p),
+                        metabolism_subset=ms,
+                        fame_score=fs,
+                        threshold=th,
+                        map_width=mw,
+                        map_height=mh,
+                    ),
+                    ws,
+                    sig,
+                    cancel_event=ev,
+                    progress_state=ps,
+                )
             ),
             queue_label=f"Predict SOM ({n} molecules)",
         )

@@ -32,6 +32,7 @@ from PyQt5.QtWidgets import (
 from ...platform_support.config import load_config
 from ...plotting.plot_radar import resolve_entry_row_oid
 from ...chem.molecule_conversion import parse_molecule_from_cell_text
+from ...chem.structure_payload import mol_from_payload, mols_from_payloads
 from ...workers import (
     FPSimilarityWorker,
     SIMILARITY_FP_TYPE_LABELS,
@@ -170,9 +171,12 @@ class FPSimilarityDialog(QDialog):
             qid = self._resolve_query_oid()
             if qid is None:
                 return None, None
-            for oid, mol in self.parent_app.collect_scoped_table_mols(src, only_selected=False):
-                if oid == qid:
-                    return mol, qid
+            payloads = self.parent_app.collect_scoped_table_structure_payloads(
+                src, only_selected=False
+            )
+            for payload in payloads:
+                if payload.oid == qid:
+                    return mol_from_payload(payload), qid
             return None, qid
         smi = self.smi_input.text().strip()
         if not smi:
@@ -204,7 +208,9 @@ class FPSimilarityDialog(QDialog):
             return
 
         compare_oids = self._compare_oids_in_scope(only_sel)
-        targets = self.parent_app.collect_scoped_table_mols(src, only_selected=only_sel)
+        payloads = self.parent_app.collect_scoped_table_structure_payloads(
+            src, only_selected=only_sel
+        )
 
         if not compare_oids:
             self.parent_app.status_label.setText(
@@ -220,30 +226,26 @@ class FPSimilarityDialog(QDialog):
             "pending_column_name": self._pending_column_name,
         }
         sig = app._ensure_fp_similarity_signals()
-        n_targets = len(targets)
+        n_targets = len(payloads)
         app._fp_similarity_run_ctx["job_id"] = enqueue_fast_process_queue_job(
             app,
             "Fingerprint similarity",
             max(1, n_targets + 1),
-            lambda ev, ps, q=qmol, t=targets, c=fp_choice, m=metric, s=sig: (
-                FPSimilarityWorker(
-                    q,
-                    t,
-                    c,
-                    s,
-                    metric=m,
-                    cancel_event=ev,
-                    progress_state=ps,
-                )
+            lambda ev, ps, q=qmol, t=payloads, c=fp_choice, m=metric, s=sig: FPSimilarityWorker(
+                q,
+                mols_from_payloads(t),
+                c,
+                s,
+                metric=m,
+                cancel_event=ev,
+                progress_state=ps,
             ),
             queue_label="Fingerprint similarity",
         )
         self.close()
 
 
-def apply_fp_similarity_column(
-    app, *, compare_oids: set[int], column_name: str, rows
-) -> None:
+def apply_fp_similarity_column(app, *, compare_oids: set[int], column_name: str, rows) -> None:
     """Write fingerprint-similarity scores into a new table column."""
     name = (column_name or "").strip()
     if not name:
@@ -274,12 +276,8 @@ def apply_fp_similarity_column(
     def on_done() -> None:
         app._sync_global_bounds_for_headers([name], refresh_filters=True)
         if chunked:
-            app._finish_tool_progress(
-                "Writing results", status_message=None, job_id=write_job_id
-            )
-        app.status_label.setText(
-            f"Added '{name}' with {n_scored} score(s); {n_na} N/A in scope"
-        )
+            app._finish_tool_progress("Writing results", status_message=None, job_id=write_job_id)
+        app.status_label.setText(f"Added '{name}' with {n_scored} score(s); {n_na} N/A in scope")
 
     writer = getattr(app, "_fp_similarity_writer", None)
     if writer is not None:

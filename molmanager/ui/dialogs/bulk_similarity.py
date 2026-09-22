@@ -30,6 +30,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...chem.structure_payload import oid_mol_rows_from_payloads
 from ...workers import (
     BulkSimilaritySignals,
     BulkSimilarityWorker,
@@ -113,7 +114,7 @@ class BulkSimilarityDialog(QDialog):
         n = len(self.parent_app._selected_logical_rows())
         self._sel_lbl.setText(f"Selected rows: {n:,}")
 
-    def _selected_mols_or_warn(self) -> list[tuple[int, object]]:
+    def _selected_payloads_or_warn(self):
         app = self.parent_app
         if app is None:
             return []
@@ -122,22 +123,21 @@ class BulkSimilarityDialog(QDialog):
             QMessageBox.information(self, "Bulk Similarity", "Select rows in the table first.")
             return []
         src = self.src_combo.currentText()
-        rows = app.collect_scoped_table_mols(src, only_selected=True)
-        out = [(oid, mol) for oid, mol in rows if mol is not None]
-        if len(out) < 2:
+        payloads = app.collect_scoped_table_structure_payloads(src, only_selected=True)
+        if len(payloads) < 2:
             QMessageBox.information(
                 self,
                 "Bulk Similarity",
                 "Need at least two selected rows with valid structures in this source.",
             )
             return []
-        return out
+        return payloads
 
     def _on_run(self) -> None:
         app = self.parent_app
         if app is None or not app.headers:
             return
-        rows = self._selected_mols_or_warn()
+        rows = self._selected_payloads_or_warn()
         if not rows:
             return
         from ...platform_support.memory_guards import check_cluster_workload
@@ -160,7 +160,7 @@ class BulkSimilarityDialog(QDialog):
             max(1, len(rows)),
             lambda ev, ps, r=rows, fp=fp_choice, m=metric, k=top_k, sig=self._sig: (
                 BulkSimilarityWorker(
-                    r,
+                    oid_mol_rows_from_payloads(r),
                     fp,
                     m,
                     top_k_pairs=k,

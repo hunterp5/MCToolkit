@@ -27,6 +27,7 @@ from molmanager.ui.analysis_job_support import (
     ensure_table_ready_for_tool,
     finish_analysis_pairs,
     prepare_scoped_structure_mols,
+    prepare_scoped_structure_payloads,
     report_analysis_failure,
     report_cancellable_job_failure,
 )
@@ -137,6 +138,30 @@ def test_prepare_scoped_structure_mols_too_few(monkeypatch):
         is None
     )
     assert infos and infos[0][2] == "need two"
+
+
+def test_prepare_scoped_structure_payloads_uses_payload_collect(monkeypatch):
+    from molmanager.chem.structure_payload import StructurePayload
+
+    monkeypatch.setattr(
+        "molmanager.ui.analysis_job_support.QMessageBox.information",
+        lambda *a, **k: None,
+    )
+    payload = StructurePayload(1, None, "CCO")
+    app = SimpleNamespace(
+        _abort_if_only_selected_but_empty=MagicMock(return_value=False),
+        _selected_oids_set=MagicMock(return_value=set()),
+        collect_scoped_table_structure_payloads=MagicMock(return_value=[payload]),
+        collect_scoped_table_mols=MagicMock(),
+    )
+    out = prepare_scoped_structure_payloads(
+        app,
+        tool_label="Cluster",
+        structure_source="Structure",
+        only_selected=False,
+    )
+    assert out == [payload]
+    app.collect_scoped_table_mols.assert_not_called()
 
 
 def test_enqueue_process_queue_job_returns_id():

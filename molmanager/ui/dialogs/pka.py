@@ -24,6 +24,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...chem.structure_payload import mols_from_payloads
 from ...workers import PKaPredictorWorker
 from ..analysis_job_support import enqueue_process_queue_job
 from ..qt_widget_utils import make_window_minimizable
@@ -100,7 +101,7 @@ class PKaPredictorDialog(QDialog):
     def _on_predict(self) -> None:
         if self.parent_app is None:
             return
-        rows = self._structure_input.collect_rows(self, "Predict pKa")
+        rows = self._structure_input.collect_payloads(self, "Predict pKa")
         if rows is None:
             return
 
@@ -115,7 +116,7 @@ class PKaPredictorDialog(QDialog):
             n,
             lambda ev, ps, r=rows, ws=self.parent_app.signals, sig=pka_signals, mb=most_basic, ma=most_acidic, ip=include_pi: (
                 PKaPredictorWorker(
-                    r,
+                    mols_from_payloads(r),
                     ws,
                     sig,
                     cancel_event=ev,

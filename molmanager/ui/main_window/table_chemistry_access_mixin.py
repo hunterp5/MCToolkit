@@ -36,10 +36,13 @@ from ...services.chemistry_columns import (
 from ...services.table_scope import collect_scoped_pairs, resolve_structure_row_for_oid
 from ...chem.molecule_conversion import (
     looks_like_mol_block,
-    mol_to_canonical_smiles,
     parse_molecule_from_cell_text,
     row_cells_from_mol,
     safe_mol_prop_string,
+)
+from ...chem.structure_payload import (
+    StructurePayload,
+    mols_from_payloads,
 )
 from ..compound_table_model import CompoundTableModel
 
@@ -223,6 +226,89 @@ class TableChemistryAccessMixin:
         """Candidate values for a tool dialog's structure-source dropdown."""
         return ["Structure"] + self._data_headers_confirmed_for_chemistry_tools()
 
+    def _scoped_row_filters(
+        self, *, only_selected: bool, only_visible: bool
+    ) -> tuple[set[int] | None, set[int] | None]:
+        allowed = self._selected_oids_set() if only_selected else None
+        visible_rows: set[int] | None = None
+        if only_visible:
+            vis = self._visible_source_row_indices()
+            visible_rows = None if vis is None else set(vis)
+        return allowed, visible_rows
+
+    def collect_scoped_table_structure_payloads(
+        self,
+        src: str,
+        *,
+        only_selected: bool = False,
+        only_visible: bool = False,
+    ) -> list[StructurePayload]:
+        """Copy ``(oid, blob, smiles)`` in scope without hydrating RDKit molecules.
+
+        ``src`` is ``"Structure"`` (MolStore blob/SMILES plus the SMILES column) or a
+        data-column header (cell / pixmap backing text only). Callers that need live
+        mols should hydrate on a worker with :func:`mols_from_payloads`.
+        """
+        allowed, visible_rows = self._scoped_row_filters(
+            only_selected=only_selected, only_visible=only_visible
+        )
+        store_map: dict[int, tuple[bytes | None, str]] = {}
+        if src == "Structure":
+            iter_fn = getattr(self.mols, "iter_structure_payloads", None)
+            if callable(iter_fn):
+                for oid, blob, smi in iter_fn():
+                    store_map[int(oid)] = (blob, smi or "")
+        smiles_h = self._canonical_smiles_header_for_updates() if src == "Structure" else None
+        ov = getattr(self, "_structure_field_override", None)
+        ov_s = str(ov).strip() if isinstance(ov, str) else ""
+        use_ov = bool(
+            ov_s and ov_s in self.headers and not is_tool_generated_structure_header(ov_s)
+        )
+        col = None if src == "Structure" else self.headers.index(src)
+        is_pixmap_src = src != "Structure" and self._table_model.is_pixmap_data_column(src)
+
+        def _cell(r: int, header: str, col_idx: int | None) -> str:
+            raw = (self._table_model.backing_value_for_row_header(r, header) or "").strip()
+            if raw:
+                return raw
+            if col_idx is None:
+                try:
+                    col_idx = self.headers.index(header)
+                except ValueError:
+                    return ""
+            return (self._table_cell_text(r, col_idx) or "").strip()
+
+        def _resolve(r: int, oid: int) -> StructurePayload | None:
+            if use_ov:
+                raw = _cell(r, ov_s, None)
+                if raw:
+                    return StructurePayload(int(oid), None, raw)
+            if src == "Structure":
+                blob, smi = store_map.get(int(oid), (None, ""))
+                smi = (smi or "").strip()
+                if not smi and smiles_h:
+                    smi = _cell(r, smiles_h, None)
+                if blob or smi:
+                    return StructurePayload(int(oid), blob, smi)
+                return None
+            raw = ""
+            if is_pixmap_src:
+                raw = (self._table_model.backing_value_for_row_header(r, src) or "").strip()
+            else:
+                raw = _cell(r, src, col)
+            if not raw:
+                return None
+            return StructurePayload(int(oid), None, raw)
+
+        pairs = collect_scoped_pairs(
+            self._table_model.rowCount(),
+            row_oid=self._table_model.row_oid,
+            resolve=_resolve,
+            allowed_oids=allowed,
+            visible_rows=visible_rows,
+        )
+        return [payload for _oid, payload in pairs]
+
     def collect_scoped_table_mols(
         self,
         src: str,
@@ -233,38 +319,18 @@ class TableChemistryAccessMixin:
         """
         Iterate the table and return ``(oid, mol)`` pairs in scope for a chemistry tool.
 
-        ``src`` is ``"Structure"`` (use the row's structure column / cached mol) or a
-        data-column header name (parse that column's cell or pixmap backing SMILES).
-        Data-column parses are not written into ``self.mols``. Used by the pKa, protomer,
-        cluster, and dimensionality-reduction dialogs.
+        Prefer :meth:`collect_scoped_table_structure_payloads` plus worker-side hydrate
+        for queued jobs. This path still hydrates on the caller thread (tests / small tools).
         """
-        allowed = self._selected_oids_set() if only_selected else None
-        col = None if src == "Structure" else self.headers.index(src)
-        visible_rows: set[int] | None = None
-        if only_visible:
-            vis = self._visible_source_row_indices()
-            visible_rows = None if vis is None else set(vis)
-        is_pixmap_src = src != "Structure" and self._table_model.is_pixmap_data_column(src)
-
-        def _resolve(r: int, oid: int) -> Chem.Mol | None:
-            if src == "Structure":
-                return self.mols.get(oid) or self._mol_for_structure_row(r)
-            if is_pixmap_src:
-                raw = self._table_model.backing_value_for_row_header(r, src)
-                mol = self._mol_from_structure_text(raw) if raw else None
-                return mol
-            raw = self._table_cell_text(r, col)
-            if not raw:
-                raw = self._table_model.backing_value_for_row_header(r, src)
-            return self._mol_from_structure_text(raw) if raw else None
-
-        return collect_scoped_pairs(
-            self._table_model.rowCount(),
-            row_oid=self._table_model.row_oid,
-            resolve=_resolve,
-            allowed_oids=allowed,
-            visible_rows=visible_rows,
+        payloads = self.collect_scoped_table_structure_payloads(
+            src, only_selected=only_selected, only_visible=only_visible
         )
+        rows: list[tuple[int, Chem.Mol]] = []
+        for oid, mol in mols_from_payloads(payloads):
+            if oid is None:
+                continue
+            rows.append((int(oid), mol))
+        return rows
 
     def collect_scoped_table_smiles(
         self,
@@ -275,61 +341,23 @@ class TableChemistryAccessMixin:
         process_ui_every: int = 64,
     ) -> list[tuple[int, str]]:
         """
-        Like :meth:`collect_scoped_table_mols` but returns ``(oid, SMILES text)`` without RDKit parsing.
+        Like :meth:`collect_scoped_table_structure_payloads` but ``(oid, SMILES text)`` only.
 
-        Periodically pumps the event loop so large tables stay responsive while gathering inputs.
+        Does not hydrate RDKit molecules. ``process_ui_every`` is kept for callers; the
+        snapshot is a backing-value walk so the event loop is not pumped.
         """
-        from PyQt5.QtWidgets import QApplication
-
-        allowed = self._selected_oids_set() if only_selected else None
-        col = None if src == "Structure" else self.headers.index(src)
-        visible_rows: set[int] | None = None
-        if only_visible:
-            vis = self._visible_source_row_indices()
-            visible_rows = None if vis is None else set(vis)
-        is_pixmap_src = src != "Structure" and self._table_model.is_pixmap_data_column(src)
-        smiles_h = self._canonical_smiles_header_for_updates()
-        every = int(process_ui_every)
-
-        def _on_row(r: int) -> None:
-            if every > 0 and r > 0 and r % every == 0:
-                QApplication.processEvents()
-
-        def _resolve(r: int, oid: int) -> str | None:
-            raw = ""
-            if src == "Structure":
-                if smiles_h:
-                    raw = (
-                        self._table_model.backing_value_for_row_header(r, smiles_h) or ""
-                    ).strip()
-                    if not raw:
-                        raw = (self._table_cell_text(r, self.headers.index(smiles_h)) or "").strip()
-                if not raw:
-                    mol = self.mols.get(oid)
-                    if mol is None:
-                        mol = self._mol_for_structure_row(r)
-                    if mol is not None:
-                        try:
-                            raw = mol_to_canonical_smiles(mol)
-                        except Exception:
-                            raw = ""
-            elif is_pixmap_src:
-                raw = (self._table_model.backing_value_for_row_header(r, src) or "").strip()
-            else:
-                raw = (self._table_cell_text(r, col) or "").strip()
-                if not raw:
-                    raw = (self._table_model.backing_value_for_row_header(r, src) or "").strip()
-            smi = raw.strip()
-            return smi or None
-
-        return collect_scoped_pairs(
-            self._table_model.rowCount(),
-            row_oid=self._table_model.row_oid,
-            resolve=_resolve,
-            allowed_oids=allowed,
-            visible_rows=visible_rows,
-            on_row=_on_row,
+        del process_ui_every
+        payloads = self.collect_scoped_table_structure_payloads(
+            src, only_selected=only_selected, only_visible=only_visible
         )
+        out: list[tuple[int, str]] = []
+        for payload in payloads:
+            if payload.oid is None:
+                continue
+            smi = (payload.smiles or "").strip()
+            if smi:
+                out.append((int(payload.oid), smi))
+        return out
 
     def _apply_structure_field_override(self, mol: Chem.Mol | None) -> Chem.Mol | None:
         field = getattr(self, "_structure_field_override", None)

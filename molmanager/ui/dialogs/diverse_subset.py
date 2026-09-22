@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from PyQt5.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -33,6 +35,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ...chem.rdkit_fingerprints import SIMILARITY_FP_TYPE_LABELS, descriptor_onbits_column_name
+from ...chem.structure_payload import mols_from_payloads
 from ...platform_support.config import load_config
 from ...platform_support.memory_guards import check_diverse_subset_workload
 from ...workers.diverse_subset_worker import (
@@ -45,7 +48,6 @@ from ..analysis_job_support import enqueue_process_queue_job
 from .scope import selection_scope_checked
 
 _OID_SCAN_PUMP_EVERY = 4096
-_MOLS_COVERAGE_THRESHOLD = 0.9
 
 _DEFAULT_COLUMN = "Diverse subset rank"
 
@@ -201,44 +203,6 @@ class DiverseSubsetDialog(QDialog):
             out[oid] = app._table_cell_text(r, hidx) or ""
         return out
 
-    def _prepare_structure_inputs(
-        self,
-        oids: list[int],
-        src: str,
-        only_selected: bool,
-    ) -> tuple[dict[int, object] | None, list[tuple[int, str]] | None]:
-        """
-        Snapshot molecules / structure text on the GUI thread for the worker.
-
-        Prefer ``app.mols`` (no Qt from the worker). Fall back to SMILES/text collection
-        with event pumping when coverage is low or the source is a data column.
-        """
-        app = self.parent_app
-        mols_src = getattr(app, "mols", None) or {}
-        mols_by_oid: dict[int, object] = {}
-        for i, oid in enumerate(oids):
-            if i > 0 and i % _OID_SCAN_PUMP_EVERY == 0:
-                QApplication.processEvents()
-            mol = mols_src.get(oid)
-            if mol is not None:
-                mols_by_oid[int(oid)] = mol
-
-        n = len(oids)
-        coverage = (len(mols_by_oid) / n) if n else 1.0
-        if src == "Structure" and coverage >= _MOLS_COVERAGE_THRESHOLD:
-            return mols_by_oid, None
-
-        app.status_label.setText("Diverse subset: collecting structures…")
-        QApplication.processEvents()
-        texts = app.collect_scoped_table_smiles(
-            src,
-            only_selected=only_selected,
-            process_ui_every=256,
-        )
-        if mols_by_oid and coverage > 0:
-            return mols_by_oid, texts
-        return (mols_by_oid or None), texts
-
     def run(self) -> None:
         app = self.parent_app
         src = self.src_combo.currentText()
@@ -314,8 +278,8 @@ class DiverseSubsetDialog(QDialog):
             if reply != QMessageBox.Yes:
                 return
 
-        mols_by_oid, structure_texts = self._prepare_structure_inputs(oids, src, only_sel)
-        if not mols_by_oid and not structure_texts:
+        payloads = app.collect_scoped_table_structure_payloads(src, only_selected=only_sel)
+        if not payloads:
             app.status_label.setText(
                 "Diverse subset: no molecules available for this structure source "
                 "(load/prepare structures first)."
@@ -337,8 +301,8 @@ class DiverseSubsetDialog(QDialog):
             subset_size=k,
             oids=list(oids),
             structure_source=src,
-            mols_by_oid=mols_by_oid,
-            structure_texts=structure_texts,
+            mols_by_oid=None,
+            structure_texts=None,
             onbits_by_oid=onbits_by_oid,
             use_onbits_column=use_onbits_col,
             mode=mode,
@@ -347,8 +311,16 @@ class DiverseSubsetDialog(QDialog):
             app,
             "Diverse subset",
             n_est,
-            lambda ev, ps, r=req, s=sig: DiverseSubsetWorker(
-                r, s, cancel_event=ev, progress_state=ps
+            lambda ev, ps, r=req, pl=payloads, s=sig: DiverseSubsetWorker(
+                replace(
+                    r,
+                    mols_by_oid={
+                        oid: mol for oid, mol in mols_from_payloads(pl) if oid is not None
+                    },
+                ),
+                s,
+                cancel_event=ev,
+                progress_state=ps,
             ),
             queue_label=f"Diverse subset ({n_est} rows, pick {k}, {mode})",
         )
