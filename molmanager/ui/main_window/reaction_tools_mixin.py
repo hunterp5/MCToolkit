@@ -30,6 +30,7 @@ from ...chem.reaction_extract import (
 )
 from ...chem.reaction_file_io import reaction_smarts_from_app_selection
 from ...workers import ReactionEnumerationWorker
+from ..analysis_job_support import enqueue_process_queue_job
 
 logger = logging.getLogger(__name__)
 
@@ -142,17 +143,18 @@ class ReactionToolsMixin:
         if not guard.ok:
             QMessageBox.warning(self, TOOL_REACTION_ENUMERATION, guard.message)
             return
-        ps = self._tool_progress_state
-        self._begin_tool_progress(TOOL_REACTION_ENUMERATION, p.max_products)
-        self.process_queue.enqueue(
-            f"{TOOL_REACTION_ENUMERATION} ({p.reaction_name})",
-            lambda ev, req=p, sigs=self.signals, prog=ps: ReactionEnumerationWorker(
+        enqueue_process_queue_job(
+            self,
+            TOOL_REACTION_ENUMERATION,
+            p.max_products,
+            lambda ev, ps, req=p, sigs=self.signals: ReactionEnumerationWorker(
                 req,
                 TOOL_REACTION_ENUMERATION,
                 sigs,
                 cancel_event=ev,
-                progress_state=prog,
+                progress_state=ps,
             ),
+            queue_label=f"{TOOL_REACTION_ENUMERATION} ({p.reaction_name})",
         )
 
     def on_reaction_enum_finished(self, result) -> None:

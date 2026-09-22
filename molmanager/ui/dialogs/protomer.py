@@ -124,13 +124,12 @@ class ProtomerGeneratorDialog(QDialog):
         self.generate_btn.setEnabled(False)
         req = ProtomerGeneratorRequest(rows=rows, pH=float(self.ph_spin.value()))
         n = len(rows)
-        prog = self.parent_app._tool_progress_state
         enqueue_process_queue_job(
             self.parent_app,
             "Generate protomers",
             n,
-            lambda ev, r=req, ws=self.parent_app.signals, ps=self._prot_signals, st=prog: (
-                ProtomerGeneratorWorker(r, ws, ps, cancel_event=ev, progress_state=st)
+            lambda ev, ps, r=req, ws=self.parent_app.signals, sig=self._prot_signals: (
+                ProtomerGeneratorWorker(r, ws, sig, cancel_event=ev, progress_state=ps)
             ),
             queue_label=f"Generate protomers ({n} molecules)",
         )

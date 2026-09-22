@@ -186,15 +186,6 @@ class SqlLoadMixin:
         self._sql_load_clear_first = bool(clear_first)
 
         progress_total = limit_eff if limit_eff > 0 else 1
-        begin = getattr(self, "_begin_tool_progress", None)
-        if callable(begin):
-            begin("SQL load", progress_total)
-        else:
-            try:
-                self.status_label.setText("SQL load: fetching…")
-            except Exception:
-                pass
-
         cancel_event = threading.Event()
         self._sql_load_cancel_event = cancel_event
         job_id = f"sql-load-{gen}"
@@ -205,8 +196,19 @@ class SqlLoadMixin:
             "SQL load…",
             cancel=cancel_event.set,
         )
+        begin = getattr(self, "_begin_tool_progress", None)
+        if callable(begin):
+            begin("SQL load", progress_total, job_id=job_id)
+        else:
+            try:
+                self.status_label.setText("SQL load: fetching…")
+            except Exception:
+                pass
 
         prog = getattr(self, "_tool_progress_state", None)
+        bind = getattr(prog, "bind", None)
+        if callable(bind):
+            prog = bind(job_id)
         signals = SqlLoadSignals(self)
 
         def _on_chunk(result, g=gen) -> None:
@@ -269,10 +271,11 @@ class SqlLoadMixin:
             return
         self._sql_load_busy = False
         self._sql_load_ctx = None
+        job_id = getattr(self, "_sql_load_job_id", None)
         self._clear_sql_load_job()
         finish = getattr(self, "_finish_tool_progress", None)
         if callable(finish):
-            finish("SQL load", status_message=None)
+            finish("SQL load", status_message=None, job_id=job_id)
         try:
             self.table.setUpdatesEnabled(True)
         except Exception:
@@ -367,6 +370,7 @@ class SqlLoadMixin:
         self.next_oid = int(result.next_oid or self.next_oid)
         self._sql_load_ctx = None
         self._sql_load_busy = False
+        job_id = getattr(self, "_sql_load_job_id", None)
         self._clear_sql_load_job()
         try:
             self.table.setUpdatesEnabled(True)
@@ -374,7 +378,7 @@ class SqlLoadMixin:
             pass
         finish = getattr(self, "_finish_tool_progress", None)
         if callable(finish):
-            finish("SQL load", status_message=None)
+            finish("SQL load", status_message=None, job_id=job_id)
 
         if rows_hit_limit:
             QMessageBox.information(

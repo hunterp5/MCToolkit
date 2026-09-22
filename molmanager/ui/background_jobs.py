@@ -60,6 +60,10 @@ def unregister_background_job(app: Any, job_id: str) -> None:
     cancels = getattr(app, "_background_job_cancels", None)
     if cancels:
         cancels.pop(str(job_id), None)
+    state = getattr(app, "_tool_progress_state", None)
+    end = getattr(state, "end", None)
+    if callable(end):
+        end(job_id=str(job_id))
     hub = getattr(app, "background_activity", None)
     if hub is not None:
         hub.notify_changed()

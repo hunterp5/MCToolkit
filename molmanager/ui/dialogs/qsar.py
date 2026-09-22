@@ -55,6 +55,7 @@ from ...workers import SIMILARITY_FP_TYPE_LABELS
 from ...workers.qsar_worker import QSARSignals, QSARPredictWorker, QSARTrainWorker
 from ..table_dataframe import numeric_subset, table_to_dataframe
 from ..qt_widget_utils import apply_monospace_to_text_edit, make_window_minimizable
+from ..analysis_job_support import enqueue_process_queue_job
 from .mmp import select_preferred_activity_column
 from .scope import selection_scope_checked
 
@@ -477,17 +478,18 @@ class QSARDialog(QDialog):
             return
         n = len(params["oids"])
         self._active_progress_label = "QSAR"
-        self.parent_app._begin_tool_progress("QSAR", n)
         self.results_text.setPlainText("Training…")
         self._set_job_running(True)
         self._fit_result = None
-        prog = self.parent_app._tool_progress_state
         self._disconnect_process_queue_thread_finished()
-        self._active_qsar_job_id = self.parent_app.process_queue.enqueue(
-            f"QSAR train ({n} rows)",
-            lambda ev, p=params, sigs=self._signals, st=prog: QSARTrainWorker(
-                p, sigs, cancel_event=ev, progress_state=st
+        self._active_qsar_job_id = enqueue_process_queue_job(
+            self.parent_app,
+            "QSAR",
+            n,
+            lambda ev, ps, p=params, sigs=self._signals: QSARTrainWorker(
+                p, sigs, cancel_event=ev, progress_state=ps
             ),
+            queue_label=f"QSAR train ({n} rows)",
         )
         self.parent_app.process_queue.thread_finished.connect(
             self._on_process_queue_thread_finished
@@ -509,15 +511,16 @@ class QSARDialog(QDialog):
         }
         n = len(oids)
         self._active_progress_label = "QSAR predictions"
-        self.parent_app._begin_tool_progress("QSAR predictions", n)
         self._set_job_running(True)
-        prog = self.parent_app._tool_progress_state
         self._disconnect_process_queue_thread_finished()
-        self._active_qsar_job_id = self.parent_app.process_queue.enqueue(
-            f"QSAR predict ({n} rows)",
-            lambda ev, p=params, sigs=self._signals, st=prog: QSARPredictWorker(
-                p, sigs, cancel_event=ev, progress_state=st
+        self._active_qsar_job_id = enqueue_process_queue_job(
+            self.parent_app,
+            "QSAR predictions",
+            n,
+            lambda ev, ps, p=params, sigs=self._signals: QSARPredictWorker(
+                p, sigs, cancel_event=ev, progress_state=ps
             ),
+            queue_label=f"QSAR predict ({n} rows)",
         )
         self.parent_app.process_queue.thread_finished.connect(
             self._on_process_queue_thread_finished

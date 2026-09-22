@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from molmanager.platform_support.tool_progress import ToolProgressState
 from molmanager.ui.background_jobs import register_background_job, unregister_background_job
 
 
@@ -38,3 +39,16 @@ def test_background_job_register_unregister() -> None:
     unregister_background_job(app, "job-a")
     assert app._background_jobs == {}
     assert app.background_activity.notify_calls == 2
+
+
+def test_unregister_background_job_ends_progress_slot() -> None:
+    state = ToolProgressState()
+    state.begin("Applying filters", 10, job_id="filter-1")
+    app = SimpleNamespace(
+        _background_jobs={"filter-1": "Applying filters"},
+        _tool_progress_state=state,
+        background_activity=None,
+    )
+    unregister_background_job(app, "filter-1")
+    assert state.snapshot(job_id="filter-1")[3] is False
+    assert app._background_jobs == {}

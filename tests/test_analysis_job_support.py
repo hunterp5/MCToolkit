@@ -21,6 +21,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from molmanager.platform_support.tool_progress import ToolProgressState
 from molmanager.ui.analysis_job_support import (
     enqueue_process_queue_job,
     ensure_table_ready_for_tool,
@@ -42,7 +43,7 @@ def test_finish_analysis_pairs_empty_returns_none(monkeypatch):
         status_label=SimpleNamespace(setText=MagicMock()),
     )
     assert finish_analysis_pairs(app, "Tool", [], empty_message="none") is None
-    app._finish_tool_progress.assert_called_once_with("Tool")
+    app._finish_tool_progress.assert_called_once_with("Tool", job_id=None)
     assert infos and infos[0][2] == "none"
 
 
@@ -139,8 +140,10 @@ def test_prepare_scoped_structure_mols_too_few(monkeypatch):
 
 
 def test_enqueue_process_queue_job_returns_id():
+    state = ToolProgressState()
     app = SimpleNamespace(
         _begin_tool_progress=MagicMock(),
+        _tool_progress_state=state,
         process_queue=SimpleNamespace(enqueue=MagicMock(return_value="job-1")),
     )
     factory = MagicMock()
@@ -148,8 +151,19 @@ def test_enqueue_process_queue_job_returns_id():
         enqueue_process_queue_job(app, "Clustering", 3, factory, queue_label="Cluster (3)")
         == "job-1"
     )
-    app._begin_tool_progress.assert_called_once_with("Clustering", 3)
-    app.process_queue.enqueue.assert_called_once_with("Cluster (3)", factory)
+    assert app._begin_tool_progress.call_count == 1
+    begin_args, begin_kwargs = app._begin_tool_progress.call_args
+    assert begin_args[:2] == ("Clustering", 3)
+    assert "job_id" in begin_kwargs
+    enqueue_args, enqueue_kwargs = app.process_queue.enqueue.call_args
+    assert enqueue_args[0] == "Cluster (3)"
+    assert enqueue_kwargs.get("job_id") == begin_kwargs["job_id"]
+    wrapped = enqueue_args[1]
+    wrapped("cancel-ev")
+    factory.assert_called_once()
+    assert factory.call_args.args[0] == "cancel-ev"
+    # Second arg is a BoundToolProgress for the allocated job id.
+    assert getattr(factory.call_args.args[1], "_job_id", None) == begin_kwargs["job_id"]
 
 
 def test_report_cancellable_job_failure_cancelled(monkeypatch):

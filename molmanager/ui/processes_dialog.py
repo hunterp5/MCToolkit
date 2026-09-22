@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with MolManager.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Modeless dialog listing queued and running background tool jobs."""
+"""Modeless dialog listing queued and running background tool jobs plus the session log."""
 
 from __future__ import annotations
 
@@ -29,11 +29,14 @@ from PyQt5.QtWidgets import (
     QHeaderView,
     QMessageBox,
     QPushButton,
+    QSplitter,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
+from .app_log_dialog import SessionLogPanel
 from .qt_widget_utils import make_window_minimizable
 
 if TYPE_CHECKING:
@@ -44,12 +47,17 @@ class ProcessesDialog(QDialog):
     def __init__(self, parent: ChemistryWorkspaceWindow | None = None):
         super().__init__(parent)
         self._app: Any = parent
-        self.setWindowTitle("Processes")
-        self.resize(640, 420)
+        self.setWindowTitle("Log")
+        self.resize(820, 680)
         self.setModal(False)
         self.setWindowModality(Qt.NonModal)
 
         root = QVBoxLayout(self)
+        splitter = QSplitter(Qt.Vertical)
+
+        jobs = QWidget()
+        jobs_ly = QVBoxLayout(jobs)
+        jobs_ly.setContentsMargins(0, 0, 0, 0)
 
         self._table = QTableWidget(0, 5)
         self._table.setHorizontalHeaderLabels(["Status", "Progress", "Elapsed", "Job ID", "Title"])
@@ -61,28 +69,34 @@ class ProcessesDialog(QDialog):
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        root.addWidget(self._table, 1)
+        jobs_ly.addWidget(self._table, 1)
+
+        self._log = SessionLogPanel(embed_filters=False)
+        splitter.addWidget(jobs)
+        splitter.addWidget(self._log)
+        splitter.setChildrenCollapsible(False)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 2)
+        splitter.setSizes([240, 420])
+        root.addWidget(splitter, 1)
 
         row = QHBoxLayout()
-        self._btn_cancel = QPushButton("Cancel")
+        self._btn_cancel = QPushButton("Cancel Job")
         self._btn_cancel.setToolTip(
             "Apply to the selected row: stop a running job (cooperative), end Render 2D, "
             "stop Gnina docking, or remove a queued job from the line without running it."
         )
-        self._btn_clear = QPushButton("Clear queue")
+        self._btn_clear = QPushButton("Clear Queue")
         self._btn_clear.setToolTip(
             "Remove all jobs waiting to run (does not stop the current job)."
         )
-        self._btn_refresh = QPushButton("Refresh")
         row.addWidget(self._btn_cancel)
         row.addWidget(self._btn_clear)
-        row.addStretch()
-        row.addWidget(self._btn_refresh)
+        row.addWidget(self._log.filter_bar(), 1)
         root.addLayout(row)
 
         self._btn_cancel.clicked.connect(self._on_cancel)
         self._btn_clear.clicked.connect(self._on_clear_queue)
-        self._btn_refresh.clicked.connect(self._reload)
         self._table.itemSelectionChanged.connect(self._update_cancel_enabled)
 
         hub = getattr(self._app, "background_activity", None)

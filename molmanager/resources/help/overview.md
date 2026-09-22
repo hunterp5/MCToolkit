@@ -24,14 +24,14 @@ Works on the current session table (structures plus property columns). Most tool
 - **External** - SQL, PubChem, ChEMBL, patents.
 - **Settings** - theme, fonts, hotkeys, WSL executable for Linux-only tools.
 - **Layout** - rearrange or restore workspace panes.
-- **Processes** - inspect running/queued background jobs.
-- **Help** - question-mark control to the right of Processes. Opens a menu for this User Guide and the Citations list. F1 also opens the guide.
+- **Log** - inspect running/queued background jobs and the session log (tool output, status history, warnings).
+- **Help** - User Guide and Citations. F1 also opens the guide.
 
 ## Workflow
 
 1. Load or open a session with structures in the table.
 2. Optionally filter or select the rows you care about.
-3. Run a tool from **Tools** / **Data** / **External**; watch **Processes** for long jobs.
+3. Run a tool from **Tools** / **Data** / **External**; watch **Log** for long jobs and the transcript below the job table.
 4. Inspect new columns, plots, or docked panes; export or save the session.
 
 ## Use cases
@@ -42,4 +42,4 @@ Works on the current session table (structures plus property columns). Most tool
 
 ## Tips and limits
 
-Long jobs run in the background; cancel or clear them from **Processes**. Structure-dependent tools need a valid structure source column. Layout changes are session UI state - save the session if you want the table data preserved.
+Long jobs run in the background; cancel or clear them from **Log**, which also keeps the full transcript. Structure-dependent tools need a valid structure source column. Layout changes are session UI state - save the session if you want the table data preserved.

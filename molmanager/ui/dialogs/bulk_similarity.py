@@ -37,6 +37,7 @@ from ...workers import (
     SIMILARITY_METRIC_LABELS,
 )
 from ..qt_widget_utils import make_window_minimizable
+from ..analysis_job_support import enqueue_process_queue_job
 
 
 class BulkSimilarityDialog(QDialog):
@@ -153,11 +154,11 @@ class BulkSimilarityDialog(QDialog):
         self.summary_lbl.setText("")
         self.table.setRowCount(0)
 
-        prog = app._tool_progress_state
-        app._begin_tool_progress("Bulk similarity", max(1, len(rows)))
-        app.process_queue.enqueue(
-            f"Bulk similarity ({len(rows)} rows)",
-            lambda ev, r=rows, fp=fp_choice, m=metric, k=top_k, sig=self._sig, st=prog: (
+        enqueue_process_queue_job(
+            app,
+            "Bulk similarity",
+            max(1, len(rows)),
+            lambda ev, ps, r=rows, fp=fp_choice, m=metric, k=top_k, sig=self._sig: (
                 BulkSimilarityWorker(
                     r,
                     fp,
@@ -165,9 +166,10 @@ class BulkSimilarityDialog(QDialog):
                     top_k_pairs=k,
                     signals=sig,
                     cancel_event=ev,
-                    progress_state=st,
+                    progress_state=ps,
                 )
             ),
+            queue_label=f"Bulk similarity ({len(rows)} rows)",
         )
 
     def _on_finished(self, res) -> None:

@@ -109,21 +109,20 @@ class PKaPredictorDialog(QDialog):
         include_pi = bool(self.include_pi_cb.isChecked())
         pka_signals = self.parent_app._ensure_pka_predictor_signals()
         n = len(rows)
-        prog = self.parent_app._tool_progress_state
         enqueue_process_queue_job(
             self.parent_app,
             "pKa prediction",
             n,
-            lambda ev, r=rows, ws=self.parent_app.signals, ps=pka_signals, mb=most_basic, ma=most_acidic, ip=include_pi, st=prog: (
+            lambda ev, ps, r=rows, ws=self.parent_app.signals, sig=pka_signals, mb=most_basic, ma=most_acidic, ip=include_pi: (
                 PKaPredictorWorker(
                     r,
                     ws,
-                    ps,
+                    sig,
                     cancel_event=ev,
                     most_basic_only=mb,
                     most_acidic_only=ma,
                     include_pi=ip,
-                    progress_state=st,
+                    progress_state=ps,
                 )
             ),
             queue_label=f"pKa prediction ({n} molecules)",

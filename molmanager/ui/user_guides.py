@@ -78,9 +78,15 @@ GUIDE_SECTIONS: tuple[GuideSection, ...] = (
             ),
             _e(
                 "processes",
-                "Processes",
-                "Processes",
-                "Running and queued background jobs; cancel and clear.",
+                "Log",
+                "Log",
+                "Running and queued background jobs, plus the session log.",
+            ),
+            _e(
+                "log",
+                "Log (transcript)",
+                "Log",
+                "Session-wide tool output, status history, and application logging in Log.",
             ),
             _e(
                 "settings",

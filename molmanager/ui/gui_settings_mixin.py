@@ -380,7 +380,7 @@ class GuiSettingsMixin:
             label.setFont(font)
 
     def _sync_menubar_chrome_font(self) -> None:
-        """Keep the menubar, Layout, and Processes on the application font."""
+        """Keep the menubar, Layout, and Log on the application font."""
         has_chrome = any(
             getattr(self, name, None) is not None
             for name in ("_btn_workspace_layout", "_btn_processes")

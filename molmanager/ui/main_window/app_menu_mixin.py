@@ -62,9 +62,10 @@ class AppMenuMixin:
         corner_ly.addWidget(btn_layout)
 
         btn_proc = QToolButton(corner)
-        btn_proc.setText("Processes")
+        btn_proc.setText("Log")
         btn_proc.setToolTip(
-            "View queued background jobs (conformers, descriptors, import, export, …)."
+            "View running and queued jobs, and the session log "
+            "(tool output, status history, warnings)."
         )
         btn_proc.setToolButtonStyle(Qt.ToolButtonTextOnly)
         btn_proc.setAutoRaise(True)
@@ -82,7 +83,10 @@ class AppMenuMixin:
         self._sync_status_chrome_for_workspace()
 
     def _sync_main_toolbar_for_table_ready(self) -> None:
-        """Disable menubar, Layout, and Processes while ``_ingest_loading``."""
+        """Disable menubar and Layout while ``_ingest_loading``.
+
+        Log stays enabled so a long load can still be inspected.
+        """
         if getattr(self, "_dock_results_mode", False):
             return
         enabled = not bool(getattr(self, "_ingest_loading", False))
@@ -102,12 +106,9 @@ class AppMenuMixin:
                 action.setEnabled(False)
             else:
                 action.setEnabled(enabled)
-        for btn in (
-            getattr(self, "_btn_workspace_layout", None),
-            getattr(self, "_btn_processes", None),
-        ):
-            if btn is not None:
-                btn.setEnabled(enabled)
+        btn = getattr(self, "_btn_workspace_layout", None)
+        if btn is not None:
+            btn.setEnabled(enabled)
 
     def open_protein_viewer(self):
         """Open the Protein Viewer window (3Dmol.js + chain Manager)."""

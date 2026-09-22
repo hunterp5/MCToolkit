@@ -26,6 +26,7 @@ from PyQt5.QtWidgets import QMessageBox
 from rdkit import Chem
 
 from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
+from ..analysis_job_support import enqueue_process_queue_job
 
 logger = logging.getLogger(__name__)
 
@@ -92,21 +93,22 @@ class ProtonateToolsMixin:
 
         sig = self._ensure_protonate_signals()
         n = len(data)
-        prog = self._tool_progress_state
-        self._begin_tool_progress("Protonate", n)
         from ...workers.protonate_worker import ProtonateWorker
 
-        self.process_queue.enqueue(
-            f"Protonate ({n} molecules)",
-            lambda ev, r=data, ph=ph, s=sig, st=prog, ws=self.signals: ProtonateWorker(
+        enqueue_process_queue_job(
+            self,
+            "Protonate",
+            n,
+            lambda ev, ps, r=data, ph=ph, s=sig, ws=self.signals: ProtonateWorker(
                 r,
                 ph,
                 signals=s,
                 cancel_event=ev,
-                progress_state=st,
+                progress_state=ps,
                 worker_signals=ws,
                 progress_message="Protonate",
             ),
+            queue_label=f"Protonate ({n} molecules)",
         )
 
     def _on_protonate_finished(self, rows: list) -> None:

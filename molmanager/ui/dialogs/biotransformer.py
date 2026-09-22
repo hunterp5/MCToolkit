@@ -271,13 +271,12 @@ class BiotransformerDialog(QDialog):
         )
         bt_signals = self.parent_app._ensure_biotransformer_signals()
         n = len(rows)
-        prog = self.parent_app._tool_progress_state
         enqueue_process_queue_job(
             self.parent_app,
             TOOL_PREDICT_METABOLITES,
             n,
-            lambda ev, r=req, ws=self.parent_app.signals, ps=bt_signals, st=prog: (
-                BiotransformerWorker(r, ws, ps, cancel_event=ev, progress_state=st)
+            lambda ev, ps, r=req, ws=self.parent_app.signals, sig=bt_signals: (
+                BiotransformerWorker(r, ws, sig, cancel_event=ev, progress_state=ps)
             ),
             queue_label=f"{TOOL_PREDICT_METABOLITES} ({n} molecules)",
         )

@@ -138,13 +138,12 @@ class SomPredictorDialog(QDialog):
         )
         som_signals = self.parent_app._ensure_som_predictor_signals()
         n = len(rows)
-        prog = self.parent_app._tool_progress_state
         enqueue_process_queue_job(
             self.parent_app,
             "Predict SOM",
             n,
-            lambda ev, r=req, ws=self.parent_app.signals, ps=som_signals, st=prog: (
-                SomPredictorWorker(r, ws, ps, cancel_event=ev, progress_state=st)
+            lambda ev, ps, r=req, ws=self.parent_app.signals, sig=som_signals: (
+                SomPredictorWorker(r, ws, sig, cancel_event=ev, progress_state=ps)
             ),
             queue_label=f"Predict SOM ({n} molecules)",
         )

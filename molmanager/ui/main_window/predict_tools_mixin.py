@@ -152,14 +152,13 @@ class PredictToolsMixin:
             return
         perm_signals = self._ensure_permeability_predictor_signals()
         n = len(rows_smi)
-        prog = self._tool_progress_state
         enqueue_process_queue_job(
             self,
             "Predict Permeability",
             n,
-            lambda ev, r=rows_smi, ws=self.signals, ps=perm_signals, c=output_columns, st=prog: (
+            lambda ev, ps, r=rows_smi, ws=self.signals, sig=perm_signals, c=output_columns: (
                 PermeabilityPredictorWorker(
-                    r, ws, ps, cancel_event=ev, output_columns=c, progress_state=st
+                    r, ws, sig, cancel_event=ev, output_columns=c, progress_state=ps
                 )
             ),
             queue_label=f"Predict Permeability ({n} rows)",

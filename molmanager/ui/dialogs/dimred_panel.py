@@ -732,7 +732,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         n = len(oids)
         begin = getattr(self.parent_app, "_begin_tool_progress", None)
         if callable(begin):
-            begin(self._window_title, n)
+            begin(self._window_title, n, job_id=self._bg_job_id)
         else:
             self.parent_app.status_label.setText(
                 f"{self._window_title}: computing in background ({n:,} row(s))…"
@@ -741,13 +741,18 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         self.parent_app.threadpool.start(worker)
 
     def _reset_dimred_job_ui(self) -> None:
+        job_id = getattr(self, "_bg_job_id", None)
         self._clear_dimred_background_job()
         self._job_running = False
         self.run_btn.setEnabled(True)
         if self.parent_app is not None:
             finish = getattr(self.parent_app, "_finish_tool_progress", None)
             if callable(finish):
-                finish(self._window_title, status_message=f"{self._window_title}: ready.")
+                finish(
+                    self._window_title,
+                    status_message=f"{self._window_title}: ready.",
+                    job_id=job_id,
+                )
             else:
                 self.parent_app.status_label.setText(f"{self._window_title}: ready.")
         if not self._plot_window_is_visible():
@@ -762,6 +767,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
         self._bg_job_id = None
 
     def _on_finished(self, result) -> None:
+        job_id = getattr(self, "_bg_job_id", None)
         self._clear_dimred_background_job()
         self._job_running = False
         self.run_btn.setEnabled(True)
@@ -772,7 +778,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
                 finish = getattr(self.parent_app, "_finish_tool_progress", None)
                 msg = f"{self._window_title}: done."
                 if callable(finish):
-                    finish(self._window_title, status_message=msg)
+                    finish(self._window_title, status_message=msg, job_id=job_id)
                 else:
                     self.parent_app.status_label.setText(msg)
             self.reveal_plot_window()
@@ -789,11 +795,12 @@ class DimensionReductionPanel(DockableResultPlotPanel):
             )
             finish = getattr(self.parent_app, "_finish_tool_progress", None)
             if callable(finish):
-                finish(self._window_title, status_message=msg)
+                finish(self._window_title, status_message=msg, job_id=job_id)
             else:
                 self.parent_app.status_label.setText(msg)
 
     def _on_failed(self, message: str) -> None:
+        job_id = getattr(self, "_bg_job_id", None)
         self._clear_dimred_background_job()
         self._job_running = False
         self.run_btn.setEnabled(True)
@@ -803,7 +810,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
                 msg = f"{self._window_title}: cancelled."
                 finish = getattr(self.parent_app, "_finish_tool_progress", None)
                 if callable(finish):
-                    finish(self._window_title, status_message=msg)
+                    finish(self._window_title, status_message=msg, job_id=job_id)
                 else:
                     self.parent_app.status_label.setText(msg)
             if not self._plot_window_is_visible():
@@ -814,7 +821,7 @@ class DimensionReductionPanel(DockableResultPlotPanel):
             msg = f"{self._window_title}: failed."
             finish = getattr(self.parent_app, "_finish_tool_progress", None)
             if callable(finish):
-                finish(self._window_title, status_message=msg)
+                finish(self._window_title, status_message=msg, job_id=job_id)
             else:
                 self.parent_app.status_label.setText(msg)
         if not self._plot_window_is_visible():

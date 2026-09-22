@@ -267,7 +267,7 @@ MAIN_WINDOW_MENUS: tuple[MenuItem, ...] = (
                 hotkey="tools.render_2d",
                 tooltip=(
                     "Regenerate 2D structure drawings for selected rows as a background "
-                    "batch (see Processes)."
+                    "batch (see Log)."
                 ),
             ),
             tooltips_visible=True,

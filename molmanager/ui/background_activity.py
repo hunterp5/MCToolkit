@@ -24,10 +24,13 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 from ..platform_support.tool_progress import format_tool_progress_text
 
+RENDER2D_PROCESS_JOB_ID = "(render-2d)"
+GNINA_PROCESS_JOB_ID = "(gnina)"
+
 
 class BackgroundActivityHub(QObject):
     """
-    Single ``changed`` signal for anything that should refresh the Processes dialog
+    Single ``changed`` signal for anything that should refresh the Log window
     or other observers. Relays ``ProcessQueueManager.snapshot_changed`` and accepts
     explicit ``notify_changed()`` for activity outside the queue (e.g. Render 2D, Gnina).
     """
@@ -85,7 +88,7 @@ class BackgroundActivityHub(QObject):
     def processes_view_rows(
         self,
     ) -> tuple[list[tuple[str, str, str]], list[dict[str, Any]]]:
-        """Table rows for Processes: ``(status, job_id, title)`` and matching row metadata dicts."""
+        """Table rows for Log: ``(status, job_id, title)`` and matching row metadata dicts."""
         pq = getattr(self._app, "process_queue", None)
         if pq is None:
             return [], []
@@ -130,12 +133,12 @@ class BackgroundActivityHub(QObject):
             )
 
         if self.render2d_batch_active() and not self._render2d_on_process_queue(snap):
-            rows.insert(0, ("Running", "(render-2d)", "Render 2D — drawing structures…"))
-            metas.insert(0, {"kind": "render2d"})
+            rows.append(("Running", RENDER2D_PROCESS_JOB_ID, "Render 2D — drawing structures…"))
+            metas.append({"kind": "render2d", "job_id": RENDER2D_PROCESS_JOB_ID})
 
         if self.gnina_dock_active():
-            rows.insert(0, ("Running", "(gnina)", "Dock — Gnina"))
-            metas.insert(0, {"kind": "gnina"})
+            rows.append(("Running", GNINA_PROCESS_JOB_ID, "Dock — Gnina"))
+            metas.append({"kind": "gnina", "job_id": GNINA_PROCESS_JOB_ID})
 
         for job_id, title in sorted((getattr(self._app, "_background_jobs", None) or {}).items()):
             from .background_jobs import background_job_is_cancellable
@@ -149,35 +152,63 @@ class BackgroundActivityHub(QObject):
                 }
             )
 
-        progress = self.current_tool_progress_text()
-        if progress:
-            prefer = next(
-                (i for i, meta in enumerate(metas) if meta.get("kind") == "pq_running"),
-                None,
-            )
-            assigned = False
-            for i, meta in enumerate(metas):
-                kind = meta.get("kind")
-                if kind == "pq_queued":
-                    meta["progress"] = ""
-                    continue
-                if prefer is not None:
-                    meta["progress"] = progress if i == prefer else ""
-                    continue
-                if not assigned:
-                    meta["progress"] = progress
-                    assigned = True
-                else:
-                    meta["progress"] = ""
-        else:
-            for meta in metas:
+        progress_by_id, default_text = self._active_progress_texts()
+        named_slots = bool(progress_by_id)
+        assigned_default = False
+        prefer_running = next(
+            (i for i, meta in enumerate(metas) if meta.get("kind") == "pq_running"),
+            None,
+        )
+        for i, meta in enumerate(metas):
+            kind = meta.get("kind")
+            if kind == "pq_queued":
                 meta["progress"] = ""
+                continue
+            job_id = self._row_progress_job_id(meta)
+            text = progress_by_id.get(job_id, "")
+            if (
+                not text
+                and default_text
+                and not named_slots
+                and not assigned_default
+                and (prefer_running is None or i == prefer_running)
+            ):
+                text = default_text
+                assigned_default = True
+            meta["progress"] = text
 
         return rows, metas
 
+    @staticmethod
+    def _row_progress_job_id(meta: dict[str, Any]) -> str:
+        kind = meta.get("kind")
+        if kind == "render2d":
+            return str(meta.get("job_id") or RENDER2D_PROCESS_JOB_ID)
+        if kind in {"gnina", "smina"}:
+            return str(meta.get("job_id") or GNINA_PROCESS_JOB_ID)
+        return str(meta.get("job_id") or "")
+
+    def _active_progress_texts(self) -> tuple[dict[str, str], str]:
+        """Named job progress texts plus the unnamed/default slot text."""
+        state = getattr(self._app, "_tool_progress_state", None)
+        snapshots = getattr(state, "snapshots", None) if state is not None else None
+        if callable(snapshots):
+            named: dict[str, str] = {}
+            default_text = ""
+            for job_id, (message, done, total, active) in snapshots().items():
+                if not active:
+                    continue
+                text = format_tool_progress_text(message, done, total)
+                if job_id:
+                    named[str(job_id)] = text
+                else:
+                    default_text = text
+            return named, default_text
+        return {}, self.current_tool_progress_text()
+
     def try_cancel_row(self, meta: dict | None) -> tuple[tuple[str, str] | None, str | None]:
         """
-        Attempt cancel/remove for a Processes table row.
+        Attempt cancel/remove for a Log table row.
 
         Returns ``(dialog_info, status_text)`` where ``dialog_info`` is ``(title, text)``
         for ``QMessageBox.information`` when the action could not proceed or needs a notice;

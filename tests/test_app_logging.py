@@ -56,6 +56,17 @@ def test_configure_app_logging_writes_file(monkeypatch, tmp_path: Path):
     text = path.read_text(encoding="utf-8")
     assert "hello-log" in text
 
+    from molmanager.platform_support.session_log import SessionLogHandler, session_log_buffer
+
+    session_log_buffer().clear()
+    logging.getLogger("molmanager.platform_support.app_logging.test").info("hello-session")
+    for h in root.handlers:
+        if hasattr(h, "flush"):
+            h.flush()
+    assert any(isinstance(h, SessionLogHandler) for h in root.handlers)
+    entries, _seq, _gen = session_log_buffer().snapshot()
+    assert any("hello-session" in e.message for e in entries)
+
 
 def test_configure_app_logging_can_disable_file(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("MOLMANAGER_LOG_DIR", str(tmp_path))

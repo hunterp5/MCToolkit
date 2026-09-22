@@ -35,6 +35,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from ..app_log_dialog import StatusLogLabel
+
 from ...platform_support.config import load_config
 from ...table.session_codec import SESSION_VERSION_CURRENT
 
@@ -651,7 +653,7 @@ class ChemistryWorkspaceWindow(
         status_row = QHBoxLayout()
         status_row.setContentsMargins(8, 6, 8, 6)
         status_row.setSpacing(8)
-        self.status_label = QLabel("Ready")
+        self.status_label = StatusLogLabel("Ready")
         self.status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._memory_status_label = QLabel("")
         self._memory_status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)

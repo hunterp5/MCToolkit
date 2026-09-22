@@ -41,6 +41,7 @@ from ...workers.diverse_subset_worker import (
     DiverseSubsetWorker,
 )
 from ..qt_widget_utils import make_window_minimizable
+from ..analysis_job_support import enqueue_process_queue_job
 from .scope import selection_scope_checked
 
 _OID_SCAN_PUMP_EVERY = 4096
@@ -330,9 +331,7 @@ class DiverseSubsetDialog(QDialog):
             "pending_column_name": self._pending_column_name,
             "select_subset": self.select_subset_cb.isChecked(),
         }
-        prog = app._tool_progress_state
         sig = app._ensure_diverse_subset_signals()
-        app._begin_tool_progress("Diverse subset", n_est)
         req = DiverseSubsetRequest(
             fp_choice=fp_choice,
             subset_size=k,
@@ -344,10 +343,13 @@ class DiverseSubsetDialog(QDialog):
             use_onbits_column=use_onbits_col,
             mode=mode,
         )
-        app.process_queue.enqueue(
-            f"Diverse subset ({n_est} rows, pick {k}, {mode})",
-            lambda ev, r=req, s=sig, st=prog: DiverseSubsetWorker(
-                r, s, cancel_event=ev, progress_state=st
+        enqueue_process_queue_job(
+            app,
+            "Diverse subset",
+            n_est,
+            lambda ev, ps, r=req, s=sig: DiverseSubsetWorker(
+                r, s, cancel_event=ev, progress_state=ps
             ),
+            queue_label=f"Diverse subset ({n_est} rows, pick {k}, {mode})",
         )
         self.close()

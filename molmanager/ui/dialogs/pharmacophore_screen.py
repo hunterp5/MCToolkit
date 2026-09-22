@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 from PyQt5.QtWidgets import (
@@ -48,6 +49,7 @@ from ...workers.pharmacophore_screen import PharmacophoreScreenWorker
 from ...workers.signals import PharmacophoreScreenSignals
 from ..chunked_table_write import ChunkedTableWriter
 from ..qt_widget_utils import make_window_minimizable
+from ..analysis_job_support import enqueue_fast_process_queue_job
 from .scope import selection_scope_checked
 
 
@@ -336,15 +338,15 @@ class PharmacophoreScreenDialog(QDialog):
         self._pending_columns = self._pending_unique_columns()
         self._select_hits = self.chk_select_hits.isChecked()
         self.run_btn.setEnabled(False)
-        prog = app._tool_progress_state
-        app._begin_tool_progress("Pharmacophore screen", max(1, len(targets)))
         query = pharma.to_dict()
         slack = float(self.spin_slack.value())
         db = getattr(self, "_ensemble_db", None)
         col = getattr(self, "_ensemble_column", None)
-        app.process_queue.enqueue_fast(
+        enqueue_fast_process_queue_job(
+            app,
             "Pharmacophore screen",
-            lambda ev, q=query, t=targets, s=slack, m=min_matched, sig=self._signals, st=prog, edb=db, ecol=col: (
+            max(1, len(targets)),
+            lambda ev, ps, q=query, t=targets, s=slack, m=min_matched, sig=self._signals, edb=db, ecol=col: (
                 PharmacophoreScreenWorker(
                     q,
                     t,
@@ -352,11 +354,12 @@ class PharmacophoreScreenDialog(QDialog):
                     slack=s,
                     min_matched=m,
                     cancel_event=ev,
-                    progress_state=st,
+                    progress_state=ps,
                     ensemble_db=edb,
                     ensemble_column=ecol,
                 )
             ),
+            queue_label="Pharmacophore screen",
         )
         self.close()
 
@@ -423,18 +426,25 @@ class PharmacophoreScreenDialog(QDialog):
         def on_done() -> None:
             app._sync_global_bounds_for_headers(names, refresh_filters=True)
             if chunked:
-                app._finish_tool_progress("Writing results", status_message=None)
+                app._finish_tool_progress(
+                    "Writing results", status_message=None, job_id=write_job_id
+                )
             self._finish_screen_results(n_hit, n_scope, hit_oids)
 
         if self._writer is not None:
             self._writer.cancel()
+        write_job_id = str(uuid.uuid4())[:8] if chunked else None
         self._writer = ChunkedTableWriter(
             table=app.table,
             total=n_rows,
             chunk=max(250, int(cfg.ingest_gui_chunk_size)) if chunked else max(1, n_rows),
             write_chunk=write_chunk,
             on_progress=(
-                (lambda done, total: app._on_tool_progress("Writing results…", done, total))
+                (
+                    lambda done, total, jid=write_job_id: app._tool_progress_state.update(
+                        "Writing results…", done, total, job_id=jid
+                    )
+                )
                 if chunked
                 else None
             ),
@@ -442,7 +452,7 @@ class PharmacophoreScreenDialog(QDialog):
             should_continue=lambda: self.parent_app is not None,
         )
         if chunked:
-            app._begin_tool_progress("Writing results", n_rows)
+            app._begin_tool_progress("Writing results", n_rows, job_id=write_job_id)
             self._writer.start()
         else:
             self._writer.run_now()

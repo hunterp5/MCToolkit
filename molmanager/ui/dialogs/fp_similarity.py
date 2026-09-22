@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -39,6 +41,7 @@ from ...workers import (
 from ..strings import COLUMN_TANIMOTO_SIMILARITY
 from ..chunked_table_write import ChunkedTableWriter
 from ..qt_widget_utils import make_window_minimizable
+from ..analysis_job_support import enqueue_fast_process_queue_job
 from .scope import selection_scope_checked
 
 _DEFAULT_METRIC = "Tanimoto"
@@ -220,11 +223,11 @@ class FPSimilarityDialog(QDialog):
 
         self.compute_btn.setEnabled(False)
         n_targets = len(targets)
-        prog = self.parent_app._tool_progress_state
-        self.parent_app._begin_tool_progress("Fingerprint similarity", max(1, n_targets + 1))
-        self.parent_app.process_queue.enqueue_fast(
+        enqueue_fast_process_queue_job(
+            self.parent_app,
             "Fingerprint similarity",
-            lambda ev, q=qmol, t=targets, c=fp_choice, m=metric, sig=self._fp_sim_signals, st=prog: (
+            max(1, n_targets + 1),
+            lambda ev, ps, q=qmol, t=targets, c=fp_choice, m=metric, sig=self._fp_sim_signals: (
                 FPSimilarityWorker(
                     q,
                     t,
@@ -232,9 +235,10 @@ class FPSimilarityDialog(QDialog):
                     sig,
                     metric=m,
                     cancel_event=ev,
-                    progress_state=st,
+                    progress_state=ps,
                 )
             ),
+            queue_label="Fingerprint similarity",
         )
 
     def _write_similarity_column(self, rows) -> None:
@@ -266,20 +270,27 @@ class FPSimilarityDialog(QDialog):
         def on_done() -> None:
             app._sync_global_bounds_for_headers([name], refresh_filters=True)
             if chunked:
-                app._finish_tool_progress("Writing results", status_message=None)
+                app._finish_tool_progress(
+                    "Writing results", status_message=None, job_id=write_job_id
+                )
             app.status_label.setText(
                 f"Added '{name}' with {n_scored} score(s); {n_na} N/A in scope"
             )
 
         if self._writer is not None:
             self._writer.cancel()
+        write_job_id = str(uuid.uuid4())[:8] if chunked else None
         self._writer = ChunkedTableWriter(
             table=app.table,
             total=n_rows,
             chunk=max(250, int(cfg.ingest_gui_chunk_size)) if chunked else max(1, n_rows),
             write_chunk=write_chunk,
             on_progress=(
-                (lambda done, total: app._on_tool_progress("Writing results…", done, total))
+                (
+                    lambda done, total, jid=write_job_id: app._tool_progress_state.update(
+                        "Writing results…", done, total, job_id=jid
+                    )
+                )
                 if chunked
                 else None
             ),
@@ -287,7 +298,7 @@ class FPSimilarityDialog(QDialog):
             should_continue=lambda: self.parent_app is not None,
         )
         if chunked:
-            app._begin_tool_progress("Writing results", n_rows)
+            app._begin_tool_progress("Writing results", n_rows, job_id=write_job_id)
             self._writer.start()
         else:
             self._writer.run_now()

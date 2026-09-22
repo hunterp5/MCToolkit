@@ -38,6 +38,7 @@ from ...workers import (
     FragmentRecompositionWorker,
     RGroupDecompositionWorker,
 )
+from ..analysis_job_support import enqueue_process_queue_job
 
 logger = logging.getLogger(__name__)
 
@@ -76,11 +77,11 @@ class FragmentToolsMixin:
             )
             self.status_label.setText("Ready.")
             return
-        ps = self._tool_progress_state
-        self._begin_tool_progress("Core-based decomposition", len(data))
-        self.process_queue.enqueue(
-            f"Core-based decomposition ({len(data)} rows)",
-            lambda ev, dt=data, pp=p, sigs=self.signals, prog=ps: RGroupDecompositionWorker(
+        enqueue_process_queue_job(
+            self,
+            "Core-based decomposition",
+            len(data),
+            lambda ev, ps, dt=data, pp=p, sigs=self.signals: RGroupDecompositionWorker(
                 dt,
                 pp.core_query,
                 pp.column_prefix,
@@ -89,8 +90,9 @@ class FragmentToolsMixin:
                 pp.matching,
                 sigs,
                 cancel_event=ev,
-                progress_state=prog,
+                progress_state=ps,
             ),
+            queue_label=f"Core-based decomposition ({len(data)} rows)",
         )
 
     def on_rgroup_decomp_finished(self, res, col_headers: list) -> None:
@@ -163,11 +165,11 @@ class FragmentToolsMixin:
         prefix = p.column_prefix or ("BRICS" if p.method == "brics" else "RECAP")
         method = "brics" if p.method == "brics" else "recap"
         self._fragment_decomp_render_2d_after = bool(getattr(p, "render_2d", False))
-        ps = self._tool_progress_state
-        self._begin_tool_progress(p.tool_title, len(data))
-        self.process_queue.enqueue(
-            f"{p.tool_title} ({len(data)} rows)",
-            lambda ev, dt=data, m=method, pref=prefix, title=p.tool_title, sigs=self.signals, prog=ps: (
+        enqueue_process_queue_job(
+            self,
+            p.tool_title,
+            len(data),
+            lambda ev, ps, dt=data, m=method, pref=prefix, title=p.tool_title, sigs=self.signals: (
                 FragmentDecompositionWorker(
                     dt,
                     m,
@@ -175,9 +177,10 @@ class FragmentToolsMixin:
                     title,
                     sigs,
                     cancel_event=ev,
-                    progress_state=prog,
+                    progress_state=ps,
                 )
             ),
+            queue_label=f"{p.tool_title} ({len(data)} rows)",
         )
 
     def on_fragment_decomp_finished(self, res, col_headers: list, tool_title: str) -> None:
@@ -317,11 +320,11 @@ class FragmentToolsMixin:
             self.status_label.setText("Ready.")
             return
         method = "brics" if p.method == "brics" else "recap"
-        ps = self._tool_progress_state
-        self._begin_tool_progress(p.tool_title, p.max_products)
-        self.process_queue.enqueue(
-            f"{p.tool_title} ({len(fragments)} fragments)",
-            lambda ev, fr=fragments, pp=p, m=method, sigs=self.signals, prog=ps: (
+        enqueue_process_queue_job(
+            self,
+            p.tool_title,
+            p.max_products,
+            lambda ev, ps, fr=fragments, pp=p, m=method, sigs=self.signals: (
                 FragmentRecompositionWorker(
                     fr,
                     m,
@@ -331,9 +334,10 @@ class FragmentToolsMixin:
                     sigs,
                     output_filters=pp.output_filters,
                     cancel_event=ev,
-                    progress_state=prog,
+                    progress_state=ps,
                 )
             ),
+            queue_label=f"{p.tool_title} ({len(fragments)} fragments)",
         )
 
     def on_fragment_recomp_finished(

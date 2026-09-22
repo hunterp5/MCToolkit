@@ -102,8 +102,8 @@ def test_processes_view_keeps_tool_progress_on_serial_job_when_render2d_overlays
     qapp,
 ) -> None:  # noqa: ARG001
     state = ToolProgressState()
-    state.begin("CONFORGE conformations", 10)
-    state.update("CONFORGE conformations", 3, 10)
+    state.begin("CONFORGE conformations", 10, job_id="cfg01")
+    state.update("CONFORGE conformations", 3, 10, job_id="cfg01")
     app = SimpleNamespace(
         process_queue=_FakeProcessQueue(
             {
@@ -123,12 +123,47 @@ def test_processes_view_keeps_tool_progress_on_serial_job_when_render2d_overlays
     )
     hub = BackgroundActivityHub(app, qapp)
     rows, metas = hub.processes_view_rows()
-    assert rows[0][1] == "(render-2d)"
-    assert metas[0]["kind"] == "render2d"
-    assert metas[0]["progress"] == ""
-    assert metas[1]["kind"] == "pq_running"
-    assert "CONFORGE" in metas[1]["progress"]
-    assert "3/10" in metas[1]["progress"]
+    assert metas[0]["kind"] == "pq_running"
+    assert "CONFORGE" in metas[0]["progress"]
+    assert "3/10" in metas[0]["progress"]
+    assert rows[-1][1] == "(render-2d)"
+    assert metas[-1]["kind"] == "render2d"
+    assert metas[-1]["progress"] == ""
+
+
+def test_processes_view_keeps_serial_progress_when_background_job_reports(
+    qapp,
+) -> None:  # noqa: ARG001
+    state = ToolProgressState()
+    state.begin("Calculate descriptors", 500, job_id="desc01")
+    state.update("Calculate descriptors", 120, 500, job_id="desc01")
+    state.begin("Applying filters", 200, job_id="filter-1")
+    state.update("Applying filters…", 40, 200, job_id="filter-1")
+    app = SimpleNamespace(
+        process_queue=_FakeProcessQueue(
+            {
+                "running": {
+                    "job_id": "desc01",
+                    "title": "Calculate descriptors",
+                    "status": "Running",
+                    "cancellable": True,
+                },
+                "queued": [],
+                "fast_running": [],
+            }
+        ),
+        render2d_batch_active=lambda: False,
+        _background_jobs={"filter-1": "Applying filters (200 rows)"},
+        _tool_progress_state=state,
+    )
+    hub = BackgroundActivityHub(app, qapp)
+    _rows, metas = hub.processes_view_rows()
+    by_kind = {m["kind"]: m for m in metas}
+    assert "120/500" in by_kind["pq_running"]["progress"]
+    assert "Calculate descriptors" in by_kind["pq_running"]["progress"]
+    assert "40/200" in by_kind["background"]["progress"]
+    assert "Applying filters" in by_kind["background"]["progress"]
+    assert "Applying filters" not in by_kind["pq_running"]["progress"]
 
 
 def test_try_cancel_pq_running_render2d_uses_batch_cancel(qapp) -> None:  # noqa: ARG001

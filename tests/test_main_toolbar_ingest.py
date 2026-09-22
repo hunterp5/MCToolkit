@@ -36,7 +36,8 @@ def test_main_toolbar_disabled_while_ingest_loading(qapp):  # noqa: ARG001
     w._set_ingest_loading(True)
     assert not file_menu.isEnabled()
     assert not w._btn_workspace_layout.isEnabled()
-    assert not w._btn_processes.isEnabled()
+    assert w._btn_processes.isEnabled()
+    assert w._btn_processes.text() == "Log"
     assert not w._help_menu.isEnabled()
     assert not w._act_user_guide.isEnabled()
     assert not w._act_citations.isEnabled()

@@ -18,9 +18,73 @@
 
 from __future__ import annotations
 
+import contextvars
 import threading
 import time
-from typing import Any
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Any, Iterator
+
+# Empty key: legacy / status-bar slot used when a caller does not name a job.
+_DEFAULT_JOB_ID = ""
+_progress_job_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "molmanager_tool_progress_job_id",
+    default=None,
+)
+
+
+@contextmanager
+def tool_progress_job(job_id: str) -> Iterator[None]:
+    """Bind ``ToolProgressState`` updates on this thread to *job_id*."""
+    token = _progress_job_id.set(str(job_id))
+    try:
+        yield
+    finally:
+        _progress_job_id.reset(token)
+
+
+def current_tool_progress_job_id() -> str | None:
+    """Job id bound to this thread, if any."""
+    bound = _progress_job_id.get()
+    return str(bound) if bound else None
+
+
+@dataclass
+class _ProgressSlot:
+    message: str = ""
+    done: int = 0
+    total: int = 1
+    active: bool = False
+    updated_at: float = 0.0
+
+
+class BoundToolProgress:
+    """Worker-facing view of one named slot on a shared ``ToolProgressState``."""
+
+    def __init__(self, state: ToolProgressState, job_id: str) -> None:
+        self._state = state
+        self._job_id = str(job_id)
+
+    def begin(self, message: str, total: int) -> str:
+        return self._state.begin(message, total, job_id=self._job_id)
+
+    def update(
+        self,
+        message: str,
+        done: int,
+        total: int | None = None,
+        job_id: str | None = None,
+    ) -> None:
+        self._state.update(message, done, total, job_id=job_id or self._job_id)
+
+    def end(self, job_id: str | None = None) -> None:
+        self._state.end(job_id=job_id or self._job_id)
+
+    def snapshot(self, job_id: str | None = None) -> tuple[str, int, int, bool]:
+        return self._state.snapshot(job_id=job_id or self._job_id)
+
+    def bind(self, job_id: str) -> BoundToolProgress:
+        return self._state.bind(job_id)
 
 
 class ToolProgressState:
@@ -28,42 +92,114 @@ class ToolProgressState:
     Updated from worker threads; read from a QTimer on the main window.
 
     Avoids relying on ``pyqtSignal`` delivery while the GIL is held by descriptor work.
+    Concurrent jobs write named slots so Log can show each row's own text.
     """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._message = ""
-        self._done = 0
-        self._total = 1
-        self._active = False
+        self._slots: dict[str, _ProgressSlot] = {}
 
-    def begin(self, message: str, total: int) -> None:
-        with self._lock:
-            self._message = str(message or "")
-            self._done = 0
-            self._total = max(1, int(total))
-            self._active = True
+    def bind(self, job_id: str) -> BoundToolProgress:
+        """Return a proxy that always reads/writes *job_id*'s slot."""
+        return BoundToolProgress(self, job_id)
 
-    def update(self, message: str, done: int, total: int | None = None) -> None:
+    def _resolve_job_id(self, job_id: str | None) -> str:
+        if job_id:
+            return str(job_id)
+        scoped = _progress_job_id.get()
+        if scoped:
+            return str(scoped)
+        return _DEFAULT_JOB_ID
+
+    def begin(self, message: str, total: int, job_id: str | None = None) -> str:
+        key = self._resolve_job_id(job_id)
         with self._lock:
-            self._message = str(message or "")
-            self._done = max(0, int(done))
+            self._slots[key] = _ProgressSlot(
+                message=str(message or ""),
+                done=0,
+                total=max(1, int(total)),
+                active=True,
+                updated_at=time.monotonic(),
+            )
+        return key
+
+    def update(
+        self,
+        message: str,
+        done: int,
+        total: int | None = None,
+        job_id: str | None = None,
+    ) -> None:
+        key = self._resolve_job_id(job_id)
+        with self._lock:
+            slot = self._slots.get(key)
+            if slot is None:
+                slot = _ProgressSlot(active=True)
+                self._slots[key] = slot
+            slot.message = str(message or "")
+            slot.done = max(0, int(done))
             if total is not None:
                 tot = int(total)
                 # Negative total is indeterminate (status text only, no 0%).
-                self._total = tot if tot < 0 else max(1, tot)
+                slot.total = tot if tot < 0 else max(1, tot)
+            slot.active = True
+            slot.updated_at = time.monotonic()
 
-    def end(self) -> None:
+    def end(self, job_id: str | None = None) -> None:
+        key = self._resolve_job_id(job_id)
         with self._lock:
-            self._active = False
+            slot = self._slots.get(key)
+            if slot is not None:
+                slot.active = False
 
-    def snapshot(self) -> tuple[str, int, int, bool]:
+    def snapshot(self, job_id: str | None = None) -> tuple[str, int, int, bool]:
         with self._lock:
-            return (self._message, self._done, self._total, self._active)
+            if job_id is not None:
+                slot = self._slots.get(str(job_id))
+                return self._tuple(slot)
+            scoped = _progress_job_id.get()
+            if scoped:
+                slot = self._slots.get(str(scoped))
+                if slot is not None:
+                    return self._tuple(slot)
+            default = self._slots.get(_DEFAULT_JOB_ID)
+            if default is not None and default.active:
+                return self._tuple(default)
+            latest: _ProgressSlot | None = None
+            latest_at = -1.0
+            for slot in self._slots.values():
+                if slot.active and slot.updated_at >= latest_at:
+                    latest = slot
+                    latest_at = slot.updated_at
+            return self._tuple(latest)
+
+    def preferred_snapshot(self, prefer_job_id: str | None = None) -> tuple[str, int, int, bool]:
+        """Snapshot for the status bar: named job if active, else ``snapshot()``."""
+        if prefer_job_id:
+            with self._lock:
+                slot = self._slots.get(str(prefer_job_id))
+                if slot is not None and slot.active:
+                    return self._tuple(slot)
+        return self.snapshot()
+
+    def snapshots(self) -> dict[str, tuple[str, int, int, bool]]:
+        """Active slots keyed by job id (empty string is the unnamed slot)."""
+        with self._lock:
+            return {jid: self._tuple(slot) for jid, slot in self._slots.items() if slot.active}
+
+    def any_active(self) -> bool:
+        with self._lock:
+            return any(slot.active for slot in self._slots.values())
+
+    @staticmethod
+    def _tuple(slot: _ProgressSlot | None) -> tuple[str, int, int, bool]:
+        if slot is None:
+            return ("", 0, 1, False)
+        return (slot.message, slot.done, slot.total, slot.active)
 
 
 def format_tool_progress_text(message: str, done: int, total: int) -> str:
-    """Status-bar / Processes text for a tool progress snapshot."""
+    """Status-bar / Log text for a tool progress snapshot."""
     if total < 0:
         return str(message or "")
     dv = min(max(int(done), 0), int(total))
@@ -80,10 +216,11 @@ def report_tool_progress(
     message: str,
     done: int,
     total: int,
-    progress_state: ToolProgressState | None = None,
+    progress_state: ToolProgressState | BoundToolProgress | None = None,
     signals: Any = None,
     throttle: list | None = None,
     force_signal: bool = False,
+    job_id: str | None = None,
 ) -> None:
     """
     Update polled status (``ToolProgressState``) and optionally emit ``tool_progress``.
@@ -95,7 +232,7 @@ def report_tool_progress(
     tot_in = int(total)
     if tot_in < 0:
         if progress_state is not None:
-            progress_state.update(msg, 0, -1)
+            progress_state.update(msg, 0, -1, job_id=job_id)
         if signals is None:
             return
         emit = True if force_signal or throttle is None else False
@@ -115,7 +252,7 @@ def report_tool_progress(
     tot = max(1, tot_in)
     d = min(max(int(done), 0), tot)
     if progress_state is not None:
-        progress_state.update(msg, d, tot)
+        progress_state.update(msg, d, tot, job_id=job_id)
     if signals is None:
         return
     emit = force_signal

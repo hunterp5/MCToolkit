@@ -25,6 +25,7 @@ from rdkit import Chem
 
 from ...chem.molecule_conversion import mol_to_canonical_smiles
 from ...workers import DisconnectFragmentsWorker
+from ..analysis_job_support import enqueue_process_queue_job
 
 
 class StructureEditMixin:
@@ -95,14 +96,16 @@ class StructureEditMixin:
                 self.status_label.setText("Ready.")
                 return
             title = f"{queue_title_prefix}disconnect largest fragments"
-            self._begin_tool_progress("Disconnect fragments", len(data))
-            self.process_queue.enqueue(
-                title,
-                lambda ev, d=data, s=self.signals, ps=self._tool_progress_state: (
+            enqueue_process_queue_job(
+                self,
+                "Disconnect fragments",
+                len(data),
+                lambda ev, ps, d=data, s=self.signals: (
                     DisconnectFragmentsWorker(
                         d, s, is_smiles=False, cancel_event=ev, progress_state=ps
                     )
                 ),
+                queue_label=title,
             )
         else:
             col = self.headers.index(src)
@@ -124,14 +127,16 @@ class StructureEditMixin:
                 self.status_label.setText("Ready.")
                 return
             title = f"{queue_title_prefix}disconnect largest fragments (column)"
-            self._begin_tool_progress("Disconnect fragments", len(data))
-            self.process_queue.enqueue(
-                title,
-                lambda ev, d=data, s=self.signals, ps=self._tool_progress_state: (
+            enqueue_process_queue_job(
+                self,
+                "Disconnect fragments",
+                len(data),
+                lambda ev, ps, d=data, s=self.signals: (
                     DisconnectFragmentsWorker(
                         d, s, is_smiles=True, cancel_event=ev, progress_state=ps
                     )
                 ),
+                queue_label=title,
             )
 
     def run_add_explicit_hydrogens(self) -> None:
@@ -187,14 +192,16 @@ class StructureEditMixin:
             )
             self.status_label.setText("Ready.")
             return
-        self._begin_tool_progress("Add explicit hydrogens", len(data))
-        self.process_queue.enqueue(
+        enqueue_process_queue_job(
+            self,
             "Add explicit hydrogens",
-            lambda ev, d=data, s=self.signals, ps=self._tool_progress_state: (
+            len(data),
+            lambda ev, ps, d=data, s=self.signals: (
                 AddExplicitHydrogensWorker(
                     d, s, is_smiles=False, cancel_event=ev, progress_state=ps
                 )
             ),
+            queue_label="Add explicit hydrogens",
         )
 
     def run_remove_explicit_hydrogens(self) -> None:
@@ -254,14 +261,16 @@ class StructureEditMixin:
             )
             self.status_label.setText("Ready.")
             return
-        self._begin_tool_progress("Remove explicit hydrogens", len(data))
-        self.process_queue.enqueue(
+        enqueue_process_queue_job(
+            self,
             "Remove explicit hydrogens",
-            lambda ev, d=data, s=self.signals, ps=self._tool_progress_state: (
+            len(data),
+            lambda ev, ps, d=data, s=self.signals: (
                 RemoveExplicitHydrogensWorker(
                     d, s, is_smiles=False, cancel_event=ev, progress_state=ps
                 )
             ),
+            queue_label="Remove explicit hydrogens",
         )
 
     def run_neutralize(self) -> None:
@@ -323,12 +332,14 @@ class StructureEditMixin:
             self.status_label.setText("Ready.")
             return
         title = f"{queue_title_prefix}neutralize".strip() or "Neutralize"
-        self._begin_tool_progress("Neutralize", len(data))
-        self.process_queue.enqueue(
-            title,
-            lambda ev, d=data, s=self.signals, ps=self._tool_progress_state: NeutralizeWorker(
+        enqueue_process_queue_job(
+            self,
+            "Neutralize",
+            len(data),
+            lambda ev, ps, d=data, s=self.signals: NeutralizeWorker(
                 d, s, is_smiles=False, cancel_event=ev, progress_state=ps
             ),
+            queue_label=title,
         )
 
     def on_disconnect_fragments_finished(self, results):

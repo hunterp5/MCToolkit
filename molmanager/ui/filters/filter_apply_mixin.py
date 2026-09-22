@@ -164,30 +164,33 @@ class FilterApplyMixin:
 
     def _cancel_async_filter_apply(self) -> None:
         """Processes Cancel: discard the in-flight SQLite/chunked filter job."""
+        job_id = getattr(self, "_filter_bg_job_id", None)
         self._invalidate_filter_jobs()
         finish = getattr(self, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Applying filters", status_message="Filter cancelled.")
+            finish("Applying filters", status_message="Filter cancelled.", job_id=job_id)
 
     def _on_filter_apply_finished(self, job_gen: int, matched) -> None:
+        job_id = getattr(self, "_filter_bg_job_id", None)
         self._unregister_filter_background_job(job_gen)
         if job_gen != getattr(self, "_filter_job_gen", 0):
             return
         finish = getattr(self, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Applying filters", status_message=None)
+            finish("Applying filters", status_message=None, job_id=job_id)
         sub = getattr(self, "_filter_pending_substructure", None)
         self._filter_pending_substructure = None
         oids = matched if isinstance(matched, frozenset) else frozenset()
         self._apply_filters_impl_sync(sub, sqlite_oids=oids)
 
     def _on_filter_apply_failed(self, job_gen: int, msg: str) -> None:
+        job_id = getattr(self, "_filter_bg_job_id", None)
         self._unregister_filter_background_job(job_gen)
         if job_gen != getattr(self, "_filter_job_gen", 0):
             return
         finish = getattr(self, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Applying filters", status_message=None)
+            finish("Applying filters", status_message=None, job_id=job_id)
         logger.warning("Filter apply job failed: %s", msg)
         pending = getattr(self, "_filter_pending_substructure", None)
         self._filter_pending_substructure = None
@@ -222,9 +225,12 @@ class FilterApplyMixin:
         )
         begin = getattr(self, "_begin_tool_progress", None)
         if callable(begin):
-            begin("Applying filters", n_rows)
+            begin("Applying filters", n_rows, job_id=job_id)
         worker_signals = getattr(self, "signals", None)
         progress_state = getattr(self, "_tool_progress_state", None)
+        bind = getattr(progress_state, "bind", None)
+        if callable(bind):
+            progress_state = bind(job_id)
         self.threadpool.start(
             FilterApplyWorker(
                 gen,
@@ -680,9 +686,12 @@ class FilterApplyMixin:
             )
             begin = getattr(self, "_begin_tool_progress", None)
             if callable(begin):
-                begin("Filtering substructure", n_rows)
+                begin("Filtering substructure", n_rows, job_id=job_id)
             worker_signals = getattr(self, "signals", None)
             progress_state = getattr(self, "_tool_progress_state", None)
+            bind = getattr(progress_state, "bind", None)
+            if callable(bind):
+                progress_state = bind(job_id)
             self.threadpool.start(
                 SubstructureFilterWorker(
                     gen,

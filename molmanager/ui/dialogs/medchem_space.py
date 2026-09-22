@@ -18,7 +18,9 @@
 
 from __future__ import annotations
 
+import threading
 import time
+import uuid
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
@@ -37,6 +39,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ..dockable_plot import handle_floating_plot_close_event, style_plot_footer_text_button
+from ..background_jobs import register_background_job
 from ...platform_support.config import load_config
 from ...plotting.plot_marker_color import color_values_are_numeric, normalize_size_column
 from ...chem.molecule_conversion import mol_to_canonical_smiles
@@ -642,7 +645,21 @@ class MedChemPlotPanel(DockableResultPlotPanel):
                 f"Computing descriptors for {len(snapshots):,} compound(s)…"
             )
             oid_smiles = self._oid_smiles_from_cache(snapshots)
-        self.parent_app._begin_tool_progress(self._window_title, len(snapshots))
+        self._bg_cancel_event = threading.Event()
+        self._bg_job_id = f"medchem-{id(self)}"
+        register_background_job(
+            self.parent_app,
+            self._bg_job_id,
+            self._window_title,
+            cancel=self._bg_cancel_event.set,
+        )
+        self.parent_app._begin_tool_progress(
+            self._window_title, len(snapshots), job_id=self._bg_job_id
+        )
+        progress_state = self.parent_app._tool_progress_state
+        bind = getattr(progress_state, "bind", None)
+        if callable(bind):
+            progress_state = bind(self._bg_job_id)
         params = {
             "snapshots": snapshots,
             "plot_kind": self._plot_kind,
@@ -653,21 +670,9 @@ class MedChemPlotPanel(DockableResultPlotPanel):
             "use_table_columns_only": use_table,
             "max_plot_points": medchem_plot_max_points(),
             "oid_smiles": oid_smiles,
-            "progress_state": self.parent_app._tool_progress_state,
+            "progress_state": progress_state,
             "progress_label": self._window_title,
         }
-        import threading
-
-        from ..background_jobs import register_background_job
-
-        self._bg_cancel_event = threading.Event()
-        self._bg_job_id = f"medchem-{id(self)}"
-        register_background_job(
-            self.parent_app,
-            self._bg_job_id,
-            self._window_title,
-            cancel=self._bg_cancel_event.set,
-        )
         worker = MedChemSpaceWorker(
             params,
             self._medchem_signals,
@@ -693,10 +698,11 @@ class MedChemPlotPanel(DockableResultPlotPanel):
         self._begin_snapshot_collect()
 
     def _on_build_finished(self, result: object) -> None:
+        job_id = getattr(self, "_bg_job_id", None)
         self._clear_medchem_background_job()
         self._set_refresh_ui_busy(False)
         if self.parent_app is not None:
-            self.parent_app._finish_tool_progress(self._window_title)
+            self.parent_app._finish_tool_progress(self._window_title, job_id=job_id)
         if not isinstance(result, MedChemSpaceBuildResult):
             return
         self._full_dataset = result.full
@@ -732,10 +738,11 @@ class MedChemPlotPanel(DockableResultPlotPanel):
             )
 
     def _on_build_failed(self, message: str) -> None:
+        job_id = getattr(self, "_bg_job_id", None)
         self._clear_medchem_background_job()
         self._set_refresh_ui_busy(False)
         if self.parent_app is not None:
-            self.parent_app._finish_tool_progress()
+            self.parent_app._finish_tool_progress(job_id=job_id)
         self.summary_text.setPlainText("")
         QMessageBox.warning(self, self._window_title, message or "Plot build failed.")
 
@@ -755,6 +762,7 @@ class MedChemPlotPanel(DockableResultPlotPanel):
         app._ensure_columns(columns)
         self._cancel_table_write_job()
         label = f"{self._window_title}: writing descriptors"
+        write_job_id = str(uuid.uuid4())[:8]
 
         def write_chunk(start: int, end: int, _is_last: bool) -> None:
             app._table_model.apply_columns_values_bulk(columns, updates[start:end])
@@ -762,15 +770,20 @@ class MedChemPlotPanel(DockableResultPlotPanel):
         def on_done() -> None:
             self._table_writer = None
             app._sync_global_bounds_for_headers(columns, refresh_filters=True)
-            app._finish_tool_progress(f"{self._window_title}: descriptors written")
+            app._finish_tool_progress(
+                f"{self._window_title}: descriptors written",
+                job_id=write_job_id,
+            )
 
-        app._begin_tool_progress(label, len(updates))
+        app._begin_tool_progress(label, len(updates), job_id=write_job_id)
         self._table_writer = ChunkedTableWriter(
             table=app.table,
             total=len(updates),
             chunk=max(500, load_config().table_selection_chunk_rows // 4),
             write_chunk=write_chunk,
-            on_progress=lambda done, total: app._tool_progress_state.update(label, done, total),
+            on_progress=lambda done, total: app._tool_progress_state.update(
+                label, done, total, job_id=write_job_id
+            ),
             on_done=on_done,
             should_continue=lambda: self.parent_app is not None,
         )

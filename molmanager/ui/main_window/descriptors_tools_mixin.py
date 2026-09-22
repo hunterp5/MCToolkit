@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ...workers.chemistry_descriptors import CalcDescriptorsRequest, CalcWorker
+from ..analysis_job_support import enqueue_process_queue_job
 
 
 class DescriptorsToolsMixin:
@@ -82,9 +83,6 @@ class DescriptorsToolsMixin:
             self.status_label.setText("Ready.")
             return
 
-        ps = self._tool_progress_state
-        self._begin_tool_progress("Calculate descriptors", len(data))
-
         req = CalcDescriptorsRequest(
             data=data,
             disp_headers=calc_headers,
@@ -95,17 +93,17 @@ class DescriptorsToolsMixin:
             ensemble_db=ensemble_db,
         )
 
-        def _make_calc_worker(ev, request=req):
-            return CalcWorker(
+        enqueue_process_queue_job(
+            self,
+            "Calculate descriptors",
+            len(data),
+            lambda ev, ps, request=req: CalcWorker(
                 request,
                 self.signals,
                 cancel_event=ev,
                 progress_state=ps,
-            )
-
-        self.process_queue.enqueue(
-            f"Calculate descriptors ({len(data)} rows)",
-            _make_calc_worker,
+            ),
+            queue_label=f"Calculate descriptors ({len(data)} rows)",
         )
 
     def _ensemble_inputs_for_descriptor_job(

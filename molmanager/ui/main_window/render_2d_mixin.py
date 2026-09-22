@@ -323,7 +323,7 @@ class Render2DMixin:
             QMessageBox.warning(
                 self,
                 TOOL_RENDER_2D,
-                "A 2D render is already running. Wait for it to finish or cancel it from Processes.",
+                "A 2D render is already running. Wait for it to finish or cancel it from Log.",
             )
             return
         candidates = self.chemistry_tool_structure_sources()
@@ -523,7 +523,7 @@ class Render2DMixin:
             QMessageBox.warning(
                 self,
                 TOOL_RENDER_2D,
-                "A 2D render is already running. Wait for it to finish or cancel it from Processes.",
+                "A 2D render is already running. Wait for it to finish or cancel it from Log.",
             )
             return
         if row < 0 or row >= self._table_model.rowCount():

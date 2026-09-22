@@ -26,6 +26,7 @@ from rdkit import Chem
 from ...platform_support.config import load_config
 from ...table.structure_depiction_layout import structure_depict_height, structure_depict_width
 from ...chem.molecule_conversion import mol_from_binary_blob
+from ..analysis_job_support import enqueue_process_queue_job
 
 
 class FastPrepareToolsMixin:
@@ -120,12 +121,14 @@ class FastPrepareToolsMixin:
             batch_size=int(cfg.fast_prepare_batch_size),
             process_pool_min_rows=int(cfg.fast_prepare_process_pool_min_rows),
         )
-        self._begin_tool_progress("Fast prepare", len(data))
-        self.process_queue.enqueue(
-            "Fast prepare: prepare structures",
-            lambda ev, d=data, p=params, s=self.signals, ps=self._tool_progress_state: (
+        enqueue_process_queue_job(
+            self,
+            "Fast prepare",
+            len(data),
+            lambda ev, ps, d=data, p=params, s=self.signals: (
                 FastPrepareWorker(d, p, s, cancel_event=ev, progress_state=ps)
             ),
+            queue_label="Fast prepare: prepare structures",
         )
 
     def on_fast_prepare_finished(self, results) -> None:

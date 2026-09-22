@@ -94,7 +94,7 @@ class SqliteRebuildMixin:
         register_background_job(self, job_id, f"Indexing table ({n_rows:,} rows)")
         begin = getattr(self, "_begin_tool_progress", None)
         if callable(begin):
-            begin("Indexing table", max(1, n_rows))
+            begin("Indexing table", max(1, n_rows), job_id=job_id)
         chunk = max(500, load_config().ingest_gui_chunk_size)
         writer = SqliteTableStore(db_path)
         writer.start_stream_rebuild(list(self.headers))
@@ -133,8 +133,9 @@ class SqliteRebuildMixin:
             writer.append_stream_rows(slice_rows)
         ctx["row_idx"] = end
         on_prog = getattr(self, "_on_tool_progress", None)
+        job_id = getattr(self, "_sqlite_rebuild_bg_job_id", None)
         if callable(on_prog):
-            on_prog("Indexing table…", end, max(1, n_rows))
+            on_prog("Indexing table…", end, max(1, n_rows), job_id=job_id)
         else:
             self.status_label.setText(f"Indexing table… ({end:,}/{n_rows:,} rows)")
         if end < n_rows:
@@ -155,6 +156,10 @@ class SqliteRebuildMixin:
             return
         self.status_label.setText(f"Indexing table… (writing {n_rows:,} rows)")
         prog = getattr(self, "_tool_progress_state", None)
+        job_id = getattr(self, "_sqlite_rebuild_bg_job_id", None)
+        bind = getattr(prog, "bind", None)
+        if callable(bind) and job_id:
+            prog = bind(job_id)
         pool.start(
             SqliteRebuildWorker(
                 gen,
@@ -176,12 +181,13 @@ class SqliteRebuildMixin:
             self._sqlite_rebuild_bg_job_id = None
 
     def _on_sqlite_rebuild_finished(self, job_gen: int, db_path: str) -> None:
+        job_id = getattr(self, "_sqlite_rebuild_bg_job_id", None)
         self._unregister_sqlite_rebuild_background_job(job_gen)
         if job_gen != getattr(self, "_sqlite_rebuild_gen", -1):
             return
         finish = getattr(self, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Indexing table", status_message=None)
+            finish("Indexing table", status_message=None, job_id=job_id)
         try:
             new_store = SqliteTableStore(db_path)
             old = getattr(self, "_sqlite_store", None)
@@ -210,12 +216,13 @@ class SqliteRebuildMixin:
             self.status_label.setText(loaded_session_status(n_rows))
 
     def _on_sqlite_rebuild_failed(self, job_gen: int, msg: str) -> None:
+        job_id = getattr(self, "_sqlite_rebuild_bg_job_id", None)
         self._unregister_sqlite_rebuild_background_job(job_gen)
         if job_gen != getattr(self, "_sqlite_rebuild_gen", -1):
             return
         finish = getattr(self, "_finish_tool_progress", None)
         if callable(finish):
-            finish("Indexing table", status_message=None)
+            finish("Indexing table", status_message=None, job_id=job_id)
         logger.warning("SQLite rebuild failed: %s", msg)
         self._sqlite_rebuild_in_progress = False
         self._sqlite_rebuild_pending_path = None
