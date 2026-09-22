@@ -643,20 +643,6 @@ class MedChemPlotPanel(DockableResultPlotPanel):
                 f"Computing descriptors for {len(snapshots):,} compound(s)…"
             )
             oid_smiles = self._oid_smiles_from_cache(snapshots)
-        self.parent_app._begin_tool_progress(self._window_title, len(snapshots))
-        params = {
-            "snapshots": snapshots,
-            "plot_kind": self._plot_kind,
-            "tpsa_col": tpsa_col,
-            "logp_col": logp_col,
-            "mw_col": mw_col,
-            "wlogp_col": wlogp_col,
-            "use_table_columns_only": use_table,
-            "max_plot_points": medchem_plot_max_points(),
-            "oid_smiles": oid_smiles,
-            "progress_state": self.parent_app._tool_progress_state,
-            "progress_label": self._window_title,
-        }
         import threading
 
         from ..background_jobs import register_background_job
@@ -669,6 +655,26 @@ class MedChemPlotPanel(DockableResultPlotPanel):
             self._window_title,
             cancel=self._bg_cancel_event.set,
         )
+        self.parent_app._begin_tool_progress(
+            self._window_title, len(snapshots), job_id=self._bg_job_id
+        )
+        progress_state = self.parent_app._tool_progress_state
+        bind = getattr(progress_state, "bind", None)
+        if callable(bind):
+            progress_state = bind(self._bg_job_id)
+        params = {
+            "snapshots": snapshots,
+            "plot_kind": self._plot_kind,
+            "tpsa_col": tpsa_col,
+            "logp_col": logp_col,
+            "mw_col": mw_col,
+            "wlogp_col": wlogp_col,
+            "use_table_columns_only": use_table,
+            "max_plot_points": medchem_plot_max_points(),
+            "oid_smiles": oid_smiles,
+            "progress_state": progress_state,
+            "progress_label": self._window_title,
+        }
         worker = MedChemSpaceWorker(
             params,
             self._medchem_signals,
@@ -694,10 +700,11 @@ class MedChemPlotPanel(DockableResultPlotPanel):
         self._begin_snapshot_collect()
 
     def _on_build_finished(self, result: object) -> None:
+        job_id = getattr(self, "_bg_job_id", None)
         self._clear_medchem_background_job()
         self._set_refresh_ui_busy(False)
         if self.parent_app is not None:
-            self.parent_app._finish_tool_progress(self._window_title)
+            self.parent_app._finish_tool_progress(self._window_title, job_id=job_id)
         if not isinstance(result, MedChemSpaceBuildResult):
             return
         self._full_dataset = result.full
@@ -733,10 +740,11 @@ class MedChemPlotPanel(DockableResultPlotPanel):
             )
 
     def _on_build_failed(self, message: str) -> None:
+        job_id = getattr(self, "_bg_job_id", None)
         self._clear_medchem_background_job()
         self._set_refresh_ui_busy(False)
         if self.parent_app is not None:
-            self.parent_app._finish_tool_progress()
+            self.parent_app._finish_tool_progress(job_id=job_id)
         self.summary_text.setPlainText("")
         QMessageBox.warning(self, self._window_title, message or "Plot build failed.")
 
