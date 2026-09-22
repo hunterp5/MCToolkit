@@ -42,7 +42,7 @@ def test_finish_analysis_pairs_empty_returns_none(monkeypatch):
         status_label=SimpleNamespace(setText=MagicMock()),
     )
     assert finish_analysis_pairs(app, "Tool", [], empty_message="none") is None
-    app._finish_tool_progress.assert_called_once_with("Tool")
+    app._finish_tool_progress.assert_called_once_with("Tool", job_id=None)
     assert infos and infos[0][2] == "none"
 
 
@@ -148,8 +148,13 @@ def test_enqueue_process_queue_job_returns_id():
         enqueue_process_queue_job(app, "Clustering", 3, factory, queue_label="Cluster (3)")
         == "job-1"
     )
-    app._begin_tool_progress.assert_called_once_with("Clustering", 3, job_id="job-1")
-    app.process_queue.enqueue.assert_called_once_with("Cluster (3)", factory)
+    app._begin_tool_progress.assert_called_once()
+    begin_args, begin_kwargs = app._begin_tool_progress.call_args
+    assert begin_args == ("Clustering", 3)
+    assert "job_id" in begin_kwargs
+    job_id = begin_kwargs["job_id"]
+    assert job_id
+    app.process_queue.enqueue.assert_called_once_with("Cluster (3)", factory, job_id=job_id)
 
 
 def test_report_cancellable_job_failure_cancelled(monkeypatch):
