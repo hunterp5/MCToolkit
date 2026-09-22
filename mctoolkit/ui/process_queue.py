@@ -258,6 +258,10 @@ class ProcessQueueManager(QObject):
     def _on_job_thread_finished(self, job_id: str) -> None:
         if self._current_job_id != job_id:
             return
+        state = getattr(self._app, "_tool_progress_state", None)
+        end = getattr(state, "end", None)
+        if callable(end):
+            end(job_id=job_id)
         self._busy = False
         self._current_job_id = None
         self._current_title = None
@@ -295,6 +299,10 @@ class ProcessQueueManager(QObject):
 
     @Slot(str)
     def _on_fast_job_thread_finished(self, job_id: str) -> None:
+        state = getattr(self._app, "_tool_progress_state", None)
+        end = getattr(state, "end", None)
+        if callable(end):
+            end(job_id=job_id)
         self._fast_running.pop(job_id, None)
         self.snapshot_changed.emit()
 
@@ -309,9 +317,12 @@ class _QueueJobRunner(QRunnable):
         self._inner = inner
 
     def run(self) -> None:
+        from ..platform_support.tool_progress import tool_progress_job
+
         QMetaObject.invokeMethod(self._manager, "_enter_app_background_ui", Qt.QueuedConnection)
         try:
-            self._inner.run()
+            with tool_progress_job(self._job_id):
+                self._inner.run()
         except Exception:
             logger.exception("Queued job crashed (job_id=%s)", self._job_id)
         finally:
@@ -329,8 +340,11 @@ class _FastQueueJobRunner(QRunnable):
         self._inner = inner
 
     def run(self) -> None:
+        from ..platform_support.tool_progress import tool_progress_job
+
         try:
-            self._inner.run()
+            with tool_progress_job(self._job_id):
+                self._inner.run()
         except Exception:
             logger.exception("Fast queued job crashed (job_id=%s)", self._job_id)
         finally:
