@@ -31,6 +31,7 @@ from ..conformers.conformer_column_codec import deserialize_confs_sidecar
 from ..docking.pose_file_io import deserialize_dock_results_payload
 from ..ionization.microstate_cache import restore_ionization_sidecar
 from ..platform_support.config import load_config
+from ..platform_support.tool_progress import format_overlay_progress_text
 from ..storage import ensure_confs_sidecar, load_mols_from_parse_result, reset_mol_store
 from ..table.session_codec import (
     SESSION_ENSEMBLES_KEY,
@@ -38,18 +39,120 @@ from ..table.session_codec import (
     parse_session_global_bounds,
 )
 from ..workers.session_rows_parse import (
+    SessionOpenResult,
     SessionRowsParseResult,
     SessionRowsParseSignals,
     SessionRowsParseWorker,
 )
 from .strings import LOADING_DETAIL_SESSION, TOOL_RENDER_2D, loaded_session_status
+from .theme import current_theme_name, refresh_open_windows_theme, theme_name_from_session_payload
 from .threadpool_access import start_runnable_on_app_pool
 from .widgets import CategoryFilterCard, FilterCard, SubstructureFilterCard, TextFilterCard
 
 logger = logging.getLogger(__name__)
 
+_SESSION_PLOT_WAIT_S = 8.0
+
 
 class SessionRestore:
+    def _show_session_open_overlay(self) -> None:
+        """Cover the live workspace before decode so the GUI can stay responsive."""
+        self._app._set_ingest_loading(True)
+        self._app._set_workspace_stack_index(0)
+        self._app._loading_detail.setText(LOADING_DETAIL_SESSION)
+        self._app.status_label.setText("Loading session…")
+
+    def _bind_session_worker_progress(
+        self,
+        signals: SessionRowsParseSignals,
+        conn_type,
+        *,
+        token: int | None = None,
+        generation: int | None = None,
+    ) -> None:
+        """Show throttled parse/read counts on the loading overlay."""
+
+        def _on_progress(message: str, done: int, total: int, t=token, g=generation) -> None:
+            if t is not None and int(t) != int(getattr(self._app, "_session_open_token", 0)):
+                return
+            if g is not None and int(g) != int(getattr(self._app, "_session_load_generation", 0)):
+                return
+            setter = getattr(self._app, "set_loading_count_progress", None)
+            if callable(setter):
+                setter(str(message or ""), int(done), int(total))
+                return
+            text = format_overlay_progress_text(str(message or ""), int(done), int(total))
+            try:
+                self._app._loading_detail.setText(text)
+                self._app.status_label.setText(text.replace("\n", " — "))
+            except RuntimeError:
+                pass
+
+        signals.progress.connect(_on_progress, type=conn_type)
+
+    def _fail_session_open(self, message: str) -> None:
+        self._app._session_open_ok = False
+        self._app._session_parse_busy = False
+        self._app._session_awaiting_ready = False
+        self._app._session_waiting_for_render = False
+        self._app._session_mutation_paused = False
+        self._app._pending_session_clean_on_ready = False
+        self._session_reveal_workspace_atomic()
+        QMessageBox.warning(self._app, "Open Session", message or "Could not open session.")
+
+    def _on_session_file_decoded(self, result: object, token: int) -> None:
+        if int(token) != int(getattr(self._app, "_session_open_token", 0)):
+            return
+        self._app._session_parse_busy = False
+        if not isinstance(result, SessionOpenResult):
+            self._fail_session_open("Invalid session decode result.")
+            return
+        doc = result.doc
+        if not isinstance(doc, dict):
+            self._fail_session_open("Could not read session file.")
+            return
+        if not self._session_format_ok(doc.get("format")) or not self._session_version_ok(
+            doc.get("version")
+        ):
+            self._fail_session_open("Unsupported session format.")
+            return
+        try:
+            self._apply_session_document(doc, prepared=result.parse)
+        except Exception as exc:
+            logger.exception("Open session: apply failed")
+            self._fail_session_open(str(exc) or "Session apply failed.")
+
+    def _on_session_file_decode_failed(self, message: str, token: int) -> None:
+        if int(token) != int(getattr(self._app, "_session_open_token", 0)):
+            return
+        logger.error("Open session: could not read file: %s", message)
+        self._fail_session_open(
+            f"Could not read file: {message}" if message else "Could not read file."
+        )
+
+    def _restore_gui_theme_from_session(self, doc: dict | None = None) -> None:
+        """Re-apply the GUI theme saved with the session (or refresh the current one).
+
+        Session chrome is rebuilt after ``clear_all()``, so this also runs at the
+        end of restore: matching names skip ``_set_gui_theme`` so Groovy does not
+        re-roll, then palettes are pushed onto the new widgets.
+        """
+        payload = None if doc is None else doc.get("gui_theme")
+        if payload is None:
+            payload = getattr(self._app, "_pending_session_gui_theme", None)
+        name = theme_name_from_session_payload(payload)
+        setter = getattr(self._app, "_set_gui_theme", None)
+        if name and callable(setter) and current_theme_name() != name:
+            setter(name)
+            rebuild = getattr(self._app, "_rebuild_gui_theme_menu", None)
+            if callable(rebuild):
+                rebuild()
+            return
+        refresh_open_windows_theme(QApplication.instance())
+        refresh = getattr(self._app, "refresh_theme", None)
+        if callable(refresh):
+            refresh()
+
     def _append_filter_widget(self, card, *, title: str | None = None) -> None:
         if title:
             card.set_filter_title(str(title))
@@ -63,15 +166,19 @@ class SessionRestore:
         self._app.filters.append(card)
         self._app._sync_filter_panel_scroll_content()
 
-    def _apply_session_document(self, doc: dict) -> None:
-        try:
-            doc = expand_session_document(doc)
-        except ValueError as exc:
-            raise ValueError(str(exc) or "Unsupported session format.") from exc
+    def _apply_session_document(
+        self, doc: dict, prepared: SessionRowsParseResult | None = None
+    ) -> None:
+        if "ids" in doc or "rows" not in doc:
+            try:
+                doc = expand_session_document(doc)
+            except ValueError as exc:
+                raise ValueError(str(exc) or "Unsupported session format.") from exc
         if not self._session_format_ok(doc.get("format")) or not self._session_version_ok(
             doc.get("version")
         ):
             raise ValueError("Unsupported session format.")
+        self._show_session_open_overlay()
         self._app._session_mutation_paused = True
         self._app._pending_session_clean_on_ready = True
         self._app._session_restore_ctx = None
@@ -82,16 +189,15 @@ class SessionRestore:
         self._app._session_plot_wait_deadline = None
         self._discard_floating_plot_dialogs()
         self._app.clear_all()
+        self._app._pending_session_gui_theme = doc.get("gui_theme")
+        self._restore_gui_theme_from_session(doc)
         self._app._session_hold_workspace_surfaces = True
         # clear_all() bumps the load generation; capture after that so callbacks match.
         self._app._session_load_generation = (
             int(getattr(self._app, "_session_load_generation", 0)) + 1
         )
         gen = self._app._session_load_generation
-        self._app._set_ingest_loading(True)
-        self._app._set_workspace_stack_index(0)
-        self._app._loading_detail.setText(LOADING_DETAIL_SESSION)
-        self._app.status_label.setText("Loading session…")
+        self._show_session_open_overlay()
         headers = doc.get("headers") or ["ID_HIDDEN", "Structure", "SMILES"]
         if len(headers) < 2 or headers[0] != "ID_HIDDEN" or headers[1] != "Structure":
             raise ValueError("Invalid session headers.")
@@ -122,11 +228,18 @@ class SessionRestore:
         except Exception:
             pass
 
-        if not rows:
+        if prepared is not None:
+            self._on_session_rows_parsed(prepared, gen, doc)
+        elif not rows:
             self._begin_session_finalize(doc, -1, gen=gen)
         else:
-            self._app._loading_detail.setText(f"Parsing structures…\n0 / {len(rows):,} rows")
-            self._app.status_label.setText(f"Loading session… (parsing {len(rows):,} rows)")
+            n_rows = len(rows)
+            self._app._loading_detail.setText(
+                format_overlay_progress_text("Parsing structures…", 0, n_rows)
+            )
+            self._app.status_label.setText(
+                format_overlay_progress_text("Parsing structures…", 0, n_rows)
+            )
             self._app._session_parse_busy = True
             signals = SessionRowsParseSignals(self._app)
 
@@ -146,12 +259,16 @@ class SessionRestore:
             )
             # Pytest has no lasting event-loop turn for threadpool completions; parse inline.
             if "pytest" in sys.modules:
-                signals.finished.connect(_on_parsed, type=Qt.DirectConnection)
-                signals.failed.connect(_on_failed, type=Qt.DirectConnection)
+                conn = Qt.DirectConnection
+                signals.finished.connect(_on_parsed, type=conn)
+                signals.failed.connect(_on_failed, type=conn)
+                self._bind_session_worker_progress(signals, conn, generation=gen)
                 worker.run()
             else:
-                signals.finished.connect(_on_parsed, type=Qt.QueuedConnection)
-                signals.failed.connect(_on_failed, type=Qt.QueuedConnection)
+                conn = Qt.QueuedConnection
+                signals.finished.connect(_on_parsed, type=conn)
+                signals.failed.connect(_on_failed, type=conn)
+                self._bind_session_worker_progress(signals, conn, generation=gen)
                 start_runnable_on_app_pool(self._app, worker)
 
         # Tests call apply synchronously; drain until async restore finishes.
@@ -167,6 +284,7 @@ class SessionRestore:
             busy = busy or getattr(self._app, "_csv_session_ctx", None) is not None
             busy = busy or getattr(self._app, "_session_finalize_ctx", None) is not None
             busy = busy or bool(getattr(self._app, "_session_awaiting_ready", False))
+            busy = busy or bool(getattr(self._app, "_session_waiting_for_render", False))
             if not busy:
                 return
             QApplication.processEvents()
@@ -177,22 +295,29 @@ class SessionRestore:
         cfg = load_config()
         return max(64, int(cfg.session_gui_chunk_size), int(cfg.ingest_gui_chunk_size))
 
+    def _session_gui_append_budget_s(self) -> float:
+        cfg = load_config()
+        return max(0.005, int(cfg.ingest_gui_time_budget_ms) / 1000.0)
+
+    def _session_begin_silent_table_appends(self) -> None:
+        begin_silent = getattr(self._app._table_model, "begin_silent_appends", None)
+        if callable(begin_silent) and not self._app._table_model.silent_appending:
+            begin_silent()
+
+    def _session_end_silent_table_appends(self) -> None:
+        end_silent = getattr(self._app._table_model, "end_silent_appends", None)
+        if callable(end_silent) and self._app._table_model.silent_appending:
+            end_silent()
+
     def _on_session_rows_parse_failed(self, message: str, generation: int) -> None:
         if generation != getattr(self._app, "_session_load_generation", 0):
             return
         self._app._session_parse_busy = False
         self._app._session_awaiting_ready = False
         self._app._session_waiting_for_render = False
-        self._app._session_hold_workspace_surfaces = False
-        self._show_session_workspace_when_ready()
-        try:
-            self._app.table.setUpdatesEnabled(True)
-        except Exception:
-            pass
-        self._app._set_ingest_loading(False)
         self._app._session_mutation_paused = False
         self._app._pending_session_clean_on_ready = False
-        self._app._set_workspace_stack_index(1)
+        self._session_reveal_workspace_atomic()
         QMessageBox.warning(self._app, "Open Session", message or "Session row parse failed.")
 
     def _on_session_rows_parsed(self, result: object, generation: int, doc: dict) -> None:
@@ -207,6 +332,7 @@ class SessionRestore:
         if not prepared:
             self._begin_session_finalize(doc, int(result.max_id), gen=generation)
             return
+        self._session_begin_silent_table_appends()
         chunk = self._session_gui_chunk_size()
         self._app._session_restore_ctx = {
             "gen": generation,
@@ -217,13 +343,15 @@ class SessionRestore:
             "max_id": int(result.max_id),
         }
         n = len(prepared)
-        self._app.status_label.setText(f"Loading session… (0/{n} rows)")
-        self._app._loading_detail.setText(f"Loading session…\n0 / {n:,} rows")
+        text = format_overlay_progress_text("Loading session…", 0, n)
+        self._app.status_label.setText(text)
+        self._app._loading_detail.setText(text)
         QTimer.singleShot(0, self._session_restore_apply_step)
 
     def _session_restore_apply_step(self) -> None:
         ctx = getattr(self._app, "_session_restore_ctx", None)
         if not ctx or ctx.get("gen") != getattr(self._app, "_session_load_generation", 0):
+            self._session_end_silent_table_appends()
             try:
                 self._app.table.setUpdatesEnabled(True)
             except Exception:
@@ -231,20 +359,25 @@ class SessionRestore:
             return
         prepared = ctx["prepared_rows"]
         doc = ctx["doc"]
-        i = int(ctx["idx"])
         chunk = int(ctx["chunk"])
         max_id = int(ctx["max_id"])
         n = len(prepared)
-        end = min(i + chunk, n)
-        batch = prepared[i:end]
-        if batch:
-            self._app._table_model.append_rows_batch(batch)
+        deadline = time.monotonic() + self._session_gui_append_budget_s()
+        end = int(ctx["idx"])
+        while end < n and time.monotonic() < deadline:
+            nxt = min(end + chunk, n)
+            batch = prepared[end:nxt]
+            if batch:
+                self._app._table_model.append_rows_batch(batch)
+            end = nxt
         ctx["idx"] = end
-        self._app.status_label.setText(f"Loading session… ({end}/{n} rows)")
-        self._app._loading_detail.setText(f"Loading session…\n{end:,} / {n:,} rows")
+        text = format_overlay_progress_text("Loading session…", end, n)
+        self._app.status_label.setText(text)
+        self._app._loading_detail.setText(text)
         if end < n:
             QTimer.singleShot(0, self._session_restore_apply_step)
             return
+        self._session_end_silent_table_appends()
         self._app._session_restore_ctx = None
         self._app._loading_detail.setText(
             f"Session loaded ({n:,} row(s)).\nRestoring filters and workspace…"
@@ -295,35 +428,31 @@ class SessionRestore:
                 )
                 return
             if step == 1:
-                self._app._loading_detail.setText("Restoring workspace and plots…")
-                self._finalize_session_workspace_and_plots(doc)
+                self._app._loading_detail.setText("Applying sort, colors, and filters…")
+                self._finalize_session_table_chrome(doc)
+                self._start_session_auto_render2d()
                 ctx["step"] = 2
                 QTimer.singleShot(0, self._session_finalize_step)
                 return
             if step == 2:
-                self._app._loading_detail.setText("Applying sort, colors, and filters…")
-                self._finalize_session_table_chrome(doc)
+                if not getattr(self._app, "_session_waiting_for_render", False):
+                    self._app._loading_detail.setText("Restoring workspace and plots…")
+                self._finalize_session_workspace_and_plots(doc)
                 ctx["step"] = 3
                 QTimer.singleShot(0, self._session_finalize_step)
                 return
             # step 3 — sidecars + reveal
-            self._app._loading_detail.setText("Restoring tool data…")
+            if not getattr(self._app, "_session_waiting_for_render", False):
+                self._app._loading_detail.setText("Restoring tool data…")
             self._finalize_session_sidecars_and_reveal(doc)
             self._app._session_finalize_ctx = None
         except Exception:
             self._app._session_finalize_ctx = None
             self._app._session_awaiting_ready = False
             self._app._session_waiting_for_render = False
-            self._app._session_hold_workspace_surfaces = False
-            self._show_session_workspace_when_ready()
-            try:
-                self._app.table.setUpdatesEnabled(True)
-            except Exception:
-                pass
-            self._app._set_ingest_loading(False)
             self._app._session_mutation_paused = False
             self._app._pending_session_clean_on_ready = False
-            self._app._set_workspace_stack_index(1)
+            self._session_reveal_workspace_atomic()
             raise
 
     def _session_finalize_after_bounds(self) -> None:
@@ -336,7 +465,11 @@ class SessionRestore:
         doc = ctx["doc"]
         max_id = int(ctx["max_id"])
         self._app._loading_detail.setText("Restoring filters…")
-        self._finalize_session_filters(doc, max_id)
+        self._app._session_filter_restore_paused = True
+        try:
+            self._finalize_session_filters(doc, max_id)
+        finally:
+            self._app._session_filter_restore_paused = False
         ctx["step"] = 1
         QTimer.singleShot(0, self._session_finalize_step)
 
@@ -472,7 +605,14 @@ class SessionRestore:
         self._app._logarithmic_columns = {
             str(h) for h in log_cols if isinstance(h, str) and h in self._app.headers
         }
-        self._app.apply_filters()
+        timer = getattr(self._app, "_apply_filters_timer", None)
+        if timer is not None:
+            timer.stop()
+        sync = getattr(self._app, "_apply_filters_impl_sync", None)
+        if callable(sync):
+            sync(None)
+        else:
+            self._app.apply_filters()
         rows_n = self._app._table_model.rowCount()
         self._app.status_label.setText(loaded_session_status(rows_n))
         if getattr(self._app, "_sqlite_store", None) is not None:
@@ -547,8 +687,6 @@ class SessionRestore:
         if callable(restore_search):
             restore_search(doc.get("table_search"))
         self._app._session_awaiting_ready = True
-        self._app._session_waiting_for_render = False
-        self._app._session_plot_wait_deadline = None
         self._hide_session_workspace_until_ready()
         self._deferred_session_post_load_follow_up()
 
@@ -563,22 +701,50 @@ class SessionRestore:
             self._app.table.setUpdatesEnabled(True)
         except Exception:
             pass
-        self._restore_pending_session_som_maps()
-        self._start_deferred_session_auto_render2d()
+
+    def _session_reveal_workspace_atomic(self) -> None:
+        """Reveal the main workspace before any floating plot / search hosts.
+
+        Floating ``PlotDialog`` windows are independent top-level HWNDs. Showing them
+        while the main window is still on the loading stack looks like the workspace
+        closed and a plot window opened alone. Always lift the overlay first.
+        """
+        self._reveal_table_after_session_prep()
+        self._show_session_workspace_when_ready()
 
     def _restore_pending_session_som_maps(self) -> None:
-        """Redraw SOM Map pixmaps after the overlay lifts so Open is not blocked on depictions."""
+        """Redraw SOM Map pixmaps before the overlay lifts."""
         payload = getattr(self._app, "_pending_session_som_browse", None)
         self._app._pending_session_som_browse = None
         from .som_browser import restore_som_maps_for_session
 
         restore_som_maps_for_session(self._app, payload)
 
-    def _start_deferred_session_auto_render2d(self) -> None:
-        """Start auto Render 2D after the workspace is shown so plot restore keeps the overlay."""
+    def _start_session_auto_render2d(self) -> None:
+        """Start auto Render 2D while plots restore so both finish under the overlay."""
         render = getattr(self._app, "_try_auto_render_all_structures_after_ingest", None)
-        if callable(render):
-            render()
+        # Set the wait flag first so a synchronous batch-finished callback cannot
+        # race past a later True assignment and leave Open hanging.
+        self._app._session_waiting_for_render = True
+        started = bool(callable(render) and render())
+        if started:
+            detail = getattr(self._app, "_loading_detail", None)
+            if detail is not None:
+                try:
+                    n = self._app._table_model.rowCount()
+                    detail.setText(format_overlay_progress_text(TOOL_RENDER_2D, 0, n))
+                except RuntimeError:
+                    pass
+        else:
+            self._app._session_waiting_for_render = False
+
+    def _start_deferred_session_auto_render2d(self) -> None:
+        """Compatibility alias; session open now starts 2D before reveal."""
+        if getattr(self._app, "_session_waiting_for_render", False):
+            return
+        if getattr(self._app, "_render2d_batch_active", False):
+            return
+        self._start_session_auto_render2d()
 
     def _hide_session_workspace_until_ready(self) -> None:
         """Keep independent floating plot windows hidden until the workspace overlay lifts."""
@@ -609,10 +775,12 @@ class SessionRestore:
                 pass
         self._app._session_search_want_visible = False
 
-    def _session_plot_host_waiting_for_web(self, host) -> bool:
-        """True when a restored plot still has a Plotly payload waiting on the WebEngine."""
+    def _session_plot_host_web_info(self, host) -> tuple[bool, bool]:
+        """Return ``(has_web_view, still_waiting)`` for a restored plot host."""
         stack = [host]
         seen: set[int] = set()
+        has_web = False
+        waiting = False
         while stack:
             widget = stack.pop()
             if widget is None:
@@ -621,18 +789,52 @@ class SessionRestore:
             if key in seen:
                 continue
             seen.add(key)
-            if hasattr(widget, "_web_ready") and not bool(getattr(widget, "_web_ready", False)):
-                if getattr(widget, "_pending_payload_json", None):
-                    return True
+            web = getattr(widget, "web", None)
+            if web is not None:
+                has_web = True
+                timer = getattr(widget, "_plot_debounce", None)
+                if timer is not None:
+                    try:
+                        if timer.isActive():
+                            waiting = True
+                    except RuntimeError:
+                        pass
+                if hasattr(widget, "_web_ready") and not bool(getattr(widget, "_web_ready", False)):
+                    waiting = True
             for attr in ("_plot_widget", "_panel", "_viewer_widget", "_view"):
                 child = getattr(widget, attr, None)
                 if child is not None:
                     stack.append(child)
-        return False
+        return has_web, waiting
+
+    def _session_plot_host_waiting_for_web(self, host) -> bool:
+        """True when a restored plot has a WebEngine view that has not finished loading."""
+        has_web, waiting = self._session_plot_host_web_info(host)
+        return bool(has_web and waiting)
+
+    def _set_session_plot_wait_progress(self) -> None:
+        """Phase label only: Plotly/WebEngine do not expose a real draw percent."""
+        detail = getattr(self._app, "_loading_detail", None)
+        if detail is None:
+            return
+        try:
+            detail.setText("Preparing plots…")
+        except RuntimeError:
+            pass
 
     def _session_plots_ready_for_reveal(self) -> bool:
-        """Do not stall overlay on Plotly WebEngine; widgets are already constructed."""
-        return True
+        """True when restored Plotly views are ready, or the wait deadline has passed."""
+        hosts_fn = getattr(self._app, "_iter_active_plot_hosts", None)
+        hosts = list(hosts_fn()) if callable(hosts_fn) else []
+        waiting = any(self._session_plot_host_waiting_for_web(host) for host in hosts)
+        if not waiting:
+            return True
+        now = time.monotonic()
+        deadline = getattr(self._app, "_session_plot_wait_deadline", None)
+        if deadline is None:
+            self._app._session_plot_wait_deadline = now + _SESSION_PLOT_WAIT_S
+            return False
+        return now >= float(deadline)
 
     def _session_on_render2d_batch_finished(self) -> None:
         """Continue session reveal after auto Render 2D (or cancel) completes."""
@@ -642,32 +844,24 @@ class SessionRestore:
             return
         detail = getattr(self._app, "_loading_detail", None)
         if detail is not None:
-            try:
-                detail.setText("Preparing plots…")
-            except RuntimeError:
-                pass
+            self._set_session_plot_wait_progress()
         QTimer.singleShot(0, self._session_try_reveal_when_ready)
 
     def _session_try_reveal_when_ready(self) -> None:
-        """Show the workspace after session prep; Plotly may still be drawing."""
+        """Show the workspace after rows, 2D, and restored plots are ready."""
         if not getattr(self._app, "_session_awaiting_ready", False):
             return
         if getattr(self._app, "_session_waiting_for_render", False):
             return
         if not self._session_plots_ready_for_reveal():
-            detail = getattr(self._app, "_loading_detail", None)
-            if detail is not None:
-                try:
-                    detail.setText("Preparing plots…")
-                except RuntimeError:
-                    pass
+            self._set_session_plot_wait_progress()
             QTimer.singleShot(50, self._session_try_reveal_when_ready)
             return
         self._app._session_awaiting_ready = False
         self._app._session_plot_wait_deadline = None
-        self._show_session_workspace_when_ready()
+        self._restore_pending_session_som_maps()
         self._restore_pending_workspace_layout()
-        self._reveal_table_after_session_prep()
+        self._session_reveal_workspace_atomic()
         rerun = getattr(self._app, "_rerun_restored_table_search", None)
         if callable(rerun):
             rerun()
@@ -681,7 +875,7 @@ class SessionRestore:
         self._app.status_label.setText(loaded_session_status(n) if n else "Ready.")
 
     def _deferred_session_post_load_follow_up(self) -> None:
-        """Migrate packed ensembles, restore chrome, then reveal; auto-render 2D after overlay lifts."""
+        """Migrate packed ensembles, restore chrome, then reveal when 2D and plots are ready."""
         migrate = getattr(self._app, "_migrate_legacy_confs_cells_to_sidecar", None)
         if callable(migrate):
             migrate()
