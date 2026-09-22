@@ -191,8 +191,8 @@ def test_session_load_uses_loading_page_then_reveals(qapp, monkeypatch):  # noqa
     }
     seen = {"loading": False, "filters_covered": False}
 
-    orig_begin = w._begin_session_finalize
-    orig_filters = w._finalize_session_filters
+    orig_begin = w.session._begin_session_finalize
+    orig_filters = w.session._finalize_session_filters
 
     def wrap_begin(d, max_id, *, gen):
         seen["loading"] = w._table_stack.currentWidget() is w._loading_page
@@ -203,8 +203,8 @@ def test_session_load_uses_loading_page_then_reveals(qapp, monkeypatch):  # noqa
         seen["filters_covered"] = not w.f_panel.isVisibleTo(w._workspace_stack)
         seen["filters_restored"] = not w.f_panel.isHidden()
 
-    monkeypatch.setattr(w, "_begin_session_finalize", wrap_begin)
-    monkeypatch.setattr(w, "_finalize_session_filters", wrap_filters)
+    monkeypatch.setattr(w.session, "_begin_session_finalize", wrap_begin)
+    monkeypatch.setattr(w.session, "_finalize_session_filters", wrap_filters)
     w._apply_session_document(doc)
     assert seen["loading"] is True
     assert seen["filters_covered"] is True
@@ -215,12 +215,16 @@ def test_session_load_uses_loading_page_then_reveals(qapp, monkeypatch):  # noqa
     assert not w._ingest_loading
 
 
-def test_session_load_reveals_before_auto_render_finishes(qapp, monkeypatch):  # noqa: ARG001
-    held = {"loading": True, "called": False}
+def test_session_load_keeps_overlay_until_auto_render_finishes(qapp, monkeypatch):  # noqa: ARG001
+    """Session Open keeps the loading page up while auto Render 2D runs under it."""
+    from PySide6.QtCore import QTimer
+
+    held = {"loading_during_render": False, "called": False}
 
     def fake_render(self):
         held["called"] = True
-        held["loading"] = self._table_stack.currentIndex() == 0
+        held["loading_during_render"] = self._table_stack.currentIndex() == 0
+        QTimer.singleShot(0, self.session._session_on_render2d_batch_finished)
         return True
 
     monkeypatch.setattr(
@@ -238,7 +242,7 @@ def test_session_load_reveals_before_auto_render_finishes(qapp, monkeypatch):  #
     }
     w._apply_session_document(doc)
     assert held["called"] is True
-    assert held["loading"] is False
+    assert held["loading_during_render"] is True
     assert w._table_stack.currentIndex() == 1
     assert not w._session_awaiting_ready
     assert not w._session_waiting_for_render
@@ -257,6 +261,67 @@ def test_session_overlay_keeps_plot_restore_over_render2d_progress(qapp):  # noq
     w._on_tool_progress("Render 2D", 4, 10)
     assert "Render 2D" in (w._loading_detail.text() or "")
     assert "4/10" in (w._loading_detail.text() or "")
+
+
+def test_session_reveal_workspace_atomic_shows_main_before_floating(qapp, monkeypatch):  # noqa: ARG001
+    """Floating plot HWNDs must not appear while the main window is still on the loading page."""
+    from PySide6.QtWidgets import QDialog
+
+    w = ChemistryWorkspaceWindow()
+    dlg = QDialog(w)
+    dlg.hide()
+    w._plot_dialogs = [dlg]
+    w._set_ingest_loading(True)
+    w._set_workspace_stack_index(0)
+    w._session_hold_workspace_surfaces = True
+
+    seen = {"stack_when_float_shown": None}
+    real_show = dlg.show
+
+    def tracking_show():
+        seen["stack_when_float_shown"] = w._table_stack.currentIndex()
+        return real_show()
+
+    monkeypatch.setattr(dlg, "show", tracking_show)
+    w._session_reveal_workspace_atomic()
+
+    assert seen["stack_when_float_shown"] == 1
+    assert w._table_stack.currentIndex() == 1
+    assert dlg.isVisible()
+    assert not w._ingest_loading
+    assert not w._session_hold_workspace_surfaces
+
+
+def test_session_try_reveal_when_ready_lifts_overlay_before_floating(qapp, monkeypatch):  # noqa: ARG001
+    from PySide6.QtWidgets import QDialog
+
+    w = ChemistryWorkspaceWindow()
+    dlg = QDialog(w)
+    dlg.hide()
+    w._plot_dialogs = [dlg]
+    w._set_ingest_loading(True)
+    w._set_workspace_stack_index(0)
+    w._session_hold_workspace_surfaces = True
+    w._session_awaiting_ready = True
+    w._session_waiting_for_render = False
+    monkeypatch.setattr(w, "_session_plots_ready_for_reveal", lambda: True)
+    monkeypatch.setattr(w, "_restore_pending_session_som_maps", lambda: None)
+    monkeypatch.setattr(w, "_restore_pending_workspace_layout", lambda: None)
+
+    seen = {"stack_when_float_shown": None}
+    real_show = dlg.show
+
+    def tracking_show():
+        seen["stack_when_float_shown"] = w._table_stack.currentIndex()
+        return real_show()
+
+    monkeypatch.setattr(dlg, "show", tracking_show)
+    w._session_try_reveal_when_ready()
+
+    assert seen["stack_when_float_shown"] == 1
+    assert w._table_stack.currentIndex() == 1
+    assert dlg.isVisible()
+    assert not w._session_awaiting_ready
 
 
 def test_file_ingest_reveals_before_auto_render_finishes(qapp, monkeypatch):  # noqa: ARG001
@@ -932,8 +997,12 @@ def test_data_menu_nests_analyze_and_split_under_table(qapp):  # noqa: ARG001
     assert "Split Column…" not in labels
     table = qt_submenu(data, "Table")
     table_labels = [a.text().replace("&", "") for a in table.actions() if not a.isSeparator()]
-    assert table_labels[:2] == ["Add Row…", "Add Column…"]
-    assert table_labels[2:] == ["Statistics…", "Split Column…", "Join Columns…"]
+    assert table_labels == ["Operations", "Statistics…"]
+    assert "Add Row…" not in table_labels
+    assert "Split Column…" not in table_labels
+    ops = qt_submenu(table, "Operations")
+    ops_labels = [a.text().replace("&", "") for a in ops.actions() if not a.isSeparator()]
+    assert ops_labels == ["Add Row…", "Add Column…", "Split Column…", "Join Columns…"]
     w.close()
 
 
