@@ -168,21 +168,22 @@ class Render2DResultsMixin:
             pass
 
     def _on_structure_lazy_scroll(self, *_args) -> None:
+        """Trim the decoded Structure LRU; do not emit ``dataChanged`` on every scroll tick."""
         if not self._table_model.structure_png_store_active():
             return
-        self._refresh_visible_structure_cells()
+        self._trim_visible_structure_pixmap_cache()
 
-    def _refresh_visible_structure_cells(self) -> None:
-        """Repaint only viewport-visible Structure cells (lazy PNG cache)."""
+    def _visible_structure_source_rows(self) -> tuple[list[int], set[int]]:
+        """Viewport source rows and molecule ids that currently have Structure PNGs on screen."""
         src = self._table_model
         if src.rowCount() <= 0:
-            return
+            return [], set()
         view = self.table
         proxy = view.model()
-        src = self._table_model
         try:
             vr0 = view.rowAt(0)
-            vr1 = view.rowAt(max(0, view.viewport().height() - 1))
+            height = view.viewport().height() if view.viewport() is not None else 0
+            vr1 = view.rowAt(max(0, int(height) - 1))
         except Exception:
             vr0, vr1 = 0, src.rowCount() - 1
         if vr0 < 0:
@@ -211,6 +212,21 @@ class Render2DResultsMixin:
             oid = src.row_oid(sr)
             if store is not None and store.has_png(oid):
                 keep.add(int(oid))
+        return source_rows, keep
+
+    def _trim_visible_structure_pixmap_cache(self) -> None:
+        """Drop decoded Structure pixmaps that scrolled out of the viewport."""
+        store = getattr(self._table_model, "_structure_png_store", None)
+        if store is None:
+            return
+        _source_rows, keep = self._visible_structure_source_rows()
+        store.trim_decoded_cache(keep_oids=keep)
+
+    def _refresh_visible_structure_cells(self) -> None:
+        """Repaint viewport-visible Structure cells after attaching a lazy PNG store."""
+        source_rows, keep = self._visible_structure_source_rows()
+        src = self._table_model
+        store = getattr(src, "_structure_png_store", None)
         if store is not None:
             store.trim_decoded_cache(keep_oids=keep)
         if source_rows:
