@@ -1,0 +1,33 @@
+---
+description: One git commit per file unless the user explicitly requests a multi-file commit
+alwaysApply: true
+---
+
+# Per-file git commits
+
+When the user asks to commit (or commit and push), **create one commit per file**. Do not stage several files and apply one message to all of them.
+
+## Default
+
+- Commit only after the user asks. This rule changes *how* commits are split, not *when*.
+- For each included path, `git add` that path and `git commit` it alone.
+- Write a concise message for **that file**, focused on why it changed.
+- A rename/move is one commit: stage the old path and the new path together.
+- Unrelated untracked junk (`_tmp_*`, caches, samples the user did not ask to include) stays unstaged.
+- Never add Cursor / agent `Co-authored-by` trailers (see `no-cursor-coauthor.mdc`).
+
+```text
+# ❌ BAD — one bulk commit
+git add mctoolkit/ui/plot.py tests/test_plot.py
+git commit -m "Fix plot hover and tests"
+
+# ✅ GOOD — one commit per file
+git add mctoolkit/ui/plot.py
+git commit -m "Keep plot hover hits aligned after WebEngine resize."
+git add tests/test_plot.py
+git commit -m "Cover plot hover alignment after WebEngine resize."
+```
+
+## Exception
+
+Combine files into a single commit **only** when the user explicitly says to (e.g. “one commit”, “commit these together”, “bulk commit”). If they do not say that, split.
