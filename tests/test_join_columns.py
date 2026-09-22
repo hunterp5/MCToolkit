@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with mctoolkit. If not, see <https://www.gnu.org/licenses/>.
 
-"""Tests for Data → Table → Join Columns."""
+"""Tests for Data → Table → Operations → Join Columns."""
 
 from __future__ import annotations
 
